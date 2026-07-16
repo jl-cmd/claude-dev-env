@@ -1,15 +1,12 @@
 # fresh-branch
 
-Creates a new branch from `origin/main` (always fresh-fetched). Triggered by `fresh branch`, `new branch from main`, `/fresh-branch`, or `start fresh`.
+Creates a new branch from fresh-fetched `origin/main` inside an isolated worktree under `Temp/<agent>/<branch-name>`. Does not push, open a PR, or run `checkout -b` in the caller tree.
 
-## Purpose
-
-A shared primitive used by other skills and directly by the user. Fetches `origin/main`, suggests 2–4 branch names via `AskUserQuestion` when a topic is available (polling recent branch naming patterns from `git branch -r`), then creates and checks out the branch with `git checkout -b <name> origin/main`.
-
-Does not push the branch. Does not create a PR. Does not switch an existing branch. Callers that need the new branch name (for example, to open a PR) receive it as a return value.
-
-## Key file
+## Key files
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Four-phase instructions: fetch `origin/main`, pick branch name (suggest or prompt), create branch, report. Includes gotchas discovered during use. |
+| `SKILL.md` | Phases, checklist, execute-vs-read for the CLI, gotchas |
+| `scripts/create_fresh_branch.py` | Deterministic CLI: fetch base, `git worktree add -b`, JSON stdout |
+| `scripts/test_create_fresh_branch.py` | Behavioral tests with temporary git repos |
+| `scripts/fresh_branch_scripts_constants/` | Constants package (`fresh_branch_cli_constants`) for the CLI |

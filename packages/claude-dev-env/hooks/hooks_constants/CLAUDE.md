@@ -20,6 +20,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
+| `convergence_gate_blocker_constants.py` | The full-PR-URL and `--repo`/`-R` flag parse patterns that key the convergence gate to the PR its command names |
 | `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
@@ -32,7 +33,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
-| `harness_scratchpad_constants.py` | Fixed path components (`claude` and `claude-` user-directory names, `scratchpad` leaf name), the session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment-variable name that the code-rules, TDD, and doc-language gates match to recognize the harness session scratchpad directory |
+| `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |

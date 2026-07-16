@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.0.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.1...claude-dev-env-v2.0.2) (2026-07-16)
+
+
+### Bug Fixes
+
+* **agents:** add SendMessage to clean-coder toolset ([#191](https://github.com/jl-cmd/claude-dev-env/issues/191)) ([3aabf3d](https://github.com/jl-cmd/claude-dev-env/commit/3aabf3dfb122b532b4ecad034ad7169fbfeec3ce))
+* **agents:** add SendMessage to clean-coder toolset ([#191](https://github.com/jl-cmd/claude-dev-env/issues/191)) ([a9cb540](https://github.com/jl-cmd/claude-dev-env/commit/a9cb5400620feee7f30dc5a8ebce68b99800da06))
+* **ci:** repair package-suite collection and tighten CI test targeting ([b7da7df](https://github.com/jl-cmd/claude-dev-env/commit/b7da7df50e8a2cd81e68903a18ff31ca499a5d6d))
+* **ci:** repair package-suite collection and tighten CI test targeting ([0d1675f](https://github.com/jl-cmd/claude-dev-env/commit/0d1675f317834dc981705d1502935ca598a64bac))
+* forward piped stdin through claude chain runner ([0938fbd](https://github.com/jl-cmd/claude-dev-env/commit/0938fbdf47cc6279b09efb0c9ba4ec8d3b2b032a))
+* forward piped stdin through claude chain runner ([c75f90e](https://github.com/jl-cmd/claude-dev-env/commit/c75f90eba5f0891d30b05db6e820cc6437f78bb8))
+* **hooks:** add retry guidance to dead-constant deny message ([#193](https://github.com/jl-cmd/claude-dev-env/issues/193)) ([aeee4ff](https://github.com/jl-cmd/claude-dev-env/commit/aeee4ffe7315dc246fae8bda6569366d6f11fa83))
+* **hooks:** allow the anthropic.com bot domain in the pii safe-email list ([95bc0dc](https://github.com/jl-cmd/claude-dev-env/commit/95bc0dce53f4c33348b9e0ae31df008c196eb619))
+* **hooks:** allow the anthropic.com bot domain in the pii safe-email list ([f9dd544](https://github.com/jl-cmd/claude-dev-env/commit/f9dd5445ae996a1a8a50104decb14612f6a36031))
+* **hooks:** clarify verified_commit surface keying message ([#194](https://github.com/jl-cmd/claude-dev-env/issues/194)) ([0de06af](https://github.com/jl-cmd/claude-dev-env/commit/0de06af63234ad04bb3d0bfa57790f1fedb98f95))
+* **hooks:** clarify verified_commit_gate surface and work-tree keying ([#194](https://github.com/jl-cmd/claude-dev-env/issues/194)) ([96df2d5](https://github.com/jl-cmd/claude-dev-env/commit/96df2d57ab451288b87a56b31937ea5ed1abc0f5))
+* **hooks:** count aliased Attribute reads in dead-module-constant ([#189](https://github.com/jl-cmd/claude-dev-env/issues/189)) ([2b0d492](https://github.com/jl-cmd/claude-dev-env/commit/2b0d4928c6189ce3c85d8ec65d391e1d90d3f187))
+* **hooks:** count aliased Attribute reads in dead-module-constant check ([#189](https://github.com/jl-cmd/claude-dev-env/issues/189)) ([00018cd](https://github.com/jl-cmd/claude-dev-env/commit/00018cdcc54dd790435f47da575e90721a68b1b2))
+* **hooks:** dead-constant deny retry guidance ([#193](https://github.com/jl-cmd/claude-dev-env/issues/193)) ([aaa9ef0](https://github.com/jl-cmd/claude-dev-env/commit/aaa9ef029d8da38a92e92543b155d5c8c12d01e7))
+* **rules:** shell-invocation-policy describes offline enforcement, not live gates ([47ea17d](https://github.com/jl-cmd/claude-dev-env/commit/47ea17d062cc51473ce7f27333ee5fd29e0056fa))
+* **scripts:** capture and emit chain-runner output as UTF-8 with replacement ([664ad93](https://github.com/jl-cmd/claude-dev-env/commit/664ad936a5fcfc691d3ebfa56d317b7a5709aec8))
+* **scripts:** capture and emit chain-runner output as UTF-8 with replacement ([8e1afd1](https://github.com/jl-cmd/claude-dev-env/commit/8e1afd1fd27a5c00ad0a7b9a43c9030c8f984298))
+
+
+### Documentation
+
+* **agents:** add pre-check loop and Windows shell idioms to clean-coder ([#190](https://github.com/jl-cmd/claude-dev-env/issues/190)) ([373d956](https://github.com/jl-cmd/claude-dev-env/commit/373d956962268205cfefa7b4adbc6c582a6af305))
+* **agents:** pre-check loop for clean-coder ([#190](https://github.com/jl-cmd/claude-dev-env/issues/190)) ([f8f0169](https://github.com/jl-cmd/claude-dev-env/commit/f8f016958b7795df1ceda59161df2db4421cdc14))
+* clarify rule and doc loading patterns with empirical evidence ([9f45430](https://github.com/jl-cmd/claude-dev-env/commit/9f454305376585b02f5d5f8d91a5a37b78ea9e77))
+* clarify rule and doc loading patterns with empirical evidence ([8b84f38](https://github.com/jl-cmd/claude-dev-env/commit/8b84f38581c42bd98b170499d8b58e64e2517533))
+* consolidate code-standards into CODE_RULES and remove dead guides ([57c1fa8](https://github.com/jl-cmd/claude-dev-env/commit/57c1fa81787e8b00aac653c630e7138100faefd0))
+* consolidate code-standards into CODE_RULES and remove dead guides ([028af75](https://github.com/jl-cmd/claude-dev-env/commit/028af75dc8d279e904de7e33754ef5912a11e18d))
+* **rules:** amend shell-invocation-policy enforcement claims ([342058e](https://github.com/jl-cmd/claude-dev-env/commit/342058eb1cbfb075f2c0d0422ee8b47912e79307)), closes [#170](https://github.com/jl-cmd/claude-dev-env/issues/170)
+* **rules:** collapse six hook-backed rules to thin pointers ([c6f3458](https://github.com/jl-cmd/claude-dev-env/commit/c6f345847d3d0372cfc6bd96b74cbed71ae91341))
+* **rules:** collapse six hook-backed rules to thin pointers ([d27e3b4](https://github.com/jl-cmd/claude-dev-env/commit/d27e3b4b05a77eb0bcc556b0fec291db833fa12f)), closes [#167](https://github.com/jl-cmd/claude-dev-env/issues/167)
+
+
+### Refactoring
+
+* **orchestrator:** thin spawn tickets over thick run artifacts ([a2c0d02](https://github.com/jl-cmd/claude-dev-env/commit/a2c0d02f0a22df8c503c154d0ccf126344eb3405))
+* **orchestrator:** thin spawn tickets over thick run artifacts ([491cd6b](https://github.com/jl-cmd/claude-dev-env/commit/491cd6b767a8bcf72eca68a95d634a761a95d8e5))
+* **rules:** thin task-narrow always-on rules for issue [#168](https://github.com/jl-cmd/claude-dev-env/issues/168) ([5072f1c](https://github.com/jl-cmd/claude-dev-env/commit/5072f1c33a21509a9a208e8ae69ba3e950f9329b))
+* **rules:** thin task-narrow always-on rules for issue [#168](https://github.com/jl-cmd/claude-dev-env/issues/168) ([de6da94](https://github.com/jl-cmd/claude-dev-env/commit/de6da94d296899abd54374f6247bbf750b72b987))
+
 ## [2.0.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.0...claude-dev-env-v2.0.1) (2026-07-15)
 
 

@@ -74,6 +74,7 @@ from hooks_constants.dead_module_constant_constants import (  # noqa: E402
     CONFIG_DIRECTORY_SEGMENT,
     CONSTANTS_MODULE_SUFFIX,
     DEAD_MODULE_CONSTANT_GUIDANCE,
+    DEAD_MODULE_CONSTANT_RETRY_GUIDANCE,
     DUNDER_ALL_NAME,
     DUNDER_INIT_FILENAME,
     GIT_DIRECTORY_NAME,
@@ -204,9 +205,11 @@ def _referenced_names_in_source(
     """Return every name a module references — imported, read, or re-exported.
 
     Collects imported binding names, ``from`` import member names, name
-    references, attribute roots, and (when ``collect_string_literals`` is set)
-    string literals, so a name listed in an ``__all__`` literal or named in a
-    string annotation counts as a reference. A module that fails to parse
+    references, both the root and the member name of each attribute access (so
+    ``module.CONSTANT`` counts ``CONSTANT`` as read), and (when
+    ``collect_string_literals`` is set) string literals, so a name listed in an
+    ``__all__`` literal or named in a string annotation counts as a reference. A
+    module that fails to parse
     contributes no names. With ``load_only`` set, only ``Load``-context names
     count, so a constant's own assignment target in the module being judged does
     not count as a reference to itself.
@@ -234,6 +237,8 @@ def _referenced_names_in_source(
             if load_only and not isinstance(each_node.ctx, ast.Load):
                 continue
             referenced_names.add(each_node.id)
+        elif isinstance(each_node, ast.Attribute):
+            referenced_names.add(each_node.attr)
         elif isinstance(each_node, ast.Import | ast.ImportFrom):
             for each_alias in each_node.names:
                 referenced_names.add(each_alias.asname or each_alias.name)
@@ -631,8 +636,9 @@ def check_dead_module_constants(
         if each_name in all_referenced_names:
             continue
         issues.append(
-            f"Line {each_line}: module-level constant {each_name!r}"
-            f" - {DEAD_MODULE_CONSTANT_GUIDANCE}"
+            f"Line {each_line}: module-level constant {each_name!r} in"
+            f" {written_path.name} - {DEAD_MODULE_CONSTANT_GUIDANCE}"
+            f" {DEAD_MODULE_CONSTANT_RETRY_GUIDANCE}"
         )
         if len(issues) >= MAX_DEAD_MODULE_CONSTANT_ISSUES:
             break

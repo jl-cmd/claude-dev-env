@@ -72,7 +72,7 @@ this register is the why.
 | Windows-semantics (7) | CI on windows-latest | Deselected on ubuntu; covered on windows-latest from the same list. Not local-only. List: `.github/ci/windows-semantics-node-ids.txt`. |
 | Known-pending deselects | Deselected on CI | Pending #20 disposition or venue-dependent failures. List: `.github/ci/known-pending-deselects.txt`. |
 | Linux `is_ephemeral` OS-temp assertion | Deselected on CI | Out-of-scope production gap (#18). Listed in `.github/ci/known-pending-deselects.txt`. |
-| Full `check.ps1` ruff + mypy green | Local quality gate | Static cleanup is not the CI pytest leg. CI runs pytest only. For a pytest-only `check.ps1` pass, use `-SkipRuff -SkipMypy`. |
+| Full `check.ps1` ruff + mypy green | CI quality gate | The quality-gate job runs `check.ps1 -SkipTests` (ruff + mypy); the enforcer pytest suite runs in the package-suite job. For a pytest-only `check.ps1` pass locally, use `-SkipRuff -SkipMypy`. |
 | Native git hooks / `verified_commit_gate` | Tests run in CI | Production hook surface is local (installed under the user Claude config). The unit tests run in the package suite. |
 | Live Neon logging | Tests run in CI | Production logging needs Neon credentials. Tests mock the boundary and run in CI. |
 

@@ -56,7 +56,7 @@ Best-practice-driven lifecycle for building a skill from scratch.
 
 > "Build a Gotchas Section — these sections should be built up from common failure points that Claude runs into when using your skill."
 
-Read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md` and `${CLAUDE_SKILL_DIR}/references/description-field.md` before the interview. Modularity and description triggers are gates: do not proceed to Write until the composition plan and trigger catalog drafts are filled.
+Read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md`, `${CLAUDE_SKILL_DIR}/references/description-field.md`, and `${CLAUDE_SKILL_DIR}/references/deterministic-elements.md` before the interview. Modularity, description triggers, and deterministic inventory are gates: do not proceed to Write until the composition plan, trigger catalog draft, and deterministic-elements inventory are filled.
 
 ### Interview questions
 
@@ -74,6 +74,7 @@ Ask the user:
 10. "Which existing skills already cover a step of this work? Which steps should this skill invoke by name?"
 11. "Is this one skill, several skills, or a thin orchestrator that calls sub-skills?"
 12. "What exact phrases, slash commands, or file types should select this skill?"
+13. "Which steps of this work are fixed procedures (same inputs → same outputs, machine-checkable) versus open judgment?"
 
 ### Related-skills inventory
 
@@ -90,6 +91,7 @@ Use the template at `${CLAUDE_SKILL_DIR}/templates/gap-analysis.md`. Fill in:
 - Initial gotcha candidates
 - **Composition plan** — capability sentence, related skills, sub-skills to invoke, split or orchestrator decision, missing sub-skills to create
 - **Description triggers** — capability stem tokens + trigger phrase list (not story prose)
+- **Deterministic elements inventory** — each process step classified; home path; paired test for code
 
 ### Assess degree of freedom
 
@@ -105,13 +107,17 @@ Record the assessment with reasoning.
 
 ### Modularity gate
 
-Copy the author checklist from `skill-modularity.md` and check every box. If the capability sentence needs an unrelated "and", stop and split scope with the user before Step 4.
+Register each task seed from `skill-modularity.md` on the session task list (`TaskCreate` / `TodoWrite`). Complete with evidence. If the capability sentence needs an unrelated "and", stop and split scope with the user before Step 4.
 
 ### Description gate
 
-Draft the frontmatter description using the template in `description-field.md`. Copy the description checklist and check every box. Story prose fails the gate.
+Draft the frontmatter description using the template in `description-field.md`. Register each description task seed and complete with evidence. Story prose fails the gate.
 
-**Output:** Completed gap analysis (composition plan + description triggers), initial gotchas, degree-of-freedom assessment, modularity checklist, draft description.
+### Deterministic-elements gate
+
+Register each task seed under **Required task seeds** in `deterministic-elements.md`. Complete with evidence. Every deterministic step must have a planned `scripts/`, `workflow/`, `templates/`, `reference/`, or task-seed path. Prose-only mechanical sequences and markdown checkbox boards fail the gate.
+
+**Output:** Completed gap analysis (composition plan + description triggers + deterministic inventory), initial gotchas, degree-of-freedom assessment, modularity gate done, draft description.
 
 ---
 
@@ -121,7 +127,7 @@ Draft the frontmatter description using the template in `description-field.md`. 
 
 Delegate to `/skill-writer` using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
 
-The handoff must include: skill type, folder structure, gap analysis (composition plan + description triggers), initial gotchas, degree of freedom, constraints, sub-skills to name in SKILL.md, exact description string to put in frontmatter.
+The handoff must include: skill type, folder structure, gap analysis (composition plan + description triggers + deterministic inventory), initial gotchas, degree of freedom, constraints, sub-skills to name in SKILL.md, exact description string to put in frontmatter, script/test paths for every deterministic step.
 
 After skill-writer produces the draft:
 
@@ -131,8 +137,9 @@ After skill-writer produces the draft:
 4. Verify files over 100 lines have a TOC.
 5. Verify modularity: single capability, sub-skills table when composing, no silent reimplementation of inventoried skills.
 6. Verify description is a trigger catalog per `description-field.md` (not story prose).
+7. Verify deterministic inventory: every deterministic step has a real code/artifact/task-seed path; no prose-only mechanical sequences; no markdown checkbox boards for required work; scripts follow CODE_RULES and have paired tests.
 
-Fix structural, modularity, and description issues before proceeding.
+Fix structural, modularity, description, and deterministic-element issues before proceeding.
 
 **Output:** Complete skill package at the target directory.
 
@@ -143,14 +150,14 @@ Fix structural, modularity, and description issues before proceeding.
 **Goal:** Verify every best practice is satisfied before delivery.
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
-2. Copy the checklist into your response.
-3. Check every item against the built skill. For each: PASS, FAIL with file:line evidence, or N/A with reason.
-4. Every FAIL must be fixed before proceeding. Apply fixes, then re-check that item.
-5. When all items are PASS or N/A, proceed to Step 6.
+2. Register **every** bullet as a session task (`TaskCreate` / `TodoWrite`).
+3. Complete each task against the built skill: PASS, FAIL with file:line evidence, or N/A with reason.
+4. Every FAIL must be fixed before proceeding. Apply fixes, then re-open/complete that task.
+5. When all tasks are PASS or N/A, proceed to Step 6.
 
 For an independent check, spawn a subagent to run the audit (see delegation-map.md).
 
-**Output:** Completed checklist with all items PASS or N/A.
+**Output:** Audit summary (PASS / N/A / FAIL-fixed counts). All items PASS or N/A.
 
 ---
 
@@ -165,7 +172,8 @@ Present to the user:
 3. **Degree of freedom** — assessment and reasoning.
 4. **Composition plan** — capability sentence, sub-skills invoked, any skills split out.
 5. **Description** — final frontmatter trigger catalog (paste the string).
-6. **Gotchas seeded** — initial gotchas captured.
-7. **Audit summary** — "All checklist items: N passed, M N/A."
-8. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
-9. **Suggested first test** — a concrete task to try with Claude B.
+6. **Deterministic inventory** — steps classified; script/template/reference paths; tests for code.
+7. **Gotchas seeded** — initial gotchas captured.
+8. **Audit summary** — "All checklist items: N passed, M N/A."
+9. **Maintenance notes** — what to watch for in future usage that might warrant iteration.
+10. **Suggested first test** — a concrete task to try with Claude B.
