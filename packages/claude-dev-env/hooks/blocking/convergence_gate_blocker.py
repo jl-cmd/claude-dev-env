@@ -19,10 +19,33 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
+    COMMAND_SEPARATOR_PATTERN,
+    GH_PR_READY_ANCHOR_PATTERN,
     PR_URL_OWNER_REPO_NUMBER_PATTERN,
     REPO_OVERRIDE_FLAG_PATTERN,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+
+
+def _ready_command_segment(command: str) -> str:
+    """Return the ``gh pr ready`` invocation, clipped at the next command separator.
+
+    ::
+
+        gh pr ready 161 && gh pr comment 999 --repo other-owner/other-repo
+        ^^^^^^^^^^^^^^^^                            clipped -> returned segment
+
+    Scanning only this segment keeps a ``--repo`` flag or PR URL that belongs to
+    a chained command from binding the gate to the wrong PR.
+    """
+    ready_match = re.search(GH_PR_READY_ANCHOR_PATTERN, command)
+    if ready_match is None:
+        return command
+    ready_tail = command[ready_match.start() :]
+    separator_match = re.search(COMMAND_SEPARATOR_PATTERN, ready_tail)
+    if separator_match is None:
+        return ready_tail
+    return ready_tail[: separator_match.start()]
 
 
 def _parse_pr_url(command: str) -> tuple[str, str, int] | None:
@@ -49,15 +72,16 @@ def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, i
     the cwd. With neither present, both the repository and the number
     resolve from the cwd.
     """
-    pr_url_identity = _parse_pr_url(command)
+    ready_segment = _ready_command_segment(command)
+    pr_url_identity = _parse_pr_url(ready_segment)
     if pr_url_identity is not None:
         return pr_url_identity
 
-    pr_number = _resolve_pr_number(command, cwd)
+    pr_number = _resolve_pr_number(ready_segment, cwd)
     if pr_number is None:
         return None
 
-    repo_flag_identity = _parse_repo_flag(command)
+    repo_flag_identity = _parse_repo_flag(ready_segment)
     if repo_flag_identity is not None:
         flag_owner, flag_repo = repo_flag_identity
         return flag_owner, flag_repo, pr_number

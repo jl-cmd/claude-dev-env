@@ -238,3 +238,36 @@ def test_parse_pr_url_yields_owner_repo_number() -> None:
 
 def test_parse_pr_url_absent_returns_none() -> None:
     assert hook_module._parse_pr_url("gh pr ready 418") is None
+
+
+def test_ready_segment_clips_at_command_separator() -> None:
+    assert (
+        hook_module._ready_command_segment(
+            "gh pr ready 161 && gh pr comment 999 --repo other-owner/other-repo"
+        )
+        == "gh pr ready 161 "
+    )
+
+
+def test_chained_repo_flag_does_not_misbind_the_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 && gh pr comment 999 --repo other-owner/other-repo --body-file note.md",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("cwd-owner", "cwd-repo", 161)
+
+
+def test_chained_pr_url_does_not_misbind_the_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 && echo https://github.com/other-owner/other-repo/pull/5",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("cwd-owner", "cwd-repo", 161)
