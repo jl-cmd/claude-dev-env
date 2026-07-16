@@ -356,7 +356,7 @@ def _existing_scratchpad_root(
     """
     if not all_relative_parts or not _is_harness_user_directory(all_relative_parts[0]):
         return None
-    for each_session_index in range(1, len(all_relative_parts) - 1):
+    for each_session_index in range(2, len(all_relative_parts) - 1):
         leaf_index = each_session_index + 1
         if all_relative_parts[each_session_index] != session_id:
             continue
@@ -365,7 +365,8 @@ def _existing_scratchpad_root(
         scratchpad_root = os.path.join(
             real_temp_root, *all_relative_parts[: leaf_index + 1]
         )
-        return scratchpad_root if os.path.isdir(scratchpad_root) else None
+        if os.path.isdir(scratchpad_root):
+            return scratchpad_root
     return None
 
 
