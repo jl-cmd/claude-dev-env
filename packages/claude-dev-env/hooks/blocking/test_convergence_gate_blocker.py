@@ -56,6 +56,18 @@ def test_extracts_pr_number_from_command() -> None:
     assert _resolve_pr_number("gh pr ready 418", None, None, None) == 418
 
 
+def test_extracts_pr_number_when_repo_flag_precedes_number() -> None:
+    assert (
+        _resolve_pr_number(
+            "gh pr ready --repo sample-owner/target-repo 161",
+            None,
+            "sample-owner",
+            "target-repo",
+        )
+        == 161
+    )
+
+
 def test_extracts_pr_number_with_flags() -> None:
     assert _resolve_pr_number("gh pr ready 99 --undo", None, None, None) == 99
 

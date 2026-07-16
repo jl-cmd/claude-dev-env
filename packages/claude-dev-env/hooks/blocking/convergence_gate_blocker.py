@@ -27,6 +27,9 @@ from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
     REPO_OVERRIDE_FLAG_PATTERN,
     REPO_SLUG_TEMPLATE,
 )
+from blocking.pr_description_pr_number import (  # noqa: E402
+    _extract_pr_number_from_command,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
 
@@ -105,9 +108,9 @@ def _resolve_pr_number(
     from_owner: str | None,
     from_repo: str | None,
 ) -> int | None:
-    direct_match = re.search(r"\bgh\s+pr\s+ready\s+(\d+)", command)
-    if direct_match:
-        return int(direct_match.group(1))
+    direct_number = _extract_pr_number_from_command(command)
+    if direct_number is not None:
+        return direct_number
     all_view_arguments = list(ALL_GH_PR_VIEW_NUMBER_COMMAND)
     if from_owner is not None and from_repo is not None:
         all_view_arguments = [

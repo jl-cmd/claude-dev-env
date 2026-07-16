@@ -248,3 +248,20 @@ def test_ready_gate_leaves_bare_command_bound_to_current_directory(
     assert all_api_calls
     for each_arguments in all_recorded:
         assert "--repo" not in each_arguments
+
+
+def test_ready_gate_ignores_repo_flag_of_chained_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate(
+        "gh pr ready 161 && gh pr comment 999 --repo other-owner/other-repo"
+    )
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/{owner}/{repo}/issues/161/comments"
+    )
+    assert all_api_calls
+    for each_arguments in all_recorded:
+        assert "other-owner/other-repo" not in each_arguments

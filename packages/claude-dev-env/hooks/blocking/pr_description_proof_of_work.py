@@ -23,6 +23,7 @@ if _hooks_dir not in sys.path:
 from blocking.convergence_gate_blocker import (  # noqa: E402
     _parse_pr_url,
     _parse_repo_flag,
+    _ready_command_segment,
 )
 from blocking.pr_description_body_audit import _iter_section_headers  # noqa: E402
 from blocking.pr_description_pr_number import (  # noqa: E402
@@ -161,7 +162,10 @@ def _resolve_target_identity(command: str) -> tuple[tuple[str, str] | None, int]
     number. A ``--repo``/``-R`` flag yields the pair while the number resolves
     from the command's positional argument or the current branch's PR. With
     neither present, the pair is None (gh reads the current directory's
-    repository) and the number resolves the same way.
+    repository) and the number resolves the same way. Every parse runs over
+    the ``gh pr ready`` segment alone, clipped at the next command separator,
+    so a ``--repo`` flag or PR URL belonging to a chained command cannot bind
+    the gate to the wrong PR.
 
     Args:
         command: The raw shell command captured by the hook.
@@ -171,13 +175,14 @@ def _resolve_target_identity(command: str) -> tuple[tuple[str, str] | None, int]
         repository — paired with the resolved PR number, or None when no PR
         number resolves.
     """
-    pr_url_identity = _parse_pr_url(command)
+    ready_segment = _ready_command_segment(command)
+    pr_url_identity = _parse_pr_url(ready_segment)
     if pr_url_identity is not None:
         url_owner, url_repo, url_number = pr_url_identity
         return (url_owner, url_repo), url_number
 
-    all_target_repo = _parse_repo_flag(command)
-    resolved_pr_number = _extract_pr_number_from_command(command)
+    all_target_repo = _parse_repo_flag(ready_segment)
+    resolved_pr_number = _extract_pr_number_from_command(ready_segment)
     if resolved_pr_number is None:
         resolved_pr_number = _resolve_current_pr_number(all_target_repo)
     if resolved_pr_number is None:
