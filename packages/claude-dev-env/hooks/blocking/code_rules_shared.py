@@ -31,11 +31,11 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     STRICT_TEST_FILE_BASENAME_PATTERN,
 )
 from hooks_constants.harness_scratchpad_constants import (  # noqa: E402
+    CLAUDE_SESSION_ID_ENVIRONMENT_VARIABLE_NAME,
     HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME,
-    HARNESS_SCRATCHPAD_PATH_SEPARATOR_REPLACEMENT,
+    HARNESS_SCRATCHPAD_USER_DIRECTORY_NAME,
     HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX,
     HOOK_PAYLOAD_SESSION_ID_KEY,
-    HOOK_PAYLOAD_WORKING_DIRECTORY_KEY,
 )
 from hooks_constants.unused_module_import_constants import (  # noqa: E402
     TYPE_CHECKING_IDENTIFIER,
@@ -275,78 +275,157 @@ def is_ephemeral_script_path(file_path: str) -> bool:
     return False
 
 
-def _resolve_session_scratchpad_root(hook_payload: dict) -> str | None:
-    """Rebuild the harness session scratchpad directory from a PreToolUse payload.
+def _session_id_for_scratchpad(hook_payload: dict) -> str:
+    """Return the session id from the payload, or the harness environment value.
+
+    Args:
+        hook_payload: The PreToolUse payload that may carry ``session_id``.
+
+    Returns:
+        The payload session id when present, otherwise the
+        ``CLAUDE_CODE_SESSION_ID`` environment value, or an empty string when
+        neither source carries one.
+    """
+    payload_session_id = hook_payload.get(HOOK_PAYLOAD_SESSION_ID_KEY, "")
+    if isinstance(payload_session_id, str) and payload_session_id:
+        return payload_session_id
+    return os.environ.get(CLAUDE_SESSION_ID_ENVIRONMENT_VARIABLE_NAME, "")
+
+
+def _is_harness_user_directory(directory_name: str) -> bool:
+    """Return whether a path component is the harness user directory.
+
+    The harness names this directory ``claude`` on Windows and ``claude-<uid>``
+    on POSIX, so both the exact name and the prefixed form count.
+
+    Args:
+        directory_name: A single path component below the temp-directory root.
+
+    Returns:
+        True when the component is the harness user directory.
+    """
+    return (
+        directory_name == HARNESS_SCRATCHPAD_USER_DIRECTORY_NAME
+        or directory_name.startswith(HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX)
+    )
+
+
+def _relative_parts_under_temp_root(
+    real_target: str, real_temp_root: str
+) -> tuple[str, ...]:
+    """Return real_target's path components below real_temp_root, or empty when outside.
+
+    Args:
+        real_target: The resolved candidate path.
+        real_temp_root: The resolved temp-directory root.
+
+    Returns:
+        The path components between the temp root and the target, or an empty
+        tuple when the target sits outside the temp directory or on another
+        drive.
+    """
+    try:
+        relative_path = os.path.relpath(real_target, real_temp_root)
+    except ValueError:
+        return ()
+    all_relative_parts = Path(relative_path).parts
+    if all_relative_parts and all_relative_parts[0] == os.path.pardir:
+        return ()
+    return all_relative_parts
+
+
+def _existing_scratchpad_root(
+    all_relative_parts: tuple[str, ...], real_temp_root: str, session_id: str
+) -> str | None:
+    """Return the on-disk scratchpad root matching the harness shape, or None.
 
     ::
 
-        payload.cwd = /home/user/project    payload.session_id = 5f2c...
-                          |                            |
-        <tempdir>/claude-<uid>/-home-user-project/5f2c.../scratchpad
-                     |               |
-                  os.getuid()   cwd with each "/" turned to "-"
-
-    No environment variable carries this path, so it is rebuilt from the three
-    signals a hook can read: the POSIX user id and the ``cwd`` and ``session_id``
-    fields the harness puts in every PreToolUse payload. The rebuilt directory
-    is returned only when it exists on disk, so a wrong guess or a non-POSIX
-    platform yields None and the gates keep full enforcement.
+        <temp-root>/<user-dir>/<mangled-cwd>/<session-id>/scratchpad/<file>
+                        |                          |           |
+                  claude user dir            session id     leaf name
 
     Args:
-        hook_payload: The PreToolUse payload carrying ``cwd`` and ``session_id``.
+        all_relative_parts: The target's path components below the temp root.
+        real_temp_root: The resolved temp-directory root.
+        session_id: The session id the scratchpad's parent segment must equal.
 
     Returns:
-        The scratchpad directory path when it exists on disk, else None.
+        The scratchpad directory path when the shape matches and that directory
+        exists on disk, otherwise None.
     """
-    get_user_id = getattr(os, "getuid", None)
-    if get_user_id is None:
+    if not all_relative_parts or not _is_harness_user_directory(all_relative_parts[0]):
         return None
-    session_id = hook_payload.get(HOOK_PAYLOAD_SESSION_ID_KEY, "")
-    working_directory = hook_payload.get(HOOK_PAYLOAD_WORKING_DIRECTORY_KEY, "")
-    if not isinstance(session_id, str) or not session_id:
-        return None
-    if not isinstance(working_directory, str) or not working_directory:
-        return None
-    mangled_working_directory = working_directory.replace("\\", "/").replace(
-        "/", HARNESS_SCRATCHPAD_PATH_SEPARATOR_REPLACEMENT
-    )
-    user_directory_name = f"{HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX}{get_user_id()}"
-    scratchpad_root = os.path.join(
-        tempfile.gettempdir(),
-        user_directory_name,
-        mangled_working_directory,
-        session_id,
-        HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME,
-    )
-    if not os.path.isdir(scratchpad_root):
-        return None
-    return scratchpad_root
+    for each_session_index in range(2, len(all_relative_parts) - 1):
+        leaf_index = each_session_index + 1
+        if all_relative_parts[each_session_index] != session_id:
+            continue
+        if all_relative_parts[leaf_index] != HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME:
+            continue
+        scratchpad_root = os.path.join(
+            real_temp_root, *all_relative_parts[: leaf_index + 1]
+        )
+        if os.path.isdir(scratchpad_root):
+            return scratchpad_root
+    return None
 
 
 def is_under_session_scratchpad(file_path: str, hook_payload: dict) -> bool:
     """Return True when file_path resolves under the harness session scratchpad.
 
     One-off scripts written to the session scratchpad are throwaway tooling
-    outside every repo, so the TDD and CODE_RULES gates skip them. Both
-    file_path and the rebuilt scratchpad root are resolved through the real
-    filesystem (symlinks followed) before the containment test, so a symlink
-    into the scratchpad exempts and a symlink out of it does not.
+    outside every repo, so the TDD and CODE_RULES gates skip them.
+
+    The match keys on the session id — from the payload, or the
+    ``CLAUDE_CODE_SESSION_ID`` environment variable — and on the temp-directory
+    path shape ``<user-dir>/<mangled-cwd>/<session-id>/scratchpad``, so it holds
+    on Windows and POSIX alike. file_path resolves through the real filesystem
+    (symlinks followed) before the shape test, and the scratchpad directory must
+    exist on disk, so a crafted path that never existed keeps full enforcement.
 
     Args:
         file_path: The path the write targets.
-        hook_payload: The PreToolUse payload carrying ``cwd`` and ``session_id``.
+        hook_payload: The PreToolUse payload carrying the session id.
 
     Returns:
         True when file_path's real path sits at or under the session scratchpad.
     """
     if not file_path:
         return False
-    scratchpad_root = _resolve_session_scratchpad_root(hook_payload)
-    if scratchpad_root is None:
+    session_id = _session_id_for_scratchpad(hook_payload)
+    if not session_id:
         return False
     real_target = os.path.realpath(file_path)
-    real_root = os.path.realpath(scratchpad_root)
-    return real_target == real_root or real_target.startswith(real_root + os.sep)
+    real_temp_root = os.path.realpath(tempfile.gettempdir())
+    all_relative_parts = _relative_parts_under_temp_root(real_target, real_temp_root)
+    return (
+        _existing_scratchpad_root(all_relative_parts, real_temp_root, session_id)
+        is not None
+    )
+
+
+def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
+    """Return True when file_path is a throwaway scratch path exempt from repo gates.
+
+    Combines the two throwaway-path families a repo gate skips: the root-anchored
+    ephemeral scratch directories (``/tmp`` and ``$CLAUDE_JOB_DIR/tmp``) and the
+    harness session scratchpad. The session scratchpad match reads the session id
+    from the payload when one is supplied, and from the harness environment
+    variable otherwise, so a caller that holds no payload still gets the match.
+    One call answers path exemption for both families, so a gate that skips
+    throwaway paths need not repeat the two checks itself.
+
+    Args:
+        file_path: The candidate path to classify.
+        hook_payload: The PreToolUse payload carrying the session id, or None to
+            read the session id from the environment alone.
+
+    Returns:
+        True when the path is ephemeral scratch or under the session scratchpad.
+    """
+    if is_ephemeral_script_path(file_path):
+        return True
+    return is_under_session_scratchpad(file_path, hook_payload or {})
 
 
 def is_migration_file(file_path: str) -> bool:

@@ -12,6 +12,9 @@ SHARED_MODULE_PATH = Path(__file__).parent / "code_rules_shared.py"
 FIXED_USER_ID = 4242
 WORKING_DIRECTORY = "/home/user/project"
 SESSION_ID = "session-abc-123"
+HARNESS_USER_DIRECTORY_WINDOWS = "claude"
+WINDOWS_MANGLED_WORKING_DIRECTORY = "c--Users-dev--claude-project"
+SESSION_ID_ENVIRONMENT_VARIABLE = "CLAUDE_CODE_SESSION_ID"
 
 
 def _load_shared_module() -> ModuleType:
@@ -25,10 +28,6 @@ def _load_shared_module() -> ModuleType:
 
 
 _SHARED_MODULE = _load_shared_module()
-
-
-def _install_fixed_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(os, "getuid", lambda: FIXED_USER_ID, raising=False)
 
 
 def _point_temporary_directory_at(monkeypatch: pytest.MonkeyPatch, temporary_root: Path) -> None:
@@ -48,6 +47,24 @@ def _build_scratchpad_directory(temporary_root: Path) -> Path:
     return scratchpad_directory
 
 
+def _build_windows_scratchpad_directory(temporary_root: Path) -> Path:
+    """Build the Windows-shaped scratchpad directory that carries no user id segment."""
+    scratchpad_directory = (
+        temporary_root
+        / HARNESS_USER_DIRECTORY_WINDOWS
+        / WINDOWS_MANGLED_WORKING_DIRECTORY
+        / SESSION_ID
+        / "scratchpad"
+    )
+    scratchpad_directory.mkdir(parents=True)
+    return scratchpad_directory
+
+
+def _simulate_windows_platform(monkeypatch: pytest.MonkeyPatch, temporary_root: Path) -> None:
+    monkeypatch.delattr(os, "getuid", raising=False)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(temporary_root))
+
+
 def _session_payload() -> dict[str, str]:
     return {"cwd": WORKING_DIRECTORY, "session_id": SESSION_ID}
 
@@ -55,7 +72,6 @@ def _session_payload() -> dict[str, str]:
 def test_returns_true_for_file_inside_reconstructed_scratchpad(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
@@ -69,7 +85,6 @@ def test_returns_true_for_file_inside_reconstructed_scratchpad(
 def test_returns_false_for_file_outside_scratchpad(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     _build_scratchpad_directory(tmp_path)
     project_module = tmp_path / "elsewhere" / "orders.py"
@@ -82,7 +97,6 @@ def test_returns_false_for_file_outside_scratchpad(
 def test_resolves_symlink_into_scratchpad_to_true(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     real_script = scratchpad_directory / "real_tool.py"
@@ -96,7 +110,6 @@ def test_resolves_symlink_into_scratchpad_to_true(
 def test_symlink_resolving_outside_scratchpad_is_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     real_target_outside = tmp_path / "outside_target.py"
@@ -113,8 +126,8 @@ def test_symlink_resolving_outside_scratchpad_is_false(
 def test_missing_session_id_signal_returns_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
+    monkeypatch.delenv(SESSION_ID_ENVIRONMENT_VARIABLE, raising=False)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
     payload_without_session = {"cwd": WORKING_DIRECTORY}
@@ -125,10 +138,12 @@ def test_missing_session_id_signal_returns_false(
     )
 
 
-def test_missing_working_directory_signal_returns_false(
+def test_exempt_without_working_directory_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
+    """The platform-safe predicate keys on the session id and the temp-directory path
+    shape, so a payload carrying the session id alone still exempts a real scratchpad
+    target even when it omits the working directory."""
     _point_temporary_directory_at(monkeypatch, tmp_path)
     scratchpad_directory = _build_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
@@ -136,27 +151,28 @@ def test_missing_working_directory_signal_returns_false(
 
     assert (
         _SHARED_MODULE.is_under_session_scratchpad(str(throwaway_script), payload_without_cwd)
-        is False
+        is True
     )
 
 
-def test_absent_getuid_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fixed_user_id(monkeypatch)
-    _point_temporary_directory_at(monkeypatch, tmp_path)
-    scratchpad_directory = _build_scratchpad_directory(tmp_path)
+def test_exempt_on_windows_without_getuid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows the os.getuid attribute is absent, and a real scratchpad target still
+    resolves as exempt through its temp-directory path shape and session id."""
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    scratchpad_directory = _build_windows_scratchpad_directory(tmp_path)
     throwaway_script = scratchpad_directory / "one_off_tool.py"
-    monkeypatch.delattr(os, "getuid", raising=False)
 
     assert (
         _SHARED_MODULE.is_under_session_scratchpad(str(throwaway_script), _session_payload())
-        is False
+        is True
     )
 
 
 def test_nonexistent_scratchpad_directory_returns_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     mangled_working_directory = WORKING_DIRECTORY.replace("/", "-")
     unbuilt_target = (
@@ -174,8 +190,92 @@ def test_nonexistent_scratchpad_directory_returns_false(
 
 
 def test_empty_file_path_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fixed_user_id(monkeypatch)
     _point_temporary_directory_at(monkeypatch, tmp_path)
     _build_scratchpad_directory(tmp_path)
 
     assert _SHARED_MODULE.is_under_session_scratchpad("", _session_payload()) is False
+
+
+def test_windows_shape_repository_file_is_not_exempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    _build_windows_scratchpad_directory(tmp_path)
+    repository_module = tmp_path / "repository" / "src" / "orders.py"
+    repository_module.parent.mkdir(parents=True)
+
+    assert (
+        _SHARED_MODULE.is_under_session_scratchpad(str(repository_module), _session_payload())
+        is False
+    )
+
+
+def test_temp_path_outside_scratchpad_shape_is_not_exempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path under the harness user directory but off the session/scratchpad shape
+    keeps full enforcement."""
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    _build_windows_scratchpad_directory(tmp_path)
+    off_shape_target = tmp_path / HARNESS_USER_DIRECTORY_WINDOWS / "unrelated" / "notes.py"
+    off_shape_target.parent.mkdir(parents=True)
+
+    assert (
+        _SHARED_MODULE.is_under_session_scratchpad(str(off_shape_target), _session_payload())
+        is False
+    )
+
+
+def test_repository_path_containing_scratchpad_word_is_not_exempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repository path outside the temp directory that merely carries a scratchpad
+    segment keeps full enforcement."""
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    _build_windows_scratchpad_directory(tmp_path)
+    repository_lookalike = tmp_path.parent / "project_repo" / "scratchpad" / "tool.py"
+
+    assert (
+        _SHARED_MODULE.is_under_session_scratchpad(str(repository_lookalike), _session_payload())
+        is False
+    )
+
+
+def test_is_ephemeral_path_true_for_windows_scratchpad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    scratchpad_directory = _build_windows_scratchpad_directory(tmp_path)
+    throwaway_script = scratchpad_directory / "probe.py"
+
+    assert _SHARED_MODULE.is_ephemeral_path(str(throwaway_script), _session_payload()) is True
+
+
+def test_is_ephemeral_path_true_for_root_anchored_tmp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+
+    assert _SHARED_MODULE.is_ephemeral_path("/tmp/scratch.py") is True
+
+
+def test_is_ephemeral_path_false_for_repository_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    repository_file = tmp_path / "repository" / "orders.py"
+    repository_file.parent.mkdir(parents=True)
+
+    assert _SHARED_MODULE.is_ephemeral_path(str(repository_file), _session_payload()) is False
+
+
+def test_is_ephemeral_path_reads_session_id_from_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no payload, the session scratchpad match reads the session id from the
+    harness environment variable, so a caller that holds no payload still matches."""
+    _simulate_windows_platform(monkeypatch, tmp_path)
+    monkeypatch.setenv(SESSION_ID_ENVIRONMENT_VARIABLE, SESSION_ID)
+    scratchpad_directory = _build_windows_scratchpad_directory(tmp_path)
+    throwaway_script = scratchpad_directory / "probe.py"
+
+    assert _SHARED_MODULE.is_ephemeral_path(str(throwaway_script)) is True
