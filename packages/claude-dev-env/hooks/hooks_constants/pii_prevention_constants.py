@@ -132,6 +132,7 @@ ALL_SOURCE_TEST_FILE_SUFFIXES: tuple[str, ...] = (
 )
 ALL_SAFE_EMAIL_DOMAINS: frozenset[str] = frozenset(
     {
+        "anthropic.com",
         "example.com",
         "example.org",
         "example.net",
