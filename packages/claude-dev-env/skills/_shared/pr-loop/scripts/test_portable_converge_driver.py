@@ -16,6 +16,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     BLOCKER_COPILOT_WAIT_CAP,
     BLOCKER_INLINE_LAG_CAP,
     BLOCKER_NOT_PORTABLE,
+    BUGBOT_INLINE_LAG_WAIT_SECONDS,
     COPILOT_WAIT_HARD_CAP,
     DEFAULT_WAIT_SECONDS,
     EXIT_CONTRACT_ERROR,
@@ -48,6 +49,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     STATE_KEY_CODEX_DOWN,
     STATE_KEY_CODEX_REQUIRED,
     STATE_KEY_PENDING_NEXT,
+    STATE_KEY_PENDING_WAIT_SECONDS,
     STATUS_ERROR,
     STATUS_OK,
 )
@@ -304,6 +306,42 @@ def test_open_run_rejects_non_portable_pacer(tmp_path: Path) -> None:
     assert payload[RESULT_KEY_PACER] == "workflow"
 
 
+def test_open_run_portable_seeds_state_and_code_review_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        driver, "_run_preflight", lambda **_kwargs: (None, EXIT_SUCCESS)
+    )
+    monkeypatch.setattr(
+        driver, "_read_git_head", lambda _cwd: ("deadbeef", None, EXIT_SUCCESS)
+    )
+    state_dir = tmp_path / "state"
+    payload, exit_code = driver.run_open_run(
+        entry_skill="autoconverge",
+        has_workflow=False,
+        has_schedule_wakeup=False,
+        owner="owner",
+        repo="repo",
+        pr_number=220,
+        cwd_path=tmp_path / "worktree",
+        state_dir=state_dir,
+        session_model="third-party",
+        is_copilot_down=False,
+        is_bugbot_down=False,
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_STATUS] == STATUS_OK
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODE_REVIEW
+    assert payload[RESULT_KEY_PHASE] == PHASE_CODE_REVIEW
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    assert all_commands[0] == "python"
+    assert "tasks" in payload
+    reloaded = driver.load_state(state_dir / "pr-converge-state.json")
+    assert reloaded[STATE_KEY_PENDING_NEXT] == NEXT_RUN_CODE_REVIEW
+    assert reloaded["current_head"] == "deadbeef"
+
+
 def test_main_after_code_review_cli(state_file: Path) -> None:
     exit_code = driver.main(
         [
@@ -368,8 +406,10 @@ def test_after_bugbot_inline_lag_polls_under_cap(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
     assert payload[RESULT_KEY_PHASE] == PHASE_BUGBOT
+    assert payload[RESULT_KEY_WAIT_SECONDS] == BUGBOT_INLINE_LAG_WAIT_SECONDS
     reloaded = driver.load_state(state_file)
     assert reloaded["inline_lag_streak"] == 1
+    assert reloaded[STATE_KEY_PENDING_WAIT_SECONDS] == BUGBOT_INLINE_LAG_WAIT_SECONDS
 
 
 def test_after_bugbot_inline_lag_cap_blocks(state_file: Path) -> None:
@@ -786,6 +826,32 @@ def test_show_state_rehydrates_poll_wait_seconds(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
     assert payload[RESULT_KEY_WAIT_SECONDS] == DEFAULT_WAIT_SECONDS
+
+
+def test_after_bugbot_inline_lag_show_state_preserves_wait_seconds(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["inline_lag_streak"] = 0
+    driver.save_state(state_file, state)
+    after_payload, after_exit = driver.run_after_bugbot(
+        state_file=state_file,
+        classification="dirty",
+        current_head="abc123",
+        is_inline_lag=True,
+    )
+    assert after_exit == EXIT_SUCCESS
+    assert after_payload[RESULT_KEY_WAIT_SECONDS] == BUGBOT_INLINE_LAG_WAIT_SECONDS
+    show_payload, show_exit = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert show_exit == EXIT_SUCCESS
+    assert show_payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+    assert show_payload[RESULT_KEY_WAIT_SECONDS] == BUGBOT_INLINE_LAG_WAIT_SECONDS
 
 
 def test_after_bugteam_head_change_resets_down_flags(state_file: Path) -> None:

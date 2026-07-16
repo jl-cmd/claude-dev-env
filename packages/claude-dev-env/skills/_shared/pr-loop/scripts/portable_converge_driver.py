@@ -180,6 +180,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     STATE_KEY_CODEX_REQUIRED,
     STATE_KEY_CWD,
     STATE_KEY_PENDING_NEXT,
+    STATE_KEY_PENDING_WAIT_SECONDS,
     STATE_KEY_SESSION_MODEL,
     STATE_STAGING_SUFFIX,
     STATUS_ERROR,
@@ -477,6 +478,24 @@ def _base_ok_payload(
     }
 
 
+def _store_pending_wait_seconds(
+    all_state: dict[str, object],
+    *,
+    wait_seconds: int | None,
+) -> None:
+    if wait_seconds is None:
+        all_state.pop(STATE_KEY_PENDING_WAIT_SECONDS, None)
+        return
+    all_state[STATE_KEY_PENDING_WAIT_SECONDS] = wait_seconds
+
+
+def _resolve_poll_wait_seconds(all_state: Mapping[str, object]) -> int:
+    pending_wait_seconds = all_state.get(STATE_KEY_PENDING_WAIT_SECONDS)
+    if isinstance(pending_wait_seconds, int):
+        return pending_wait_seconds
+    return DEFAULT_WAIT_SECONDS
+
+
 def _finish_ok(
     all_state: dict[str, object],
     state_file: Path,
@@ -488,6 +507,7 @@ def _finish_ok(
     all_extra_fields: Mapping[str, object] | None,
 ) -> tuple[dict[str, object], int]:
     all_state[STATE_KEY_PENDING_NEXT] = next_action
+    _store_pending_wait_seconds(all_state, wait_seconds=wait_seconds)
     resolved_commands = all_commands
     if next_action == NEXT_RUN_CODE_REVIEW:
         resolved_commands = _code_review_commands_from_state(all_state)
@@ -604,8 +624,7 @@ def _seed_open_run_task_list_and_finish(
         state_file,
         next_action=NEXT_RUN_CODE_REVIEW,
         all_commands=_code_review_commands(
-            cwd_path=cwd_path, session_model=session_model,
-            all_extra_fields=None,
+            cwd_path=cwd_path, session_model=session_model
         ),
         wait_seconds=None,
         blocker=None,
@@ -1454,7 +1473,9 @@ def _dispatch_show_state(
     elif next_action == NEXT_MARK_READY:
         all_payload[RESULT_KEY_COMMANDS] = _mark_ready_commands(all_state)
     elif next_action == NEXT_POLL_WAIT:
-        all_payload[RESULT_KEY_WAIT_SECONDS] = DEFAULT_WAIT_SECONDS
+        all_payload[RESULT_KEY_WAIT_SECONDS] = _resolve_poll_wait_seconds(
+            all_state
+        )
     return all_payload, EXIT_SUCCESS
 
 

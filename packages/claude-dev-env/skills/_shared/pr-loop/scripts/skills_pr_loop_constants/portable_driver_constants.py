@@ -136,6 +136,7 @@ ALL_CODEX_CLASSIFICATIONS: tuple[str, ...] = (
 )
 
 STATE_KEY_PENDING_NEXT: str = "pending_next"
+STATE_KEY_PENDING_WAIT_SECONDS: str = "pending_wait_seconds"
 STATE_KEY_CODEX_DOWN: str = "codex_down"
 STATE_KEY_CODEX_REQUIRED: str = "codex_required"
 STATE_KEY_CODEX_CLEAN_AT: str = "codex_clean_at"
