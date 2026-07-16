@@ -51,6 +51,7 @@ DEFAULT_WAIT_SECONDS: int = 360
 BUGBOT_INLINE_LAG_WAIT_SECONDS: int = 90
 INLINE_LAG_STREAK_CAP: int = 3
 COPILOT_WAIT_HARD_CAP: int = 3
+BUGBOT_ABSENT_WAIT_HARD_CAP: int = 3
 
 STATE_FILENAME: str = "pr-converge-state.json"
 STATE_JSON_INDENT: int = 2
@@ -83,6 +84,7 @@ STATUS_OK: str = "ok"
 STATUS_ERROR: str = "error"
 
 BLOCKER_COPILOT_WAIT_CAP: str = "copilot_wait_cap"
+BLOCKER_BUGBOT_WAIT_CAP: str = "bugbot_wait_cap"
 BLOCKER_INLINE_LAG_CAP: str = "inline_lag_cap"
 BLOCKER_REVIEW_FAILED: str = "code_review_failed"
 BLOCKER_PREFLIGHT: str = "preflight_failed"

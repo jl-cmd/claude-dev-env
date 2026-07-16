@@ -77,11 +77,13 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     ALL_CODEX_CLASSIFICATIONS,
     ALL_COPILOT_CLASSIFICATIONS,
     ALL_GIT_REV_PARSE_HEAD_ARGV,
+    BLOCKER_BUGBOT_WAIT_CAP,
     BLOCKER_COPILOT_WAIT_CAP,
     BLOCKER_INLINE_LAG_CAP,
     BLOCKER_NOT_PORTABLE,
     BLOCKER_PREFLIGHT,
     BLOCKER_REVIEW_FAILED,
+    BUGBOT_ABSENT_WAIT_HARD_CAP,
     BUGBOT_INLINE_LAG_WAIT_SECONDS,
     CHECK_CONVERGENCE_BUGBOT_DOWN_FLAG,
     CHECK_CONVERGENCE_CODEX_CLEAN_AT_FLAG,
@@ -281,6 +283,7 @@ def build_initial_state(
         "merge_state_status": None,
         "current_head": current_head,
         "copilot_wait_count": 0,
+        "bugbot_wait_count": 0,
         "copilot_down": is_copilot_down,
         "bugbot_down": is_bugbot_down,
         STATE_KEY_CODEX_DOWN: is_codex_down,
@@ -304,9 +307,8 @@ def _reset_push_invalidated_markers(all_state: dict[str, object]) -> None:
     all_state[STATE_KEY_CODEX_CLEAN_AT] = None
     all_state["merge_state_status"] = None
     all_state["copilot_wait_count"] = 0
+    all_state["bugbot_wait_count"] = 0
     all_state["inline_lag_streak"] = 0
-    all_state["bugbot_down"] = False
-    all_state[STATE_KEY_CODEX_DOWN] = False
 
 
 def _code_review_commands(
@@ -613,22 +615,11 @@ def run_open_run(
     )
 
 
-def _is_successful_serve(*, returncode: int, served_command: str) -> bool:
+def _is_successful_serve(*, returncode: int) -> bool:
     """Return True when code-review completed a successful serve.
-
-    ::
-
-        returncode 0 + served_command ''          -> True  (in_session)
-        returncode 0 + served_command in_session  -> True
-        returncode 0 + served_command claude.exe  -> True  (chain)
-        returncode 1 + any served_command         -> False
-
-    Empty served_command with returncode 0 is the in_session default
-    path. Non-zero returncode always fails regardless of command text.
 
     Args:
         returncode: Helper process exit code.
-        served_command: Empty, ``in_session``, or chain command path.
 
     Returns:
         Whether the serve counts as successful for phase advance.
@@ -661,10 +652,8 @@ def run_after_code_review(
     all_state["current_head"] = current_head
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
-    is_successful_serve = _is_successful_serve(
-        returncode=returncode,
-        served_command=served_command,
-    )
+    del served_command
+    is_successful_serve = _is_successful_serve(returncode=returncode)
     if not is_successful_serve:
         all_state["phase"] = PHASE_CODE_REVIEW
         all_state["blocker"] = BLOCKER_REVIEW_FAILED
@@ -802,7 +791,6 @@ def run_after_bugteam(
     if is_pushed:
         _reset_push_invalidated_markers(all_state)
         all_state["phase"] = PHASE_CODE_REVIEW
-        all_state["current_head"] = current_head
         return _finish_ok(
             all_state,
             state_file,
@@ -964,6 +952,19 @@ def run_after_bugbot(
             all_state, state_file, is_inline_lag=is_inline_lag
         )
     if classification == CLASSIFICATION_ABSENT:
+        wait_count = int(all_state.get("bugbot_wait_count") or 0) + 1
+        all_state["bugbot_wait_count"] = wait_count
+        if wait_count >= BUGBOT_ABSENT_WAIT_HARD_CAP:
+            all_state["phase"] = PHASE_BLOCKED
+            all_state["blocker"] = BLOCKER_BUGBOT_WAIT_CAP
+            return _finish_ok(
+                all_state,
+                state_file,
+                next_action=NEXT_STOP_BLOCKED,
+                all_commands=_EMPTY_COMMANDS,
+                wait_seconds=None,
+                blocker=BLOCKER_BUGBOT_WAIT_CAP,
+            )
         all_state["phase"] = PHASE_BUGBOT
         return _finish_ok(
             all_state,
@@ -1064,12 +1065,7 @@ def _after_copilot_surfaced(
         return _after_copilot_not_surfaced(all_state, state_file)
     if classification == CLASSIFICATION_DOWN:
         return _after_copilot_down(all_state, state_file)
-    if classification == CLASSIFICATION_CLEAN:
-        return _after_copilot_clean(all_state, state_file, current_head)
-    return (
-        _error_payload(f"unknown classification: {classification!r}"),
-        EXIT_USAGE_ERROR,
-    )
+    return _after_copilot_clean(all_state, state_file, current_head)
 
 
 def run_after_copilot_wait(

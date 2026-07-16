@@ -154,9 +154,9 @@ def test_after_bugteam_pushed_resets_to_code_review(state_file: Path) -> None:
     reloaded = driver.load_state(state_file)
     assert reloaded["code_review_clean_at"] is None
     assert reloaded["current_head"] == "def456"
-    assert reloaded["bugbot_down"] is False
+    assert reloaded["bugbot_down"] is True
     assert reloaded["copilot_down"] is True
-    assert reloaded[STATE_KEY_CODEX_DOWN] is False
+    assert reloaded[STATE_KEY_CODEX_DOWN] is True
     assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
     assert reloaded["inline_lag_streak"] == 0
 
