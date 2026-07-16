@@ -6,11 +6,12 @@ Spawns a background subagent that polls the GitHub Copilot reviewer on the curre
 
 The main session gathers PR context (number, HEAD SHA, owner/repo, branch), spawns a self-terminating background subagent with a fully filled-in prompt, and returns control at once. The subagent loops on a 6-minute `ScheduleWakeup` cadence: fetch Copilot's latest review, TDD-fix any inline findings, push a commit, reply inline, resolve each addressed thread, re-request review. It stops on convergence, a persistent blocker, `TaskStop`, three consecutive ticks with no Copilot review at the current HEAD, or after 20 ticks.
 
-## Key file
+## Key files
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Four-step orchestration (opt-out check, gather PR context, spawn subagent, report to user), the verbatim subagent prompt template with all placeholders, fix protocol, stop conditions, and ground rules (one commit per tick, honor hooks, preserve draft state, use `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix). |
+| `SKILL.md` | Four-step orchestration (opt-out check, gather PR context, spawn subagent, report to user), fix protocol, stop conditions, and ground rules (one commit per tick, honor hooks, preserve draft state, use `copilot-pull-request-reviewer[bot]` with the `[bot]` suffix). |
+| `templates/subagent-prompt.md` | The background watcher prompt Step 3 passes to the subagent word for word, with placeholders for PR number, owner, repo, branch, and HEAD SHA. |
 
 ## Environment opt-out
 

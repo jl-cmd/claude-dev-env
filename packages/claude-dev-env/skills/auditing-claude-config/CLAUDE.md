@@ -9,6 +9,7 @@ Audits a Claude Code setup — user `CLAUDE.md`, `~/.claude/rules/`, project `.c
 | File | Role |
 |---|---|
 | `SKILL.md` | Full audit protocol: inventory the always-loaded set, find duplicate imports, classify each rule, produce the migration table, stage recommendations by risk, and verify lazy-load behavior with an optional probe hook. |
+| `reference/probe-hook.md` | The optional lazy-load probe hook: hook script, `settings.json` registration, and test protocol. |
 
 ## What the skill produces
 
@@ -17,4 +18,4 @@ Audits a Claude Code setup — user `CLAUDE.md`, `~/.claude/rules/`, project `.c
 3. **Recommended next step** — the single highest-leverage change.
 4. **Open questions** — anything not verified by the probe hook.
 
-No scripts or workflow files. The skill body holds all logic.
+No runnable scripts or workflow files. The audit logic lives in the skill body; the optional lazy-load probe hook lives in `reference/probe-hook.md` as copy-ready text.

@@ -60,21 +60,7 @@ Resolve the metadata used by the frontmatter and the vault path:
 - **Date:** today's date
 - **Title:** a 2–5 word summary of the session's primary outcome. Examples: "Amazon Auth Migration", "Source Loading Fix", "PR 475 Convergence". Avoid generic titles like "Bug Fixes".
 
-The frontmatter contract every session report carries (inside an HTML comment, as the first child of `<body>`):
-
-```html
-<!--
-type: session-report
-project: [name]
-session: [N]
-session_id: [uuid]
-date: [YYYY-MM-DD]
-status: completed|in-progress|blocked
-blocked: true|false
-vault_context_retrieved: true|false
-tags: [session, [project-tag], [topic-tags]]
--->
-```
+The frontmatter contract every session report carries (inside an HTML comment, as the first child of `<body>`) is the metadata block in [`templates/frontmatter.md`](templates/frontmatter.md).
 
 Every session report carries this metadata block verbatim so vault search and the tidy step in step 5 work. **Initial values for Step 2's Write:** substitute concrete values for every placeholder — for `session_id`, write the value read from `CLAUDE_CODE_SESSION_ID` in step 1 (or `unknown` when the variable is unset); for `vault_context_retrieved`, write the literal value `false` (the safe default before Step 3's vault-MCP-tool scan completes). Step 3 then Edits `vault_context_retrieved` to `true` if any of the three vault MCP tools fired this session.
 
@@ -113,16 +99,7 @@ Review the conversation history for any use of these vault MCP tools (look only 
 Edit the vault HTML via two Edit calls:
 
 1. Set the frontmatter `vault_context_retrieved` field to `true` when any of the three tools fired this session, `false` otherwise.
-2. Append one fact — vault-context status — into whatever section the report designer placed for notes / metadata / references. If the report has no such section, append a fresh `<h2>Notes</h2>` block at the end of the content:
-
-```html
-<h2>Notes</h2>
-<ul>
-  <!-- Pick exactly one of the two forms based on whether vault MCP tools fired this session: -->
-  <li><strong>Vault context:</strong> Retrieved ([list of note paths])</li>
-  <li><strong>Vault context:</strong> Not retrieved</li>
-</ul>
-```
+2. Append one fact — vault-context status — into whatever section the report designer placed for notes / metadata / references. If the report has no such section, append a fresh `<h2>Notes</h2>` block (in [`templates/frontmatter.md`](templates/frontmatter.md)) at the end of the content.
 
 If the report already has a notes / references section, use Edit to insert one matching child element at the end of that section. The element shape mirrors whatever the section already uses: an extra `<li>` before the closing `</ul>` for a list, an extra `<dt>Vault context</dt><dd>…</dd>` pair before the closing `</dl>` for a description list, an extra `<p><strong>Vault context:</strong> …</p>` before the section's closing tag for a paragraph-based section. Pick the form that matches the surrounding markup.
 
@@ -189,4 +166,5 @@ The primary outcome comes from the session title resolved in step 1.
 
 ## Folder map
 
-- `SKILL.md` — this hub. Single-file skill; no companions.
+- `SKILL.md` — this hub.
+- `templates/frontmatter.md` — the report frontmatter contract and the Step 3 notes block.
