@@ -13,7 +13,8 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
     portable_converge_driver.py open-run --skill autoconverge \\
         --has-workflow 0 --has-schedule-wakeup 0 \\
         --owner O --repo R --pr-number N --cwd DIR --state-dir DIR \\
-        [--session-model third-party] [--copilot-down 0|1] [--bugbot-down 0|1]
+        [--session-model third-party] [--copilot-down 0|1] [--bugbot-down 0|1] \\
+        [--codex-down 0|1] [--codex-required 0|1]
 
     portable_converge_driver.py after-code-review --state-file PATH \\
         --returncode 0 --dirty-tree 0 --current-head SHA \\
@@ -26,8 +27,11 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
         --classification clean|dirty|absent|down --current-head SHA \\
         [--inline-lag 0|1]
 
+    portable_converge_driver.py after-codex --state-file PATH \\
+        --classification clean|dirty|down --current-head SHA
+
     portable_converge_driver.py after-copilot-wait --state-file PATH \\
-        --review-surfaced 0|1 --classification clean|dirty|absent \\
+        --review-surfaced 0|1 --classification clean|dirty|absent|down \\
         --current-head SHA
 
     portable_converge_driver.py after-ready-check --state-file PATH \\
@@ -38,6 +42,9 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
 Successful code-review serve: returncode 0 and served_command is empty
 (in_session default), the ``in_session`` token, or any non-empty chain
 command. Non-zero returncode is always a failed serve.
+
+After Bugbot clean or down, the machine runs the Codex step (or the
+codex-down / not-required waiver) before COPILOT_WAIT or check_ready.
 """
 
 from __future__ import annotations
@@ -67,6 +74,8 @@ from skills_pr_loop_constants.pacer_constants import (  # noqa: E402
 )
 from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     ALL_CLASSIFICATIONS,
+    ALL_CODEX_CLASSIFICATIONS,
+    ALL_COPILOT_CLASSIFICATIONS,
     ALL_GIT_REV_PARSE_HEAD_ARGV,
     BLOCKER_COPILOT_WAIT_CAP,
     BLOCKER_INLINE_LAG_CAP,
@@ -74,8 +83,16 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     BLOCKER_PREFLIGHT,
     BLOCKER_REVIEW_FAILED,
     BUGBOT_INLINE_LAG_WAIT_SECONDS,
+    CHECK_CONVERGENCE_BUGBOT_DOWN_FLAG,
+    CHECK_CONVERGENCE_CODEX_CLEAN_AT_FLAG,
+    CHECK_CONVERGENCE_CODEX_DOWN_FLAG,
+    CHECK_CONVERGENCE_COPILOT_DOWN_FLAG,
+    CHECK_CONVERGENCE_OWNER_FLAG,
+    CHECK_CONVERGENCE_PR_NUMBER_FLAG,
     CHECK_CONVERGENCE_RELATIVE_PATH,
+    CHECK_CONVERGENCE_REPO_FLAG,
     CLASSIFICATION_ABSENT,
+    CLASSIFICATION_CLEAN,
     CLASSIFICATION_DIRTY,
     CLASSIFICATION_DOWN,
     CLI_BUGBOT_DOWN_FLAG,
@@ -103,6 +120,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     COMMAND_AFTER_BUGBOT,
     COMMAND_AFTER_BUGTEAM,
     COMMAND_AFTER_CODE_REVIEW,
+    COMMAND_AFTER_CODEX,
     COMMAND_AFTER_COPILOT_WAIT,
     COMMAND_AFTER_READY_CHECK,
     COMMAND_OPEN_RUN,
@@ -123,8 +141,8 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     NEXT_RUN_BUGBOT_GATE,
     NEXT_RUN_BUGTEAM,
     NEXT_RUN_CODE_REVIEW,
+    NEXT_RUN_CODEX,
     NEXT_STOP_BLOCKED,
-    NEXT_TEARDOWN,
     PHASE_BLOCKED,
     PHASE_BUGBOT,
     PHASE_BUGTEAM,
@@ -134,6 +152,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     PREFLIGHT_WORKTREE_SCRIPT_NAME,
     RESULT_KEY_BLOCKER,
     RESULT_KEY_BUGBOT_DOWN,
+    RESULT_KEY_CODEX_DOWN,
     RESULT_KEY_COMMANDS,
     RESULT_KEY_COPILOT_DOWN,
     RESULT_KEY_CURRENT_HEAD,
@@ -152,6 +171,10 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     SERVED_COMMAND_IN_SESSION,
     STATE_FILENAME,
     STATE_JSON_INDENT,
+    STATE_KEY_CODEX_CLEAN_AT,
+    STATE_KEY_CODEX_DOWN,
+    STATE_KEY_CODEX_REQUIRED,
+    STATE_KEY_PENDING_NEXT,
     STATE_STAGING_SUFFIX,
     STATUS_ERROR,
     STATUS_OK,
@@ -229,6 +252,8 @@ def build_initial_state(
     owner: str,
     repo: str,
     pr_number: int,
+    is_codex_down: bool = False,
+    is_codex_required: bool = False,
 ) -> dict[str, object]:
     """Build the initial portable loop state for a PR head.
 
@@ -240,6 +265,8 @@ def build_initial_state(
         owner: Repository owner.
         repo: Repository name.
         pr_number: Pull request number.
+        is_codex_down: Codex gate skipped (disabled or opted out).
+        is_codex_required: Codex is required by usage/policy for this run.
 
     Returns:
         New state mapping at ``CODE_REVIEW``.
@@ -251,11 +278,14 @@ def build_initial_state(
         "code_review_clean_at": None,
         "bugteam_clean_at": None,
         "copilot_clean_at": None,
+        STATE_KEY_CODEX_CLEAN_AT: None,
         "merge_state_status": None,
         "current_head": current_head,
         "copilot_wait_count": 0,
         "copilot_down": is_copilot_down,
         "bugbot_down": is_bugbot_down,
+        STATE_KEY_CODEX_DOWN: is_codex_down,
+        STATE_KEY_CODEX_REQUIRED: is_codex_required,
         "inline_lag_streak": 0,
         "pacer": PACER_PORTABLE,
         "entry_skill": entry_skill,
@@ -263,6 +293,7 @@ def build_initial_state(
         "repo": repo,
         "pr_number": pr_number,
         "blocker": None,
+        STATE_KEY_PENDING_NEXT: NEXT_RUN_CODE_REVIEW,
     }
 
 
@@ -271,10 +302,12 @@ def _reset_push_invalidated_markers(all_state: dict[str, object]) -> None:
     all_state["code_review_clean_at"] = None
     all_state["bugteam_clean_at"] = None
     all_state["copilot_clean_at"] = None
+    all_state[STATE_KEY_CODEX_CLEAN_AT] = None
     all_state["merge_state_status"] = None
     all_state["copilot_wait_count"] = 0
     all_state["inline_lag_streak"] = 0
     all_state["bugbot_down"] = False
+    all_state[STATE_KEY_CODEX_DOWN] = False
 
 
 def _code_review_commands(
@@ -300,27 +333,56 @@ def _check_convergence_commands(
     pr_number: int,
     is_copilot_down: bool,
     is_bugbot_down: bool,
+    is_codex_down: bool,
+    codex_clean_at: str | None,
 ) -> list[str]:
     check_path = _home_path(*CHECK_CONVERGENCE_RELATIVE_PATH.split("/"))
     all_arguments = [
         "python",
         str(check_path),
-        "--owner",
+        CHECK_CONVERGENCE_OWNER_FLAG,
         owner,
-        "--repo",
+        CHECK_CONVERGENCE_REPO_FLAG,
         repo,
-        "--pr-number",
+        CHECK_CONVERGENCE_PR_NUMBER_FLAG,
         str(pr_number),
     ]
     if is_copilot_down:
-        all_arguments.extend(["--copilot-down"])
+        all_arguments.append(CHECK_CONVERGENCE_COPILOT_DOWN_FLAG)
     if is_bugbot_down:
-        all_arguments.extend(["--bugbot-down"])
+        all_arguments.append(CHECK_CONVERGENCE_BUGBOT_DOWN_FLAG)
+    if is_codex_down:
+        all_arguments.append(CHECK_CONVERGENCE_CODEX_DOWN_FLAG)
+    if codex_clean_at:
+        all_arguments.extend(
+            [CHECK_CONVERGENCE_CODEX_CLEAN_AT_FLAG, codex_clean_at]
+        )
     return all_arguments
 
 
 def _state_pr_number(all_state: Mapping[str, object]) -> int:
     return int(str(all_state["pr_number"]))
+
+
+def _codex_clean_at_or_none(all_state: Mapping[str, object]) -> str | None:
+    maybe_stamp = all_state.get(STATE_KEY_CODEX_CLEAN_AT)
+    if isinstance(maybe_stamp, str) and maybe_stamp:
+        return maybe_stamp
+    return None
+
+
+def _check_convergence_commands_from_state(
+    all_state: Mapping[str, object],
+) -> list[str]:
+    return _check_convergence_commands(
+        owner=str(all_state["owner"]),
+        repo=str(all_state["repo"]),
+        pr_number=_state_pr_number(all_state),
+        is_copilot_down=bool(all_state.get("copilot_down")),
+        is_bugbot_down=bool(all_state.get("bugbot_down")),
+        is_codex_down=bool(all_state.get(STATE_KEY_CODEX_DOWN)),
+        codex_clean_at=_codex_clean_at_or_none(all_state),
+    )
 
 
 def _base_ok_payload(
@@ -339,6 +401,7 @@ def _base_ok_payload(
         RESULT_KEY_PR_NUMBER: all_state.get("pr_number"),
         RESULT_KEY_COPILOT_DOWN: bool(all_state.get("copilot_down")),
         RESULT_KEY_BUGBOT_DOWN: bool(all_state.get("bugbot_down")),
+        RESULT_KEY_CODEX_DOWN: bool(all_state.get(STATE_KEY_CODEX_DOWN)),
     }
 
 
@@ -352,6 +415,7 @@ def _finish_ok(
     blocker: str | None,
     all_extra_fields: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, object], int]:
+    all_state[STATE_KEY_PENDING_NEXT] = next_action
     save_state(state_file, all_state)
     all_payload = _base_ok_payload(all_state, state_file)
     all_payload[RESULT_KEY_NEXT] = next_action
@@ -448,6 +512,8 @@ def _seed_open_run_task_list_and_finish(
         entry_skill=entry_skill,
         is_copilot_down=is_copilot_down,
         is_bugbot_down=is_bugbot_down,
+        is_codex_down=is_codex_down,
+        is_codex_required=is_codex_required,
         owner=owner,
         repo=repo,
         pr_number=pr_number,
@@ -644,6 +710,62 @@ def run_after_code_review(
     )
 
 
+def _needs_codex_step(all_state: Mapping[str, object]) -> bool:
+    if all_state.get(STATE_KEY_CODEX_DOWN):
+        return False
+    if not all_state.get(STATE_KEY_CODEX_REQUIRED):
+        return False
+    current_head = all_state.get("current_head")
+    if (
+        isinstance(current_head, str)
+        and all_state.get(STATE_KEY_CODEX_CLEAN_AT) == current_head
+    ):
+        return False
+    return True
+
+
+def _advance_after_codex_resolved(
+    all_state: dict[str, object],
+    state_file: Path,
+) -> tuple[dict[str, object], int]:
+    if all_state.get("copilot_down"):
+        all_state["phase"] = PHASE_READY
+        return _finish_ok(
+            all_state,
+            state_file,
+            next_action=NEXT_CHECK_READY,
+            all_commands=_check_convergence_commands_from_state(all_state),
+            wait_seconds=None,
+            blocker=None,
+        )
+    all_state["phase"] = PHASE_COPILOT_WAIT
+    return _finish_ok(
+        all_state,
+        state_file,
+        next_action=NEXT_REQUEST_COPILOT,
+        all_commands=_EMPTY_COMMANDS,
+        wait_seconds=None,
+        blocker=None,
+    )
+
+
+def _advance_after_bugbot_resolved(
+    all_state: dict[str, object],
+    state_file: Path,
+) -> tuple[dict[str, object], int]:
+    if _needs_codex_step(all_state):
+        all_state["phase"] = PHASE_BUGBOT
+        return _finish_ok(
+            all_state,
+            state_file,
+            next_action=NEXT_RUN_CODEX,
+            all_commands=_EMPTY_COMMANDS,
+            wait_seconds=None,
+            blocker=None,
+        )
+    return _advance_after_codex_resolved(all_state, state_file)
+
+
 def _after_bugteam_converged(
     all_state: dict[str, object],
     state_file: Path,
@@ -660,31 +782,7 @@ def _after_bugteam_converged(
             wait_seconds=None,
             blocker=None,
         )
-    if all_state.get("copilot_down"):
-        all_state["phase"] = PHASE_READY
-        return _finish_ok(
-            all_state,
-            state_file,
-            next_action=NEXT_CHECK_READY,
-            all_commands=_check_convergence_commands(
-                owner=str(all_state["owner"]),
-                repo=str(all_state["repo"]),
-                pr_number=_state_pr_number(all_state),
-                is_copilot_down=True,
-                is_bugbot_down=True,
-            ),
-            wait_seconds=None,
-            blocker=None,
-        )
-    all_state["phase"] = PHASE_COPILOT_WAIT
-    return _finish_ok(
-        all_state,
-        state_file,
-        next_action=NEXT_REQUEST_COPILOT,
-        all_commands=_EMPTY_COMMANDS,
-        wait_seconds=None,
-        blocker=None,
-    )
+    return _advance_after_bugbot_resolved(all_state, state_file)
 
 
 def run_after_bugteam(
@@ -741,31 +839,7 @@ def _after_bugbot_down(
     state_file: Path,
 ) -> tuple[dict[str, object], int]:
     all_state["bugbot_down"] = True
-    if all_state.get("copilot_down"):
-        all_state["phase"] = PHASE_READY
-        return _finish_ok(
-            all_state,
-            state_file,
-            next_action=NEXT_CHECK_READY,
-            all_commands=_check_convergence_commands(
-                owner=str(all_state["owner"]),
-                repo=str(all_state["repo"]),
-                pr_number=_state_pr_number(all_state),
-                is_copilot_down=True,
-                is_bugbot_down=True,
-            ),
-            wait_seconds=None,
-            blocker=None,
-        )
-    all_state["phase"] = PHASE_COPILOT_WAIT
-    return _finish_ok(
-        all_state,
-        state_file,
-        next_action=NEXT_REQUEST_COPILOT,
-        all_commands=_EMPTY_COMMANDS,
-        wait_seconds=None,
-        blocker=None,
-    )
+    return _advance_after_bugbot_resolved(all_state, state_file)
 
 
 def _after_bugbot_dirty(
@@ -816,31 +890,52 @@ def _after_bugbot_clean(
 ) -> tuple[dict[str, object], int]:
     all_state["bugbot_clean_at"] = current_head
     all_state["inline_lag_streak"] = 0
-    if all_state.get("copilot_down"):
-        all_state["phase"] = PHASE_READY
+    return _advance_after_bugbot_resolved(all_state, state_file)
+
+
+def run_after_codex(
+    *,
+    state_file: Path,
+    classification: str,
+    current_head: str,
+) -> tuple[dict[str, object], int]:
+    """Advance state from a Codex review step outcome.
+
+    Args:
+        state_file: Loop state path.
+        classification: clean, dirty, or down.
+        current_head: Current PR head SHA.
+
+    Returns:
+        Payload and process exit code.
+    """
+    if classification not in ALL_CODEX_CLASSIFICATIONS:
+        return (
+            _error_payload(f"unknown classification: {classification!r}"),
+            EXIT_USAGE_ERROR,
+        )
+    all_state = load_state(state_file)
+    all_state["current_head"] = current_head
+    all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
+
+    if classification == CLASSIFICATION_DIRTY:
+        _reset_push_invalidated_markers(all_state)
+        all_state["phase"] = PHASE_CODE_REVIEW
         return _finish_ok(
             all_state,
             state_file,
-            next_action=NEXT_CHECK_READY,
-            all_commands=_check_convergence_commands(
-                owner=str(all_state["owner"]),
-                repo=str(all_state["repo"]),
-                pr_number=_state_pr_number(all_state),
-                is_copilot_down=True,
-                is_bugbot_down=bool(all_state.get("bugbot_down")),
-            ),
+            next_action=NEXT_APPLY_FIXES,
+            all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
         )
-    all_state["phase"] = PHASE_COPILOT_WAIT
-    return _finish_ok(
-        all_state,
-        state_file,
-        next_action=NEXT_REQUEST_COPILOT,
-        all_commands=_EMPTY_COMMANDS,
-        wait_seconds=None,
-        blocker=None,
-    )
+
+    if classification == CLASSIFICATION_DOWN:
+        all_state[STATE_KEY_CODEX_DOWN] = True
+        return _advance_after_codex_resolved(all_state, state_file)
+
+    all_state[STATE_KEY_CODEX_CLEAN_AT] = current_head
+    return _advance_after_codex_resolved(all_state, state_file)
 
 
 def run_after_bugbot(
@@ -917,6 +1012,39 @@ def _after_copilot_not_surfaced(
     )
 
 
+def _after_copilot_clean(
+    all_state: dict[str, object],
+    state_file: Path,
+    current_head: str,
+) -> tuple[dict[str, object], int]:
+    all_state["copilot_clean_at"] = current_head
+    all_state["phase"] = PHASE_READY
+    return _finish_ok(
+        all_state,
+        state_file,
+        next_action=NEXT_CHECK_READY,
+        all_commands=_check_convergence_commands_from_state(all_state),
+        wait_seconds=None,
+        blocker=None,
+    )
+
+
+def _after_copilot_down(
+    all_state: dict[str, object],
+    state_file: Path,
+) -> tuple[dict[str, object], int]:
+    all_state["copilot_down"] = True
+    all_state["phase"] = PHASE_READY
+    return _finish_ok(
+        all_state,
+        state_file,
+        next_action=NEXT_CHECK_READY,
+        all_commands=_check_convergence_commands_from_state(all_state),
+        wait_seconds=None,
+        blocker=None,
+    )
+
+
 def _after_copilot_surfaced(
     all_state: dict[str, object],
     state_file: Path,
@@ -924,6 +1052,11 @@ def _after_copilot_surfaced(
     classification: str,
     current_head: str,
 ) -> tuple[dict[str, object], int]:
+    if classification not in ALL_COPILOT_CLASSIFICATIONS:
+        return (
+            _error_payload(f"unknown classification: {classification!r}"),
+            EXIT_USAGE_ERROR,
+        )
     all_state["copilot_wait_count"] = 0
     if classification == CLASSIFICATION_DIRTY:
         all_state["phase"] = PHASE_CODE_REVIEW
@@ -935,21 +1068,15 @@ def _after_copilot_surfaced(
             wait_seconds=None,
             blocker=None,
         )
-    all_state["copilot_clean_at"] = current_head
-    all_state["phase"] = PHASE_READY
-    return _finish_ok(
-        all_state,
-        state_file,
-        next_action=NEXT_CHECK_READY,
-        all_commands=_check_convergence_commands(
-            owner=str(all_state["owner"]),
-            repo=str(all_state["repo"]),
-            pr_number=_state_pr_number(all_state),
-            is_copilot_down=bool(all_state.get("copilot_down")),
-            is_bugbot_down=bool(all_state.get("bugbot_down")),
-        ),
-        wait_seconds=None,
-        blocker=None,
+    if classification == CLASSIFICATION_ABSENT:
+        return _after_copilot_not_surfaced(all_state, state_file)
+    if classification == CLASSIFICATION_DOWN:
+        return _after_copilot_down(all_state, state_file)
+    if classification == CLASSIFICATION_CLEAN:
+        return _after_copilot_clean(all_state, state_file, current_head)
+    return (
+        _error_payload(f"unknown classification: {classification!r}"),
+        EXIT_USAGE_ERROR,
     )
 
 
@@ -965,7 +1092,7 @@ def run_after_copilot_wait(
     Args:
         state_file: Loop state path.
         is_review_surfaced: A Copilot review exists at current_head.
-        classification: clean, dirty, or absent when not surfaced.
+        classification: clean, dirty, absent, or down when surfaced.
         current_head: Current PR head SHA.
 
     Returns:
@@ -1097,6 +1224,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     after_bugbot_parser.add_argument(CLI_CURRENT_HEAD_FLAG, required=True)
     after_bugbot_parser.add_argument(CLI_INLINE_LAG_FLAG, default="0")
 
+    after_codex_parser = all_subparsers.add_parser(COMMAND_AFTER_CODEX)
+    after_codex_parser.add_argument(CLI_STATE_FILE_FLAG, required=True)
+    after_codex_parser.add_argument(CLI_CLASSIFICATION_FLAG, required=True)
+    after_codex_parser.add_argument(CLI_CURRENT_HEAD_FLAG, required=True)
+
     after_copilot_parser = all_subparsers.add_parser(COMMAND_AFTER_COPILOT_WAIT)
     after_copilot_parser.add_argument(CLI_STATE_FILE_FLAG, required=True)
     after_copilot_parser.add_argument(CLI_REVIEW_SURFACED_FLAG, required=True)
@@ -1174,6 +1306,16 @@ def _dispatch_after_bugbot(
     )
 
 
+def _dispatch_after_codex(
+    parsed_arguments: argparse.Namespace,
+) -> tuple[dict[str, object], int]:
+    return run_after_codex(
+        state_file=Path(parsed_arguments.state_file),
+        classification=parsed_arguments.classification,
+        current_head=parsed_arguments.current_head,
+    )
+
+
 def _dispatch_after_copilot_wait(
     parsed_arguments: argparse.Namespace,
 ) -> tuple[dict[str, object], int]:
@@ -1195,17 +1337,24 @@ def _dispatch_after_ready_check(
     )
 
 
+def _resolve_show_state_next(all_state: Mapping[str, object]) -> str:
+    pending_next = all_state.get(STATE_KEY_PENDING_NEXT)
+    if isinstance(pending_next, str) and pending_next:
+        return pending_next
+    if all_state.get("phase") == PHASE_READY:
+        return NEXT_MARK_READY
+    if all_state.get("phase") == PHASE_BLOCKED:
+        return NEXT_STOP_BLOCKED
+    return str(all_state.get("phase"))
+
+
 def _dispatch_show_state(
     parsed_arguments: argparse.Namespace,
 ) -> tuple[dict[str, object], int]:
     state_file = Path(parsed_arguments.state_file)
     all_state = load_state(state_file)
     all_payload = _base_ok_payload(all_state, state_file)
-    all_payload[RESULT_KEY_NEXT] = (
-        NEXT_TEARDOWN
-        if all_state.get("phase") in {PHASE_READY, PHASE_BLOCKED}
-        else str(all_state.get("phase"))
-    )
+    all_payload[RESULT_KEY_NEXT] = _resolve_show_state_next(all_state)
     return all_payload, EXIT_SUCCESS
 
 
@@ -1225,6 +1374,7 @@ def main(all_argv: list[str]) -> int:
         COMMAND_AFTER_CODE_REVIEW: _dispatch_after_code_review,
         COMMAND_AFTER_BUGTEAM: _dispatch_after_bugteam,
         COMMAND_AFTER_BUGBOT: _dispatch_after_bugbot,
+        COMMAND_AFTER_CODEX: _dispatch_after_codex,
         COMMAND_AFTER_COPILOT_WAIT: _dispatch_after_copilot_wait,
         COMMAND_AFTER_READY_CHECK: _dispatch_after_ready_check,
         COMMAND_SHOW_STATE: _dispatch_show_state,

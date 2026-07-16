@@ -26,6 +26,7 @@ NEXT_RUN_CODE_REVIEW: str = "run_code_review"
 NEXT_APPLY_FIXES: str = "apply_fixes_and_push"
 NEXT_RUN_BUGTEAM: str = "run_bugteam"
 NEXT_RUN_BUGBOT_GATE: str = "run_bugbot_gate"
+NEXT_RUN_CODEX: str = "run_codex_review"
 NEXT_REQUEST_COPILOT: str = "request_copilot_review"
 NEXT_POLL_WAIT: str = "poll_wait"
 NEXT_CHECK_READY: str = "check_ready"
@@ -37,6 +38,7 @@ ALL_NEXT_ACTIONS: tuple[str, ...] = (
     NEXT_APPLY_FIXES,
     NEXT_RUN_BUGTEAM,
     NEXT_RUN_BUGBOT_GATE,
+    NEXT_RUN_CODEX,
     NEXT_REQUEST_COPILOT,
     NEXT_POLL_WAIT,
     NEXT_CHECK_READY,
@@ -75,6 +77,7 @@ RESULT_KEY_PR_NUMBER: str = "pr_number"
 RESULT_KEY_MESSAGE: str = "message"
 RESULT_KEY_COPILOT_DOWN: str = "copilot_down"
 RESULT_KEY_BUGBOT_DOWN: str = "bugbot_down"
+RESULT_KEY_CODEX_DOWN: str = "codex_down"
 
 STATUS_OK: str = "ok"
 STATUS_ERROR: str = "error"
@@ -104,6 +107,7 @@ CLI_BUGBOT_DOWN_FLAG: str = "--bugbot-down"
 CLI_COPILOT_DOWN_FLAG: str = "--copilot-down"
 CLI_CODEX_DOWN_FLAG: str = "--codex-down"
 CLI_CODEX_REQUIRED_FLAG: str = "--codex-required"
+CLI_CODEX_CLEAN_AT_FLAG: str = "--codex-clean-at"
 CLI_CURRENT_HEAD_FLAG: str = "--current-head"
 CLI_CHECK_CONVERGENCE_EXIT_FLAG: str = "--check-exit"
 
@@ -117,12 +121,37 @@ ALL_CLASSIFICATIONS: tuple[str, ...] = (
     CLASSIFICATION_ABSENT,
     CLASSIFICATION_DOWN,
 )
+ALL_COPILOT_CLASSIFICATIONS: tuple[str, ...] = (
+    CLASSIFICATION_CLEAN,
+    CLASSIFICATION_DIRTY,
+    CLASSIFICATION_ABSENT,
+    CLASSIFICATION_DOWN,
+)
+ALL_CODEX_CLASSIFICATIONS: tuple[str, ...] = (
+    CLASSIFICATION_CLEAN,
+    CLASSIFICATION_DIRTY,
+    CLASSIFICATION_DOWN,
+)
+
+STATE_KEY_PENDING_NEXT: str = "pending_next"
+STATE_KEY_CODEX_DOWN: str = "codex_down"
+STATE_KEY_CODEX_REQUIRED: str = "codex_required"
+STATE_KEY_CODEX_CLEAN_AT: str = "codex_clean_at"
+
+CHECK_CONVERGENCE_OWNER_FLAG: str = "--owner"
+CHECK_CONVERGENCE_REPO_FLAG: str = "--repo"
+CHECK_CONVERGENCE_PR_NUMBER_FLAG: str = "--pr-number"
+CHECK_CONVERGENCE_COPILOT_DOWN_FLAG: str = "--copilot-down"
+CHECK_CONVERGENCE_BUGBOT_DOWN_FLAG: str = "--bugbot-down"
+CHECK_CONVERGENCE_CODEX_DOWN_FLAG: str = "--codex-down"
+CHECK_CONVERGENCE_CODEX_CLEAN_AT_FLAG: str = "--codex-clean-at"
 
 COMMAND_OPEN_RUN: str = "open-run"
 COMMAND_AFTER_CODE_REVIEW: str = "after-code-review"
 COMMAND_AFTER_BUGTEAM: str = "after-bugteam"
 COMMAND_AFTER_BUGBOT: str = "after-bugbot"
 COMMAND_AFTER_COPILOT_WAIT: str = "after-copilot-wait"
+COMMAND_AFTER_CODEX: str = "after-codex"
 COMMAND_AFTER_READY_CHECK: str = "after-ready-check"
 COMMAND_SHOW_STATE: str = "show-state"
 

@@ -20,6 +20,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     DEFAULT_WAIT_SECONDS,
     EXIT_CONTRACT_ERROR,
     EXIT_SUCCESS,
+    EXIT_USAGE_ERROR,
     INLINE_LAG_STREAK_CAP,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
@@ -27,6 +28,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     NEXT_POLL_WAIT,
     NEXT_RUN_BUGTEAM,
     NEXT_RUN_CODE_REVIEW,
+    NEXT_RUN_CODEX,
     NEXT_STOP_BLOCKED,
     PHASE_BLOCKED,
     PHASE_BUGTEAM,
@@ -40,6 +42,10 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     RESULT_KEY_STATUS,
     RESULT_KEY_WAIT_SECONDS,
     SERVED_COMMAND_IN_SESSION,
+    STATE_KEY_CODEX_CLEAN_AT,
+    STATE_KEY_CODEX_DOWN,
+    STATE_KEY_CODEX_REQUIRED,
+    STATE_KEY_PENDING_NEXT,
     STATUS_ERROR,
     STATUS_OK,
 )
@@ -53,6 +59,8 @@ def state_file(tmp_path: Path) -> Path:
         entry_skill="autoconverge",
         is_copilot_down=True,
         is_bugbot_down=True,
+        is_codex_down=True,
+        is_codex_required=False,
         owner="owner",
         repo="repo",
         pr_number=220,
@@ -119,9 +127,9 @@ def test_after_bugteam_converged_with_down_gates_checks_ready(
     assert payload[RESULT_KEY_PHASE] == PHASE_READY
     all_commands = payload["commands"]
     assert isinstance(all_commands, list)
-    assert "check_convergence.py" in " ".join(
-        str(each_token) for each_token in all_commands
-    )
+    joined = " ".join(str(each_token) for each_token in all_commands)
+    assert "check_convergence.py" in joined
+    assert "--codex-down" in joined
 
 
 def test_after_bugteam_pushed_resets_to_code_review(state_file: Path) -> None:
@@ -130,6 +138,8 @@ def test_after_bugteam_pushed_resets_to_code_review(state_file: Path) -> None:
     state["bugteam_clean_at"] = "old"
     state["bugbot_down"] = True
     state["copilot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = True
+    state[STATE_KEY_CODEX_CLEAN_AT] = "old"
     state["inline_lag_streak"] = 2
     driver.save_state(state_file, state)
     payload, exit_code = driver.run_after_bugteam(
@@ -145,6 +155,8 @@ def test_after_bugteam_pushed_resets_to_code_review(state_file: Path) -> None:
     assert reloaded["current_head"] == "def456"
     assert reloaded["bugbot_down"] is False
     assert reloaded["copilot_down"] is True
+    assert reloaded[STATE_KEY_CODEX_DOWN] is False
+    assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
     assert reloaded["inline_lag_streak"] == 0
 
 
@@ -228,6 +240,8 @@ def test_after_ready_check_zero_marks_ready(state_file: Path) -> None:
     all_commands = payload["commands"]
     assert isinstance(all_commands, list)
     assert all_commands[0] == "gh"
+    reloaded = driver.load_state(state_file)
+    assert reloaded[STATE_KEY_PENDING_NEXT] == NEXT_MARK_READY
 
 
 def test_open_run_rejects_non_portable_pacer(tmp_path: Path) -> None:
@@ -335,3 +349,240 @@ def test_after_bugbot_inline_lag_cap_blocks(state_file: Path) -> None:
     reloaded = driver.load_state(state_file)
     assert reloaded["inline_lag_streak"] == INLINE_LAG_STREAK_CAP
 
+
+def test_after_copilot_clean_stamps_and_checks_ready(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="clean",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    assert payload[RESULT_KEY_PHASE] == PHASE_READY
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_clean_at"] == "abc123"
+
+
+def test_after_copilot_absent_when_surfaced_polls_without_stamp(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    state["copilot_wait_count"] = 0
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="absent",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_POLL_WAIT
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_clean_at"] is None
+    assert reloaded["copilot_wait_count"] == 1
+
+
+def test_after_copilot_unknown_classification_rejects(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="mystery",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_USAGE_ERROR
+    assert payload[RESULT_KEY_STATUS] == STATUS_ERROR
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_clean_at"] is None
+
+
+def test_after_copilot_down_advances_without_clean_stamp(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["copilot_down"] = False
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_copilot_wait(
+        state_file=state_file,
+        is_review_surfaced=True,
+        classification="down",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    reloaded = driver.load_state(state_file)
+    assert reloaded["copilot_down"] is True
+    assert reloaded["copilot_clean_at"] is None
+
+
+def test_after_bugbot_clean_when_codex_required_runs_codex(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    state["copilot_down"] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_bugbot(
+        state_file=state_file,
+        classification="clean",
+        current_head="abc123",
+        is_inline_lag=False,
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODEX
+    assert payload[RESULT_KEY_PHASE] == PHASE_BUGBOT
+    reloaded = driver.load_state(state_file)
+    assert reloaded["bugbot_clean_at"] == "abc123"
+    assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
+
+
+def test_after_codex_clean_advances_to_check_ready(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    state["copilot_down"] = True
+    state["bugbot_down"] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_codex(
+        state_file=state_file,
+        classification="clean",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    assert payload[RESULT_KEY_PHASE] == PHASE_READY
+    reloaded = driver.load_state(state_file)
+    assert reloaded[STATE_KEY_CODEX_CLEAN_AT] == "abc123"
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    joined = " ".join(str(each_token) for each_token in all_commands)
+    assert "--codex-clean-at" in joined
+    assert "abc123" in joined
+
+
+def test_after_codex_down_waives_and_checks_ready(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    state["copilot_down"] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_codex(
+        state_file=state_file,
+        classification="down",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    reloaded = driver.load_state(state_file)
+    assert reloaded[STATE_KEY_CODEX_DOWN] is True
+    assert reloaded[STATE_KEY_CODEX_CLEAN_AT] is None
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    assert "--codex-down" in " ".join(
+        str(each_token) for each_token in all_commands
+    )
+
+
+def test_after_codex_dirty_requests_fixes(state_file: Path) -> None:
+    state = driver.load_state(state_file)
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_codex(
+        state_file=state_file,
+        classification="dirty",
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_APPLY_FIXES
+    assert payload[RESULT_KEY_PHASE] == PHASE_CODE_REVIEW
+
+
+def test_after_bugteam_when_codex_required_runs_codex_before_ready(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["bugbot_down"] = True
+    state["copilot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = True
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_bugteam(
+        state_file=state_file,
+        is_pushed=False,
+        is_converged=True,
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODEX
+    assert payload[RESULT_KEY_PHASE] == PHASE_BUGBOT
+
+
+def test_show_state_ready_with_pending_mark_ready(state_file: Path) -> None:
+    driver.run_after_ready_check(
+        state_file=state_file,
+        check_exit=0,
+        current_head="abc123",
+    )
+    exit_code = driver.main(
+        ["show-state", "--state-file", str(state_file)]
+    )
+    assert exit_code == EXIT_SUCCESS
+    reloaded = driver.load_state(state_file)
+    assert reloaded["phase"] == PHASE_READY
+    assert reloaded[STATE_KEY_PENDING_NEXT] == NEXT_MARK_READY
+    payload, show_exit = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert show_exit == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_MARK_READY
+
+
+def test_show_state_ready_without_pending_defaults_to_mark_ready(
+    state_file: Path,
+) -> None:
+    state = driver.load_state(state_file)
+    state["phase"] = PHASE_READY
+    state.pop(STATE_KEY_PENDING_NEXT, None)
+    driver.save_state(state_file, state)
+    payload, exit_code = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_MARK_READY
+
+
+def test_show_state_echoes_pending_check_ready(state_file: Path) -> None:
+    driver.run_after_bugteam(
+        state_file=state_file,
+        is_pushed=False,
+        is_converged=True,
+        current_head="abc123",
+    )
+    payload, exit_code = driver._dispatch_show_state(  # noqa: SLF001
+        type(
+            "Namespace",
+            (),
+            {"state_file": str(state_file)},
+        )()
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_CHECK_READY
+    assert payload[RESULT_KEY_PHASE] == PHASE_READY
