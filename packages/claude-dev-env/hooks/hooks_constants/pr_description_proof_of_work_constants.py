@@ -17,6 +17,8 @@ PR_READY_UNDO_FLAG: str = "--undo"
 
 GH_EXECUTABLE: str = "gh"
 GH_API_SUBCOMMAND: str = "api"
+GH_REPO_FLAG: str = "--repo"
+REPO_SLUG_TEMPLATE: str = "{owner}/{repo}"
 GH_PAGINATE_FLAG: str = "--paginate"
 GH_SLURP_FLAG: str = "--slurp"
 PR_COMMENTS_API_PATH_TEMPLATE: str = "repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"
@@ -91,6 +93,7 @@ __all__ = [
     "GH_COMMAND_TIMEOUT_SECONDS",
     "GH_EXECUTABLE",
     "GH_PAGINATE_FLAG",
+    "GH_REPO_FLAG",
     "GH_SLURP_FLAG",
     "HEX_COLOR_ADDED_LINE_PATTERN",
     "IMAGE_EMBED_PATTERN",
@@ -108,4 +111,5 @@ __all__ = [
     "PR_READY_GATE_MESSAGE_TEMPLATE",
     "PR_READY_INVOCATION_PATTERN",
     "PR_READY_UNDO_FLAG",
+    "REPO_SLUG_TEMPLATE",
 ]

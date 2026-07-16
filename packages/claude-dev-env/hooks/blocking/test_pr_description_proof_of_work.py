@@ -70,6 +70,34 @@ def _install_fake_gh(monkeypatch, all_comment_bodies, all_diff_names, diff_text)
     monkeypatch.setattr(proof_module, "_run_gh_command", _fake_run_gh_command)
 
 
+def _install_recording_fake_gh(monkeypatch, all_comment_bodies, all_diff_names, diff_text):
+    all_comment_records = [{"body": each_body} for each_body in all_comment_bodies]
+    all_recorded_argument_lists: list[list[str]] = []
+
+    def _fake_run_gh_command(all_gh_arguments):
+        all_recorded_argument_lists.append(list(all_gh_arguments))
+        if all_gh_arguments and all_gh_arguments[0] == "api":
+            return json.dumps([all_comment_records])
+        if list(all_gh_arguments[:2]) == ["pr", "view"]:
+            return json.dumps({"number": 77})
+        if "--name-only" in all_gh_arguments:
+            return "\n".join(all_diff_names)
+        if list(all_gh_arguments[:2]) == ["pr", "diff"]:
+            return diff_text
+        return None
+
+    monkeypatch.setattr(proof_module, "_run_gh_command", _fake_run_gh_command)
+    return all_recorded_argument_lists
+
+
+def _argument_lists_with_leading(all_recorded_argument_lists, first_token, second_token):
+    return [
+        each_arguments
+        for each_arguments in all_recorded_argument_lists
+        if list(each_arguments[:2]) == [first_token, second_token]
+    ]
+
+
 def test_is_proof_shaped_body_detects_verification_heading() -> None:
     assert is_proof_shaped_body(PASSING_PROOF_COMMENT_BODY)
 
@@ -160,3 +188,63 @@ def test_ready_gate_resolves_pr_number_from_current_branch(
 ) -> None:
     _install_fake_gh(monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], "")
     assert evaluate_pr_ready_gate("gh pr ready") is None
+
+
+def test_ready_gate_reads_comments_from_repo_named_by_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready 42 --repo other-owner/other-repo")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/other-owner/other-repo/issues/42/comments"
+    )
+    assert all_api_calls
+    for each_arguments in all_api_calls:
+        assert "{owner}" not in each_arguments[1]
+        assert "{repo}" not in each_arguments[1]
+
+
+def test_ready_gate_resolves_pr_number_from_repo_named_by_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready --repo other-owner/other-repo")
+    all_view_calls = _argument_lists_with_leading(all_recorded, "pr", "view")
+    assert all_view_calls
+    for each_arguments in all_view_calls:
+        assert "--repo" in each_arguments
+        assert "other-owner/other-repo" in each_arguments
+
+
+def test_ready_gate_reads_comments_from_repo_named_by_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready https://github.com/url-owner/url-repo/pull/99")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/url-owner/url-repo/issues/99/comments"
+    )
+    assert all_api_calls
+    all_view_calls = _argument_lists_with_leading(all_recorded, "pr", "view")
+    assert not all_view_calls
+
+
+def test_ready_gate_leaves_bare_command_bound_to_current_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready 123")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/{owner}/{repo}/issues/123/comments"
+    )
+    assert all_api_calls
+    for each_arguments in all_recorded:
+        assert "--repo" not in each_arguments

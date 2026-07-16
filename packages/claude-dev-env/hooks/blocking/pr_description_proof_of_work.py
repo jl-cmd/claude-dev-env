@@ -20,6 +20,10 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.convergence_gate_blocker import (  # noqa: E402
+    _parse_pr_url,
+    _parse_repo_flag,
+)
 from blocking.pr_description_body_audit import _iter_section_headers  # noqa: E402
 from blocking.pr_description_pr_number import (  # noqa: E402
     _extract_pr_number_from_command,
@@ -41,6 +45,7 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     GH_COMMAND_TIMEOUT_SECONDS,
     GH_EXECUTABLE,
     GH_PAGINATE_FLAG,
+    GH_REPO_FLAG,
     GH_SLURP_FLAG,
     HEX_COLOR_ADDED_LINE_PATTERN,
     IMAGE_EMBED_PATTERN,
@@ -58,6 +63,7 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     PROOF_PART_MEASURED_MESSAGE,
     PROOF_PART_PLAN_LINKAGE_MESSAGE,
     PROOF_PART_VISUAL_MESSAGE,
+    REPO_SLUG_TEMPLATE,
 )
 from hooks_constants.setup_project_paths_constants import UTF8_ENCODING  # noqa: E402
 
@@ -112,12 +118,17 @@ def audit_proof_comment_body(body: str, pr_number: int | None) -> list[str]:
         an honest-gaps statement, and (when the PR diff is visual) an
         image embed.
     """
-    is_visual_change = _detect_visual_change(pr_number)
+    is_visual_change = _detect_visual_change(pr_number, None)
     return _missing_proof_parts(body, is_visual_change)
 
 
 def evaluate_pr_ready_gate(command: str) -> str | None:
     """Decide whether a gh pr ready command may proceed.
+
+    Every gh read the gate runs binds to the repository the command names —
+    a full PR URL or a ``--repo``/``-R`` flag — so a command targeting one
+    repository from a working tree checked out to another audits the named
+    repository's PR, not the working tree's.
 
     Args:
         command: The raw shell command captured by the hook.
@@ -127,21 +138,69 @@ def evaluate_pr_ready_gate(command: str) -> str | None:
         carries no passing proof comment, or None when a passing proof
         comment exists or any gh query fails.
     """
-    resolved_pr_number = _extract_pr_number_from_command(command)
-    if resolved_pr_number is None:
-        resolved_pr_number = _resolve_current_pr_number()
-    if resolved_pr_number is None:
+    target_identity = _resolve_target_identity(command)
+    if target_identity is None:
         return None
-    all_comment_bodies = _fetch_pr_comment_bodies(resolved_pr_number)
+    all_target_repo, resolved_pr_number = target_identity
+    all_comment_bodies = _fetch_pr_comment_bodies(resolved_pr_number, all_target_repo)
     if all_comment_bodies is None:
         return None
-    is_visual_change = _detect_visual_change(resolved_pr_number)
+    is_visual_change = _detect_visual_change(resolved_pr_number, all_target_repo)
     for each_body in all_comment_bodies:
         if not is_proof_shaped_body(each_body):
             continue
         if not _missing_proof_parts(each_body, is_visual_change):
             return None
     return PR_READY_GATE_MESSAGE_TEMPLATE.format(pr_number=resolved_pr_number)
+
+
+def _resolve_target_identity(command: str) -> tuple[tuple[str, str] | None, int] | None:
+    """Resolve the repository and PR number the gate keys its reads to.
+
+    A full PR URL in the command yields both the (owner, repo) pair and the
+    number. A ``--repo``/``-R`` flag yields the pair while the number resolves
+    from the command's positional argument or the current branch's PR. With
+    neither present, the pair is None (gh reads the current directory's
+    repository) and the number resolves the same way.
+
+    Args:
+        command: The raw shell command captured by the hook.
+
+    Returns:
+        The (owner, repo) pair — or None when the command names no
+        repository — paired with the resolved PR number, or None when no PR
+        number resolves.
+    """
+    pr_url_identity = _parse_pr_url(command)
+    if pr_url_identity is not None:
+        url_owner, url_repo, url_number = pr_url_identity
+        return (url_owner, url_repo), url_number
+
+    all_target_repo = _parse_repo_flag(command)
+    resolved_pr_number = _extract_pr_number_from_command(command)
+    if resolved_pr_number is None:
+        resolved_pr_number = _resolve_current_pr_number(all_target_repo)
+    if resolved_pr_number is None:
+        return None
+    return all_target_repo, resolved_pr_number
+
+
+def _repo_flag_arguments(all_target_repo: tuple[str, str] | None) -> list[str]:
+    """Build the ``--repo owner/repo`` arguments for a gh subcommand.
+
+    Args:
+        all_target_repo: The (owner, repo) pair the command names, or None when
+            the command names no repository.
+
+    Returns:
+        A ``[--repo, owner/repo]`` argument pair when a repository is named,
+        or an empty list when it is None — leaving gh bound to the current
+        directory's repository.
+    """
+    if all_target_repo is None:
+        return []
+    owner, repo = all_target_repo
+    return [GH_REPO_FLAG, REPO_SLUG_TEMPLATE.format(owner=owner, repo=repo)]
 
 
 def _run_gh_command(all_gh_arguments: list[str]) -> str | None:
@@ -173,14 +232,20 @@ def _run_gh_command(all_gh_arguments: list[str]) -> str | None:
     return completed_process.stdout
 
 
-def _resolve_current_pr_number() -> int | None:
-    """Resolve the PR number of the current branch's open PR.
+def _resolve_current_pr_number(all_target_repo: tuple[str, str] | None) -> int | None:
+    """Resolve the PR number of the named repository's current-branch PR.
+
+    Args:
+        all_target_repo: The (owner, repo) pair the command names, or None to
+            read the current directory's repository.
 
     Returns:
         The PR number from ``gh pr view``, or None when no PR resolves or
         gh fails.
     """
-    view_stdout = _run_gh_command(list(ALL_PR_VIEW_NUMBER_ARGUMENTS))
+    view_stdout = _run_gh_command(
+        [*ALL_PR_VIEW_NUMBER_ARGUMENTS, *_repo_flag_arguments(all_target_repo)]
+    )
     if view_stdout is None:
         return None
     try:
@@ -195,7 +260,30 @@ def _resolve_current_pr_number() -> int | None:
     return None
 
 
-def _fetch_pr_comment_bodies(pr_number: int) -> list[str] | None:
+def _build_comments_api_path(pr_number: int, all_target_repo: tuple[str, str] | None) -> str:
+    """Build the issues-comments API path for the named repository's PR.
+
+    Args:
+        pr_number: The PR number whose comments to read.
+        all_target_repo: The (owner, repo) pair the command names, or None to
+            leave gh's ``{owner}``/``{repo}`` placeholders for gh to expand
+            from the current directory's repository.
+
+    Returns:
+        The ``repos/<owner>/<repo>/issues/<pr_number>/comments`` path with
+        the named owner and repo filled in, or the placeholder form when no
+        repository is named.
+    """
+    comments_api_path = PR_COMMENTS_API_PATH_TEMPLATE.format(pr_number=pr_number)
+    if all_target_repo is None:
+        return comments_api_path
+    owner, repo = all_target_repo
+    return comments_api_path.format(owner=owner, repo=repo)
+
+
+def _fetch_pr_comment_bodies(
+    pr_number: int, all_target_repo: tuple[str, str] | None
+) -> list[str] | None:
     """Read every comment body on a PR through the paginated issues API.
 
     The query runs ``gh api --paginate --slurp`` so every page lands in one
@@ -204,13 +292,15 @@ def _fetch_pr_comment_bodies(pr_number: int) -> list[str] | None:
 
     Args:
         pr_number: The PR number whose comments to read.
+        all_target_repo: The (owner, repo) pair the command names, or None to
+            read the current directory's repository.
 
     Returns:
         The comment bodies across all pages, or None when gh fails or the
         output is not the slurped page-array shape — the caller fails open
         on None.
     """
-    comments_api_path = PR_COMMENTS_API_PATH_TEMPLATE.format(pr_number=pr_number)
+    comments_api_path = _build_comments_api_path(pr_number, all_target_repo)
     api_stdout = _run_gh_command(
         [GH_API_SUBCOMMAND, comments_api_path, GH_PAGINATE_FLAG, GH_SLURP_FLAG]
     )
@@ -232,7 +322,9 @@ def _fetch_pr_comment_bodies(pr_number: int) -> list[str] | None:
     return all_comment_bodies
 
 
-def _detect_visual_change(pr_number: int | None) -> bool:
+def _detect_visual_change(
+    pr_number: int | None, all_target_repo: tuple[str, str] | None
+) -> bool:
     """Decide whether the PR diff carries visual work.
 
     A diff is visual when a changed file carries an image, HTML, or
@@ -242,21 +334,31 @@ def _detect_visual_change(pr_number: int | None) -> bool:
     Args:
         pr_number: The PR number to diff, or None to diff the current
             branch's PR.
+        all_target_repo: The (owner, repo) pair the command names, or None to
+            diff the current directory's repository.
 
     Returns:
         True when the diff is visual; False when it is not or when any gh
         query fails — an unknowable diff never adds the visual requirement.
     """
     all_number_arguments = [str(pr_number)] if pr_number is not None else []
+    all_repo_arguments = _repo_flag_arguments(all_target_repo)
     name_only_stdout = _run_gh_command(
-        [*ALL_PR_DIFF_SUBCOMMANDS, *all_number_arguments, PR_DIFF_NAME_ONLY_FLAG]
+        [
+            *ALL_PR_DIFF_SUBCOMMANDS,
+            *all_number_arguments,
+            *all_repo_arguments,
+            PR_DIFF_NAME_ONLY_FLAG,
+        ]
     )
     if name_only_stdout is None:
         return False
     for each_changed_path in name_only_stdout.splitlines():
         if Path(each_changed_path.strip()).suffix.lower() in ALL_VISUAL_FILE_SUFFIXES:
             return True
-    diff_stdout = _run_gh_command([*ALL_PR_DIFF_SUBCOMMANDS, *all_number_arguments])
+    diff_stdout = _run_gh_command(
+        [*ALL_PR_DIFF_SUBCOMMANDS, *all_number_arguments, *all_repo_arguments]
+    )
     if diff_stdout is None:
         return False
     return HEX_COLOR_ADDED_LINE_PATTERN.search(diff_stdout[:MAX_DIFF_SCAN_CHARS]) is not None
