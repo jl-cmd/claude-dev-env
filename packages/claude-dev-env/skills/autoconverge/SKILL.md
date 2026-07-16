@@ -1,20 +1,21 @@
 ---
 name: autoconverge
 description: >-
-  Drives one draft PR to convergence in one autonomous run: a deterministic static
-  sweep, then code review, bug audit, and self-review on one HEAD, all fixes in one
-  commit, then Bugbot, Copilot, and Codex as terminal confirmation gates before ready.
-  Use when the user says '/autoconverge', 'autoconverge this PR', 'converge this
-  PR in one run', 'run the converge workflow', or 'drive the PR to ready
-  autonomously'.
+  Drives one draft PR to convergence in one autonomous run with a host-selected
+  pacer (Workflow tool or portable continuous driver): a deterministic static
+  sweep, then code review, bug audit, and self-review on one HEAD, all fixes in
+  one commit, then Bugbot, Copilot, and Codex as terminal confirmation gates
+  before ready. Use when the user says '/autoconverge', 'autoconverge this PR',
+  'converge this PR in one run', 'run the converge workflow', or 'drive the PR
+  to ready autonomously'.
 ---
 
 # Autoconverge
 
 One launch drives the whole loop to convergence. The `/autoconverge` skill
-resolves PR scope, enters a worktree, grants project permissions, then selects
-a **pacer** and drives the shared converge product to ready (or a named
-blocker).
+scans the tool list, selects a **pacer** (Workflow or portable), then resolves
+PR scope, enters a worktree, grants project permissions, and drives the shared
+converge product to ready (or a named blocker).
 
 | Pacer | Host surface | How the loop runs |
 |---|---|---|

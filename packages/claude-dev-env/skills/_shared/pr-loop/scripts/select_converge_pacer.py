@@ -35,7 +35,6 @@ if str(_self_dir) not in sys.path:
 from skills_pr_loop_constants.pacer_constants import (  # noqa: E402
     ALL_ENTRY_SKILLS,
     ALL_FALSY_FLAG_TOKENS,
-    ALL_PACERS,
     ALL_TRUTHY_FLAG_TOKENS,
     CLI_HAS_SCHEDULE_WAKEUP_FLAG,
     CLI_HAS_WORKFLOW_FLAG,
@@ -120,14 +119,6 @@ def select_converge_pacer(
     else:
         selected_pacer = (
             PACER_SCHEDULE_WAKEUP if has_schedule_wakeup else PACER_PORTABLE
-        )
-
-    if selected_pacer not in ALL_PACERS:
-        raise ValueError(
-            UNKNOWN_ENTRY_SKILL_ERROR.format(
-                allowed=ENTRY_SKILL_JOIN_SEPARATOR.join(ALL_PACERS),
-                got=selected_pacer,
-            )
         )
 
     return ConvergePacerSelection(

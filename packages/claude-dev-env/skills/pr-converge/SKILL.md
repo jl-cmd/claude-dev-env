@@ -316,7 +316,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
             → `bugbot_clean_at = current_head` → Step 7
       - [ ] **no review / commit_id mismatch** → `reviewer-gates` Bugbot flow (Gate 3):
-            silent pass → stamp + Step 7; queued/triggered → 360s wakeup → Step 4;
+            silent pass → stamp + Step 7; queued/triggered → ScheduleWakeup 360s or portable in-session poll → Step 4;
             down → `bugbot_down = true` → Step 7
 
 - [ ] **Step 5: CODE-REVIEW — static sweep, review, fix, advance**
@@ -361,7 +361,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       `origin/main...HEAD` diff. Re-resolve HEAD after bugteam.
 
       - [ ] **bugteam pushed** → verify threads replied + resolved → reset markers
-            → `phase = CODE_REVIEW` → 360s wakeup → Step 5
+            → `phase = CODE_REVIEW` → ScheduleWakeup 360s or portable in-session poll → Step 5
       - [ ] **converged, no push** → zero unresolved threads →
             `bugteam_clean_at = current_head` → `phase = BUGBOT` → Step 4
       - [ ] **findings without committed fixes** → apply shared fix protocol → push →
@@ -392,7 +392,7 @@ round as converged. This rule holds every tick, every loop, every PR.
             skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
             → push → reset markers → `phase = CODE_REVIEW` → Step 5
       - [ ] **no review yet** → increment `copilot_wait_count` → ≥ 3 hard-blocks;
-            else 360s wakeup → Step 7a next tick
+            else ScheduleWakeup 360s or portable in-session poll → Step 7a next tick
 
 - [ ] **Step 8: Clean working tree**
       `pr-loop-lifecycle` Close (`../pr-loop-lifecycle/SKILL.md`).
