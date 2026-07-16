@@ -43,7 +43,7 @@ its parallel-lens round shape stay available when `Workflow` is present.
 | Bugteam audit / fix workers | `bugteam` skill; workers via `resolve_worker_spawn.py` (Grok headless, then Claude headless on third-party) |
 | Fix commit, push, reply, resolve | `_shared/pr-loop/fix-protocol.md` + skill deltas |
 | External gate opt-out / down | `CLAUDE_REVIEWS_DISABLED`, `--bugbot-down`, `--copilot-down`, `--codex-down`, `reviewer-gates` |
-| Ready definition | `pr-converge/scripts/check_convergence.py` exit 0, then mark ready |
+| Ready definition | `pr-converge/scripts/check_convergence.py` exit 0, then mark ready. That script shells out to `gh`; it needs a working `gh` in the session. On a cloud host without `gh`, either build a fixture snapshot from MCP reads and pass `--fixture`, or apply the `pr-loop-cloud-transport` readiness equivalent before mark-ready. |
 | Open / close | `pr-loop-lifecycle` |
 | Durable resume | `write_handoff.py` under `~/.claude/runtime/pr-loop/` |
 

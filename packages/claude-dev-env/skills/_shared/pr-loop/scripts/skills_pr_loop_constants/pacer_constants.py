@@ -16,11 +16,6 @@ ALL_ENTRY_SKILLS: tuple[str, ...] = (
 PACER_WORKFLOW: str = "workflow"
 PACER_SCHEDULE_WAKEUP: str = "schedule_wakeup"
 PACER_PORTABLE: str = "portable"
-ALL_PACERS: tuple[str, ...] = (
-    PACER_WORKFLOW,
-    PACER_SCHEDULE_WAKEUP,
-    PACER_PORTABLE,
-)
 
 CLI_SKILL_FLAG: str = "--skill"
 CLI_HAS_WORKFLOW_FLAG: str = "--has-workflow"
