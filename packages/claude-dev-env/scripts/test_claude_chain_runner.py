@@ -78,20 +78,32 @@ class _Recorder:
         self.behavior_by_command = behavior_by_command
         self.invocations = []
         self.timeouts = []
+        self.all_keyword_arguments = []
 
     def __call__(self, invocation, **keyword_arguments):
         self.invocations.append(invocation)
         self.timeouts.append(keyword_arguments.get("timeout"))
+        self.all_keyword_arguments.append(keyword_arguments)
         behavior = self.behavior_by_command[invocation[0]]
         if isinstance(behavior, BaseException):
             raise behavior
         return behavior
 
 
+class _TtyStdin:
+    def isatty(self) -> bool:
+        return True
+
+
+def _install_tty_stdin(monkeypatch):
+    monkeypatch.setattr(runner.sys, "stdin", _TtyStdin())
+
+
 def _install(monkeypatch, config_file, behavior_by_command):
     recorder = _Recorder(behavior_by_command)
     monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
     monkeypatch.setattr(runner, "chain_subprocess_runner", recorder)
+    _install_tty_stdin(monkeypatch)
     return recorder
 
 
@@ -276,6 +288,45 @@ def test_extra_args_are_appended_to_invocation(
     assert recorder.invocations[0] == ["claude", "-p", "hello", "--account", "ev"]
 
 
+def test_run_claude_forwards_stdin_text_to_subprocess(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    recorder = _install(monkeypatch, config_file, {"claude": _completed("claude", 0)})
+    runner.run_claude(
+        _PROMPT_ARGUMENTS, timeout_seconds=5, stdin_text="charter body"
+    )
+    assert recorder.all_keyword_arguments[0]["input"] == "charter body"
+
+
+def test_run_claude_passes_none_input_when_stdin_text_omitted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    recorder = _install(monkeypatch, config_file, {"claude": _completed("claude", 0)})
+    runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert recorder.all_keyword_arguments[0].get("input") is None
+
+
+def test_cli_forwards_piped_stdin_to_invocation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    recorder = _install(monkeypatch, config_file, {"claude": _completed("claude", 0)})
+
+    class _PipedStdin:
+        def isatty(self) -> bool:
+            return False
+
+        def read(self) -> str:
+            return "charter body"
+
+    monkeypatch.setattr(runner.sys, "stdin", _PipedStdin())
+    exit_code = runner.main([CLI_ARGUMENTS_SEPARATOR, "-p", "hi"])
+    assert exit_code == 0
+    assert recorder.all_keyword_arguments[0]["input"] == "charter body"
+
+
 def test_signature_matching_is_case_insensitive(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -362,6 +413,7 @@ def test_cli_missing_config_exits_config_error(
 ) -> None:
     missing_config = tmp_path / CONFIG_FILENAME
     monkeypatch.setattr(runner, "chain_config_path", lambda: missing_config)
+    _install_tty_stdin(monkeypatch)
     exit_code = runner.main([CLI_ARGUMENTS_SEPARATOR, "-p", "hi"])
     captured = capsys.readouterr()
     assert exit_code == CHAIN_CONFIG_ERROR_EXIT_CODE

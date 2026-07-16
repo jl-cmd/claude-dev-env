@@ -19,6 +19,12 @@ A usage-limited primary falls over to the second binary::
     primary claude     -> exit 1, "usage limit reached"  (falls over)
     fallback claude-ev -> exit 0                          (served)
 
+When stdin is piped (not a TTY), the runner reads it once and forwards the
+same text to every chain attempt so a piped ``-p`` charter body reaches each
+binary in the walk::
+
+    cat charter.md | python claude_chain_runner.py -- -p --strict-mcp-config
+
 Import ``run_claude`` for the outcome object, or run the module as a CLI::
 
     python claude_chain_runner.py [--timeout-seconds N] -- <claude args...>
@@ -283,7 +289,10 @@ def _classify_completion(
 
 
 def run_claude(
-    all_claude_arguments: list[str], *, timeout_seconds: int
+    all_claude_arguments: list[str],
+    *,
+    timeout_seconds: int,
+    stdin_text: str | None = None,
 ) -> ChainInvocationOutcome:
     """Run *all_claude_arguments* through the configured fallback chain.
 
@@ -291,12 +300,16 @@ def run_claude(
     exit whose output carries a usage-limit signature) falls over to the next
     binary. A missing fallback binary is skipped and the walk continues. A
     timeout, a missing primary binary, or a non-zero exit without a usage-limit
-    signature stops the walk and returns that outcome unchanged.
+    signature stops the walk and returns that outcome unchanged. When
+    *stdin_text* is set, that same text is supplied as stdin on every chain
+    attempt.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
             ``["-p", prompt, "--strict-mcp-config"]``.
         timeout_seconds: Timeout applied to each binary invocation.
+        stdin_text: Optional UTF-8 text forwarded as stdin to every binary.
+            ``None`` leaves the subprocess without a piped stdin body.
 
     Returns:
         The outcome of the walk, naming the serving binary and the full
@@ -317,6 +330,7 @@ def run_claude(
                 text=True,
                 timeout=timeout_seconds,
                 check=False,
+                input=stdin_text,
             )
         except subprocess.TimeoutExpired as timeout_error:
             all_attempts.append(
@@ -368,6 +382,12 @@ def _exhausted_message(all_attempts: tuple[ChainAttempt, ...]) -> str:
     return CHAIN_EXHAUSTED_MESSAGE_TEMPLATE.format(attempt_summary=attempt_summary)
 
 
+def _read_piped_stdin_text() -> str | None:
+    if sys.stdin.isatty():
+        return None
+    return sys.stdin.read()
+
+
 def main(all_command_arguments: list[str]) -> int:
     """Walk the chain for CLI arguments and return the process exit code.
 
@@ -381,9 +401,12 @@ def main(all_command_arguments: list[str]) -> int:
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
     all_claude_arguments = _strip_leading_separator(parsed_arguments.passthrough)
+    maybe_stdin_text = _read_piped_stdin_text()
     try:
         chain_outcome = run_claude(
-            all_claude_arguments, timeout_seconds=parsed_arguments.timeout_seconds
+            all_claude_arguments,
+            timeout_seconds=parsed_arguments.timeout_seconds,
+            stdin_text=maybe_stdin_text,
         )
     except ChainConfigurationError as configuration_error:
         print(str(configuration_error), file=sys.stderr)
