@@ -33,7 +33,7 @@ if str(_HOOKS_DIR) not in sys.path:
 import tempfile  # noqa: E402
 
 from pii_payload_scan import evaluate_write_edit_payload  # noqa: E402
-from pii_prevention_blocker import evaluate_bash_command  # noqa: E402
+from pii_prevention_blocker import evaluate, evaluate_bash_command  # noqa: E402
 
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME,
@@ -136,6 +136,22 @@ def test_windows_shaped_scratchpad_write_is_skipped(
     scratch_target = scratchpad_root / "blocker-matrix.txt"
     payload = {HOOK_PAYLOAD_SESSION_ID_KEY: session_id}
     assert _write_deny_reason(scratch_target, _bot_trailer_address(), payload) is None
+
+
+def test_entry_point_threads_payload_session_id_to_scratchpad_skip(
+    monkeypatch: pytest.MonkeyPatch,
+    harness_scratchpad: tuple[Path, str],
+) -> None:
+    scratchpad_root, session_id = harness_scratchpad
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    scratch_target = scratchpad_root / "blocker-matrix.txt"
+    content = "owner contact " + _real_pii_email() + "\n"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(scratch_target), "content": content},
+        HOOK_PAYLOAD_SESSION_ID_KEY: session_id,
+    }
+    assert evaluate(payload) is None
 
 
 def test_job_dir_ephemeral_write_outside_repo_is_skipped(
