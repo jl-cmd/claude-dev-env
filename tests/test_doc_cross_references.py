@@ -53,7 +53,6 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "packages/agent-gate-prompt-refinement/src/agent_gate_prompt_refinement/canonical_prompt_builder.py",
         "packages/agent-gate-prompt-refinement/src/agent_gate_prompt_refinement/config/constants.py",
         "packages/agent-gate-prompt-refinement/src/agent_gate_prompt_refinement/server.py",
-        "packages/claude-dev-env/hooks/blocking/pwsh_enforcer.py",
         "packages/claude-dev-env/scripts/Install-SweepEmptyDirs.ps1",
         "packages/claude-dev-env/scripts/config/sweep_config.py",
         "packages/claude-dev-env/scripts/sweep_empty_dirs.py",
