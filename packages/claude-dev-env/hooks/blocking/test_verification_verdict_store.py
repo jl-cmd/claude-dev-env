@@ -211,6 +211,18 @@ def test_corrective_message_scopes_comment_exemption_to_python() -> None:
     assert "comment-, and test-only surfaces are exempt" not in lowered_message
 
 
+def test_corrective_message_names_worktree_surface_keying() -> None:
+    lowered_message = CORRECTIVE_MESSAGE.lower()
+    assert "work tree" in lowered_message
+    assert "byte-identical" in lowered_message
+
+
+def test_corrective_message_gives_cross_worktree_remedy() -> None:
+    lowered_message = CORRECTIVE_MESSAGE.lower()
+    assert "run this command from the work tree" in lowered_message
+    assert "verify this surface here" in lowered_message
+
+
 def test_untracked_claude_production_hook_is_gated(tmp_path: pathlib.Path) -> None:
     work_dir = _make_repo_with_origin(tmp_path)
     new_hook_dir = work_dir / ".claude" / "hooks" / "blocking"
