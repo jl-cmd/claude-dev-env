@@ -14,7 +14,6 @@ deselect_source_lists=(
 )
 
 deselect_args=()
-expected_deselect_count=0
 for each_list_file in "${deselect_source_lists[@]}"; do
   while IFS= read -r each_node_id || [ -n "${each_node_id}" ]; do
     each_node_id="${each_node_id//$'\r'/}"
@@ -22,6 +21,16 @@ for each_list_file in "${deselect_source_lists[@]}"; do
       ''|\#*) continue ;;
     esac
     deselect_args+=(--deselect="${each_node_id}")
+  done < "${each_list_file}"
+done
+
+expected_deselect_count=0
+for each_list_file in "${deselect_source_lists[@]}"; do
+  while IFS= read -r each_node_id || [ -n "${each_node_id}" ]; do
+    each_node_id="${each_node_id//$'\r'/}"
+    case "${each_node_id}" in
+      ''|\#*) continue ;;
+    esac
     expected_deselect_count=$((expected_deselect_count + 1))
   done < "${each_list_file}"
 done
