@@ -274,6 +274,56 @@ class TestNormalizeBaseRef:
         assert module.normalize_base_ref("upstream/dev") == "upstream/dev"
 
 
+class TestAgentSlugPathSafety:
+    def should_reject_parent_segment_agent_slug_without_mkdir_outside(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        escaped_agent_root = (agent_scratch_parent / ".." / "escape-agent").resolve()
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        with pytest.raises(ValueError, match="agent slug"):
+            module.create_fresh_branch(
+                branch_name="fix/safe-branch",
+                repo_path=tmp_path / "unused-repo",
+                agent_slug="../escape-agent",
+                base_ref=DEFAULT_BASE_REF,
+            )
+        assert not escaped_agent_root.exists()
+        assert not (agent_scratch_parent / "claude").exists()
+
+    def should_reject_empty_agent_slug(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        agent_scratch_parent.mkdir()
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        with pytest.raises(ValueError, match="agent slug"):
+            module.create_fresh_branch(
+                branch_name="fix/safe-branch",
+                repo_path=tmp_path / "unused-repo",
+                agent_slug="",
+                base_ref=DEFAULT_BASE_REF,
+            )
+        assert not any(agent_scratch_parent.iterdir())
+
+
 class TestBranchNamePathSafety:
     def should_reject_parent_segments_without_mkdir_outside(
         self,

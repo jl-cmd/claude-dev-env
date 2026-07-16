@@ -211,18 +211,20 @@ def create_fresh_branch(
         Success payload mapping.
 
     Raises:
-        ValueError: When branch_name is empty or path-unsafe.
+        ValueError: When branch_name is empty or path-unsafe, or agent_slug
+            fails the path-safety pattern.
         RuntimeError: On git or path failures.
     """
     cleaned_branch = branch_name.strip()
     if not cleaned_branch:
         raise ValueError(ERROR_BRANCH_NAME_REQUIRED)
     _validate_branch_name_for_worktree_path(cleaned_branch)
+    normalized_agent_slug = _normalize_agent_slug(agent_slug)
     resolved_base_ref = normalize_base_ref(base_ref)
     repo_root = _resolve_repo_root(repo_path)
     _fetch_base_ref(repo_root, resolved_base_ref)
     base_commit = _resolve_base_commit(repo_root, resolved_base_ref)
-    agent_worktree_root = resolve_agent_worktree_root(agent_slug)
+    agent_worktree_root = resolve_agent_worktree_root(normalized_agent_slug)
     preferred_path = agent_worktree_root / cleaned_branch
     _assert_path_is_under_agent_root(
         candidate_path=preferred_path,
@@ -244,7 +246,7 @@ def create_fresh_branch(
         PAYLOAD_KEY_WORKTREE_PATH: str(worktree_path.resolve()),
         PAYLOAD_KEY_BASE_REF: resolved_base_ref,
         PAYLOAD_KEY_BASE_COMMIT: base_commit,
-        PAYLOAD_KEY_AGENT: agent_slug,
+        PAYLOAD_KEY_AGENT: normalized_agent_slug,
         PAYLOAD_KEY_REPO_ROOT: str(repo_root),
     }
 
