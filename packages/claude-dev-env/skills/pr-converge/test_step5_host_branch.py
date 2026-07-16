@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 SKILL_ROOT = Path(__file__).resolve().parent
-SKILL_MARKDOWN_PATH = SKILL_ROOT / "SKILL.md"
+PROGRESS_CHECKLIST_MARKDOWN_PATH = SKILL_ROOT / "reference" / "progress-checklist.md"
 PER_TICK_MARKDOWN_PATH = SKILL_ROOT / "reference" / "per-tick.md"
 
 HELPER_SCRIPT_NAME = "invoke_code_review.py"
@@ -45,10 +45,10 @@ def _code_review_section(per_tick_text: str) -> str:
     return per_tick_text[section_start:section_end]
 
 
-def _step_five_checklist(skill_text: str) -> str:
-    step_start = skill_text.index("**Step 5: CODE-REVIEW")
-    step_end = skill_text.index("**Step 6: BUGTEAM", step_start)
-    return skill_text[step_start:step_end]
+def _step_five_checklist(progress_checklist_text: str) -> str:
+    step_start = progress_checklist_text.index("**Step 5: CODE-REVIEW")
+    step_end = progress_checklist_text.index("**Step 6: BUGTEAM", step_start)
+    return progress_checklist_text[step_start:step_end]
 
 
 def test_per_tick_code_review_names_helper_and_mode_inputs() -> None:
@@ -75,7 +75,9 @@ def test_per_tick_code_review_names_helper_and_mode_inputs() -> None:
 
 
 def test_skill_step_five_checklist_names_helper_and_mode_inputs() -> None:
-    step_five_checklist = _step_five_checklist(_read_markdown(SKILL_MARKDOWN_PATH))
+    step_five_checklist = _step_five_checklist(
+        _read_markdown(PROGRESS_CHECKLIST_MARKDOWN_PATH)
+    )
     assert HELPER_SCRIPT_NAME in step_five_checklist
     assert HOST_PROFILE_PHRASE in step_five_checklist
     assert SESSION_MODEL_PHRASE in step_five_checklist
