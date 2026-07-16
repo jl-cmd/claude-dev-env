@@ -85,19 +85,17 @@ description: You can use this to process Excel files
 3. List **near-misses** that must *not* select it (sibling skills). Fold only the shortest distinguishing tokens into Triggers if needed.
 4. Assemble stem + `Triggers:` list. Strip adjectives, benefits, and process narrative.
 5. Count characters (≤1024). Prefer under ~400 when possible — every skill’s description is always loaded.
-6. Run the checklist below.
+6. Register the task seeds below on the session task list (`TaskCreate` / `TodoWrite`); complete each with evidence. Do not use markdown checkboxes as the tracker.
 
-## Description checklist
+## Description task seeds
 
-```
-- [ ] Third person; no I/you
-- [ ] Capability stem present (what), ≤20 words of tokens
-- [ ] Triggers: segment (or equivalent dense when-list) with concrete phrases
-- [ ] No story prose, benefits language, or implementation steps
-- [ ] No XML; length ≤1024
-- [ ] Distinguishable from sibling skills in the same domain
-- [ ] Body holds process detail — not the description
-```
+- Third person; no I/you
+- Capability stem present (what), ≤20 words of tokens
+- Triggers: segment (or equivalent dense when-list) with concrete phrases
+- No story prose, benefits language, or implementation steps
+- No XML; length ≤1024
+- Distinguishable from sibling skills in the same domain
+- Body holds process detail — not the description
 
 ## Where process lives
 

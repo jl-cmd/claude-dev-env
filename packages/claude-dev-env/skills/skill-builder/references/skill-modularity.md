@@ -100,14 +100,13 @@ Self-audit requires this table (or equivalent) whenever the skill composes other
 - **Vague dependency** — "use other skills as needed" with no names, when, or outputs.
 - **Redundant twin** — a new skill whose description overlaps an existing one without a refusal boundary.
 
-## Checklist for authors
+## Task seeds for authors
 
-Copy into the response during new-skill Gather and improve Diagnose:
+Register each item as a session task during new-skill Gather and improve Diagnose (`TaskCreate` / `TodoWrite`). Complete with evidence. Do not track as markdown checkboxes.
 
-```
-- [ ] Capability fits one sentence without an unrelated "and"
-- [ ] Related skills scanned; inventory written
-- [ ] Reusable steps map to named skills (or justify local procedure)
-- [ ] Multi-capability work is split or is an orchestrator with sub-skills
-- [ ] SKILL.md will name each sub-skill with when + produces + missing behavior
-```
+- Capability fits one sentence without an unrelated "and"
+- Related skills scanned; inventory written
+- Reusable steps map to named skills (or justify local procedure)
+- Multi-capability work is split or is an orchestrator with sub-skills
+- SKILL.md will name each sub-skill with when + produces + missing behavior
+
