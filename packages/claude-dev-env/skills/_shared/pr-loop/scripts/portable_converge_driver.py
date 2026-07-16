@@ -94,7 +94,6 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     CHECK_CONVERGENCE_RELATIVE_PATH,
     CHECK_CONVERGENCE_REPO_FLAG,
     CLASSIFICATION_ABSENT,
-    CLASSIFICATION_CLEAN,
     CLASSIFICATION_DIRTY,
     CLASSIFICATION_DOWN,
     CLI_BUGBOT_DOWN_FLAG,
@@ -486,7 +485,7 @@ def _finish_ok(
     all_commands: list[str],
     wait_seconds: int | None,
     blocker: str | None,
-    all_extra_fields: Mapping[str, object] | None = None,
+    all_extra_fields: Mapping[str, object] | None,
 ) -> tuple[dict[str, object], int]:
     all_state[STATE_KEY_PENDING_NEXT] = next_action
     resolved_commands = all_commands
@@ -605,7 +604,8 @@ def _seed_open_run_task_list_and_finish(
         state_file,
         next_action=NEXT_RUN_CODE_REVIEW,
         all_commands=_code_review_commands(
-            cwd_path=cwd_path, session_model=session_model
+            cwd_path=cwd_path, session_model=session_model,
+            all_extra_fields=None,
         ),
         wait_seconds=None,
         blocker=None,
@@ -741,6 +741,7 @@ def run_after_code_review(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=BLOCKER_REVIEW_FAILED,
+            all_extra_fields=None,
         )
 
     if is_dirty_tree:
@@ -753,6 +754,7 @@ def run_after_code_review(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
 
     all_state["code_review_clean_at"] = current_head
@@ -765,6 +767,7 @@ def run_after_code_review(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=None,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -795,6 +798,7 @@ def _advance_after_codex_resolved(
             all_commands=_check_convergence_commands_from_state(all_state),
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
     all_state["phase"] = PHASE_COPILOT_WAIT
     return _finish_ok(
@@ -804,6 +808,7 @@ def _advance_after_codex_resolved(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=None,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -820,6 +825,7 @@ def _advance_after_bugbot_resolved(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
     return _advance_after_codex_resolved(all_state, state_file)
 
@@ -839,6 +845,7 @@ def _after_bugteam_converged(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
     return _advance_after_bugbot_resolved(all_state, state_file)
 
@@ -876,6 +883,7 @@ def run_after_bugteam(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
 
     if is_converged:
@@ -889,6 +897,7 @@ def run_after_bugteam(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=None,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -917,6 +926,7 @@ def _after_bugbot_dirty(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
     streak = int(all_state.get("inline_lag_streak") or 0) + 1
     all_state["inline_lag_streak"] = streak
@@ -930,6 +940,7 @@ def _after_bugbot_dirty(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=BLOCKER_INLINE_LAG_CAP,
+            all_extra_fields=None,
         )
     all_state["phase"] = PHASE_BUGBOT
     return _finish_ok(
@@ -939,6 +950,7 @@ def _after_bugbot_dirty(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=BUGBOT_INLINE_LAG_WAIT_SECONDS,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -988,6 +1000,7 @@ def run_after_codex(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
 
     if classification == CLASSIFICATION_DOWN:
@@ -1045,6 +1058,7 @@ def run_after_bugbot(
                 all_commands=_EMPTY_COMMANDS,
                 wait_seconds=None,
                 blocker=BLOCKER_BUGBOT_WAIT_CAP,
+                all_extra_fields=None,
             )
         all_state["phase"] = PHASE_BUGBOT
         return _finish_ok(
@@ -1054,6 +1068,7 @@ def run_after_bugbot(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=DEFAULT_WAIT_SECONDS,
             blocker=None,
+            all_extra_fields=None,
         )
     return _after_bugbot_clean(all_state, state_file, current_head)
 
@@ -1074,6 +1089,7 @@ def _after_copilot_not_surfaced(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=BLOCKER_COPILOT_WAIT_CAP,
+            all_extra_fields=None,
         )
     all_state["phase"] = PHASE_COPILOT_WAIT
     return _finish_ok(
@@ -1083,6 +1099,7 @@ def _after_copilot_not_surfaced(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=DEFAULT_WAIT_SECONDS,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -1100,6 +1117,7 @@ def _after_copilot_clean(
         all_commands=_check_convergence_commands_from_state(all_state),
         wait_seconds=None,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -1117,6 +1135,7 @@ def _after_copilot_down(
         all_commands=_check_convergence_commands_from_state(all_state),
         wait_seconds=None,
         blocker=None,
+        all_extra_fields=None,
     )
 
 
@@ -1142,6 +1161,7 @@ def _after_copilot_surfaced(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
     if classification == CLASSIFICATION_ABSENT:
         return _after_copilot_not_surfaced(all_state, state_file)
@@ -1210,6 +1230,7 @@ def run_after_ready_check(
             all_commands=_mark_ready_commands(all_state),
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
 
     if check_exit == 1:
@@ -1221,6 +1242,7 @@ def run_after_ready_check(
             all_commands=_EMPTY_COMMANDS,
             wait_seconds=None,
             blocker=None,
+            all_extra_fields=None,
         )
 
     all_state["phase"] = PHASE_BLOCKED
@@ -1232,6 +1254,7 @@ def run_after_ready_check(
         all_commands=_EMPTY_COMMANDS,
         wait_seconds=None,
         blocker=str(all_state["blocker"]),
+        all_extra_fields=None,
     )
 
 
