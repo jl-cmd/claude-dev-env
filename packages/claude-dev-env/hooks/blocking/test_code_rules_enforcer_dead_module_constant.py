@@ -448,3 +448,61 @@ def test_widened_scan_reads_each_file_at_most_once(
     assert not over_read_paths, (
         f"Widening must read each .py file at most once, got over-reads: {over_read_paths}"
     )
+
+
+def _build_settings_package(workflow_directory: Path, constants_body: str) -> Path:
+    constants_package = workflow_directory / "app_settings"
+    constants_package.mkdir(parents=True)
+    (constants_package / "__init__.py").write_text("", encoding="utf-8")
+    constants_path = constants_package / "app_settings_constants.py"
+    constants_path.write_text(constants_body, encoding="utf-8")
+    return constants_path
+
+
+def test_deny_once_records_intent_then_retry_passes_after_consumer(
+    neutral_root: Path,
+) -> None:
+    constants_body = 'PATH_ENV_NAME = "THEME_PATH"\n'
+    workflow_directory = neutral_root / "workflow"
+    constants_path = _build_settings_package(workflow_directory, constants_body)
+    first_issues = _check(constants_body, str(constants_path))
+    assert any("PATH_ENV_NAME" in each_issue for each_issue in first_issues), first_issues
+    assert any(
+        "app_settings_constants.py" in each_issue for each_issue in first_issues
+    ), f"Deny message must record the target constants module, got: {first_issues}"
+    assert any(
+        "re-issue this write" in each_issue for each_issue in first_issues
+    ), f"Deny message must instruct the retry escape, got: {first_issues}"
+    consumer_body = (
+        "from app_settings.app_settings_constants import PATH_ENV_NAME\n"
+        "\n"
+        "def resolve() -> str:\n"
+        "    return PATH_ENV_NAME\n"
+    )
+    (workflow_directory / "consumer_service.py").write_text(
+        consumer_body, encoding="utf-8"
+    )
+    retry_issues = _check(constants_body, str(constants_path))
+    assert retry_issues == [], (
+        f"Once the consumer is on disk the retry passes, got: {retry_issues}"
+    )
+
+
+def test_dead_constant_stays_denied_on_every_attempt(neutral_root: Path) -> None:
+    constants_body = 'PATH_ENV_NAME = "THEME_PATH"\n'
+    workflow_directory = neutral_root / "workflow"
+    constants_path = _build_settings_package(workflow_directory, constants_body)
+    (workflow_directory / "unrelated.py").write_text(
+        "def noop() -> int:\n    return 1\n", encoding="utf-8"
+    )
+    first_issues = _check(constants_body, str(constants_path))
+    second_issues = _check(constants_body, str(constants_path))
+    for each_attempt in (first_issues, second_issues):
+        assert any("PATH_ENV_NAME" in each_issue for each_issue in each_attempt), each_attempt
+        assert any(
+            "app_settings_constants.py" in each_issue for each_issue in each_attempt
+        ), f"Every deny attempt records the target module, got: {each_attempt}"
+        assert any(
+            "re-issue this write" in each_issue for each_issue in each_attempt
+        ), f"A dead constant stays denied with the retry escape, got: {each_attempt}"
+
