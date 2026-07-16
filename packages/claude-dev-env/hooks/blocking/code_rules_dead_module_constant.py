@@ -74,6 +74,7 @@ from hooks_constants.dead_module_constant_constants import (  # noqa: E402
     CONFIG_DIRECTORY_SEGMENT,
     CONSTANTS_MODULE_SUFFIX,
     DEAD_MODULE_CONSTANT_GUIDANCE,
+    DEAD_MODULE_CONSTANT_RETRY_GUIDANCE,
     DUNDER_ALL_NAME,
     DUNDER_INIT_FILENAME,
     GIT_DIRECTORY_NAME,
@@ -635,8 +636,9 @@ def check_dead_module_constants(
         if each_name in all_referenced_names:
             continue
         issues.append(
-            f"Line {each_line}: module-level constant {each_name!r}"
-            f" - {DEAD_MODULE_CONSTANT_GUIDANCE}"
+            f"Line {each_line}: module-level constant {each_name!r} in"
+            f" {written_path.name} - {DEAD_MODULE_CONSTANT_GUIDANCE}"
+            f" {DEAD_MODULE_CONSTANT_RETRY_GUIDANCE}"
         )
         if len(issues) >= MAX_DEAD_MODULE_CONSTANT_ISSUES:
             break
