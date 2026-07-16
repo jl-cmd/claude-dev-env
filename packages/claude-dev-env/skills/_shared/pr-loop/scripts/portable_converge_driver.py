@@ -1117,6 +1117,7 @@ def run_after_ready_check(
     """
     all_state = load_state(state_file)
     all_state["current_head"] = current_head
+    all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
     if check_exit == 0:
         all_state["phase"] = PHASE_READY
         all_state["blocker"] = None
