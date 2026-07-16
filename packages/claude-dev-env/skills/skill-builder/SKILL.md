@@ -24,6 +24,7 @@ Highest-signal content. Append a bullet each time a skill build fails in a new w
 - Multi-capability packages fail modularity audit — split or thin orchestrator + named sub-skills (`skill-modularity.md`).
 - Skipping the composition plan before Write reintroduces silent reimplementation of peer skills.
 - Deterministic steps written only as prose (fenced source, giant `rg` lines, multi-step mechanical sequences) fail audit — extract to `scripts/` / `workflow/` / `templates/` / `reference/` (`deterministic-elements.md`).
+- Markdown `- [ ]` checklists as the agent's progress board fail audit when a task tool exists — seed tasks via `TaskCreate` / `TodoWrite` (`deterministic-elements.md`).
 
 ## When this skill applies
 
@@ -118,11 +119,13 @@ Mandatory highest-signal section (see Gotchas above). Capture real failure modes
 
 Use the template pattern for structured outputs. Use the examples pattern (input/output pairs) for style-dependent work.
 
-### Workflows and checklists
+### Workflows and task seeds
 
-> "For particularly complex workflows, provide a checklist that Claude can copy into its response and check off as it progresses."
+Multi-step required work is a **task seed list** (plain bullets in a reference file) plus an instruction to register each item on the host task tool (`TaskCreate`, `TodoWrite`, or equivalent). Agents work the task list and mark complete with evidence.
 
-Multi-step processes get `[ ]` checklists. Quality-critical operations get feedback loops (run validator → fix → repeat).
+Do **not** ship markdown `- [ ]` boards as the completion protocol when a task tool is available. Do **not** say "copy this checklist into your response and check it off."
+
+Quality-critical operations still use feedback loops (run validator → fix → repeat). Spec: [`references/deterministic-elements.md`](references/deterministic-elements.md) (Task-tool tracking).
 
 ### Scripts
 
@@ -132,11 +135,11 @@ Multi-step processes get `[ ]` checklists. Quality-critical operations get feedb
 
 ### Deterministic elements (mandatory classification)
 
-Any skill element that is **deterministic** (same inputs → same outputs; machine-checkable success) ships as code or a fixed artifact — not prose-only steps. Judgment, routing, and refusals stay in markdown.
+Any skill element that is **deterministic** (same inputs → same outputs; machine-checkable success) ships as code, a fixed artifact, or a **session task seed** — not prose-only steps or markdown checkbox boards. Judgment, routing, and refusals stay in markdown.
 
-Full rules, inventory table, CODE_RULES bar for skill scripts, and anti-patterns: [`references/deterministic-elements.md`](references/deterministic-elements.md).
+Full rules, inventory table, task-tool tracking, CODE_RULES bar for skill scripts, and anti-patterns: [`references/deterministic-elements.md`](references/deterministic-elements.md).
 
-New-skill Gather records a deterministic-elements inventory before write. Self-audit items for this section are mandatory on every delivery (pure-judgment skills mark script rows N/A with evidence).
+New-skill Gather records a deterministic-elements inventory before write. Self-audit items register as session tasks and are mandatory on every delivery (pure-judgment skills mark script rows N/A with evidence).
 
 ### Setup and memory
 
@@ -152,11 +155,11 @@ New-skill Gather records a deterministic-elements inventory before write. Self-a
 
 > No Windows paths. Don’t offer too many options — provide a default with escape hatch. Avoid time-sensitive claims. Use consistent terminology. No deeply nested references.
 
-Also: story-form descriptions; monolith multi-capability skills; silent reimplementation of peer skills; nested folders used as fake sub-skills; deterministic logic only in prose or fenced source.
+Also: story-form descriptions; monolith multi-capability skills; silent reimplementation of peer skills; nested folders used as fake sub-skills; deterministic logic only in prose or fenced source; markdown `- [ ]` as the agent's work tracker.
 
 ## Self-audit
 
-After every build, improvement, or polish pass, run the mandatory checklist at `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`. Every item must pass before delivery. Fix failures, then re-audit.
+After every build, improvement, or polish pass, load `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`, **register every bullet as a session task**, and complete each with evidence. Every item must pass before delivery. Fix failures, then re-audit.
 
 ## Delegation to skill-writer
 
@@ -182,8 +185,8 @@ See `${CLAUDE_SKILL_DIR}/references/delegation-map.md` for exact patterns.
 | `references/progressive-disclosure.md` | Folder conventions, hub pattern, hard rules |
 | `references/skill-modularity.md` | Cross-skill modularity, sub-skills, composition plan |
 | `references/description-field.md` | Description as trigger catalog (not story prose) |
-| `references/deterministic-elements.md` | Deterministic steps must be code; CODE_RULES bar for skill scripts |
-| `references/self-audit-checklist.md` | Mandatory post-build audit (core, modularity, description, deterministic) |
+| `references/deterministic-elements.md` | Deterministic steps as code/task seeds; CODE_RULES; no markdown checkbox boards |
+| `references/self-audit-checklist.md` | Post-build audit task seeds (register via TaskCreate / TodoWrite) |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |
 | `workflows/improve-skill.md` | Observation-first flow for existing skills (6 steps) |

@@ -8,7 +8,7 @@ Step-by-step workflow files for each skill lifecycle phase, loaded on demand by 
 |---|---|
 | `new-skill.md` | Full lifecycle: classify, scaffold, gather (composition + description triggers + deterministic inventory), write via skill-writer, self-audit, deliver. |
 | `improve-skill.md` | Observation-first improve: diagnose activation/modularity/quality/deterministic prose, targeted fix, re-audit. |
-| `polish-skill.md` | Description trigger-catalog audit; progressive disclosure + modularity + deterministic audit; checklist sign-off. |
+| `polish-skill.md` | Description trigger-catalog audit; progressive disclosure + modularity + deterministic audit; task-seeded self-audit. |
 
 ## Conventions
 

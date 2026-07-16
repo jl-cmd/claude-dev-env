@@ -89,23 +89,25 @@ Scan the transcript for:
 
 ## Delegating self-audit
 
-After building, spawn a subagent to run the checklist independently:
+After building, spawn a subagent to run the audit independently (task-tool first):
 
 ```
 Agent(
   subagent_type="general-purpose",
-  description="Self-audit skill against checklist",
+  description="Self-audit skill via task seeds",
   prompt="Read the skill at [skill-path]/SKILL.md and all companion files.
 
-Then read the self-audit checklist at [skill-builder-path]/references/self-audit-checklist.md.
+Then read the self-audit task seeds at [skill-builder-path]/references/self-audit-checklist.md.
 
-Check every item. For each: PASS, FAIL with specific file:line evidence and what to fix, or N/A with reason.
+Register every bullet as a session task (TaskCreate / TodoWrite). Complete each with PASS, FAIL+file:line+fix, or N/A+reason. Do not use markdown checkboxes as the tracker.
 
 Report as:
 ## Audit Results
-[ ] Item 1: PASS
-[ ] Item 2: FAIL — [file:line] — [what's wrong and how to fix]
-..."
+- PASS: N
+- N/A: M
+- FAIL fixed: K
+- Remaining FAIL (must be empty): …
+"
 )
 ```
 

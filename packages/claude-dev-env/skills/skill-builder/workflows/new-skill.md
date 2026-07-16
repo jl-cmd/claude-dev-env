@@ -107,17 +107,17 @@ Record the assessment with reasoning.
 
 ### Modularity gate
 
-Copy the author checklist from `skill-modularity.md` and check every box. If the capability sentence needs an unrelated "and", stop and split scope with the user before Step 4.
+Register each task seed from `skill-modularity.md` on the session task list (`TaskCreate` / `TodoWrite`). Complete with evidence. If the capability sentence needs an unrelated "and", stop and split scope with the user before Step 4.
 
 ### Description gate
 
-Draft the frontmatter description using the template in `description-field.md`. Copy the description checklist and check every box. Story prose fails the gate.
+Draft the frontmatter description using the template in `description-field.md`. Register each description task seed and complete with evidence. Story prose fails the gate.
 
 ### Deterministic-elements gate
 
-Copy the author checklist from `deterministic-elements.md` and check every box. Every deterministic step must have a planned `scripts/`, `workflow/`, `templates/`, or `reference/` path. Prose-only mechanical sequences fail the gate.
+Register each task seed under **Required task seeds** in `deterministic-elements.md`. Complete with evidence. Every deterministic step must have a planned `scripts/`, `workflow/`, `templates/`, `reference/`, or task-seed path. Prose-only mechanical sequences and markdown checkbox boards fail the gate.
 
-**Output:** Completed gap analysis (composition plan + description triggers + deterministic inventory), initial gotchas, degree-of-freedom assessment, modularity checklist, draft description.
+**Output:** Completed gap analysis (composition plan + description triggers + deterministic inventory), initial gotchas, degree-of-freedom assessment, modularity gate done, draft description.
 
 ---
 
@@ -137,7 +137,7 @@ After skill-writer produces the draft:
 4. Verify files over 100 lines have a TOC.
 5. Verify modularity: single capability, sub-skills table when composing, no silent reimplementation of inventoried skills.
 6. Verify description is a trigger catalog per `description-field.md` (not story prose).
-7. Verify deterministic inventory: every deterministic step has a real code/artifact path; no prose-only mechanical sequences; scripts follow CODE_RULES and have paired tests.
+7. Verify deterministic inventory: every deterministic step has a real code/artifact/task-seed path; no prose-only mechanical sequences; no markdown checkbox boards for required work; scripts follow CODE_RULES and have paired tests.
 
 Fix structural, modularity, description, and deterministic-element issues before proceeding.
 
@@ -150,14 +150,14 @@ Fix structural, modularity, description, and deterministic-element issues before
 **Goal:** Verify every best practice is satisfied before delivery.
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
-2. Copy the checklist into your response.
-3. Check every item against the built skill. For each: PASS, FAIL with file:line evidence, or N/A with reason.
-4. Every FAIL must be fixed before proceeding. Apply fixes, then re-check that item.
-5. When all items are PASS or N/A, proceed to Step 6.
+2. Register **every** bullet as a session task (`TaskCreate` / `TodoWrite`).
+3. Complete each task against the built skill: PASS, FAIL with file:line evidence, or N/A with reason.
+4. Every FAIL must be fixed before proceeding. Apply fixes, then re-open/complete that task.
+5. When all tasks are PASS or N/A, proceed to Step 6.
 
 For an independent check, spawn a subagent to run the audit (see delegation-map.md).
 
-**Output:** Completed checklist with all items PASS or N/A.
+**Output:** Audit summary (PASS / N/A / FAIL-fixed counts). All items PASS or N/A.
 
 ---
 

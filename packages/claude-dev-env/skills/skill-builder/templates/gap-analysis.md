@@ -46,8 +46,9 @@ See `references/deterministic-elements.md`. Required before Write.
 
 Rules:
 
-- Every `deterministic` row has a real path under `scripts/`, `workflow/`, `templates/`, or `reference/` — not prose-only.
+- Every `deterministic` row has a real path under `scripts/`, `workflow/`, `templates/`, `reference/`, or `task-seed:…` — not prose-only.
 - Every code path has a paired test path (or a one-line pure-data reason).
+- Every required multi-step work list uses `task-seed:…` plus a body seed instruction (no markdown `- [ ]` board).
 - A `borderline` row kept in prose has a one-line why it stays in the body.
 
 ## Gaps Identified

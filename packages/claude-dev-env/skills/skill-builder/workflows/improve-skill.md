@@ -58,6 +58,8 @@ Failure classification:
 | Detection/validation is a giant one-liner in body | Executable logic not in `scripts/` | `deterministic-elements.md` |
 | Fenced Python/JS in SKILL.md is the real implementation | Code not shipped as a file | Extract to `scripts/` or `workflow/` + paired test |
 | Script has magic literals / no tests | CODE_RULES bar missed | `deterministic-elements.md` + CODE_RULES |
+| Skill uses `- [ ]` for agent progress | Work list not on task tool | Task-seed catalog + seed instruction (`deterministic-elements.md`) |
+| "Copy checklist into response" protocol | Markdown as tracker | Switch to TaskCreate / TodoWrite seeding |
 
 When scope, activation, or deterministic placement is in play, re-read `${CLAUDE_SKILL_DIR}/references/skill-modularity.md`, `${CLAUDE_SKILL_DIR}/references/description-field.md`, and `${CLAUDE_SKILL_DIR}/references/deterministic-elements.md`.
 
@@ -78,7 +80,8 @@ For each diagnosis from Step 2:
 3. For description failures: rewrite frontmatter into a trigger catalog (capability stem + Triggers list); strip story prose.
 4. For modularity failures: add sub-skills table, split packages, or thin the orchestrator; do not paste peer skill procedures.
 5. For deterministic failures: extract mechanical work to `scripts/` / `workflow/` / `templates/` / `reference/`; body only points and handles exit codes; apply CODE_RULES + paired tests to new code.
-6. Verify the fix doesn’t break anything that was working.
+6. For checkbox/tracker failures: replace markdown `- [ ]` boards with a plain task-seed list and a seed instruction (`TaskCreate` / `TodoWrite`).
+7. Verify the fix doesn’t break anything that was working.
 
 Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
 
@@ -109,10 +112,10 @@ For each failure observed in Step 1:
 Same process as new-skill Step 5:
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
-2. Check every item. Fix failures. Re-check.
+2. Register every bullet as a session task; complete with evidence. Fix failures. Re-complete those tasks.
 3. Pay special attention to items that overlap with the diagnosis from Step 2 — those were the failures; confirm they’re now fixed.
 
-**Output:** Completed checklist, all PASS or N/A.
+**Output:** Audit summary; all PASS or N/A.
 
 ---
 

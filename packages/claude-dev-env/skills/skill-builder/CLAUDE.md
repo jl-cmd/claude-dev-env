@@ -17,8 +17,8 @@ Enforces craft standards for new and existing skills. For quick one-off SKILL.md
 | `references/progressive-disclosure.md` | Hub pattern, folder conventions, hard rules |
 | `references/skill-modularity.md` | Cross-skill modularity, sub-skills, composition plan |
 | `references/description-field.md` | Description as trigger catalog (not story prose) |
-| `references/deterministic-elements.md` | Deterministic steps must be code; CODE_RULES bar for skill scripts |
-| `references/self-audit-checklist.md` | Mandatory post-build audit |
+| `references/deterministic-elements.md` | Deterministic steps as code/task seeds; no markdown checkbox boards |
+| `references/self-audit-checklist.md` | Post-build audit task seeds (TaskCreate / TodoWrite) |
 | `references/delegation-map.md` | Subagent handoff patterns and transcript guidance |
 | `references/thariq-x-post-skills.json` | Source reference — lessons from building Claude Code skills |
 | `workflows/new-skill.md` | Full lifecycle for new skills (6 steps) |

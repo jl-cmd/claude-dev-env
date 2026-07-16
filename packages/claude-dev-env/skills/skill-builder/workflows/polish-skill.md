@@ -35,15 +35,17 @@ description: >-
   <capability tokens>. Triggers: <phrase>, <phrase>, <slash>, <filetype>.
 ```
 
-### Checklist
+### Description task seeds
 
-- [ ] **Third person** — no I/you
-- [ ] **Capability stem** — what tokens, ≤20 words, no story
-- [ ] **Triggers list** — concrete phrases / slash forms / file types
-- [ ] **Under 1024 characters** (prefer much shorter; always-on context)
-- [ ] **No XML tags**
-- [ ] **Not a story** — no narrative, benefits, or process dump
-- [ ] **Sibling boundary** — distinguishable from related skills
+Register each as a session task; complete with evidence (no markdown checkboxes):
+
+- **Third person** — no I/you
+- **Capability stem** — what tokens, ≤20 words, no story
+- **Triggers list** — concrete phrases / slash forms / file types
+- **Under 1024 characters** (prefer much shorter; always-on context)
+- **No XML tags**
+- **Not a story** — no narrative, benefits, or process dump
+- **Sibling boundary** — distinguishable from related skills
 
 ### Trigger phrase review
 
@@ -84,6 +86,7 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 - Silent reimplementation → invoke peer skill by name; add Sub-skills table
 - Mechanical sequence / fenced program / giant detector only in body → extract to `scripts/` or `workflow/`; point from process steps; add paired tests and `*_constants/` as needed
 - Verbatim templates inline → `templates/`; long fixed tables → `reference/`
+- Markdown `- [ ]` progress boards → plain task-seed list + seed instruction (`TaskCreate` / `TodoWrite`)
 
 **Output:** Verified structure, composition, and deterministic placement (and edits if needed).
 
@@ -112,11 +115,11 @@ If any check fails, rewrite. Show before/after. The after form must match `descr
 Same as new-skill Step 5 and improve-skill Step 5:
 
 1. Read `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`.
-2. Check every item. Fix failures. Re-check.
+2. Register every bullet as a session task; complete with evidence. Fix failures. Re-complete.
 3. All items must be PASS or N/A.
 4. Description items, modularity items, and process-step classification are never N/A for a delivered skill (sub-skills table alone may be N/A for pure leaf skills; script/test rows are N/A only when the package has zero code files and every step is judgment).
 
-**Output:** Completed checklist.
+**Output:** Audit summary; all PASS or N/A.
 
 ---
 

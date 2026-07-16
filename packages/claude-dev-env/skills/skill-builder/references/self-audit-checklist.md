@@ -1,118 +1,126 @@
-# Self-Audit Checklist
+# Self-Audit Task Seeds
 
 Mandatory post-build verification. Every item must pass before a skill is delivered. Run after writing a new skill, improving an existing one, or polishing.
 
-Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices), [Lessons from Building Claude Code](thariq-x-post-skills.json), model skills (bugteam, pr-converge).
+**How to run:** Register **each** bullet below as a session task (`TaskCreate`, `TodoWrite`, or host equivalent). Complete tasks only with evidence (PASS / FAIL+file:line / N/A+reason). Do not track progress as markdown `- [ ]` boxes in chat.
+
+Source synthesis: [Anthropic best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices), [Lessons from Building Claude Code](thariq-x-post-skills.json), model skills (bugteam, pr-converge), host task tools.
 
 ## Core quality
 
-- [ ] **Conciseness** — Only context Claude doesn't already have. Every line justifies its token cost.
+- **Conciseness** — Only context Claude doesn't already have. Every line justifies its token cost.
   > "Default assumption: Claude is already very smart."
-- [ ] **Degree of freedom** — Matches task fragility. Low for narrow bridges, high for open fields.
+- **Degree of freedom** — Matches task fragility. Low for narrow bridges, high for open fields.
   > "Match the level of specificity to the task's fragility and variability."
-- [ ] **Naming convention** — Name uses gerund form (verb-ing) unless it's a well-known acronym or proper name. Lowercase, numbers, hyphens only. Max 64 chars. No reserved words.
+- **Naming convention** — Name uses gerund form (verb-ing) unless it's a well-known acronym or proper name. Lowercase, numbers, hyphens only. Max 64 chars. No reserved words.
   > "Use consistent naming patterns to make Skills easier to reference."
-- [ ] **Description is a trigger catalog** — Capability stem (what tokens) + concrete Triggers list (when). Third person. Max 1024 chars. No XML. Spec: `description-field.md`.
+- **Description is a trigger catalog** — Capability stem (what tokens) + concrete Triggers list (when). Third person. Max 1024 chars. No XML. Spec: `description-field.md`.
   > "The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills."
-- [ ] **Description is not a story** — No narrative prose, benefits language ("helps you"), first/second person, or process/implementation dump in frontmatter.
+- **Description is not a story** — No narrative prose, benefits language ("helps you"), first/second person, or process/implementation dump in frontmatter.
   > "The description field is not a summary — it's a description of when to trigger."
-- [ ] **Description match surface** — Includes specific phrases, slash forms, and file types a user would say; distinguishable from sibling skills.
+- **Description match surface** — Includes specific phrases, slash forms, and file types a user would say; distinguishable from sibling skills.
   > "Be specific and include key terms."
-- [ ] **SKILL.md body under 500 lines**
+- **SKILL.md body under 500 lines**
   > "Keep SKILL.md body under 500 lines for optimal performance."
-- [ ] **One level deep** — All reference files link directly from SKILL.md. No nested references.
+- **One level deep** — All reference files link directly from SKILL.md. No nested references.
   > "Claude may partially read files when they're referenced from other referenced files."
-- [ ] **TOC on files over 100 lines** — Every reference file >100 lines has a table of contents.
+- **TOC on files over 100 lines** — Every reference file >100 lines has a table of contents.
   > "This ensures Claude can see the full scope of available information even when previewing with partial reads."
-- [ ] **No time-sensitive claims** — Or isolated in "old patterns" section.
+- **No time-sensitive claims** — Or isolated in "old patterns" section.
   > "Don't include information that will become outdated."
-- [ ] **Consistent terminology** — One term per concept throughout.
+- **Consistent terminology** — One term per concept throughout.
   > "Consistency helps Claude understand and follow instructions."
-- [ ] **Forward slashes only** — File paths use `/`, not `\`.
+- **Forward slashes only** — File paths use `/`, not `\`.
   > "Unix-style paths work across all platforms."
-- [ ] **Default provided, not options menu** — One recommended approach, escape hatch for special cases.
+- **Default provided, not options menu** — One recommended approach, escape hatch for special cases.
   > "Don't present multiple approaches unless necessary. Provide a default with escape hatch."
-- [ ] **Gotchas section present** — Highest-signal content. Built from real failure observations.
+- **Gotchas section present** — Highest-signal content. Built from real failure observations.
   > "The highest-signal content in any skill is the Gotchas section."
-- [ ] **Doesn't state the obvious** — Pushes Claude out of defaults, doesn't re-teach what Claude knows.
+- **Doesn't state the obvious** — Pushes Claude out of defaults, doesn't re-teach what Claude knows.
   > "Focus on information that pushes Claude out of its normal way of thinking."
-- [ ] **Not railroading** — Gives information and flexibility, not rigid scripts.
+- **Not railroading** — Gives information and flexibility, not rigid scripts.
   > "Give Claude the information it needs, but give it the flexibility to adapt to the situation."
-- [ ] **When-this-applies section** — Trigger conditions clear. Refusal cases with exact response text.
+- **When-this-applies section** — Trigger conditions clear. Refusal cases with exact response text.
   > bugteam pattern — "Refusals — first match wins; respond with the quoted line exactly and stop."
-- [ ] **File index present** — Every file in the package listed with its purpose.
+- **File index present** — Every file in the package listed with its purpose.
   > "Tell Claude what files are in your skill, and it will read them at appropriate times."
-- [ ] **Concrete examples** — Input/output pairs or exit scenarios, not abstract descriptions.
+- **Concrete examples** — Input/output pairs or exit scenarios, not abstract descriptions.
   > "Examples help Claude understand the desired style and level of detail more clearly than descriptions alone."
-- [ ] **Workflows have checklists** — Multi-step processes include copyable `[ ]` checklists.
-  > "For particularly complex workflows, provide a checklist that Claude can copy into its response and check off as it progresses."
-- [ ] **Feedback loops where quality-critical** — Run validator → fix → repeat pattern.
+- **Workflows seed tasks** — Multi-step processes ship a task-seed list and instruct the agent to register each item on the host task tool (`TaskCreate` / `TodoWrite`). No markdown `- [ ]` as the progress board when a task tool is available.
+  > Spec: `deterministic-elements.md` — Task-tool tracking.
+- **Feedback loops where quality-critical** — Run validator → fix → repeat pattern.
   > "This pattern greatly improves output quality."
-- [ ] **Constraints separated** — Non-negotiables in CONSTRAINTS.md or equivalent section.
+- **Constraints separated** — Non-negotiables in CONSTRAINTS.md or equivalent section.
   > bugteam pattern — constraints file with design rationale.
-- [ ] **Folder map at bottom** — Lists directories and their purposes.
+- **Folder map at bottom** — Lists directories and their purposes.
   > pr-converge pattern — "Folder map" section.
 
 ## Skill-type-specific
 
-- [ ] **Skill type classified** — Fits one of 9 types. Folder structure matches type recommendation.
+- **Skill type classified** — Fits one of 9 types. Folder structure matches type recommendation.
   > "The best skills fit cleanly into one; the more confusing ones straddle several."
-- [ ] **Domain layout appropriate** — If multiple domains, organized by domain (reference/finance.md, reference/sales.md).
+- **Domain layout appropriate** — If multiple domains, organized by domain (reference/finance.md, reference/sales.md).
   > Pattern 2 — domain-specific organization.
 
 ## Deterministic elements
 
 Mandatory for every skill. Spec: `deterministic-elements.md`. Progressive disclosure alone does not satisfy these items.
 
-- [ ] **Process steps classified** — Every process step is marked deterministic, judgment, or borderline (inventory in gap analysis or equivalent).
+- **Process steps classified** — Every process step is marked deterministic, judgment, or borderline (inventory in gap analysis or equivalent).
   > "One of the most powerful tools you can give Claude is code."
-- [ ] **Deterministic steps are not prose-only** — Each deterministic step has a real path under `scripts/`, `workflow/`, `templates/`, or `reference/` — not only markdown steps, fenced source, or a giant shell one-liner in the body.
+- **Deterministic steps are not prose-only** — Each deterministic step has a real path under `scripts/`, `workflow/`, `templates/`, `reference/`, or a task-seed list — not only markdown steps, fenced source, markdown checkboxes, or a giant shell one-liner in the body.
   > "These can include deterministic scripts or tools for maximum robustness."
-- [ ] **Body points at code** — SKILL.md names when to run each script, what it prints, and how to treat non-zero exit; it does not restate the algorithm.
+- **Body points at code** — SKILL.md names when to run each script, what it prints, and how to treat non-zero exit; it does not restate the algorithm.
   > "Make clear in your instructions whether Claude should execute the script or read it as reference."
-- [ ] **No executable-only fences** — Full programs meant to run do not live only inside `SKILL.md` code fences.
-- [ ] **CODE_RULES on skill scripts** — Any `scripts/` or `workflow/` code uses named constants (`*_constants/` or equivalent), type annotations where the language supports them, specific error handling, and no banned identifier/prefix patterns from CODE_RULES.
-- [ ] **Paired tests for new scripts** — Each new production script path ships a paired test in the same delivery (N/A only when the package has zero code files).
-- [ ] **Scripts solve, don't punt** — Error handling explicit, no raw exceptions for Claude to figure out.
+- **No executable-only fences** — Full programs meant to run do not live only inside `SKILL.md` code fences.
+- **CODE_RULES on skill scripts** — Any `scripts/` or `workflow/` code uses named constants (`*_constants/` or equivalent), type annotations where the language supports them, specific error handling, and no banned identifier/prefix patterns from CODE_RULES.
+- **Paired tests for new scripts** — Each new production script path ships a paired test in the same delivery (N/A only when the package has zero code files).
+- **Task seeds for required work lists** — Every ordered gate/audit/process list the agent must finish is a plain task-seed catalog plus a seed instruction; no markdown checkbox board.
+- **Scripts solve, don't punt** — Error handling explicit, no raw exceptions for Claude to figure out.
   > "Handle error conditions rather than punting to Claude."
-- [ ] **Execute vs read intent clear** — "Run script.py" (execute) vs "See script.py for algorithm" (read).
+- **Execute vs read intent clear** — "Run script.py" (execute) vs "See script.py for algorithm" (read).
   > "Make clear in your instructions whether Claude should execute the script or read it as reference."
-- [ ] **Dependencies listed** — Required packages stated, verified as available (N/A when no scripts).
+- **Dependencies listed** — Required packages stated, verified as available (N/A when no scripts).
   > "List required packages in your SKILL.md and verify they're available."
-- [ ] **MCP tools fully qualified** — `ServerName:tool_name` format when MCP tools appear.
+- **MCP tools fully qualified** — `ServerName:tool_name` format when MCP tools appear.
   > "Always use fully qualified tool names to avoid 'tool not found' errors."
-- [ ] **Plan-validate-execute for high-stakes ops** — Verifiable intermediate outputs before destructive actions (N/A when no high-stakes ops).
+- **Plan-validate-execute for high-stakes ops** — Verifiable intermediate outputs before destructive actions (N/A when no high-stakes ops).
   > "Catches errors early: validation finds problems before changes are applied."
 
 ## Setup and memory (if applicable)
 
-- [ ] **Setup instructions clear** — config.json pattern or AskUserQuestion for initial context.
+- **Setup instructions clear** — config.json pattern or AskUserQuestion for initial context.
   > "If the config is not set up, the agent can then ask the user for information."
-- [ ] **Persistent data uses `${CLAUDE_PLUGIN_DATA}`** — Not stored in skill directory itself.
+- **Persistent data uses `${CLAUDE_PLUGIN_DATA}`** — Not stored in skill directory itself.
   > "Data stored in the skill directory may be deleted when you upgrade the skill."
 
 ## Modularity and composition
 
 Mandatory for every skill. Spec: `skill-modularity.md`. Progressive disclosure (file split) does not satisfy these items.
 
-- [ ] **Single capability boundary** — One clear job in one sentence. Unrelated jobs are separate skills or an orchestrator that only routes to named sub-skills.
+- **Single capability boundary** — One clear job in one sentence. Unrelated jobs are separate skills or an orchestrator that only routes to named sub-skills.
   > "The best skills fit cleanly into one; the more confusing ones straddle several."
-- [ ] **Compose before reimplement** — Steps an existing skill already owns are invoked by name, not pasted into this package. Local reimplementation has a one-line why in the gap analysis or gotchas.
+- **Compose before reimplement** — Steps an existing skill already owns are invoked by name, not pasted into this package. Local reimplementation has a one-line why in the gap analysis or gotchas.
   > "You can just reference other skills by name, and the model will invoke them if they are installed."
-- [ ] **Sub-skills table (when composing)** — Each invoked skill lists when to call it, what it produces, and missing-install behavior. N/A only when the skill is a pure leaf (invokes no peers).
+- **Sub-skills table (when composing)** — Each invoked skill lists when to call it, what it produces, and missing-install behavior. N/A only when the skill is a pure leaf (invokes no peers).
   > "You may want to have skills that depend on each other."
-- [ ] **Sibling boundary clear** — Description and when-this-applies distinguish this skill from related skills in the same domain. No silent overlap.
+- **Sibling boundary clear** — Description and when-this-applies distinguish this skill from related skills in the same domain. No silent overlap.
   > "The description field is not a summary — it's a description of when to trigger."
-- [ ] **No monolith packing** — Multi-capability content is not stuffed under one description. Either split packages or thin orchestrator + peer sub-skills (not nested fake skills under `workflows/`).
+- **No monolith packing** — Multi-capability content is not stuffed under one description. Either split packages or thin orchestrator + peer sub-skills (not nested fake skills under `workflows/`).
   > skill-modularity.md — anti-patterns: monolith, silent reimplementation, folder nesting as composition.
 
 ## Hooks (if applicable)
 
-- [ ] **Hooks declared** — If skill registers hooks, their purpose and scope is stated.
+- **Hooks declared** — If skill registers hooks, their purpose and scope is stated.
   > "Skills can include hooks that are only activated when the skill is called."
 
 ---
 
 ## Usage
 
-Copy this checklist into your response after building. Check off each item. Any item that fails → fix before delivering. Any item marked "if applicable" that doesn't apply → mark N/A with a one-line reason. Sub-skills table may be N/A for pure leaf skills; single capability boundary and no-monolith never are. Process-step classification and "deterministic steps are not prose-only" never are N/A — pure-judgment skills still inventory steps and mark each as judgment.
+1. Register every bullet in this file as a session task (batch create is fine).
+2. Work only from the task list. Mark complete with PASS, FAIL+file:line+fix, or N/A+one-line reason.
+3. Any FAIL must be fixed before delivery; re-open a task if the fix needs re-check.
+4. Sub-skills table may be N/A for pure leaf skills; single capability boundary and no-monolith never are. Process-step classification and "deterministic steps are not prose-only" never are N/A — pure-judgment skills still inventory steps and mark each as judgment.
+5. Deliver a short audit summary (counts of PASS / N/A / FAIL fixed) — not a markdown checkbox dump.
+
