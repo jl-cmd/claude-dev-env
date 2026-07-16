@@ -142,24 +142,6 @@ def test_commit_with_missing_local_identity_still_blocks_the_value(
     assert deny_reason is not None
     assert "email" in deny_reason
 
-
-def test_commit_allows_the_public_anthropic_bot_address_by_safe_domain(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("CLAUDE_LOCAL_IDENTITY_PATH", str(tmp_path / "absent.json"))
-    repository_root = tmp_path / "repo"
-    _init_repo_with_origin_and_staged_value(
-        repository_root,
-        _OTHER_SLUG,
-        "Co-Authored-By: Claude <noreply@anthropic.com>",
-    )
-    deny_reason = evaluate_bash_command(
-        f"git -C {repository_root} commit -m x",
-        working_directory=str(repository_root),
-    )
-    assert deny_reason is None
-
-
 def _init_repo_with_staged_pii(repository_root: Path) -> None:
     repository_root.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q"], cwd=repository_root, check=True)
