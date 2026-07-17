@@ -11,10 +11,39 @@ default application, and any file that cannot be loaded as an image falls back t
 that default application too. Escape or the close button dismisses a window; the
 process exits once every window is closed.
 
+Callers often launch this script with Start-Process and do not wait. The script
+therefore watches its parent process and a max lifetime so orphan viewers cannot
+outlive a dead agent parent or run indefinitely:
+
+- Parent-death watch: poll the parent PID on an interval (default 1s). When the
+  parent is gone, all forms close and the process exits.
+- Max lifetime: after the configured span (default 30 minutes) forms close and
+  the process exits even if windows remain open.
+
 .PARAMETER Paths
 One or more file paths to open.
+
+.PARAMETER ParentProcessId
+Process id to watch for death. When 0 (default), the script's own parent process
+id is used. Pass an explicit id in tests.
+
+.PARAMETER MaxLifetimeSeconds
+Maximum seconds the viewer may stay open (default 1800 = 30 minutes). When the
+span elapses, forms close and the process exits.
+
+.PARAMETER ParentPollIntervalMilliseconds
+How often to poll the parent process and max lifetime (default 1000 ms).
 #>
 param(
+    [ValidateRange(0, [int]::MaxValue)]
+    [int]$ParentProcessId = 0,
+
+    [ValidateRange(1, 86400)]
+    [int]$MaxLifetimeSeconds = 1800,
+
+    [ValidateRange(250, 10000)]
+    [int]$ParentPollIntervalMilliseconds = 1000,
+
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Paths
 )
@@ -35,6 +64,66 @@ $screenMargin = 80
 $minimumClientWidth = 220
 $minimumClientHeight = 160
 $openWindowCount = 0
+$allOpenForms = New-Object 'System.Collections.Generic.List[System.Windows.Forms.Form]'
+$sessionStartedAtUtc = [datetime]::UtcNow
+$maxLifetime = [timespan]::FromSeconds($MaxLifetimeSeconds)
+
+function Get-OwnParentProcessId {
+    try {
+        $ownProcessRecord = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+        return [int]$ownProcessRecord.ParentProcessId
+    }
+    catch {
+        return 0
+    }
+}
+
+function Test-ProcessIsAlive {
+    param(
+        [int]$ProcessId
+    )
+    if ($ProcessId -le 0) {
+        return $true
+    }
+    try {
+        $null = Get-Process -Id $ProcessId -ErrorAction Stop
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Stop-ShowAssetSession {
+    if ($null -ne $script:watchTimer) {
+        $script:watchTimer.Stop()
+    }
+    foreach ($eachForm in @($script:allOpenForms.ToArray())) {
+        if (-not $eachForm.IsDisposed) {
+            $eachForm.Close()
+        }
+    }
+    [System.Windows.Forms.Application]::Exit()
+}
+
+function Test-ShouldEndShowAssetSession {
+    $isParentAlive = Test-ProcessIsAlive -ProcessId $script:watchedParentProcessId
+    if (-not $isParentAlive) {
+        return $true
+    }
+    $elapsedLifetime = [datetime]::UtcNow - $script:sessionStartedAtUtc
+    if ($elapsedLifetime -ge $script:maxLifetime) {
+        return $true
+    }
+    return $false
+}
+
+if ($ParentProcessId -gt 0) {
+    $watchedParentProcessId = $ParentProcessId
+}
+else {
+    $watchedParentProcessId = Get-OwnParentProcessId
+}
 
 foreach ($path in $Paths) {
     if (-not (Test-Path -LiteralPath $path)) { continue }
@@ -93,14 +182,25 @@ foreach ($path in $Paths) {
             if ($eventArguments.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $sender.Close() }
         })
     $form.Add_FormClosed({
+            param($sender, $eventArguments)
+            [void]$script:allOpenForms.Remove($sender)
             $script:openWindowCount--
             if ($script:openWindowCount -le 0) { [System.Windows.Forms.Application]::Exit() }
         })
 
     $openWindowCount++
+    [void]$allOpenForms.Add($form)
     $form.Show()
 }
 
 if ($openWindowCount -gt 0) {
+    $watchTimer = New-Object System.Windows.Forms.Timer
+    $watchTimer.Interval = $ParentPollIntervalMilliseconds
+    $watchTimer.Add_Tick({
+            if (Test-ShouldEndShowAssetSession) {
+                Stop-ShowAssetSession
+            }
+        })
+    $watchTimer.Start()
     [System.Windows.Forms.Application]::Run()
 }

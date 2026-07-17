@@ -24,7 +24,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `Migrate-ShellPolicy.ps1` | Applies automated fixes for common shell-policy violations found by the audit script |
 | `Install-SweepEmptyDirs.ps1` | Registers `sweep_empty_dirs.py` as a scheduled task on Windows |
 | `check.ps1` | Runs the full code-quality check suite |
-| `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
+| `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application; exits when the parent process dies (1s poll) or after a max lifetime (default 30 minutes); Escape and the close button still dismiss windows |
 | `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |
 
 ## Subdirectories
