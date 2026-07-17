@@ -4,7 +4,7 @@ Runs an audit-fix loop on an open pull request until all findings are resolved o
 
 ## Purpose
 
-Each loop: a `code-quality-agent` (fresh context, all A–Q audit categories) produces an outcome XML; a `clean-coder` agent applies every fix; the lead commits, pushes, and posts a GitHub PR review (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty). Grants `.claude/**` write permissions at the start and revokes them at the end.
+Each loop: a `code-quality-agent` (fresh context, all A–Q audit categories) produces an outcome XML; a `clean-coder` agent applies every fix; the lead commits, pushes, and posts a GitHub PR review (APPROVE on clean, REQUEST_CHANGES with inline anchored comments on dirty; COMMENT with an appended transport disclosure when the author reviews their own PR and no alternate reviewer account is set). Grants `.claude/**` write permissions at the start and revokes them at the end.
 
 ## Key files
 
@@ -27,4 +27,4 @@ Each loop: a `code-quality-agent` (fresh context, all A–Q audit categories) pr
 
 - `CLAUDE_REVIEWS_DISABLED=bugteam` — disables the skill entirely (pre-flight exits 7).
 - `BUGTEAM_PREFLIGHT_SKIP=1` — skips pytest in pre-flight.
-- `BUGTEAM_REVIEWER_ACCOUNT=<login>` — names the alternate `gh` account for posting reviews when the PR author and reviewer identity match.
+- `BUGTEAM_REVIEWER_ACCOUNT=<login>` — names the alternate `gh` account for posting reviews when the PR author and reviewer identity match. Left unset on a self-PR, the review downgrades to a `COMMENT` carrying an appended transport disclosure, because GitHub rejects a self-approval.

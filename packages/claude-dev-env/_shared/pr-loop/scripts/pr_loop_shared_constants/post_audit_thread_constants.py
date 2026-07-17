@@ -1,12 +1,10 @@
 """Constants for post_audit_thread.py.
 
 Centralizes every literal the script and its tests need so the script body
-contains no magic values beyond the integer literals exempt from
-``check_magic_values`` (``0``, ``1``, ``-1``). Constants live here per
-CODE_RULES.md §4 (Config Locations) and §3 (Reuse Constants).
-
-All scalar constants stay narrowly typed so the consuming script and tests
-can rely on ``int`` / ``str`` / ``tuple`` semantics without runtime checks.
+holds no magic values beyond the exempt integers (``0``, ``1``, ``-1``), per
+CODE_RULES.md §4 (Config Locations) and §3 (Reuse Constants). Every scalar
+stays narrowly typed so the script and tests rely on ``int`` / ``str`` /
+``tuple`` semantics without runtime checks.
 """
 
 from __future__ import annotations
@@ -45,9 +43,28 @@ GITHUB_API_VERSION_HEADER: str = "2022-11-28"
 
 GITHUB_REVIEW_EVENT_APPROVE: str = "APPROVE"
 GITHUB_REVIEW_EVENT_REQUEST_CHANGES: str = "REQUEST_CHANGES"
+GITHUB_REVIEW_EVENT_COMMENT: str = "COMMENT"
+
+SELF_APPROVAL_REJECTION_MESSAGE_SUBSTRING: str = "own pull request"
+SELF_APPROVAL_DOWNGRADE_STDOUT_MARKER: str = (
+    "self-approval downgrade: review posted as COMMENT"
+)
+DISCLOSURE_BODY_SEPARATOR: str = "\n\n"
+SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN: str = (
+    "_Posted as a COMMENT review: GitHub returns HTTP 422 when the audit "
+    "account approves its own pull request, so this clean audit verdict lands "
+    "as a comment, which does not count as an approving review._"
+)
+SELF_APPROVAL_DOWNGRADE_DISCLOSURE_DIRTY: str = (
+    "_Posted as a COMMENT review: GitHub returns HTTP 422 when the audit "
+    "account requests changes on its own pull request, so this dirty audit "
+    "verdict lands as a comment, which does not block merge the way a "
+    "REQUEST_CHANGES review would._"
+)
 
 HTTP_STATUS_SUCCESS_RANGE_LOW: int = 200
 HTTP_STATUS_SUCCESS_RANGE_HIGH: int = 300
+HTTP_STATUS_UNPROCESSABLE_ENTITY: int = 422
 
 HTTP_AUTHORIZATION_BEARER_PREFIX: str = "Bearer "
 HTTP_HEADER_AUTHORIZATION: str = "Authorization"
@@ -108,6 +125,7 @@ REVIEW_REQUEST_FIELD_EVENT: str = "event"
 REVIEW_REQUEST_FIELD_COMMENTS: str = "comments"
 
 REVIEW_RESPONSE_FIELD_HTML_URL: str = "html_url"
+GH_ERROR_MESSAGE_FIELD: str = "message"
 
 INLINE_COMMENT_FIELD_PATH: str = "path"
 INLINE_COMMENT_FIELD_LINE: str = "line"
@@ -149,6 +167,7 @@ DETAILS_BLOCK_BULLET_TEMPLATE: str = (
     "- **[{severity}]** `{path}:{line}` — {description}"
 )
 DETAILS_BLOCK_FOOTER: str = "\n</details>"
+DETAILS_BLOCK_BULLET_SEPARATOR: str = "\n"
 
 INLINE_COMMENT_BODY_TEMPLATE: str = (
     "**[{severity}] {skill_display} audit finding**\n\n"

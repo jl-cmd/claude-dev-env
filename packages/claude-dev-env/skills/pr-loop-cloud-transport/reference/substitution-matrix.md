@@ -29,7 +29,7 @@ Route every `gh` operation a PR-loop skill names through its cloud path. Load th
 | CI logs | `gh run view --log` | `mcp__github__actions_list` / `mcp__github__actions_get` / `mcp__github__get_job_logs` |
 | Clone another repo | `gh repo clone` | `git clone https://github.com/owner/repo` (session-scoped), or `mcp__Claude_Code_Remote__add_repo` first |
 | Copilot quota | `gh api copilot_internal/user` | None. Treat quota as unknown; call `mcp__github__request_copilot_review`, then read `copilot_down` from what lands on the PR (SKILL.md Step 5). |
-| Second reviewer identity | `gh auth switch`, `BUGTEAM_REVIEWER_ACCOUNT` | None. One MCP identity — the `mcp__github__get_me` login. `COMMENT` reviews on own PRs work; `APPROVE`/`REQUEST_CHANGES` on own PRs are blocked by GitHub. |
+| Second reviewer identity | `gh auth switch`, `BUGTEAM_REVIEWER_ACCOUNT` | None. One MCP identity — the `mcp__github__get_me` login. `COMMENT` reviews on own PRs work; `APPROVE`/`REQUEST_CHANGES` on own PRs are blocked by GitHub, so a self-PR audit review downgrades to a `COMMENT` that carries an appended transport disclosure. |
 
 ## Pagination rules
 

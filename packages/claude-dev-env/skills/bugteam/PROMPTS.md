@@ -166,9 +166,13 @@ cd into `<worktree_path>` before any git or file operation.
      and exit `error: post_audit_thread retry exhausted` without retrying
      and without falling back to a flat issue comment.
 
-     Harvest the parent review URL from stdout, then extract the
+     Harvest the parent review URL from the first stdout line, then extract the
      numeric review id from that URL's `#pullrequestreview-<id>` suffix
-     (the trailing URL fragment, the part after `#`). Then harvest child-comment URLs
+     (the trailing URL fragment, the part after `#`). A second stdout line is the
+     self-approval downgrade marker: the review posted as a `COMMENT` because the
+     author has no alternate reviewer account, and its body carries a transport
+     disclosure. When that second line is present, carry the disclosure into the
+     gaps section of the proof-of-work comment. Then harvest child-comment URLs
      **and PR review thread node ids** via
      `pull_request_read(method="get_review_comments", owner=<O>,
      repo=<R>, pullNumber=<N>)` filtered to that review id.
