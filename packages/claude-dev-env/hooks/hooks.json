@@ -186,6 +186,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_list_loop_starter.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/mcp_session_lifecycle.py",
+            "timeout": 15
           }
         ]
       }
@@ -222,6 +227,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/session_end_cleanup.py",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/mcp_session_lifecycle.py",
+            "timeout": 45
           },
           {
             "type": "command",
