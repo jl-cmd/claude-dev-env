@@ -1,57 +1,19 @@
-"""Tests for run_all_validators.py."""
+"""Tests for the run_all_validators entry module: CLI flags and report helpers."""
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from . import run_all_validators
 from .run_all_validators import (
-    ValidatorResult,
-    _hooks_subprocess_working_directory_and_environment,
     add_timing,
     build_json_output,
     create_timing_metrics,
     format_timing_report,
     main,
     print_header,
-    run_file_scoped_validators,
-    run_git_checks,
-    run_python_style_checks,
-    run_with_fallback,
 )
-
-
-class TestFileScopedValidatorFaultFailsClosed:
-    def test_one_raising_validator_fails_closed_without_killing_the_batch(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        def raise_validator_fault(_files: list[Path]) -> ValidatorResult:
-            raise RuntimeError("anti-pattern check crashed")
-
-        monkeypatch.setattr(
-            run_all_validators,
-            "run_python_antipattern_checks",
-            raise_validator_fault,
-        )
-        probe_file = tmp_path / "probe_module.py"
-        probe_file.write_text("answer = 1\n", encoding="utf-8")
-
-        all_results = run_file_scoped_validators([probe_file])
-
-        faulted_results = [
-            each_result
-            for each_result in all_results
-            if each_result.name == "Python Anti-patterns"
-        ]
-        assert len(all_results) == 14
-        assert len(faulted_results) == 1
-        assert faulted_results[0].passed is False
-        assert faulted_results[0].skipped is False
-        assert "write blocked" in faulted_results[0].output.lower()
 
 
 class TestFixFlag:
@@ -59,10 +21,13 @@ class TestFixFlag:
 
     def test_fix_flag_is_accepted(self) -> None:
         """Verify --fix flag is recognized without error."""
-        with patch("validators.run_all_validators.get_changed_files") as mock_get_files, \
-             patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
-             patch("validators.run_all_validators.run_git_checks") as mock_git:
-
+        with (
+            patch("validators.run_all_validators.get_changed_files") as mock_get_files,
+            patch(
+                "validators.run_all_validators.run_file_structure_checks"
+            ) as mock_file,
+            patch("validators.run_all_validators.run_git_checks") as mock_git,
+        ):
             mock_get_files.return_value = []
 
             mock_result = MagicMock()
@@ -84,15 +49,20 @@ class TestFixFlag:
 
     def test_fix_flag_calls_fix_python_style(self) -> None:
         """Verify --fix flag triggers fix_python_style when files exist."""
-        with patch("validators.run_all_validators.get_changed_files") as mock_get_files, \
-             patch("validators.run_all_validators.fix_python_style") as mock_fix, \
-             patch("validators.run_all_validators.run_python_style_checks") as mock_style, \
-             patch("validators.run_all_validators.run_test_safety_checks") as mock_test, \
-             patch("validators.run_all_validators.run_react_checks") as mock_react, \
-             patch("validators.run_all_validators.run_comment_checks") as mock_comment, \
-             patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
-             patch("validators.run_all_validators.run_git_checks") as mock_git:
-
+        with (
+            patch("validators.run_all_validators.get_changed_files") as mock_get_files,
+            patch("validators.run_all_validators.fix_python_style") as mock_fix,
+            patch(
+                "validators.run_all_validators.run_python_style_checks"
+            ) as mock_style,
+            patch("validators.run_all_validators.run_test_safety_checks") as mock_test,
+            patch("validators.run_all_validators.run_react_checks") as mock_react,
+            patch("validators.run_all_validators.run_comment_checks") as mock_comment,
+            patch(
+                "validators.run_all_validators.run_file_structure_checks"
+            ) as mock_file,
+            patch("validators.run_all_validators.run_git_checks") as mock_git,
+        ):
             mock_get_files.return_value = [Path("test.py")]
             mock_fix.return_value = ["test.py"]
 
@@ -120,15 +90,20 @@ class TestFixFlag:
 
     def test_no_fix_flag_skips_fixes(self) -> None:
         """Verify fixes are skipped when --fix flag is not provided."""
-        with patch("validators.run_all_validators.get_changed_files") as mock_get_files, \
-             patch("validators.run_all_validators.fix_python_style") as mock_fix, \
-             patch("validators.run_all_validators.run_python_style_checks") as mock_style, \
-             patch("validators.run_all_validators.run_test_safety_checks") as mock_test, \
-             patch("validators.run_all_validators.run_react_checks") as mock_react, \
-             patch("validators.run_all_validators.run_comment_checks") as mock_comment, \
-             patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
-             patch("validators.run_all_validators.run_git_checks") as mock_git:
-
+        with (
+            patch("validators.run_all_validators.get_changed_files") as mock_get_files,
+            patch("validators.run_all_validators.fix_python_style") as mock_fix,
+            patch(
+                "validators.run_all_validators.run_python_style_checks"
+            ) as mock_style,
+            patch("validators.run_all_validators.run_test_safety_checks") as mock_test,
+            patch("validators.run_all_validators.run_react_checks") as mock_react,
+            patch("validators.run_all_validators.run_comment_checks") as mock_comment,
+            patch(
+                "validators.run_all_validators.run_file_structure_checks"
+            ) as mock_file,
+            patch("validators.run_all_validators.run_git_checks") as mock_git,
+        ):
             mock_get_files.return_value = [Path("test.py")]
 
             mock_result = MagicMock()
@@ -152,99 +127,6 @@ class TestFixFlag:
                 sys.argv = original_argv
 
             mock_fix.assert_not_called()
-
-
-class TestGracefulDegradation:
-    def test_missing_validator_fails_closed_naming_the_check(self) -> None:
-        def failing_validator() -> ValidatorResult:
-            raise FileNotFoundError("validator.py not found")
-
-        blocking_result = run_with_fallback(
-            failing_validator,
-            "Missing Validator",
-            "99",
-        )
-
-        assert blocking_result.passed is False
-        assert blocking_result.skipped is False
-        assert blocking_result.name == "Missing Validator"
-        assert "write blocked" in blocking_result.output.lower()
-
-    def test_validator_exception_fails_closed_naming_the_check(self) -> None:
-        def crashing_validator() -> ValidatorResult:
-            raise RuntimeError("Unexpected crash")
-
-        blocking_result = run_with_fallback(
-            crashing_validator,
-            "Crashing Validator",
-            "99",
-        )
-
-        assert blocking_result.passed is False
-        assert blocking_result.skipped is False
-        assert blocking_result.name == "Crashing Validator"
-        assert "write blocked" in blocking_result.output.lower()
-
-    def test_successful_validator_returns_normal_result(self) -> None:
-        def working_validator() -> ValidatorResult:
-            return ValidatorResult(
-                name="Working",
-                checks="1",
-                passed=True,
-                output="All good",
-            )
-
-        result = run_with_fallback(
-            working_validator,
-            "Working",
-            "1",
-        )
-
-        assert result.skipped is False
-        assert result.passed is True
-
-
-class TestStderrSurfacing:
-    """Verify that validator stderr is surfaced when stdout is empty."""
-
-    def test_python_style_check_surfaces_stderr_when_stdout_empty(self) -> None:
-        """When a validator crashes with no stdout, stderr must appear in output."""
-        with patch("validators.run_all_validators.invoke_validator_module") as mock_invoke:
-            crashed_result = MagicMock()
-            crashed_result.returncode = 1
-            crashed_result.stdout = ""
-            crashed_result.stderr = "ImportError: No module named validators.python_style_checks"
-            mock_invoke.return_value = crashed_result
-
-            validator_result = run_python_style_checks([Path("foo.py")])
-
-            assert "ImportError" in validator_result.output
-
-    def test_git_check_surfaces_stderr_when_stdout_empty(self) -> None:
-        """When git validator crashes with no stdout, stderr must appear in output."""
-        with patch("validators.run_all_validators.invoke_validator_module") as mock_invoke:
-            crashed_result = MagicMock()
-            crashed_result.returncode = 1
-            crashed_result.stdout = ""
-            crashed_result.stderr = "SyntaxError: invalid syntax in git_checks.py"
-            mock_invoke.return_value = crashed_result
-
-            validator_result = run_git_checks()
-
-            assert "SyntaxError" in validator_result.output
-
-    def test_output_falls_back_to_all_checks_passed_when_both_empty(self) -> None:
-        """When both stdout and stderr are empty and returncode is 0, use fallback."""
-        with patch("validators.run_all_validators.invoke_validator_module") as mock_invoke:
-            clean_result = MagicMock()
-            clean_result.returncode = 0
-            clean_result.stdout = ""
-            clean_result.stderr = ""
-            mock_invoke.return_value = clean_result
-
-            validator_result = run_git_checks()
-
-            assert validator_result.output == "All checks passed"
 
 
 class TestTimingMetrics:
@@ -278,7 +160,9 @@ class TestTimingMetrics:
 
 
 class TestVersionHeader:
-    def test_print_header_includes_version(self, capsys) -> None:
+    def test_print_header_includes_version(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         print_header()
         captured = capsys.readouterr()
 
@@ -295,22 +179,3 @@ class TestVersionHeader:
         assert "version" in json_output
         assert "timestamp" in json_output
         assert isinstance(json_output["version"], str)
-
-
-class TestHooksSubprocessWorkingDirectory:
-    def test_unc_path_fallback_on_windows_uses_tempdir_when_temp_unset(self) -> None:
-        mock_hooks_directory = MagicMock()
-        mock_hooks_directory.resolve.return_value = Path("\\\\server\\share\\hooks")
-        environment_without_temp = {
-            each_key: each_value
-            for each_key, each_value in os.environ.items()
-            if each_key not in ("TEMP", "TMP")
-        }
-        with patch("validators.run_all_validators.hooks_dir", mock_hooks_directory), patch(
-            "validators.run_all_validators.sys.platform", "win32"
-        ), patch("validators.run_all_validators.os.environ", environment_without_temp):
-            working_directory_string, _environment = (
-                _hooks_subprocess_working_directory_and_environment()
-            )
-        assert working_directory_string == tempfile.gettempdir()
-        assert not working_directory_string.startswith("\\\\")

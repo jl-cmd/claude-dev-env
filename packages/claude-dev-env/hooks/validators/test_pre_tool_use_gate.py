@@ -9,17 +9,14 @@ import io
 import json
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from . import run_all_validators
+from . import file_scoped_runners, pre_tool_use_gate
 from .run_all_validators import (
     ValidatorResult,
-    _scope_new_and_preexisting,
-    _violation_line_number,
     main,
     run_pre_tool_use_gate,
     run_validators_entrypoint_subprocess,
@@ -48,7 +45,7 @@ class TestGateFailsClosedOnFault:
             raise RuntimeError("anti-pattern check crashed")
 
         monkeypatch.setattr(
-            run_all_validators,
+            file_scoped_runners,
             "run_python_antipattern_checks",
             raise_validator_fault,
         )
@@ -75,7 +72,7 @@ class TestGateFailsClosedOnFault:
             raise RuntimeError("payload evaluation crashed")
 
         monkeypatch.setattr(
-            run_all_validators,
+            pre_tool_use_gate,
             "reconstruct_proposed_content",
             raise_reconstruction_fault,
         )
@@ -361,50 +358,3 @@ class TestBaselineScopedGate:
         assert '"permissionDecision": "deny"' in completed.stdout
         assert "F401" in completed.stdout
         assert "F841" not in completed.stdout
-
-
-class TestScopeNewAndPreexisting:
-    def test_failed_result_without_located_lines_is_treated_as_new(self) -> None:
-        summary_only_result = ValidatorResult(
-            name="Ruff", checks="37", passed=False, output="Found 1 error."
-        )
-
-        new_results, preexisting_results = _scope_new_and_preexisting(
-            [summary_only_result], "import os\n", Counter()
-        )
-
-        assert [each_result.name for each_result in new_results] == ["Ruff"]
-        assert preexisting_results == []
-
-
-class TestViolationLineNumber:
-    def test_ruff_line_col_prefix_returns_line_not_column(self) -> None:
-        ruff_shaped_line = "/pkg/legacy_module.py:37:5: F401 `os` imported but unused"
-
-        assert _violation_line_number(ruff_shaped_line) == 37
-
-    def test_windows_drive_prefix_returns_line(self) -> None:
-        windows_shaped_line = r"C:\repo\tmp\legacy_module.py:37:5: F401 unused import"
-
-        assert _violation_line_number(windows_shaped_line) == 37
-
-    def test_check_module_line_prefix_returns_line(self) -> None:
-        check_module_line = "/pkg/legacy_module.py:37: magic number 199"
-
-        assert _violation_line_number(check_module_line) == 37
-
-    def test_summary_line_without_location_returns_zero(self) -> None:
-        assert _violation_line_number("Found 3 errors.") == 0
-
-    def test_code_frame_line_quoting_colon_digits_returns_zero(self) -> None:
-        frame_line = '4 | message = "err:37: bad"'
-
-        assert _violation_line_number(frame_line) == 0
-
-    def test_code_frame_source_line_returns_zero(self) -> None:
-        assert _violation_line_number("17 | import os") == 0
-
-    def test_path_with_spaces_returns_line(self) -> None:
-        spaced_path_line = "/tmp/my dir/legacy module.py:37: magic number 199"
-
-        assert _violation_line_number(spaced_path_line) == 37
