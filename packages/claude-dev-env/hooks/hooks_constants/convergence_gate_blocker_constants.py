@@ -25,16 +25,18 @@ chained command does not bind the gate to the wrong PR::
 
 GH_PR_READY_ANCHOR_PATTERN: str = r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)"
 
-COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n"
+COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n|&"
 
 BASH_LINE_CONTINUATION_PATTERN: str = r"\\\r?\n[ \t]*"
 
 PR_URL_OWNER_REPO_NUMBER_PATTERN: str = (
-    r"https://github\.com/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)/pull/(?P<number>\d+)"
+    r"https?://[^/]+/(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)/pull/(?P<number>\d+)"
 )
 
 REPO_OVERRIDE_FLAG_PATTERN: str = (
-    r"(?:^|\s)(?:--repo(?:=|\s+)|-R(?:=|\s+)?)(?:[\w.-]+/)*(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)"
+    r"(?:^|\s)(?:--repo(?:=|\s+)|-R(?:=|\s+)?)"
+    r"(?:https?://[^/\s]+/|git@[^:\s]+:|(?:[\w.-]+/)*)"
+    r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)"
 )
 
 ALL_GH_PR_VIEW_NUMBER_COMMAND: tuple[str, ...] = (

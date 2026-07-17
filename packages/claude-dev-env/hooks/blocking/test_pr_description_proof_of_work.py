@@ -187,6 +187,11 @@ def test_ready_gate_resolves_pr_number_from_current_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_fake_gh(monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], "")
+    monkeypatch.setattr(
+        proof_module,
+        "_resolve_current_branch_pr_number",
+        lambda all_target_repo, cwd: 77,
+    )
     assert evaluate_pr_ready_gate("gh pr ready") is None
 
 
@@ -209,15 +214,16 @@ def test_ready_gate_reads_comments_from_repo_named_by_flag(
 def test_ready_gate_resolves_pr_number_from_repo_named_by_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    all_recorded = _install_recording_fake_gh(
-        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
-    )
+    _install_fake_gh(monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], "")
+    all_captured_repo_pairs: list[tuple[str, str] | None] = []
+
+    def fake_resolver(all_target_repo: tuple[str, str] | None, cwd: str | None) -> int:
+        all_captured_repo_pairs.append(all_target_repo)
+        return 77
+
+    monkeypatch.setattr(proof_module, "_resolve_current_branch_pr_number", fake_resolver)
     evaluate_pr_ready_gate("gh pr ready --repo other-owner/other-repo")
-    all_view_calls = _argument_lists_with_leading(all_recorded, "pr", "view")
-    assert all_view_calls
-    for each_arguments in all_view_calls:
-        assert "--repo" in each_arguments
-        assert "other-owner/other-repo" in each_arguments
+    assert all_captured_repo_pairs == [("other-owner", "other-repo")]
 
 
 def test_ready_gate_reads_comments_from_repo_named_by_url(
@@ -265,3 +271,42 @@ def test_ready_gate_ignores_repo_flag_of_chained_command(
     assert all_api_calls
     for each_arguments in all_recorded:
         assert "other-owner/other-repo" not in each_arguments
+
+
+def test_ready_gate_reads_comments_from_repo_named_by_full_url_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready 42 --repo https://github.com/other-owner/other-repo")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/other-owner/other-repo/issues/42/comments"
+    )
+    assert all_api_calls
+
+
+def test_ready_gate_reads_comments_from_repo_named_by_short_url_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready 42 -R https://github.com/other-owner/other-repo")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/other-owner/other-repo/issues/42/comments"
+    )
+    assert all_api_calls
+
+
+def test_ready_gate_reads_comments_from_repo_named_by_ssh_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded = _install_recording_fake_gh(
+        monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], ""
+    )
+    evaluate_pr_ready_gate("gh pr ready 42 --repo git@github.com:other-owner/other-repo")
+    all_api_calls = _argument_lists_with_leading(
+        all_recorded, "api", "repos/other-owner/other-repo/issues/42/comments"
+    )
+    assert all_api_calls

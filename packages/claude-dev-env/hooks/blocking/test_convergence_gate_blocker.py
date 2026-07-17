@@ -334,3 +334,51 @@ def test_ready_segment_skips_a_leading_undo_invocation() -> None:
         hook_module._ready_command_segment("gh pr ready --undo && gh pr ready 161")
         == "gh pr ready 161"
     )
+
+
+def test_parse_repo_flag_full_url_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo https://github.com/other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_short_alias_full_url_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 -R https://github.com/other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_ssh_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo git@github.com:other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_pr_url_accepts_enterprise_host() -> None:
+    assert hook_module._parse_pr_url(
+        "gh pr ready https://github.example.com/other-owner/other-repo/pull/161"
+    ) == ("other-owner", "other-repo", 161)
+
+
+def test_background_operator_clips_chained_repo_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 & gh pr comment 999 --repo other-owner/other-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("cwd-owner", "cwd-repo", 161)
+
+
+def test_trailing_redirect_keeps_earlier_repo_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 --repo other-owner/other-repo 2>&1",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("other-owner", "other-repo", 161)

@@ -106,22 +106,43 @@ def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, i
     return cwd_owner, cwd_repo, pr_number
 
 
-def _resolve_pr_number(
-    command: str,
-    cwd: str | None,
-    from_owner: str | None,
-    from_repo: str | None,
+def _repo_flag_arguments(all_target_repo: tuple[str, str] | None) -> list[str]:
+    """Build the ``--repo owner/repo`` arguments for a gh subcommand.
+
+    Args:
+        all_target_repo: The (owner, repo) pair the command names, or None when
+            the command names no repository.
+
+    Returns:
+        A ``[--repo, owner/repo]`` argument pair when a repository is named, or
+        an empty list when it is None — leaving gh bound to the current
+        directory's repository.
+    """
+    if all_target_repo is None:
+        return []
+    owner, repo = all_target_repo
+    return [GH_REPO_FLAG, REPO_SLUG_TEMPLATE.format(owner=owner, repo=repo)]
+
+
+def _resolve_current_branch_pr_number(
+    all_target_repo: tuple[str, str] | None, cwd: str | None
 ) -> int | None:
-    direct_number = _extract_pr_number_from_command(command)
-    if direct_number is not None:
-        return direct_number
-    all_view_arguments = list(ALL_GH_PR_VIEW_NUMBER_COMMAND)
-    if from_owner is not None and from_repo is not None:
-        all_view_arguments = [
-            *all_view_arguments,
-            GH_REPO_FLAG,
-            REPO_SLUG_TEMPLATE.format(owner=from_owner, repo=from_repo),
-        ]
+    """Resolve the current-branch PR number through ``gh pr view``.
+
+    Args:
+        all_target_repo: The (owner, repo) pair the command names, or None to
+            read the current directory's repository.
+        cwd: The working directory gh runs in, or None for the process default.
+
+    Returns:
+        The PR number gh reports, or None when gh is missing, exits non-zero,
+        or prints no integer — every failure path returns None so the caller
+        fails open.
+    """
+    all_view_arguments = [
+        *ALL_GH_PR_VIEW_NUMBER_COMMAND,
+        *_repo_flag_arguments(all_target_repo),
+    ]
     try:
         completed_process = subprocess.run(
             all_view_arguments,
@@ -138,6 +159,22 @@ def _resolve_pr_number(
         return int(completed_process.stdout.strip())
     except (ValueError, TypeError):
         return None
+
+
+def _resolve_pr_number(
+    command: str,
+    cwd: str | None,
+    from_owner: str | None,
+    from_repo: str | None,
+) -> int | None:
+    direct_number = _extract_pr_number_from_command(command)
+    if direct_number is not None:
+        return direct_number
+    if from_owner is not None and from_repo is not None:
+        all_target_repo: tuple[str, str] | None = (from_owner, from_repo)
+    else:
+        all_target_repo = None
+    return _resolve_current_branch_pr_number(all_target_repo, cwd)
 
 
 def _resolve_owner_repo(cwd: str | None) -> tuple[str, str] | None:

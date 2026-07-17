@@ -24,6 +24,8 @@ from blocking.convergence_gate_blocker import (  # noqa: E402
     _parse_pr_url,
     _parse_repo_flag,
     _ready_command_segment,
+    _repo_flag_arguments,
+    _resolve_current_branch_pr_number,
 )
 from blocking.pr_description_body_audit import _iter_section_headers  # noqa: E402
 from blocking.pr_description_pr_number import (  # noqa: E402
@@ -37,7 +39,6 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
 from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E402
     ALL_HONEST_GAP_PHRASES,
     ALL_PR_DIFF_SUBCOMMANDS,
-    ALL_PR_VIEW_NUMBER_ARGUMENTS,
     ALL_PROOF_HEADING_KEYWORDS,
     ALL_VISUAL_FILE_SUFFIXES,
     COMMENT_BODY_JSON_FIELD,
@@ -46,7 +47,6 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     GH_COMMAND_TIMEOUT_SECONDS,
     GH_EXECUTABLE,
     GH_PAGINATE_FLAG,
-    GH_REPO_FLAG,
     GH_SLURP_FLAG,
     HEX_COLOR_ADDED_LINE_PATTERN,
     IMAGE_EMBED_PATTERN,
@@ -55,7 +55,6 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     PLAN_LINKAGE_KEYWORD_PATTERN,
     PR_COMMENTS_API_PATH_TEMPLATE,
     PR_DIFF_NAME_ONLY_FLAG,
-    PR_NUMBER_JSON_FIELD,
     PR_READY_GATE_MESSAGE_TEMPLATE,
     PR_READY_INVOCATION_PATTERN,
     PR_READY_UNDO_FLAG,
@@ -64,7 +63,6 @@ from hooks_constants.pr_description_proof_of_work_constants import (  # noqa: E4
     PROOF_PART_MEASURED_MESSAGE,
     PROOF_PART_PLAN_LINKAGE_MESSAGE,
     PROOF_PART_VISUAL_MESSAGE,
-    REPO_SLUG_TEMPLATE,
 )
 from hooks_constants.setup_project_paths_constants import UTF8_ENCODING  # noqa: E402
 
@@ -184,28 +182,10 @@ def _resolve_target_identity(command: str) -> tuple[tuple[str, str] | None, int]
     all_target_repo = _parse_repo_flag(ready_segment)
     resolved_pr_number = _extract_pr_number_from_command(ready_segment)
     if resolved_pr_number is None:
-        resolved_pr_number = _resolve_current_pr_number(all_target_repo)
+        resolved_pr_number = _resolve_current_branch_pr_number(all_target_repo, None)
     if resolved_pr_number is None:
         return None
     return all_target_repo, resolved_pr_number
-
-
-def _repo_flag_arguments(all_target_repo: tuple[str, str] | None) -> list[str]:
-    """Build the ``--repo owner/repo`` arguments for a gh subcommand.
-
-    Args:
-        all_target_repo: The (owner, repo) pair the command names, or None when
-            the command names no repository.
-
-    Returns:
-        A ``[--repo, owner/repo]`` argument pair when a repository is named,
-        or an empty list when it is None — leaving gh bound to the current
-        directory's repository.
-    """
-    if all_target_repo is None:
-        return []
-    owner, repo = all_target_repo
-    return [GH_REPO_FLAG, REPO_SLUG_TEMPLATE.format(owner=owner, repo=repo)]
 
 
 def _run_gh_command(all_gh_arguments: list[str]) -> str | None:
@@ -235,34 +215,6 @@ def _run_gh_command(all_gh_arguments: list[str]) -> str | None:
         logger.warning("gh command exited %d: %s", completed_process.returncode, all_gh_arguments)
         return None
     return completed_process.stdout
-
-
-def _resolve_current_pr_number(all_target_repo: tuple[str, str] | None) -> int | None:
-    """Resolve the PR number of the named repository's current-branch PR.
-
-    Args:
-        all_target_repo: The (owner, repo) pair the command names, or None to
-            read the current directory's repository.
-
-    Returns:
-        The PR number from ``gh pr view``, or None when no PR resolves or
-        gh fails.
-    """
-    view_stdout = _run_gh_command(
-        [*ALL_PR_VIEW_NUMBER_ARGUMENTS, *_repo_flag_arguments(all_target_repo)]
-    )
-    if view_stdout is None:
-        return None
-    try:
-        view_record = json.loads(view_stdout)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(view_record, dict):
-        return None
-    resolved_number = view_record.get(PR_NUMBER_JSON_FIELD)
-    if isinstance(resolved_number, int):
-        return resolved_number
-    return None
 
 
 def _build_comments_api_path(pr_number: int, all_target_repo: tuple[str, str] | None) -> str:
