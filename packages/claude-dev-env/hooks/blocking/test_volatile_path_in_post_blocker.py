@@ -118,6 +118,51 @@ def test_scan_unchanged_bare_markers_still_detected() -> None:
     )
 
 
+def test_scan_space_prefixed_relative_worktree_path_is_detected() -> None:
+    text = "see .claude/worktrees/wt-1/notes.md"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_cd_relative_worktree_path_is_detected() -> None:
+    text = "cd .claude/worktrees/wt-199 && pytest"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_start_of_text_relative_worktree_path_is_detected() -> None:
+    text = ".claude/worktrees/wt-1/notes.md"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_markdown_link_relative_worktree_target_is_detected() -> None:
+    text = "[notes](.claude/worktrees/wt-1/notes.md)"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_space_prefixed_relative_job_scratch_path_is_detected() -> None:
+    text = "see .claude-editor/jobs/j1/log.txt"
+    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+
+
+def test_scan_backslash_relative_worktree_path_is_detected() -> None:
+    text = r"see .claude\worktrees\wt-1\notes.md"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_prose_child_token_after_marker_is_detected() -> None:
+    text = "the .claude/worktrees/wt-name pattern"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
+def test_scan_placeholder_child_segment_is_allowed() -> None:
+    text = "worktrees live under `.claude/worktrees/<name>`"
+    assert scan_text_for_volatile_marker(text) is None
+
+
+def test_scan_sentence_final_marker_period_is_allowed() -> None:
+    text = "the constant is `.claude/worktrees/`. Next."
+    assert scan_text_for_volatile_marker(text) is None
+
+
 def test_gh_comment_with_job_scratch_path_is_blocked() -> None:
     command = (
         'gh pr comment 669 --body "Contact sheet at '

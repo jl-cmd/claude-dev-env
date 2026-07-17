@@ -22,9 +22,11 @@ another argument never classifies.
 The marker scan runs in two tiers over the normalized body. Five bare markers
 — the system temp locations and env tokens — match as a plain substring
 anywhere. Two dot-relative directory markers, ``.claude-editor/jobs/`` and
-``.claude/worktrees/``, match only where a slash sits immediately before the
-marker, so a machine-local path such as ``~/.claude/worktrees/wt/f.py`` counts
-while a bare repo-relative mention of the directory name passes.
+``.claude/worktrees/``, match when either a slash sits immediately before the
+marker or a path segment follows it. A machine-local absolute path
+(``~/.claude/worktrees/wt/f.py``) and a relative path that names a child
+(``see .claude/worktrees/wt-1/notes.md``) both count; a bare directory-name
+mention with neither anchor posts cleanly.
 """
 
 import json
@@ -60,18 +62,28 @@ from hooks_constants.volatile_path_in_post_blocker_constants import (  # noqa: E
     MCP_GITHUB_TOOL_PREFIX,
     MINIMUM_POST_SUBCOMMAND_TOKEN_COUNT,
     PATH_ANCHOR_CHARACTER,
+    PATH_SEGMENT_START_CHARACTERS,
     TOKEN_JOIN_SEPARATOR,
 )
 
 
-def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
-    """Return whether the marker appears with a slash immediately before it.
+def _character_starts_path_segment(character: str) -> bool:
+    """Return whether a character can open a path segment after a marker."""
+    return bool(character) and (
+        character.isalnum() or character in PATH_SEGMENT_START_CHARACTERS
+    )
 
-    Every occurrence is scanned, so a bare mention earlier in the text never
-    masks a path-anchored occurrence later::
+
+def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
+    """Return whether the marker appears as part of a path.
+
+    A match counts when either a slash sits immediately before the marker or a
+    path segment follows it. Every occurrence is scanned, so a bare directory
+    mention earlier in the text never masks a path occurrence later::
 
         ok:   ".claude/worktrees/ is the manifest key"      -> False
         flag: "path c:/users/me/.claude/worktrees/wt/f.py"  -> True
+        flag: "see .claude/worktrees/wt-1/notes.md"         -> True
 
     Args:
         normalized_text: The body text with backslashes folded to forward
@@ -79,7 +91,7 @@ def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
         marker: A dot-relative directory marker to search for.
 
     Returns:
-        True when at least one occurrence is preceded by a slash.
+        True when at least one occurrence is path-anchored.
     """
     search_start = 0
     while True:
@@ -87,7 +99,11 @@ def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
         if found_index < 0:
             return False
         preceding_character = normalized_text[found_index - 1 : found_index]
-        if preceding_character == PATH_ANCHOR_CHARACTER:
+        following_index = found_index + len(marker)
+        following_character = normalized_text[following_index : following_index + 1]
+        is_slash_before = preceding_character == PATH_ANCHOR_CHARACTER
+        is_segment_after = _character_starts_path_segment(following_character)
+        if is_slash_before or is_segment_after:
             return True
         search_start = found_index + 1
 
@@ -96,16 +112,18 @@ def scan_text_for_volatile_marker(text: str) -> str | None:
     """Return the first volatile-path marker found in text, or None.
 
     Backslashes normalize to forward slashes and the text lowercases before the
-    scan. The two dot-relative directory markers count only where a slash sits
-    immediately before them; the five bare markers match anywhere::
+    scan. The two dot-relative directory markers count when either a slash sits
+    immediately before them or a path segment follows them; the five bare
+    markers match anywhere::
 
         ok:   "the `.claude/worktrees/` manifest key"    -> None
         flag: r"C:\\Users\\me\\.claude-editor\\jobs\\x"   -> ".claude-editor/jobs/"
+        flag: "see .claude/worktrees/wt-1/notes.md"       -> ".claude/worktrees/"
         flag: "saved to %TEMP%\\out.txt"                  -> "%temp%"
 
-    A dot-relative marker with no slash right before it — start of text,
-    whitespace, a quote, a bracket, or any other character — reads as a
-    repo-relative mention and passes.
+    A dot-relative marker with neither a slash before it nor a path segment
+    after it — start of text naming the directory, a quoted config constant,
+    or a placeholder form such as ``.claude/worktrees/<name>`` — posts cleanly.
 
     Args:
         text: The post body text to scan.

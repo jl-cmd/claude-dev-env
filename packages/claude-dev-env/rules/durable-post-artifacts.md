@@ -26,7 +26,12 @@ Handle the two kinds of content differently:
 
 Both slash directions count.
 
-The worktree and job-scratch entries count only as part of a machine-local path — a `/` or `\` sits right before them, as in a drive-letter path (`C:\Users\me\.claude\worktrees\wt\f.py`), a home path (`~/.claude/worktrees/wt`), or a POSIX absolute path (`/home/me/.claude-editor/jobs/j/log.txt`). A mention of the directory name with no path separator right before it — a quoted config constant, plain prose, or a bare relative path — reads as text and passes.
+The worktree and job-scratch entries count as a path when either:
+
+- A `/` or `\` sits right before them — a drive-letter path (`C:\Users\me\.claude\worktrees\wt\f.py`), a home path (`~/.claude/worktrees/wt`), or a POSIX absolute path (`/home/me/.claude-editor/jobs/j/log.txt`).
+- A path segment follows them — a relative path that names a child under that directory (`see .claude/worktrees/wt-1/notes.md`, a markdown link target, or `cd .claude/worktrees/wt-199`).
+
+With neither anchor the text names the directory rather than something inside it, and it posts — a quoted config constant, a backticked directory name, or a placeholder form such as `.claude/worktrees/<name>`. Un-backticked prose that puts a word immediately after the marker reads the same as a relative path and is blocked; the placeholder form is the documented escape.
 
 ## Enforcement
 
