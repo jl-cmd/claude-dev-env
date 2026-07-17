@@ -7,11 +7,13 @@
     {"source": "override", "reset_at": "2026-07-08T10:14:00-07:00",
      "seconds_until_reset": 4440, "stages_seconds": [3480, 960, 120], ...}
 
-With no ``--override``, the script resolves a bearer token: the Claude Code
-OAuth access token from the CLI credential file, or the session ingress token
-file when that credential is unavailable. It asks the OAuth usage endpoint for the
-``five_hour`` and ``seven_day`` windows. Exit code 2 means the probe cannot
-resolve; the caller then asks the user for a manual reset time.
+With no ``--override``, the script resolves a bearer token. On the desktop
+host it uses only the session ingress token. On every other host it reads the
+Claude Code OAuth access token from the CLI credential file, then the session
+ingress token file when that credential is unavailable. It asks the OAuth
+usage endpoint for the ``five_hour`` and ``seven_day`` windows. Exit code 2
+means the probe cannot resolve; the caller then asks the user for a manual
+reset time.
 """
 
 from __future__ import annotations
@@ -41,7 +43,9 @@ from usage_pause_constants.resolve_usage_window_constants import (
     CREDENTIALS_ACCESS_TOKEN_KEY,
     CREDENTIALS_EXPIRES_AT_KEY,
     CREDENTIALS_OAUTH_SECTION_KEY,
+    DESKTOP_ENTRYPOINT_VALUE,
     DURATION_PATTERN,
+    ENTRYPOINT_ENV_VAR,
     EPOCH_MILLISECONDS_THRESHOLD,
     EXIT_CODE_PROBE_UNAVAILABLE,
     EXIT_CODE_RESOLVED,
@@ -267,14 +271,36 @@ def read_session_ingress_token() -> str | None:
     return token_text
 
 
+def running_on_desktop_host() -> bool:
+    """Tell whether this process runs under the Claude desktop app.
+
+    ::
+
+        entrypoint is the desktop marker  ->  True
+        entrypoint is the CLI or unset    ->  False
+
+    The desktop app meters its session under a different auth session than
+    the CLI credential file, so a true answer tells the resolver to leave
+    that credential file alone.
+
+    Returns:
+        True when the entrypoint environment variable names the desktop app.
+    """
+    return os.environ.get(ENTRYPOINT_ENV_VAR) == DESKTOP_ENTRYPOINT_VALUE
+
+
 def resolve_access_token(credentials_path: Path, now: datetime) -> str | None:
     """Choose the usage-endpoint bearer token from its available sources.
 
     ::
 
-        credential file token valid   ->  the credential token
-        credential token unavailable  ->  the session ingress token
-        neither source available      ->  None
+        CLI host, credential token valid        ->  the credential token
+        CLI host, credential token unavailable   ->  the session ingress token
+        desktop host                             ->  the session ingress token
+        no source available                      ->  None
+
+    On the desktop host the CLI credential file belongs to a different auth
+    session, so it is skipped and only the session ingress token is honored.
 
     Args:
         credentials_path: The CLI credential file holding the OAuth section.
@@ -283,6 +309,8 @@ def resolve_access_token(credentials_path: Path, now: datetime) -> str | None:
     Returns:
         The bearer token for the usage endpoint, or None when no source has one.
     """
+    if running_on_desktop_host():
+        return read_session_ingress_token()
     credential_token = read_oauth_access_token(credentials_path, now)
     return credential_token or read_session_ingress_token()
 
@@ -447,6 +475,37 @@ def _describe_ingress_token_source() -> str:
     return f"the session ingress token file ({SESSION_INGRESS_TOKEN_FILE_ENV_VAR} set but empty)"
 
 
+def _no_token_error_message(credentials_path: Path) -> str:
+    """Build the no-usable-token exit-2 error, host-aware for the desktop app.
+
+    ::
+
+        desktop host  ->  names the different-session skip and the /usage remedy
+        other host    ->  names the credential path and the ingress source tried
+
+    On the desktop host the CLI credential file is never read, so the message
+    points the user at the interactive /usage panel for a manual reset time.
+
+    Args:
+        credentials_path: The CLI credential file the non-desktop message names.
+
+    Returns:
+        The error text for the no-usable-token exit-2 path.
+    """
+    if running_on_desktop_host():
+        return (
+            "on the desktop host the CLI credential file belongs to a different "
+            f"auth session and is not read, and {_describe_ingress_token_source()} "
+            "has no token; read the reset time from the interactive /usage panel "
+            "and give it manually, for example /usage-pause 10:20pm or /usage-pause 74m"
+        )
+    return (
+        "no usable bearer token from the OAuth credential file at "
+        f"{credentials_path} or {_describe_ingress_token_source()}; give a "
+        "manual reset time, for example /usage-pause 10:20pm or /usage-pause 74m"
+    )
+
+
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve the 5-hour usage window reset and plan the pause stage chain.",
@@ -503,11 +562,7 @@ def main() -> int:
     )
     access_token = resolve_access_token(credentials_path, now)
     if access_token is None:
-        return _emit_error(
-            "no usable bearer token from the OAuth credential file at "
-            f"{credentials_path} or {_describe_ingress_token_source()}; give a "
-            "manual reset time, for example /usage-pause 10:20pm or /usage-pause 74m"
-        )
+        return _emit_error(_no_token_error_message(credentials_path))
     try:
         usage_payload = _fetch_usage_payload(access_token)
     except (
