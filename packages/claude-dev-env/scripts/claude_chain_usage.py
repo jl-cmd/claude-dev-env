@@ -158,8 +158,7 @@ def weekly_remaining_from_utilization(weekly_utilization: float) -> float:
     Returns:
         Remaining weekly capacity on the same 0–100 scale.
     """
-    full_weekly_percent = FULL_WEEKLY_PERCENT
-    return full_weekly_percent - weekly_utilization
+    return FULL_WEEKLY_PERCENT - weekly_utilization
 
 
 def _report_for_entry(
