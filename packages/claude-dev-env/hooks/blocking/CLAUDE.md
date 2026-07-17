@@ -12,6 +12,7 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 | `claude_md_orphan_file_blocker_parts/` | Concern modules the `claude_md_orphan_file_blocker.py` entry hook wires together: reference extraction, subtree scan, scan plan, decision, and constants |
 | `package_inventory_stale_blocker_parts/` | Concern modules the `package_inventory_stale_blocker.py` entry hook wires together: inventory detection, decision, and constants |
 | `inventory_intent_records/` | The shared per-session pending-intent store both inventory blockers read to break the file/row add-order deadlock |
+| `gate_skip_token/` | The per-session skip-token store both gate surfaces read to escalate a deny to a human permission prompt on a refactor deadlock |
 | `pii_prevention_blocker_parts/` | Concern modules the `pii_prevention_blocker.py` entry hook wires together: per-repository scan exemption, the per-repository allowlist of exact values a commit may carry, and resolving the repository a commit command targets (with `config/` for the resolution deny-message constants) |
 | `tests/` | pytest suite for `pii_prevention_blocker.py` repository resolution and the `pii_prevention_blocker_parts` modules |
 
