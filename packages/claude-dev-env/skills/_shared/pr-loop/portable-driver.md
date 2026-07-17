@@ -63,7 +63,7 @@ ok; `1` = contract failure; `2` = usage error.
 
 | Command | Deterministic effect |
 |---|---|
-| `open-run` | Require `portable`; preflight; seed state + task list; next=`run_code_review` |
+| `open-run` | Require `portable`; preflight; seed state + task list; when `--codex-down` is off, set `codex_required` from CLI force-on or the weekly usage probe (same rule as `check_convergence`); next=`run_code_review` |
 | `after-code-review` | From returncode / dirty_tree / served_command |
 | `after-bugteam` | From pushed / converged |
 | `after-bugbot` | From classification / inline lag |

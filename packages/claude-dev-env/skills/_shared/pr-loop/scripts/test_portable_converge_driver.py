@@ -55,6 +55,19 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
 )
 
 
+_REAL_PROBE_WEEKLY_USAGE_REQUIRES_CODEX = driver.probe_weekly_usage_requires_codex
+
+
+@pytest.fixture(autouse=True)
+def stub_codex_usage_probe_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep unit tests offline: live weekly probe never requires Codex."""
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: False,
+    )
+
+
 @pytest.fixture
 def state_file(tmp_path: Path) -> Path:
     path = tmp_path / "pr-converge-state.json"
@@ -605,6 +618,174 @@ def test_after_bugteam_when_codex_required_runs_codex_before_ready(
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODEX
     assert payload[RESULT_KEY_PHASE] == PHASE_BUGBOT
+
+
+def test_after_bugteam_usage_probe_requires_codex_when_seed_false(
+    state_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: True,
+    )
+    state = driver.load_state(state_file)
+    state["bugbot_down"] = True
+    state["copilot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = False
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_bugteam(
+        state_file=state_file,
+        is_pushed=False,
+        is_converged=True,
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODEX
+    reloaded = driver.load_state(state_file)
+    assert reloaded[STATE_KEY_CODEX_REQUIRED] is True
+
+
+def test_after_ready_check_fail_routes_to_codex_when_usage_requires(
+    state_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: True,
+    )
+    state = driver.load_state(state_file)
+    state["bugbot_down"] = True
+    state["copilot_down"] = True
+    state[STATE_KEY_CODEX_DOWN] = False
+    state[STATE_KEY_CODEX_REQUIRED] = False
+    state[STATE_KEY_CODEX_CLEAN_AT] = None
+    state["phase"] = PHASE_READY
+    driver.save_state(state_file, state)
+    payload, exit_code = driver.run_after_ready_check(
+        state_file=state_file,
+        check_exit=1,
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODEX
+    reloaded = driver.load_state(state_file)
+    assert reloaded[STATE_KEY_CODEX_REQUIRED] is True
+
+
+def test_resolve_codex_required_flag_force_on_skips_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: False,
+    )
+    assert (
+        driver.resolve_codex_required_flag(
+            is_codex_down=False,
+            is_codex_required=True,
+        )
+        is True
+    )
+
+
+def test_resolve_codex_required_flag_uses_probe_when_seed_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: True,
+    )
+    assert (
+        driver.resolve_codex_required_flag(
+            is_codex_down=False,
+            is_codex_required=False,
+        )
+        is True
+    )
+
+
+def test_resolve_codex_required_flag_down_never_requires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        lambda: True,
+    )
+    assert (
+        driver.resolve_codex_required_flag(
+            is_codex_down=True,
+            is_codex_required=True,
+        )
+        is False
+    )
+
+
+def test_probe_weekly_usage_requires_codex_true_above_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        _REAL_PROBE_WEEKLY_USAGE_REQUIRES_CODEX,
+    )
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_via_subprocess",
+        lambda: {driver.USAGE_REPORT_KEY_PERCENT_LEFT: 50.0},
+    )
+    monkeypatch.setattr(
+        driver,
+        "is_codex_review_required",
+        lambda percent_left: percent_left is not None and percent_left > 10.0,
+    )
+    assert driver.probe_weekly_usage_requires_codex() is True
+
+
+def test_probe_weekly_usage_requires_codex_false_when_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        _REAL_PROBE_WEEKLY_USAGE_REQUIRES_CODEX,
+    )
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_via_subprocess",
+        lambda: {driver.USAGE_REPORT_KEY_PERCENT_LEFT: None},
+    )
+    monkeypatch.setattr(
+        driver,
+        "is_codex_review_required",
+        lambda percent_left: False,
+    )
+    assert driver.probe_weekly_usage_requires_codex() is False
+
+
+def test_probe_weekly_usage_requires_codex_false_on_probe_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_requires_codex",
+        _REAL_PROBE_WEEKLY_USAGE_REQUIRES_CODEX,
+    )
+
+    def _raise_probe_error() -> dict[str, object]:
+        raise OSError("codex CLI missing")
+
+    monkeypatch.setattr(
+        driver,
+        "probe_weekly_usage_via_subprocess",
+        _raise_probe_error,
+    )
+    assert driver.probe_weekly_usage_requires_codex() is False
 
 
 def test_show_state_ready_with_pending_mark_ready(state_file: Path) -> None:

@@ -45,6 +45,10 @@ success. Non-zero returncode is always a failed serve.
 
 After Bugbot clean or down, the machine runs the Codex step (or the
 codex-down / not-required waiver) before COPILOT_WAIT or check_ready.
+
+When ``--codex-down`` is off, open-run and every codex decision point probe
+weekly usage through ``codex_usage_probe`` so ``codex_required`` matches
+``check_convergence`` (CLI ``--codex-required 1`` still forces the step on).
 """
 
 from __future__ import annotations
@@ -118,6 +122,8 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CLI_STATE_DIR_FLAG,
     CLI_STATE_FILE_FLAG,
+    CODEX_REVIEW_SCRIPTS_DIRNAME,
+    CODEX_REVIEW_SKILL_DIRNAME,
     COMMAND_AFTER_BUGBOT,
     COMMAND_AFTER_BUGTEAM,
     COMMAND_AFTER_CODE_REVIEW,
@@ -134,6 +140,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     EXIT_USAGE_ERROR,
     INLINE_LAG_STREAK_CAP,
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
+    PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
     NEXT_MARK_READY,
@@ -191,6 +198,28 @@ from skills_pr_loop_constants.preflight_constants import (  # noqa: E402
     MODE_STRICT,
     OWNER_ARG_FLAG,
     REPO_ARG_FLAG,
+)
+
+_skills_directory_for_codex = Path(__file__).resolve().parent
+_remaining_codex_path_hops = PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS
+while _remaining_codex_path_hops > 0:
+    _skills_directory_for_codex = _skills_directory_for_codex.parent
+    _remaining_codex_path_hops -= 1
+_codex_scripts_directory = (
+    _skills_directory_for_codex
+    / CODEX_REVIEW_SKILL_DIRNAME
+    / CODEX_REVIEW_SCRIPTS_DIRNAME
+)
+_codex_scripts_text = str(_codex_scripts_directory)
+if _codex_scripts_text not in sys.path:
+    sys.path.insert(0, _codex_scripts_text)
+
+from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa: E402
+    USAGE_REPORT_KEY_PERCENT_LEFT,
+)
+from codex_usage_probe import (  # noqa: E402
+    is_codex_review_required,
+    probe_weekly_usage_via_subprocess,
 )
 
 _EMPTY_COMMANDS: list[str] = []
@@ -336,6 +365,76 @@ def _sync_task_list_from_down_flags(all_state: dict[str, object]) -> None:
     all_state["final_task_id"] = all_task_list["final_task_id"]
     all_state["runnable_review_ids"] = all_task_list["runnable_review_ids"]
     all_state["done_when"] = all_task_list["done_when"]
+
+
+def probe_weekly_usage_requires_codex() -> bool:
+    """Return whether live weekly Codex usage requires a review stamp.
+
+    Matches ``check_convergence``: unknown percent and probe failures never
+    require a review. A known percent above the shared threshold does.
+
+    Returns:
+        True only when the weekly probe exits successfully with a percent
+        that ``is_codex_review_required`` accepts as required.
+    """
+    try:
+        usage_report = probe_weekly_usage_via_subprocess()
+    except (
+        FileNotFoundError,
+        OSError,
+        subprocess.TimeoutExpired,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ):
+        return False
+    raw_percent = usage_report.get(USAGE_REPORT_KEY_PERCENT_LEFT)
+    if isinstance(raw_percent, bool):
+        return False
+    if isinstance(raw_percent, (int, float)):
+        return is_codex_review_required(float(raw_percent))
+    return False
+
+
+def resolve_codex_required_flag(
+    *,
+    is_codex_down: bool,
+    is_codex_required: bool,
+) -> bool:
+    """Resolve whether Codex is a runnable review for this run.
+
+    Args:
+        is_codex_down: Codex gate skipped (disabled or opted out).
+        is_codex_required: CLI force-on (``--codex-required 1``).
+
+    Returns:
+        False when Codex is down; otherwise the CLI force-on flag or the
+        live weekly usage probe (same rule as ``check_convergence``).
+    """
+    if is_codex_down:
+        return False
+    if is_codex_required:
+        return True
+    return probe_weekly_usage_requires_codex()
+
+
+def _ensure_codex_required_matches_usage(all_state: dict[str, object]) -> None:
+    """Promote ``codex_required`` when live usage requires a stamp.
+
+    Args:
+        all_state: Mutable loop state; may set ``codex_required`` and refresh
+            the task list when the probe requires Codex.
+    """
+    if all_state.get(STATE_KEY_CODEX_DOWN):
+        return
+    if all_state.get(STATE_KEY_CODEX_REQUIRED):
+        return
+    if not probe_weekly_usage_requires_codex():
+        return
+    all_state[STATE_KEY_CODEX_REQUIRED] = True
+    _sync_task_list_from_down_flags(all_state)
 
 
 def _maybe_reset_on_head_change(
@@ -695,13 +794,17 @@ def run_open_run(
             "git rev-parse HEAD failed", blocker=BLOCKER_PREFLIGHT
         ), head_exit
     state_dir.mkdir(parents=True, exist_ok=True)
+    resolved_codex_required = resolve_codex_required_flag(
+        is_codex_down=is_codex_down,
+        is_codex_required=is_codex_required,
+    )
     return _seed_open_run_task_list_and_finish(
         current_head=current_head,
         entry_skill=selection.entry_skill,
         is_copilot_down=is_copilot_down,
         is_bugbot_down=is_bugbot_down,
         is_codex_down=is_codex_down,
-        is_codex_required=is_codex_required,
+        is_codex_required=resolved_codex_required,
         owner=owner,
         repo=repo,
         pr_number=pr_number,
@@ -793,15 +896,15 @@ def run_after_code_review(
 def _needs_codex_step(all_state: Mapping[str, object]) -> bool:
     if all_state.get(STATE_KEY_CODEX_DOWN):
         return False
-    if not all_state.get(STATE_KEY_CODEX_REQUIRED):
-        return False
     current_head = all_state.get("current_head")
     if (
         isinstance(current_head, str)
         and all_state.get(STATE_KEY_CODEX_CLEAN_AT) == current_head
     ):
         return False
-    return True
+    if all_state.get(STATE_KEY_CODEX_REQUIRED):
+        return True
+    return probe_weekly_usage_requires_codex()
 
 
 def _advance_after_codex_resolved(
@@ -835,6 +938,7 @@ def _advance_after_bugbot_resolved(
     all_state: dict[str, object],
     state_file: Path,
 ) -> tuple[dict[str, object], int]:
+    _ensure_codex_required_matches_usage(all_state)
     if _needs_codex_step(all_state):
         all_state["phase"] = PHASE_BUGBOT
         return _finish_ok(
@@ -1253,6 +1357,18 @@ def run_after_ready_check(
         )
 
     if check_exit == 1:
+        _ensure_codex_required_matches_usage(all_state)
+        if _needs_codex_step(all_state):
+            all_state["phase"] = PHASE_BUGBOT
+            return _finish_ok(
+                all_state,
+                state_file,
+                next_action=NEXT_RUN_CODEX,
+                all_commands=_EMPTY_COMMANDS,
+                wait_seconds=None,
+                blocker=None,
+                all_extra_fields=None,
+            )
         all_state["phase"] = PHASE_CODE_REVIEW
         return _finish_ok(
             all_state,

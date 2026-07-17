@@ -172,6 +172,10 @@ CHECK_CONVERGENCE_RELATIVE_PATH: str = (
     ".claude/skills/pr-converge/scripts/check_convergence.py"
 )
 
+CODEX_REVIEW_SKILL_DIRNAME: str = "codex-review"
+CODEX_REVIEW_SCRIPTS_DIRNAME: str = "scripts"
+PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS: int = 3
+
 EXIT_SUCCESS: int = 0
 EXIT_USAGE_ERROR: int = 2
 EXIT_CONTRACT_ERROR: int = 1
