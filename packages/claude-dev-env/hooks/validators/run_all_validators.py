@@ -33,8 +33,17 @@ package_name = VALIDATORS_DIR.name
 _hooks_directory_on_path = str(hooks_dir.resolve())
 if _hooks_directory_on_path not in sys.path:
     sys.path.insert(0, _hooks_directory_on_path)
+_blocking_directory_on_path = str((hooks_dir / "blocking").resolve())
+if _blocking_directory_on_path not in sys.path:
+    sys.path.insert(0, _blocking_directory_on_path)
 
 from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
+from gate_skip_token.records import (  # noqa: E402
+    consume_skip_token,
+    content_sha256,
+    has_valid_skip_token,
+    should_downgrade_to_ask,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
@@ -830,6 +839,34 @@ def _emit_pre_tool_use_deny(deny_reason: str) -> None:
     sys.stdout.flush()
 
 
+def _emit_pre_tool_use_ask(ask_reason: str) -> None:
+    """Write one PreToolUse ask JSON payload escalating the block to a human prompt.
+
+    ::
+
+        deny  -> a new violation, or no valid token: the block stands
+        ask   -> only pre-existing findings under a valid token: a human grants
+
+    Args:
+        ask_reason: The ``permissionDecisionReason`` naming the pre-existing
+            findings a human must approve.
+    """
+    ask_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": ask_reason,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="run_all_validators.py",
+        hook_event="PreToolUse",
+        block_reason=ask_reason,
+    )
+    sys.stdout.write(json.dumps(ask_payload) + "\n")
+    sys.stdout.flush()
+
+
 def _record_function_spans(
     parent_node: ast.AST, name_prefix: str, name_by_line: dict[int, str]
 ) -> None:
@@ -1238,12 +1275,22 @@ def _emit_pre_existing_warning(all_preexisting_results: List[ValidatorResult]) -
     sys.stderr.flush()
 
 
-def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
+def _decide_pre_tool_use(
+    file_path: str, proposed_content: str, permission_mode: str, session_id: str
+) -> None:
     """Deny only violations absent from the baseline; warn on the ones that persist.
+
+    A new violation never downgrades: the escalation guard treats "proposed
+    findings are a subset of the on-disk findings" as "there are no new
+    results", which is false whenever a new result exists. So a valid token
+    escalates to a human ``ask`` only when every proposed failure is
+    pre-existing, and a new violation always denies.
 
     Args:
         file_path: The write's target path.
         proposed_content: The reconstructed post-edit content of that file.
+        permission_mode: The PreToolUse permission mode of the write.
+        session_id: The session a skip token belongs to.
     """
     all_proposed_failed = _failed_results(
         validate_proposed_file(file_path, proposed_content)
@@ -1256,8 +1303,16 @@ def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
     )
     if all_preexisting_results:
         _emit_pre_existing_warning(all_preexisting_results)
-    if all_new_results:
-        _emit_pre_tool_use_deny(_proposed_content_deny_reason(all_new_results))
+    if not all_new_results:
+        return
+    proposed_content_hash = content_sha256(proposed_content)
+    has_token = has_valid_skip_token(session_id, file_path, proposed_content_hash)
+    deny_reason = _proposed_content_deny_reason(all_new_results)
+    if should_downgrade_to_ask(permission_mode, not all_new_results, has_token):
+        consume_skip_token(session_id, file_path, proposed_content_hash)
+        _emit_pre_tool_use_ask(deny_reason)
+        return
+    _emit_pre_tool_use_deny(deny_reason)
 
 
 def _evaluate_pre_tool_use_payload() -> None:
@@ -1287,7 +1342,9 @@ def _evaluate_pre_tool_use_payload() -> None:
     proposed_content = reconstruct_proposed_content(tool_name, tool_input)
     if not proposed_content:
         return
-    _decide_pre_tool_use(file_path, proposed_content)
+    permission_mode = pre_tool_use_payload.get("permission_mode", "")
+    session_id = pre_tool_use_payload.get("session_id", "")
+    _decide_pre_tool_use(file_path, proposed_content, permission_mode, session_id)
 
 
 def run_pre_tool_use_gate() -> int:

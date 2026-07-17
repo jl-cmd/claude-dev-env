@@ -35,6 +35,9 @@ ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
 DENY_REASON_ISSUE_PREVIEW_COUNT = 10
+ISSUE_LIST_JOIN_SEPARATOR = "; "
+
+FINDING_IDENTITY_DIGIT_RUN_PATTERN: re.Pattern[str] = re.compile(r"\d+")
 
 ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_", "was_", "did_")
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")

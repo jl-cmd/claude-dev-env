@@ -104,6 +104,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/plain_language_blocker.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gate_question_default_gate.py",
+            "timeout": 10
           }
         ]
       },

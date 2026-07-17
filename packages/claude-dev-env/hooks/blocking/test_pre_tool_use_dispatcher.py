@@ -9,6 +9,9 @@ union.
 The failure-mode tests cover one row each from spec/failure-modes.md:
 early-exit-then-later-deny, multi-deny, context-survival, blocking-hook crash,
 fail-open malformed input.
+
+The unit tests also pin the deny over ask over allow precedence the aggregator
+resolves and the ask payload the emitter writes.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
 )
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
     HostedHookResult,
+    _emit_ask_decision,
     aggregate_hosted_hook_results,
     run_hosted_hook,
 )
@@ -868,3 +872,101 @@ def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
             "from the dispatcher's hosted hook set — coverage was lost when the "
             "standalone entry was removed from hooks.json"
         )
+
+
+def _ask_payload_stdout(reason_text: str) -> str:
+    """Build one hosted-hook stdout carrying an ask decision with a reason."""
+    return json.dumps(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": reason_text,
+            }
+        }
+    )
+
+
+def test_aggregate_ask_payload_signals_ask_decision() -> None:
+    """An ask payload from a hosted hook signals an ask decision, not deny or allow.
+
+    A hosted gate downgrades a deny to ask when a valid skip token clears the
+    deadlock guards. The aggregator must surface that as an ask so the dispatcher
+    routes the write to the human permission prompt rather than swallowing it.
+    """
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("pre-existing finding — human must approve"),
+            did_crash=False,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_ask, "an ask payload with no deny must signal an ask decision"
+    assert not decision.should_deny, "an ask must not signal a deny"
+    assert not decision.should_allow, "an ask must not signal an explicit allow"
+    assert "human must approve" in " | ".join(decision.all_ask_reasons)
+
+
+def test_aggregate_ask_is_overridden_by_a_deny() -> None:
+    """A deny wins over an ask from another hook in the same run."""
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("please confirm"),
+            did_crash=False,
+            is_blocking=True,
+        ),
+        HostedHookResult(
+            exit_code=BLOCKING_CRASH_EXIT_CODE,
+            captured_stdout="",
+            did_crash=False,
+            is_blocking=True,
+        ),
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_deny, "a deny must win over an ask"
+    assert not decision.should_ask, "should_ask must be False when any hook denies"
+
+
+def test_aggregate_ask_overrides_an_explicit_allow() -> None:
+    """An ask wins over an explicit allow when no hook denies."""
+    explicit_allow_stdout = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+    )
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=explicit_allow_stdout,
+            did_crash=False,
+            is_blocking=True,
+        ),
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("deadlock cleared by a valid skip token"),
+            did_crash=False,
+            is_blocking=True,
+        ),
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_ask, "an ask must win over an explicit allow"
+    assert not decision.should_allow, "should_allow must be False when a hook asks"
+
+
+def test_emit_ask_decision_writes_ask_permission(capsys: pytest.CaptureFixture[str]) -> None:
+    """_emit_ask_decision writes a permissionDecision ask payload carrying the reason."""
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("edit blocked only by a pre-existing finding"),
+            did_crash=False,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    _emit_ask_decision(decision)
+    emitted_payload = json.loads(capsys.readouterr().out.strip())
+    hook_specific = emitted_payload["hookSpecificOutput"]
+    assert hook_specific["permissionDecision"] == "ask"
+    assert "pre-existing finding" in hook_specific["permissionDecisionReason"]
