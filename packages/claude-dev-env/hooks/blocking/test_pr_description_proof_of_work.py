@@ -17,6 +17,7 @@ _HOOKS_ROOT = _HOOK_DIR.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
+from blocking import convergence_gate_blocker as convergence_module  # noqa: E402
 from blocking import pr_description_proof_of_work as proof_module  # noqa: E402
 from blocking.pr_description_proof_of_work import (  # noqa: E402
     audit_proof_comment_body,
@@ -188,7 +189,7 @@ def test_ready_gate_resolves_pr_number_from_current_branch(
 ) -> None:
     _install_fake_gh(monkeypatch, [PASSING_PROOF_COMMENT_BODY], ["src/parser.py"], "")
     monkeypatch.setattr(
-        proof_module,
+        convergence_module,
         "_resolve_current_branch_pr_number",
         lambda all_target_repo, cwd: 77,
     )
@@ -221,7 +222,7 @@ def test_ready_gate_resolves_pr_number_from_repo_named_by_flag(
         all_captured_repo_pairs.append(all_target_repo)
         return 77
 
-    monkeypatch.setattr(proof_module, "_resolve_current_branch_pr_number", fake_resolver)
+    monkeypatch.setattr(convergence_module, "_resolve_current_branch_pr_number", fake_resolver)
     evaluate_pr_ready_gate("gh pr ready --repo other-owner/other-repo")
     assert all_captured_repo_pairs == [("other-owner", "other-repo")]
 

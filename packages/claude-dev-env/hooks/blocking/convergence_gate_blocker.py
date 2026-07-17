@@ -74,30 +74,56 @@ def _parse_repo_flag(command: str) -> tuple[str, str] | None:
     return flag_match.group("owner"), flag_match.group("repo")
 
 
-def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, int] | None:
-    """Resolve the (owner, repo, pr_number) the gate keys its evidence to.
+def _resolve_named_identity(
+    command: str, cwd: str | None
+) -> tuple[tuple[str, str] | None, int] | None:
+    """Resolve the repository the command names and its PR number.
 
-    A full PR URL in the command yields all three. A --repo/-R flag yields
-    the repository while the PR number resolves from the command number or
-    the named repository's current-branch PR. With neither present, both the
-    repository and the number resolve from the cwd.
+    A full PR URL yields both the (owner, repo) pair and the number. A
+    ``--repo``/``-R`` flag yields the pair while the number resolves from the
+    command's positional argument or the named repository's current-branch PR.
+    With neither present, the pair is None — leaving gh bound to the current
+    directory's repository — and the number resolves the same way. Every parse
+    runs over the ``gh pr ready`` segment alone, clipped at the next command
+    separator, so a flag or URL belonging to a chained command cannot bind the
+    gate to the wrong PR.
+
+    Args:
+        command: The raw shell command captured by the hook.
+        cwd: The working directory gh runs in when the number resolves from the
+            current branch, or None for the process default.
+
+    Returns:
+        The (owner, repo) pair the command names — None when it names none —
+        paired with the resolved PR number, or None when no number resolves.
     """
     ready_segment = _ready_command_segment(command)
     pr_url_identity = _parse_pr_url(ready_segment)
     if pr_url_identity is not None:
-        return pr_url_identity
-
-    repo_flag_identity = _parse_repo_flag(ready_segment)
-    from_owner: str | None = None
-    from_repo: str | None = None
-    if repo_flag_identity is not None:
-        from_owner, from_repo = repo_flag_identity
-    pr_number = _resolve_pr_number(ready_segment, cwd, from_owner, from_repo)
-    if pr_number is None:
+        url_owner, url_repo, url_number = pr_url_identity
+        return (url_owner, url_repo), url_number
+    all_target_repo = _parse_repo_flag(ready_segment)
+    from_owner, from_repo = all_target_repo if all_target_repo is not None else (None, None)
+    resolved_pr_number = _resolve_pr_number(ready_segment, cwd, from_owner, from_repo)
+    if resolved_pr_number is None:
         return None
+    return all_target_repo, resolved_pr_number
 
-    if from_owner is not None and from_repo is not None:
-        return from_owner, from_repo, pr_number
+
+def _resolve_target_identity(command: str, cwd: str | None) -> tuple[str, str, int] | None:
+    """Resolve the (owner, repo, pr_number) the gate keys its evidence to.
+
+    Delegates the repository-and-number resolution to the shared core, then
+    falls back to the cwd repository for the number when the command names no
+    repository of its own.
+    """
+    named_identity = _resolve_named_identity(command, cwd)
+    if named_identity is None:
+        return None
+    all_target_repo, pr_number = named_identity
+    if all_target_repo is not None:
+        owner, repo = all_target_repo
+        return owner, repo, pr_number
 
     cwd_identity = _resolve_owner_repo(cwd)
     if cwd_identity is None:

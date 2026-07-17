@@ -21,16 +21,10 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from blocking.convergence_gate_blocker import (  # noqa: E402
-    _parse_pr_url,
-    _parse_repo_flag,
-    _ready_command_segment,
     _repo_flag_arguments,
-    _resolve_current_branch_pr_number,
+    _resolve_named_identity,
 )
 from blocking.pr_description_body_audit import _iter_section_headers  # noqa: E402
-from blocking.pr_description_pr_number import (  # noqa: E402
-    _extract_pr_number_from_command,
-)
 from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     BULLET_MARKER_PATTERN,
     FENCED_CODE_BLOCK_PATTERN,
@@ -137,7 +131,7 @@ def evaluate_pr_ready_gate(command: str) -> str | None:
         carries no passing proof comment, or None when a passing proof
         comment exists or any gh query fails.
     """
-    target_identity = _resolve_target_identity(command)
+    target_identity = _resolve_named_identity(command, None)
     if target_identity is None:
         return None
     all_target_repo, resolved_pr_number = target_identity
@@ -151,41 +145,6 @@ def evaluate_pr_ready_gate(command: str) -> str | None:
         if not _missing_proof_parts(each_body, is_visual_change):
             return None
     return PR_READY_GATE_MESSAGE_TEMPLATE.format(pr_number=resolved_pr_number)
-
-
-def _resolve_target_identity(command: str) -> tuple[tuple[str, str] | None, int] | None:
-    """Resolve the repository and PR number the gate keys its reads to.
-
-    A full PR URL in the command yields both the (owner, repo) pair and the
-    number. A ``--repo``/``-R`` flag yields the pair while the number resolves
-    from the command's positional argument or the current branch's PR. With
-    neither present, the pair is None (gh reads the current directory's
-    repository) and the number resolves the same way. Every parse runs over
-    the ``gh pr ready`` segment alone, clipped at the next command separator,
-    so a ``--repo`` flag or PR URL belonging to a chained command cannot bind
-    the gate to the wrong PR.
-
-    Args:
-        command: The raw shell command captured by the hook.
-
-    Returns:
-        The (owner, repo) pair — or None when the command names no
-        repository — paired with the resolved PR number, or None when no PR
-        number resolves.
-    """
-    ready_segment = _ready_command_segment(command)
-    pr_url_identity = _parse_pr_url(ready_segment)
-    if pr_url_identity is not None:
-        url_owner, url_repo, url_number = pr_url_identity
-        return (url_owner, url_repo), url_number
-
-    all_target_repo = _parse_repo_flag(ready_segment)
-    resolved_pr_number = _extract_pr_number_from_command(ready_segment)
-    if resolved_pr_number is None:
-        resolved_pr_number = _resolve_current_branch_pr_number(all_target_repo, None)
-    if resolved_pr_number is None:
-        return None
-    return all_target_repo, resolved_pr_number
 
 
 def _run_gh_command(all_gh_arguments: list[str]) -> str | None:

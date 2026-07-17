@@ -25,7 +25,7 @@ chained command does not bind the gate to the wrong PR::
 
 GH_PR_READY_ANCHOR_PATTERN: str = r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)"
 
-COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n|&"
+COMMAND_SEPARATOR_PATTERN: str = r"&&|\|\||;|\||\n|(?<![>&])&(?![>&])"
 
 BASH_LINE_CONTINUATION_PATTERN: str = r"\\\r?\n[ \t]*"
 

@@ -382,3 +382,36 @@ def test_trailing_redirect_keeps_earlier_repo_flag(
         ("cwd-owner", "cwd-repo"),
     )
     assert identity == ("other-owner", "other-repo", 161)
+
+
+def test_stderr_redirect_dup_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 >&2 --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_stderr_to_stdout_redirect_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 2>&1 --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_append_all_output_redirect_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 &> log --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_stderr_redirect_binds_repo_end_to_end(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 >&2 --repo other-owner/other-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("other-owner", "other-repo", 161)
