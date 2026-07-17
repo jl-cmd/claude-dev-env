@@ -110,7 +110,7 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
 - Functions stay at 30 lines or fewer. If it's longer, flag as advisory ONLY.
 - Top-level functions follow the language's blank-line convention: Python uses two blank lines between top-level functions. Other languages defer to file-established convention.
 - `import` statements live at the top of the file.
-- Application and library code uses logging calls. CLI tools and automation entrypoints may use `print()` when stdout is the integration contract (`print(json.dumps(...))`).
+- Application and library code uses logging calls. CLI tools and automation entrypoints may use `print()` when stdout is the integration contract (`print(json.dumps(...))`). A file counts as a CLI entrypoint by path marker: a `_cli.py` or `cli.py` filename, or a `/scripts/` path segment. Both write-time surfaces read the same markers — the `check_print_in_production` validator and the `check_library_print` blocker.
 - `log_*` and `logger.*` calls use `%`-style placeholders: `logger.info("delivered %s", message_id)`.
 - A `log_*` helper imported from a `str.format`-based logger (`shared_utils.automation_logging`) is the exception: its messages take `{}` placeholders, and a `%s`/`%d` token there is dropped by `str.format`, so the arguments never print.
 
