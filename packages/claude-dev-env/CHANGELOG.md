@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.2.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.2.0...claude-dev-env-v2.2.1) (2026-07-17)
+
+
+### Bug Fixes
+
+* **check:** type-check pr-loop scripts in the quality gate ([fb9551d](https://github.com/jl-cmd/claude-dev-env/commit/fb9551daeda9a8a6cf4e40eae7d8d2942e0cc58e))
+* **check:** type-check pr-loop scripts in the quality gate ([d5c6e06](https://github.com/jl-cmd/claude-dev-env/commit/d5c6e06be0a6b0df2de076e32cefa298ba69e563))
+* **hooks:** count-scope gate identities and drop unlocated validator noise ([07753de](https://github.com/jl-cmd/claude-dev-env/commit/07753de6b3540273532d68ab4e94c7c80d254320))
+* **hooks:** diff-scope run_all_validators write gate to new violations ([#186](https://github.com/jl-cmd/claude-dev-env/issues/186)) ([9cb0e8f](https://github.com/jl-cmd/claude-dev-env/commit/9cb0e8f5169106c1e4776702d29bb44c30b70294))
+* **hooks:** pin ruff concise output and allow spaced paths in gate locations ([0fffc24](https://github.com/jl-cmd/claude-dev-env/commit/0fffc2446e0eb15c73c093900332faae5da19906))
+* **hooks:** skip PII write scan on ephemeral non-repo paths ([fd169eb](https://github.com/jl-cmd/claude-dev-env/commit/fd169ebd8dfb175b843dbcd1470527e5de21f2ab)), closes [#187](https://github.com/jl-cmd/claude-dev-env/issues/187)
+* **hooks:** skip PII write scan on ephemeral paths ([#187](https://github.com/jl-cmd/claude-dev-env/issues/187)) ([a63beb8](https://github.com/jl-cmd/claude-dev-env/commit/a63beb809696b4d9ab08d5947f199c67db3822b3))
+* **hooks:** skip PII write scan when no texts to inspect ([dbc224e](https://github.com/jl-cmd/claude-dev-env/commit/dbc224e1e5ebffd239eecebc3ed448ab169a786b))
+* **hooks:** thread hook_payload into PII write evaluate ([bc1294d](https://github.com/jl-cmd/claude-dev-env/commit/bc1294d407f705aa1b719f2d60adc37633710b10))
+* **usage-pause:** skip CLI credential token on the desktop host ([3340c79](https://github.com/jl-cmd/claude-dev-env/commit/3340c7988922857099207566a236a220892fe216))
+* **usage-pause:** skip CLI credential token on the desktop host ([678ea09](https://github.com/jl-cmd/claude-dev-env/commit/678ea0939b1e49ddbb7ae1a69f88af9230d38d12))
+
+
+### Documentation
+
+* **claude-md:** name all three verified-commit-gate exemption arms ([c6d485e](https://github.com/jl-cmd/claude-dev-env/commit/c6d485e5d05b0c315bc73a3fe3ef20255a1767dc))
+* **claude-md:** name all three verified-commit-gate exemption arms ([75348f8](https://github.com/jl-cmd/claude-dev-env/commit/75348f84ec043d5fa758bc0fcd1cb8ef34e3e0c1)), closes [#241](https://github.com/jl-cmd/claude-dev-env/issues/241)
+* **rules:** add cleanup-command-forms rule ([7f7cc2c](https://github.com/jl-cmd/claude-dev-env/commit/7f7cc2cba954bd4315a272b0d18c7f4a0c8b7ab4))
+* **rules:** add cleanup-command-forms rule ([6fe3f5b](https://github.com/jl-cmd/claude-dev-env/commit/6fe3f5b6bd99037d9481b9f2165883a183002c4a))
+* **rules:** correct destructive_command_blocker auto-allow description ([ae23bb4](https://github.com/jl-cmd/claude-dev-env/commit/ae23bb46509fefed75a9bc7180f13a3a97edf4d8))
+* **rules:** fix cleanup-command-forms auto-allow shapes ([4c727e7](https://github.com/jl-cmd/claude-dev-env/commit/4c727e7ee84756f0b2841adc7c826393db4bde8d))
+* **rules:** fix garbled cleanup directive and windows-filesystem-safe cross-ref ([a2372da](https://github.com/jl-cmd/claude-dev-env/commit/a2372da7ea89c345bb4d0072380ab4165c266f1f))
+
+
+### Style
+
+* **hooks:** drop whitespace-only docstring hunk from code_rules_shared ([af498e5](https://github.com/jl-cmd/claude-dev-env/commit/af498e5a3fa3320af9a942c5e4b850794fbdb322))
+
 ## [2.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.1.0...claude-dev-env-v2.2.0) (2026-07-17)
 
 
