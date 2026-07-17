@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.1.0...claude-dev-env-v2.2.0) (2026-07-17)
+
+
+### Features
+
+* **pr-loop:** portable converge pacer for third-party hosts ([bd0a345](https://github.com/jl-cmd/claude-dev-env/commit/bd0a3459120a3e243841396fb4d13eb24adc3cfc))
+
 ## [2.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.2...claude-dev-env-v2.1.0) (2026-07-17)
 
 
