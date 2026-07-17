@@ -43,10 +43,8 @@ Triggers: `/closeout`, "close out this session", "file the session obstacles", "
 ## The process
 
 ```
-- [ ] Phase 1 — Harvest obstacles from the three sources; quote verbatim evidence
-- [ ] Phase 1 — Run the PII pass over every candidate
-- [ ] Phase 2 — Draft one issue-candidate record per obstacle
-- [ ] Phase 2 — Confirmation gate: AskUserQuestion, hand off only on approval
+- [ ] Phase 1 — Harvest obstacles from the three sources; quote verbatim evidence; run the PII pass
+- [ ] Phase 2 — Draft one issue-candidate record per obstacle; confirmation gate via AskUserQuestion
 - [ ] Phase 3 — Route each candidate to its repo
 - [ ] Phase 4 — Hand each approved record to the issue-tracker; collect numbers and URLs
 - [ ] Phase 5 — Print the computed cloud handoff prompt in chat
