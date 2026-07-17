@@ -26,7 +26,7 @@ Handle the two kinds of content differently:
 
 Both slash directions count.
 
-The worktree and job-scratch entries count only as part of a machine-local path — a `/` or `\` sits right before them, as in a drive-letter path (`C:\Users\me\.claude\worktrees\wt\f.py`), a home path (`~/.claude/worktrees/wt`), or a POSIX absolute path (`/home/me/.claude-editor/jobs/j/log.txt`). A bare repo-relative mention of the directory name on its own — a quoted config constant or plain prose — reads as text and passes.
+The worktree and job-scratch entries count only as part of a machine-local path — a `/` or `\` sits right before them, as in a drive-letter path (`C:\Users\me\.claude\worktrees\wt\f.py`), a home path (`~/.claude/worktrees/wt`), or a POSIX absolute path (`/home/me/.claude-editor/jobs/j/log.txt`). A mention of the directory name with no path separator right before it — a quoted config constant, plain prose, or a bare relative path — reads as text and passes.
 
 ## Enforcement
 

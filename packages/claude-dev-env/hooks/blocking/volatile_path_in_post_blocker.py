@@ -103,8 +103,9 @@ def scan_text_for_volatile_marker(text: str) -> str | None:
         flag: r"C:\\Users\\me\\.claude-editor\\jobs\\x"   -> ".claude-editor/jobs/"
         flag: "saved to %TEMP%\\out.txt"                  -> "%temp%"
 
-    A dot-relative marker preceded by start-of-text, whitespace, a quote, or a
-    bracket reads as a repo-relative mention and passes.
+    A dot-relative marker with no slash right before it — start of text,
+    whitespace, a quote, a bracket, or any other character — reads as a
+    repo-relative mention and passes.
 
     Args:
         text: The post body text to scan.
@@ -112,7 +113,7 @@ def scan_text_for_volatile_marker(text: str) -> str | None:
     Returns:
         The matched marker string, or None when the text names no volatile path.
     """
-    normalized_text = text.replace("\\", "/").lower()
+    normalized_text = text.replace("\\", PATH_ANCHOR_CHARACTER).lower()
     for each_marker in ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS:
         if _text_has_anchored_marker(normalized_text, each_marker):
             return each_marker
