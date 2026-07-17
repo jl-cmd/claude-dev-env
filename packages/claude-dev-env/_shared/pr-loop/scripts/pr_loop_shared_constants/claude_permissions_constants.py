@@ -8,6 +8,7 @@ __all__ = (
     "ALL_AGENT_CONFIG_DENY_TOOLS",
     "ALL_AGENT_CONFIG_PATH_PATTERNS",
     "ALL_PERMISSION_ALLOW_TOOLS",
+    "ALL_REVOKE_PERMISSION_TOOLS",
     "ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS",
     "AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX",
     "AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE",
@@ -23,6 +24,14 @@ __all__ = (
 ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Write", "Read")
 
 ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Write", "Read", "Glob")
+
+ALL_REVOKE_PERMISSION_TOOLS: tuple[str, ...] = (
+    "Edit",
+    "Write",
+    "Read",
+    "Glob",
+    "NotebookEdit",
+)
 
 ALL_AGENT_CONFIG_PATH_PATTERNS: tuple[str, ...] = (
     "settings*.json",

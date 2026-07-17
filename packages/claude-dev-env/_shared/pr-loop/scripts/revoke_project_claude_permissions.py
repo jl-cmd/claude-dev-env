@@ -27,9 +27,8 @@ from _claude_permissions_common import (  # noqa: E402
     save_settings,
 )
 from pr_loop_shared_constants.claude_permissions_constants import (
-    ALL_AGENT_CONFIG_DENY_TOOLS,
     ALL_AGENT_CONFIG_PATH_PATTERNS,
-    ALL_PERMISSION_ALLOW_TOOLS,
+    ALL_REVOKE_PERMISSION_TOOLS,
     AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
     get_claude_user_settings_path,
 )
@@ -212,10 +211,12 @@ def revoke_permissions_for_current_directory() -> None:
         )
         raise SystemExit(1)
     project_path = get_current_project_path()
-    permission_rules = build_permission_rules(project_path, ALL_PERMISSION_ALLOW_TOOLS)
+    permission_rules = build_permission_rules(
+        project_path, ALL_REVOKE_PERMISSION_TOOLS
+    )
     all_agent_config_deny_rules = build_agent_config_deny_rules(
         project_path,
-        ALL_AGENT_CONFIG_DENY_TOOLS,
+        ALL_REVOKE_PERMISSION_TOOLS,
         ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
     settings = load_settings(claude_user_settings_path)
