@@ -22,6 +22,23 @@ A partial-scope round does not count and cannot set `code_review_clean_at`.
 Run with no path arguments so the built-in command sees the whole branch diff
 against `origin/main` (see Claude Code local diff review docs).
 
+## Usage probe (pre-step)
+
+`claude_usage_probe.py` runs before the invoker and prints one JSON object:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `session_utilization` | number or null | 5-hour percent spent |
+| `weekly_utilization` | number or null | Weekly percent spent |
+| `weekly_near_cap` | bool or null | Weekly WARN flag from usage-pause |
+| `session_has_usage_left` | bool or null | True when utilization known and below threshold |
+| `source` | string | Resolver source, or `unavailable` |
+| `probe_ok` | bool | True only when the usage-pause resolver succeeded |
+
+Pass the decision into the invoker as `--session-has-usage-left
+true|false|unknown`. `false` forces `mode=chain` even on Claude+opus. Probe
+failure does not block the review.
+
 ## Invoker JSON shape
 
 `invoke_code_review.py` prints one JSON object on stdout only:
@@ -35,7 +52,8 @@ against `origin/main` (see Claude Code local diff review docs).
 
 On `ChainConfigurationError` or host `ValueError`, the helper still prints this
 shape (non-zero `returncode`, null `served_command`) and exits non-zero — never
-a traceback-only failure.
+a traceback-only failure. The invoker outcome keys stay fixed; usage-probe
+fields stay on the separate probe CLI.
 
 ## Successful serve
 

@@ -7,6 +7,8 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | File | Purpose |
 |---|---|
 | `claude_chain_runner.py` | Runs a `claude` invocation through a config-driven fallback chain (`~/.claude/claude-chain.json`): the leading binary serves the call, and only a usage-limit failure falls over to the next logged-in binary; usable as an imported module (`run_claude`) or a CLI. Copy `claude-chain.example.json` to `~/.claude/claude-chain.json` and list your binaries in fallback order |
+| `claude_usage_probe.py` | Thin wrapper over usage-pause `resolve_usage_window.py` for claude-review: prints `{session_utilization, weekly_utilization, weekly_near_cap, session_has_usage_left, source, probe_ok}`; never blocks on probe failure |
+| `invoke_code_review.py` | Host-aware `/code-review xhigh --fix` invoker: in-session on Claude+opus, headless via `claude_chain_runner` otherwise; optional `--session-has-usage-left false` forces chain when the primary session is drained |
 | `gh_artifact_upload.py` | Uploads a file to a repo's durable `artifacts` prerelease under a timestamped asset name and prints the permanent download URL a GitHub post can link |
 | `grok_headless_runner.py` | Runs one worker as headless `grok`: builds argv, mints a unique leader socket, captures streams, kills on timeout with grace, classifies ok/usage_limit/auth_failure/timeout/error; imported by `spawn_grok_batch.py` |
 | `grok_worker_preflight.py` | Soft gate for the headless grok tier: binary on PATH, `grok models` auth, install manifest + role agents, opt-in cached live ping; non-zero exit is fallthrough, not failure |

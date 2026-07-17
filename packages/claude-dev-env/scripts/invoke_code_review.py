@@ -3,12 +3,14 @@
 
 Mode decision::
 
-    host=Claude, session_model=opus  -> mode in_session (skill runs slash cmd)
+    session_has_usage_left=false      -> mode chain (force; primary drained)
+    host=Claude, session_model=opus   -> mode in_session (skill runs slash cmd)
     host=Claude, session_model=sonnet -> mode chain (headless opus spawn)
     host=ThirdParty, any model        -> mode chain
 
-Chain mode runs ``run_claude`` with argv from ``build_code_review_arguments``
-(single-turn prompt, model opus, json output, bypassPermissions).
+Chain mode runs ``run_claude`` (``claude_chain_runner``) with argv from
+``build_code_review_arguments`` (single-turn prompt, model opus, json output,
+bypassPermissions).
 
 cwd is the PR working tree and stdin is redirected from the empty stream so
 the spawn does not wait for interactive input. Result JSON on stdout only::
@@ -24,6 +26,7 @@ Import ``invoke_code_review`` for the outcome object, or run as a CLI::
 
     python invoke_code_review.py --cwd <dir> --session-model <alias>
         [--timeout-seconds N]
+        [--session-has-usage-left true|false|unknown]
 """
 
 from __future__ import annotations
@@ -59,6 +62,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
+    CLI_SESSION_HAS_USAGE_LEFT_FLAG,
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
     CODE_REVIEW_PROMPT,
@@ -75,6 +79,9 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     RESULT_KEY_MODE,
     RESULT_KEY_RETURNCODE,
     RESULT_KEY_SERVED_COMMAND,
+    SESSION_HAS_USAGE_LEFT_FALSE,
+    SESSION_HAS_USAGE_LEFT_TRUE,
+    SESSION_HAS_USAGE_LEFT_UNKNOWN,
     SUCCESSFUL_REVIEW_RETURNCODE,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
@@ -143,8 +150,13 @@ def is_opus_session_model(session_model: str) -> bool:
     return session_model.strip().lower() == CODE_REVIEW_MODEL_ALIAS
 
 
-def decide_review_mode(*, host_profile: str, session_model: str) -> str:
-    """Return ``in_session`` or ``chain`` from host profile and session model.
+def decide_review_mode(
+    *,
+    host_profile: str,
+    session_model: str,
+    session_has_usage_left: bool | None = None,
+) -> str:
+    """Return ``in_session`` or ``chain`` from host, model, and usage probe.
 
     ::
 
@@ -154,14 +166,26 @@ def decide_review_mode(*, host_profile: str, session_model: str) -> str:
             # ok: "chain"
         decide_review_mode(host_profile="ThirdParty", session_model="opus")
             # ok: "chain"
+        decide_review_mode(
+            host_profile="Claude",
+            session_model="opus",
+            session_has_usage_left=False,
+        )  # ok: "chain"
 
     Args:
         host_profile: Detected host profile (``Claude`` or ``ThirdParty``).
         session_model: Caller-stated session model short alias.
+        session_has_usage_left: Usage-probe decision for the primary session.
+            ``False`` forces chain so another chain binary can serve when the
+            primary account is drained. ``True`` and ``None`` keep host/model
+            rules.
 
     Returns:
-        ``MODE_IN_SESSION`` only for Claude host on opus; otherwise ``MODE_CHAIN``.
+        ``MODE_IN_SESSION`` only for Claude host on opus with usage left
+        unknown or true; otherwise ``MODE_CHAIN``.
     """
+    if session_has_usage_left is False:
+        return MODE_CHAIN
     is_claude_host = host_profile == HOST_PROFILE_CLAUDE
     if is_claude_host and is_opus_session_model(session_model):
         return MODE_IN_SESSION
@@ -347,11 +371,45 @@ def _failure_code_review_outcome(returncode: int) -> CodeReviewOutcome:
         is_dirty_tree=False,
     )
 
+def parse_session_has_usage_left_token(
+    session_has_usage_left_token: str,
+) -> bool | None:
+    """Parse the CLI ``--session-has-usage-left`` token into a tri-state bool.
+
+    ::
+
+        parse_session_has_usage_left_token("true")     # ok: True
+        parse_session_has_usage_left_token("false")    # ok: False
+        parse_session_has_usage_left_token("unknown")  # ok: None
+
+    Args:
+        session_has_usage_left_token: One of ``true``, ``false``, or ``unknown``
+            (letter case ignored).
+
+    Returns:
+        True, False, or None for the three probe outcomes.
+
+    Raises:
+        ValueError: The token is not one of the three allowed labels.
+    """
+    normalized_token = session_has_usage_left_token.strip().lower()
+    if normalized_token == SESSION_HAS_USAGE_LEFT_TRUE:
+        return True
+    if normalized_token == SESSION_HAS_USAGE_LEFT_FALSE:
+        return False
+    if normalized_token == SESSION_HAS_USAGE_LEFT_UNKNOWN:
+        return None
+    raise ValueError(
+        f"unsupported session-has-usage-left token: {session_has_usage_left_token!r}"
+    )
+
+
 def invoke_code_review(
     *,
     working_directory: Path,
     session_model: str,
     timeout_seconds: int,
+    session_has_usage_left: bool | None = None,
 ) -> CodeReviewOutcome:
     """Run or hand off ``/code-review`` based on host profile and session model.
 
@@ -360,6 +418,8 @@ def invoke_code_review(
         session_model: Caller-stated session model short alias (for example
             ``opus`` or ``sonnet``).
         timeout_seconds: Timeout applied to each chain binary invocation.
+        session_has_usage_left: Optional usage-probe decision. ``False`` forces
+            chain mode even on Claude+opus so another chain binary can serve.
 
     Returns:
         Structured outcome including mode, served binary, return code, and
@@ -369,6 +429,7 @@ def invoke_code_review(
     review_mode = decide_review_mode(
         host_profile=host_profile,
         session_model=session_model,
+        session_has_usage_left=session_has_usage_left,
     )
     if review_mode == MODE_IN_SESSION:
         return _in_session_outcome()
@@ -426,6 +487,20 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
         help="Timeout in seconds applied to each chain binary invocation.",
     )
+    parser.add_argument(
+        CLI_SESSION_HAS_USAGE_LEFT_FLAG,
+        dest="session_has_usage_left_token",
+        default=SESSION_HAS_USAGE_LEFT_UNKNOWN,
+        choices=[
+            SESSION_HAS_USAGE_LEFT_TRUE,
+            SESSION_HAS_USAGE_LEFT_FALSE,
+            SESSION_HAS_USAGE_LEFT_UNKNOWN,
+        ],
+        help=(
+            "Usage-probe decision for the primary session. "
+            "'false' forces chain mode even on Claude+opus."
+        ),
+    )
     return parser
 
 
@@ -444,11 +519,15 @@ def main(all_command_arguments: list[str]) -> int:
     """
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
+    session_has_usage_left = parse_session_has_usage_left_token(
+        parsed_arguments.session_has_usage_left_token
+    )
     try:
         review_outcome = invoke_code_review(
             working_directory=parsed_arguments.working_directory,
             session_model=parsed_arguments.session_model,
             timeout_seconds=parsed_arguments.timeout_seconds,
+            session_has_usage_left=session_has_usage_left,
         )
     except ChainConfigurationError:
         review_outcome = _failure_code_review_outcome(CHAIN_CONFIG_ERROR_EXIT_CODE)

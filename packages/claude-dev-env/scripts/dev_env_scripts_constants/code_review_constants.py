@@ -52,6 +52,18 @@ RESULT_KEY_DIRTY_TREE: str = "dirty_tree"
 CLI_SESSION_MODEL_FLAG: str = "--session-model"
 """CLI flag naming the caller's current session model short alias."""
 
+CLI_SESSION_HAS_USAGE_LEFT_FLAG: str = "--session-has-usage-left"
+"""CLI flag passing the usage-probe session_has_usage_left decision into mode select."""
+
+SESSION_HAS_USAGE_LEFT_TRUE: str = "true"
+"""CLI token meaning the primary session still has 5-hour usage left."""
+
+SESSION_HAS_USAGE_LEFT_FALSE: str = "false"
+"""CLI token meaning the primary session has no 5-hour usage left (force chain)."""
+
+SESSION_HAS_USAGE_LEFT_UNKNOWN: str = "unknown"
+"""CLI token meaning the session meter is unknown; keep host/model mode rules."""
+
 GIT_BINARY: str = "git"
 """Executable name resolved on PATH for working-tree dirty checks."""
 

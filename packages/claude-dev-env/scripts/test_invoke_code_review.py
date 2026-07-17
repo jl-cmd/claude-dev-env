@@ -666,6 +666,48 @@ def test_decide_review_mode(
     )
 
 
+@pytest.mark.parametrize(
+    ("session_has_usage_left", "expected_mode"),
+    [
+        (None, MODE_IN_SESSION),
+        (True, MODE_IN_SESSION),
+        (False, MODE_CHAIN),
+    ],
+)
+def test_decide_review_mode_forces_chain_when_session_drained(
+    session_has_usage_left: bool | None,
+    expected_mode: str,
+) -> None:
+    assert (
+        invoker.decide_review_mode(
+            host_profile=HOST_PROFILE_CLAUDE,
+            session_model=FIXTURE_SESSION_OPUS,
+            session_has_usage_left=session_has_usage_left,
+        )
+        == expected_mode
+    )
+
+
+@pytest.mark.parametrize(
+    ("session_has_usage_left_token", "expected_value"),
+    [
+        ("true", True),
+        ("false", False),
+        ("unknown", None),
+        ("TRUE", True),
+        (" False ", False),
+    ],
+)
+def test_parse_session_has_usage_left_token(
+    session_has_usage_left_token: str,
+    expected_value: bool | None,
+) -> None:
+    assert (
+        invoker.parse_session_has_usage_left_token(session_has_usage_left_token)
+        == expected_value
+    )
+
+
 def test_encode_code_review_outcome_shape() -> None:
     review_outcome = invoker.CodeReviewOutcome(
         mode=MODE_CHAIN,

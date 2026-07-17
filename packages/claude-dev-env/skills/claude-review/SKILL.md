@@ -2,17 +2,18 @@
 name: claude-review
 description: >-
   Thorough built-in Claude Code full-diff review; `/code-review xhigh --fix` on
-  opus; host-aware invoker and claude_chain_runner. Triggers: claude-review,
-  /claude-review, code-review xhigh --fix, thorough review on opus, chain runner
-  review, ultra-review, invoke_code_review, full-diff local code review.
+  opus; usage probe + host-aware invoker and claude_chain_runner. Triggers:
+  claude-review, /claude-review, code-review xhigh --fix, thorough review on
+  opus, chain runner review, ultra-review, invoke_code_review, full-diff local
+  code review.
 ---
 
 # Claude Review
 
 Runs the thorough built-in Claude Code review on the full `origin/main...HEAD`
-diff: static sweep first when a converge loop calls this skill, then
-`/code-review xhigh --fix` pinned to **opus**, host-aware in-session or chain
-via `invoke_code_review.py` / `claude_chain_runner`.
+diff: static sweep first when a converge loop calls this skill, then a usage
+probe, then `/code-review xhigh --fix` pinned to **opus**, host-aware
+in-session or chain via `invoke_code_review.py` / `claude_chain_runner`.
 
 ## When this skill applies
 
@@ -84,7 +85,34 @@ sweep. Do not start Step 2 until the sweep is clean.
 Standalone `/claude-review` may skip the sweep when the user asked only for the
 built-in review.
 
-### Step 2 — Invoke host-aware review
+### Step 2 — Usage probe (Layer A)
+
+**Before** invoking the review, run the session usage probe. Compose the
+usage-pause resolver; do not reimplement OAuth.
+
+```bash
+python "$HOME/.claude/scripts/claude_usage_probe.py"
+```
+
+Checkout path (from this monorepo): package `scripts/claude_usage_probe`
+plus `scripts/dev_env_scripts_constants/claude_usage_probe_constants` (wraps
+usage-pause `skills/usage-pause/scripts/resolve_usage_window.py`).
+
+Stdout is one JSON object:
+`{session_utilization, weekly_utilization, weekly_near_cap,
+session_has_usage_left, source, probe_ok}`.
+
+| Reading | Action |
+|---|---|
+| Probe succeeds, `session_utilization` is null | Proceed; note unknown session meter (`session_has_usage_left` null) |
+| Probe succeeds, `session_utilization` ≥ threshold (`SESSION_UTILIZATION_NO_USAGE_THRESHOLD`, default **100**) | Primary session has **no usage left**; still run review **only through chain runner** — pass `--session-has-usage-left false` so Claude+opus does not take the in-session path |
+| `weekly_near_cap` true | WARN only; do not block the review solely on weekly (same WARN posture as usage-pause) |
+| Probe unavailable (`probe_ok` false / `source` unavailable) | Proceed; report `usage_probe: unavailable` — **never** block the whole skill on probe failure |
+
+`session_has_usage_left` is true only when utilization is known and strictly
+below the threshold; false at/above; null when unknown.
+
+### Step 3 — Invoke host-aware review (Layer B)
 
 **Execute** the package invoker (do not reimplement host detect, empty stdin,
 dirty-tree, or JSON outcome):
@@ -92,13 +120,26 @@ dirty-tree, or JSON outcome):
 ```bash
 python "$HOME/.claude/scripts/invoke_code_review.py" \
   --cwd "$(git rev-parse --show-toplevel)" \
-  --session-model <session-model-alias>
+  --session-model <session-model-alias> \
+  --session-has-usage-left <true|false|unknown>
 ```
+
+Map the probe into `--session-has-usage-left`:
+
+| Probe `session_has_usage_left` | Flag value |
+|---|---|
+| true | `true` |
+| false | `false` |
+| null / probe unavailable | `unknown` |
 
 - Prompt constant: `/code-review xhigh --fix`
 - Model pin: `opus`
-- Chain path: `claude_chain_runner.run_claude` with `-p`, that prompt, `--model opus`,
-  JSON output, `bypassPermissions`
+- **Headless path always uses** `claude_chain_runner.run_claude` (installed at
+  `$HOME/.claude/scripts/claude_chain_runner.py`; package source
+  `packages/claude-dev-env/scripts/claude_chain_runner.py`). The runner walks
+  `~/.claude/claude-chain.json` and fails over **only** on usage-limit
+  signatures (see `ALL_USAGE_LIMIT_SIGNATURES` in chain constants).
+- Chain argv: `-p`, that prompt, `--model opus`, JSON output, `bypassPermissions`
 - Stdin: empty stream; cwd: PR worktree
 - Chain never commits and never pushes
 
@@ -109,12 +150,15 @@ Mode decision (first match):
 
 | Mode | When | Action |
 |---|---|---|
-| `in_session` | Claude host and session model is opus | Run `/code-review xhigh --fix` in this session with no path args (full branch diff vs `origin/main`) |
+| `chain` | `session_has_usage_left` is false (primary drained) | Force headless chain even on Claude+opus |
+| `in_session` | Claude host, session model is opus, usage left true/unknown | Run `/code-review xhigh --fix` in this session with no path args (full branch diff vs `origin/main`) |
 | `chain` | Third-party host, or Claude on any non-opus model | Helper already ran the headless spawn; read JSON fields |
 
-Third-party hosts **always** chain.
+Third-party hosts **always** chain. Headless serves **must** go through
+`claude_chain_runner` — that is the redundancy when the primary claude binary
+is usage-limited mid-call.
 
-### Step 3 — Interpret outcome
+### Step 4 — Interpret outcome
 
 Full-diff rule and clean-stamp contract:
 [reference/full-diff-and-clean-stamp.md](reference/full-diff-and-clean-stamp.md).
@@ -132,8 +176,11 @@ row. `dirty_tree` false on a failed serve is **not** clean.
 
 - **One capability:** thorough built-in `/code-review xhigh --fix` on opus over the
   full diff, via the host-aware invoker.
+- **Two-layer redundancy:** (A) usage probe before invoke; (B) headless always via
+  `claude_chain_runner`.
 - **Full diff only:** never delta-scope, single-file scope, or bugbot-flagged paths.
-- **Compose:** static sweep scripts and `pr-fix-protocol` stay external.
+- **Compose:** static sweep scripts, usage-pause resolver, and `pr-fix-protocol`
+  stay external — no second OAuth client in this skill.
 - **Effort token is `xhigh`:** not `high`, not `max`.
 - **Reuse invoker:** `scripts/invoke_code_review.py` + `code_review_constants.py`;
   do not clone host-detect / chain / dirty-tree logic into this skill folder.
@@ -142,8 +189,10 @@ row. `dirty_tree` false on a failed serve is **not** clean.
 
 <example>
 User: `/claude-review`
-Claude: [confirms clean worktree; runs invoke_code_review.py with session model;
-on chain mode reads JSON; reports clean or dirty_tree / failure]
+Claude: [confirms clean worktree; runs Layer A probe
+(`claude_usage_probe` / `claude_usage_probe_constants`); runs
+`invoke_code_review` with session model and session-has-usage-left; on chain
+mode reads JSON; reports clean or dirty_tree / failure]
 </example>
 
 <example>
@@ -153,7 +202,7 @@ Claude: [same procedure; colloquial ultra-review maps to this skill]
 
 <example>
 pr-converge CODE_REVIEW phase
-Claude: [static sweep first; then this skill's invoker path; on dirty_tree runs
+Claude: [static sweep first; usage probe; invoker path; on dirty_tree runs
 pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_at]
 </example>
 
@@ -161,6 +210,14 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
 
 - **`xhigh` vs `high`:** Docs and the invoker must both say `xhigh`. Older copy and
   constants used `high`; the locked prompt is `/code-review xhigh --fix`.
+- **Probe unavailable ≠ fail:** `probe_ok` false means report
+  `usage_probe: unavailable` and continue with `--session-has-usage-left unknown`.
+- **Primary drained → force chain:** When `session_has_usage_left` is false, pass
+  `--session-has-usage-left false` so in-session Claude+opus is not used against
+  a drained account; chain binaries still try to serve.
+- **Chain failover only on usage-limit signatures:** `claude_chain_runner` walks
+  `~/.claude/claude-chain.json` and advances only when a binary fails with a
+  usage-limit signature; other failures stop the chain.
 - **Chain needs a trusted workspace:** Headless `bypassPermissions` only works when
   the worktree is trusted for unattended tool use.
 - **`session_id` is cwd-scoped:** Chain spawns do not share the parent session id;
@@ -171,6 +228,8 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
   non-empty `git status --porcelain` as fixes applied (`dirty_tree` equivalent).
 - **No GitHub review threads:** Built-in `/code-review` does not post PR review
   threads; reply-and-resolve is N/A for this surface.
+- **Weekly near-cap is WARN only:** Do not block the review solely on
+  `weekly_near_cap` true.
 
 ## File index
 
@@ -183,7 +242,8 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
 
 ## Folder map
 
-- `SKILL.md` — orchestration and invoker contract.
+- `SKILL.md` — orchestration, usage probe, and invoker contract.
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — full-diff / clean-stamp detail and process task seeds.
-- Invoker lives in package `scripts/invoke_code_review.py` (not under this skill).
+- Runtime lives in package `scripts/` (not under this skill): usage probe,
+  invoker, and chain runner.
