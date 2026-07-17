@@ -331,3 +331,8 @@ class TestViolationLineNumber:
 
     def test_code_frame_source_line_returns_zero(self) -> None:
         assert _violation_line_number("17 | import os") == 0
+
+    def test_path_with_spaces_returns_line(self) -> None:
+        spaced_path_line = "/tmp/my dir/legacy module.py:37: magic number 199"
+
+        assert _violation_line_number(spaced_path_line) == 37

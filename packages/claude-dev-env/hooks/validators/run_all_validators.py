@@ -896,9 +896,10 @@ def _violation_line_number(output_line: str) -> int:
 
     The line is the first colon-delimited field that is all digits, with every
     later prefix field also all digits (the column) and every earlier field
-    reading like a path — no spaces, pipes, or quotes. A ruff code-frame line
-    quoting source text carries a space or quote before any digits, so frame
-    and summary noise resolves to 0.
+    reading like a path — no pipes or quotes, though spaces are allowed so a
+    spaced directory or file name still parses. A ruff code-frame line quoting
+    source text carries a pipe or quote before any digits, so frame and
+    summary noise resolves to 0.
 
     Args:
         output_line: One printed ``Violation`` line from a validator.
@@ -927,7 +928,7 @@ def _line_number_when_prefix_is_a_location(
         The line number, or 0 when the surrounding fields do not form a
         ``path:line[:col]`` location.
     """
-    non_path_characters = (" ", "|", '"')
+    non_path_characters = ("|", '"')
     if digit_field_index == 0:
         return 0
     path_fields = prefix_fields[:digit_field_index]
