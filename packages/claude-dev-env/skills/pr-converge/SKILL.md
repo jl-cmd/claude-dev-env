@@ -195,7 +195,7 @@ the `persistent_agents` map
   record it, and continue the tick. Never abort a tick on a stale id;
   never retry the same dead id.
 - **Fresh every round (never persisted):** the Step 5 host-aware
-  `invoke_code_review.py` / `/code-review high --fix` pass and the Step 6
+  `invoke_code_review.py` / `/code-review xhigh --fix` pass and the Step 6
   bugteam audit (unbiased eyes each round; the enforcer needs the formal
   Skill call), and every `code-verifier` — a named code-verifier never fires
   `SubagentStop`, so no verdict mints (see the named-`code-verifier` entry
@@ -253,7 +253,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
   Windows is Git Bash which cannot execute PowerShell cmdlets. Route all
   PowerShell work through the PowerShell tool or `pwsh -NoProfile -File`.
 - **Cross-repo PR: route cwd into the PR worktree before Step 5 review** —
-  `invoke_code_review.py` and `/code-review high --fix` audit the repo of the
+  `invoke_code_review.py` and `/code-review xhigh --fix` audit the repo of the
   cwd (the helper's `--cwd`). When the session is rooted in a different repo
   than the PR, `EnterWorktree` cannot re-root (it is scoped to the session's
   repo); resolve the PR worktree and `cd` into it per
@@ -338,7 +338,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § CODE_REVIEW entry](reference/per-tick.md).
       Pre-condition: cwd is the Step 1.5 PR worktree on `current_head`.
       Scope: FULL `origin/main...HEAD` diff every tick (no path args, no delta cut).
-      Review always runs at effort high on model opus through
+      Review always runs at effort xhigh on model opus through
       `invoke_code_review.py`. Mode decision inputs: host profile + session
       model. Call:
       `python "$HOME/.claude/scripts/invoke_code_review.py" --cwd <PR-worktree>
@@ -351,7 +351,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
       - [ ] **`mode == in_session`** (Claude host, session model opus) → run
-            `/code-review high --fix` in-session (no path args)
+            `/code-review xhigh --fix` in-session (no path args)
       - [ ] **`mode == chain`** (any other host or non-opus session) → helper
             already ran the headless review; read `returncode`,
             `served_command`, and `dirty_tree` from JSON

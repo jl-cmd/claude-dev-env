@@ -145,8 +145,8 @@ Mode decision:
 | `Claude` | any other alias | `chain` | Headless spawn through `claude_chain_runner` |
 | `ThirdParty` | any | `chain` | Headless spawn through `claude_chain_runner` |
 
-The review always runs at effort **high** on model **opus**. Chain mode builds
-a single-turn prompt `/code-review high --fix`, pins `--model opus`, sets
+The review always runs at effort **xhigh** on model **opus**. Chain mode builds
+a single-turn prompt `/code-review xhigh --fix`, pins `--model opus`, sets
 subprocess `cwd` to the PR working tree, and reads stdin from the empty stream
 so the spawn does not wait for input.
 
