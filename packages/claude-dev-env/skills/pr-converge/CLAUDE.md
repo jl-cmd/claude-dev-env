@@ -18,13 +18,14 @@ Drives a draft PR to convergence by driving the internal passes to clean first �
 | `pr_converge_skill_constants/` | Importable constants module shared by skill scripts |
 | `reference/` | Per-tick steps, convergence gates, fix protocol, obstacle runbooks, state schema, stop conditions, examples |
 | `scripts/` | Python helpers (bugbot check, convergence check, Copilot review fetcher, fix-reply poster, reflow tool) and their tests |
-| `workflows/` | ScheduleWakeup loop pacing specification |
+| `workflows/` | ScheduleWakeup loop pacing specification (`pacer=schedule_wakeup`) |
 
 ## Conventions
 
-- Each invocation runs one tick. The next tick is scheduled via `ScheduleWakeup` unless convergence or a stop condition has been reached.
+- Pre-flight selects a pacer via `select_converge_pacer.py`: `schedule_wakeup` or `portable`. Missing `ScheduleWakeup` selects portable — it does not abort the skill.
+- On `pacer=schedule_wakeup`, each invocation runs one tick and the next advances via `ScheduleWakeup`. On `pacer=portable`, the session runs ticks continuously (continue or in-session poll) until convergence, a stop condition, or a budget handoff.
 - Loop state persists to `$CLAUDE_JOB_DIR/pr-converge-state.json` between ticks.
-- The pre-flight gate requires `EnterWorktree` before any file read or API call, and confirms `ScheduleWakeup` is in the tool list.
+- Isolation uses `EnterWorktree` when present; otherwise the portable driver git worktree path, then `preflight_worktree.py`.
 - All findings and PR reports state verified facts only — no hedging language.
 - The GitHub MCP (`pull_request_read`, `pull_request_review_write`) is the primary path for PR inspection; `gh api` is the fallback.
 - Three step-scoped agents (`fix_executor`, `thread_sweep`, `copilot_watch`) persist across ticks via the `persistent_agents` map in loop state; each tick resumes them with `SendMessage` and spawns a fresh named agent when a stored id is dead.

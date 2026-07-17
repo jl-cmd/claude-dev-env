@@ -1,48 +1,66 @@
 ---
 name: autoconverge
 description: >-
-  Drives one draft PR to convergence in one autonomous run: static sweep, then
-  code review, bug audit, and self-review on one HEAD, fixes in one commit, then
-  Bugbot, Copilot, and Codex as terminal gates before ready. Use when the user
-  says '/autoconverge', 'autoconverge this PR', 'converge this PR in one run',
-  'run the converge workflow', or 'drive the PR to ready autonomously'.
+  Drives one draft PR to convergence in one autonomous run with a host-selected
+  pacer. On workflow: three parallel lenses (code-review, bug-audit, self-review)
+  and one-commit fixes via converge.mjs. On portable: pr-converge continuous ticks
+  via portable-driver.md. Bugbot, Copilot, and Codex as terminal confirmation
+  gates before ready. Use when the user says '/autoconverge', 'autoconverge this
+  PR', 'converge this PR in one run', 'run the converge workflow', or 'drive the
+  PR to ready autonomously'.
 ---
 
 # Autoconverge
 
 One launch drives the whole loop to convergence. The `/autoconverge` skill
-resolves PR scope, enters a worktree, grants project permissions, then hands
-the loop to the **`converge.mjs` workflow**, which runs every round and every
-reviewer wait inside one background pass — no ticks, no `ScheduleWakeup`, no
-state file. State lives in the workflow's own variables; resume is handled by
-the workflow journal.
+scans the tool list, selects a **pacer** (Workflow or portable), then resolves
+PR scope, enters a worktree, grants project permissions, and drives the shared
+converge product to ready (or a named blocker).
 
-`pr-converge` paces the same four-reviewer loop across `ScheduleWakeup` ticks;
-autoconverge runs it as a deterministic workflow. The two skills share the same
-helper scripts and the same convergence gate.
+| Pacer | Host surface | How the loop runs |
+|---|---|---|
+| `workflow` | Tool list includes `Workflow` | `converge.mjs` background pass; state in the workflow journal |
+| `portable` | `Workflow` absent | Continuous in-session ticks per [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md); same helpers and `check_convergence.py` ready definition |
+
+`pr-converge` selects `schedule_wakeup` or `portable` the same way. Both
+entry skills share the helper scripts and the convergence gate.
 
 ## Run scope: one PR or several
 
 Decide the scope from how many PRs the user named, then follow that path:
 
-1. **One PR** → the single-PR run described below (`workflow/converge.mjs`): one
-   worktree, one workflow launch, one teardown.
-2. **Several PRs** → the [Multiple PRs](reference/multi-pr.md) run
-   (`workflow/converge_multi.mjs`): one worktree per PR and a single workflow
-   launch that drives every PR's converge run in parallel, then one teardown per
-   PR.
+1. **One PR** → the single-PR run described below: one worktree, one pacer
+   launch (`converge.mjs` on `pacer=workflow`, portable continuous ticks on
+   `pacer=portable`), one teardown.
+2. **Several PRs** → the [Multiple PRs](reference/multi-pr.md) run: on
+   `pacer=workflow`, `workflow/converge_multi.mjs` drives every PR in parallel;
+   on `pacer=portable`, run the portable driver once per PR (serial or host
+   fan-out), then one teardown per PR.
 
-The single-PR sections (Requirements, Pre-flight, Run the workflow, Teardown)
-each describe one converge run. The multi-PR reference reuses them once per PR
-and adds only what fanning out needs: a per-PR worktree and a per-PR teardown
-loop.
+The single-PR sections (Requirements, Pre-flight, Run the workflow or portable
+driver, Teardown) each describe one converge run. The multi-PR reference reuses
+them once per PR and adds only what fanning out needs: a per-PR worktree and a
+per-PR teardown loop.
 
 ## Requirements
 
-Scan the tool list at the top of this conversation for the literal string
-`Workflow`. If it is absent, report `autoconverge requires the Workflow tool;
-aborting` and stop. The workflow also needs the `gh` CLI authenticated for the
-PR's owner.
+Scan the tool list for `Workflow` and `ScheduleWakeup`, then select the pacer:
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
+  --skill autoconverge \
+  --has-workflow <0|1> \
+  --has-schedule-wakeup <0|1>
+```
+
+- `pacer=workflow` — continue with Pre-flight and **Run the workflow** below.
+- `pacer=portable` — continue with Pre-flight (portable worktree rules when
+  `EnterWorktree` is absent), then the continuous driver in
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+  **Do not abort** because the Workflow tool is missing.
+
+Transport still needs authenticated GitHub access for the PR's owner (`gh` or
+`pr-loop-cloud-transport`).
 
 ## Review-lens boundary
 
@@ -65,11 +83,30 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 
 ## Pre-flight (main session)
 
-1. **Enter a worktree.** Call `EnterWorktree` with no arguments before any
-   `gh`, `git`, file read, or edit. `gh`/`git` Bash calls do not auto-isolate,
-   so this is mandatory. If it fails, report and stop. A bare `EnterWorktree`
-   branches from `origin/main`; step 2 positions the worktree on the PR's head
-   ref, which the workflow needs.
+0. **Build the task list (step 1 of every run).** After Copilot quota / down
+   flags and Codex required/down are known, run only:
+
+   ```
+   python "$HOME/.claude/skills/_shared/pr-loop/scripts/build_converge_task_list.py" \
+     --bugbot-down <0|1> --copilot-down <0|1> \
+     --codex-down <0|1> --codex-required <0|1>
+   ```
+
+   Register every `tasks[]` entry on the session task list. **Final task** is
+   always `all_runnable_reviews_clean_same_head` (`done_when` in the JSON).
+   The run is complete only when that final task is completed — all runnable
+   code reviews CLEAN on the same HEAD. Do not invent tasks in prose. On
+   `pacer=portable`, `open-run` returns the same list; still register it as
+   step 1 before driving reviews.
+
+1. **Enter a worktree.** When `EnterWorktree` is in the tool list, call it with
+   no arguments before any `gh`, `git`, file read, or edit. `gh`/`git` Bash
+   calls do not auto-isolate, so isolation is mandatory. If it fails, report
+   and stop. A bare `EnterWorktree` branches from `origin/main`; step 2
+   positions the worktree on the PR's head ref. When `EnterWorktree` is
+   absent, isolate with git worktree machinery per
+   [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
+   § Isolation and worktree, then continue step 2.
 
 2. **Resolve PR scope.** When the user passed a PR URL or number, parse owner,
    repo, and number from it. Otherwise read the current branch's PR:
@@ -78,14 +115,15 @@ orchestrating session's own steps, and the script's agent-prompt text carries
    ready, mark it draft first (`gh pr ready <n> --repo <o>/<r> --undo`) so the
    loop owns the ready transition.
 
-   **Position the worktree on the PR branch.** The workflow reviews
+   **Position the worktree on the PR branch.** The run reviews
    `git diff origin/main...HEAD` against this worktree's local `HEAD` and pushes
    each fix to the PR branch, so the worktree sits on the PR's head ref at the PR
-   HEAD before the workflow launches. A worktree fresh off `origin/main` has
+   HEAD before the loop starts. A worktree fresh off `origin/main` has
    `HEAD == origin/main`, shows an empty diff, and reports a false convergence
    with zero findings. When a local worktree already tracks the PR branch, enter
-   that one by passing its path to `EnterWorktree`; otherwise put the entered
-   worktree on the branch with `gh pr checkout <number> --repo <owner>/<repo>`
+   that one (pass its path to `EnterWorktree` when that tool exists; otherwise
+   `cd` into it). Otherwise put the checkout on the branch with
+   `gh pr checkout <number> --repo <owner>/<repo>`
    (or `git fetch origin <headRefName>` then `git switch <headRefName>`). Confirm
    before launching: `git rev-parse --abbrev-ref HEAD` equals the PR's head ref
    and local `HEAD` equals the PR head SHA.
@@ -93,27 +131,32 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 3. **Verify the worktree is the PR's repo (strict pre-flight).** Run
    `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <owner> --repo <repo> --mode strict`.
    It confirms the working directory is a checkout of the PR's own repo and
-   that `git worktree` machinery is healthy, so `EnterWorktree` can create and
-   enter the branch worktree. A non-zero exit prints a `PREFLIGHT_OUTCOME` line
-   and an `ABORT` line: report that line and stop. Autoconverge runs inside the
-   PR's own repo, so a working directory rooted in a different repo (for
-   example, `claude-dev-env` while the PR lives in `llm-settings`) or in no
-   git checkout at all cannot continue.
+   that `git worktree` machinery is healthy. A non-zero exit prints a
+   `PREFLIGHT_OUTCOME` line and an `ABORT` line: report that line and stop.
+   Autoconverge runs inside the PR's own repo, so a working directory rooted in
+   a different repo (for example, `claude-dev-env` while the PR lives in
+   `llm-settings`) or in no git checkout at all cannot continue.
 
 4. **Grant project permissions.** Apply the `pr-loop-lifecycle` skill's Open
    section (`../pr-loop-lifecycle/SKILL.md`) — the grant command
    (`grant_project_claude_permissions.py`) and the auto-mode `AskUserQuestion`
    escalation for a blocked grant both live there.
 
-5. **Copilot quota pre-check.** Before the `Workflow` call, apply the
+5. **Copilot quota pre-check.** Before the pacer starts the loop, apply the
    `reviewer-gates` skill's Copilot quota gate (`../reviewer-gates/SKILL.md`)
-   once. Exit 0 maps to `copilotDisabled: false` in the Workflow call; any
-   non-zero exit maps to `copilotDisabled: true`, and the workflow then skips
-   the Copilot gate with no agent spawned.
+   once. Exit 0 maps to `copilotDisabled: false` / `copilot_down=false`; any
+   non-zero exit maps to `copilotDisabled: true` / `copilot_down=true`, and the
+   run skips the Copilot gate with no agent spawned.
+
+6. **Branch on pacer.** When `pacer=portable`, follow
+   [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
+   § Continuous tick loop and § Autoconverge entry on portable pacer, then
+   skip **Run the workflow** (no Workflow tool). When `pacer=workflow`,
+   continue with **Run the workflow**.
 
 ## Run the workflow
 
-Call the `Workflow` tool against the colocated script:
+(`pacer=workflow` only.) Call the `Workflow` tool against the colocated script:
 
 ```
 Workflow({
@@ -160,26 +203,89 @@ skips a reviewer that is down or out of quota without re-probing. This list is t
 
 ## Copilot findings — tier, verify, then route
 
-The Copilot gate tiers each finding (self-healing vs code-concern), verifies
-each code concern with an executed check against the flagged HEAD, and returns a
-confirmed / refuted / inconclusive verdict — full semantics and the `userReview`
-return contract in
-[`reference/copilot-findings.md`](reference/copilot-findings.md). Only
-inconclusive findings return `blocker: "user-review"`; the orchestrating session
-handles that hold in Teardown via the
-[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill.
+The Copilot gate tiers each finding: a **self-healing** finding (style, type
+hints, imports, formatting, magic-value extraction, test-only or doc-vs-code
+fixes — nothing that changes observable runtime behavior) flows into the fix
+round with no user notification. A **code-concern** finding (logic, security,
+data handling, error-handling semantics, concurrency — the tier whenever in
+doubt) goes to a verification stage before any routing.
+
+Each code-concern finding gets its own verifier agent, all in parallel, inside
+the workflow. A verdict is conclusive only when an actual check ran: the verifier
+executes a command against the flagged HEAD — running the code path with crafted
+inputs, forcing the claimed error condition, or running a purpose-built test —
+and captures its output. The verdict carries
+`{ verdict, checkCommand, checkOutput, evidence }`; a conclusive verdict with an
+empty `checkCommand` or `checkOutput` downgrades to inconclusive.
+
+- **confirmed** — the check reproduces the defect. The finding becomes
+  self-healing: it joins the fix round carrying its repro, and the fix re-runs
+  that same check, adds a regression test where the suite covers the surface,
+  lands in one commit, pushes, and replies on the thread with the fix SHA and the
+  before/after output. No page.
+- **refuted** — the check shows the code already behaves correctly in the exact
+  scenario the finding claims is broken. The workflow replies on the thread with
+  the command and output, resolves it, and counts it clean. No page.
+- **inconclusive** — everything else, and the verifier's default: no runnable
+  check exists, the check is infeasible here, the results are ambiguous, or the
+  fix needs a product decision. Any doubt sorts here. Only inconclusive findings
+  page the user.
+
+A round whose code concerns all confirm or refute never returns
+`blocker: "user-review"`. On one or more inconclusive findings, the workflow
+stops with `converged: false`, `blocker: "user-review"`, and a `userReview`
+field carrying
+`{ reviewUrl, findings: [{ file, line, severity, tier, title, evidence }] }` —
+`evidence` is the verifier's one-line note stating what check was attempted and
+why it was not decisive.
+
+The wait for a human belongs to the orchestrating session. On a
+`blocker: "user-review"` return, run the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) skill for the ntfy
+page only (the per-finding summary and evidence note plus the `reviewUrl`
+Copilot review link), then hold for the user's response by pacer. On
+`pacer=portable`, override triage's hold step — ntfy plus the portable hold
+below; do not follow triage's `ScheduleWakeup` / `send_later` path.
+
+- **`pacer=workflow`** — triage hold: 45-minute `ScheduleWakeup` (or
+  `send_later` when that is the host arm).
+- **`pacer=portable`** — portable hold only: in-session poll or handoff per
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md);
+  never `ScheduleWakeup` or `send_later`.
+
+When the user answers within the window, follow their direction. When the
+window closes with no response, run normal teardown and report the
+inconclusive findings un-reviewed.
 
 ## Budget stop
 
-`converge.mjs` paces itself against the workflow `budget` API and stops at a
-round boundary when a full round does not fit —
-[`reference/stop-conditions.md`](reference/stop-conditions.md) § Budget stop
-gives the rule. On a `blocker: "budget"` return, write the durable handoff with
-the run id and the `Workflow({scriptPath, resumeFromRunId})` resume command
-before stopping, so a fresh session resumes the paced run without the stopped
-session's transcript.
+Branch the stop and resume path on the selected pacer. Full rule:
+[`reference/stop-conditions.md`](reference/stop-conditions.md) § Budget stop.
 
-## Teardown (on workflow completion)
+- **`pacer=workflow`** — `converge.mjs` paces against the workflow `budget` API
+  and stops at a round boundary when a full round does not fit. On a
+  `blocker: "budget"` return, write the durable handoff with the run id and the
+  `Workflow({scriptPath, resumeFromRunId})` resume command before stopping, so a
+  fresh session resumes the paced run without the stopped session's transcript.
+- **`pacer=portable`** — stop at a tick boundary when the session cannot cover a
+  full clean tick; write the durable handoff and resume with
+  `/autoconverge <PR URL>` (see
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)).
+  Do not instruct a Workflow resume on the portable path.
+
+## Teardown
+
+### `pacer=portable`
+
+Skip Workflow-only report steps that need a workflow run id (journal merge,
+HTML closing report, Artifact publish). Run `pr-loop-lifecycle` Close
+(description rewrite when converged, working-tree clean, permission revoke)
+and print the final report block using tick/`check_convergence` outcomes.
+User-review holds use the portable in-session poll (or handoff) from
+[`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
+— not `ScheduleWakeup`. Resume command: `/autoconverge <PR URL>`.
+
+### `pacer=workflow` (on workflow completion)
 
 Teardown runs as an ordered checkpoint list. After each checkpoint finishes,
 re-write the durable handoff with `--phase teardown`, the run id, and the
@@ -201,15 +307,18 @@ On teardown entry, when `~/.claude/runtime/pr-loop/bugteam-pr-<N>/handoff.json`
 exists, read its `completed_steps` and skip any checkpoint the list already
 names, so a resumed run performs only the checkpoints left.
 
-On a `blocker: "user-review"` return, the workflow held one or more code-concern
-findings that stayed inconclusive after the executed-check verification stage.
-Run the [`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
+On a `blocker: "user-review"` return under `pacer=workflow`, the workflow held
+one or more code-concern findings that stayed inconclusive after the
+executed-check verification stage. Run the
+[`copilot-finding-triage`](../copilot-finding-triage/SKILL.md) gate before
 teardown: send the ntfy alert with the per-finding summary and evidence note and
-the `userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup`. Act
-on the user's direction when it arrives inside the window; when the window closes
-with no response, fall through to normal teardown and report the
-`userReview.findings` un-reviewed. The PR stays a draft in this path — the
-workflow marked nothing ready.
+the `userReview.reviewUrl` link, then hold with a 45-minute `ScheduleWakeup` (or
+`send_later` when that is the host arm). Act on the user's direction when it
+arrives inside the window; when the window closes with no response, fall through
+to normal teardown and report the `userReview.findings` un-reviewed. The PR
+stays a draft in this path — the workflow marked nothing ready. Under
+`pacer=portable`, use the portable teardown hold above (ntfy plus in-session
+poll or handoff; never `ScheduleWakeup`).
 
 Before the checkpoints, when the workflow returned a non-null `copilotNote`
 (the Copilot gate was bypassed), query the PR's reviews once more for a
@@ -277,8 +386,10 @@ When the user names several PRs, run the multi-PR path in
 [`reference/multi-pr.md`](reference/multi-pr.md): one worktree per PR
 (`git worktree add` on each head ref, strict pre-flight per worktree, one
 permission grant per repository, one Copilot quota check for the whole run),
-then a single `workflow/converge_multi.mjs` launch with one entry per PR, then
-the single-PR teardown once per `results` entry and a one-line-per-PR summary.
+then launch by pacer — `pacer=workflow`: one `workflow/converge_multi.mjs`
+call with one entry per PR; `pacer=portable`: portable driver once per PR
+(serial or host fan-out) — then single-PR teardown once per PR and a
+one-line-per-PR summary.
 
 ## Self-closing loop: converge the deferred PRs
 
@@ -294,6 +405,7 @@ also carries the Conventional-Commit title rule each hardening PR must meet.
 ## Folder map
 
 - `SKILL.md` — this hub.
+- [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md) — portable pacer when `Workflow` is absent.
 - `workflow/converge.mjs` — the convergence workflow script.
 - `workflow/converge_multi.mjs` — the multi-PR fan-out driver: one `converge.mjs` child run per PR in parallel, each pinned to its PR worktree via `repoPath`.
 - `workflow/aggregate_runs.py` — merges every autoconverge journal for a PR into one journal and returns its deduped findings, fix summaries, round count, and final SHA.
@@ -301,7 +413,6 @@ also carries the Conventional-Commit title rule each hardening PR must meet.
 - `workflow/render_report.py` — builds the closing convergence insights HTML report, taking the summary from `--summary-file`.
 - `workflow/autoconverge_report_constants/` — named constants for the report builder and the summary prompt.
 - `reference/convergence.md` — the whole loop: reuse pass, round shape, terminal gates, model tiers, ready definition.
-- `reference/copilot-findings.md` — the Copilot gate tiering, per-finding verification, and the `userReview` return contract.
 - `reference/stop-conditions.md` — every way the run ends short of ready, including the budget stop.
 - `reference/gotchas.md` — hard-won failure lessons.
 - `reference/closing-report.md` — the closing HTML report: data source, build steps, publishing.
