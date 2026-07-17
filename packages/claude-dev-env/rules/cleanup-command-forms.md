@@ -1,12 +1,12 @@
 # Cleanup Command Forms
 
-Never use bash `rm` in any form to clean up. The `destructive_command_blocker` hook watches every Bash-tool command and matches `rm -rf` (and the rest of the destructive patterns) as raw text. It auto-allows only a single standalone `rm` whose every target is an absolute literal path inside an ephemeral directory (the OS temp root, `/tmp`, `/temp`, or a worktrees directory). It falls through to a permission prompt on any other shape: a compound command (`cd <dir> && rm -rf <dir>`, `… ; rm -rf …`, a pipe, a backtick, `$(...)`), a `$` variable that could expand to a wider path, a relative target, a glob basename, or a string-executing wrapper (`bash -c 'rm -rf …'`). In a background or auto-mode run no human can answer that prompt, so the call stalls.
+Never use bash `rm` in any form to clean up. The `destructive_command_blocker` hook watches every Bash-tool command and matches `rm -rf` (and the rest of the destructive patterns) as raw text. It allows an `rm` without a prompt only when it can prove every target is ephemeral — an absolute path under the OS temp root, `/tmp`, `/temp`, or a worktrees directory. The `rm` may stand alone or sit in a chain whose other segments are plain reporting commands such as `cd` or `echo`, and an `rm` run from an ephemeral working directory passes too. It falls through to a permission prompt on anything it cannot prove ephemeral: a `$` variable, `$(...)`, or backtick expansion whose value it cannot resolve, a target outside that set, a glob basename, or a string-executing wrapper (`bash -c 'rm -rf …'`). In a background or auto-mode run no human can answer that prompt, so the call stalls.
 
 Remove files with these forms, which the hook never prompts on:
 
 - **Scratch and probe files:** the PowerShell tool — `Remove-Item -Recurse -Force -Confirm:$false <absolute path>`. The hook watches only the Bash tool, so a PowerShell removal never reaches it. A file left in the OS temp dir or `$CLAUDE_JOB_DIR/tmp` is ephemeral and needs no explicit removal.
 - **Worktrees:** `git worktree remove --force <path>`. This matches no destructive pattern.
-- **When bash `rm` is unavoidable:** one standalone `rm` command, an absolute literal path under the OS temp root or a worktrees directory, no chaining, no variables, no globs. This is the one shape the hook auto-allows.
+- **When bash `rm` is unavoidable:** one standalone `rm` command, an absolute literal path under the OS temp root or a worktrees directory, no chaining, no variables, no globs. The hook auto-allows this shape without a prompt.
 
 ## Every subagent prompt carries the rule
 
