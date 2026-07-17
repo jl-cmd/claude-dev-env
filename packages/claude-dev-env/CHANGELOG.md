@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.2...claude-dev-env-v2.1.0) (2026-07-17)
+
+
+### Features
+
+* **fresh-branch:** isolate new branches in agent temp worktrees ([9f6eb02](https://github.com/jl-cmd/claude-dev-env/commit/9f6eb0240a65ce65cc332f9df85446d7e2753a3b))
+* **fresh-branch:** isolate new branches in agent temp worktrees ([ae87079](https://github.com/jl-cmd/claude-dev-env/commit/ae87079f9e4fe9d9a309e09c0b7600c23dafa327))
+* **hooks:** verify-skip rule + gate deny additionalContext injection ([72c18f2](https://github.com/jl-cmd/claude-dev-env/commit/72c18f2ade0e43b29815a2e54f255dd1dfc8984f))
+* **skill-builder:** enforce deterministic elements as code ([0212dda](https://github.com/jl-cmd/claude-dev-env/commit/0212ddab63dd6c4a58e8bd1d691fd2945b0a8771))
+* **skill-builder:** enforce deterministic elements as code ([3932cb4](https://github.com/jl-cmd/claude-dev-env/commit/3932cb4300760924405ba09694b4a4519e2a6305))
+* **skill-builder:** require task tools for ordered work lists ([d215363](https://github.com/jl-cmd/claude-dev-env/commit/d2153632741006274d680966d9b9ed80c90595ea))
+
+
+### Bug Fixes
+
+* **ci:** run drive-path absoluteness test on the Windows micro-job ([a4fb1ae](https://github.com/jl-cmd/claude-dev-env/commit/a4fb1ae76d0557789e2e2b71b497170c5ea602da))
+* **fresh-branch:** harden detection, path safety, and base ref ([d88749f](https://github.com/jl-cmd/claude-dev-env/commit/d88749f5339c9002816581339c8c7f5422024a0f))
+* **fresh-branch:** validate agent_slug inside create_fresh_branch ([0c59068](https://github.com/jl-cmd/claude-dev-env/commit/0c590686b04b7279140b369af59962233e331a11))
+* **hooks:** absolute-path mypy targets under nested config roots ([aa046b4](https://github.com/jl-cmd/claude-dev-env/commit/aa046b434ef802c5d31116bef8d7e39b265a14bf))
+* **hooks:** align ephemeral-path docstring and Windows getuid test fixture ([eba7039](https://github.com/jl-cmd/claude-dev-env/commit/eba70394fc592ee611e2395c5b6e2d0f2d3fdd5d))
+* **hooks:** allow print() in CLI entrypoints ([#188](https://github.com/jl-cmd/claude-dev-env/issues/188)) ([dc117b2](https://github.com/jl-cmd/claude-dev-env/commit/dc117b29504385b0446cf1ad01595cfea75a5bfb))
+* **hooks:** bind convergence gate to --repo/-R or PR URL ([#195](https://github.com/jl-cmd/claude-dev-env/issues/195)) ([bb49edc](https://github.com/jl-cmd/claude-dev-env/commit/bb49edc563aa0a86b53083b3a3a529f3c8ad9e85))
+* **hooks:** clip gh pr ready segment before repo/url binding ([07bbc09](https://github.com/jl-cmd/claude-dev-env/commit/07bbc09aa65d95cc245564a8b50b8f7d5d5cde52))
+* **hooks:** drop unused getuid monkeypatch helper in ephemeral path tests ([19d07e4](https://github.com/jl-cmd/claude-dev-env/commit/19d07e46f003e2e9ded63db02732ce2396586503))
+* **hooks:** platform-safe is_ephemeral_path for Windows ([#184](https://github.com/jl-cmd/claude-dev-env/issues/184)) ([33dce81](https://github.com/jl-cmd/claude-dev-env/commit/33dce8175674a52875c5aeae335a2996c9151a6f))
+* **hooks:** require mangled-cwd segment when matching session scratchpad ([9b841ff](https://github.com/jl-cmd/claude-dev-env/commit/9b841ff14f5189b148bd908fbb259257f1f7dc21))
+* **hooks:** resolve mypy config against target file repo ([#192](https://github.com/jl-cmd/claude-dev-env/issues/192)) ([24a3346](https://github.com/jl-cmd/claude-dev-env/commit/24a33462755ffe3208924e2eefa6a44e9e020599))
+* **hooks:** restore path-based ephemeral exemption before basename collapse ([#183](https://github.com/jl-cmd/claude-dev-env/issues/183)) ([6f8121a](https://github.com/jl-cmd/claude-dev-env/commit/6f8121a36e5617e1009d4d90ed1910b12cd507bf))
+* **hooks:** round-1 convergence fixes for verified-commit-gate refactor ([07aa94d](https://github.com/jl-cmd/claude-dev-env/commit/07aa94d1ab86f58bf4e1ce9339d230f8a20a12ae))
+* **hooks:** scope doc-language gates off ephemeral paths ([#185](https://github.com/jl-cmd/claude-dev-env/issues/185)) ([67da8fd](https://github.com/jl-cmd/claude-dev-env/commit/67da8fd7f80391d633c91668aa04c06ded9e647d))
+* **hooks:** share ready-anchor pattern and skip --undo ([f3eb194](https://github.com/jl-cmd/claude-dev-env/commit/f3eb194170c313dbcba379e5e5023e021b11fb13))
+* **skill-builder:** restore LF endings on task-seed catalogs ([ef3bb15](https://github.com/jl-cmd/claude-dev-env/commit/ef3bb15eb730deda9ab85eb4b7702ffe28124f2d))
+* **skills:** repair step5 checklist test path and advisor heading citation ([daf2c27](https://github.com/jl-cmd/claude-dev-env/commit/daf2c27a6ec54dc4e2baf50df474cfb6f76925eb))
+
+
+### Documentation
+
+* **hooks:** align harness_scratchpad_constants inventory with shape-match API ([18b9d41](https://github.com/jl-cmd/claude-dev-env/commit/18b9d417b1378e7bc2bcf82533793fd88e138d32))
+* **hooks:** align is_ephemeral_path docstring with PreToolUse consumer ([14bc689](https://github.com/jl-cmd/claude-dev-env/commit/14bc689cbdfa6e9b19bc5381ed453d88dd7afeaf))
+* **hooks:** clarify is_ephemeral_path shared-predicate docstring ([5d2d4f5](https://github.com/jl-cmd/claude-dev-env/commit/5d2d4f5ce7ed3260b6c7173acb39b83e712dba3b))
+* **hooks:** note doc-language gates in harness scratchpad constants ([66c98bc](https://github.com/jl-cmd/claude-dev-env/commit/66c98bc02779bccab008eff92af4bfc5ed9d3838))
+
+
+### Refactoring
+
+* **hooks:** share ancestor walk for mypy config root lookup ([2934f0f](https://github.com/jl-cmd/claude-dev-env/commit/2934f0ffbaa7e05db76301f87126cd3b183ceb20))
+* **skills:** extract skill bodies into companion reference files ([0d9beda](https://github.com/jl-cmd/claude-dev-env/commit/0d9beda7d2b90ec2f2064af8a3bcbee3f0a27e6e))
+* **skills:** extract skill bodies into companion reference files ([48de698](https://github.com/jl-cmd/claude-dev-env/commit/48de6989600a989f7ffe13aed1c2802aa44e3d62))
+
+
+### Tests
+
+* **hooks:** drop duplicate Windows scratchpad exempt case covered by getuid test ([d099594](https://github.com/jl-cmd/claude-dev-env/commit/d099594f906ae3f370d94210ee7c9248a3a98513))
+
 ## [2.0.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.0.1...claude-dev-env-v2.0.2) (2026-07-16)
 
 
