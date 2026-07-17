@@ -12,7 +12,7 @@ Remove files with these forms, which the hook never prompts on:
 
 A prompt-delivered directive reaches only the agent that gets it. An agent that spawns its own workers — review lenses, fix agents, verifiers — copies this line into every subagent prompt it issues, so a grandchild cleaning up its own probe file uses an allowed form:
 
-> Never use bash rm in any form. Delete scratch/probe files with the PowerShell tool (Remove-Item -Recurse -Force -Confirm:$false <absolute path>) or the OS temp dir; remove worktrees only via git worktree remove --force.
+> Never use bash rm in any form. Delete scratch/probe files with the PowerShell tool (Remove-Item -Recurse -Force -Confirm:$false <absolute path>), or leave them in the OS temp dir; remove worktrees only via git worktree remove --force.
 
 Prefer that a child leaves its scratch files in place for the parent to remove at teardown with `Remove-Item`.
 
@@ -20,4 +20,4 @@ Prefer that a child leaves its scratch files in place for the parent to remove a
 
 - [`no-inline-destructive-literals`](no-inline-destructive-literals.md) — keep a destructive literal out of the Bash command string even when it rides only as data.
 - [`cleanup-temp-files`](cleanup-temp-files.md) — remove the scratch files a task created once the task is done.
-- [`windows-filesystem-safe`](windows-filesystem-safe.md) — the safe `Remove-Item` / `rmtree` patterns for read-only Windows files.
+- [`windows-filesystem-safe`](windows-filesystem-safe.md) — the safe `rmtree` / `force_rmtree` patterns for read-only Windows files.
