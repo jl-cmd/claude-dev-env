@@ -222,3 +222,57 @@ class TestPrintCliExemptionThroughPipeline:
         antipattern_result = _antipattern_result_for(CLI_BASENAME, PIPELINE_PRINT_SOURCE)
         assert antipattern_result.passed
         assert PRINT_FINDING_FRAGMENT not in antipattern_result.output
+
+
+SCRIPTS_DIRECTORY_PATH = "packages/foo/scripts/run_job.py"
+NON_EXEMPT_PRODUCTION_PATH = "packages/foo/services/worker.py"
+TEST_FILE_PROPOSED_PATH = "packages/foo/tests/test_helpers.py"
+USELESS_TEST_VALIDATOR_NAME = "Useless Tests"
+USELESS_TEST_SOURCE = '''
+def test_exists():
+    assert callable(str)
+'''
+
+
+class TestDirectoryExemptionThroughPipeline:
+    """Directory-based exemptions must survive validate_proposed_file staging.
+
+    Basename-only temp staging drops /scripts/, so print() was falsely denied.
+    The real-path unit check allows the same content; the pipeline must match.
+    """
+
+    def test_scripts_directory_print_passes_through_pipeline(self) -> None:
+        tree = ast.parse(PIPELINE_PRINT_SOURCE)
+        basename_only = Path(SCRIPTS_DIRECTORY_PATH).name
+
+        assert len(check_print_in_production(tree, basename_only)) == 1
+        assert check_print_in_production(tree, SCRIPTS_DIRECTORY_PATH) == []
+
+        antipattern_result = _antipattern_result_for(
+            SCRIPTS_DIRECTORY_PATH, PIPELINE_PRINT_SOURCE
+        )
+        assert antipattern_result.passed
+        assert PRINT_FINDING_FRAGMENT not in antipattern_result.output
+
+    def test_non_exempt_production_print_still_fails_through_pipeline(self) -> None:
+        antipattern_result = _antipattern_result_for(
+            NON_EXEMPT_PRODUCTION_PATH, PIPELINE_PRINT_SOURCE
+        )
+        assert not antipattern_result.passed
+        assert PRINT_FINDING_FRAGMENT in antipattern_result.output
+
+    def test_test_filename_filtering_still_recognizes_test_path(self) -> None:
+        all_results = validate_proposed_file(TEST_FILE_PROPOSED_PATH, USELESS_TEST_SOURCE)
+        useless_result = next(
+            each_result
+            for each_result in all_results
+            if each_result.name == USELESS_TEST_VALIDATOR_NAME
+        )
+        assert not useless_result.passed
+        assert "callable" in useless_result.output.lower()
+
+        antipattern_result = _antipattern_result_for(
+            TEST_FILE_PROPOSED_PATH, TEST_FILE_WITH_PRINT
+        )
+        assert antipattern_result.passed
+        assert PRINT_FINDING_FRAGMENT not in antipattern_result.output

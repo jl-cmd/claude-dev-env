@@ -19,6 +19,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from .config.directory_exemption_constants import (
+    ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS,
+    ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+)
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
@@ -758,14 +762,65 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
     ]
 
 
+def _temporary_path_preserving_directory_signal(
+    temporary_directory: Path, file_path: str
+) -> Path:
+    """Build a temp path that keeps exemption directory tails and the basename.
+
+    Directory-based exemptions (for example ``/scripts/`` CLI markers and
+    ``/tests/`` test-path patterns) match substrings of the file path. Staging
+    under a flat temp basename drops those segments. Mirroring only the
+    exemption-relevant directory tail (plus basename) restores that signal
+    without copying absolute system prefixes such as pytest ``tmp_path`` parents
+    that contain ``test_`` and would falsely trip test-file exemptions.
+
+    Args:
+        temporary_directory: Root of the ephemeral staging tree.
+        file_path: Real destination path the write or edit targets.
+
+    Returns:
+        Path under *temporary_directory* ending in the exemption directory tail
+        (when present) and the real basename.
+    """
+    destination_path = Path(file_path)
+    path_parts = destination_path.parts
+    if destination_path.anchor:
+        path_parts = path_parts[1:]
+    if not path_parts:
+        path_parts = (destination_path.name,)
+
+    all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
+    claude_directory_name, hooks_directory_name = ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS
+    start_index = len(path_parts) - 1
+    for each_index, each_part in enumerate(path_parts[:-1]):
+        part_lower = each_part.lower()
+        if part_lower not in all_directory_exemption_segment_names:
+            continue
+        if (
+            part_lower == hooks_directory_name
+            and each_index > 0
+            and path_parts[each_index - 1].lower() == claude_directory_name
+        ):
+            start_index = each_index - 1
+        else:
+            start_index = each_index
+        break
+
+    selected_parts = path_parts[start_index:]
+    temporary_file = temporary_directory.joinpath(*selected_parts)
+    temporary_file.parent.mkdir(parents=True, exist_ok=True)
+    return temporary_file
+
+
 def validate_proposed_file(
     file_path: str, proposed_content: str
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Writes the content to a temporary file that carries the target's basename so
-    suffix-based and test-name-based validator filtering matches the real path,
-    then runs the file-scoped validators against it.
+    Writes the content to a temporary file that preserves the target's
+    directory segments and basename so directory-based exemptions, suffix-based
+    filtering, and test-name-based filtering match the real path, then runs the
+    file-scoped validators against it.
 
     Args:
         file_path: The destination path the write or edit targets.
@@ -774,9 +829,10 @@ def validate_proposed_file(
     Returns:
         One ValidatorResult per file-scoped validator.
     """
-    base_name = Path(file_path).name
     with tempfile.TemporaryDirectory() as temporary_directory:
-        temporary_file = Path(temporary_directory) / base_name
+        temporary_file = _temporary_path_preserving_directory_signal(
+            Path(temporary_directory), file_path
+        )
         temporary_file.write_text(proposed_content, encoding="utf-8")
         return run_file_scoped_validators([temporary_file])
 
