@@ -31,6 +31,24 @@ def test_register_binds_dotted_name_to_sibling_constants_file(
     assert detached_head_line == "HEAD"
 
 
+def test_register_binds_gate_output_constants_module(
+    run_under_config_shadow: RunUnderConfigShadow,
+) -> None:
+    completed_probe = run_under_config_shadow(
+        "import verified_commit_config_bootstrap as bootstrap\n"
+        "bootstrap.register_verified_commit_constants()\n"
+        "import config.verified_commit_gate_output_constants as loaded\n"
+        "print(loaded.__file__)\n"
+        "print(loaded.DENY_PERMISSION_DECISION)\n"
+    )
+    assert completed_probe.returncode == 0, completed_probe.stderr
+    resolved_file_line, deny_decision_line = completed_probe.stdout.splitlines()[:2]
+    assert resolved_file_line.replace("\\", "/").endswith(
+        "blocking/config/verified_commit_gate_output_constants.py"
+    )
+    assert deny_decision_line == "deny"
+
+
 def test_register_leaves_an_already_cached_module_untouched(
     run_under_config_shadow: RunUnderConfigShadow,
 ) -> None:
