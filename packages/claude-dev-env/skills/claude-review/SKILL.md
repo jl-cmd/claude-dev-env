@@ -1,11 +1,12 @@
 ---
 name: claude-review
 description: >-
-  Thorough built-in Claude Code full-diff review; `/code-review xhigh --fix` on
-  opus; usage probe + host-aware invoker and claude_chain_runner. Triggers:
-  claude-review, /claude-review, code-review xhigh --fix, thorough review on
-  opus, chain runner review, ultra-review, invoke_code_review, full-diff local
-  code review.
+  Thorough built-in full-diff /code-review at xhigh on opus over
+  origin/main...HEAD; clean-pass PR issue comment on a clean review. Triggers:
+  /claude-review, claude-review, ultra-review, xhigh, code-review xhigh --fix,
+  thorough review on opus, review this branch on opus, full-diff code review,
+  clean comment, clean-pass PR comment, pr-converge CODE_REVIEW,
+  portable CODE_REVIEW.
 ---
 
 # Claude Review
@@ -13,7 +14,21 @@ description: >-
 Runs the thorough built-in Claude Code review on the full `origin/main...HEAD`
 diff: static sweep first when a converge loop calls this skill, then a usage
 probe, then `/code-review xhigh --fix` pinned to **opus**, host-aware
-in-session or chain via `invoke_code_review.py` / `claude_chain_runner`.
+in-session or chain via `invoke_code_review.py` / `claude_chain_runner`. On a
+clean pass, posts a best-effort PR issue comment.
+
+## Contents
+
+- [When this skill applies](#when-this-skill-applies)
+- [Refusals](#refusals)
+- [Sub-skills and composed runtimes](#sub-skills-and-composed-runtimes)
+- [Task seeding](#task-seeding)
+- [Process](#process)
+- [Ground rules](#ground-rules)
+- [Examples](#examples)
+- [Gotchas](#gotchas)
+- [File index](#file-index)
+- [Folder map](#folder-map)
 
 ## When this skill applies
 
@@ -22,6 +37,11 @@ in-session or chain via `invoke_code_review.py` / `claude_chain_runner`.
 - A third-party host needs a headless chain spawn of that slash command.
 - Callers name `claude-review`, `/claude-review`, or colloquial **ultra-review**
   for this path (folder name stays `claude-review`).
+- Portable pr-converge / autoconverge **CODE_REVIEW** phase (not the workflow
+  `converge.mjs` code-review lens).
+
+Not this skill: `bugteam` multi-agent audit, `codex-review`, Copilot/Bugbot
+gates, or the autoconverge workflow reading lens inside `converge.mjs`.
 
 ## Refusals
 
@@ -33,14 +53,25 @@ Respond with the quoted line exactly and stop:
 - Host task tool missing when a multi-step process list must be tracked:
   `/claude-review needs a host task tool (TaskCreate / TodoWrite).`
 
-## Sub-skills
+## Sub-skills and composed runtimes
 
-| Skill | When | Produces |
+| Peer | When | Produces |
 |---|---|---|
 | `pr-fix-protocol` | After a successful review leaves a dirty tree (converge callers) | Fix sequence, commit, push when the caller requires it |
+| `usage-pause` (via `claude_usage_probe.py`) | Layer A before invoke; invoker also auto-probes when flag omitted/`unknown` | Session/weekly utilization JSON; never reimplement OAuth here |
 
 If `pr-fix-protocol` is missing when fixes applied, stop with:
 `/claude-review needs the pr-fix-protocol skill to apply review fixes.`
+
+Package scripts (execute; do not reimplement host detect, chain walk, or
+comment post):
+
+| Script | Role |
+|---|---|
+| `scripts/claude_usage_probe.py` | Layer A probe wrapper over usage-pause resolver |
+| `scripts/invoke_code_review.py` | Host-aware invoker; force chain when usage left is false |
+| `scripts/claude_chain_runner.py` | Layer B headless chain; failover only on usage-limit signatures |
+| `scripts/post_claude_review_clean_comment.py` | Clean-pass PR issue comment; soft-fail + idempotent per HEAD |
 
 Static sweep uses existing shared scripts
 (`code_rules_gate.py`, ruff, mypy, stem-matched pytest). This skill does not
@@ -194,35 +225,36 @@ and still leaves the clean stamp intact. Constants:
 ## Ground rules
 
 - **One capability:** thorough built-in `/code-review xhigh --fix` on opus over the
-  full diff, via the host-aware invoker.
+  full diff, via the host-aware invoker, plus optional clean-pass issue comment.
 - **Two-layer redundancy:** (A) usage probe before invoke; (B) headless always via
   `claude_chain_runner`.
 - **Full diff only:** never delta-scope, single-file scope, or bugbot-flagged paths.
-- **Compose:** static sweep scripts, usage-pause resolver, and `pr-fix-protocol`
-  stay external — no second OAuth client in this skill.
+- **Compose by path/name:** static sweep scripts, `usage-pause` resolver,
+  `invoke_code_review.py`, `post_claude_review_clean_comment.py`, and
+  `pr-fix-protocol` stay external — no second OAuth client or invoker clone.
 - **Effort token is `xhigh`:** not `high`, not `max`.
-- **Reuse invoker:** `scripts/invoke_code_review.py` + `code_review_constants.py`;
-  do not clone host-detect / chain / dirty-tree logic into this skill folder.
+- **Clean comment never blocks stamp:** soft-fail only; stamp stays when post flakes.
 
 ## Examples
 
 <example>
 User: `/claude-review`
-Claude: [confirms clean worktree; runs Layer A probe
-(`claude_usage_probe` / `claude_usage_probe_constants`); runs
+Claude: [confirms clean worktree; runs Layer A probe; runs
 `invoke_code_review` with session model and session-has-usage-left; on chain
-mode reads JSON; reports clean or dirty_tree / failure]
+mode reads JSON; on clean runs `post_claude_review_clean_comment.py`; reports
+clean, dirty_tree, or failure]
 </example>
 
 <example>
-User: "thorough review on opus" / "ultra-review this branch"
-Claude: [same procedure; colloquial ultra-review maps to this skill]
+User: "thorough review on opus" / "ultra-review this branch" / "xhigh review"
+Claude: [same procedure; colloquial ultra-review and xhigh map to this skill]
 </example>
 
 <example>
-pr-converge CODE_REVIEW phase
+pr-converge / portable CODE_REVIEW phase
 Claude: [static sweep first; usage probe; invoker path; on dirty_tree runs
-pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_at]
+pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps
+`code_review_clean_at` then clean-comment poster (soft-fail)]
 </example>
 
 ## Gotchas
@@ -258,7 +290,7 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Hub: when, refusals, sub-skills, process, gotchas |
+| `SKILL.md` | Hub: when, refusals, composition, process, gotchas |
 | `CLAUDE.md` | Package map for agents opening this skill |
 | `reference/full-diff-and-clean-stamp.md` | Full-diff rule, JSON outcome shape, clean-stamp contract |
 | `reference/process-tasks.md` | Task-seed catalog for a full review pass |
