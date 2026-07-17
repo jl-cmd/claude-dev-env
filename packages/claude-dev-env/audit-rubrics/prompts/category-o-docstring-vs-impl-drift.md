@@ -12,8 +12,6 @@ This file is the audit **template** only: source-material slots, forced-exhausti
 | **This prompt** | Variant C protocol shell that points at the rubric for judgment. |
 | `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md` | Always-on write-time policy + compact checklist. |
 
----
-
 Audit [REPO/ARTIFACT] [TARGET_ID] for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A–N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 9 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
 Apply each sub-bucket's **judgment standard** from the thick rubric. The bullets under each sub-bucket here are protocol probes only.
