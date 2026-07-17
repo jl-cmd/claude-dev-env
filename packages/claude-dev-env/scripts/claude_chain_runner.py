@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Run a ``claude`` invocation through a config-driven fallback chain.
+"""Run a ``claude`` invocation through a usage-ranked fallback chain.
 
 An automation that shells out to a single ``claude -p ...`` fails outright when
 that account hits a usage limit. Other logged-in installs sit idle meanwhile.
-This module runs the leading binary in the chain. It falls over to the next
-binary only on a usage-limit failure. Every other outcome returns to the caller
-unchanged.
+This module probes remaining weekly usage once per call, ranks chain accounts
+highest remaining first, and tries that order. It falls over to the next
+ranked binary only on a usage-limit failure. Every other outcome returns to
+the caller unchanged.
 
 The chain lives in ``~/.claude/claude-chain.json``. Copy the committed
-``claude-chain.example.json`` template there and list your binaries in fallback
-order::
+``claude-chain.example.json`` template there and list your account binaries.
+Try order comes from weekly remaining via ``claude_chain_usage`` (usage-pause
+OAuth probe), not from list position alone::
 
     {"chain": [{"command": "claude", "extra_args": []},
                {"command": "claude-ev", "extra_args": []}]}
 
-A usage-limited primary falls over to the second binary::
+A usage-limited first try falls over to the next ranked binary::
 
-    primary claude     -> exit 1, "usage limit reached"  (falls over)
-    fallback claude-ev -> exit 0                          (served)
+    first try (highest remaining)  -> exit 1, "usage limit reached"  (falls over)
+    next ranked binary             -> exit 0                          (served)
 
 When stdin is piped (not a TTY), the runner reads it once and forwards the
 same text to every chain attempt so a piped ``-p`` charter body reaches each
@@ -37,10 +39,15 @@ import io
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+if __name__ == "__main__":
+    sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
+
+import claude_chain_usage as chain_usage
 from dev_env_scripts_constants.claude_chain_constants import (
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -89,7 +96,8 @@ class ChainEntry:
     """One binary in the fallback chain and its per-account extra arguments.
 
     ``credentials_path`` is an optional path to that account's OAuth credentials
-    file. Selection walks ignore it; usage reporting reads it when present.
+    file. The subprocess walk does not pass it; weekly-usage ranking reads it
+    when present.
     """
 
     command: str
@@ -111,8 +119,8 @@ class ChainInvocationOutcome:
 
     ``served_command`` names the binary whose response is returned. It is
     ``None`` when no binary served the call: every entry was usage-limited or
-    missing, the invocation timed out, or the primary binary was absent. The
-    ``attempts`` trail records every binary tried and how it resolved.
+    missing, the invocation timed out, or the first-ranked binary was absent.
+    The ``attempts`` trail records every binary tried and how it resolved.
     """
 
     served_command: str | None
@@ -123,6 +131,9 @@ class ChainInvocationOutcome:
 
 
 chain_subprocess_runner = subprocess.run
+chain_weekly_usage_reporter: Callable[
+    ..., list[chain_usage.AccountUsageReport]
+] = chain_usage.report_chain_weekly_usage
 
 
 def chain_config_path() -> Path:
@@ -238,6 +249,23 @@ def _build_invocation(entry: ChainEntry, all_claude_arguments: list[str]) -> lis
     return [entry.command, *all_claude_arguments, *entry.extra_args]
 
 
+def _entries_ranked_by_weekly_remaining(
+    all_entries: list[ChainEntry],
+    all_usage_reports: list[chain_usage.AccountUsageReport],
+) -> list[ChainEntry]:
+    entry_by_command = {
+        each_entry.command: each_entry for each_entry in all_entries
+    }
+    all_ranked_reports = chain_usage.rank_accounts_by_weekly_remaining(
+        all_usage_reports
+    )
+    return [
+        entry_by_command[each_report.command]
+        for each_report in all_ranked_reports
+        if each_report.command in entry_by_command
+    ]
+
+
 def _is_usage_limit_failure(completion: subprocess.CompletedProcess[str]) -> bool:
     combined_text = f"{completion.stdout}{completion.stderr}".lower()
     return any(
@@ -323,19 +351,20 @@ def run_claude(
     timeout_seconds: int,
     stdin_text: str | None = None,
 ) -> ChainInvocationOutcome:
-    """Run *all_claude_arguments* through the configured fallback chain.
+    """Run *all_claude_arguments* through the usage-ranked fallback chain.
 
     ::
 
-        primary usage-limited, fallback ok
-            -> served_command=fallback, returncode=0
-        primary nonzero without usage-limit signature
-            -> served_command=primary (no fallover)
+        highest remaining usage-limited, next ranked ok
+            -> served_command=next ranked, returncode=0
+        first try nonzero without usage-limit signature
+            -> served_command=first try (no fallover)
         stdin_text set
             -> same text on every attempt's stdin
 
-    Leading binary serves first. Only a usage-limit failure falls over. Missing
-    fallbacks are skipped; timeout, missing primary, and other nonzero exits stop.
+    Probes weekly remaining once, ranks highest first, then walks that order.
+    Only a usage-limit failure falls over. Missing later-ranked binaries are
+    skipped; timeout, missing first-ranked binary, and other nonzero exits stop.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
@@ -351,11 +380,16 @@ def run_claude(
     Raises:
         ChainConfigurationError: When the chain configuration cannot be loaded.
     """
-    all_entries = load_chain(chain_config_path())
+    config_path = chain_config_path()
+    all_entries = load_chain(config_path)
+    all_usage_reports = chain_weekly_usage_reporter(config_path=config_path)
+    all_ranked_entries = _entries_ranked_by_weekly_remaining(
+        all_entries, all_usage_reports
+    )
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
-    for each_index, each_entry in enumerate(all_entries):
-        is_primary = each_index == 0
+    for each_index, each_entry in enumerate(all_ranked_entries):
+        is_first_ranked = each_index == 0
         try:
             completion = chain_subprocess_runner(
                 _build_invocation(each_entry, all_claude_arguments),
@@ -376,7 +410,7 @@ def run_claude(
             all_attempts.append(
                 ChainAttempt(each_entry.command, ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND)
             )
-            if is_primary:
+            if is_first_ranked:
                 return _no_process_outcome(all_attempts, None)
             continue
         terminal_outcome = _classify_completion(each_entry, completion, all_attempts)
