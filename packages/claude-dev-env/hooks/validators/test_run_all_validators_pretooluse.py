@@ -8,12 +8,15 @@ when that content violates a validator, rather than grading the whole branch.
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from .run_all_validators import (
+    ValidatorResult,
+    _scope_new_and_preexisting,
     _violation_line_number,
     main,
     run_validators_entrypoint_subprocess,
@@ -30,7 +33,9 @@ VIOLATING_PYTHON_SOURCE = (
 
 
 def run_gate(payload: dict[str, object]) -> "subprocess.CompletedProcess[str]":
-    return run_validators_entrypoint_subprocess(["--pre-tool-use"], stdin_text=json.dumps(payload))
+    return run_validators_entrypoint_subprocess(
+        ["--pre-tool-use"], stdin_text=json.dumps(payload)
+    )
 
 
 class TestPreToolUseGate:
@@ -77,7 +82,9 @@ class TestPreToolUseGate:
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
 
-    def test_edit_validates_reconstructed_post_edit_content(self, tmp_path: Path) -> None:
+    def test_edit_validates_reconstructed_post_edit_content(
+        self, tmp_path: Path
+    ) -> None:
         target_file = tmp_path / "calculate.py"
         target_file.write_text(CLEAN_PYTHON_SOURCE, encoding="utf-8")
         completed = run_gate(
@@ -140,19 +147,16 @@ MAGIC_VALUE_MARKER_FUNCTION = "def clean_marker() -> int:\n    return 199\n"
 PRE_EXISTING_VIOLATION_SOURCE = (
     _over_long_function_source("over_long_function") + "\n" + CLEAN_MARKER_FUNCTION
 )
-DEAD_CONSTANT_HOOK_PATH = (
-    Path(__file__).resolve().parent.parent / "blocking" / "code_rules_dead_module_constant.py"
-)
-ATTRIBUTE_EDIT_ANCHOR = "        elif isinstance(each_node, ast.Import | ast.ImportFrom):\n"
-ATTRIBUTE_EDIT_REPLACEMENT = (
-    "        elif isinstance(each_node, ast.Attribute):\n"
-    "            referenced_names.add(each_node.attr)\n"
-    "        elif isinstance(each_node, ast.Import | ast.ImportFrom):\n"
+MAGIC_VALUE_FUNCTION_SOURCE = "def compute_total() -> int:\n    return 199\n"
+RUFF_DIRTY_FUNCTION_SOURCE = (
+    "def compute_total() -> int:\n    unused_intermediate = 1\n    return 1\n"
 )
 
 
 class TestBaselineScopedGate:
-    def test_clean_edit_to_violating_file_is_allowed_with_warning(self, tmp_path: Path) -> None:
+    def test_clean_edit_to_violating_file_is_allowed_with_warning(
+        self, tmp_path: Path
+    ) -> None:
         target_file = tmp_path / "legacy_module.py"
         target_file.write_text(PRE_EXISTING_VIOLATION_SOURCE, encoding="utf-8")
         completed = run_gate(
@@ -222,20 +226,83 @@ class TestBaselineScopedGate:
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
 
-    def test_attribute_edit_to_pristine_dead_constant_hook_is_allowed_with_warning(self) -> None:
+    def test_growing_a_function_with_existing_length_violation_is_allowed_with_warning(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(
+            _over_long_function_source("over_long_function"), encoding="utf-8"
+        )
         completed = run_gate(
             {
                 "tool_name": "Edit",
                 "tool_input": {
-                    "file_path": str(DEAD_CONSTANT_HOOK_PATH),
-                    "old_string": ATTRIBUTE_EDIT_ANCHOR,
-                    "new_string": ATTRIBUTE_EDIT_REPLACEMENT,
+                    "file_path": str(target_file),
+                    "old_string": "    return running_total\n",
+                    "new_string": (
+                        "    running_total = running_total + 1\n"
+                        "    running_total = running_total + 1\n"
+                        "    return running_total\n"
+                    ),
                 },
             }
         )
         assert completed.returncode == 0, completed.stderr
         assert '"permissionDecision": "deny"' not in completed.stdout
         assert "Code Quality" in completed.stderr
+
+    def test_new_same_validator_violation_in_dirty_function_denies(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(MAGIC_VALUE_FUNCTION_SOURCE, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "    return 199\n",
+                    "new_string": "    threshold = 42\n    return 199 + threshold\n",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Magic Values" in completed.stdout
+
+    def test_new_module_scope_ruff_violation_with_dirty_function_denies(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(RUFF_DIRTY_FUNCTION_SOURCE, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "def compute_total",
+                    "new_string": "import os\n\n\ndef compute_total",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "F401" in completed.stdout
+        assert "F841" not in completed.stdout
+
+
+class TestScopeNewAndPreexisting:
+    def test_failed_result_without_located_lines_is_treated_as_new(self) -> None:
+        summary_only_result = ValidatorResult(
+            name="Ruff", checks="37", passed=False, output="Found 1 error."
+        )
+
+        new_results, preexisting_results = _scope_new_and_preexisting(
+            [summary_only_result], "import os\n", Counter()
+        )
+
+        assert [each_result.name for each_result in new_results] == ["Ruff"]
+        assert preexisting_results == []
 
 
 class TestViolationLineNumber:
@@ -256,3 +323,11 @@ class TestViolationLineNumber:
 
     def test_summary_line_without_location_returns_zero(self) -> None:
         assert _violation_line_number("Found 3 errors.") == 0
+
+    def test_code_frame_line_quoting_colon_digits_returns_zero(self) -> None:
+        frame_line = '4 | message = "err:37: bad"'
+
+        assert _violation_line_number(frame_line) == 0
+
+    def test_code_frame_source_line_returns_zero(self) -> None:
+        assert _violation_line_number("17 | import os") == 0

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -864,7 +865,7 @@ def _enclosing_function_name_by_line(content: str) -> dict[int, str]:
             def inner():         # lines 2-3 -> "outer.inner"
                 return None
             return inner
-        log_start()              # line 6 -> "" (module scope)
+        log_start()              # line 5 -> "" (module scope)
 
     Args:
         content: The full source text to parse.
@@ -891,23 +892,53 @@ def _violation_line_number(output_line: str) -> int:
         /pkg/legacy_module.py:37: magic number    -> line number 37
         /pkg/legacy_module.py:37:5: F401 unused   -> line number 37
         a summary line with no file location      -> line number 0
+        1 | import os  (ruff code frame)          -> line number 0
 
-    A location prefix reads ``file:line`` for a check module and ``file:line:col``
-    for ruff, so the line is the first colon-delimited field that is all digits.
-    A Windows drive letter (``C:``) and the path itself never form an all-digit
-    field, so the first digit field is the line for both shapes.
+    The line is the first colon-delimited field that is all digits, with every
+    later prefix field also all digits (the column) and every earlier field
+    reading like a path — no spaces, pipes, or quotes. A ruff code-frame line
+    quoting source text carries a space or quote before any digits, so frame
+    and summary noise resolves to 0.
 
     Args:
         output_line: One printed ``Violation`` line from a validator.
 
     Returns:
-        The parsed line number, or 0 when the text carries no ``file:line``
-        prefix.
+        The parsed line number, or 0 for a line with no ``file:line`` prefix.
     """
-    prefix_before_message = output_line.partition(": ")[0]
-    for each_field in prefix_before_message.split(":"):
-        if each_field.isdigit():
-            return int(each_field)
+    prefix_fields = output_line.partition(": ")[0].split(":")
+    for each_field_index, each_field in enumerate(prefix_fields):
+        if not each_field.isdigit():
+            continue
+        return _line_number_when_prefix_is_a_location(prefix_fields, each_field_index)
+    return 0
+
+
+def _line_number_when_prefix_is_a_location(
+    prefix_fields: List[str], digit_field_index: int
+) -> int:
+    """Return the digit field as a line number when its prefix reads ``path:line``.
+
+    Args:
+        prefix_fields: The colon-split fields of the text before the message.
+        digit_field_index: The index of the first all-digit field.
+
+    Returns:
+        The line number, or 0 when the surrounding fields do not form a
+        ``path:line[:col]`` location.
+    """
+    non_path_characters = (" ", "|", '"')
+    if digit_field_index == 0:
+        return 0
+    path_fields = prefix_fields[:digit_field_index]
+    looks_like_a_path = not any(
+        each_character in each_path_field
+        for each_path_field in path_fields
+        for each_character in non_path_characters
+    )
+    trailing_fields = prefix_fields[digit_field_index + 1 :]
+    if looks_like_a_path and all(each_field.isdigit() for each_field in trailing_fields):
+        return int(prefix_fields[digit_field_index])
     return 0
 
 
@@ -934,44 +965,117 @@ def _failed_results(all_results: List[ValidatorResult]) -> List[ValidatorResult]
     ]
 
 
+ViolationIdentity = tuple[str, str, str]
+
+
+def _violation_message(output_line: str) -> str:
+    """Return the message text after the ``path:line[:col]: `` location prefix.
+
+    Args:
+        output_line: One located violation line from a validator.
+
+    Returns:
+        The text after the first colon-space separator.
+    """
+    return output_line.partition(": ")[2]
+
+
+def _located_violation_lines(each_result: ValidatorResult) -> List[str]:
+    """Return the result's output lines that carry a real ``file:line`` location.
+
+    Ruff code frames, help hints, and ``Found N errors`` summaries carry no
+    location, so they are dropped rather than classified.
+
+    Args:
+        each_result: The failing validator result to filter.
+
+    Returns:
+        The located violation lines in output order.
+    """
+    return [
+        each_output_line
+        for each_output_line in each_result.output.splitlines()
+        if _violation_line_number(each_output_line) > 0
+    ]
+
+
+def _line_identity(
+    validator_name: str, output_line: str, name_by_line: dict[int, str]
+) -> ViolationIdentity:
+    """Return one line's ``(validator, enclosing function, message)`` identity key.
+
+    Args:
+        validator_name: The name of the validator that printed the line.
+        output_line: One located violation line.
+        name_by_line: The line-to-name map for the content that produced it.
+
+    Returns:
+        The identity key for baseline comparison.
+    """
+    return (
+        validator_name,
+        _identity_scope(output_line, name_by_line),
+        _violation_message(output_line),
+    )
+
+
 def _violation_identities(
     failed_results: List[ValidatorResult], content: str
-) -> set[tuple[str, str]]:
-    """Return one ``(validator name, enclosing function)`` key per violation line.
+) -> Counter[ViolationIdentity]:
+    """Count each located violation line by its identity key.
 
     Keying on the enclosing function rather than the raw line number keeps a
-    key stable when an edit shifts or lengthens that function, so a pre-existing
-    violation still matches its baseline twin after the edit.
+    key stable when an edit shifts that function, and counting rather than set
+    membership keeps a second violation of the same validator in the same
+    function visible as new.
 
     Args:
         failed_results: The validator results that fired.
         content: The source text those results were produced against.
 
     Returns:
-        The set of violation identity keys.
+        The multiset of violation identity keys.
     """
     name_by_line = _enclosing_function_name_by_line(content)
-    return {
-        (each_result.name, _identity_scope(each_output_line, name_by_line))
+    return Counter(
+        _line_identity(each_result.name, each_output_line, name_by_line)
         for each_result in failed_results
-        for each_output_line in each_result.output.splitlines()
-    }
+        for each_output_line in _located_violation_lines(each_result)
+    )
 
 
-def _baseline_violation_identities(file_path: str) -> set[tuple[str, str]]:
-    """Return the violation identities the on-disk file already carries.
+def _baseline_violation_identities(file_path: str) -> Counter[ViolationIdentity]:
+    """Return the violation identity counts the on-disk file already carries.
 
     Args:
         file_path: The write's target path, read as the pre-edit baseline.
 
     Returns:
-        The baseline identity set, empty when the file is absent or empty.
+        The baseline identity multiset, empty when the file is absent or empty.
     """
     baseline_content = _read_target_file_content(file_path)
     if not baseline_content:
-        return set()
+        return Counter()
     baseline_failed = _failed_results(validate_proposed_file(file_path, baseline_content))
     return _violation_identities(baseline_failed, baseline_content)
+
+
+def _identity_key_counts(
+    baseline_identities: Counter[ViolationIdentity],
+) -> Counter[tuple[str, str]]:
+    """Sum baseline counts down to ``(validator, enclosing function)`` keys.
+
+    Args:
+        baseline_identities: The baseline identity multiset.
+
+    Returns:
+        The per-key line counts with messages ignored, so a violation whose
+        message drifted with the edit still finds its baseline budget.
+    """
+    key_counts: Counter[tuple[str, str]] = Counter()
+    for each_identity, each_count in baseline_identities.items():
+        key_counts[each_identity[:2]] += each_count
+    return key_counts
 
 
 def _result_with_output(
@@ -987,61 +1091,139 @@ def _result_with_output(
     )
 
 
+def _consume_exact_matches(
+    all_line_identities: List[ViolationIdentity],
+    remaining_exact: Counter[ViolationIdentity],
+    remaining_by_key: Counter[tuple[str, str]],
+) -> set[int]:
+    """Mark the lines whose full identity matches an unconsumed baseline entry.
+
+    Args:
+        all_line_identities: One identity per located line, in output order.
+        remaining_exact: The unconsumed baseline identity budget, decremented
+            in place per match.
+        remaining_by_key: The unconsumed per-key budget, decremented in step.
+
+    Returns:
+        The indexes of the exactly-matched lines.
+    """
+    all_matched_line_indexes: set[int] = set()
+    for each_line_index, each_identity in enumerate(all_line_identities):
+        if remaining_exact[each_identity] <= 0:
+            continue
+        remaining_exact[each_identity] -= 1
+        remaining_by_key[each_identity[:2]] -= 1
+        all_matched_line_indexes.add(each_line_index)
+    return all_matched_line_indexes
+
+
+def _line_is_preexisting(
+    line_index: int,
+    all_line_identities: List[ViolationIdentity],
+    all_matched_line_indexes: set[int],
+    remaining_by_key: Counter[tuple[str, str]],
+) -> bool:
+    """Return whether one located line matches the baseline budget.
+
+    An exact identity match is pre-existing. A leftover line whose
+    ``(validator, enclosing function)`` key still has baseline budget is
+    pre-existing with a drifted message. A line beyond its key's budget is new.
+
+    Args:
+        line_index: The line's position in the located-line order.
+        all_line_identities: One identity per located line.
+        all_matched_line_indexes: The exactly-matched line indexes.
+        remaining_by_key: The unconsumed per-key budget, decremented in place.
+
+    Returns:
+        True when the line is pre-existing, False when it is new.
+    """
+    if line_index in all_matched_line_indexes:
+        return True
+    each_key = all_line_identities[line_index][:2]
+    if remaining_by_key[each_key] > 0:
+        remaining_by_key[each_key] -= 1
+        return True
+    return False
+
+
 def _partition_output_lines(
     each_result: ValidatorResult,
     name_by_line: dict[int, str],
-    all_baseline_identities: set[tuple[str, str]],
+    remaining_exact: Counter[ViolationIdentity],
+    remaining_by_key: Counter[tuple[str, str]],
 ) -> tuple[List[str], List[str]]:
-    """Split one result's lines into new and pre-existing by baseline identity.
+    """Split one result's located lines into a (new, pre-existing) line pair.
 
-    Args:
-        each_result: The failing validator result to split.
-        name_by_line: The line-to-name map for the proposed content.
-        all_baseline_identities: The identities the baseline already carries.
-
-    Returns:
-        A ``(new_lines, preexisting_lines)`` pair.
+    The exact and per-key baseline budgets are consumed in place, exact
+    matches first, so a later result never double-spends an earlier match.
     """
+    located_lines = _located_violation_lines(each_result)
+    all_line_identities = [
+        _line_identity(each_result.name, each_line, name_by_line)
+        for each_line in located_lines
+    ]
+    all_matched_line_indexes = _consume_exact_matches(
+        all_line_identities, remaining_exact, remaining_by_key
+    )
     all_new_lines: List[str] = []
     all_preexisting_lines: List[str] = []
-    for each_output_line in each_result.output.splitlines():
-        identity = (each_result.name, _identity_scope(each_output_line, name_by_line))
-        target_lines = (
-            all_preexisting_lines if identity in all_baseline_identities else all_new_lines
+    for each_line_index, each_line in enumerate(located_lines):
+        is_preexisting = _line_is_preexisting(
+            each_line_index, all_line_identities, all_matched_line_indexes, remaining_by_key
         )
-        target_lines.append(each_output_line)
+        (all_preexisting_lines if is_preexisting else all_new_lines).append(each_line)
     return all_new_lines, all_preexisting_lines
+
+
+def _grouped_result_lines(
+    each_result: ValidatorResult, all_partitioned_lines: tuple[List[str], List[str]]
+) -> tuple[List[ValidatorResult], List[ValidatorResult]]:
+    """Return one result's (new, pre-existing) groups from its partitioned lines.
+
+    A failed result with no located line at all cannot be baseline-matched, so
+    it stays new in full — the gate fails closed rather than letting an
+    unlocatable failure through.
+    """
+    all_new_lines, all_preexisting_lines = all_partitioned_lines
+    if not all_new_lines and not all_preexisting_lines:
+        return [each_result], []
+    new_results = [_result_with_output(each_result, all_new_lines)] if all_new_lines else []
+    preexisting_results = (
+        [_result_with_output(each_result, all_preexisting_lines)]
+        if all_preexisting_lines
+        else []
+    )
+    return new_results, preexisting_results
 
 
 def _scope_new_and_preexisting(
     all_proposed_failed_results: List[ValidatorResult],
     proposed_content: str,
-    all_baseline_identities: set[tuple[str, str]],
+    baseline_identities: Counter[ViolationIdentity],
 ) -> tuple[List[ValidatorResult], List[ValidatorResult]]:
     """Group proposed violations into newly-introduced and pre-existing results.
 
     Args:
         all_proposed_failed_results: The validators that fired on the proposed file.
         proposed_content: The reconstructed post-edit source text.
-        all_baseline_identities: The identities the on-disk baseline already carries.
+        baseline_identities: The identity counts the on-disk baseline carries.
 
     Returns:
-        A ``(new_results, preexisting_results)`` pair, each result carrying only
-        the output lines of its group.
+        A ``(new_results, preexisting_results)`` pair.
     """
     name_by_line = _enclosing_function_name_by_line(proposed_content)
+    remaining_exact = Counter(baseline_identities)
+    remaining_by_key = _identity_key_counts(baseline_identities)
     all_new_results: List[ValidatorResult] = []
     all_preexisting_results: List[ValidatorResult] = []
     for each_result in all_proposed_failed_results:
-        all_new_lines, all_preexisting_lines = _partition_output_lines(
-            each_result, name_by_line, all_baseline_identities
+        new_results, preexisting_results = _grouped_result_lines(
+            each_result,
+            _partition_output_lines(each_result, name_by_line, remaining_exact, remaining_by_key),
         )
-        if all_new_lines:
-            all_new_results.append(_result_with_output(each_result, all_new_lines))
-        if all_preexisting_lines:
-            all_preexisting_results.append(
-                _result_with_output(each_result, all_preexisting_lines)
-            )
+        all_new_results.extend(new_results)
+        all_preexisting_results.extend(preexisting_results)
     return all_new_results, all_preexisting_results
 
 
@@ -1067,9 +1249,9 @@ def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
     )
     if not all_proposed_failed:
         return
-    all_baseline_identities = _baseline_violation_identities(file_path)
+    baseline_identities = _baseline_violation_identities(file_path)
     all_new_results, all_preexisting_results = _scope_new_and_preexisting(
-        all_proposed_failed, proposed_content, all_baseline_identities
+        all_proposed_failed, proposed_content, baseline_identities
     )
     if all_preexisting_results:
         _emit_pre_existing_warning(all_preexisting_results)
@@ -1083,10 +1265,11 @@ def _evaluate_pre_tool_use_payload() -> None:
     The path-based exemption decision runs against the real target path from the
     payload, so an ephemeral scratch or session scratchpad target passes without
     validation before any baseline-scoped decision runs. For a non-exempt target,
-    each violation is keyed by its validator name and enclosing function, then
-    compared against the on-disk baseline. A key the baseline lacks denies the
-    write. A key the baseline already carries passes with a stderr advisory.
-    Writes nothing for a clean file, an exempt target, or an unparseable payload.
+    each located violation is keyed by validator name, enclosing function, and
+    message, then counted against the on-disk baseline. A violation beyond the
+    baseline's budget for its key denies the write; one the baseline already
+    carries passes with a stderr advisory. Writes nothing for a clean file, an
+    exempt target, or an unparseable payload.
     """
     pre_tool_use_payload = json.load(sys.stdin)
     if not isinstance(pre_tool_use_payload, dict):
