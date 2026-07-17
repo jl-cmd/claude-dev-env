@@ -38,8 +38,9 @@ def run_ruff_check(files: list[Path]) -> RuffResult:
     if not py_files:
         return RuffResult(passed=True, output="No Python files", fixed_count=0)
 
+    concise_output_arguments = ["--output-format", "concise"]
     result = subprocess.run(
-        ["ruff", "check"] + py_files,
+        ["ruff", "check", *concise_output_arguments] + py_files,
         check=False,
         capture_output=True,
         text=True,

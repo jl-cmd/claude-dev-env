@@ -25,3 +25,24 @@ def test_run_ruff_check_returns_passed_for_empty_files() -> None:
     result = run_ruff_check([])
     assert result.passed is True
     assert "No files" in result.output
+
+
+def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
+    """Each reported violation carries a ``path:line:col:`` prefix on its own line.
+
+    The run_all_validators PreToolUse gate parses these prefixes to scope
+    violations to a baseline, so the output format is pinned to the concise
+    shape rather than the ruff default, which moved locations onto separate
+    ``-->`` lines.
+    """
+    violating_file = tmp_path / "unused_import_module.py"
+    violating_file.write_text("import os\n", encoding="utf-8")
+
+    result = run_ruff_check([violating_file])
+
+    assert result.passed is False
+    location_prefix = f"{violating_file}:1:8:"
+    assert any(
+        each_line.startswith(location_prefix) and "F401" in each_line
+        for each_line in result.output.splitlines()
+    ), result.output

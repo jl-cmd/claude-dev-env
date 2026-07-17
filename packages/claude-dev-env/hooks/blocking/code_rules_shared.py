@@ -412,8 +412,10 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
     harness session scratchpad. The session scratchpad match reads the session id
     from the payload when one is supplied, and from the harness environment
     variable otherwise, so a caller that holds no payload still gets the match.
-    One call answers path exemption for both families, so a gate that skips
-    throwaway paths need not repeat the two checks itself.
+    The run_all_validators PreToolUse gate calls this predicate to skip a scratch
+    target before it validates. The code-rules and TDD gates call the two path
+    predicates ``is_ephemeral_script_path`` and ``is_under_session_scratchpad``
+    directly.
 
     Args:
         file_path: The candidate path to classify.
