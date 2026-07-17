@@ -146,6 +146,21 @@ def build_repo_with_origin(workspace_path: Path) -> Path:
     return clone_path
 
 
+def read_branch_config(
+    repository_path: Path,
+    branch_name: str,
+    config_leaf: str,
+) -> str:
+    completed = subprocess.run(
+        ["git", "config", "--get", f"branch.{branch_name}.{config_leaf}"],
+        cwd=str(repository_path),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
 def read_head_branch(repository_path: Path) -> str:
     completed = run_git(["rev-parse", "--abbrev-ref", "HEAD"], repository_path)
     return completed.stdout.strip()
@@ -154,6 +169,14 @@ def read_head_branch(repository_path: Path) -> str:
 def read_head_commit(repository_path: Path) -> str:
     completed = run_git(["rev-parse", "HEAD"], repository_path)
     return completed.stdout.strip()
+
+
+def read_remote_main_commit(repository_path: Path) -> str:
+    completed = run_git(
+        ["ls-remote", REMOTE_NAME, f"refs/heads/{MAIN_BRANCH_NAME}"],
+        repository_path,
+    )
+    return completed.stdout.split()[0]
 
 
 class TestResolveAgentSlug:
@@ -510,6 +533,81 @@ class TestCreateFreshBranchIntegration:
         assert success_payload[PAYLOAD_KEY_BASE_COMMIT] == origin_tip_before
         assert read_head_commit(worktree_path) == origin_tip_before
         assert read_head_commit(worktree_path) != local_main_commit
+
+
+class TestWorktreeBranchTracking:
+    def should_leave_new_branch_without_an_upstream(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        success_payload = module.create_fresh_branch(
+            branch_name="fix/no-upstream",
+            repo_path=repository_path,
+            agent_slug="claude",
+            base_ref=DEFAULT_BASE_REF,
+        )
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        assert read_head_branch(worktree_path) == "fix/no-upstream"
+        assert read_branch_config(repository_path, "fix/no-upstream", "merge") == ""
+        assert read_branch_config(repository_path, "fix/no-upstream", "remote") == ""
+
+    def should_not_aim_a_bare_push_at_main_under_push_default_upstream(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        empty_hooks_path = tmp_path / "repo" / "empty-hooks"
+        run_git(
+            ["config", "push.default", "upstream"],
+            repository_path,
+            empty_hooks_path=empty_hooks_path,
+        )
+        agent_scratch_parent = tmp_path / "agent-scratch"
+        monkeypatch.setattr(module.sys, "platform", "linux")
+        monkeypatch.setattr(
+            module.tempfile,
+            "gettempdir",
+            lambda: str(agent_scratch_parent),
+        )
+        success_payload = module.create_fresh_branch(
+            branch_name="feature/silent-push",
+            repo_path=repository_path,
+            agent_slug="claude",
+            base_ref=DEFAULT_BASE_REF,
+        )
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        (worktree_path / SEED_FILE_NAME).write_text("drive-by\n", encoding="utf-8")
+        run_git(["add", SEED_FILE_NAME], worktree_path, empty_hooks_path=empty_hooks_path)
+        run_git(
+            ["commit", "-m", "work on the feature branch"],
+            worktree_path,
+            empty_hooks_path=empty_hooks_path,
+        )
+        origin_main_before = read_remote_main_commit(repository_path)
+        push_attempt = subprocess.run(
+            ["git", "-c", f"core.hooksPath={empty_hooks_path}", "push"],
+            cwd=str(worktree_path),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert push_attempt.returncode != 0, (
+            "bare push should be refused, but it succeeded:\n"
+            f"{push_attempt.stdout}{push_attempt.stderr}"
+        )
+        assert read_remote_main_commit(repository_path) == origin_main_before
 
 
 class TestMainCli:
