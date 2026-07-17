@@ -210,7 +210,11 @@ When bugfix (clean-coder) subagent completes after push:
 3. Each PR with new subagent results → spawn next agent per rules, all
    in one parallel message.
 4. Re-read `state.json` if needed for scheduling.
-5. Call `ScheduleWakeup` with appropriate delay.
+5. Advance the pacer: on `pacer=schedule_wakeup`, call `ScheduleWakeup`
+   with the appropriate delay; on `pacer=portable`, continue or poll
+   in-session per
+   [`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+   (no `ScheduleWakeup`).
 6. Nothing else.
 
 ## Memory

@@ -1,8 +1,10 @@
 # ScheduleWakeup loop pacing (pr-converge)
 
-Load this document for converge **loop pacing**. The pre-flight in `SKILL.md`
-guarantees `ScheduleWakeup` is available before any tick runs. Shared bugbot
-/ bugteam / Fix protocol steps stay in the main `SKILL.md`.
+Load this document when pre-flight selects `pacer=schedule_wakeup`. When
+`pacer=portable`, use
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+instead. Shared bugbot / bugteam / Fix protocol steps stay in the main
+`SKILL.md`.
 
 ## Calling ScheduleWakeup
 

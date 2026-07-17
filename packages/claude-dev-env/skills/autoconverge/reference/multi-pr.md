@@ -42,7 +42,27 @@ each PR its own checkout with `git worktree add`. For each PR the user named:
    non-zero exit sets `copilotDisabled: true` on every entry, so each child skips
    the Copilot gate with no agent spawned.
 
-## Launch the multi-PR workflow
+## Launch
+
+Select the pacer once for the multi-PR run (same helper as single-PR):
+
+```
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
+  --skill autoconverge \
+  --has-workflow <0|1> \
+  --has-schedule-wakeup <0|1>
+```
+
+### `pacer=portable`
+
+Do **not** call `Workflow`. For each PR worktree from pre-flight, run the
+continuous portable driver in
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+(serial, or host fan-out when the host can isolate workers). One teardown per
+PR after that PR reaches ready or a named blocker. Shared Copilot quota and
+permission grants from multi-PR pre-flight still apply once.
+
+### `pacer=workflow`
 
 Call the `Workflow` tool against the fan-out script, passing the absolute path of
 `converge.mjs` and one entry per PR:
@@ -74,7 +94,18 @@ Each record's `deferredPrs` is that PR's own list of draft hardening PRs, and
 `allDeferredPrs` is every record's `deferredPrs` flattened into one list. The
 top-level `converged` is true only when every PR converged.
 
-## Multi-PR teardown (on workflow completion)
+## Multi-PR teardown
+
+### `pacer=portable`
+
+For each PR worktree, run the single-PR **Teardown → pacer=portable** path in
+[`SKILL.md`](../SKILL.md) (`pr-loop-lifecycle` Close, no Workflow journal
+report). Write one durable handoff per PR with that PR's `--pr-number` and
+resume command `/autoconverge <PR URL>`. Revoke project permissions once per
+repository after every PR's close. Print one summary line per PR as
+`#<prNumber>: <converged | blocked> — rounds <N>, final <finalSha>[, blocker <blocker>]`.
+
+### `pacer=workflow` (on workflow completion)
 
 Run the single-PR Teardown in [`SKILL.md`](../SKILL.md) once per entry in
 `results`, using that PR's `owner`, `repo`, `prNumber`, and `finalSha`, and its

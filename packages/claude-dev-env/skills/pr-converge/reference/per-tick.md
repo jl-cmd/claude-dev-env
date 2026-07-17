@@ -15,29 +15,38 @@ Use on **draft PR**. Cursor Bugbot and `/bugteam` re-run after each push. Fix
 findings between rounds until back-to-back clean on same `HEAD`, then mark
 PR ready for review.
 
-Run every tick in parent harness session. Pacing lives in
-[`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md) (read before Step 4); see [Pacing
-workflow](#pacing-workflow).
+Run every tick in the parent harness session. Pacing depends on the selected
+pacer from pre-flight (`select_converge_pacer.py`):
+
+- `schedule_wakeup` — [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
+- `portable` — [`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+
+See [Pacing workflow](#pacing-workflow).
 
 Every BUGTEAM tick runs **bugteam** — never hand-rolled substitute. Fix
-protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in main session via
-`ScheduleWakeup` (pre-flight aborts when absent).
+protocol per [fix-protocol.md](fix-protocol.md). Pacing stays in the main
+session (native `ScheduleWakeup` or the portable continuous driver).
 
 ## Invocation modes
 
-- **`/pr-converge`** runs one tick, then Step 4 schedules the next via
-  `ScheduleWakeup`. Omit the next wakeup only on convergence or **Stop
-  conditions**.
+- **`/pr-converge` with `pacer=schedule_wakeup`** runs one tick, then Step 4
+  schedules the next via `ScheduleWakeup`. Omit the next wakeup only on
+  convergence or **Stop conditions**.
+- **`/pr-converge` with `pacer=portable`** runs ticks continuously in-session
+  (poll waits at the same delays); write handoff at budget boundaries. See
+  the portable driver.
 
 ## Pacing workflow
 
-Read [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
+When `pacer=schedule_wakeup`, read
+[`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
 (installed copy under `$HOME/.claude/skills/pr-converge/workflows/`) before
-Step 4. The pre-flight gate guarantees `ScheduleWakeup` is invokable; the
-workflow file specifies delays, prompts, and convergence cleanup.
+Step 4. When `pacer=portable`, read
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+and skip `ScheduleWakeup` calls.
 
 - **`/pr-converge`** (default): loops until convergence. After each tick
-  (unless converged or stopped), run **Step 4**.
+  (unless converged or stopped), run **Step 4** using the selected pacer.
 
 ## Step 1: Resolve current HEAD and PR context
 
@@ -244,8 +253,8 @@ c. Decide (three branches; match first whose predicate holds):
 
    - **Failed review (`returncode != 0`, or chain mode with null
      `served_command`):** The review did not complete a successful serve. Do
-     not set `code_review_clean_at`. Stay `phase = CODE_REVIEW`, schedule next
-     wakeup, return. A failed chain often leaves `dirty_tree` false — that is
+     not set `code_review_clean_at`. Stay `phase = CODE_REVIEW`, apply Step 4 pacer
+     (ScheduleWakeup or portable continue/poll), return. A failed chain often leaves `dirty_tree` false — that is
      not a clean stamp.
    - **Fixes applied (working tree dirty / `dirty_tree` true):** Commit the
      applied fixes in one commit → push, following the shared fix protocol
@@ -253,7 +262,7 @@ c. Decide (three branches; match first whose predicate holds):
      push-invalidated markers per [ground-rules.md](ground-rules.md) /
      [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
      `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). Stay
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     `phase = CODE_REVIEW`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return. Every fix push
      re-enters the internal passes on the new HEAD.
    - **Clean (successful serve: `returncode == 0`, chain `served_command`
      non-null when `mode == chain`, and `dirty_tree` false):** Set
@@ -318,7 +327,7 @@ d. Decide based on post-bugteam state — order matters. Check
 pushed-during-bugteam FIRST so a convergence report against a stale HEAD
 never falsely terminates:
    - **Audit pushed this tick (clean-at fields reset in step b):**
-     `phase = CODE_REVIEW`, schedule next wakeup, return. Every fix push
+     `phase = CODE_REVIEW`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return. Every fix push
      re-enters the internal passes on the new HEAD.
    - **Convergence AND no push:** the internal passes are clean on
      `current_head`. Stamp `bugteam_clean_at = current_head`, then
@@ -328,8 +337,8 @@ never falsely terminates:
      ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [fix-protocol.md](fix-protocol.md)). Reset push-invalidated markers
      per [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
-     `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
-     next wakeup, return.
+     `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, apply Step 4 pacer
+     (ScheduleWakeup or portable continue/poll), return.
 
 ### `phase == BUGBOT` (terminal gate)
 
@@ -386,7 +395,7 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_
 c. Decide (four branches; match first whose predicate holds):
    - **No bugbot review yet, OR latest review's `commit_id` ≠
      `current_head`:** Re-trigger bugbot (Step 3), set `bugbot_clean_at =
-     null`, reset `inline_lag_streak = 0`, schedule next wakeup, return to the
+     null`, reset `inline_lag_streak = 0`, apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return to the
      Bugbot gate next tick.
    - **`commit_id == current_head` AND zero unaddressed inline AND review
      body clean:** Set `bugbot_clean_at = current_head`, reset
@@ -402,7 +411,7 @@ c. Decide (four branches; match first whose predicate holds):
      `state.json`: the clean-coder teammate executes the fix, writes
      `state.json`, goes idle; the next tick re-enters CODE_REVIEW on the new
      HEAD. No `state.json` (single-PR): the lead executes it, stays
-     `phase = CODE_REVIEW`. Schedule next wakeup, return.
+     `phase = CODE_REVIEW`. Apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return.
 
 ### `phase == COPILOT_WAIT`
 
@@ -435,12 +444,12 @@ b. Decide (three branches; match first whose predicate holds):
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
      `bugbot_acknowledged_at`, `codex_down`). **Set `phase = CODE_REVIEW`**
      (NOT COPILOT_WAIT) — every fix push re-enters the internal passes on the
-     new HEAD. Schedule next wakeup, return.
+     new HEAD. Apply Step 4 pacer (ScheduleWakeup or portable continue/poll), return.
    - **No Copilot review at `current_head` yet:** Increment
      `copilot_wait_count` (init 0 on COPILOT_WAIT entry; reset to 0 on
      every push and on every successful Copilot review). `>= 3` → hard
      blocker per [stop-conditions.md](stop-conditions.md). Otherwise
-     schedule next wakeup (360s), return.
+     apply Step 4 pacer (ScheduleWakeup or portable continue/poll; 360s wait), return.
 
 **Non-negotiable:** After any Copilot fix push, `phase` MUST route to
 `CODE_REVIEW`. Never cycle COPILOT_WAIT → fix → COPILOT_WAIT. The
@@ -508,8 +517,11 @@ base), never an invented commit range.
 
 ## Step 4: Loop pacing
 
-**`ScheduleWakeup` field hints** (prefer [Pacing
-workflow](#pacing-workflow)):
+Apply the pacer selected at pre-flight ([Pacing workflow](#pacing-workflow)).
+
+### `pacer=schedule_wakeup`
+
+**`ScheduleWakeup` field hints:**
 
 - `delaySeconds: 360` after bugbot re-trigger. Exception:
   BUGBOT inline-lag branch uses `delaySeconds: 90` (no re-trigger;
@@ -520,6 +532,21 @@ workflow](#pacing-workflow)):
 
 **On convergence:** apply **Convergence** section of
 `../workflows/schedule-wakeup-loop.md` (omit wakeups).
+
+### `pacer=portable`
+
+Do **not** call `ScheduleWakeup`. After writing state and handoff:
+
+- **Immediate work next** → continue the next tick in the same turn.
+- **Wait next** (Bugbot queued, COPILOT_WAIT with no review yet) → poll
+  in-session for the same delay (`360` default, `90` on Bugbot inline-lag),
+  then resume the same step. Honor the same hard caps as the ScheduleWakeup
+  path.
+- **Budget too low for a full tick** → stop at the tick boundary; print
+  `/pr-converge <PR URL>` and the persisted phase.
+
+Full portable rules:
+[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md).
 
 ## Bugteam execution
 

@@ -115,9 +115,21 @@ counts as approval.
 
 ### Step 2 — Hold and wait
 
-Arm `ScheduleWakeup` for a 45-minute deadline. Where `ScheduleWakeup` is absent,
-use `send_later`. The clock starts when the page reaches the user, which is the
-moment the script exits zero.
+Branch the hold on the caller's pacer (or on whether a durable wake surface is
+present when the caller has not selected a pacer):
+
+- **Native pacer** (`pacer=schedule_wakeup`, `pacer=workflow`, or
+  `ScheduleWakeup` present): arm `ScheduleWakeup` for a 45-minute deadline.
+  Where `ScheduleWakeup` is absent on that native path, use `send_later`.
+- **Portable pacer** (`pacer=portable`, or no durable wake): do not call
+  `ScheduleWakeup` or `send_later`. Hold with an in-session deadline poll, or
+  write handoff and stop, per
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+  Callers may override this step after the ntfy page and apply their own
+  portable hold.
+
+The clock starts when the page reaches the user, which is the moment the script
+exits zero.
 
 - If the user answers, follow their direction.
 - If the deadline passes with no answer, run the caller's normal teardown and
@@ -141,7 +153,7 @@ its fix re-runs that same check and posts the before/after output on the thread.
       evidence note.
 - [ ] The page carries the PR name, the per-finding summary, and the review URL.
 - [ ] `scripts/notify_ntfy.py` exited zero before the 45-minute clock started.
-- [ ] The wakeup is armed for 45 minutes from a delivered page.
+- [ ] The hold is armed from a delivered page (45-minute `ScheduleWakeup` / `send_later` on native pacer; portable in-session poll or handoff on `pacer=portable`).
 - [ ] A failed page kept the gate open rather than approving the round.
 
 ## Files

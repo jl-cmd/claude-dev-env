@@ -66,11 +66,11 @@ confirmation gates that are expected to return zero.
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`),
      report-only workflow agent — see runCodeReviewLens in workflow/converge.mjs for its configuration.
      The built-in `/code-review` command is a separate surface outside this
-     workflow path. Autoconverge runs only where the Workflow tool exists (the
-     skill hub Requirements sentence `autoconverge requires the Workflow tool`).
-     Harness portability of that command is a pr-converge concern: pr-converge's
-     CODE_REVIEW phase runs Claude Code's built-in `/code-review high --fix`
-     ([`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)).
+     workflow path. On `pacer=workflow`, this lens runs inside `converge.mjs`.
+     On `pacer=portable`, the continuous driver uses the pr-converge CODE_REVIEW
+     phase through `invoke_code_review.py` instead of `runCodeReviewLens`
+     ([`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md);
+     [`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)).
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
      shared A–P rubric from `_shared/pr-loop/audit-contract.md`, then its
      adversarial second pass, and the doc-parity, test-assertion, and

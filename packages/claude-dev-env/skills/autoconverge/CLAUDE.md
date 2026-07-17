@@ -2,7 +2,7 @@
 
 **Trigger:** `/autoconverge`, "autoconverge this PR", "converge this PR in one run", "run the converge workflow", "drive the PR to ready autonomously".
 
-Drives one draft PR to convergence in a single autonomous workflow run. Each round runs a deterministic static sweep first, then a code-review pass, a bug-audit (with its adversarial second pass), and a self-review parity pass in parallel on the same HEAD, deduplicates findings, applies every fix in one commit, and re-verifies. Once the internal lenses are clean, Cursor Bugbot, Copilot, and Codex run as terminal confirmation gates, and the run marks the PR ready on convergence. State lives in the workflow journal; no `ScheduleWakeup` ticks.
+Drives one draft PR to convergence in one autonomous run. On `pacer=workflow`, each round runs a deterministic static sweep first, then a code-review pass, a bug-audit (with its adversarial second pass), and a self-review parity pass in parallel on the same HEAD, deduplicates findings, applies every fix in one commit, and re-verifies; state lives in the workflow journal. On `pacer=portable`, the continuous driver in `_shared/pr-loop/portable-driver.md` runs the shared pr-converge phase machine with the same helpers and `check_convergence.py` ready definition. Once the internal passes are clean, Cursor Bugbot, Copilot, and Codex run as terminal confirmation gates, and the run marks the PR ready on convergence.
 
 ## Subdirectories
 
@@ -15,7 +15,7 @@ Drives one draft PR to convergence in a single autonomous workflow run. Each rou
 
 | File | Role |
 |---|---|
-| `SKILL.md` | Full entry-point protocol: pre-flight steps, worktree setup, `Workflow` call, budget-aware round boundaries, teardown, and the per-round convergence loop summary. |
+| `SKILL.md` | Full entry-point protocol: pacer selection, pre-flight steps, worktree setup, Workflow or portable path, budget-aware boundaries, teardown, and the convergence loop summary. |
 | `workflow/converge.mjs` | Main convergence workflow. Runs a static sweep then the internal lenses each round, applies fixes, runs Bugbot, Copilot, and Codex as terminal gates, checks convergence, and marks the PR ready. |
 | `workflow/aggregate_runs.py` | Merges every autoconverge journal for a PR into one deduped journal. |
 | `workflow/convergence_summary.py` | Builds the convergence-summary agent prompt over the merged findings. |
@@ -31,4 +31,6 @@ Drives one draft PR to convergence in a single autonomous workflow run. Each rou
 
 ## Entry point
 
-Requires the `Workflow` tool. The `SKILL.md` body specifies the exact pre-flight sequence and `Workflow` call.
+Selects `workflow` or `portable` via `select_converge_pacer.py`. Missing
+`Workflow` selects portable and continues — it does not abort. The `SKILL.md`
+body specifies the pre-flight sequence and each pacer's run path.
