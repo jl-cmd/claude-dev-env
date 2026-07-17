@@ -32,6 +32,14 @@ _DECOY_CONFIG_CONSTANTS_SOURCE = (
     '"""Stale stand-in carrying none of the real gate constants."""\n\nIS_DECOY_CONFIG = True\n'
 )
 
+_BLOCKING_TEST_BOOTSTRAP_DIRECTORIES = (
+    str(_BLOCKING_SOURCE_DIRECTORY),
+    str(_BLOCKING_SOURCE_DIRECTORY.parent),
+)
+for each_bootstrap_directory in _BLOCKING_TEST_BOOTSTRAP_DIRECTORIES:
+    if each_bootstrap_directory not in sys.path:
+        sys.path.insert(0, each_bootstrap_directory)
+
 
 def _copy_mirrored_packages(mirrored_hooks_directory: Path, mirrored_blocking_directory: Path) -> None:
     """Copy the ``config``, gate-parts, and ``hooks_constants`` packages into the mirror."""
