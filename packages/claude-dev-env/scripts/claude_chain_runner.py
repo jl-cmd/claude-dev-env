@@ -77,6 +77,82 @@ from dev_env_scripts_constants.claude_chain_constants import (
     UTF8_ENCODING,
 )
 
+import tempfile
+
+
+def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:
+    """Decode captured *raw_bytes* using *encoding* and *errors*."""
+    return raw_bytes.decode(encoding, errors)
+
+
+def _optional_timeout(value: object) -> float | None:
+    """Return *value* as a timeout in seconds, or None when it is not numeric."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _optional_cwd(value: object) -> str | None:
+    """Return *value* as a working-directory string, or None when unset."""
+    if value is None:
+        return None
+    return str(value)
+
+
+def _optional_stdin_fd(value: object, input_bytes: bytes | None) -> int | None:
+    """Return the stdin descriptor to use, or None when stdin text is supplied."""
+    if input_bytes is not None:
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def _stdin_bytes(value: object, encoding: str, errors: str) -> bytes | None:
+    """Encode stdin text *value* to bytes, or None when no text is given."""
+    if value is None:
+        return None
+    return str(value).encode(encoding, errors)
+
+
+# Capturing a large-output child through OS pipes (``capture_output=True``)
+# deadlocks on Windows: the child buffers its whole response and flushes it at
+# once, the pipe buffer fills before the parent drains it, and both sides block.
+# Redirecting each stream to a temporary file removes the pipe, so the child
+# writes freely; the files are then read back and decoded the way a pipe capture
+# would. ``capture_output`` and ``text`` are ignored in favor of file
+# redirection; ``timeout``, ``check``, ``input``, ``stdin``, ``cwd``,
+# ``encoding``, and ``errors`` are honored.
+def _run_captured_subprocess(
+    all_invocation_tokens: list[str],
+    **all_subprocess_options: object,
+) -> subprocess.CompletedProcess[str]:
+    """Run *all_invocation_tokens*, spooling stdout and stderr to temp files."""
+    encoding = str(all_subprocess_options.get("encoding") or UTF8_ENCODING)
+    errors = str(all_subprocess_options.get("errors") or CODEC_ERROR_STRATEGY)
+    stdin_input = all_subprocess_options.get("input")
+    input_bytes = _stdin_bytes(stdin_input, encoding, errors)
+    with (
+        tempfile.TemporaryFile() as stdout_file,
+        tempfile.TemporaryFile() as stderr_file,
+    ):
+        completion = subprocess.run(
+            all_invocation_tokens, stdout=stdout_file, stderr=stderr_file,
+            check=bool(all_subprocess_options.get("check", False)),
+            timeout=_optional_timeout(all_subprocess_options.get("timeout")),
+            cwd=_optional_cwd(all_subprocess_options.get("cwd")),
+            input=input_bytes,
+            stdin=_optional_stdin_fd(all_subprocess_options.get("stdin"), input_bytes),
+        )
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        return subprocess.CompletedProcess(
+            all_invocation_tokens,
+            completion.returncode,
+            _decode_captured_stream(stdout_file.read(), encoding, errors),
+            _decode_captured_stream(stderr_file.read(), encoding, errors),
+        )
+
 
 class ChainConfigurationError(Exception):
     """Raised when the chain configuration is missing, unreadable, or malformed."""
@@ -115,7 +191,7 @@ class ChainInvocationOutcome:
     attempts: tuple[ChainAttempt, ...]
 
 
-chain_subprocess_runner = subprocess.run
+chain_subprocess_runner = _run_captured_subprocess
 
 
 def chain_config_path() -> Path:
@@ -299,13 +375,15 @@ def run_claude(
 ) -> ChainInvocationOutcome:
     """Run *all_claude_arguments* through the configured fallback chain.
 
-    The leading binary serves the call. Only a usage-limit failure (a non-zero
-    exit whose output carries a usage-limit signature) falls over to the next
-    binary. A missing fallback binary is skipped and the walk continues. A
-    timeout, a missing primary binary, or a non-zero exit without a usage-limit
-    signature stops the walk and returns that outcome unchanged. When
-    *stdin_text* is set, that same text is supplied as stdin on every chain
-    attempt.
+    The leading binary serves; only a usage-limit failure falls over to the
+    next. A timeout, a missing primary, or a non-usage-limit non-zero exit stops
+    the walk. *stdin_text*, when set, is forwarded as stdin on every attempt.
+
+    ::
+
+        # primary usage-limited, fallback serves
+        claude     -> exit 1 "usage limit reached"  # flag: falls over
+        claude-ev  -> exit 0                         # ok: served
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
