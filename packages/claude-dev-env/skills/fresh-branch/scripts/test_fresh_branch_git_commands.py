@@ -43,7 +43,11 @@ def build_repo(workspace_path: Path) -> Path:
         capture_output=True,
         text=True,
     )
-    for each_pair in (("user.name", GIT_USER_NAME), ("user.email", GIT_USER_EMAIL)):
+    for each_pair in (
+        ("user.name", GIT_USER_NAME),
+        ("user.email", GIT_USER_EMAIL),
+        ("commit.gpgsign", "false"),
+    ):
         subprocess.run(
             ["git", *hooks_argument, "config", *each_pair],
             cwd=str(workspace_path),
@@ -87,7 +91,11 @@ def build_clone_with_origin(workspace_path: Path) -> tuple[Path, Path]:
         capture_output=True,
         text=True,
     )
-    for each_pair in (("user.name", GIT_USER_NAME), ("user.email", GIT_USER_EMAIL)):
+    for each_pair in (
+        ("user.name", GIT_USER_NAME),
+        ("user.email", GIT_USER_EMAIL),
+        ("commit.gpgsign", "false"),
+    ):
         subprocess.run(
             ["git", *hooks_argument, "config", *each_pair],
             cwd=str(clone_path),
@@ -108,7 +116,11 @@ def advance_origin_main(workspace_path: Path, bare_origin: Path) -> str:
         capture_output=True,
         text=True,
     )
-    for each_pair in (("user.name", GIT_USER_NAME), ("user.email", GIT_USER_EMAIL)):
+    for each_pair in (
+        ("user.name", GIT_USER_NAME),
+        ("user.email", GIT_USER_EMAIL),
+        ("commit.gpgsign", "false"),
+    ):
         subprocess.run(
             ["git", *hooks_argument, "config", *each_pair],
             cwd=str(pusher_path),
