@@ -246,33 +246,36 @@ def run_with_fallback(
     fallback_name: str,
     fallback_checks: str,
 ) -> ValidatorResult:
-    """Run a validator with graceful error handling.
+    """Run one validator, mapping any fault to a fail-closed blocking result.
+
+    ::
+
+        healthy validator          -> its own ValidatorResult
+        validator raises any error -> flag: failed (not skipped), names the check
+
+    A validator that raises cannot take down the whole batch, and its fault is
+    never a pass or a skip. The returned result is a failure that names the
+    faulted validator, so the gate blocks the write and the deny reason
+    attributes the block to the check that could not run. Mapping a crash to a
+    skip would let content crafted to trip one validator bypass that check.
 
     Args:
-        validator_func: Validator function to run
-        fallback_name: Name to use in error result
-        fallback_checks: Check numbers for error result
+        validator_func: The validator call to run.
+        fallback_name: The validator's name, carried into a fault result.
+        fallback_checks: The validator's check numbers, carried into a fault result.
 
     Returns:
-        ValidatorResult, either from validator or skipped fallback
+        The validator's own result on success, or a failed result that names
+        the faulted validator on any exception.
     """
     try:
         return validator_func()
-    except FileNotFoundError as error:
-        return ValidatorResult(
-            name=fallback_name,
-            checks=fallback_checks,
-            passed=False,
-            output=f"Validator not found: {error} (skipped)",
-            skipped=True,
-        )
     except Exception as error:
         return ValidatorResult(
             name=fallback_name,
             checks=fallback_checks,
             passed=False,
-            output=f"Validator error: {error} (skipped)",
-            skipped=True,
+            output=f"check could not run; write blocked (validator error: {error})",
         )
 
 
@@ -738,23 +741,29 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
             gate mode.
 
     Returns:
-        One ValidatorResult per file-scoped validator, in run order.
+        One ValidatorResult per file-scoped validator, in run order. A validator
+        that raises yields a fail-closed result naming it, so one crash cannot
+        take down the batch or silently skip its check.
     """
+    file_scoped_validators: List[Tuple[str, str, Callable[[], ValidatorResult]]] = [
+        ("Python Style", "1,2,3,4", lambda: run_python_style_checks(all_files)),
+        ("Test Safety", "11,21", lambda: run_test_safety_checks(all_files)),
+        ("React", "17", lambda: run_react_checks(all_files)),
+        ("Ruff", "37", lambda: run_ruff_checks(all_files)),
+        ("Mypy", "39,40", lambda: run_mypy_checks(all_files)),
+        ("Abbreviations", "5", lambda: run_abbreviation_checks(all_files)),
+        ("PR References", "6", lambda: run_pr_reference_checks(all_files)),
+        ("Magic Values", "7", lambda: run_magic_value_checks(all_files)),
+        ("Useless Tests", "12", lambda: run_useless_test_checks(all_files)),
+        ("Security", "27,28,29", lambda: run_security_checks(all_files)),
+        ("Code Quality", "30,31,32", lambda: run_code_quality_checks(all_files)),
+        ("Python Anti-patterns", "33,34,35", lambda: run_python_antipattern_checks(all_files)),
+        ("TODO Tracking", "36", lambda: run_todo_checks(all_files)),
+        ("Type Safety", "39,40", lambda: run_type_safety_checks(all_files)),
+    ]
     return [
-        run_python_style_checks(all_files),
-        run_test_safety_checks(all_files),
-        run_react_checks(all_files),
-        run_ruff_checks(all_files),
-        run_mypy_checks(all_files),
-        run_abbreviation_checks(all_files),
-        run_pr_reference_checks(all_files),
-        run_magic_value_checks(all_files),
-        run_useless_test_checks(all_files),
-        run_security_checks(all_files),
-        run_code_quality_checks(all_files),
-        run_python_antipattern_checks(all_files),
-        run_todo_checks(all_files),
-        run_type_safety_checks(all_files),
+        run_with_fallback(each_validator_call, each_name, each_checks)
+        for each_name, each_checks, each_validator_call in file_scoped_validators
     ]
 
 
@@ -1291,22 +1300,25 @@ def _evaluate_pre_tool_use_payload() -> None:
 
 
 def run_pre_tool_use_gate() -> int:
-    """Run the PreToolUse gate, never crashing the tool call on an internal error.
+    """Run the PreToolUse gate, failing closed on any internal fault.
 
-    A hook that raises is rendered by the harness as a tool malfunction, so an
-    unexpected failure here logs to stderr and returns 0 rather than propagating.
+    A block is signaled through a deny payload rather than an exit code, so the
+    gate always returns 0. A malformed hook payload is not a write to gate and
+    passes silently. Any other fault emits a deny naming the gate, so an
+    unrecoverable internal error blocks the write rather than letting it through
+    unchecked.
 
     Returns:
-        Always 0 — the gate signals a block through the deny payload, not an
-        exit code.
+        Always 0 — a block is signaled through the deny payload, not an exit code.
     """
     try:
         _evaluate_pre_tool_use_payload()
     except json.JSONDecodeError:
         return 0
     except Exception as error:
-        sys.stderr.write(f"[run_all_validators] pre-tool-use gate error: {error}\n")
-        sys.stderr.flush()
+        _emit_pre_tool_use_deny(
+            f"BLOCKED: [validators] pre-tool-use gate faulted; write blocked: {error}"
+        )
     return 0
 
 

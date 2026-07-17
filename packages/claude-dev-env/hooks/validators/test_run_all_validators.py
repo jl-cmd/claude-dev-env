@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from . import run_all_validators
 from .run_all_validators import (
     ValidatorResult,
     _hooks_subprocess_working_directory_and_environment,
@@ -17,10 +18,40 @@ from .run_all_validators import (
     format_timing_report,
     main,
     print_header,
+    run_file_scoped_validators,
     run_git_checks,
     run_python_style_checks,
     run_with_fallback,
 )
+
+
+class TestFileScopedValidatorFaultFailsClosed:
+    def test_one_raising_validator_fails_closed_without_killing_the_batch(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        def raise_validator_fault(_files: list[Path]) -> ValidatorResult:
+            raise RuntimeError("anti-pattern check crashed")
+
+        monkeypatch.setattr(
+            run_all_validators,
+            "run_python_antipattern_checks",
+            raise_validator_fault,
+        )
+        probe_file = tmp_path / "probe_module.py"
+        probe_file.write_text("answer = 1\n", encoding="utf-8")
+
+        all_results = run_file_scoped_validators([probe_file])
+
+        faulted_results = [
+            each_result
+            for each_result in all_results
+            if each_result.name == "Python Anti-patterns"
+        ]
+        assert len(all_results) == 14
+        assert len(faulted_results) == 1
+        assert faulted_results[0].passed is False
+        assert faulted_results[0].skipped is False
+        assert "write blocked" in faulted_results[0].output.lower()
 
 
 class TestFixFlag:
@@ -124,32 +155,35 @@ class TestFixFlag:
 
 
 class TestGracefulDegradation:
-    def test_missing_validator_returns_skipped_result(self) -> None:
+    def test_missing_validator_fails_closed_naming_the_check(self) -> None:
         def failing_validator() -> ValidatorResult:
             raise FileNotFoundError("validator.py not found")
 
-        result = run_with_fallback(
+        blocking_result = run_with_fallback(
             failing_validator,
             "Missing Validator",
             "99",
         )
 
-        assert result.skipped is True
-        assert "skipped" in result.output.lower()
-        assert result.passed is False
+        assert blocking_result.passed is False
+        assert blocking_result.skipped is False
+        assert blocking_result.name == "Missing Validator"
+        assert "write blocked" in blocking_result.output.lower()
 
-    def test_validator_exception_returns_skipped_result(self) -> None:
+    def test_validator_exception_fails_closed_naming_the_check(self) -> None:
         def crashing_validator() -> ValidatorResult:
             raise RuntimeError("Unexpected crash")
 
-        result = run_with_fallback(
+        blocking_result = run_with_fallback(
             crashing_validator,
             "Crashing Validator",
             "99",
         )
 
-        assert result.skipped is True
-        assert "skipped" in result.output.lower()
+        assert blocking_result.passed is False
+        assert blocking_result.skipped is False
+        assert blocking_result.name == "Crashing Validator"
+        assert "write blocked" in blocking_result.output.lower()
 
     def test_successful_validator_returns_normal_result(self) -> None:
         def working_validator() -> ValidatorResult:

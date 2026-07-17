@@ -5,6 +5,7 @@ Write, Edit, or MultiEdit would produce and emits a PreToolUse deny decision
 when that content violates a validator, rather than grading the whole branch.
 """
 
+import io
 import json
 import subprocess
 import sys
@@ -14,13 +15,84 @@ from unittest.mock import patch
 
 import pytest
 
+from . import run_all_validators
 from .run_all_validators import (
     ValidatorResult,
     _scope_new_and_preexisting,
     _violation_line_number,
     main,
+    run_pre_tool_use_gate,
     run_validators_entrypoint_subprocess,
 )
+
+GATE_PROBE_CLEAN_SOURCE = "def gate_probe() -> int:\n    return 1\n"
+
+
+def _run_gate_in_process(
+    payload: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> str:
+    """Drive the PreToolUse gate in-process against *payload*, returning its stdout."""
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    exit_code = run_pre_tool_use_gate()
+    assert exit_code == 0
+    return capsys.readouterr().out
+
+
+class TestGateFailsClosedOnFault:
+    def test_faulted_file_scoped_validator_denies_naming_it(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def raise_validator_fault(_files: list[Path]) -> ValidatorResult:
+            raise RuntimeError("anti-pattern check crashed")
+
+        monkeypatch.setattr(
+            run_all_validators,
+            "run_python_antipattern_checks",
+            raise_validator_fault,
+        )
+        gate_stdout = _run_gate_in_process(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "gate_probe_module.py",
+                    "content": GATE_PROBE_CLEAN_SOURCE,
+                },
+            },
+            monkeypatch,
+            capsys,
+        )
+        assert '"permissionDecision": "deny"' in gate_stdout
+        assert "Python Anti-patterns" in gate_stdout
+
+    def test_top_level_fault_denies_rather_than_allowing_silently(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def raise_reconstruction_fault(
+            _tool_name: str, _tool_input: dict[str, object]
+        ) -> str:
+            raise RuntimeError("payload evaluation crashed")
+
+        monkeypatch.setattr(
+            run_all_validators,
+            "reconstruct_proposed_content",
+            raise_reconstruction_fault,
+        )
+        gate_stdout = _run_gate_in_process(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "gate_probe_module.py",
+                    "content": GATE_PROBE_CLEAN_SOURCE,
+                },
+            },
+            monkeypatch,
+            capsys,
+        )
+        assert '"permissionDecision": "deny"' in gate_stdout
+        assert "gate faulted" in gate_stdout
+
 
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
