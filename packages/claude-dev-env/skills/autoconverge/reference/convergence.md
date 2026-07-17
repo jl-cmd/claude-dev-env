@@ -65,10 +65,13 @@ confirmation gates that are expected to return zero.
    re-deriving the diff; each lens forms its own review judgment.
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`),
      report-only workflow agent — see runCodeReviewLens in workflow/converge.mjs for its configuration.
-     The built-in `/code-review` command is a separate surface outside this
-     workflow path. On `pacer=workflow`, this lens runs inside `converge.mjs`.
+     The built-in `/code-review` surface is a separate path owned by the
+     **claude-review** skill
+     ([`../../claude-review/SKILL.md`](../../claude-review/SKILL.md)):
+     full-diff `/code-review xhigh --fix` on opus via `invoke_code_review.py`.
+     On `pacer=workflow`, the workflow lens runs inside `converge.mjs`.
      On `pacer=portable`, the continuous driver uses the pr-converge CODE_REVIEW
-     phase through `invoke_code_review.py` instead of `runCodeReviewLens`
+     phase, which invokes claude-review / `invoke_code_review.py`
      ([`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md);
      [`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)).
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
@@ -191,6 +194,10 @@ the strongest model only where judgment is dense:
 Every lens, every round, reviews the full `origin/main...HEAD` diff — every file
 the PR touches. A lens that scopes to recent commits, a single file, or a
 bugbot-flagged path does not satisfy the round; its clean verdict is not a clean.
+
+The portable built-in review path (claude-review / `invoke_code_review.py`) follows
+the same full-diff rule; see
+[`../../claude-review/reference/full-diff-and-clean-stamp.md`](../../claude-review/reference/full-diff-and-clean-stamp.md).
 
 ## The ready definition
 

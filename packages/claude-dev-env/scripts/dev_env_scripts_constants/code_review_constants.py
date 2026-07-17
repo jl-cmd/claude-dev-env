@@ -68,6 +68,9 @@ DEFAULT_CODE_REVIEW_EFFORT: str = "high"
 CODE_REVIEW_SLASH_COMMAND: str = "/code-review"
 """Built-in Claude Code slash command that runs the repository review."""
 
+CODE_REVIEW_EFFORT: str = "xhigh"
+"""Pinned effort for the thorough claude-review skill path."""
+
 CODE_REVIEW_FIX_FLAG: str = "--fix"
 """Slash-command flag that applies automatic fixes for review findings."""
 
