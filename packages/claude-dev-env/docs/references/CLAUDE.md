@@ -7,6 +7,7 @@ Pointer documents to external sources and standard terminology. Files here are l
 | File | Purpose |
 |---|---|
 | `dead-code-elimination.md` | External sources and standard terms behind CODE_RULES §9.8 (remove code you orphan): DCE, tree shaking, reachability analysis, and the Lava Flow anti-pattern |
+| `mcp-lifecycle.md` | Config paths and operator recipe for lean MCP policy plus SessionEnd teardown of mcpvault/playwright/serena process trees |
 
 ## Role
 
