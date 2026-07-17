@@ -71,7 +71,7 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 The **PR worktree** is the local working tree of the PR's repo on its head
 branch. Every local operation this tick runs there: the CODE_REVIEW static sweep
-and `/code-review high --fix`, every `clean-coder` fix spawn, and every commit and
+and `/code-review xhigh --fix`, every `clean-coder` fix spawn, and every commit and
 push. `/code-review` and `git` both act on the repo of the current working
 directory, so the working directory must be the PR worktree before any local
 work begins. Re-resolve it every tick — a rebase or a fresh HEAD can move the
@@ -180,7 +180,7 @@ CODE_REVIEW.
 ### `phase == CODE_REVIEW`
 
 The entry phase of every convergence tick, re-entered after any fix push. It runs
-a deterministic static sweep, then the built-in `/code-review high --fix` on the
+a deterministic static sweep, then the built-in `/code-review xhigh --fix` on the
 full `origin/main...HEAD` diff at effort high on model opus. `/code-review`
 produces no GitHub review artifact, so there are no code-review threads to
 resolve.
@@ -196,7 +196,7 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
    the host-aware review below.
 
-b. Run the built-in `/code-review high --fix` on the FULL `origin/main...HEAD`
+b. Run the built-in `/code-review xhigh --fix` with OPUS on the FULL `origin/main...HEAD`
    diff — every file the PR touches — via the
    [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
    The review always runs at effort high on model opus. It reviews the diff and
@@ -231,14 +231,14 @@ b. Run the built-in `/code-review high --fix` on the FULL `origin/main...HEAD`
    Match the first mode whose predicate holds:
 
    - **`mode == "in_session"`** (Claude host and session model is opus): run
-     `/code-review high --fix` in this session with no path arguments so it
+     `/code-review xhigh --fix` with OPUS in this session with no path arguments so it
      audits the whole branch diff against `origin/main`. After it returns, a
      non-empty `git status --porcelain` means fixes applied (`dirty_tree`
      equivalent). Treat a failed in-session slash command the same as a failed
      review: do not set `code_review_clean_at`.
    - **`mode == "chain"`** (any other host, or a Claude session on any model
      other than opus): the helper already ran the headless review
-     (`claude -p "/code-review high --fix" --model opus` through the chain
+     (`claude -p "/code-review xhigh --fix" --model opus` through the chain
      runner) with cwd set to the PR worktree. Read `returncode`,
      `served_command`, and `dirty_tree` from the JSON. A successful serve is
      `returncode == 0` with a non-null `served_command`. `dirty_tree` true
