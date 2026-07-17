@@ -66,7 +66,11 @@ Transport still needs authenticated GitHub access for the PR's owner (`gh` or
 
 The code-review lens boundary (workflow agent versus the built-in `/code-review`
 command) is defined on the **Code-review lens** bullet in
-[`reference/convergence.md`](reference/convergence.md).
+[`reference/convergence.md`](reference/convergence.md). On `pacer=portable`,
+the built-in path is **claude-review**
+([`../claude-review/SKILL.md`](../claude-review/SKILL.md)) via the portable
+driver / `invoke_code_review.py`. On `pacer=workflow`, the lens stays
+`runCodeReviewLens` / `code-quality-agent` inside `converge.mjs`.
 
 ## Transport check (before any GitHub step)
 

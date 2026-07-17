@@ -16,7 +16,7 @@ TASK_ID_ALL_CLEAN_SAME_HEAD: str = "all_runnable_reviews_clean_same_head"
 TASK_KIND_REVIEW: str = "review"
 TASK_KIND_FINAL: str = "final"
 
-TASK_TITLE_CODE_REVIEW: str = "CODE_REVIEW clean (invoke_code_review / high)"
+TASK_TITLE_CODE_REVIEW: str = "CODE_REVIEW clean (claude-review / xhigh)"
 TASK_TITLE_BUGTEAM: str = "BUGTEAM clean (full origin/main...HEAD audit)"
 TASK_TITLE_BUGBOT: str = "BUGBOT clean on same HEAD (or down/skip)"
 TASK_TITLE_COPILOT: str = "COPILOT clean on same HEAD (or down/skip)"

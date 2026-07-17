@@ -198,10 +198,14 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
    the host-aware review below.
 
-b. Run **claude-review** for the built-in review procedure (prefer
-   `Skill({skill: "claude-review", ...})`; when `Skill` is not invokable, read
-   [`../../claude-review/SKILL.md`](../../claude-review/SKILL.md)). Full-diff rule,
-   invoker JSON shape, and clean-stamp contract:
+b. Run **claude-review** for the full built-in review procedure — usage probe
+   (Layer A), host-aware invoker + `claude_chain_runner` (Layer B), then the
+   clean-stamp decision. Prefer `Skill({skill: "claude-review", ...})`. When
+   `Skill` is not invokable, run the invoker path below (the invoker auto-runs
+   the usage probe when `--session-has-usage-left` is omitted or `unknown`;
+   probe failure never blocks the review). Skill contract:
+   [`../../claude-review/SKILL.md`](../../claude-review/SKILL.md). Full-diff
+   rule, invoker JSON shape, and clean-stamp contract:
    [`../../claude-review/reference/full-diff-and-clean-stamp.md`](../../claude-review/reference/full-diff-and-clean-stamp.md).
 
    Before running, confirm the working directory is the PR worktree resolved
@@ -212,8 +216,10 @@ b. Run **claude-review** for the built-in review procedure (prefer
    persisted working directory is the cwd the review audits.
 
    Route every CODE_REVIEW pass through the host-aware helper
-   `invoke_code_review.py`. Mode decision inputs are the host profile (detected
-   by the helper) and the caller's session model short alias:
+   `invoke_code_review.py` (or via the skill, which calls the same helper).
+   Mode decision inputs are the host profile (detected by the helper), the
+   caller's session model short alias, and the usage-probe decision (auto-run
+   when the usage flag is omitted):
 
    ```bash
    python "$HOME/.claude/scripts/invoke_code_review.py" \
@@ -224,22 +230,24 @@ b. Run **claude-review** for the built-in review procedure (prefer
    The helper prints one JSON object on stdout only:
    `{mode, served_command, returncode, dirty_tree}`. Chain mode sets cwd to the
    PR worktree and redirects stdin from the empty stream so the spawn does not
-   wait for interactive input. The chain process never commits and never pushes
-   — commit and push belong to this step via the shared fix protocol. On
+   wait for interactive input. Headless serve always goes through
+   `claude_chain_runner`. The chain process never commits and never pushes —
+   commit and push belong to this step via the shared fix protocol. On
    `ChainConfigurationError` or host `ValueError`, the helper still prints that
    JSON shape (non-zero `returncode`, null `served_command`) and exits non-zero
    — never a traceback-only failure.
 
    Match the first mode whose predicate holds:
 
-   - **`mode == "in_session"`** (Claude host and session model is opus): run
-     `/code-review xhigh --fix` with OPUS in this session with no path arguments so it
-     audits the whole branch diff against `origin/main`. After it returns, a
-     non-empty `git status --porcelain` means fixes applied (`dirty_tree`
-     equivalent). Treat a failed in-session slash command the same as a failed
+   - **`mode == "in_session"`** (Claude host, session model is opus, and
+     primary session has usage left or unknown): run `/code-review xhigh --fix`
+     with OPUS in this session with no path arguments so it audits the whole
+     branch diff against `origin/main`. After it returns, a non-empty
+     `git status --porcelain` means fixes applied (`dirty_tree` equivalent).
+     Treat a failed in-session slash command the same as a failed
      review: do not set `code_review_clean_at`.
-   - **`mode == "chain"`** (any other host, or a Claude session on any model
-     other than opus): the helper already ran the headless review
+   - **`mode == "chain"`** (ThirdParty host, Claude on a non-opus model, or
+     primary session drained): the helper already ran the headless review
      (`claude -p "/code-review xhigh --fix" --model opus` through the chain
      runner) with cwd set to the PR worktree. Read `returncode`,
      `served_command`, and `dirty_tree` from the JSON. A successful serve is

@@ -24,7 +24,7 @@ against `origin/main` (see Claude Code local diff review docs).
 
 ## Usage probe (pre-step)
 
-`claude_usage_probe.py` runs before the invoker and prints one JSON object:
+`claude_usage_probe.py` prints one JSON object:
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -35,9 +35,11 @@ against `origin/main` (see Claude Code local diff review docs).
 | `source` | string | Resolver source, or `unavailable` |
 | `probe_ok` | bool | True only when the usage-pause resolver succeeded |
 
-Pass the decision into the invoker as `--session-has-usage-left
-true|false|unknown`. `false` forces `mode=chain` even on Claude+opus. Probe
-failure does not block the review.
+Callers may pass the decision as `--session-has-usage-left true|false|unknown`.
+When the flag is omitted or `unknown`, `invoke_code_review.py` auto-runs the
+probe and maps `session_has_usage_left` into mode selection. Explicit
+`true`/`false` skip the auto-probe. `false` forces `mode=chain` even on
+Claude+opus. Probe failure does not block the review.
 
 ## Invoker JSON shape
 

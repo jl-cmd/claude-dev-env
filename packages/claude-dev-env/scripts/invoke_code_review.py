@@ -8,6 +8,11 @@ Mode decision::
     host=Claude, session_model=sonnet -> mode chain (headless opus spawn)
     host=ThirdParty, any model        -> mode chain
 
+When ``--session-has-usage-left`` is omitted or ``unknown``, the invoker
+auto-runs ``claude_usage_probe`` and maps ``session_has_usage_left`` into
+mode selection. Explicit ``true``/``false`` skip the probe. Probe failure
+never fails the review — treated as unknown so host/model rules apply.
+
 Chain mode runs ``run_claude`` (``claude_chain_runner``) with argv from
 ``build_code_review_arguments`` (single-turn prompt, model opus, json output,
 bypassPermissions).
@@ -57,6 +62,10 @@ from claude_chain_runner import (  # noqa: E402
     ChainConfigurationError,
     ChainInvocationOutcome,
     run_claude,
+)
+from claude_usage_probe import (  # noqa: E402
+    ClaudeUsageProbeReport,
+    probe_claude_usage,
 )
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
@@ -125,6 +134,7 @@ class CodeReviewOutcome:
 review_claude_runner = run_claude
 review_host_profile_detector = detect_host_profile
 review_git_status_runner = subprocess.run
+review_usage_probe: Callable[[], ClaudeUsageProbeReport] = probe_claude_usage
 
 TextCapturingSubprocessRunner = Callable[
     ...,
@@ -404,6 +414,38 @@ def parse_session_has_usage_left_token(
     )
 
 
+def resolve_session_has_usage_left(
+    session_has_usage_left: bool | None,
+) -> bool | None:
+    """Return an explicit usage flag, or auto-probe when the flag is unknown.
+
+    ::
+
+        resolve_session_has_usage_left(True)   # ok: True (no probe)
+        resolve_session_has_usage_left(False)  # ok: False (no probe)
+        resolve_session_has_usage_left(None)   # ok: probe.session_has_usage_left
+
+    Explicit ``True``/``False`` win and skip the probe. ``None`` (CLI omitted
+    or ``unknown``) runs ``review_usage_probe`` and maps its
+    ``session_has_usage_left``. Probe failure yields ``None`` so mode
+    selection proceeds as unknown and the review still runs.
+
+    Args:
+        session_has_usage_left: Caller-stated probe decision, or None when
+            unknown.
+
+    Returns:
+        True, False, or None after optional auto-probe.
+    """
+    if session_has_usage_left is not None:
+        return session_has_usage_left
+    try:
+        probe_report = review_usage_probe()
+    except (OSError, RuntimeError, TypeError, ValueError, AttributeError):
+        return None
+    return probe_report.session_has_usage_left
+
+
 def invoke_code_review(
     *,
     working_directory: Path,
@@ -420,16 +462,21 @@ def invoke_code_review(
         timeout_seconds: Timeout applied to each chain binary invocation.
         session_has_usage_left: Optional usage-probe decision. ``False`` forces
             chain mode even on Claude+opus so another chain binary can serve.
+            ``None`` auto-runs the usage probe; explicit ``True``/``False``
+            skip it.
 
     Returns:
         Structured outcome including mode, served binary, return code, and
         whether the working tree is dirty after a chain run.
     """
     host_profile = review_host_profile_detector()
+    resolved_session_has_usage_left = resolve_session_has_usage_left(
+        session_has_usage_left
+    )
     review_mode = decide_review_mode(
         host_profile=host_profile,
         session_model=session_model,
-        session_has_usage_left=session_has_usage_left,
+        session_has_usage_left=resolved_session_has_usage_left,
     )
     if review_mode == MODE_IN_SESSION:
         return _in_session_outcome()
@@ -498,7 +545,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         ],
         help=(
             "Usage-probe decision for the primary session. "
-            "'false' forces chain mode even on Claude+opus."
+            "'false' forces chain mode even on Claude+opus. "
+            "Omitted or 'unknown' auto-runs claude_usage_probe; "
+            "probe failure still proceeds."
         ),
     )
     return parser

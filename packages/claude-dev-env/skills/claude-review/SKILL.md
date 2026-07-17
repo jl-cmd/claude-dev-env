@@ -87,8 +87,11 @@ built-in review.
 
 ### Step 2 — Usage probe (Layer A)
 
-**Before** invoking the review, run the session usage probe. Compose the
-usage-pause resolver; do not reimplement OAuth.
+The invoker auto-runs the session usage probe when
+`--session-has-usage-left` is omitted or `unknown` (portable converge paths
+rely on that chokepoint). A skill-side probe is optional redundancy when the
+host can surface meters to the user. Compose the usage-pause resolver; do not
+reimplement OAuth.
 
 ```bash
 python "$HOME/.claude/scripts/claude_usage_probe.py"
@@ -115,22 +118,23 @@ below the threshold; false at/above; null when unknown.
 ### Step 3 — Invoke host-aware review (Layer B)
 
 **Execute** the package invoker (do not reimplement host detect, empty stdin,
-dirty-tree, or JSON outcome):
+dirty-tree, or JSON outcome). Omit the usage flag to auto-probe, or pass an
+explicit decision:
 
 ```bash
 python "$HOME/.claude/scripts/invoke_code_review.py" \
   --cwd "$(git rev-parse --show-toplevel)" \
   --session-model <session-model-alias> \
-  --session-has-usage-left <true|false|unknown>
+  [--session-has-usage-left <true|false|unknown>]
 ```
 
-Map the probe into `--session-has-usage-left`:
+When the skill already probed, map into `--session-has-usage-left`:
 
 | Probe `session_has_usage_left` | Flag value |
 |---|---|
 | true | `true` |
 | false | `false` |
-| null / probe unavailable | `unknown` |
+| null / probe unavailable | `unknown` (invoker re-probes or treats as unknown) |
 
 - Prompt constant: `/code-review xhigh --fix`
 - Model pin: `opus`

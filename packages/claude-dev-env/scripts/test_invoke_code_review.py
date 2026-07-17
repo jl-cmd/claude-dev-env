@@ -22,6 +22,7 @@ from claude_chain_runner import (  # noqa: E402
     ChainConfigurationError,
     ChainInvocationOutcome,
 )
+from claude_usage_probe import ClaudeUsageProbeReport  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
 )
@@ -155,10 +156,26 @@ class SeamCallLog:
     claude_calls: int = 0
     claude_arguments: list[str] | None = None
     host_profile_calls: int = 0
+    usage_probe_calls: int = 0
     is_stdin_empty: bool = False
     claude_working_directory: Path | None = None
     all_observed_working_directories: list[Path] = field(default_factory=list)
     all_git_status_commands: list[list[str]] = field(default_factory=list)
+
+
+def _usage_probe_report(
+    *,
+    session_has_usage_left: bool | None = None,
+    is_probe_ok: bool = False,
+) -> ClaudeUsageProbeReport:
+    return ClaudeUsageProbeReport(
+        session_utilization=None,
+        weekly_utilization=None,
+        weekly_near_cap=None,
+        session_has_usage_left=session_has_usage_left,
+        source="unavailable" if not is_probe_ok else "probe",
+        probe_ok=is_probe_ok,
+    )
 
 
 def _install_seams(
@@ -168,8 +185,14 @@ def _install_seams(
     claude_outcome: ChainInvocationOutcome | BaseException | None = None,
     should_dirty_tree_on_chain: bool = False,
     working_directory: Path | None = None,
+    usage_probe_report: ClaudeUsageProbeReport | BaseException | None = None,
 ) -> SeamCallLog:
     call_log = SeamCallLog()
+    resolved_usage_probe_report = (
+        usage_probe_report
+        if usage_probe_report is not None
+        else _usage_probe_report()
+    )
 
     def fake_host_profile(
         setting_by_name: object | None = None,
@@ -177,6 +200,12 @@ def _install_seams(
         del setting_by_name
         call_log.host_profile_calls += 1
         return host_profile
+
+    def fake_usage_probe() -> ClaudeUsageProbeReport:
+        call_log.usage_probe_calls += 1
+        if isinstance(resolved_usage_probe_report, BaseException):
+            raise resolved_usage_probe_report
+        return resolved_usage_probe_report
 
     def fake_claude(
         all_claude_arguments: list[str], *, timeout_seconds: int
@@ -228,6 +257,7 @@ def _install_seams(
 
     monkeypatch.setattr(invoker, "review_host_profile_detector", fake_host_profile)
     monkeypatch.setattr(invoker, "review_claude_runner", fake_claude)
+    monkeypatch.setattr(invoker, "review_usage_probe", fake_usage_probe)
     monkeypatch.setattr(
         chain_runner, "chain_subprocess_runner", _tracking_subprocess_runner
     )
@@ -706,6 +736,137 @@ def test_parse_session_has_usage_left_token(
         invoker.parse_session_has_usage_left_token(session_has_usage_left_token)
         == expected_value
     )
+
+
+def test_resolve_session_has_usage_left_skips_probe_when_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_count = {"n": 0}
+
+    def fake_usage_probe() -> ClaudeUsageProbeReport:
+        call_count["n"] += 1
+        return _usage_probe_report(session_has_usage_left=False, is_probe_ok=True)
+
+    monkeypatch.setattr(invoker, "review_usage_probe", fake_usage_probe)
+    assert invoker.resolve_session_has_usage_left(True) is True
+    assert invoker.resolve_session_has_usage_left(False) is False
+    assert call_count["n"] == 0
+
+
+def test_resolve_session_has_usage_left_auto_probes_when_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_count = {"n": 0}
+
+    def fake_usage_probe() -> ClaudeUsageProbeReport:
+        call_count["n"] += 1
+        return _usage_probe_report(session_has_usage_left=False, is_probe_ok=True)
+
+    monkeypatch.setattr(invoker, "review_usage_probe", fake_usage_probe)
+    assert invoker.resolve_session_has_usage_left(None) is False
+    assert call_count["n"] == 1
+
+
+def test_resolve_session_has_usage_left_treats_probe_error_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_usage_probe() -> ClaudeUsageProbeReport:
+        raise OSError("resolver unavailable")
+
+    monkeypatch.setattr(invoker, "review_usage_probe", fake_usage_probe)
+    assert invoker.resolve_session_has_usage_left(None) is None
+
+
+def test_auto_probe_forces_chain_when_session_drained(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+    call_log = _install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        claude_outcome=_claude_served(),
+        working_directory=working_directory,
+        usage_probe_report=_usage_probe_report(
+            session_has_usage_left=False,
+            is_probe_ok=True,
+        ),
+    )
+    review_outcome = invoker.invoke_code_review(
+        working_directory=working_directory,
+        session_model=FIXTURE_SESSION_OPUS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+    )
+    assert review_outcome.mode == MODE_CHAIN
+    assert call_log.usage_probe_calls == 1
+    assert call_log.claude_calls == 1
+
+
+def test_auto_probe_keeps_in_session_when_usage_left(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+    call_log = _install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        working_directory=working_directory,
+        usage_probe_report=_usage_probe_report(
+            session_has_usage_left=True,
+            is_probe_ok=True,
+        ),
+    )
+    review_outcome = invoker.invoke_code_review(
+        working_directory=working_directory,
+        session_model=FIXTURE_SESSION_OPUS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+    )
+    assert review_outcome.mode == MODE_IN_SESSION
+    assert call_log.usage_probe_calls == 1
+    assert call_log.claude_calls == 0
+
+
+def test_explicit_usage_flag_skips_auto_probe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+    call_log = _install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        claude_outcome=_claude_served(),
+        working_directory=working_directory,
+        usage_probe_report=_usage_probe_report(
+            session_has_usage_left=True,
+            is_probe_ok=True,
+        ),
+    )
+    review_outcome = invoker.invoke_code_review(
+        working_directory=working_directory,
+        session_model=FIXTURE_SESSION_OPUS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+        session_has_usage_left=False,
+    )
+    assert review_outcome.mode == MODE_CHAIN
+    assert call_log.usage_probe_calls == 0
+    assert call_log.claude_calls == 1
+
+
+def test_auto_probe_failure_proceeds_as_unknown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+    call_log = _install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        working_directory=working_directory,
+        usage_probe_report=RuntimeError("probe failed"),
+    )
+    review_outcome = invoker.invoke_code_review(
+        working_directory=working_directory,
+        session_model=FIXTURE_SESSION_OPUS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+    )
+    assert review_outcome.mode == MODE_IN_SESSION
+    assert call_log.usage_probe_calls == 1
+    assert call_log.claude_calls == 0
 
 
 def test_encode_code_review_outcome_shape() -> None:
