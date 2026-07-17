@@ -171,10 +171,25 @@ Full-diff rule and clean-stamp contract:
 |---|---|---|
 | Failed review | `returncode != 0`, or chain with null `served_command` | Do not stamp clean; report failure |
 | Fixes applied | Successful serve and `dirty_tree` true | Invoke `pr-fix-protocol` (converge) or report dirty tree |
-| Clean | Successful serve and `dirty_tree` false | Stamp clean when the caller uses `code_review_clean_at` |
+| Clean | Successful serve and `dirty_tree` false | Stamp clean when the caller uses `code_review_clean_at`; then **Execute** the clean-comment poster script |
 
 Helper predicate: `is_code_review_clean_stamp_allowed` is true only for the clean
 row. `dirty_tree` false on a failed serve is **not** clean.
+
+On the clean row, after the stamp path (or when standalone has a clean outcome):
+
+```bash
+python "$HOME/.claude/scripts/post_claude_review_clean_comment.py" \
+  --cwd "$(git rev-parse --show-toplevel)" \
+  --head-sha "$(git rev-parse HEAD)" \
+  [--mode chain|in_session] \
+  [--served-command <name>]
+```
+
+Portable converge emits this argv in `commands` from `after-code-review` when
+the clean path stamps. Soft-fail: a post flake prints JSON with `posted=false`
+and still leaves the clean stamp intact. Constants:
+`dev_env_scripts_constants/post_claude_review_clean_comment_constants.py`.
 
 ## Ground rules
 
@@ -231,7 +246,11 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
 - **In-session still needs porcelain check:** After in-session `/code-review`, treat
   non-empty `git status --porcelain` as fixes applied (`dirty_tree` equivalent).
 - **No GitHub review threads:** Built-in `/code-review` does not post PR review
-  threads; reply-and-resolve is N/A for this surface.
+  threads; reply-and-resolve is N/A for this surface. The clean-pass note is a
+  single **issue comment** via the clean-comment poster script, not a review
+  thread.
+- **Clean comment is best-effort:** Post failure must not undo or block the
+  clean stamp. The helper always exits `0` and is idempotent per HEAD SHA.
 - **Weekly near-cap is WARN only:** Do not block the review solely on
   `weekly_near_cap` true.
 
@@ -250,4 +269,4 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps code_review_clean_a
 - `CLAUDE.md` — purpose, trigger, key files.
 - `reference/` — full-diff / clean-stamp detail and process task seeds.
 - Runtime lives in package `scripts/` (not under this skill): usage probe,
-  invoker, and chain runner.
+  invoker, chain runner, and clean-comment poster.

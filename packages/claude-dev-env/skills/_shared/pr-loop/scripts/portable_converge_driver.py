@@ -141,6 +141,10 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     INLINE_LAG_STREAK_CAP,
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
     PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS,
+    POST_CLEAN_COMMENT_CWD_FLAG,
+    POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
+    POST_CLEAN_COMMENT_RELATIVE_PATH,
+    POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
     NEXT_MARK_READY,
@@ -482,6 +486,45 @@ def _code_review_commands_from_state(
         session_model = DEFAULT_SESSION_MODEL
     return _code_review_commands(
         cwd_path=cwd_path, session_model=session_model
+    )
+
+
+def _cwd_path_from_state(all_state: Mapping[str, object]) -> Path:
+    stored_cwd = all_state.get(STATE_KEY_CWD)
+    if isinstance(stored_cwd, str) and stored_cwd:
+        return Path(stored_cwd)
+    return Path.cwd()
+
+
+def _clean_comment_commands(
+    *,
+    cwd_path: Path,
+    head_sha: str,
+    served_command: str,
+) -> list[str]:
+    post_path = _home_path(*POST_CLEAN_COMMENT_RELATIVE_PATH.split("/"))
+    return [
+        "python",
+        str(post_path),
+        POST_CLEAN_COMMENT_CWD_FLAG,
+        str(cwd_path),
+        POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
+        head_sha,
+        POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
+        served_command,
+    ]
+
+
+def _clean_comment_commands_from_state(
+    all_state: Mapping[str, object],
+    *,
+    head_sha: str,
+    served_command: str,
+) -> list[str]:
+    return _clean_comment_commands(
+        cwd_path=_cwd_path_from_state(all_state),
+        head_sha=head_sha,
+        served_command=served_command,
     )
 
 
@@ -851,7 +894,6 @@ def run_after_code_review(
     _maybe_reset_on_head_change(all_state, current_head)
     all_state["tick_count"] = int(all_state.get("tick_count") or 0) + 1
 
-    del served_command
     is_successful_serve = _is_successful_serve(returncode=returncode)
     if not is_successful_serve:
         all_state["phase"] = PHASE_CODE_REVIEW
@@ -886,7 +928,11 @@ def run_after_code_review(
         all_state,
         state_file,
         next_action=NEXT_RUN_BUGTEAM,
-        all_commands=_EMPTY_COMMANDS,
+        all_commands=_clean_comment_commands_from_state(
+            all_state,
+            head_sha=current_head,
+            served_command=served_command,
+        ),
         wait_seconds=None,
         blocker=None,
         all_extra_fields=None,

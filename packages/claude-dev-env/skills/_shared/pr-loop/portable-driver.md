@@ -105,7 +105,7 @@ Copilot quota pre-check:
 |---|---|---|
 | `run_code_review` | Run `commands` | `after-code-review` |
 | `apply_fixes_and_push` | Fix protocol; commit; push | re-review then `after-code-review` |
-| `run_bugteam` | resolve_worker_spawn / bugteam body | `after-bugteam` |
+| `run_bugteam` | Run `commands` when present (clean-comment poster, best-effort), then resolve_worker_spawn / bugteam body | `after-bugteam` |
 | `run_bugbot_gate` | Bugbot helper scripts | `after-bugbot` |
 | `run_codex_review` | Run Codex review step | `after-codex` |
 | `request_copilot_review` | Request Copilot | `after-copilot-wait` |
@@ -139,6 +139,7 @@ sections unchanged.
 | Pacer | `select_converge_pacer.py` |
 | Worktree | `preflight_worktree.py` |
 | Code review | **claude-review** skill + `$HOME/.claude/scripts/invoke_code_review.py` (auto usage probe + `claude_chain_runner`; portable `_code_review_commands` calls the invoker alone) |
+| Clean comment | `$HOME/.claude/scripts/post_claude_review_clean_comment.py` (emitted on clean `after-code-review`; soft-fail, idempotent per HEAD) |
 | Workers | `$HOME/.claude/scripts/resolve_worker_spawn.py` |
 | Ready | `pr-converge/scripts/check_convergence.py` |
 | Handoff | `write_handoff.py` |

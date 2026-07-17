@@ -6,6 +6,7 @@
 - [Invoker JSON shape](#invoker-json-shape)
 - [Successful serve](#successful-serve)
 - [Clean stamp](#clean-stamp)
+- [Clean PR issue comment](#clean-pr-issue-comment)
 - [Caller phase machine](#caller-phase-machine)
 
 ## Full-diff rule
@@ -89,6 +90,25 @@ requires **both**:
 | In-session handoff, slash ok, dirty porcelain | No — fixes applied |
 | In-session handoff, slash ok, clean porcelain | Yes |
 
+## Clean PR issue comment
+
+After a clean stamp (or a standalone clean outcome), post one PR **issue
+comment** (not a review thread) via the clean-comment poster:
+
+```bash
+python "$HOME/.claude/scripts/post_claude_review_clean_comment.py" \
+  --cwd <PR-worktree> --head-sha <sha> [--mode ...] [--served-command ...]
+```
+
+Body starts with `## claude-review CLEAN` and includes `head_sha`, the locked
+`/code-review xhigh --fix` prompt, and mode / served_command when known.
+Named tokens live in
+`dev_env_scripts_constants/post_claude_review_clean_comment_constants.py`.
+
+- **Idempotent:** same marker + same `head_sha` line → skip repost.
+- **Soft-fail:** helper always exits `0`; `posted=false` never undoes the stamp.
+- Portable `after-code-review` emits this argv in `commands` on the clean path.
+
 ## Caller phase machine
 
 This skill does not own converge phase fields. Callers (pr-converge CODE_REVIEW,
@@ -96,7 +116,7 @@ portable autoconverge) keep:
 
 - Failed review → stay CODE_REVIEW, no stamp
 - Dirty tree → fix protocol, push, reset `*_clean_at`, re-enter CODE_REVIEW
-- Clean → set `code_review_clean_at`, advance phase
+- Clean → set `code_review_clean_at`, emit clean-comment command, advance phase
 
 See [`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)
 for the tick state machine.

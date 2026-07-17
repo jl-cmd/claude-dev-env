@@ -41,5 +41,7 @@ No skill-local scripts. Runtime lives in package `scripts/` (installed under
 | `../../scripts/claude_usage_probe.py` | Layer A: wraps usage-pause `resolve_usage_window` into skill-facing JSON |
 | `../../scripts/invoke_code_review.py` | Host-aware entrypoint; forces chain when `--session-has-usage-left false` |
 | `../../scripts/claude_chain_runner.py` | Layer B: headless chain; fail over only on usage-limit signatures |
+| `../../scripts/post_claude_review_clean_comment.py` | Best-effort PR issue comment after a clean pass (idempotent per HEAD) |
 | `../../scripts/dev_env_scripts_constants/code_review_constants.py` | Prompt, model pin, mode keys, session-has-usage-left CLI tokens |
 | `../../scripts/dev_env_scripts_constants/claude_usage_probe_constants.py` | Session no-usage threshold and probe report keys |
+| `../../scripts/dev_env_scripts_constants/post_claude_review_clean_comment_constants.py` | Clean-comment marker, gh argv tokens, soft-fail result keys |
