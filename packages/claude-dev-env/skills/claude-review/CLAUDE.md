@@ -29,10 +29,8 @@ loops own phase stamps (`code_review_clean_at`) and re-entry.
 
 ## Invoker surface
 
-Package scripts (installed under `$HOME/.claude/scripts/`):
-
-| Path | Role |
-|---|---|
-| `invoke_code_review.py` | Host-aware entrypoint; JSON outcome on stdout |
-| `dev_env_scripts_constants/code_review_constants.py` | Prompt (`xhigh`), model alias, result keys |
-| `claude_chain_runner.py` | Binary failover chain for headless `-p` runs |
+No skill-local scripts. Runtime lives in package `scripts/` (installed under
+`$HOME/.claude/scripts/`): host-aware entrypoint
+(`../../scripts/invoke_code_review.py`), code-review constants
+(`../../scripts/dev_env_scripts_constants/code_review_constants.py`), and the
+headless chain runner (`../../scripts/claude_chain_runner.py`).
