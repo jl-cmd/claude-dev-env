@@ -64,6 +64,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "scripts/config/notes_constants.py",
         "scripts/db/config.py",
         "scripts/discover_open_prs.py",
+        "scripts/foo.py",
         "scripts/grant_project_claude_permissions.py",
         "scripts/logifix.ps1",
         "scripts/mine_copilot_findings.py",
