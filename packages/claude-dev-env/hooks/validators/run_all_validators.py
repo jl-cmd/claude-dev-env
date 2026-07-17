@@ -758,14 +758,102 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
     ]
 
 
+def _mirrored_relative_segments(file_path: str) -> list[str]:
+    """Return the target path's directory segments minus its anchor and dot parts.
+
+    ::
+
+        automation/config/x.py    -> ['automation', 'config', 'x.py']
+        /repo/config/x.py         -> ['repo', 'config', 'x.py']
+        ../../escape_target.py    -> ['escape_target.py']
+
+    Normalizes the untrusted payload path, drops the drive or root anchor, and
+    removes every ``.`` or ``..`` segment, so the segments join under a temporary
+    root without escaping it while every real directory name survives.
+
+    Args:
+        file_path: The write or edit target path from the payload.
+
+    Returns:
+        The target's directory segments in order, ending with its basename.
+    """
+    normalized_target = Path(os.path.normpath(file_path))
+    target_segments = normalized_target.parts
+    if normalized_target.anchor:
+        target_segments = target_segments[1:]
+    dot_segments = {os.curdir, os.pardir}
+    return [
+        each_segment
+        for each_segment in target_segments
+        if each_segment not in dot_segments
+    ]
+
+
+def _path_is_within_directory(candidate_path: Path, directory_path: Path) -> bool:
+    """Return True when *candidate_path* resolves to a location under *directory_path*."""
+    resolved_directory = directory_path.resolve()
+    return resolved_directory in candidate_path.resolve().parents
+
+
+def _mirrored_staging_path(file_path: str, temporary_root: Path) -> Optional[Path]:
+    """Return the mirrored staging path under *temporary_root*, or None to stage flat.
+
+    Returns None when the sanitized path has no segments, or when the mirrored
+    path would resolve outside *temporary_root*.
+    """
+    relative_segments = _mirrored_relative_segments(file_path)
+    if not relative_segments:
+        return None
+    mirrored_path = temporary_root.joinpath(*relative_segments)
+    if not _path_is_within_directory(mirrored_path, temporary_root):
+        return None
+    return mirrored_path
+
+
+def _write_staging_file(staging_path: Path, proposed_content: str) -> Path:
+    """Write *proposed_content* to *staging_path* and return that path."""
+    staging_path.write_text(proposed_content, encoding="utf-8")
+    return staging_path
+
+
+def _stage_proposed_content(
+    file_path: str, proposed_content: str, temporary_directory: str
+) -> Path:
+    """Write *proposed_content* under *temporary_directory*, mirroring the target's dirs.
+
+    ::
+
+        target: automation/config/submission_constants.py
+        staged: <tempdir>/automation/config/submission_constants.py
+
+    Preserving each directory segment lets a ``config``/``scripts``/``tests``
+    path-keyed exemption match the staged copy. A bare filename mirrors to the
+    same path flat basename staging would use. Flat basename staging is the
+    fallback when the sanitized path has no segments, when the mirrored path
+    would resolve outside the temporary root, or on an ``OSError`` building the
+    directories or writing the staged file.
+    """
+    temporary_root = Path(temporary_directory)
+    flat_staging_path = temporary_root / Path(file_path).name
+    mirrored_staging_path = _mirrored_staging_path(file_path, temporary_root)
+    staging_path = mirrored_staging_path or flat_staging_path
+    try:
+        staging_path.parent.mkdir(parents=True, exist_ok=True)
+        return _write_staging_file(staging_path, proposed_content)
+    except OSError:
+        return _write_staging_file(flat_staging_path, proposed_content)
+
+
 def validate_proposed_file(
     file_path: str, proposed_content: str
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Writes the content to a temporary file that carries the target's basename so
-    suffix-based and test-name-based validator filtering matches the real path,
-    then runs the file-scoped validators against it.
+    Stages the content under a temporary directory that mirrors every directory
+    segment of the target path, so suffix filters, test-name filters, and
+    path-keyed exemptions (a ``config`` ancestor, a ``scripts`` or ``tests``
+    segment) match the staged copy as they would the real target, then runs the
+    file-scoped validators against it.
 
     Args:
         file_path: The destination path the write or edit targets.
@@ -774,11 +862,11 @@ def validate_proposed_file(
     Returns:
         One ValidatorResult per file-scoped validator.
     """
-    base_name = Path(file_path).name
     with tempfile.TemporaryDirectory() as temporary_directory:
-        temporary_file = Path(temporary_directory) / base_name
-        temporary_file.write_text(proposed_content, encoding="utf-8")
-        return run_file_scoped_validators([temporary_file])
+        staged_file = _stage_proposed_content(
+            file_path, proposed_content, temporary_directory
+        )
+        return run_file_scoped_validators([staged_file])
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:

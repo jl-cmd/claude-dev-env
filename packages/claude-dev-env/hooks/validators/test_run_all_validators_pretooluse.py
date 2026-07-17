@@ -22,6 +22,11 @@ from .run_all_validators import (
     run_validators_entrypoint_subprocess,
 )
 
+CONFIG_DIR_TARGET_PATH = (
+    "CDP Automations/os_update_workflow/config/submission_constants.py"
+)
+PARENT_TRAVERSAL_TARGET_PATH = "../../escape_target.py"
+
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
     "    return first_number + second_number\n"
@@ -85,7 +90,9 @@ class TestPreToolUseGate:
     def test_edit_validates_reconstructed_post_edit_content(
         self, tmp_path: Path
     ) -> None:
-        target_file = tmp_path / "calculate.py"
+        target_directory = tmp_path.parent / "neutral_edit_target"
+        target_directory.mkdir(exist_ok=True)
+        target_file = target_directory / "calculate.py"
         target_file.write_text(CLEAN_PYTHON_SOURCE, encoding="utf-8")
         completed = run_gate(
             {
@@ -106,6 +113,56 @@ class TestPreToolUseGate:
         )
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
+
+    def test_write_to_config_dir_path_is_not_denied(self) -> None:
+        completed = run_gate(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": CONFIG_DIR_TARGET_PATH,
+                    "content": VIOLATING_PYTHON_SOURCE,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
+    def test_write_to_parent_traversal_path_still_validates(self) -> None:
+        completed = run_gate(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": PARENT_TRAVERSAL_TARGET_PATH,
+                    "content": VIOLATING_PYTHON_SOURCE,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Magic Values" in completed.stdout
+
+
+class TestMirroredRelativeSegments:
+    def test_strips_parent_traversal_segments(self) -> None:
+        staging_module = sys.modules[main.__module__]
+        segments = staging_module._mirrored_relative_segments(
+            PARENT_TRAVERSAL_TARGET_PATH
+        )
+        assert segments == ["escape_target.py"]
+
+    def test_keeps_config_directory_segment(self) -> None:
+        staging_module = sys.modules[main.__module__]
+        segments = staging_module._mirrored_relative_segments(CONFIG_DIR_TARGET_PATH)
+        assert segments[-1] == "submission_constants.py"
+        assert "config" in segments
+
+    def test_drops_leading_anchor(self, tmp_path: Path) -> None:
+        staging_module = sys.modules[main.__module__]
+        absolute_target = tmp_path / "config" / "submission_constants.py"
+        segments = staging_module._mirrored_relative_segments(str(absolute_target))
+        assert "config" in segments
+        assert segments[-1] == "submission_constants.py"
+        assert Path(str(absolute_target)).anchor not in segments
 
 
 class TestCliModeRegression:
