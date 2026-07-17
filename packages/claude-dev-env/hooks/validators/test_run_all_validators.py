@@ -20,7 +20,32 @@ from .run_all_validators import (
     run_git_checks,
     run_python_style_checks,
     run_with_fallback,
+    validate_proposed_file,
 )
+
+_VALIDATORS_DIRECTORY = Path(__file__).parent
+_ASSERT_FALSE_SOURCE = (
+    "def probe_condition(observed_total: int) -> None:\n"
+    "    assert False, observed_total\n"
+)
+
+
+def test_validate_proposed_file_threads_ruff_config_from_original_path() -> None:
+    """A non-test staged file is linted under the project ruff config (B selected).
+
+    ::
+
+        original path .../validators/threading_probe.py, assert False body
+        ok: config resolved from the original path -> Ruff output carries B011
+    """
+    probe_path = _VALIDATORS_DIRECTORY / "threading_probe.py"
+
+    all_results = validate_proposed_file(str(probe_path), _ASSERT_FALSE_SOURCE)
+
+    ruff_output = next(
+        each_result.output for each_result in all_results if each_result.name == "Ruff"
+    )
+    assert "B011" in ruff_output
 
 
 class TestFixFlag:

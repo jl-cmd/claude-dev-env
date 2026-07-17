@@ -4,10 +4,14 @@ import contextlib
 import subprocess
 import sys
 import tempfile
-import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+
+from .pyproject_config_discovery import (
+    ancestor_directories,
+    find_pyproject_configuring_tool,
+)
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
@@ -17,6 +21,7 @@ try:
         PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
+    from hooks_constants.pyproject_config_discovery_constants import MYPY_TOOL_TABLE_NAME
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
@@ -25,6 +30,7 @@ except ModuleNotFoundError:
         PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
+    from hooks_constants.pyproject_config_discovery_constants import MYPY_TOOL_TABLE_NAME
 
 
 @dataclass
@@ -48,38 +54,6 @@ def check_mypy_available() -> bool:
         return False
 
 
-def _pyproject_contains_tool_mypy(pyproject_path: Path) -> bool:
-    try:
-        with pyproject_path.open("rb") as readable_handle:
-            parsed_toml = tomllib.load(readable_handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return False
-    tool_table = parsed_toml.get("tool", {})
-    return isinstance(tool_table, dict) and "mypy" in tool_table
-
-
-def _ancestor_directories(starting_file: Path) -> list[Path]:
-    """Return *starting_file*'s directory and every parent, nearest first.
-
-    ::
-
-        repo/pkg/mod.py -> [repo/pkg, repo, ... , filesystem root]
-        repo/pkg/       -> [repo/pkg, repo, ... , filesystem root]
-
-    A file resolves to its containing directory; a directory resolves to
-    itself, so both ancestor walks below start from the same first candidate.
-
-    Args:
-        starting_file: The file (or directory) the walk begins from.
-
-    Returns:
-        The resolved starting directory followed by each of its parents.
-    """
-    resolved_starting_file = starting_file.resolve()
-    walk_origin = resolved_starting_file.parent if resolved_starting_file.is_file() else resolved_starting_file
-    return [walk_origin, *walk_origin.parents]
-
-
 def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
     """Walk up from a starting file to locate a pyproject.toml that configures mypy.
 
@@ -97,12 +71,7 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
         table, or ``None`` when no such file exists between ``starting_file``
         and the filesystem root.
     """
-    pyproject_filename_for_lookup = PYPROJECT_FILENAME
-    for each_candidate_directory in _ancestor_directories(starting_file):
-        candidate_pyproject = each_candidate_directory / pyproject_filename_for_lookup
-        if candidate_pyproject.is_file() and _pyproject_contains_tool_mypy(candidate_pyproject):
-            return candidate_pyproject
-    return None
+    return find_pyproject_configuring_tool(starting_file, MYPY_TOOL_TABLE_NAME)
 
 
 def find_module_resolution_root(starting_file: Path) -> Path | None:
@@ -127,7 +96,7 @@ def find_module_resolution_root(starting_file: Path) -> Path | None:
     """
     git_entry_name = GIT_DIRECTORY_NAME
     pyproject_filename = PYPROJECT_FILENAME
-    for each_candidate_directory in _ancestor_directories(starting_file):
+    for each_candidate_directory in ancestor_directories(starting_file):
         has_git_entry = (each_candidate_directory / git_entry_name).exists()
         has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
         if has_git_entry or has_pyproject:
@@ -171,7 +140,7 @@ def mypy_working_directory(all_py_files: list[str]) -> Iterator[str]:
         yield isolated_directory
 
 
-def _mypy_config_argument(all_py_files: list[str]) -> list[str]:
+def _native_mypy_config_argument(all_py_files: list[str]) -> list[str]:
     """Return the ``--config-file`` argument for the first file with a mypy config."""
     for each_py_file in all_py_files:
         discovered_pyproject = find_pyproject_with_mypy_config(Path(each_py_file))
@@ -180,9 +149,39 @@ def _mypy_config_argument(all_py_files: list[str]) -> list[str]:
     return []
 
 
-def _run_mypy_subprocess(all_py_files: list[str]) -> subprocess.CompletedProcess[str]:
+def _mypy_config_argument(
+    all_py_files: list[str], config_source_path: Path | None
+) -> list[str]:
+    """Return the ``--config-file`` argument, resolved from the original path when given.
+
+    ::
+
+        config_source_path resolves .../hooks/pyproject.toml
+            -> ["--config-file", ".../hooks/pyproject.toml"]
+        config_source_path given, no [tool.mypy] up-tree -> [] (native discovery)
+        config_source_path None -> native per-file discovery over all_py_files
+
+    Args:
+        all_py_files: The resolved paths mypy will check.
+        config_source_path: The original target path the staged copy stands in
+            for, or ``None`` for a native multi-file run.
+
+    Returns:
+        The ``--config-file`` argument vector, empty when no config resolves.
+    """
+    if config_source_path is None:
+        return _native_mypy_config_argument(all_py_files)
+    resolved_pyproject = find_pyproject_with_mypy_config(config_source_path)
+    if resolved_pyproject is not None:
+        return ["--config-file", str(resolved_pyproject)]
+    return _native_mypy_config_argument(all_py_files)
+
+
+def _run_mypy_subprocess(
+    all_py_files: list[str], config_source_path: Path | None
+) -> subprocess.CompletedProcess[str]:
     """Run mypy over *all_py_files* from each file's own project root."""
-    config_argument = _mypy_config_argument(all_py_files)
+    config_argument = _mypy_config_argument(all_py_files, config_source_path)
     with mypy_working_directory(all_py_files) as working_directory:
         return subprocess.run(
             ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
@@ -194,24 +193,29 @@ def _run_mypy_subprocess(all_py_files: list[str]) -> subprocess.CompletedProcess
         )
 
 
-def run_mypy_check(files: list[Path]) -> MypyResult:
-    """Run mypy on files."""
-    if not files:
+def run_mypy_check(
+    all_files: list[Path], config_source_path: Path | None = None
+) -> MypyResult:
+    """Run mypy on files, resolving config from *config_source_path* when given.
+
+    A given ``config_source_path`` walks ``--config-file`` up from the original
+    target rather than the staged copy's own ancestors.
+    """
+    if not all_files:
         return MypyResult(passed=True, output="No files to check", error_count=0)
 
     if not check_mypy_available():
         return MypyResult(passed=True, output="Mypy not installed - skipping", error_count=0)
 
-    python_source_suffix = PYTHON_SOURCE_SUFFIX
     all_py_files = [
         str(each_file.resolve())
-        for each_file in files
-        if each_file.suffix == python_source_suffix
+        for each_file in all_files
+        if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not all_py_files:
         return MypyResult(passed=True, output="No Python files", error_count=0)
 
-    completed_process = _run_mypy_subprocess(all_py_files)
+    completed_process = _run_mypy_subprocess(all_py_files, config_source_path)
     error_count = completed_process.stdout.count(": error:")
 
     return MypyResult(
