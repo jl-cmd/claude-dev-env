@@ -3,8 +3,8 @@
 AUTO-GENERATED — DO NOT EDIT.
 Source of truth: jl-cmd/claude-dev-env/AGENTS.md
 Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: unknown
-Synced at: 2026-07-11T22:38:18.161601+00:00
+Source commit: dc117b29504385b0446cf1ad01595cfea75a5bfb
+Synced at: 2026-07-17T00:15:56.303558+00:00
 -->
 <!-- SYNC-HEADER-END -->
 
@@ -120,7 +120,7 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
 - Functions stay at 30 lines or fewer. If it's longer, flag as advisory ONLY.
 - Top-level functions follow the language's blank-line convention: Python uses two blank lines between top-level functions. Other languages defer to file-established convention.
 - `import` statements live at the top of the file.
-- Application and library code uses logging calls. CLI tools and automation entrypoints may use `print()` when stdout is the integration contract (`print(json.dumps(...))`).
+- Application and library code uses logging calls. CLI tools and automation entrypoints may use `print()` when stdout is the integration contract (`print(json.dumps(...))`). A file counts as a CLI entrypoint by path marker: a `_cli.py` or `cli.py` filename, or a `/scripts/` path segment. Both write-time surfaces read the same markers — the `check_print_in_production` validator and the `check_library_print` blocker.
 - `log_*` and `logger.*` calls use `%`-style placeholders: `logger.info("delivered %s", message_id)`.
 - A `log_*` helper imported from a `str.format`-based logger (`shared_utils.automation_logging`) is the exception: its messages take `{}` placeholders, and a `%s`/`%d` token there is dropped by `str.format`, so the arguments never print.
 
@@ -141,6 +141,9 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
 - Mocks populate every field the code under test reads — every attribute touched by the code path appears on the mock. If a mock omits a field, flag as advisory ONLY.
 - Assertions exercise behavior. Replace tautologies (`assert CONSTANT == CONSTANT`, `assert hasattr(module, "name")`) with assertions that would fail on real regression.
 - Delete tests that add no value: tests that only verify a function exists (`callable(func)`), tests that re-assert constant values (`assert CACHE_DIR == "cache"`), and tests that duplicate coverage already provided by another test.
+- Corollary-matrix tests are findings: when the code reduces inputs to a canonical form and then compares, flag a matrix over input spellings that follows from the reduction being canonical — test the reduction once and the comparison with discriminating cases (`anti-corollary-tests.md`).
+- Tests whose expected value equals the degenerate default a dead implementation would return (empty string, `None`, `False`, blanket refusal, empty collection) prove nothing on their own — the suite needs at least one case expecting the non-default answer on the real code path (`anti-corollary-tests.md`).
+- Decoration tests are findings: when no single named change to the code under test would fail the test (or only a change that also breaks unrelated cases), the test proves nothing — drop or rewrite it. For a new mechanism with a degenerate failure mode, a stated mutation (one specific code change and how many tests it kills) belongs in the audit lane; a mutation that kills zero tests means the suite proves nothing (`anti-corollary-tests.md`).
 - When a system dependency is missing, the test fails with a clear error rather than skipping. Do not use `@skip_if_missing_dependency`, environment-based skip decorators, or guard clauses that swallow the missing dependency.
 - Keep test infrastructure pragmatic. A test helper file passes when all of these hold: (1) ONE file, not a package; (2) only `def` functions, no class definitions; (3) no module-level state besides one or two simple constants; (4) no caching, no lazy initialization, no abstractions added "for future use"; (5) imports cover the test target plus stdlib only — no helper imports another helper.
 - Test through the public API. Do not assert on private state, hook return values, internal class fields, or `component.state.X`. If the test needs visibility the public API does not provide, the public API needs a method, not the test.

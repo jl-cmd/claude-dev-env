@@ -53,6 +53,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `tdd.md` | Test-driven development: red → green → refactor, no production code before a failing test |
 | `testing.md` | Test quality and infrastructure standards |
 | `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |
+| `verified-commit-gate-skip.md` | The `# verify-skip` marker on a blocked commit/push is allowed only when the branch surface is the same code a code-verifier already passed clean; any real change since that verdict runs a fresh verification |
 | `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking; recalled facts expire until re-checked this session |
 | `verify-runtime-state.md` | A "component is fine / not at fault" verdict rests on a live probe this session, never code reading or prior-session memory |
 | `windows-filesystem-safe.md` | Use safe `rmtree` patterns on Windows; `mkdirSync` with `recursive: true` on possibly-existing paths |

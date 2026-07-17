@@ -1,12 +1,13 @@
-"""Deterministic loader for the verified-commit constants module.
+"""Deterministic loader for the verified-commit constants modules.
 
 The blocking hooks import their shared constants as
-``from config.verified_commit_constants import ...``. In the installed hook
-tree a second, unrelated ``config`` package can sit ahead of this package on
-``sys.path`` and win that dotted name by path order, so the import binds to the
-wrong file and raises ImportError on any constant the stale copy lacks. This
-module binds the dotted name to the sibling ``config/verified_commit_constants``
-file by explicit location, so resolution never depends on ``sys.path`` order.
+``from config.verified_commit_constants import ...`` and
+``from config.verified_commit_context_constants import ...``. In the installed
+hook tree a second, unrelated ``config`` package can sit ahead of this package
+on ``sys.path`` and win those dotted names by path order, so the import binds
+to the wrong file and raises ImportError on any constant the stale copy lacks.
+This module binds each dotted name to its sibling ``config/`` file by explicit
+location, so resolution never depends on ``sys.path`` order.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from pathlib import Path
 
 
 def register_verified_commit_constants() -> None:
-    """Bind ``config.verified_commit_constants`` to the sibling config file.
+    """Bind both verified-commit constants dotted names to their config files.
 
     ::
 
@@ -35,11 +36,22 @@ def register_verified_commit_constants() -> None:
     Returns:
         None. The effect is the ``sys.modules`` registration.
     """
-    config_module_dotted_name = "config.verified_commit_constants"
+    all_constants_module_stems = (
+        "verified_commit_constants",
+        "verified_commit_context_constants",
+        "verified_commit_gate_output_constants",
+    )
+    for each_module_stem in all_constants_module_stems:
+        _register_config_module(each_module_stem)
+
+
+def _register_config_module(module_stem: str) -> None:
+    """Bind one ``config.<module_stem>`` dotted name to its sibling file."""
+    config_module_dotted_name = f"config.{module_stem}"
     if config_module_dotted_name in sys.modules:
         return
     constants_file_path = (
-        Path(__file__).resolve().parent / "config" / "verified_commit_constants.py"
+        Path(__file__).resolve().parent / "config" / f"{module_stem}.py"
     )
     module_spec = importlib.util.spec_from_file_location(
         config_module_dotted_name, constants_file_path

@@ -13,6 +13,15 @@ from typing import List
 
 from .validator_base import Violation
 
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+
+try:
+    from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARKERS
+except ModuleNotFoundError:
+    if _hooks_directory not in sys.path:
+        sys.path.insert(0, _hooks_directory)
+    from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARKERS
+
 
 def check_mutable_default_args(tree: ast.AST, filename: str) -> List[Violation]:
     violations: List[Violation] = []
@@ -53,6 +62,13 @@ def check_print_in_production(tree: ast.AST, filename: str) -> List[Violation]:
     violations: List[Violation] = []
 
     if "test" in filename.lower():
+        return violations
+
+    normalized_path = filename.lower().replace("\\", "/")
+    is_cli_entry_point = any(
+        marker.replace("\\", "/") in normalized_path for marker in ALL_CLI_FILE_PATH_MARKERS
+    )
+    if is_cli_entry_point:
         return violations
 
     for node in ast.walk(tree):

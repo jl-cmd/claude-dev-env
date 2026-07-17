@@ -12,3 +12,4 @@ packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[C:/Temp/scratch.py]
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::test_should_return_true_for_root_anchored_tmp_and_temp[c:/tmp/scratch.py]
 packages/claude-dev-env/hooks/blocking/test_destructive_command_blocker.py::test_rm_rf_asks_when_rm_target_uses_windows_backslash_absolute_path_unquoted
+packages/claude-dev-env/hooks/blocking/verified_commit_gate_parts/tests/test_directory_resolution.py::test_is_absolute_directory_true_for_a_drive_path
