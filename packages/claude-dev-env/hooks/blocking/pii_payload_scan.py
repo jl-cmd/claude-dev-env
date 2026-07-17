@@ -18,6 +18,7 @@ try:
     for each_bootstrap_directory in (_blocking_directory, _hooks_directory):
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
+    from code_rules_shared import is_ephemeral_path
     from pii_prevention_blocker_parts.repository_exemption import (
         repository_allowlisted_values,
     )
@@ -45,6 +46,41 @@ except ImportError as import_error:
         "pii_payload_scan: cannot import its sibling modules; "
         "ensure the blocking and hooks directories are importable."
     ) from import_error
+
+
+def _target_is_ephemeral_outside_repository(
+    file_path: str, hook_payload: dict | None
+) -> bool:
+    """Report whether a write target is a throwaway draft outside every repo.
+
+    ::
+
+        ephemeral path, no repo tree  ->  True   (write scan skipped)
+        ephemeral path inside a repo  ->  False  (write scan kept)
+        ordinary path                 ->  False  (write scan kept)
+
+    A draft under the harness scratchpad or an ephemeral scratch root turns
+    durable only through a surface that keeps its own scan, so scanning it at
+    write time is a false positive. A draft that resolves inside a git tree
+    still carries that repository's own allowlist, so the scan stays.
+
+    Args:
+        file_path: The write target path to classify.
+        hook_payload: The PreToolUse payload carrying the session id, or None to
+            read the session id from the environment alone.
+
+    Returns:
+        True only when the path is ephemeral and no enclosing git repository
+        resolves.
+    """
+    if not file_path:
+        return False
+    if not is_ephemeral_path(file_path, hook_payload):
+        return False
+    resolution_directory = _existing_ancestor_directory(file_path)
+    if resolution_directory is None:
+        return True
+    return resolve_repository_root(resolution_directory) is None
 
 
 def build_deny_reason(all_findings: list[PiiFinding], gate_surface: str) -> str:
@@ -165,29 +201,16 @@ def _write_path_allowlisted_values(file_path: str) -> frozenset[str]:
     return repository_allowlisted_values(repository_root)
 
 
-def evaluate_write_edit_payload(
-    tool_name: str,
-    all_tool_input: dict[str, object],
-    all_allowlisted_values: frozenset[str] = frozenset(),
+def _write_deny_reason_for_texts(
+    all_texts: list[str],
+    file_path: str,
+    all_allowlisted_values: frozenset[str],
 ) -> str | None:
-    """Return a deny reason when Write/Edit/MultiEdit content carries PII.
+    """Return the deny reason for the first text carrying non-allowlisted PII.
 
-    A value in the target repository's PII allowlist is dropped from the
-    findings, so a write under that repository's tree may carry it. Repository
-    resolution for that allowlist runs only after a raw PII hit.
-
-    Args:
-        tool_name: The intercepted tool name.
-        all_tool_input: The tool input mapping.
-        all_allowlisted_values: Extra exact values allowed past the scan,
-            unioned with the target repository's own allowlist.
-
-    Returns:
-        Deny reason text, or None when the write is clean or out of scope.
+    Repository allowlist resolution runs once, only after a raw PII hit, so a
+    clean payload triggers no git call.
     """
-    if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
-        return None
-    file_path, all_texts = _collect_write_edit_texts(tool_name, all_tool_input)
     resolved_allowlisted_values: frozenset[str] | None = None
     for each_text in all_texts:
         all_raw_findings = scan_text_for_pii(each_text)
@@ -206,6 +229,41 @@ def evaluate_write_edit_payload(
             gate_surface = f"file write ({file_path or 'unknown path'})"
             return build_deny_reason(all_findings, gate_surface)
     return None
+
+
+def evaluate_write_edit_payload(
+    tool_name: str,
+    all_tool_input: dict[str, object],
+    all_allowlisted_values: frozenset[str] = frozenset(),
+    hook_payload: dict | None = None,
+) -> str | None:
+    """Return a deny reason when Write/Edit/MultiEdit content carries PII.
+
+    A value in the target repository's PII allowlist is dropped from the
+    findings, so a write under that repository's tree may carry it. A draft
+    under an ephemeral scratch root outside every repository is skipped, since
+    it turns durable only through surfaces that keep their own scans.
+
+    Args:
+        tool_name: The intercepted tool name.
+        all_tool_input: The tool input mapping.
+        all_allowlisted_values: Extra exact values allowed past the scan,
+            unioned with the target repository's own allowlist.
+        hook_payload: The PreToolUse payload carrying the session id, threaded
+            to the ephemeral-path predicate; None reads the session id from the
+            environment alone.
+
+    Returns:
+        Deny reason text, or None when the write is clean or out of scope.
+    """
+    if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
+        return None
+    file_path, all_texts = _collect_write_edit_texts(tool_name, all_tool_input)
+    if not all_texts:
+        return None
+    if _target_is_ephemeral_outside_repository(file_path, hook_payload):
+        return None
+    return _write_deny_reason_for_texts(all_texts, file_path, all_allowlisted_values)
 
 
 def evaluate_post_body_texts(

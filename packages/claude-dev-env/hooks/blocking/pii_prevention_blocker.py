@@ -329,7 +329,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     raw_tool_input = payload_by_key.get("tool_input", {})
     all_tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
     if tool_name in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
-        return evaluate_write_edit_payload(tool_name, all_tool_input)
+        return evaluate_write_edit_payload(
+            tool_name, all_tool_input, hook_payload=payload_by_key
+        )
     if tool_name in ALL_SHELL_TOOL_NAMES:
         return _evaluate_shell_tool(all_tool_input, payload_by_key)
     if tool_name.startswith(MCP_GITHUB_TOOL_PREFIX):
