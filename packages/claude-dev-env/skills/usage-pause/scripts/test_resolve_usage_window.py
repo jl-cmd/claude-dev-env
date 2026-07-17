@@ -18,7 +18,9 @@ SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
-from usage_pause_constants.resolve_usage_window_constants import (
+from usage_pause_constants.resolve_usage_window_constants import (  # noqa: E402
+    DESKTOP_ENTRYPOINT_VALUE,
+    ENTRYPOINT_ENV_VAR,
     SESSION_INGRESS_TOKEN_FILE_ENV_VAR as INGRESS_TOKEN_FILE_ENV_VAR,
 )
 
@@ -188,8 +190,7 @@ class TestReadOauthAccessToken:
         credentials_path.write_text("{not valid json", encoding="utf-8")
         with caplog.at_level(logging.WARNING):
             assert (
-                resolver.read_oauth_access_token(credentials_path, local_now())
-                is None
+                resolver.read_oauth_access_token(credentials_path, local_now()) is None
             )
         assert any("unreadable" in each_message for each_message in caplog.messages)
 
@@ -240,7 +241,43 @@ class TestReadSessionIngressToken:
         assert INGRESS_TOKEN_FILE_ENV_VAR == "CLAUDE_SESSION_INGRESS_TOKEN_FILE"
 
 
+class TestRunningOnDesktopHost:
+    def should_be_true_when_entrypoint_names_the_desktop_app(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv(ENTRYPOINT_ENV_VAR, DESKTOP_ENTRYPOINT_VALUE)
+        assert resolver.running_on_desktop_host() is True
+
+    def should_be_false_when_entrypoint_names_a_non_desktop_host(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv(ENTRYPOINT_ENV_VAR, "cli")
+        assert resolver.running_on_desktop_host() is False
+
+    def should_be_false_when_entrypoint_is_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.delenv(ENTRYPOINT_ENV_VAR, raising=False)
+        assert resolver.running_on_desktop_host() is False
+
+    def should_pin_the_desktop_entrypoint_contract_to_the_literal_marker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "claude-desktop")
+        assert resolver.running_on_desktop_host() is True
+        assert ENTRYPOINT_ENV_VAR == "CLAUDE_CODE_ENTRYPOINT"
+        assert DESKTOP_ENTRYPOINT_VALUE == "claude-desktop"
+
+
 class TestResolveAccessToken:
+    @pytest.fixture(autouse=True)
+    def force_non_desktop_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(ENTRYPOINT_ENV_VAR, raising=False)
+
     def should_use_ingress_token_when_credential_file_missing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -293,6 +330,57 @@ class TestResolveAccessToken:
         monkeypatch.delenv(INGRESS_TOKEN_FILE_ENV_VAR, raising=False)
         missing_credentials = tmp_path / "absent.json"
         assert resolver.resolve_access_token(missing_credentials, local_now()) is None
+
+
+class TestResolveAccessTokenHostAware:
+    def should_ignore_a_valid_cli_credential_token_on_the_desktop_host(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        now = local_now()
+        credentials_path = tmp_path / ".credentials.json"
+        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
+        write_credentials(
+            credentials_path, future_milliseconds, access_token="cli-credential-token"
+        )
+        monkeypatch.setenv(ENTRYPOINT_ENV_VAR, DESKTOP_ENTRYPOINT_VALUE)
+        monkeypatch.delenv(INGRESS_TOKEN_FILE_ENV_VAR, raising=False)
+        chosen_token = resolver.resolve_access_token(credentials_path, now)
+        assert chosen_token != "cli-credential-token"
+        assert chosen_token is None
+
+    def should_use_the_ingress_token_over_the_cli_credential_on_the_desktop_host(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        now = local_now()
+        credentials_path = tmp_path / ".credentials.json"
+        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
+        write_credentials(
+            credentials_path, future_milliseconds, access_token="cli-credential-token"
+        )
+        token_file = tmp_path / "ingress-token"
+        token_file.write_text("ingress-token-value", encoding="utf-8")
+        monkeypatch.setenv(ENTRYPOINT_ENV_VAR, DESKTOP_ENTRYPOINT_VALUE)
+        monkeypatch.setenv(INGRESS_TOKEN_FILE_ENV_VAR, str(token_file))
+        chosen_token = resolver.resolve_access_token(credentials_path, now)
+        assert chosen_token == "ingress-token-value"
+        assert chosen_token != "cli-credential-token"
+
+    def should_return_the_cli_credential_token_on_a_non_desktop_host(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        now = local_now()
+        credentials_path = tmp_path / ".credentials.json"
+        future_milliseconds = int((now + timedelta(hours=1)).timestamp() * 1000)
+        write_credentials(
+            credentials_path, future_milliseconds, access_token="cli-credential-token"
+        )
+        monkeypatch.setenv(ENTRYPOINT_ENV_VAR, "cli")
+        monkeypatch.delenv(INGRESS_TOKEN_FILE_ENV_VAR, raising=False)
+        chosen_token = resolver.resolve_access_token(credentials_path, now)
+        assert chosen_token == "cli-credential-token"
 
 
 class TestExtractUsageWindows:
@@ -361,13 +449,20 @@ class TestBuildPausePlan:
 
 class TestCommandLine:
     def run_resolver(
-        self, *arguments: str, ingress_token_file: str | None = None
+        self,
+        *arguments: str,
+        ingress_token_file: str | None = None,
+        entrypoint: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         child_environment = dict(os.environ)
         if ingress_token_file is None:
             child_environment.pop(INGRESS_TOKEN_FILE_ENV_VAR, None)
         else:
             child_environment[INGRESS_TOKEN_FILE_ENV_VAR] = ingress_token_file
+        if entrypoint is None:
+            child_environment.pop(ENTRYPOINT_ENV_VAR, None)
+        else:
+            child_environment[ENTRYPOINT_ENV_VAR] = entrypoint
         return subprocess.run(
             [sys.executable, str(RESOLVER_PATH), *arguments],
             capture_output=True,
@@ -403,9 +498,7 @@ class TestCommandLine:
         assert str(missing_path) in resolved_payload["error"]
         assert f"{INGRESS_TOKEN_FILE_ENV_VAR} unset" in resolved_payload["error"]
 
-    def should_name_the_ingress_token_path_in_the_error(
-        self, tmp_path: Path
-    ) -> None:
+    def should_name_the_ingress_token_path_in_the_error(self, tmp_path: Path) -> None:
         missing_credentials = tmp_path / "absent.json"
         stale_ingress = tmp_path / "stale-ingress-token"
         completed = self.run_resolver(
@@ -429,9 +522,28 @@ class TestCommandLine:
         assert completed.returncode == 2
         resolved_payload = json.loads(completed.stdout)
         assert (
-            f"{INGRESS_TOKEN_FILE_ENV_VAR} set but empty"
-            in resolved_payload["error"]
+            f"{INGRESS_TOKEN_FILE_ENV_VAR} set but empty" in resolved_payload["error"]
         )
+
+    def should_exit_two_with_a_host_aware_error_on_the_desktop_host(
+        self, tmp_path: Path
+    ) -> None:
+        credentials_path = tmp_path / ".credentials.json"
+        future_milliseconds = int((local_now() + timedelta(hours=1)).timestamp() * 1000)
+        write_credentials(
+            credentials_path, future_milliseconds, access_token="cli-credential-token"
+        )
+        completed = self.run_resolver(
+            "--credentials-path",
+            str(credentials_path),
+            entrypoint="claude-desktop",
+        )
+        assert completed.returncode == 2
+        assert "cli-credential-token" not in completed.stdout
+        error_text = json.loads(completed.stdout)["error"]
+        assert "different auth session" in error_text
+        assert "/usage" in error_text
+        assert "/usage-pause" in error_text
 
     def should_reject_invalid_override_with_error_payload(self) -> None:
         completed = self.run_resolver("--override", "soon")
