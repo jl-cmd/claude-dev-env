@@ -32,5 +32,8 @@ Drives one draft PR to convergence in one autonomous run. On `pacer=workflow`, e
 ## Entry point
 
 Selects `workflow` or `portable` via `select_converge_pacer.py`. Missing
-`Workflow` selects portable and continues — it does not abort. The `SKILL.md`
-body specifies the pre-flight sequence and each pacer's run path.
+`Workflow` selects portable and continues — it does not abort. The `grok` arg
+forces the portable pacer and routes loop edit, audit, and fix workers through
+`resolve_worker_spawn.py` (grok-first, Claude fallback); code-review and the
+code-verifier verdict stay on Claude. The `SKILL.md` body specifies the
+pre-flight sequence and each pacer's run path.

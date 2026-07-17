@@ -5,8 +5,17 @@ Open and apply the shared fix sequence in
 — executor choice, the 13-step sequence, reply transport, thread resolution,
 and post-push resets. Hook handling per [ground-rules.md](ground-rules.md).
 
-This file holds only the pr-converge deltas: the multi-PR teammate
-obligations and the same-tick re-entry rule.
+This file holds only the pr-converge deltas: the grok-mode executor, the
+multi-PR teammate obligations, and the same-tick re-entry rule.
+
+## Grok-mode executor
+
+Under grok mode (`grok_mode` true in state), dispatch the fix worker via
+`resolve_worker_spawn.py --role clean-coder` (grok-first, Claude fallback) as a
+fresh dispatcher call each tick rather than the persistent `fix_executor`
+teammate. On grok fallthrough or `claude_agent_required`, spawn the one-shot
+Claude fix worker as today. Invocation shape:
+[`../../bugteam/reference/audit-and-teammates.md`](../../bugteam/reference/audit-and-teammates.md).
 
 **Multi-PR (`state.json`) teammate obligations** (plus TDD, commit, push):
 

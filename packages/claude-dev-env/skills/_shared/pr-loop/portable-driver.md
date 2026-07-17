@@ -27,8 +27,12 @@ shared HEAD. Do not invent tasks in prose.
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   --skill <pr-converge|autoconverge> \
   --has-workflow <0|1> \
-  --has-schedule-wakeup <0|1>
+  --has-schedule-wakeup <0|1> \
+  --grok-mode <0|1>
 ```
+
+Pass `--grok-mode 1` under grok mode. For `autoconverge` this returns
+`portable` even when `Workflow` is present.
 
 When `pacer` is not `portable`, use the skill’s native Workflow or
 ScheduleWakeup path. When `pacer=portable`, use the control script below.
@@ -60,6 +64,11 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/portable_converge_driver.py
 Stdout JSON: `status`, `next`, `phase`, `state_file`, optional `commands`,
 `wait_seconds`, `blocker`, and on `open-run` the task-list fields. Exit `0` =
 ok; `1` = contract failure; `2` = usage error.
+
+`open-run` re-derives the pacer from the same inputs as the
+`select_converge_pacer.py` call above, so pass it `--grok-mode <0|1>` too. For
+`autoconverge` under grok mode it seeds the portable run rather than rejecting
+the workflow pacer.
 
 | Command | Deterministic effect |
 |---|---|
@@ -114,6 +123,13 @@ Copilot quota pre-check:
 | `mark_ready` | Run `commands` (`gh pr ready`) | teardown |
 | `stop_blocked` | Teardown; print blocker | stop |
 
+Under grok mode (`--grok-mode 1`), the `apply_fixes_and_push` fix worker spawns
+through `resolve_worker_spawn.py --role clean-coder` (grok-first, Claude
+fallback) as a fresh dispatcher call each tick — invocation shape in
+[`../../bugteam/reference/audit-and-teammates.md`](../../bugteam/reference/audit-and-teammates.md).
+`run_code_review` stays `invoke_code_review.py` on Claude and the code-verifier
+verdict stays on Claude; `run_bugteam` already routes through the dispatcher.
+
 ## Autoconverge entry on portable pacer
 
 When `/autoconverge` selects `pacer=portable`:
@@ -126,7 +142,8 @@ When `/autoconverge` selects `pacer=portable`:
   Workflow tool.
 - Teardown uses the lifecycle Close path; the Workflow-only closing HTML
   journal report is optional and skipped when no workflow run id exists.
-- Resume command on handoff: `/autoconverge <PR URL>`.
+- Resume command on handoff: `/autoconverge <PR URL>`, or
+  `/autoconverge grok: <PR URL>` under grok mode.
 
 When `/autoconverge` selects `pacer=workflow`, follow the skill’s Workflow
 sections unchanged.

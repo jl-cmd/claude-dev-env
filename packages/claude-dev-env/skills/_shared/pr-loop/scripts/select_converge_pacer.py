@@ -9,15 +9,16 @@ Pacer values::
 
 Rules::
 
-    autoconverge + Workflow present      -> workflow
-    autoconverge + Workflow absent       -> portable
-    pr-converge  + ScheduleWakeup present -> schedule_wakeup
-    pr-converge  + ScheduleWakeup absent  -> portable
+    autoconverge + Workflow present             -> workflow
+    autoconverge + Workflow absent              -> portable
+    autoconverge + Workflow present + grok mode -> portable
+    pr-converge  + ScheduleWakeup present       -> schedule_wakeup
+    pr-converge  + ScheduleWakeup absent        -> portable
 
 Import ``select_converge_pacer`` or run as a CLI::
 
     python select_converge_pacer.py --skill <pr-converge|autoconverge> \\
-        --has-workflow <0|1> --has-schedule-wakeup <0|1>
+        --has-workflow <0|1> --has-schedule-wakeup <0|1> [--grok-mode <0|1>]
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from skills_pr_loop_constants.pacer_constants import (  # noqa: E402
     ALL_ENTRY_SKILLS,
     ALL_FALSY_FLAG_TOKENS,
     ALL_TRUTHY_FLAG_TOKENS,
+    CLI_GROK_MODE_FLAG,
     CLI_HAS_SCHEDULE_WAKEUP_FLAG,
     CLI_HAS_WORKFLOW_FLAG,
     CLI_SKILL_FLAG,
@@ -43,11 +45,13 @@ from skills_pr_loop_constants.pacer_constants import (  # noqa: E402
     ENTRY_SKILL_JOIN_SEPARATOR,
     EXIT_SUCCESS,
     EXIT_USAGE_ERROR,
+    GROK_MODE_FLAG_DEFAULT,
     INVALID_BOOL_FLAG_ERROR,
     PACER_PORTABLE,
     PACER_SCHEDULE_WAKEUP,
     PACER_WORKFLOW,
     RESULT_KEY_ENTRY_SKILL,
+    RESULT_KEY_GROK_MODE,
     RESULT_KEY_HAS_SCHEDULE_WAKEUP,
     RESULT_KEY_HAS_WORKFLOW,
     RESULT_KEY_PACER,
@@ -63,13 +67,15 @@ class ConvergePacerSelection:
     entry_skill: str
     has_workflow: bool
     has_schedule_wakeup: bool
+    grok_mode: bool
 
 
 def parse_bool_flag(flag_token: str) -> bool:
     """Parse a CLI boolean token into a bool.
 
     Args:
-        flag_token: Token from ``--has-workflow`` or ``--has-schedule-wakeup``.
+        flag_token: Token from ``--has-workflow``, ``--has-schedule-wakeup``,
+            or ``--grok-mode``.
 
     Returns:
         True for truthy tokens, False for falsy tokens.
@@ -90,6 +96,7 @@ def select_converge_pacer(
     entry_skill: str,
     has_workflow: bool,
     has_schedule_wakeup: bool,
+    is_grok_mode: bool = False,
 ) -> ConvergePacerSelection:
     """Return the pacer the named entry skill must use on this host.
 
@@ -98,6 +105,9 @@ def select_converge_pacer(
         has_workflow: True when the host tool list includes ``Workflow``.
         has_schedule_wakeup: True when the host tool list includes
             ``ScheduleWakeup``.
+        is_grok_mode: True when the run routes loop workers through the
+            grok-first dispatcher. For ``autoconverge`` this forces the
+            portable pacer; ``pr-converge`` is unaffected.
 
     Returns:
         A ``ConvergePacerSelection`` with the chosen ``pacer`` name.
@@ -115,7 +125,10 @@ def select_converge_pacer(
         )
 
     if normalized_skill == ENTRY_SKILL_AUTOCONVERGE:
-        selected_pacer = PACER_WORKFLOW if has_workflow else PACER_PORTABLE
+        should_force_portable = is_grok_mode or not has_workflow
+        selected_pacer = (
+            PACER_PORTABLE if should_force_portable else PACER_WORKFLOW
+        )
     else:
         selected_pacer = (
             PACER_SCHEDULE_WAKEUP if has_schedule_wakeup else PACER_PORTABLE
@@ -126,6 +139,7 @@ def select_converge_pacer(
         entry_skill=normalized_skill,
         has_workflow=has_workflow,
         has_schedule_wakeup=has_schedule_wakeup,
+        grok_mode=is_grok_mode,
     )
 
 
@@ -148,21 +162,16 @@ def selection_as_json_dict(
         RESULT_KEY_HAS_SCHEDULE_WAKEUP: selection_by_field[
             "has_schedule_wakeup"
         ],
+        RESULT_KEY_GROK_MODE: selection_by_field["grok_mode"],
     }
 
 
-def build_argument_parser() -> argparse.ArgumentParser:
-    """Build the CLI parser for pacer selection.
+def _add_pacer_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the pacer-selection flags on the parser.
 
-    Returns:
-        Configured argument parser.
+    Args:
+        parser: Parser to receive the pacer-selection flags.
     """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Select workflow, schedule_wakeup, or portable pacer for a "
-            "converge entry skill."
-        )
-    )
     parser.add_argument(
         CLI_SKILL_FLAG,
         required=True,
@@ -179,6 +188,26 @@ def build_argument_parser() -> argparse.ArgumentParser:
         required=True,
         help="1/true when the host tool list includes ScheduleWakeup.",
     )
+    parser.add_argument(
+        CLI_GROK_MODE_FLAG,
+        default=GROK_MODE_FLAG_DEFAULT,
+        help="1/true routes loop workers through the grok dispatcher.",
+    )
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for pacer selection.
+
+    Returns:
+        Configured argument parser.
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Select workflow, schedule_wakeup, or portable pacer for a "
+            "converge entry skill."
+        )
+    )
+    _add_pacer_arguments(parser)
     return parser
 
 
@@ -198,10 +227,12 @@ def main(all_argv: list[str]) -> int:
         has_schedule_wakeup = parse_bool_flag(
             parsed_arguments.has_schedule_wakeup
         )
+        is_grok_mode = parse_bool_flag(parsed_arguments.grok_mode)
         selection = select_converge_pacer(
             entry_skill=parsed_arguments.skill,
             has_workflow=has_workflow,
             has_schedule_wakeup=has_schedule_wakeup,
+            is_grok_mode=is_grok_mode,
         )
     except ValueError as validation_error:
         print(str(validation_error), file=sys.stderr)
