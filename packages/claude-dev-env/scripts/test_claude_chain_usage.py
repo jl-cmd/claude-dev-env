@@ -30,6 +30,7 @@ from dev_env_scripts_constants.claude_chain_usage_constants import (  # noqa: E4
     JSON_COMMAND_KEY,
     JSON_ERROR_KEY,
     JSON_WEEKLY_REMAINING_PERCENT_KEY,
+    RESOLVE_USAGE_WINDOW_MODULE_NAME,
 )
 
 PLACEHOLDER_CREDENTIALS_PRIMARY = "/path/to/account-primary/.credentials.json"
@@ -376,3 +377,12 @@ def test_probe_weekly_utilization_raises_when_token_missing(
     )
     with pytest.raises(usage.WeeklyUtilizationProbeError):
         usage._probe_weekly_utilization(Path(PLACEHOLDER_CREDENTIALS_PRIMARY))
+
+
+def test_load_resolve_usage_window_module_loads_real_probe_api() -> None:
+    if RESOLVE_USAGE_WINDOW_MODULE_NAME in sys.modules:
+        del sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME]
+    loaded_module = usage._load_resolve_usage_window_module()
+    assert callable(loaded_module.resolve_access_token)
+    assert callable(loaded_module.extract_usage_windows)
+    assert sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] is loaded_module

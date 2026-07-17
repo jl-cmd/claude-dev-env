@@ -110,6 +110,7 @@ def _load_resolve_usage_window_module() -> ModuleType:
             )
         )
     loaded_module = importlib.util.module_from_spec(module_specification)
+    sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] = loaded_module
     module_specification.loader.exec_module(loaded_module)
     return loaded_module
 
