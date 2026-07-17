@@ -180,10 +180,12 @@ CODE_REVIEW.
 ### `phase == CODE_REVIEW`
 
 The entry phase of every convergence tick, re-entered after any fix push. It runs
-a deterministic static sweep, then the built-in `/code-review xhigh --fix` on the
-full `origin/main...HEAD` diff at effort high on model opus. `/code-review`
-produces no GitHub review artifact, so there are no code-review threads to
-resolve.
+a deterministic static sweep, then the thorough built-in review owned by the
+**claude-review** skill
+([`../../claude-review/SKILL.md`](../../claude-review/SKILL.md)):
+`/code-review xhigh --fix` on model opus over the full `origin/main...HEAD` diff
+via host-aware `invoke_code_review.py`. `/code-review` produces no GitHub review
+artifact, so there are no code-review threads to resolve.
 
 a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    gates over the full `origin/main...HEAD` changed files:
@@ -196,11 +198,11 @@ a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    `phase = CODE_REVIEW`, and re-run the sweep. When the sweep is clean, run
    the host-aware review below.
 
-b. Run the built-in `/code-review xhigh --fix` with OPUS on the FULL `origin/main...HEAD`
-   diff — every file the PR touches — via the
-   [local diff review](https://code.claude.com/docs/en/code-review#review-a-diff-locally).
-   The review always runs at effort high on model opus. It reviews the diff and
-   applies its findings to the working tree.
+b. Run **claude-review** for the built-in review procedure (prefer
+   `Skill({skill: "claude-review", ...})`; when `Skill` is not invokable, read
+   [`../../claude-review/SKILL.md`](../../claude-review/SKILL.md)). Full-diff rule,
+   invoker JSON shape, and clean-stamp contract:
+   [`../../claude-review/reference/full-diff-and-clean-stamp.md`](../../claude-review/reference/full-diff-and-clean-stamp.md).
 
    Before running, confirm the working directory is the PR worktree resolved
    in [Step 1.5](#step-15-resolve-the-pr-worktree-cwd-routing) — `git rev-parse

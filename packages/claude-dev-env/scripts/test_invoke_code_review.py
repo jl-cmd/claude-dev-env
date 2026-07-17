@@ -27,6 +27,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
+    CODE_REVIEW_EFFORT,
     CODE_REVIEW_MODEL_ALIAS,
     CODE_REVIEW_PROMPT,
     GIT_BINARY,
@@ -408,6 +409,11 @@ def test_cli_prints_result_json_only(
     }
 
 
+def test_code_review_prompt_uses_xhigh_effort() -> None:
+    assert CODE_REVIEW_EFFORT == "xhigh"
+    assert CODE_REVIEW_PROMPT == "/code-review xhigh --fix"
+
+
 def test_build_code_review_arguments_matches_contract() -> None:
     all_arguments = invoker.build_code_review_arguments()
     assert all_arguments == [
@@ -420,6 +426,10 @@ def test_build_code_review_arguments_matches_contract() -> None:
         PERMISSION_MODE_FLAG,
         PERMISSION_MODE_BYPASS,
     ]
+    assert CODE_REVIEW_PROMPT in all_arguments
+    assert all_arguments[all_arguments.index(SINGLE_TURN_FLAG) + 1] == (
+        "/code-review xhigh --fix"
+    )
 
 
 def test_is_working_tree_dirty_against_real_git_repo(tmp_path: Path) -> None:

@@ -403,7 +403,7 @@ def encode_code_review_outcome(
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run built-in /code-review at high effort on opus, host-aware."
+            "Run built-in /code-review at xhigh effort on opus, host-aware."
         )
     )
     parser.add_argument(

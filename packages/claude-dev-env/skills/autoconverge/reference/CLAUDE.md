@@ -6,7 +6,7 @@ Reference documentation for the `autoconverge` skill. The `converge.mjs` workflo
 
 | File | Role |
 |---|---|
-| `convergence.md` | Round shape: the static sweep, the three parallel internal lenses (code-review, bug-audit, self-review), deduplication, the fix commit step, the terminal Bugbot, Copilot, and Codex gates, and the definition of a clean convergence. |
+| `convergence.md` | Round shape: the static sweep, the three parallel internal lenses (code-review, bug-audit, self-review), deduplication, the fix commit step, the terminal Bugbot, Copilot, and Codex gates, and the definition of a clean convergence. Portable built-in review points at the claude-review skill. |
 | `copilot-findings.md` | The Copilot gate tiering, per-finding verification, and the `userReview` return contract. |
 | `stop-conditions.md` | Every condition that ends the run short of ready: budget cap, iteration cap, blocker exit, static-sweep stall, Bugbot, Copilot, and Codex bypass. |
 | `gotchas.md` | Hard-won lessons from failed runs: PR title validation, conflicting PRs, worktree branch lock, resumed sessions rerooting, and minter issues. |
