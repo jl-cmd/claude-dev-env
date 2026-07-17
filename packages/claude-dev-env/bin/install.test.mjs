@@ -10,6 +10,8 @@ import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
+    CORE_SKILLS,
+    INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
@@ -163,6 +165,23 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),
         'scripts must ship with --only core so claude_chain_runner.py is available for advisor CLI fallback',
+    );
+});
+
+
+test('CORE_SKILLS ships issue-tracker so the core group installs the skill the SessionStart injector needs', () => {
+    assert.ok(
+        CORE_SKILLS.includes('issue-tracker'),
+        'issue-tracker must be in CORE_SKILLS so --only core ships it alongside the SessionStart hooks',
+    );
+    assert.ok(
+        INSTALL_GROUPS.core.skills.includes('issue-tracker'),
+        'the resolved core group must ship issue-tracker',
+    );
+    assert.equal(
+        INSTALL_GROUPS.core.skills,
+        CORE_SKILLS,
+        'the core group skills array must read CORE_SKILLS so the two never drift',
     );
 });
 

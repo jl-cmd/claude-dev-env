@@ -91,6 +91,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `hedging_language_blocker.py` | Stop | Responses with hedging words (`likely`, `probably`, `appears to`) |
 | `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on |
 | `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work |
+| `issue_tracker_commit_reminder.py` | PreToolUse (Bash), via dispatcher roster | Blocks nothing — returns allow plus additionalContext on `git commit`/`git push` reminding the agent to update the issue tracker in place, check off finished children, and add `Closes #N` to a finished sub-issue's commit or PR |
 | `open_questions_in_plans_blocker.py` | PreToolUse (Write/Edit) | Plan documents with unresolved open questions |
 | `nas_ssh_binary_enforcer.py` | PreToolUse (Bash) | A bare `ssh`/`scp`/`sftp` command word targeting the NAS (Git Bash's MSYS ssh stalls on an interactive password prompt), or the full `System32/OpenSSH` binary to that host without `-o BatchMode=yes` |
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |

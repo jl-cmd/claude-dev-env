@@ -28,6 +28,15 @@ export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
 ];
 
+export const CORE_SKILLS = [
+    'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
+    'grok-spawn',
+    'anthropic-plan', 'everything-search',
+    'privacy-hygiene',
+    'issue-tracker',
+    'recall', 'remember', 'task-build',
+];
+
 export function collectPackageSourceConflicts(packageDirectory) {
     const gitConflictStatusCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
     const porcelainStatusLineMinLength = 4;
@@ -172,16 +181,10 @@ function discoverDependencyGroups() {
 const dependencyDiscovery = discoverDependencyGroups();
 const UNRESOLVED_DEPENDENCY_NAMES = dependencyDiscovery.unresolvedDependencyNames;
 
-const INSTALL_GROUPS = {
+export const INSTALL_GROUPS = {
     core: {
         description: 'Development standards, hooks, agents, commands',
-        skills: [
-            'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
-            'grok-spawn',
-            'anthropic-plan', 'everything-search',
-            'privacy-hygiene',
-            'recall', 'remember', 'task-build'
-        ],
+        skills: CORE_SKILLS,
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
     },

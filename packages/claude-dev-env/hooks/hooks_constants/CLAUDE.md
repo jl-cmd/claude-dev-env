@@ -41,6 +41,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
 | `hosted_hook_runner.py` | `run_hook_capturing_output()` — shared runner that runs one dispatcher-hosted hook in-process via runpy and returns its captured stdout and crash flag |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
+| `issue_tracker_commit_reminder_constants.py` | Git commit/push token match tokens (executable names, trigger subcommands, argument-taking global flags, flag prefix, flag-plus-value token span), shell command-separator tokens for the command-boundary check, path separators for the token-basename split, tool-input payload keys, PreToolUse allow-payload keys and values, and the reminder additionalContext text for the issue-tracker commit/push reminder hook |
+| `issue_tracker_session_starter_constants.py` | The `CLAUDE_ISSUE_TRACKER` toggle name, the tracker start directive text, the `.claude` config directory name, the skill and agent presence-probe path fragments, and the git command pieces and GitHub marker for the issue-tracker SessionStart injector hook |
 | `js_conventions_constants.py` | Banned identifier set, boolean-prefix pattern, and declaration/JSDoc patterns for the JavaScript convention checks |
 | `local_identity.py` | Loader for local machine values: NAS host, ssh user, and ssh port the ssh enforcer guards (`CLAUDE_NAS_*` / `~/.claude/local-identity.json` with placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`, keyed by owner/repo slug) read from the git-ignored local file whose path `CLAUDE_LOCAL_IDENTITY_PATH` may point elsewhere; also composes the ssh enforcer's two deny messages that quote the NAS values |
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
@@ -49,6 +51,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
+| `orchestrator_auto_starter_constants.py` | The `CLAUDE_AUTO_ORCHESTRATOR` toggle name and the `/orchestrator` start directive text for the orchestrator SessionStart injector hook |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |
 | `paired_test_coverage_constants.py` | Test-directory name, stem-test filename affixes, test-file globs, exempt public-function names, scan budget, coverage threshold, and guidance text for the public-function paired-test coverage check |
@@ -72,6 +75,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
+| `session_start_injector.py` | Shared logic for the SessionStart injector hooks: read a default-on environment toggle, judge whether a session source is inject-eligible, and wrap directive text in the nested SessionStart output payload |
+| `session_start_injector_constants.py` | The environment off-values, inject-eligible session sources, SessionStart payload field names, and nested `hookSpecificOutput` payload keys and event name shared by the SessionStart injector hooks |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
