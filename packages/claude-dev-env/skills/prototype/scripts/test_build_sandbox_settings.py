@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-from prototype_scripts_constants.build_sandbox_settings_constants import (
+from prototype_scripts_constants.config.build_sandbox_settings_constants import (
     ALL_DESTRUCTIVE_REQUIRED_MATCHERS,
     ALL_PII_REQUIRED_MATCHERS,
     ALL_SAFETY_HOOK_SCRIPT_BASENAMES,

@@ -27,7 +27,7 @@ import logging
 import sys
 from pathlib import Path
 
-from prototype_scripts_constants.build_sandbox_settings_constants import (
+from prototype_scripts_constants.config.build_sandbox_settings_constants import (
     ALL_REQUIRED_MATCHERS_BY_SAFETY_BASENAME,
     ALL_SAFETY_HOOK_SCRIPT_BASENAMES,
     BUILD_SUCCESS_EXIT_CODE,
@@ -41,7 +41,7 @@ from prototype_scripts_constants.build_sandbox_settings_constants import (
     SETTINGS_MISSING_SAFETY_HOOK_EXIT_CODE,
     SETTINGS_SOURCE_UNREADABLE_EXIT_CODE,
 )
-from prototype_scripts_constants.prototype_common_constants import (
+from prototype_scripts_constants.config.prototype_common_constants import (
     LOGGING_FORMAT,
     TEXT_ENCODING_UTF8,
 )

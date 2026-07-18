@@ -22,7 +22,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from prototype_scripts_constants.launch_sandbox_constants import (
+from prototype_scripts_constants.config.launch_sandbox_constants import (
     BARE_FLAG,
     CLAUDE_EXECUTABLE_NAME,
     DEFAULT_TIMEOUT_SECONDS,
@@ -34,7 +34,7 @@ from prototype_scripts_constants.launch_sandbox_constants import (
     SUMMARY_KEY_SETTINGS,
     SUMMARY_KEY_WORKTREE,
 )
-from prototype_scripts_constants.prototype_common_constants import (
+from prototype_scripts_constants.config.prototype_common_constants import (
     LOGGING_FORMAT,
     TEXT_ENCODING_UTF8,
 )

@@ -8,7 +8,7 @@ from types import ModuleType
 
 import pytest
 
-from prototype_scripts_constants.launch_sandbox_constants import (
+from prototype_scripts_constants.config.launch_sandbox_constants import (
     BARE_FLAG,
     CLAUDE_EXECUTABLE_NAME,
     LAUNCH_MISSING_PATH_EXIT_CODE,

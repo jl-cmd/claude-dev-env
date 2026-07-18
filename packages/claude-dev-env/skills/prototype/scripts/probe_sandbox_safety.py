@@ -26,25 +26,25 @@ import sys
 from pathlib import Path
 
 from build_sandbox_settings import read_settings_document
-from prototype_scripts_constants.build_sandbox_settings_constants import (
+from prototype_scripts_constants.config.build_sandbox_settings_constants import (
     ALL_SAFETY_HOOK_SCRIPT_BASENAMES,
     COMMAND_KEY,
     HOOKS_KEY,
     MATCHER_KEY,
     PRE_TOOL_USE_KEY,
 )
-from prototype_scripts_constants.probe_sandbox_safety_constants import (
-    ALL_BLOCK_DECISION_VALUES,
+from prototype_scripts_constants.config.probe_sandbox_safety_constants import (
+    ALL_BLOCK_DECISIONS,
     ALL_DESTRUCTIVE_PROBE_COMMAND_TOKENS,
     COMMAND_TOKEN_JOIN_SEPARATOR,
     DESTRUCTIVE_PROBE_TOOL_NAME,
     ENVELOPE_HOOK_EVENT_NAME_KEY,
-    ENVELOPE_HOOK_EVENT_NAME_VALUE,
+    ENVELOPE_PRE_TOOL_USE_EVENT_NAME,
+    ENVELOPE_PROBE_SESSION_ID,
     ENVELOPE_SESSION_ID_KEY,
-    ENVELOPE_SESSION_ID_VALUE,
     ENVELOPE_TOOL_INPUT_KEY,
     ENVELOPE_TOOL_NAME_KEY,
-    HOOK_OUTPUT_KEY,
+    HOOK_SPECIFIC_REPLY_KEY,
     MATCHER_JOIN_SEPARATOR,
     PERMISSION_DECISION_KEY,
     PII_PROBE_CONTENT_TEMPLATE,
@@ -60,7 +60,7 @@ from prototype_scripts_constants.probe_sandbox_safety_constants import (
     TOOL_INPUT_CONTENT_KEY,
     TOOL_INPUT_FILE_PATH_KEY,
 )
-from prototype_scripts_constants.prototype_common_constants import LOGGING_FORMAT
+from prototype_scripts_constants.config.prototype_common_constants import LOGGING_FORMAT
 
 logger = logging.getLogger("probe_sandbox_safety")
 
@@ -72,8 +72,8 @@ def _build_pii_probe_payload() -> dict:
     )
     probe_content = PII_PROBE_CONTENT_TEMPLATE.format(secret=synthetic_secret)
     return {
-        ENVELOPE_SESSION_ID_KEY: ENVELOPE_SESSION_ID_VALUE,
-        ENVELOPE_HOOK_EVENT_NAME_KEY: ENVELOPE_HOOK_EVENT_NAME_VALUE,
+        ENVELOPE_SESSION_ID_KEY: ENVELOPE_PROBE_SESSION_ID,
+        ENVELOPE_HOOK_EVENT_NAME_KEY: ENVELOPE_PRE_TOOL_USE_EVENT_NAME,
         ENVELOPE_TOOL_NAME_KEY: PII_PROBE_TOOL_NAME,
         ENVELOPE_TOOL_INPUT_KEY: {
             TOOL_INPUT_FILE_PATH_KEY: PII_PROBE_FILE_PATH,
@@ -87,8 +87,8 @@ def _build_destructive_probe_payload() -> dict:
         ALL_DESTRUCTIVE_PROBE_COMMAND_TOKENS
     )
     return {
-        ENVELOPE_SESSION_ID_KEY: ENVELOPE_SESSION_ID_VALUE,
-        ENVELOPE_HOOK_EVENT_NAME_KEY: ENVELOPE_HOOK_EVENT_NAME_VALUE,
+        ENVELOPE_SESSION_ID_KEY: ENVELOPE_PROBE_SESSION_ID,
+        ENVELOPE_HOOK_EVENT_NAME_KEY: ENVELOPE_PRE_TOOL_USE_EVENT_NAME,
         ENVELOPE_TOOL_NAME_KEY: DESTRUCTIVE_PROBE_TOOL_NAME,
         ENVELOPE_TOOL_INPUT_KEY: {TOOL_INPUT_COMMAND_KEY: destructive_command},
     }
@@ -205,8 +205,8 @@ def hook_blocks_probe(all_command_tokens: list[str], probe_payload: dict) -> boo
         parsed_hook_reply = json.loads(completed_process.stdout)
     except json.JSONDecodeError:
         return False
-    decision = parsed_hook_reply.get(HOOK_OUTPUT_KEY, {}).get(PERMISSION_DECISION_KEY)
-    return decision == ALL_BLOCK_DECISION_VALUES[0]
+    decision = parsed_hook_reply.get(HOOK_SPECIFIC_REPLY_KEY, {}).get(PERMISSION_DECISION_KEY)
+    return decision == ALL_BLOCK_DECISIONS[0]
 
 
 def probe_safety_hook(settings_document: dict, basename: str) -> bool:

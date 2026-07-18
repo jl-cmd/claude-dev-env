@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-from prototype_scripts_constants.build_sandbox_settings_constants import (
+from prototype_scripts_constants.config.build_sandbox_settings_constants import (
     ALL_SAFETY_HOOK_SCRIPT_BASENAMES,
     COMMAND_KEY,
     HOOKS_KEY,
     MATCHER_KEY,
     PRE_TOOL_USE_KEY,
 )
-from prototype_scripts_constants.probe_sandbox_safety_constants import (
+from prototype_scripts_constants.config.probe_sandbox_safety_constants import (
     DESTRUCTIVE_PROBE_COMMAND,
     ENVELOPE_TOOL_INPUT_KEY,
     ENVELOPE_TOOL_NAME_KEY,
