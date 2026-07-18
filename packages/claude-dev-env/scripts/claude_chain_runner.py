@@ -116,18 +116,6 @@ def _optional_working_directory(value: object) -> str | None:
     return None
 
 
-# Capturing a large-output child through OS pipes (``capture_output=True``)
-# deadlocks on Windows: the child buffers its whole response and flushes it at
-# once, the pipe buffer fills before the parent drains it, and both sides block.
-# Redirecting each stream to a temporary file removes the pipe, so the child
-# writes freely; the files are then read back and decoded the way a pipe capture
-# would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
-# redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
-# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. On timeout,
-# partial stdout/stderr are decoded from the temp files and attached to the
-# raised ``TimeoutExpired``. When ``check=True`` and the child exits non-zero,
-# ``CalledProcessError.stdout`` / ``.stderr`` stay unset (temp files are not
-# attached to that raised error).
 class _SpooledByteStream(Protocol):
     """Binary spool with seek/read — TemporaryFile wrappers and BufferedIO."""
 
@@ -166,6 +154,18 @@ def _attach_partial_timeout_streams(
     timeout_error.stderr = captured_stderr
 
 
+# Capturing a large-output child through OS pipes (``capture_output=True``)
+# deadlocks on Windows: the child buffers its whole response and flushes it at
+# once, the pipe buffer fills before the parent drains it, and both sides block.
+# Redirecting each stream to a temporary file removes the pipe, so the child
+# writes freely; the files are then read back and decoded the way a pipe capture
+# would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
+# redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
+# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. On timeout,
+# partial stdout/stderr are decoded from the temp files and attached to the
+# raised ``TimeoutExpired``. When ``check=True`` and the child exits non-zero,
+# ``CalledProcessError.stdout`` / ``.stderr`` stay unset (temp files are not
+# attached to that raised error).
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
