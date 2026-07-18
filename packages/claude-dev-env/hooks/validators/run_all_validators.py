@@ -19,6 +19,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from .config.directory_exemption_constants import (
+    ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+)
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
@@ -763,136 +766,77 @@ def run_file_scoped_validators(
     ]
 
 
-def _mirrored_relative_segments(file_path: str) -> list[str]:
-    """Return the target path's directory segments minus its anchor and dot parts.
+def _escapes_temporary_root(path_part: str) -> bool:
+    """Return True when a path part would climb out of or re-anchor the temp root.
 
     ::
 
-        automation/config/x.py    -> ['automation', 'config', 'x.py']
-        /repo/config/x.py         -> ['repo', 'config', 'x.py']
-        ../../escape_target.py    -> ['escape_target.py']
+        ok:   "scripts"  -> False (stays inside)
+        flag: ".."       -> True  (climbs a level)
+        flag: "/etc"     -> True  (absolute, re-anchors the join)
 
-    Normalizes the untrusted payload path, drops the drive or root anchor, and
-    removes every ``.`` or ``..`` segment, so the segments join under a temporary
-    root without escaping it while every real directory name survives.
-
-    Args:
-        file_path: The write or edit target path from the payload.
-
-    Returns:
-        The target's directory segments in order, ending with its basename.
-    """
-    normalized_target = Path(os.path.normpath(file_path))
-    target_segments = normalized_target.parts
-    if normalized_target.anchor:
-        target_segments = target_segments[1:]
-    dot_segments = {os.curdir, os.pardir}
-    return [
-        each_segment
-        for each_segment in target_segments
-        if each_segment not in dot_segments
-    ]
-
-
-def _path_is_within_directory(candidate_path: Path, directory_path: Path) -> bool:
-    """Return True when *candidate_path* resolves to a location under *directory_path*."""
-    return candidate_path.resolve().is_relative_to(directory_path.resolve())
-
-
-def _is_under_system_temporary_directory(file_path: str) -> bool:
-    """Return True when an absolute *file_path* sits at or under the process temp directory.
-
-    ::
-
-        /tmp/pytest-of-x/test_foo0/mod.py  -> True
-        C:\\Users\\x\\AppData\\Local\\Temp\\a.py -> True
-        automation/config/constants.py     -> False
-        /repo/src/module.py                -> False
-
-    Only absolute targets are classified. A relative path is never reclassified
-    by an incidental process cwd under the OS temp directory (for example the
-    Windows UNC-safe temp fallback cwd), so path-keyed exemptions such as a
-    ``config`` ancestor still match after mirrored staging.
-
-    Pytest sandboxes live under the OS temp directory and name each test folder
-    with a ``test_`` prefix. Mirroring those segments into the staging tree would
-    make ``is_test_file`` treat a non-test module as a test file and skip magic
-    value, abbreviation, and similar scanners.
+    A ``..`` component escapes upward and an absolute or anchored component
+    re-roots the join away from the temporary directory. Both are dropped so a
+    staged file cannot land outside the ephemeral root.
 
     Args:
-        file_path: The write or edit target path from the payload.
+        path_part: A single path component drawn from the destination path.
 
     Returns:
-        True when *file_path* is absolute and resolves at or under
-        ``tempfile.gettempdir()``.
+        True when the component must be dropped to keep staging contained.
     """
-    if not Path(file_path).is_absolute():
-        return False
-    try:
-        resolved_target = Path(file_path).resolve()
-        temporary_root = Path(tempfile.gettempdir()).resolve()
-    except OSError:
-        return False
-    if resolved_target == temporary_root:
+    if path_part == os.pardir:
         return True
-    return temporary_root in resolved_target.parents
+    part_as_path = Path(path_part)
+    return part_as_path.is_absolute() or bool(part_as_path.anchor)
 
 
-def _mirrored_staging_path(file_path: str, temporary_root: Path) -> Optional[Path]:
-    """Return the mirrored staging path under *temporary_root*, or None to stage flat.
-
-    Returns None when the target sits under the process temp directory, when the
-    sanitized path has no segments, or when the mirrored path would resolve
-    outside *temporary_root*.
-    """
-    if _is_under_system_temporary_directory(file_path):
-        return None
-    relative_segments = _mirrored_relative_segments(file_path)
-    if not relative_segments:
-        return None
-    mirrored_path = temporary_root.joinpath(*relative_segments)
-    if not _path_is_within_directory(mirrored_path, temporary_root):
-        return None
-    return mirrored_path
-
-
-def _write_staging_file(staging_path: Path, proposed_content: str) -> Path:
-    """Write *proposed_content* to *staging_path* and return that path."""
-    staging_path.write_text(proposed_content, encoding="utf-8")
-    return staging_path
-
-
-def _stage_proposed_content(
-    file_path: str, proposed_content: str, temporary_directory: str
+def _temporary_path_preserving_directory_signal(
+    temporary_directory: Path, file_path: str
 ) -> Path:
-    """Write *proposed_content* under *temporary_directory*, mirroring the target's dirs.
+    """Build a temp path that keeps exemption directory tails and the basename.
 
-    ::
+    Directory-based exemptions (for example ``/scripts/`` CLI markers and
+    ``/tests/`` test-path patterns) match substrings of the file path. Staging
+    under a flat temp basename drops those segments. Mirroring only the
+    exemption-relevant directory tail (plus basename) restores that signal
+    without copying absolute system prefixes such as pytest ``tmp_path`` parents
+    that contain ``test_`` and would falsely trip test-file exemptions.
 
-        target: automation/config/submission_constants.py
-        staged: <tempdir>/automation/config/submission_constants.py
+    Args:
+        temporary_directory: Root of the ephemeral staging tree.
+        file_path: Real destination path the write or edit targets.
 
-        target: /tmp/pytest-of-x/test_foo0/legacy_module.py
-        staged: <tempdir>/legacy_module.py
-
-    Preserving each directory segment lets a ``config`` ancestor or a ``tests``
-    path-keyed exemption match the staged copy. Targets under the process temp
-    directory stage by basename only so pytest's ``test_*`` sandbox folders do
-    not falsely match ``is_test_file``. A bare filename mirrors to the same path
-    flat basename staging would use. Flat basename staging is also the fallback
-    when the sanitized path has no segments, when the mirrored path would
-    resolve outside the temporary root, or on an ``OSError`` resolving the
-    mirrored path, building directories, or writing the staged file.
+    Returns:
+        Path under *temporary_directory* ending in the exemption directory tail
+        (when present) and the real basename.
     """
-    temporary_root = Path(temporary_directory)
-    flat_staging_path = temporary_root / Path(file_path).name
-    try:
-        mirrored_staging_path = _mirrored_staging_path(file_path, temporary_root)
-        staging_path = mirrored_staging_path or flat_staging_path
-        staging_path.parent.mkdir(parents=True, exist_ok=True)
-        return _write_staging_file(staging_path, proposed_content)
-    except OSError:
-        return _write_staging_file(flat_staging_path, proposed_content)
+    destination_path = Path(file_path)
+    path_parts = destination_path.parts
+    if destination_path.anchor:
+        path_parts = path_parts[1:]
+    if not path_parts:
+        path_parts = (destination_path.name,)
+
+    all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
+    start_index = len(path_parts) - 1
+    for each_index, each_part in enumerate(path_parts[:-1]):
+        if each_part.lower() not in all_directory_exemption_segment_names:
+            continue
+        start_index = each_index
+        break
+
+    selected_parts = path_parts[start_index:]
+    contained_parts = tuple(
+        each_part for each_part in selected_parts if not _escapes_temporary_root(each_part)
+    )
+    if not contained_parts:
+        contained_parts = (destination_path.name,)
+    temporary_file = temporary_directory.joinpath(*contained_parts)
+    if not temporary_file.resolve().is_relative_to(temporary_directory.resolve()):
+        temporary_file = temporary_directory / destination_path.name
+    temporary_file.parent.mkdir(parents=True, exist_ok=True)
+    return temporary_file
 
 
 def validate_proposed_file(
@@ -902,15 +846,12 @@ def validate_proposed_file(
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Stages the content under a temporary directory that mirrors the target
-    path's directory segments, so suffix filters, test-name filters, and
-    path-keyed exemptions (a ``config`` ancestor or a ``tests`` segment) match
-    the staged copy as they would the real target, then runs the file-scoped
-    validators against it. A target under the system temp directory stages by
-    basename only, so a pytest sandbox folder does not read as a test file.
-    Ruff and mypy resolve their config by walking up from the config source
-    path, so the staged copy is graded under the project config the real path
-    sits in rather than the temporary directory's.
+    Writes the content to a temporary file that preserves the exemption-relevant
+    directory tail and basename so directory-based exemptions, suffix-based
+    filtering, and test-name-based filtering match the real path, then runs the
+    file-scoped validators against it. Ruff and mypy resolve their config by
+    walking up from the config source path, so the staged copy is graded under
+    the project config the real path sits in rather than the temp directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
@@ -922,16 +863,17 @@ def validate_proposed_file(
         One ValidatorResult per file-scoped validator.
     """
     with tempfile.TemporaryDirectory() as temporary_directory:
-        staged_file = _stage_proposed_content(
-            file_path, proposed_content, temporary_directory
+        temporary_file = _temporary_path_preserving_directory_signal(
+            Path(temporary_directory), file_path
         )
+        temporary_file.write_text(proposed_content, encoding="utf-8")
         resolved_config_source_path = (
             config_source_path
             if config_source_path is not None
             else Path(file_path)
         )
         return run_file_scoped_validators(
-            [staged_file], config_source_path=resolved_config_source_path
+            [temporary_file], config_source_path=resolved_config_source_path
         )
 
 
