@@ -246,24 +246,22 @@ def advance_origin_main_divergent(
     run_git(repository_root, "checkout", "feature")
 
 
-def write_agent_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+def _spawn_payload(tool_name: str, subagent_type: str, prompt: str, cwd: Path) -> str:
     return json.dumps(
         {
-            "tool_name": "Agent",
+            "tool_name": tool_name,
             "tool_input": {"subagent_type": subagent_type, "prompt": prompt},
             "cwd": str(cwd),
         }
     )
+
+
+def write_agent_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+    return _spawn_payload("Agent", subagent_type, prompt, cwd)
 
 
 def write_task_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
-    return json.dumps(
-        {
-            "tool_name": "Task",
-            "tool_input": {"subagent_type": subagent_type, "prompt": prompt},
-            "cwd": str(cwd),
-        }
-    )
+    return _spawn_payload("Task", subagent_type, prompt, cwd)
 
 
 def run_hook(payload: str, cwd: Path) -> subprocess.CompletedProcess[str]:
