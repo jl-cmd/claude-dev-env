@@ -249,21 +249,30 @@ test('the Codex gate prompt returns codex_down when the background poll budget i
   );
 });
 
-test('meta Codex gate phase describes codex_down as blocking, not a non-blocking skip', () => {
+test('meta Codex gate phase describes codex_down as a non-blocking skip that logs a note', () => {
   const phaseStart = convergeSource.indexOf("title: 'Codex gate'");
   const phaseEnd = convergeSource.indexOf("title: 'Finalize'");
   assert.notEqual(phaseStart, -1, 'expected a Codex gate phase in meta');
   const codexPhaseDetail = convergeSource.slice(phaseStart, phaseEnd);
   assert.match(codexPhaseDetail, /codex_down/, 'expected the phase detail to name codex_down');
-  assert.match(codexPhaseDetail, /draft|blocker/i, 'expected codex_down to be described as holding the PR draft');
-  assert.doesNotMatch(
+  assert.match(
     codexPhaseDetail,
     /codex_down, the gate skips without blocking/,
-    'codex_down must not be described as skipping without blocking',
+    'expected codex_down to be described as a non-blocking skip',
+  );
+  assert.match(
+    codexPhaseDetail,
+    /logged as a note/,
+    'expected the codex_down skip to be logged as a note so the bypass stays visible',
+  );
+  assert.doesNotMatch(
+    codexPhaseDetail,
+    /holds the PR as a draft with a codex-down blocker/,
+    'codex_down must not be described as holding the PR draft with a blocker',
   );
 });
 
-test('CODEX_SCHEMA down.description separates the blocking codex_down case from the bypassed opt-out', () => {
+test('CODEX_SCHEMA down.description describes codex_down as a skipped, bypassed gate recorded as a note', () => {
   const schemaStart = convergeSource.indexOf('const CODEX_SCHEMA =');
   const schemaEnd = convergeSource.indexOf('const COPILOT_VERIFY_VERDICTS =');
   assert.notEqual(schemaStart, -1, 'expected CODEX_SCHEMA to exist');
@@ -271,15 +280,16 @@ test('CODEX_SCHEMA down.description separates the blocking codex_down case from 
   const downLineStart = schemaSource.indexOf('down: {');
   const downLine = schemaSource.slice(downLineStart, schemaSource.indexOf('\n', downLineStart));
   assert.match(downLine, /codex_down/, 'expected the down description to name codex_down');
-  assert.match(downLine, /blocker|draft/i, 'expected codex_down to be described as blocking');
+  assert.match(downLine, /skipped and bypassed/, 'expected codex_down to be described as a skipped, bypassed gate');
+  assert.match(downLine, /recorded as a note/, 'expected codex_down to be recorded as a note');
   assert.doesNotMatch(
     downLine,
-    /the gate is bypassed'/,
-    'the down description must not claim codex_down is bypassed — it now holds the PR draft',
+    /holds the PR as a draft with a codex-down blocker/,
+    'the down description must not claim codex_down holds the PR draft as a blocker',
   );
 });
 
-test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out or usage skip', () => {
+test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out, usage, or down skip', () => {
   const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
   assert.notEqual(codexPhaseStart, -1, 'expected a CODEX phase block');
@@ -290,9 +300,10 @@ test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out o
   assert.match(codexPhase, /codexCleanAt = head/, 'expected a clean pass to stamp the HEAD');
   assert.match(codexPhase, /skip-token[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
   assert.match(codexPhase, /skip-usage[\s\S]*codexDown = false[\s\S]*codexCleanAt = null/);
+  assert.match(codexPhase, /kind === 'down'[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
 });
 
-test('the CODEX phase holds a genuine codex_down as a blocker rather than marking the PR ready', () => {
+test('the CODEX phase skips a genuine codex_down gracefully, recording a note and advancing to mark-ready', () => {
   const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
   const codexPhase = convergeSource.slice(codexPhaseStart, finalizePhaseStart);
@@ -301,19 +312,25 @@ test('the CODEX phase holds a genuine codex_down as a blocker rather than markin
   assert.notEqual(downBranchStart, -1, 'expected a codex_down branch in the CODEX phase');
   assert.notEqual(downBranchEnd, -1, 'expected a fix branch after the down branch');
   const downBranch = codexPhase.slice(downBranchStart, downBranchEnd);
-  assert.match(downBranch, /blocker =/, 'a genuine codex_down must record a blocker');
-  assert.match(downBranch, /codex-down/, 'the blocker names the codex-down stop condition');
-  assert.match(downBranch, /\bbreak\b/, 'the down branch breaks the loop rather than advancing to mark-ready');
-  assert.doesNotMatch(
+  assert.match(downBranch, /codexNote =/, 'a genuine codex_down records a transparent note');
+  assert.match(downBranch, /codexDown = true/, 'the down branch sets the bypass flag so mark-ready skips the required Codex gate');
+  assert.match(downBranch, /codexCleanAt = null/, 'the down branch clears any codex-clean stamp');
+  assert.match(
     downBranch,
     /phase = 'FINALIZE'/,
-    'a genuine codex_down must not route to FINALIZE — that would mark the PR ready without the required gate',
+    'a genuine codex_down advances to mark-ready with the gate bypassed rather than blocking the run',
   );
-  assert.doesNotMatch(
-    downBranch,
-    /codexDown = true/,
-    'a genuine codex_down must not set the bypass flag that lets mark-ready skip the required Codex gate',
-  );
+  assert.doesNotMatch(downBranch, /blocker =/, 'a genuine codex_down must not record a blocker');
+  assert.doesNotMatch(downBranch, /\bbreak\b/, 'the down branch continues rather than breaking the loop');
+});
+
+test('the workflow return object includes codexNote so the final report surfaces the Codex skip', () => {
+  const assembleStart = convergeSource.indexOf('const assembleResult =');
+  assert.notEqual(assembleStart, -1, 'expected assembleResult to exist');
+  const assembleEnd = convergeSource.indexOf('})', assembleStart);
+  assert.notEqual(assembleEnd, -1, 'expected the assembleResult object to close');
+  const assembleSource = convergeSource.slice(assembleStart, assembleEnd);
+  assert.match(assembleSource, /codexNote,/, 'expected codexNote among the returned notes');
 });
 
 test('the CODEX phase routes findings through applyFixes and re-enters CONVERGE', () => {

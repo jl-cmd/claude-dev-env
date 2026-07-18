@@ -18,7 +18,7 @@ export const meta = {
     { title: 'Converge', detail: 'A deterministic static sweep runs first each round; then code-review, bug-audit, and self-review run in parallel on the same HEAD; one clean-coder applies all fixes; the loop repeats until every lens is clean on a stable HEAD' },
     { title: 'Bugbot gate', detail: 'A terminal confirmation gate that runs once the internal lenses are clean; when Bugbot is disabled or unavailable it spawns no agent and passes, otherwise it fetches Bugbot\'s verdict and routes any finding back into Converge' },
     { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and proceed with the gate bypassed' },
-    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, or when weekly usage is at or below the shared probe threshold (or null), the gate skips without blocking; when the wrapper classifies codex_down the gate holds the PR as a draft with a codex-down blocker rather than marking it ready without the required review; when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
+    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, when weekly usage is at or below the shared probe threshold (or null), or when the wrapper classifies codex_down, the gate skips without blocking (a codex_down skip is logged as a note so the bypass stays visible); when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
@@ -695,7 +695,7 @@ const CODEX_SCHEMA = {
   properties: {
     sha: { type: 'string', description: 'PR HEAD SHA this gate evaluated' },
     clean: { type: 'boolean', description: 'true when Codex reported no findings on sha, or when the gate skipped without requiring a review' },
-    down: { type: 'boolean', description: 'true when the wrapper classifies codex_down (the gate holds the PR as a draft with a codex-down blocker) or when Codex is opted out via the codex token (skipped, and the gate is bypassed)' },
+    down: { type: 'boolean', description: 'true when the wrapper classifies codex_down (the gate is skipped and bypassed, recorded as a note) or when Codex is opted out via the codex token — the gate is bypassed' },
     skipped: { type: 'boolean', description: 'true when the gate did not run the review wrapper (opt-out token or usage at/below the shared threshold)' },
     skipReason: {
       type: 'string',
@@ -2541,6 +2541,7 @@ let copilotDown = input.copilotDisabled || false
 let codexDown = false
 let codexCleanAt = null
 let copilotNote = null
+let codexNote = null
 let standardsNote = null
 let cleanAuditNote = null
 let hasStandardsFollowUpFiled = false
@@ -2554,6 +2555,7 @@ const assembleResult = (outcomeFields) => ({
   ...outcomeFields,
   standardsNote,
   copilotNote,
+  codexNote,
   cleanAuditNote,
   reuseNote,
   deferredPrs,
@@ -2845,9 +2847,12 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (codexOutcome.kind === 'down') {
-      blocker = `codex-down: the required Codex review did not complete on HEAD ${head} — the codex-review wrapper classified codex_down (a Codex CLI error, or a run that ran past its timeout budget). The PR stays a draft instead of being marked ready without the required gate; re-run once Codex is reachable, or opt Codex out for this run through CLAUDE_REVIEWS_DISABLED to mark ready without it.`
-      log(`Codex gate: ${blocker}`)
-      break
+      codexNote = `Codex was unreachable this run (the codex-review wrapper classified codex_down — a Codex CLI error, or a review that ran past its timeout budget). The terminal Codex gate was skipped with the gate bypassed so a Codex outage does not hinder convergence; Codex runs again on the next convergence.`
+      log(`Codex gate: ${codexNote}`)
+      codexDown = true
+      codexCleanAt = null
+      phase = 'FINALIZE'
+      continue
     }
     if (codexOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(codexOutcome.findings)) {
