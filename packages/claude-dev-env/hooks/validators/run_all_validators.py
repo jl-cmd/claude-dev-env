@@ -22,6 +22,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .config.directory_exemption_constants import (
     ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS,
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+    ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
 )
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
@@ -787,6 +788,35 @@ def _escapes_temporary_root(path_part: str) -> bool:
     return part_as_path.is_absolute() or bool(part_as_path.anchor)
 
 
+def _directory_segment_signals_exemption(segment_lower: str) -> bool:
+    """Return True when a directory segment carries a path-exemption signal.
+
+    ::
+
+        ok:   "test_helpers" -> True  (contains the ``test_`` fragment)
+        ok:   "scripts"      -> True  (exact CLI-marker segment name)
+        flag: "latest"       -> False (neither exact name nor a fragment)
+
+    A segment is kept during staging when its name exactly matches an exemption
+    directory name or contains a separator-free substring pattern that
+    ``is_test_file`` and its siblings match anywhere in a path. The substring
+    branch is what preserves ``pkg/test_helpers/`` so the staged copy earns the
+    same test exemption the real path does.
+
+    Args:
+        segment_lower: One lowercased directory component of the target path.
+
+    Returns:
+        True when staging must keep this segment to reproduce the exemption.
+    """
+    if segment_lower in ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES:
+        return True
+    return any(
+        each_pattern in segment_lower
+        for each_pattern in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    )
+
+
 def _temporary_path_preserving_directory_signal(
     temporary_directory: Path, file_path: str
 ) -> Path:
@@ -814,12 +844,11 @@ def _temporary_path_preserving_directory_signal(
     if not path_parts:
         path_parts = (destination_path.name,)
 
-    all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
     claude_directory_name, hooks_directory_name = ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS
     start_index = len(path_parts) - 1
     for each_index, each_part in enumerate(path_parts[:-1]):
         part_lower = each_part.lower()
-        if part_lower not in all_directory_exemption_segment_names:
+        if not _directory_segment_signals_exemption(part_lower):
             continue
         if (
             part_lower == hooks_directory_name
