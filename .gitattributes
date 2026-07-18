@@ -1,1 +1,2 @@
 .github/ci/*.txt text eol=lf
+packages/claude-dev-env/**/*.py text eol=lf
