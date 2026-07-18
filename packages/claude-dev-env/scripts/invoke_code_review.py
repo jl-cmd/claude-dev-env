@@ -57,6 +57,7 @@ from claude_chain_runner import (  # noqa: E402
 )
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
+    collect_forwarded_text_codec,
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER,
@@ -425,7 +426,9 @@ def _run_claude_with_empty_stdin(
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
     with _CHAIN_RUNNER_LOCK:
-        previous_runner = chain_runner.chain_subprocess_runner
+        previous_runner: TextCapturingSubprocessRunner = (
+            chain_runner.chain_subprocess_runner
+        )
 
         def _runner_with_empty_stdin(
             all_invocation_tokens: Sequence[str],
@@ -439,6 +442,7 @@ def _run_claude_with_empty_stdin(
                 timeout_for_run = float(maybe_timeout)
             else:
                 timeout_for_run = None
+            forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
             completed_process: subprocess.CompletedProcess[str] = previous_runner(
                 all_invocation_tokens,
                 capture_output=True,
@@ -447,6 +451,7 @@ def _run_claude_with_empty_stdin(
                 check=False,
                 stdin=subprocess.DEVNULL,
                 cwd=working_directory_path,
+                **forwarded_text_codec,
             )
             return completed_process
 
