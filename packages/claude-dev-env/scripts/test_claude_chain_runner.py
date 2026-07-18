@@ -1029,6 +1029,26 @@ def test_run_captured_subprocess_honors_cwd(tmp_path: Path) -> None:
     assert Path(completion.stdout).resolve() == tmp_path.resolve()
 
 
+def test_run_captured_subprocess_timeout_keeps_partial_stdout() -> None:
+    child_code = (
+        "import sys, time;"
+        "sys.stdout.write('partial-before-timeout');"
+        "sys.stdout.flush();"
+        "time.sleep(30)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired) as raised:
+        runner._run_captured_subprocess(
+            [sys.executable, "-c", child_code],
+            encoding=UTF8_ENCODING,
+            errors=CODEC_ERROR_STRATEGY,
+            timeout=1,
+            check=False,
+            input=None,
+        )
+    assert raised.value.stdout == "partial-before-timeout"
+    assert isinstance(raised.value.stdout, str)
+
+
 def test_run_captured_subprocess_reads_stdin_stream(tmp_path: Path) -> None:
     prompt_path = tmp_path / "prompt_body.txt"
     prompt_path.write_text(_STDIN_ECHO_PAYLOAD, encoding=UTF8_ENCODING)

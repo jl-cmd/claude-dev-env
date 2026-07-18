@@ -876,14 +876,14 @@ def _stage_proposed_content(
     not falsely match ``is_test_file``. A bare filename mirrors to the same path
     flat basename staging would use. Flat basename staging is also the fallback
     when the sanitized path has no segments, when the mirrored path would
-    resolve outside the temporary root, or on an ``OSError`` building the
-    directories or writing the staged file.
+    resolve outside the temporary root, or on an ``OSError`` resolving the
+    mirrored path, building directories, or writing the staged file.
     """
     temporary_root = Path(temporary_directory)
     flat_staging_path = temporary_root / Path(file_path).name
-    mirrored_staging_path = _mirrored_staging_path(file_path, temporary_root)
-    staging_path = mirrored_staging_path or flat_staging_path
     try:
+        mirrored_staging_path = _mirrored_staging_path(file_path, temporary_root)
+        staging_path = mirrored_staging_path or flat_staging_path
         staging_path.parent.mkdir(parents=True, exist_ok=True)
         return _write_staging_file(staging_path, proposed_content)
     except OSError:

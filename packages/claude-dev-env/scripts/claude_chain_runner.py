@@ -123,9 +123,49 @@ def _optional_working_directory(value: object) -> str | None:
 # writes freely; the files are then read back and decoded the way a pipe capture
 # would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
 # redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
-# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. When
-# ``check=True`` and the child exits non-zero, ``CalledProcessError.stdout`` /
-# ``.stderr`` stay unset (temp files are not attached to the raised error).
+# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. On timeout,
+# partial stdout/stderr are decoded from the temp files and attached to the
+# raised ``TimeoutExpired``. When ``check=True`` and the child exits non-zero,
+# ``CalledProcessError.stdout`` / ``.stderr`` stay unset (temp files are not
+# attached to that raised error).
+class _SpooledByteStream(Protocol):
+    """Binary spool with seek/read — TemporaryFile wrappers and BufferedIO."""
+
+    def seek(self, target: int, whence: int = 0, /) -> int: ...
+
+    def read(self, size: int | None = -1, /) -> bytes: ...
+
+
+def _decoded_spooled_streams(
+    stdout_file: _SpooledByteStream,
+    stderr_file: _SpooledByteStream,
+    encoding: str,
+    errors: str,
+) -> tuple[str, str]:
+    """Seek both spool files to the start and decode their full contents."""
+    stdout_file.seek(0)
+    stderr_file.seek(0)
+    return (
+        _decode_captured_stream(stdout_file.read(), encoding, errors),
+        _decode_captured_stream(stderr_file.read(), encoding, errors),
+    )
+
+
+def _attach_partial_timeout_streams(
+    timeout_error: subprocess.TimeoutExpired,
+    stdout_file: _SpooledByteStream,
+    stderr_file: _SpooledByteStream,
+    encoding: str,
+    errors: str,
+) -> None:
+    """Decode partial spool contents onto *timeout_error* before re-raise."""
+    captured_stdout, captured_stderr = _decoded_spooled_streams(
+        stdout_file, stderr_file, encoding, errors
+    )
+    timeout_error.stdout = captured_stdout
+    timeout_error.stderr = captured_stderr
+
+
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
@@ -138,22 +178,29 @@ def _run_captured_subprocess(
         tempfile.TemporaryFile() as stdout_file,
         tempfile.TemporaryFile() as stderr_file,
     ):
-        completion = subprocess.run(
-            all_invocation_tokens,
-            stdout=stdout_file,
-            stderr=stderr_file,
-            cwd=_optional_working_directory(all_subprocess_options.get("cwd")),
-            check=bool(all_subprocess_options.get("check", False)),
-            timeout=_optional_timeout(all_subprocess_options.get("timeout")),
-            input=input_bytes,
+        try:
+            completion = subprocess.run(
+                all_invocation_tokens,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                cwd=_optional_working_directory(all_subprocess_options.get("cwd")),
+                check=bool(all_subprocess_options.get("check", False)),
+                timeout=_optional_timeout(all_subprocess_options.get("timeout")),
+                input=input_bytes,
+            )
+        except subprocess.TimeoutExpired as timeout_error:
+            _attach_partial_timeout_streams(
+                timeout_error, stdout_file, stderr_file, encoding, errors
+            )
+            raise
+        captured_stdout, captured_stderr = _decoded_spooled_streams(
+            stdout_file, stderr_file, encoding, errors
         )
-        stdout_file.seek(0)
-        stderr_file.seek(0)
         return subprocess.CompletedProcess(
             all_invocation_tokens,
             completion.returncode,
-            _decode_captured_stream(stdout_file.read(), encoding, errors),
-            _decode_captured_stream(stderr_file.read(), encoding, errors),
+            captured_stdout,
+            captured_stderr,
         )
 
 

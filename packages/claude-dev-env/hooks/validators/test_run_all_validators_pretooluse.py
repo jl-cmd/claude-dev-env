@@ -252,6 +252,27 @@ class TestMirroredRelativeSegments:
         assert "config" in mirrored_path.parts
         assert mirrored_path.name == "x.py"
 
+    def test_stage_falls_back_to_flat_when_resolve_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        staging_module = sys.modules[main.__module__]
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+
+        def resolve_raises(
+            self: Path, *all_arguments: object, **all_keyword_arguments: object
+        ) -> Path:
+            raise OSError("resolve failed")
+
+        monkeypatch.setattr(Path, "resolve", resolve_raises)
+        staged_path = staging_module._stage_proposed_content(
+            CONFIG_DIR_TARGET_PATH,
+            MAGIC_VALUE_MARKER_FUNCTION,
+            str(staging_root),
+        )
+        assert staged_path == staging_root / "submission_constants.py"
+        assert staged_path.read_text(encoding="utf-8") == MAGIC_VALUE_MARKER_FUNCTION
+
 
 class TestCliModeRegression:
     def test_cli_mode_reports_violations_and_exits_one(
