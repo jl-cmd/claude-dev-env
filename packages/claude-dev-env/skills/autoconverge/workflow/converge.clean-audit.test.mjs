@@ -215,7 +215,7 @@ test('every no-lens-reviewed round registers one shared counter and every lens-r
   const registerSites = loopBody.match(/registerNoLensRound\(/g) || [];
   assert.equal(registerSites.length, 3, 'expected the preflight-no-SHA, all-lenses-dead, and no-lens-ran rounds to register');
   const resetSites = loopBody.match(/resetNoLensRounds\(\)/g) || [];
-  assert.equal(resetSites.length, 5, 'expected a reset on the static-sweep, standards, findings, not-clean, and posted lens-ran rounds');
+  assert.equal(resetSites.length, 6, 'expected a reset on the static-sweep, standards, P2-only, findings, not-clean, and posted lens-ran rounds');
   const deadBranch = convergeSource.slice(
     convergeSource.indexOf('if (roundOutcome.allLensesDead) {'),
     convergeSource.indexOf('const findings = roundOutcome.findings'),
@@ -533,7 +533,7 @@ test('CLEAN_AUDIT_SCHEMA requires posted, reviewUrl, and reason', () => {
 test('the standards-only call site records a clean-audit bypass and continues to BUGBOT when the post does not land', () => {
   const branch = convergeSource.slice(
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
-    convergeSource.indexOf('if (findings.length > 0) {'),
+    convergeSource.indexOf('if (isP2OnlyFindings(findings)) {'),
   );
   assert.match(branch, /runGeneralUtilityTask\(.*'post-clean-audit'/);
   assert.match(branch, /cleanAuditNote = resolveCleanAuditNote\(auditResult, head, rounds\)/);
@@ -545,7 +545,7 @@ test('the standards-only call site records a clean-audit bypass and continues to
 test('the standards-only call site relays lens provenance, the deferred standards findings, and the deferral filing state', () => {
   const branch = convergeSource.slice(
     convergeSource.indexOf('if (isStandardsOnlyRound(findings)) {'),
-    convergeSource.indexOf('if (findings.length > 0) {'),
+    convergeSource.indexOf('if (isP2OnlyFindings(findings)) {'),
   );
   assert.match(branch, /const namedLenses = nameLensResults\(lenses\)/);
   assert.match(branch, /lensResults: namedLenses/);

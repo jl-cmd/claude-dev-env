@@ -106,6 +106,15 @@ follow-up issue listing the findings, opens a draft environment-hardening PR
 (hooks/rules that block those violation classes at Write/Edit time), resolves
 any bot threads with a deferral note, and reports the deferral in
 `standardsNote`. The hardening PRs land in the run result's `deferredPrs` list.
+Standards-only deferral still takes precedence when every finding is category
+`code-standard`.
+
+When the already-deduped findings for a phase are all severity P2 (and not
+standards-only), the phase still applies the fixes once, then treats the fixed
+HEAD as clean for that phase and advances forward without re-converging the same
+phase. The three CONVERGE reading lenses stay parallel; the P2-only decision is a
+routing branch on the deduped set after `resolveRoundOutcome` / gate
+classification. Mixed P0/P1 findings keep the existing fix + re-converge path.
 
 **BUGBOT** gate (terminal external confirmation):
 
@@ -115,7 +124,10 @@ any bot threads with a deferral note, and reports the deferral in
   to the Copilot gate with `bugbotDown` set.
 - Otherwise drive Cursor Bugbot to a verdict on HEAD (trigger and poll its CI
   check run when needed).
-- Bugbot findings → fix them and return to CONVERGE on the new HEAD.
+- Bugbot findings that are not standards-only and not P2-only → fix them and
+  return to CONVERGE on the new HEAD.
+- Bugbot P2-only findings → fix once, then advance to the Copilot gate on the
+  fixed HEAD (no re-converge).
 - Bugbot clean or approved → move to the Copilot gate.
 - Bugbot down after the poll cap → move to the Copilot gate with `bugbotDown` set.
 
@@ -123,7 +135,10 @@ any bot threads with a deferral note, and reports the deferral in
 
 - Request a Copilot review on HEAD (skipping a duplicate request), then poll up
   to the configured cap, 360 seconds apart.
-- Copilot findings → fix them and return to CONVERGE on the new HEAD.
+- Copilot findings that are not standards-only and not P2-only → fix them and
+  return to CONVERGE on the new HEAD.
+- Copilot P2-only findings → fix once, then advance to the Codex gate on the
+  fixed HEAD (no re-converge).
 - Copilot clean or approved → move to the Codex gate.
 - Copilot down or out of quota (an out-of-usage notice, or no review after the
   configured cap) → log a notice and move to the Codex gate with the Copilot gate
@@ -140,7 +155,9 @@ any bot threads with a deferral note, and reports the deferral in
 - Usage at/below threshold or null → skip with no stamp; the machine checklist
   applies the same rule.
 - Above threshold → run the codex-review wrapper against the PR base branch.
-  Non–code-standard findings → fix and return to CONVERGE.
+  Non–code-standard, non–P2-only findings → fix and return to CONVERGE.
+  P2-only findings → fix once, stamp `codexCleanAt` on the fixed HEAD, and move
+  to the convergence check (no re-converge).
   Standards-only findings → defer a follow-up, stamp `codexCleanAt`, and move to the
   convergence check (no fix push).
   Clean → stamp `codexCleanAt` and pass `--codex-clean-at` into the convergence check.
