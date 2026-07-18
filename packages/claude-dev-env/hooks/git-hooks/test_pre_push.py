@@ -439,3 +439,74 @@ def test_main_allows_main_onto_main_push(
     exit_code = pre_push.main()
 
     assert exit_code == 0
+
+
+CODE_REVIEW_STUB_BLOCK_REASON: str = "CODE_REVIEW_STUB_BLOCK_REASON"
+
+
+def _write_passing_code_rules_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    passing_gate_path = tmp_path / "code_rules_gate.py"
+    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
+        ),
+    )
+
+
+def _write_code_review_gate_stub(tmp_path: Path, returned_reason_literal: str) -> Path:
+    stub_gate_path = tmp_path / "code_review_push_gate.py"
+    stub_gate_path.write_text(
+        "def deny_reason_for_directory(target_directory):\n"
+        f"    return {returned_reason_literal}\n",
+        encoding="utf-8",
+    )
+    return stub_gate_path
+
+
+def test_main_blocks_when_code_review_gate_returns_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    stub_gate_path = _write_code_review_gate_stub(
+        tmp_path, repr(CODE_REVIEW_STUB_BLOCK_REASON)
+    )
+    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
+
+    exit_code = pre_push.main()
+
+    assert exit_code == git_hooks_constants.CODE_REVIEW_STAMP_BLOCK_EXIT_CODE
+    captured = capsys.readouterr()
+    assert CODE_REVIEW_STUB_BLOCK_REASON in captured.err
+
+
+def test_main_allows_when_code_review_gate_returns_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    stub_gate_path = _write_code_review_gate_stub(tmp_path, "None")
+    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+
+
+def test_main_code_review_check_fails_open_when_gate_module_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    monkeypatch.setenv(
+        "CODE_REVIEW_PUSH_GATE_PATH", str(tmp_path / "does_not_exist.py")
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
