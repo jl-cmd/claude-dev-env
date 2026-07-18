@@ -25,6 +25,7 @@ from blocking.pr_description_body_audit import (  # noqa: E402
     _iter_section_headers,
     _matches_self_closing_reference,
     _opens_with_this_pr_phrase,
+    contains_hardcoded_test_count_claim,
 )
 from blocking.pr_description_command_parser import (  # noqa: E402
     extract_body_from_command,
@@ -53,6 +54,7 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     ALL_HEAVY_OPENING_HEADERS,
     ALL_HEAVY_TESTING_HEADERS,
     ALL_READABILITY_CLI_FLAG_TOKENS,
+    HARDCODED_TEST_COUNT_MESSAGE,
     HEAVY_SHAPE,
     MINIMUM_SUBSTANTIVE_PROSE_CHARS,
     PR_GUIDE_PATH,
@@ -207,6 +209,9 @@ def main() -> None:
         extracted_pr_number = _extract_pr_number_from_command(command)
 
     violations = validate_pr_body(body, pr_number=extracted_pr_number)
+
+    if (is_pr_create or is_pr_edit) and contains_hardcoded_test_count_claim(body):
+        violations.append(HARDCODED_TEST_COUNT_MESSAGE)
 
     if is_pr_comment and is_proof_shaped_body(body):
         violations.extend(audit_proof_comment_body(body, extracted_pr_number))
