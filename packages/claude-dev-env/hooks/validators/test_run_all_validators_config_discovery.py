@@ -28,9 +28,18 @@ VALIDATORS_DIRECTORY = Path(__file__).parent
 NON_TEST_PROBE_PATH = VALIDATORS_DIRECTORY / "config_probe_module.py"
 TEST_PROBE_PATH = VALIDATORS_DIRECTORY / "test_config_probe_module.py"
 
+RUN_ALL_VALIDATORS_PATH = VALIDATORS_DIRECTORY / "run_all_validators.py"
+EXEMPT_PATHS_PATH = VALIDATORS_DIRECTORY / "exempt_paths.py"
+
 DIRTY_SOURCE = (
     "def probe_condition(observed_total: int) -> None:\n    assert False, observed_total\n"
 )
+
+UNCHECKED_SUBPROCESS_SOURCE = (
+    "import subprocess\n\n\ndef run_listing() -> None:\n    subprocess.run([\"ls\"])\n"
+)
+
+UNUSED_IMPORT_SOURCE = "import os\n"
 
 
 def _ruff_result(all_results: list[ValidatorResult]) -> ValidatorResult:
@@ -73,3 +82,42 @@ def test_staged_test_file_suppresses_b011_via_per_file_ignore(
 
     assert "B011" in non_test_ruff_result.output
     assert "B011" not in test_ruff_result.output
+
+
+@pytest.mark.parametrize("cwd_kind", ["repo_root", "outside_repo"])
+def test_staged_run_all_validators_suppresses_plw1510_via_path_ignore(
+    cwd_kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(_working_directory_for(cwd_kind, tmp_path))
+
+    ruff_result = _ruff_result(
+        validate_proposed_file(str(RUN_ALL_VALIDATORS_PATH), UNCHECKED_SUBPROCESS_SOURCE)
+    )
+
+    assert "PLW1510" not in ruff_result.output
+    assert ruff_result.passed
+
+
+def test_staged_exempt_paths_suppresses_f401_via_path_ignore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    ruff_result = _ruff_result(
+        validate_proposed_file(str(EXEMPT_PATHS_PATH), UNUSED_IMPORT_SOURCE)
+    )
+
+    assert "F401" not in ruff_result.output
+    assert ruff_result.passed
+
+
+def test_staged_non_carved_path_still_reports_plw1510(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    ruff_result = _ruff_result(
+        validate_proposed_file(str(NON_TEST_PROBE_PATH), UNCHECKED_SUBPROCESS_SOURCE)
+    )
+
+    assert "PLW1510" in ruff_result.output
