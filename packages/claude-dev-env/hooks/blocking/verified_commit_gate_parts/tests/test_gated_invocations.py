@@ -59,3 +59,38 @@ def test_gated_repo_directories_gates_an_empty_work_tree_against_the_session() -
     assert gated_repo_directories("git --work-tree= commit -m x", "/session") == [
         os.path.join("/session", "")
     ]
+
+
+def test_default_gated_subcommands_gates_both_commit_and_push() -> None:
+    assert gated_repo_directories("git commit -m x", "/session") == ["/session"]
+    assert gated_repo_directories("git push", "/session") == ["/session"]
+
+
+def test_push_only_subcommands_gate_push_but_not_commit() -> None:
+    push_only = frozenset({"push"})
+    assert gated_invocation_directory(["push"], push_only)[0] is True
+    assert gated_invocation_directory(["commit", "-m", "x"], push_only)[0] is False
+
+
+def test_commit_only_subcommands_gate_commit_but_not_push() -> None:
+    commit_only = frozenset({"commit"})
+    assert gated_invocation_directory(["commit", "-m", "x"], commit_only)[0] is True
+    assert gated_invocation_directory(["push"], commit_only)[0] is False
+
+
+def test_gated_repo_directories_threads_push_only_subcommands() -> None:
+    push_only = frozenset({"push"})
+    assert gated_repo_directories("git push", "/session", push_only) == ["/session"]
+    assert gated_repo_directories("git commit -m x", "/session", push_only) == []
+
+
+def test_gated_repo_directories_accepts_the_all_gated_subcommands_keyword() -> None:
+    push_only = frozenset({"push"})
+    assert gated_repo_directories(
+        "git push", "/session", all_gated_subcommands=push_only
+    ) == ["/session"]
+
+
+def test_gated_invocation_directory_accepts_the_all_gated_subcommands_keyword() -> None:
+    push_only = frozenset({"push"})
+    assert gated_invocation_directory(["push"], all_gated_subcommands=push_only)[0] is True

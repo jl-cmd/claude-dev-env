@@ -91,7 +91,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
       - [ ] **`mode == in_session`** (Claude host, session model opus) → run
-            `/code-review high --fix` in-session (no path args)
+            `/code-review xhigh --fix` in-session (no path args)
       - [ ] **`mode == chain`** (any other host or non-opus session) → helper
             already ran the headless review; read `returncode`,
             `served_command`, and `dirty_tree` from JSON

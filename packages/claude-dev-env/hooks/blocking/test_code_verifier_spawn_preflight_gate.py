@@ -183,6 +183,20 @@ def other_value() -> int:
     return 42
 '''
 
+BROKEN_ENFORCER_SOURCE = (
+    '"""Enforcer stub that raises a non-import error at load time."""\n'
+    "\n"
+    "raise RuntimeError('deliberate enforcer load failure')\n"
+)
+
+RE_ERROR_ENFORCER_SOURCE = (
+    '"""Enforcer stub whose module-scope regex compile raises re.error."""\n'
+    "\n"
+    "import re\n"
+    "\n"
+    "re.compile('(')\n"
+)
+
 
 def run_git(repository_root: Path, *git_arguments: str) -> str:
     completed = subprocess.run(
@@ -240,14 +254,22 @@ def advance_origin_main_divergent(
     run_git(repository_root, "checkout", "feature")
 
 
-def write_agent_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+def _spawn_payload(tool_name: str, subagent_type: str, prompt: str, cwd: Path) -> str:
     return json.dumps(
         {
-            "tool_name": "Agent",
+            "tool_name": tool_name,
             "tool_input": {"subagent_type": subagent_type, "prompt": prompt},
             "cwd": str(cwd),
         }
     )
+
+
+def write_agent_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+    return _spawn_payload("Agent", subagent_type, prompt, cwd)
+
+
+def write_task_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+    return _spawn_payload("Task", subagent_type, prompt, cwd)
 
 
 def run_hook(payload: str, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -586,3 +608,103 @@ def test_hook_imports_real_config_when_parent_holds_shadowing_config(
 
     assert "ModuleNotFoundError" not in completed.stderr
     assert completed.returncode == 0
+
+
+def test_task_tool_code_verifier_spawn_is_gated_like_agent(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "fresh.py", VIOLATING_MODULE_SOURCE)
+    task_payload = write_task_payload("code-verifier", "verify the change", repository_root)
+    task_result = run_hook(task_payload, repository_root)
+    assert not is_allow(task_result)
+    task_reason = deny_reason(task_result)
+    assert "fresh.py" in task_reason
+    assert "CODE_RULES violations on changed lines:" in task_reason
+    clean_coder_payload = write_task_payload("clean-coder", "write code", repository_root)
+    clean_coder_result = run_hook(clean_coder_payload, repository_root)
+    assert is_allow(clean_coder_result)
+
+
+def stage_package_and_feature_repo(tmp_path: Path) -> tuple[Path, Path]:
+    """Copy the hook package and build a clean feature repo for load-failure tests.
+
+    Args:
+        tmp_path: The pytest temporary directory the staged copy lands under.
+
+    Returns:
+        A ``(staged_enforcer_path, repository_root)`` pair: the copied
+        ``code_rules_enforcer.py`` a test renders unloadable, and the clean
+        feature repository the staged hook runs against.
+    """
+    real_hooks_directory = HOOK_PATH.parent.parent
+    real_package_directory = real_hooks_directory.parent
+    staged_package_directory = tmp_path / "claude-dev-env"
+    shutil.copytree(real_hooks_directory, staged_package_directory / "hooks")
+    shutil.copytree(
+        real_package_directory / "_shared", staged_package_directory / "_shared"
+    )
+    enforcer_path = staged_package_directory / "hooks" / "blocking" / "code_rules_enforcer.py"
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "feature.py", CLEAN_MODULE_SOURCE)
+    return enforcer_path, repository_root
+
+
+def run_staged_preflight_hook(
+    enforcer_path: Path, repository_root: Path
+) -> subprocess.CompletedProcess[str]:
+    """Run the staged preflight hook that sits beside *enforcer_path*.
+
+    Args:
+        enforcer_path: The staged ``code_rules_enforcer.py`` path; the staged
+            hook is its sibling in the same ``hooks/blocking`` directory.
+        repository_root: The feature repository the hook inspects.
+
+    Returns:
+        The completed hook subprocess run.
+    """
+    staged_hook = enforcer_path.parent / "code_verifier_spawn_preflight_gate.py"
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    return subprocess.run(
+        [sys.executable, str(staged_hook)],
+        check=False,
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=str(repository_root),
+        timeout=120,
+    )
+
+
+def test_engine_load_failure_denies_with_named_reason(tmp_path: Path) -> None:
+    enforcer_path, repository_root = stage_package_and_feature_repo(tmp_path)
+    enforcer_path.unlink()
+    completed = run_staged_preflight_hook(enforcer_path, repository_root)
+    assert not is_allow(completed)
+    reason = deny_reason(completed)
+    assert "CODE_RULES engine failed to load" in reason
+    assert "load_validate_content" in reason
+
+
+def test_engine_import_error_denies_with_named_reason(tmp_path: Path) -> None:
+    enforcer_path, repository_root = stage_package_and_feature_repo(tmp_path)
+    enforcer_path.write_text(BROKEN_ENFORCER_SOURCE, encoding="utf-8")
+    completed = run_staged_preflight_hook(enforcer_path, repository_root)
+    assert not is_allow(completed)
+    reason = deny_reason(completed)
+    assert "CODE_RULES engine failed to load" in reason
+    assert "load_validate_content" in reason
+
+
+def test_engine_re_error_denies_with_named_reason(tmp_path: Path) -> None:
+    enforcer_path, repository_root = stage_package_and_feature_repo(tmp_path)
+    enforcer_path.write_text(RE_ERROR_ENFORCER_SOURCE, encoding="utf-8")
+    completed = run_staged_preflight_hook(enforcer_path, repository_root)
+    assert not is_allow(completed)
+    reason = deny_reason(completed)
+    assert "CODE_RULES engine failed to load" in reason
+    assert "load_validate_content" in reason
