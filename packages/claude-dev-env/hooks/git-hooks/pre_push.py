@@ -30,6 +30,8 @@ Exit codes:
 
 from __future__ import annotations
 
+import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +40,12 @@ from git_hooks_constants import (
     ALL_PROTECTED_BRANCH_PUSH_NAMES,
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
+    BLOCKING_DIRECTORY_NAME,
+    CODE_REVIEW_DENY_REASON_FUNCTION_NAME,
+    CODE_REVIEW_PUSH_GATE_MODULE_NAME,
+    CODE_REVIEW_PUSH_GATE_PATH_OVERRIDE_ENV_VAR,
+    CODE_REVIEW_PUSH_GATE_SCRIPT_FILENAME,
+    CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
     DEFAULT_REMOTE_BASE_REFERENCE,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     INVOKE_GATE_FAILURE_MESSAGE,
@@ -158,6 +166,82 @@ def invoke_gate(gate_script_path: Path, base_reference: str) -> int:
     return completion.returncode
 
 
+def resolve_code_review_gate_path() -> tuple[Path, Path | None]:
+    """Return the code-review push gate script path and its exact-allow override.
+
+    The override environment variable, when set, names the only path the trust
+    check accepts; otherwise the gate script resolves to the ``blocking``
+    directory beside this hook's ``git-hooks`` directory, which holds in both
+    the repository layout and the installed ``~/.claude/hooks`` layout.
+
+    Returns:
+        A pair of the resolved gate script path and either the exact override
+        path (override set) or None (trust-root case).
+    """
+    override_path_raw = os.environ.get(
+        CODE_REVIEW_PUSH_GATE_PATH_OVERRIDE_ENV_VAR, ""
+    ).strip()
+    if override_path_raw:
+        exact_override = Path(override_path_raw).resolve()
+        return exact_override, exact_override
+    blocking_directory = Path(__file__).resolve().parent.parent / BLOCKING_DIRECTORY_NAME
+    return blocking_directory / CODE_REVIEW_PUSH_GATE_SCRIPT_FILENAME, None
+
+
+def load_code_review_deny_reason(gate_script_path: Path, work_tree_directory: str) -> str | None:
+    """Import the gate script and read its push deny reason for a work tree.
+
+    Any import or evaluation failure reads as no deny reason.
+
+    Args:
+        gate_script_path: The resolved code-review push gate script path.
+        work_tree_directory: The work tree the push targets.
+
+    Returns:
+        The gate's deny reason when the surface lacks a covering low stamp;
+        None when the gate allows the push or could not be evaluated.
+    """
+    try:
+        gate_specification = importlib.util.spec_from_file_location(
+            CODE_REVIEW_PUSH_GATE_MODULE_NAME, str(gate_script_path)
+        )
+        if gate_specification is None or gate_specification.loader is None:
+            return None
+        gate_module = importlib.util.module_from_spec(gate_specification)
+        gate_specification.loader.exec_module(gate_module)
+        deny_reason_function = getattr(gate_module, CODE_REVIEW_DENY_REASON_FUNCTION_NAME, None)
+        if deny_reason_function is None:
+            return None
+        deny_reason = deny_reason_function(work_tree_directory)
+    except Exception:
+        return None
+    if isinstance(deny_reason, str) and deny_reason:
+        return deny_reason
+    return None
+
+
+def code_review_stamp_block_exit_code() -> int:
+    """Block the push when no clean low code-review stamp covers the surface.
+
+    Runs the gate decision only when the gate script sits at a trusted
+    installed location (or the exact override path). When the gate is absent
+    from a trusted location, the check is skipped and the push is allowed,
+    matching the CODE_RULES gate's fail-open posture.
+
+    Returns:
+        The block exit code when a covering low stamp is missing; 0 when the
+        surface is covered or the gate is not installed at a trusted location.
+    """
+    gate_script_path, exact_allowed_path = resolve_code_review_gate_path()
+    if not is_safe_regular_file(gate_script_path, exact_allowed_path):
+        return 0
+    deny_reason = load_code_review_deny_reason(gate_script_path, os.getcwd())
+    if deny_reason is None:
+        return 0
+    sys.stderr.write(deny_reason + "\n")
+    return CODE_REVIEW_STAMP_BLOCK_EXIT_CODE
+
+
 def main() -> int:
     stdin_read_failure_message = STDIN_READ_FAILURE_MESSAGE
     gate_infrastructure_failure_exit_code = GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
@@ -191,14 +275,17 @@ def main() -> int:
             pre_push_gate_script_not_found_message.format(path=gate_script_path),
             file=sys.stderr,
         )
-        return 0
+        return code_review_stamp_block_exit_code()
     base_reference = resolve_base_reference_from_stdin(stdin_text)
     if base_reference is None:
         return 0
     if base_reference == no_parseable_stdin_lines_sentinel:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
-    return invoke_gate(gate_script_path, base_reference)
+    code_rules_exit_code = invoke_gate(gate_script_path, base_reference)
+    if code_rules_exit_code != 0:
+        return code_rules_exit_code
+    return code_review_stamp_block_exit_code()
 
 
 if __name__ == "__main__":
