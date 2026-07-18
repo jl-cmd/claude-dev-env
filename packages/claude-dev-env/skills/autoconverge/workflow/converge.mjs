@@ -29,7 +29,7 @@ const CONFIG = {
   maxIterations: 20,
   maxConsecutiveNoLensRounds: 3,
   copilotMaxPolls: 8,
-  codexReviewTimeoutSeconds: 1800,
+  codexReviewTimeoutSeconds: 2400,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
