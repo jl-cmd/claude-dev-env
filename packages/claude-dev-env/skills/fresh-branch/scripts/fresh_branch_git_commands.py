@@ -11,7 +11,9 @@ Git auto-tracks a remote-tracking start point, leaving the new branch with
 bare ``git push`` from that branch fast-forwards straight onto main, so every
 worktree here is created with ``GIT_NO_TRACK_FLAG``.
 
-Each command reports failure by raising, so callers never read a return code.
+The fetch, resolve, and worktree-add commands raise on failure. ``run_git``
+returns the completed process without raising, and ``is_ref_present`` reads its
+return code to answer a bool.
 """
 
 from __future__ import annotations
