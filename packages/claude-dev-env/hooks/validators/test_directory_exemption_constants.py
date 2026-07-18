@@ -13,11 +13,13 @@ from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY
 from validators.config.directory_exemption_constants import (
     ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS,
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+    ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
     ALL_DIRECTORY_SEGMENTS_FROM_PATH_PATTERNS,
     all_directory_segments_in_path_pattern,
     directory_segment_names_from_path_patterns,
     is_filename_like_path_segment,
     parent_and_child_directory_segments_from_patterns,
+    substring_patterns_from_path_patterns,
 )
 from validators.exempt_paths import (
     HOOK_INFRASTRUCTURE_PATTERNS,
@@ -108,3 +110,22 @@ def test_temporary_path_preserves_tests_directory_segment(tmp_path: Path) -> Non
         tmp_path, "packages/demo/tests/helper_functions.py"
     )
     assert staged_path == tmp_path / "tests" / "helper_functions.py"
+
+
+def test_substring_patterns_from_path_patterns_skips_directory_tokens() -> None:
+    all_substring_patterns = substring_patterns_from_path_patterns(
+        {"test_", "/tests/", "conftest", "\\tests\\"}
+    )
+    assert all_substring_patterns == frozenset({"test_", "conftest"})
+
+
+def test_directory_exemption_substring_patterns_are_non_empty_and_separator_free() -> None:
+    assert ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    for each_pattern in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS:
+        assert "/" not in each_pattern
+        assert "\\" not in each_pattern
+
+
+def test_directory_exemption_substring_patterns_include_test_fragments() -> None:
+    assert "test_" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert "conftest" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
