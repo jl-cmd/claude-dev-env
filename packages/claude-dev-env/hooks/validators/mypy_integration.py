@@ -8,12 +8,21 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from .pyproject_config_discovery import (
-    ancestor_directories,
-    find_pyproject_configuring_tool,
-)
-
+_validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
+
+try:
+    from pyproject_config_discovery import (
+        ancestor_directories,
+        find_pyproject_configuring_tool,
+    )
+except ModuleNotFoundError:
+    if _validators_directory not in sys.path:
+        sys.path.insert(0, _validators_directory)
+    from pyproject_config_discovery import (
+        ancestor_directories,
+        find_pyproject_configuring_tool,
+    )
 
 try:
     from hooks_constants.mypy_integration_constants import (
