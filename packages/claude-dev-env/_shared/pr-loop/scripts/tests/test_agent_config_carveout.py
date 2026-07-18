@@ -15,7 +15,6 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 
 import pytest
 
@@ -79,7 +78,7 @@ def _seed_grant_then_run(
     fake_settings_path: Path,
     fake_project_root: Path,
     monkeypatch: pytest.MonkeyPatch,
-    pre_existing_settings: dict[str, Any],
+    pre_existing_settings: dict[str, object],
 ) -> None:
     fake_settings_path.write_text(json.dumps(pre_existing_settings), encoding="utf-8")
     grant_module = _load_grant_module()
@@ -96,7 +95,7 @@ def _seed_revoke_then_run(
     fake_settings_path: Path,
     fake_project_root: Path,
     monkeypatch: pytest.MonkeyPatch,
-    pre_existing_settings: dict[str, Any],
+    pre_existing_settings: dict[str, object],
 ) -> None:
     fake_settings_path.write_text(json.dumps(pre_existing_settings), encoding="utf-8")
     revoke_module = _load_revoke_module()
@@ -117,6 +116,24 @@ def _make_fake_project(tmp_path: Path) -> Path:
 
 def _project_path_as_posix(fake_project_root: Path) -> str:
     return str(fake_project_root).replace("\\", "/")
+
+
+def _two_stale_trust_entries(project_path_posix: str) -> tuple[str, str]:
+    base_entry = f"Trusted local workspace: {project_path_posix}/.claude/**"
+    return f"{base_entry} wording form one", f"{base_entry} wording form two"
+
+
+def _project_trust_entry_count(
+    environment_list: list[object], project_path_posix: str
+) -> int:
+    project_marker = f"{project_path_posix}/.claude/**"
+    return sum(
+        1
+        for each_entry in environment_list
+        if isinstance(each_entry, str)
+        and each_entry.startswith("Trusted local workspace:")
+        and project_marker in each_entry
+    )
 
 
 def test_grant_writes_deny_rules_for_every_tool_and_pattern(
@@ -140,14 +157,13 @@ def test_grant_writes_deny_rules_for_every_tool_and_pattern(
             )
 
 
-def test_grant_writes_glob_deny_rules_for_every_agent_config_pattern(
+def test_grant_mints_only_edit_and_read_rules(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Glob must be in the deny tuple so agent-config paths require approval.
-
-    The AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE promises Edit/Write/Read/Glob
-    trust EXCEPT for agent-config files. Glob deny rules are how the EXCEPT
-    clause is honored for the Glob tool.
+    """Claude Code matches file operations against Edit(path) and Read(path)
+    rules only, so a grant run mints those two tools alone. A Write(path) or
+    Glob(path) rule is ignored by the permission checker and prints a startup
+    warning, so no minted rule may name either tool.
     """
     fake_project_root = _make_fake_project(tmp_path)
     fake_settings_path = tmp_path / "settings.json"
@@ -157,15 +173,15 @@ def test_grant_writes_glob_deny_rules_for_every_agent_config_pattern(
     )
     capsys.readouterr()
     written_settings = json.loads(fake_settings_path.read_text(encoding="utf-8"))
-    deny_list = written_settings["permissions"]["deny"]
-    project_path_posix = _project_path_as_posix(fake_project_root)
-    assert "Glob" in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
-    assert "Glob" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
-    for each_pattern in constants_module.ALL_AGENT_CONFIG_PATH_PATTERNS:
-        expected_glob_rule = f"Glob({project_path_posix}/.claude/{each_pattern})"
-        assert expected_glob_rule in deny_list, (
-            f"deny list missing expected Glob rule {expected_glob_rule!r}"
-        )
+    permissions_section = written_settings["permissions"]
+    minted_rules = permissions_section["allow"] + permissions_section["deny"]
+    assert "Write" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
+    assert "Write" not in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
+    assert "Glob" not in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
+    assert minted_rules, "grant run wrote no permission rules"
+    for each_rule in minted_rules:
+        assert "Write(" not in each_rule, f"unmatched Write rule: {each_rule!r}"
+        assert "Glob(" not in each_rule, f"unmatched Glob rule: {each_rule!r}"
 
 
 def test_grant_purges_stale_trust_entries_then_writes_current_template(
@@ -174,18 +190,10 @@ def test_grant_purges_stale_trust_entries_then_writes_current_template(
     fake_project_root = _make_fake_project(tmp_path)
     fake_settings_path = tmp_path / "settings.json"
     project_path_posix = _project_path_as_posix(fake_project_root)
-    stale_entry_a = (
-        f"Trusted local workspace: {project_path_posix}/.claude/** old wording form A"
-    )
-    stale_entry_b = (
-        f"Trusted local workspace: {project_path_posix}/.claude/** "
-        f"different earlier wording"
-    )
+    stale_entry_a, stale_entry_b = _two_stale_trust_entries(project_path_posix)
     unrelated_entry = "Some unrelated environment hint"
-    pre_existing_settings: dict[str, Any] = {
-        "autoMode": {
-            "environment": [stale_entry_a, stale_entry_b, unrelated_entry],
-        },
+    pre_existing_settings: dict[str, object] = {
+        "autoMode": {"environment": [stale_entry_a, stale_entry_b, unrelated_entry]},
     }
     _seed_grant_then_run(
         fake_settings_path,
@@ -199,14 +207,7 @@ def test_grant_purges_stale_trust_entries_then_writes_current_template(
     assert stale_entry_a not in environment_list
     assert stale_entry_b not in environment_list
     assert unrelated_entry in environment_list
-    matching_trust_entries = [
-        each_entry
-        for each_entry in environment_list
-        if isinstance(each_entry, str)
-        and each_entry.startswith("Trusted local workspace:")
-        and f"{project_path_posix}/.claude/**" in each_entry
-    ]
-    assert len(matching_trust_entries) == 1
+    assert _project_trust_entry_count(environment_list, project_path_posix) == 1
     assert "Stale auto-mode environment entries purged" in captured.out
 
 
@@ -223,10 +224,8 @@ def test_revoke_removes_deny_rules(
         constants_module.ALL_AGENT_CONFIG_DENY_TOOLS,
         constants_module.ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
-    pre_existing_settings: dict[str, Any] = {
-        "permissions": {
-            "deny": list(all_deny_rules),
-        },
+    pre_existing_settings: dict[str, object] = {
+        "permissions": {"deny": list(all_deny_rules)},
     }
     _seed_revoke_then_run(
         fake_settings_path,
@@ -248,16 +247,11 @@ def test_revoke_removes_every_legacy_trust_entry_for_project(
     fake_project_root = _make_fake_project(tmp_path)
     fake_settings_path = tmp_path / "settings.json"
     project_path_posix = _project_path_as_posix(fake_project_root)
-    legacy_entry_a = (
-        f"Trusted local workspace: {project_path_posix}/.claude/** template revision A"
-    )
-    legacy_entry_b = (
-        f"Trusted local workspace: {project_path_posix}/.claude/** template revision B"
-    )
+    legacy_entry_a, legacy_entry_b = _two_stale_trust_entries(project_path_posix)
     unrelated_other_project_entry = (
         "Trusted local workspace: /some/other/project/.claude/** still valid"
     )
-    pre_existing_settings: dict[str, Any] = {
+    pre_existing_settings: dict[str, object] = {
         "autoMode": {
             "environment": [
                 legacy_entry_a,
@@ -293,43 +287,31 @@ def test_is_trust_entry_for_project_predicate_filters_by_prefix_and_project_path
     common_module = _load_common_module()
     project_path_posix = "/fake/proj"
     trust_prefix = "Trusted local workspace:"
-    non_string_value: object = 42
-    assert (
-        common_module.is_trust_entry_for_project(
-            non_string_value, project_path_posix, trust_prefix
-        )
-        is False
-    )
     wrong_prefix_entry = (
         f"Something else: {project_path_posix}/.claude/** with marker token"
-    )
-    assert (
-        common_module.is_trust_entry_for_project(
-            wrong_prefix_entry, project_path_posix, trust_prefix
-        )
-        is False
     )
     different_project_entry = (
         "Trusted local workspace: /other/project/.claude/** unrelated"
     )
-    assert (
-        common_module.is_trust_entry_for_project(
-            different_project_entry, project_path_posix, trust_prefix
-        )
-        is False
-    )
     matching_entry = (
         f"Trusted local workspace: {project_path_posix}/.claude/** any wording form"
     )
-    assert (
-        common_module.is_trust_entry_for_project(
-            matching_entry, project_path_posix, trust_prefix
+    predicate_cases: list[tuple[object, bool]] = [
+        (42, False),
+        (wrong_prefix_entry, False),
+        (different_project_entry, False),
+        (matching_entry, True),
+    ]
+    for candidate_entry, expected_result in predicate_cases:
+        assert (
+            common_module.is_trust_entry_for_project(
+                candidate_entry, project_path_posix, trust_prefix
+            )
+            is expected_result
         )
-        is True
-    )
 
 
-def test_is_trust_entry_rejects_cross_project_path_suffix_collision() -> None:
+def test_is_trust_entry_for_project_rejects_cross_project_suffix_collision() -> None:
     """When the project_path is a path suffix of an unrelated entry's path,
     the predicate must reject the unrelated entry (the boundary anchor case)."""
     common_module = _load_common_module()
