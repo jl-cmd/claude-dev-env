@@ -25,6 +25,7 @@ Read the body and the docstring side by side. Apply each check that matches the 
 - **Predicate breadth** — the body accepts only the inputs the prose names.
 - **Exclusion axis** — an exclusion clause keys on the same axis the body classifies on.
 - **Companion docs** — a `SKILL.md` (or sibling) order/content claim matches the producer body.
+- **Gate-outcome status flags** — a workflow gate outcome documented as bypassing or skipping matches the branch that handles it. When the code routes an outcome to a blocker (`blocker = ...; break`) that holds the PR in draft, every surface that names that outcome — a schema property `description`, an architecture `detail` string, and each companion reference `.md` bullet — describes it as a blocker, not a bypass. An outcome the code blocks must not read as "skips without blocking" or "the gate is bypassed" on any surface.
 - **Returns / Raises / Note claims** — each free-form claim matches the body.
 
 Many deterministic shapes of this drift have Write/Edit gates in `packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py` (and the JS/`.mjs` slices in `code_rules_imports_logging.py`). Free-form rest is judgment.
