@@ -390,12 +390,36 @@ def verdict_directory() -> Path:
     return Path.home() / CLAUDE_HOME_DIRECTORY_NAME / VERDICT_DIRECTORY_NAME
 
 
+def root_key_for_repo(repo_root: str) -> str:
+    """Derive the shared path-key that names a work tree's store file.
+
+    ::
+
+        root_key_for_repo("/repo")  == root_key_for_repo("/repo/sub")   (same tree)
+        root_key_for_repo("/Repo")  == root_key_for_repo("/repo")        (case-folded)
+
+    The path is resolved, forward-slashed, and lowercased before hashing, so a
+    subdirectory of a work tree keys to the same file as its root and case
+    differences fold together. Both the verdict store and the code-review stamp
+    store key their per-work-tree files by this one derivation, so the two never
+    drift and an existing verdict file still resolves.
+
+    Args:
+        repo_root: The repository top-level directory.
+
+    Returns:
+        The lowercased hex path-key, truncated to ``ROOT_KEY_HEX_LENGTH`` chars.
+    """
+    normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
+    return hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
+
+
 def verdict_path_for_repo(repo_root: str) -> Path:
     """Derive the verdict file path for a repository work tree.
 
     Verdicts live outside the repository (under the user's Claude home) so
-    no repo accumulates untracked files, keyed by a hash of the normalized
-    work-tree path so every worktree gets its own verdict.
+    no repo accumulates untracked files, keyed by the shared
+    ``root_key_for_repo`` derivation so every worktree gets its own verdict.
 
     Args:
         repo_root: The repository top-level directory.
@@ -403,9 +427,7 @@ def verdict_path_for_repo(repo_root: str) -> Path:
     Returns:
         The verdict file path for this work tree.
     """
-    normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
-    root_key = hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
-    return verdict_directory() / f"{root_key}.json"
+    return verdict_directory() / f"{root_key_for_repo(repo_root)}.json"
 
 
 def load_valid_verdict(repo_root: str, expected_manifest_sha256: str) -> dict | None:

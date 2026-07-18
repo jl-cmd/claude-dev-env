@@ -35,6 +35,8 @@ minted_verdict_covers_surface = store_module.minted_verdict_covers_surface
 write_verdict = store_module.write_verdict
 worktree_path_for_branch = store_module.worktree_path_for_branch
 empty_surface_hash = store_module.empty_surface_hash
+root_key_for_repo = store_module.root_key_for_repo
+verdict_path_for_repo = store_module.verdict_path_for_repo
 
 constants_spec = importlib.util.spec_from_file_location(
     "verified_commit_constants",
@@ -901,3 +903,18 @@ def test_write_verdict_returns_path_when_ledger_append_fails(
     assert verdict_file.is_file()
     verdict_record = json.loads(verdict_file.read_text(encoding="utf-8"))
     assert verdict_record[constants_module.VERDICT_KEY_ALL_PASS] is True
+
+
+def test_root_key_for_repo_folds_subdirectory_and_case(tmp_path: pathlib.Path) -> None:
+    work_dir = tmp_path / "Repo"
+    subdirectory = work_dir / "src"
+    subdirectory.mkdir(parents=True)
+    root_key = root_key_for_repo(str(work_dir))
+    assert root_key_for_repo(str(subdirectory.parent)) == root_key
+    assert root_key_for_repo(str(work_dir).lower()) == root_key
+
+
+def test_verdict_path_for_repo_stem_is_the_shared_root_key(tmp_path: pathlib.Path) -> None:
+    work_dir = tmp_path / "repo"
+    work_dir.mkdir()
+    assert verdict_path_for_repo(str(work_dir)).stem == root_key_for_repo(str(work_dir))
