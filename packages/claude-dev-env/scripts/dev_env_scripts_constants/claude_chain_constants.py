@@ -1,4 +1,5 @@
-"""Named constants for the claude fallback-chain runner.
+"""Named constants for the claude fallback-chain runner, and the helper that
+picks which text-codec kwargs a chain subprocess wrapper forwards.
 
 Per the project's configuration conventions, every scalar and structural
 constant the runner needs lives here rather than inline in the module.
