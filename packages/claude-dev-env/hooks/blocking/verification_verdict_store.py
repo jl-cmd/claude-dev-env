@@ -720,7 +720,7 @@ def _append_verdict_ledger_row(
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         branch_name = _head_branch_name(repo_root)
         ledger_row = {
-            LEDGER_KEY_TIMESTAMP: datetime.datetime.now().isoformat(),
+            LEDGER_KEY_TIMESTAMP: datetime.datetime.now(datetime.timezone.utc).isoformat(),
             LEDGER_KEY_REPO_ROOT: repo_root,
             LEDGER_KEY_BRANCH: branch_name,
             LEDGER_KEY_MANIFEST_HASH: bound_manifest_sha256,
