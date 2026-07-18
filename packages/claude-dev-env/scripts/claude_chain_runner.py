@@ -123,7 +123,9 @@ def _optional_working_directory(value: object) -> str | None:
 # writes freely; the files are then read back and decoded the way a pipe capture
 # would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
 # redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
-# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored.
+# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. When
+# ``check=True`` and the child exits non-zero, ``CalledProcessError.stdout`` /
+# ``.stderr`` stay unset (temp files are not attached to the raised error).
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
