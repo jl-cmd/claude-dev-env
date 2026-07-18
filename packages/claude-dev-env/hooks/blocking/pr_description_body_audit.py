@@ -21,11 +21,13 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     BOLD_PAIR_PATTERN,
     BULLET_MARKER_PATTERN,
     FENCED_CODE_BLOCK_PATTERN,
+    HARDCODED_TEST_COUNT_PATTERN,
     HEADING_LINE_PATTERN,
     HEAVY_MIN_BODY_CHARS_FOR_CLASSIFICATION,
     HEAVY_SHAPE,
     INLINE_CODE_PATTERN,
     LINK_TEXT_PATTERN,
+    PYTEST_INVOCATION_PATTERN,
     SELF_REFERENCE_PATTERN_TEMPLATE,
     STANDARD_SHAPE,
     TABLE_ROW_LINE_PATTERN,
@@ -52,6 +54,36 @@ def strip_markdown_ceremony(body: str) -> str:
     body_without_emphasis = body_without_bold.replace("*", "")
     body_without_links = LINK_TEXT_PATTERN.sub(r"\1", body_without_emphasis)
     return body_without_links
+
+
+def contains_hardcoded_test_count_claim(body: str) -> bool:
+    """Return True when a PR description hand-types a pytest count in prose.
+
+    The count is drift-prone: a hand-typed `40 passed` in the description grows
+    stale as commits land and tests are added, while a count pasted from real
+    command output inside a code fence stays copied-not-typed and is exempt.
+
+    ::
+
+        flag:  `python -m pytest scripts/` -> 40 passed   (pytest + prose count)
+        ok:    ```\n$ pytest scripts/\n46 passed\n```       (count inside a fence)
+        ok:    the importer wrote 40 rows                   (count, no pytest)
+
+    A pytest reference may sit anywhere, including inline code, so it is matched
+    against the raw body. The count must survive Markdown-ceremony stripping,
+    which removes fenced and inline code, so pasted output does not trip it.
+
+    Args:
+        body: The PR description markdown text.
+
+    Returns:
+        True when the body references pytest and carries a hand-typed pass or
+        fail count in its prose; False otherwise.
+    """
+    if PYTEST_INVOCATION_PATTERN.search(body) is None:
+        return False
+    prose_only = strip_markdown_ceremony(body)
+    return HARDCODED_TEST_COUNT_PATTERN.search(prose_only) is not None
 
 
 def _count_substantive_prose_chars(body: str) -> int:

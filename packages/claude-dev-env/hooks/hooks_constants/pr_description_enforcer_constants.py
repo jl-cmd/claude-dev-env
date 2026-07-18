@@ -28,6 +28,17 @@ VAGUE_LANGUAGE_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+PYTEST_INVOCATION_PATTERN: re.Pattern[str] = re.compile(r"\bpytest\b", re.IGNORECASE)
+HARDCODED_TEST_COUNT_PATTERN: re.Pattern[str] = re.compile(
+    r"\b\d+\s+(?:passed|failed)\b",
+    re.IGNORECASE,
+)
+HARDCODED_TEST_COUNT_MESSAGE: str = (
+    "PR description hand-types a pytest count (N passed/failed) -- the count drifts "
+    "as commits land and tests are added; move it to the proof comment as pasted "
+    "command output rather than a hand-typed number in the description"
+)
+
 SUMMARY_HEADER: str = "## Summary"
 PROBLEM_HEADER: str = "## Problem"
 TEST_PLAN_HEADER: str = "## Test plan"
@@ -136,6 +147,8 @@ __all__ = [
     "FLESCH_SYLLABLES_PER_WORD_COEFFICIENT",
     "FLESCH_WORDS_PER_SENTENCE_COEFFICIENT",
     "GH_PR_COMMAND_MIN_TOKEN_COUNT",
+    "HARDCODED_TEST_COUNT_MESSAGE",
+    "HARDCODED_TEST_COUNT_PATTERN",
     "HEADING_LINE_PATTERN",
     "HEAVY_MIN_BODY_CHARS_FOR_CLASSIFICATION",
     "HEAVY_SHAPE",
@@ -143,6 +156,7 @@ __all__ = [
     "LINK_TEXT_PATTERN",
     "MINIMUM_SUBSTANTIVE_PROSE_CHARS",
     "PR_GUIDE_PATH",
+    "PYTEST_INVOCATION_PATTERN",
     "READABILITY_AVG_SENTENCE_WORDS_CEILING",
     "READABILITY_ENABLED_STATE_FILE",
     "READABILITY_FLESCH_LOOSEN_FACTOR",
