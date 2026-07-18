@@ -153,6 +153,11 @@ def test_scan_prose_child_token_after_marker_is_detected() -> None:
     assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
 
 
+def test_scan_relative_worktree_path_with_hyphen_child_is_detected() -> None:
+    text = "see .claude/worktrees/-scratch/notes.md"
+    assert scan_text_for_volatile_marker(text) == ".claude/worktrees/"
+
+
 def test_scan_placeholder_child_segment_is_allowed() -> None:
     text = "worktrees live under `.claude/worktrees/<name>`"
     assert scan_text_for_volatile_marker(text) is None

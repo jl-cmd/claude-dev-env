@@ -21,7 +21,7 @@ ALL_GH_POST_SUBCOMMANDS: dict[str, frozenset[str]] = {
 
 PATH_ANCHOR_CHARACTER: str = "/"
 
-PATH_SEGMENT_START_CHARACTERS: str = "_"
+PATH_SEGMENT_START_CHARACTERS: str = "_-"
 
 ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     ".claude-editor/jobs/",
