@@ -6,7 +6,7 @@ Step-by-step workflow files for each skill lifecycle phase, loaded on demand by 
 
 | File | Purpose |
 |---|---|
-| `new-skill.md` | Full lifecycle for creating a new skill: 6 steps from intent capture through type classification, folder scaffolding, writing via skill-writer, self-audit, and delivery. |
+| `new-skill.md` | Full lifecycle for creating a new skill: 6 steps from intent capture through type classification, folder scaffolding, writing via the skill-writer-agent, self-audit, and delivery. |
 | `improve-skill.md` | Observation-first flow for improving an existing skill: 6 steps starting from real usage failures, gap analysis, targeted rewrite, and re-audit. |
 | `polish-skill.md` | Description audit and final validation: 5 steps for description optimization, trigger phrase review, and checklist sign-off. |
 

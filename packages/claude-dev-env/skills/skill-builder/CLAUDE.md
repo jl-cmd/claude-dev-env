@@ -1,12 +1,12 @@
 # skill-builder
 
-Orchestrates the complete skill-building lifecycle: classify the skill type, scaffold folders, write via `skill-writer`, self-audit against a 38-point checklist, and refine from real usage observations.
+Orchestrates the complete skill-building lifecycle: classify the skill type, scaffold folders, write via the `skill-writer-agent`, self-audit against a 38-point checklist, and refine from real usage observations.
 
 **Trigger:** "build a skill", "new skill workflow", "improve this skill", "optimize skill description", "skill development lifecycle".
 
 ## Purpose
 
-The expert that enforces craft standards. For quick one-off SKILL.md edits, use `/skill-writer` directly. This skill classifies, scaffolds, gathers context, delegates writing, and self-audits the result.
+The expert that enforces craft standards. This skill classifies, scaffolds, gathers context, delegates writing to the `skill-writer-agent`, and self-audits the result.
 
 ## Key files
 
@@ -41,5 +41,5 @@ The expert that enforces craft standards. For quick one-off SKILL.md edits, use 
 ## Conventions
 
 - Every build ends with the 38-point self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
-- `skill-builder` orchestrates; `skill-writer` authors. The handoff packet must include type, gap analysis, degree-of-freedom assessment, and constraints.
+- `skill-builder` orchestrates; the `skill-writer-agent` authors. The handoff packet must include type, gap analysis, degree-of-freedom assessment, and constraints.
 - The Claude A / Claude B pattern: Claude A (this session) designs; Claude B (subagents) tests by running the built skill on real tasks.

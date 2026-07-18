@@ -2,7 +2,7 @@
 name: skill-builder
 description: >-
   Runs the skill-building lifecycle: type classification, scaffolding, writing
-  through skill-writer, self-audit against a checklist, and refinement from real
+  through the skill-writer-agent, self-audit against a checklist, and refinement from real
   usage. Triggers: 'build a skill', 'new skill workflow', 'improve this skill',
   'optimize skill description', 'skill development lifecycle'.
 ---
@@ -21,9 +21,7 @@ Highest-signal content. Append a bullet each time a skill build fails in a new w
 
 ## When this skill applies
 
-Trigger for requests to **build**, **improve**, or **polish** a skill. This skill orchestrates the process — it classifies, scaffolds, gathers context, delegates writing to `/skill-writer`, and self-audits the result.
-
-For quick skill syntax questions or one-off SKILL.md edits, use `/skill-writer` directly instead.
+Trigger for requests to **build**, **improve**, or **polish** a skill. This skill orchestrates the process — it classifies, scaffolds, gathers context, delegates writing to the `skill-writer-agent`, and self-audits the result.
 
 **Refusal cases — first match wins:**
 
@@ -152,9 +150,9 @@ Multi-step processes get `[ ]` checklists. Quality-critical operations get feedb
 
 After every build, improvement, or polish pass, run the mandatory checklist at `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`. Every item must pass before delivery. Fix failures, then re-audit.
 
-## Delegation to skill-writer
+## Delegation to the skill-writer-agent
 
-skill-builder orchestrates; skill-writer authors. The handoff packet from Step 4 must include:
+skill-builder orchestrates; the `skill-writer-agent` authors. Spawn it with the Agent tool (`subagent_type="skill-writer-agent"`). The handoff packet from Step 4 must include:
 
 - Skill type and folder structure
 - Gap analysis or observation findings

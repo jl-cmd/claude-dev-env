@@ -18,6 +18,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 | `plan-packet-validator.md` | Plan Packet Validator | Fresh-context validator for workflow-generated plan packets under `docs/plans/` |
 | `pr-description-writer.md` | PR Description Writer | Authors PR descriptions in Anthropic-style shapes that pass the `pr_description_enforcer` hook's body audit |
 | `session-advisor.md` | Session Advisor | Standing multi-consumer reviewer; SendMessage only; returns endorse/correction/plan/stop |
+| `skill-writer-agent.md` | Skill Writer Agent | Authoring specialist the skill-builder skill delegates to; writes a skill package from a handoff packet and returns a file manifest |
 
 ## Format
 

@@ -99,11 +99,11 @@ Record the assessment with reasoning.
 
 **Goal:** Produce the skill package — SKILL.md and companion files.
 
-Delegate to `/skill-writer` using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
+Delegate to the `skill-writer-agent` — spawn it with the Agent tool using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
 
 The handoff must include: skill type, folder structure, gap analysis, initial gotchas, degree of freedom, constraints.
 
-After skill-writer produces the draft:
+After the skill-writer-agent produces the draft:
 
 1. Verify it follows the hub layout (principle → gotchas → when-applies → process → file index → folder map).
 2. Verify SKILL.md body is under 500 lines.

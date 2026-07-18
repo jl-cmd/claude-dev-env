@@ -76,7 +76,7 @@ For each diagnosis from Step 2:
 2. Make the minimum change that addresses the failure.
 3. Verify the fix doesn’t break anything that was working.
 
-Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
+Delegate larger rewrites to the `skill-writer-agent` — spawn it with the Agent tool using the refine-skill handoff from delegation-map.md.
 
 **Output:** Modified skill files with targeted fixes.
 

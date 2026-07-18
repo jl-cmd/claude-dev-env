@@ -1,15 +1,18 @@
 # Delegation Map
 
-How skill-builder delegates work to subagents and `/skill-writer`.
+How skill-builder delegates work to subagents and the `skill-writer-agent`.
 
-## Delegating to skill-writer (Step 4)
+## Delegating to the skill-writer-agent (Step 4)
 
-skill-builder orchestrates; skill-writer authors the SKILL.md and companion files. The handoff must be structured so skill-writer has everything it needs.
+skill-builder orchestrates; the `skill-writer-agent` authors the SKILL.md and companion files. Spawn it with the Agent tool (`subagent_type="skill-writer-agent"`), passing the handoff below as the prompt. The handoff must be structured so the agent has everything it needs.
 
 ### New skill handoff
 
 ```
-Create a skill with these parameters:
+Agent(
+  subagent_type="skill-writer-agent",
+  description="Author skill package",
+  prompt="Create a skill with these parameters:
 
 **Skill type:** [one of 9 types from skill-types.md]
 **Folder structure:** [directories to create: reference/, scripts/, etc.]
@@ -23,13 +26,17 @@ Produce:
 1. SKILL.md with hub layout (principle, gotchas, when-applies, process, file index, folder map)
 2. Companion files as needed (reference docs, workflow steps, templates)
 3. Every file under 500 lines; TOC on files over 100 lines
-4. File index listing every file and its purpose
+4. File index listing every file and its purpose"
+)
 ```
 
 ### Refine skill handoff
 
 ```
-Refine this existing skill:
+Agent(
+  subagent_type="skill-writer-agent",
+  description="Refine skill package",
+  prompt="Refine this existing skill:
 
 **Current SKILL.md:** [reference or paste]
 **What was observed:** [specific failures from Claude B usage]
@@ -37,7 +44,8 @@ Refine this existing skill:
 **New gotchas to add:** [failure patterns discovered]
 **What to preserve:** [working content — do not touch]
 
-Constraint: Only change what the observations demand. Do not reorganize working content.
+Constraint: Only change what the observations demand. Do not reorganize working content."
+)
 ```
 
 ## Spawning a test subagent
