@@ -426,7 +426,9 @@ def _run_claude_with_empty_stdin(
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
     with _CHAIN_RUNNER_LOCK:
-        previous_runner = chain_runner.chain_subprocess_runner
+        previous_runner: TextCapturingSubprocessRunner = (
+            chain_runner.chain_subprocess_runner
+        )
 
         def _runner_with_empty_stdin(
             all_invocation_tokens: Sequence[str],

@@ -180,7 +180,9 @@ def _run_claude_with_headless_overrides(
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
     with _HEADLESS_CHAIN_RUNNER_LOCK:
-        previous_runner = chain_runner.chain_subprocess_runner
+        previous_runner: TextCapturingSubprocessRunner = (
+            chain_runner.chain_subprocess_runner
+        )
 
         def _runner_with_headless_overrides(
             all_invocation_tokens: Sequence[str],
