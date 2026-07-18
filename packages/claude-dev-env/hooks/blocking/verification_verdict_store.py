@@ -13,6 +13,7 @@ and reading/writing verdict files.
 from __future__ import annotations
 
 import ast
+import datetime
 import hashlib
 import json
 import re
@@ -20,6 +21,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from collections.abc import Mapping
 
 blocking_directory = str(Path(__file__).resolve().parent)
 if blocking_directory not in sys.path:
@@ -45,6 +47,15 @@ from config.verified_commit_constants import (
     ALL_FALLBACK_BASE_REFERENCES,
     EMPTY_SURFACE_GUARD_MESSAGE,
     GIT_TIMEOUT_SECONDS,
+    LEDGER_KEY_ALL_PASS,
+    LEDGER_KEY_BRANCH,
+    LEDGER_KEY_FINDING_CHECK_NAMES,
+    LEDGER_KEY_FINDING_COUNT,
+    LEDGER_KEY_MANIFEST_HASH,
+    LEDGER_KEY_MINTED_FROM_AGENT_ID,
+    LEDGER_KEY_REPO_ROOT,
+    LEDGER_KEY_TIMESTAMP,
+    LOGS_DIRECTORY_NAME,
     MANIFEST_HASH_CLI_FLAG,
     MANIFEST_HASH_FOR_BRANCH_CLI_FLAG,
     MINIMUM_STATUS_FIELD_COUNT,
@@ -65,10 +76,12 @@ from config.verified_commit_constants import (
     VERDICT_DIRECTORY_NAME,
     VERDICT_FENCE_PATTERN,
     VERDICT_FILE_GLOB,
+    VERDICT_FINDING_CHECK_KEY,
     VERDICT_JSON_INDENT,
     VERDICT_KEY_ALL_PASS,
     VERDICT_KEY_FINDINGS,
     VERDICT_KEY_MANIFEST_SHA256,
+    VERIFIER_VERDICTS_JSONL_FILENAME,
     WORKTREE_LIST_BRANCH_PREFIX,
     WORKTREE_LIST_PATH_PREFIX,
 )
@@ -377,12 +390,36 @@ def verdict_directory() -> Path:
     return Path.home() / CLAUDE_HOME_DIRECTORY_NAME / VERDICT_DIRECTORY_NAME
 
 
+def root_key_for_repo(repo_root: str) -> str:
+    """Derive the shared path-key that names a work tree's store file.
+
+    ::
+
+        root_key_for_repo("/repo")  == root_key_for_repo("/repo/sub")   (same tree)
+        root_key_for_repo("/Repo")  == root_key_for_repo("/repo")        (case-folded)
+
+    The path is resolved, forward-slashed, and lowercased before hashing, so a
+    subdirectory of a work tree keys to the same file as its root and case
+    differences fold together. Both the verdict store and the code-review stamp
+    store key their per-work-tree files by this one derivation, so the two never
+    drift and an existing verdict file still resolves.
+
+    Args:
+        repo_root: The repository top-level directory.
+
+    Returns:
+        The lowercased hex path-key, truncated to ``ROOT_KEY_HEX_LENGTH`` chars.
+    """
+    normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
+    return hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
+
+
 def verdict_path_for_repo(repo_root: str) -> Path:
     """Derive the verdict file path for a repository work tree.
 
     Verdicts live outside the repository (under the user's Claude home) so
-    no repo accumulates untracked files, keyed by a hash of the normalized
-    work-tree path so every worktree gets its own verdict.
+    no repo accumulates untracked files, keyed by the shared
+    ``root_key_for_repo`` derivation so every worktree gets its own verdict.
 
     Args:
         repo_root: The repository top-level directory.
@@ -390,9 +427,7 @@ def verdict_path_for_repo(repo_root: str) -> Path:
     Returns:
         The verdict file path for this work tree.
     """
-    normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
-    root_key = hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
-    return verdict_directory() / f"{root_key}.json"
+    return verdict_directory() / f"{root_key_for_repo(repo_root)}.json"
 
 
 def load_valid_verdict(repo_root: str, expected_manifest_sha256: str) -> dict | None:
@@ -654,6 +689,74 @@ def workflow_verdict_covers_surface(
     return False
 
 
+def _finding_check_names(all_findings: list) -> list[str]:
+    """Collect the ``check`` name from each finding mapping that carries one.
+
+    Args:
+        all_findings: The verifier's findings list (empty when clean).
+
+    Returns:
+        Ordered list of non-empty check name strings; entries without a
+        string ``check`` field are omitted.
+    """
+    all_check_names: list[str] = []
+    for each_finding in all_findings:
+        if not isinstance(each_finding, Mapping):
+            continue
+        check_name = each_finding.get(VERDICT_FINDING_CHECK_KEY)
+        if isinstance(check_name, str) and check_name:
+            all_check_names.append(check_name)
+    return all_check_names
+
+
+def _append_verdict_ledger_row(
+    repo_root: str,
+    bound_manifest_sha256: str,
+    is_all_pass: bool,
+    all_findings: list,
+    minted_from_agent_id: str,
+) -> None:
+    """Append one fail-safe JSONL row for a minted verdict.
+
+    Writes to ``~/.claude/logs/verifier-verdicts.jsonl``. Swallows home
+    resolution and IO errors so a ledger failure never changes the mint.
+
+    Args:
+        repo_root: The repository top-level directory.
+        bound_manifest_sha256: Hash of the surface the verdict covers.
+        is_all_pass: Whether the verifier reported a clean verdict.
+        all_findings: The verifier's findings list (empty when clean).
+        minted_from_agent_id: The subagent invocation id, kept for audit.
+    """
+    try:
+        home_directory = Path.home()
+    except RuntimeError:
+        return
+    try:
+        ledger_path = (
+            home_directory
+            / CLAUDE_HOME_DIRECTORY_NAME
+            / LOGS_DIRECTORY_NAME
+            / VERIFIER_VERDICTS_JSONL_FILENAME
+        )
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        branch_name = _head_branch_name(repo_root)
+        ledger_row = {
+            LEDGER_KEY_TIMESTAMP: datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            LEDGER_KEY_REPO_ROOT: repo_root,
+            LEDGER_KEY_BRANCH: branch_name,
+            LEDGER_KEY_MANIFEST_HASH: bound_manifest_sha256,
+            LEDGER_KEY_ALL_PASS: is_all_pass,
+            LEDGER_KEY_FINDING_COUNT: len(all_findings),
+            LEDGER_KEY_FINDING_CHECK_NAMES: _finding_check_names(all_findings),
+            LEDGER_KEY_MINTED_FROM_AGENT_ID: minted_from_agent_id,
+        }
+        with ledger_path.open("a", encoding="utf-8") as ledger_file:
+            ledger_file.write(json.dumps(ledger_row) + "\n")
+    except OSError:
+        return
+
+
 def write_verdict(
     repo_root: str,
     bound_manifest_sha256: str,
@@ -662,6 +765,9 @@ def write_verdict(
     minted_from_agent_id: str,
 ) -> Path:
     """Write a verdict file binding a verification outcome to a surface hash.
+
+    Also appends one durable JSONL ledger row under the Claude logs directory.
+    A ledger write failure never changes the mint outcome.
 
     Args:
         repo_root: The repository top-level directory.
@@ -685,6 +791,13 @@ def write_verdict(
     }
     verdict_file.write_text(
         json.dumps(verdict_record, indent=VERDICT_JSON_INDENT), encoding="utf-8"
+    )
+    _append_verdict_ledger_row(
+        repo_root,
+        bound_manifest_sha256,
+        is_all_pass,
+        all_findings,
+        minted_from_agent_id,
     )
     return verdict_file
 

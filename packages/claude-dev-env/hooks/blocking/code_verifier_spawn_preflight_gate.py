@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """PreToolUse hook: pre-flight gate for the code-verifier subagent spawn.
 
-The hook fires only on an ``Agent`` tool call whose ``subagent_type`` is
+The hook fires on an ``Agent`` or ``Task`` tool call whose ``subagent_type`` is
 ``code-verifier``. Before that verification spawn runs, the hook checks the
 branch for two committability problems against the resolved base ref: a real
 merge conflict (a non-mutating trial-merge of HEAD against the base ref) and a
 CODE_RULES violation on a line added in the working tree since the merge base
-(committed on the branch or uncommitted). When
-either fires, the hook denies the spawn with a reason addressed to the spawning
-agent that names the conflicting files and the violating file:line, so that
-agent fixes them and re-spawns. Both checks fail OPEN on any infrastructure
-problem — a non-repo cwd, an absent base ref, a git or engine failure, or a
-timeout — because the authoritative fail-closed CODE_RULES enforcement already
-runs at Write time and at commit time. The hook never network-fetches and never
+(committed on the branch or uncommitted). When either fires, the hook denies
+the spawn with a reason addressed to the spawning agent that names the
+conflicting files and the violating file:line, so that agent fixes them and
+re-spawns. A CODE_RULES engine import/load failure is fail-closed (deny with a
+named load-failure section). Environmental problems — a non-repo cwd, an
+absent base ref, a git failure, an unreadable file alone, or a timeout — fail
+OPEN because the authoritative fail-closed CODE_RULES enforcement already runs
+at Write time and at commit time. The hook never network-fetches and never
 mutates the index or working tree.
 """
 
@@ -21,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +45,7 @@ from verification_verdict_store import (  # noqa: E402
 )
 
 from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # noqa: E402
+    ALL_CODE_VERIFIER_SPAWN_TOOL_NAMES,
     ALL_MERGE_HEAD_PROBE_FLAGS,
     ALL_MERGE_TREE_COMMAND_FLAGS,
     ALL_NAME_ONLY_WORKTREE_DIFF_FLAGS,
@@ -51,6 +54,7 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     CODE_RULES_SECTION_HEADER,
     CODE_VERIFIER_SUBAGENT_TYPE,
     DENY_REASON_LEAD,
+    ENGINE_LOAD_FAILURE_SECTION,
     GATE_SCRIPTS_RELATIVE_PATH,
     MERGE_CONFLICT_SECTION_HEADER,
     MERGE_TREE_CLEAN_EXIT_CODE,
@@ -58,9 +62,6 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     MERGE_TREE_TIMEOUT_SECONDS,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pr_converge_bugteam_enforcer_constants import (  # noqa: E402
-    AGENT_TOOL_NAME,
-)
 
 _scripts_dir = str(Path(__file__).resolve().parents[2] / GATE_SCRIPTS_RELATIVE_PATH)
 if _scripts_dir not in sys.path:
@@ -78,17 +79,17 @@ from code_rules_gate import (  # noqa: E402
 
 
 def _should_run(payload_by_field: dict[str, object]) -> bool:
-    """Return True only for a code-verifier Agent spawn.
+    """Return True only for a code-verifier Agent or Task spawn.
 
     Args:
         payload_by_field: The full PreToolUse hook payload (already
             JSON-parsed), keyed by top-level field name.
 
     Returns:
-        True when the tool is Agent and ``tool_input.subagent_type`` is
-        ``code-verifier``; False for every other shape.
+        True when the tool is Agent or Task and ``tool_input.subagent_type``
+        is ``code-verifier``; False for every other shape.
     """
-    if payload_by_field.get("tool_name", "") != AGENT_TOOL_NAME:
+    if payload_by_field.get("tool_name", "") not in ALL_CODE_VERIFIER_SPAWN_TOOL_NAMES:
         return False
     tool_input = payload_by_field.get("tool_input", {})
     if not isinstance(tool_input, dict):
@@ -297,7 +298,7 @@ def _tracked_file_added_lines(repo_root: str, merge_base_sha: str, relative_path
 def _code_rules_report(
     repo_root: str, all_file_paths: list[Path], all_added_lines_by_path: dict[Path, set[int]]
 ) -> str | None:
-    """Run the CODE_RULES engine and return its blocking report, or None.
+    """Run the CODE_RULES engine and return a full deny section, or None.
 
     Args:
         repo_root: The repository top-level directory.
@@ -306,19 +307,30 @@ def _code_rules_report(
             by resolved absolute path.
 
     Returns:
-        The engine's grouped file:line report when a blocking violation lands
-        on an added line, or None when the surface is clean, only an unreadable
-        changed file caused a non-zero gate exit, the engine fails to load, or
-        any engine error arises — every non-block outcome fails OPEN. The
-        harness hook timeout in hooks.json is the wall-clock bound on a runaway
-        engine.
+        A full deny section when a blocking violation lands on an added line or
+        the CODE_RULES engine fails to import/load (fail-closed). None when the
+        surface is clean, only an unreadable changed file caused a non-zero gate
+        exit, or an environmental engine error arises — those non-block outcomes
+        fail OPEN. The harness hook timeout in hooks.json is the wall-clock
+        bound on a runaway engine.
     """
     if not all_file_paths:
         return None
     try:
         validate_content = load_validate_content()
     except SystemExit:
-        return None
+        return ENGINE_LOAD_FAILURE_SECTION
+    except (
+        ImportError,
+        SyntaxError,
+        AttributeError,
+        RuntimeError,
+        TypeError,
+        NameError,
+        OSError,
+        re.error,
+    ):
+        return ENGINE_LOAD_FAILURE_SECTION
     try:
         blocking_present, captured_report = _run_gate_capturing_stderr(
             validate_content, all_file_paths, Path(repo_root), all_added_lines_by_path
@@ -327,7 +339,7 @@ def _code_rules_report(
         return None
     if not blocking_present:
         return None
-    return captured_report
+    return f"{CODE_RULES_SECTION_HEADER}\n{captured_report.strip()}"
 
 
 def _run_gate_capturing_stderr(
@@ -382,8 +394,8 @@ def _build_deny_reason(
         all_conflicting_files: The conflicting file paths from the conflict
             check, an empty list when clean, or None when that check failed open.
         base_ref: The base ref named in the conflict section header.
-        code_rules_report: The grouped report from the CODE_RULES check, or None
-            when that check found nothing or failed open.
+        code_rules_report: A full CODE_RULES deny section (violations or engine
+            load failure), or None when that check found nothing or failed open.
 
     Returns:
         The full deny reason when either check fired, or None when neither
@@ -395,7 +407,7 @@ def _build_deny_reason(
         conflict_header = MERGE_CONFLICT_SECTION_HEADER.format(base_ref=base_ref)
         reason_sections.append(f"{conflict_header}\n{conflict_lines}")
     if code_rules_report:
-        reason_sections.append(f"{CODE_RULES_SECTION_HEADER}\n{code_rules_report.strip()}")
+        reason_sections.append(code_rules_report.strip())
     if not reason_sections:
         return None
     return DENY_REASON_LEAD + "\n\n" + "\n\n".join(reason_sections)

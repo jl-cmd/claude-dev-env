@@ -18,6 +18,15 @@ and scanned, since that content is what gets embedded in the post). The ``gh``
 command is tokenized with ``shlex.split`` and the ``gh`` word must be the first
 command token, so a ``gh pr comment`` that only appears as quoted data inside
 another argument never classifies.
+
+The marker scan runs in two tiers over the normalized body. Five bare markers
+— the system temp locations and env tokens — match as a plain substring
+anywhere. Two dot-relative directory markers, ``.claude-editor/jobs/`` and
+``.claude/worktrees/``, match when either a slash sits immediately before the
+marker or a path segment follows it. A machine-local absolute path
+(``~/.claude/worktrees/wt/f.py``) and a relative path that names a child
+(``see .claude/worktrees/wt-1/notes.md``) both count; a bare directory-name
+mention with neither anchor posts cleanly.
 """
 
 import json
@@ -42,30 +51,79 @@ from blocking._gh_body_arg_utils import (  # noqa: E402
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.volatile_path_in_post_blocker_constants import (  # noqa: E402
+    ALL_BARE_VOLATILE_PATH_MARKERS,
     ALL_GH_POST_SUBCOMMANDS,
     ALL_MCP_BODY_PARAM_NAMES,
-    ALL_VOLATILE_PATH_MARKERS,
+    ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS,
     BASH_TOOL_NAME,
     BODY_FILE_ENCODING,
     CORRECTIVE_MESSAGE,
     GH_COMMAND_NAME,
     MCP_GITHUB_TOOL_PREFIX,
     MINIMUM_POST_SUBCOMMAND_TOKEN_COUNT,
+    PATH_ANCHOR_CHARACTER,
+    PATH_SEGMENT_START_CHARACTERS,
     TOKEN_JOIN_SEPARATOR,
 )
+
+
+def _character_starts_path_segment(character: str) -> bool:
+    """Return whether a character can open a path segment after a marker."""
+    return bool(character) and (
+        character.isalnum() or character in PATH_SEGMENT_START_CHARACTERS
+    )
+
+
+def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
+    """Return whether the marker appears as part of a path.
+
+    A match counts when either a slash sits immediately before the marker or a
+    path segment follows it. Every occurrence is scanned, so a bare directory
+    mention earlier in the text never masks a path occurrence later::
+
+        ok:   ".claude/worktrees/ is the manifest key"      -> False
+        flag: "path c:/users/me/.claude/worktrees/wt/f.py"  -> True
+        flag: "see .claude/worktrees/wt-1/notes.md"         -> True
+
+    Args:
+        normalized_text: The body text with backslashes folded to forward
+            slashes and lowercased.
+        marker: A dot-relative directory marker to search for.
+
+    Returns:
+        True when at least one occurrence is path-anchored.
+    """
+    search_start = 0
+    while True:
+        found_index = normalized_text.find(marker, search_start)
+        if found_index < 0:
+            return False
+        preceding_character = normalized_text[found_index - 1 : found_index]
+        following_index = found_index + len(marker)
+        following_character = normalized_text[following_index : following_index + 1]
+        is_slash_before = preceding_character == PATH_ANCHOR_CHARACTER
+        is_segment_after = _character_starts_path_segment(following_character)
+        if is_slash_before or is_segment_after:
+            return True
+        search_start = found_index + 1
 
 
 def scan_text_for_volatile_marker(text: str) -> str | None:
     """Return the first volatile-path marker found in text, or None.
 
     Backslashes normalize to forward slashes and the text lowercases before the
-    scan, so a marker matches regardless of slash direction or letter case::
+    scan. The two dot-relative directory markers count when either a slash sits
+    immediately before them or a path segment follows them; the five bare
+    markers match anywhere::
 
-        ok:   "See the log table pasted below."        -> None
-        flag: r"C:\\Users\\me\\.claude-editor\\jobs\\x" -> ".claude-editor/jobs/"
+        ok:   "the `.claude/worktrees/` manifest key"    -> None
+        flag: r"C:\\Users\\me\\.claude-editor\\jobs\\x"   -> ".claude-editor/jobs/"
+        flag: "see .claude/worktrees/wt-1/notes.md"       -> ".claude/worktrees/"
+        flag: "saved to %TEMP%\\out.txt"                  -> "%temp%"
 
-    Env-token markers such as ``%TEMP%`` and ``$CLAUDE_JOB_DIR`` match on the
-    same lowercased text.
+    A dot-relative marker with neither a slash before it nor a path segment
+    after it — start of text naming the directory, a quoted config constant,
+    or a placeholder form such as ``.claude/worktrees/<name>`` — posts cleanly.
 
     Args:
         text: The post body text to scan.
@@ -73,8 +131,11 @@ def scan_text_for_volatile_marker(text: str) -> str | None:
     Returns:
         The matched marker string, or None when the text names no volatile path.
     """
-    normalized_text = text.replace("\\", "/").lower()
-    for each_marker in ALL_VOLATILE_PATH_MARKERS:
+    normalized_text = text.replace("\\", PATH_ANCHOR_CHARACTER).lower()
+    for each_marker in ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS:
+        if _text_has_anchored_marker(normalized_text, each_marker):
+            return each_marker
+    for each_marker in ALL_BARE_VOLATILE_PATH_MARKERS:
         if each_marker in normalized_text:
             return each_marker
     return None
