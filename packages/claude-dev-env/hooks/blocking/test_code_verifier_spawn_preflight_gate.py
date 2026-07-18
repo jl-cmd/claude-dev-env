@@ -189,6 +189,14 @@ BROKEN_ENFORCER_SOURCE = (
     "raise RuntimeError('deliberate enforcer load failure')\n"
 )
 
+RE_ERROR_ENFORCER_SOURCE = (
+    '"""Enforcer stub whose module-scope regex compile raises re.error."""\n'
+    "\n"
+    "import re\n"
+    "\n"
+    "re.compile('(')\n"
+)
+
 
 def run_git(repository_root: Path, *git_arguments: str) -> str:
     completed = subprocess.run(
@@ -685,6 +693,16 @@ def test_engine_load_failure_denies_with_named_reason(tmp_path: Path) -> None:
 def test_engine_import_error_denies_with_named_reason(tmp_path: Path) -> None:
     enforcer_path, repository_root = stage_package_and_feature_repo(tmp_path)
     enforcer_path.write_text(BROKEN_ENFORCER_SOURCE, encoding="utf-8")
+    completed = run_staged_preflight_hook(enforcer_path, repository_root)
+    assert not is_allow(completed)
+    reason = deny_reason(completed)
+    assert "CODE_RULES engine failed to load" in reason
+    assert "load_validate_content" in reason
+
+
+def test_engine_re_error_denies_with_named_reason(tmp_path: Path) -> None:
+    enforcer_path, repository_root = stage_package_and_feature_repo(tmp_path)
+    enforcer_path.write_text(RE_ERROR_ENFORCER_SOURCE, encoding="utf-8")
     completed = run_staged_preflight_hook(enforcer_path, repository_root)
     assert not is_allow(completed)
     reason = deny_reason(completed)

@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -327,6 +328,7 @@ def _code_rules_report(
         TypeError,
         NameError,
         OSError,
+        re.error,
     ):
         return ENGINE_LOAD_FAILURE_SECTION
     try:
