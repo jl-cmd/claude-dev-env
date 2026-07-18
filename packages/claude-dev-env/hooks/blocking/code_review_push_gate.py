@@ -39,14 +39,13 @@ try:
     register_code_review_enforcement_constants()
     register_verified_commit_constants()
 
+    from code_review_gate_deny import log_and_emit_code_review_deny
     from code_review_stamp_store import live_surface_hash, stamp_covers_surface
     from config.code_review_enforcement_constants import (
         ALL_GATED_SHELL_TOOL_NAMES,
         CODE_REVIEW_BYPASS_MARKER,
-        DENY_PERMISSION_DECISION,
         GATED_PUSH_SUBCOMMANDS,
         HASH_PREVIEW_LENGTH,
-        PRE_TOOL_USE_HOOK_EVENT_NAME,
         PUSH_GATE_CORRECTIVE_MESSAGE,
         PUSH_GATE_HOOK_MODULE_NAME,
         PUSH_REQUIRED_EFFORT,
@@ -60,31 +59,11 @@ try:
         command_carries_trailing_marker,
     )
     from verified_commit_gate_parts.gated_invocations import gated_repo_directories
-
-    from hooks_constants.hook_block_logger import log_hook_block
 except ImportError as import_error:
     raise ImportError(
         "the code_review_push_gate dependencies did not import; "
         "ensure the hooks directory is importable."
     ) from import_error
-
-
-def build_deny_payload(deny_reason: str) -> dict[str, dict[str, str]]:
-    """Build the PreToolUse deny payload for a blocked push.
-
-    Args:
-        deny_reason: The corrective message naming why the push is denied.
-
-    Returns:
-        The ``hookSpecificOutput`` deny payload.
-    """
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": PRE_TOOL_USE_HOOK_EVENT_NAME,
-            "permissionDecision": DENY_PERMISSION_DECISION,
-            "permissionDecisionReason": deny_reason,
-        }
-    }
 
 
 def deny_reason_for_directory(target_directory: str) -> str | None:
@@ -116,17 +95,6 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
     return f"{PUSH_GATE_CORRECTIVE_MESSAGE} (repo: {repo_root}, surface sha256 {hash_preview}...)"
 
 
-def _log_and_emit_deny(deny_reason: str, tool_name: str) -> None:
-    """Log the block and write the deny payload to stdout."""
-    log_hook_block(
-        calling_hook_name=PUSH_GATE_HOOK_MODULE_NAME,
-        hook_event=PRE_TOOL_USE_HOOK_EVENT_NAME,
-        block_reason=deny_reason,
-        tool_name=tool_name if isinstance(tool_name, str) else None,
-    )
-    sys.stdout.write(json.dumps(build_deny_payload(deny_reason)) + "\n")
-
-
 def _emit_first_denied_directory(command_text: str, session_directory: str, tool_name: str) -> None:
     """Deny the push against the first target directory that lacks a stamp."""
     all_target_directories = gated_repo_directories(
@@ -136,7 +104,7 @@ def _emit_first_denied_directory(command_text: str, session_directory: str, tool
         deny_reason = deny_reason_for_directory(each_target_directory)
         if deny_reason is None:
             continue
-        _log_and_emit_deny(deny_reason, tool_name)
+        log_and_emit_code_review_deny(deny_reason, tool_name, PUSH_GATE_HOOK_MODULE_NAME)
         return
 
 

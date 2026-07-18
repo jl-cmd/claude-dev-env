@@ -40,6 +40,7 @@ def _load_module(module_name: str) -> ModuleType:
 
 gate_module = _load_module("code_review_pr_create_gate")
 store_module = _load_module("code_review_stamp_store")
+deny_module = _load_module("code_review_gate_deny")
 
 
 def _run_git(repository_directory: Path, *git_arguments: str) -> None:
@@ -179,6 +180,6 @@ def test_gh_pr_edit_payload_is_not_denied(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_build_deny_payload_shape() -> None:
-    deny_payload = gate_module.build_deny_payload("blocked reason")
+    deny_payload = deny_module.build_code_review_deny_payload("blocked reason")
     assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert deny_payload["hookSpecificOutput"]["permissionDecisionReason"] == "blocked reason"

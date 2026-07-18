@@ -20,7 +20,6 @@ that does not match, and an effort below the threshold all read as not covered.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 import time
@@ -54,7 +53,6 @@ try:
     )
     from config.verified_commit_constants import (
         CLAUDE_HOME_DIRECTORY_NAME,
-        ROOT_KEY_HEX_LENGTH,
         VERDICT_JSON_INDENT,
     )
     from verification_verdict_store import (
@@ -63,6 +61,7 @@ try:
         manifest_sha256,
         resolve_merge_base,
         resolve_repo_root,
+        root_key_for_repo,
     )
 except ModuleNotFoundError:
     if _blocking_directory not in sys.path:
@@ -76,7 +75,6 @@ except ModuleNotFoundError:
     )
     from config.verified_commit_constants import (
         CLAUDE_HOME_DIRECTORY_NAME,
-        ROOT_KEY_HEX_LENGTH,
         VERDICT_JSON_INDENT,
     )
     from verification_verdict_store import (
@@ -85,6 +83,7 @@ except ModuleNotFoundError:
         manifest_sha256,
         resolve_merge_base,
         resolve_repo_root,
+        root_key_for_repo,
     )
 
 
@@ -104,9 +103,9 @@ def stamp_directory() -> Path:
 def stamp_path_for_repo(repo_root: str) -> Path:
     """Derive the stamp file path for a repository work tree.
 
-    Keyed by a hash of the normalized, lowercased, resolved work-tree path — the
-    same scheme the verdict store uses — so every work tree gets its own stamp
-    file and a subdirectory of a work tree resolves to the same key as its root.
+    Keyed by the shared ``root_key_for_repo`` derivation, so every work tree
+    gets its own stamp file and a subdirectory of a work tree resolves to the
+    same key as its root.
 
     Args:
         repo_root: The repository top-level directory.
@@ -114,9 +113,7 @@ def stamp_path_for_repo(repo_root: str) -> Path:
     Returns:
         The stamp file path for this work tree.
     """
-    normalized_root = str(Path(repo_root).resolve()).replace("\\", "/").lower()
-    root_key = hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()[:ROOT_KEY_HEX_LENGTH]
-    return stamp_directory() / f"{root_key}.json"
+    return stamp_directory() / f"{root_key_for_repo(repo_root)}.json"
 
 
 def _read_stamps_by_effort(stamp_file: Path) -> dict[str, object]:

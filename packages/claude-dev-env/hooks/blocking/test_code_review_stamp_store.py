@@ -31,6 +31,9 @@ stamp_covers_surface = _store_module.stamp_covers_surface
 live_surface_hash = _store_module.live_surface_hash
 stamp_path_for_repo = _store_module.stamp_path_for_repo
 
+_verdict_store_module = sys.modules["verification_verdict_store"]
+root_key_for_repo = _verdict_store_module.root_key_for_repo
+
 _constants_spec = importlib.util.spec_from_file_location(
     "code_review_enforcement_constants",
     _HOOK_DIR / "config" / "code_review_enforcement_constants.py",
@@ -191,3 +194,12 @@ def test_live_surface_hash_is_none_when_nothing_changed(
 
 def test_push_required_effort_is_the_lowest_known_token() -> None:
     assert PUSH_REQUIRED_EFFORT == ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER[0]
+
+
+def test_stamp_path_for_repo_stem_matches_the_shared_root_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    _isolate_home(monkeypatch, tmp_path / "home")
+    work_dir = tmp_path / "work-tree"
+    work_dir.mkdir()
+    assert stamp_path_for_repo(str(work_dir)).stem == root_key_for_repo(str(work_dir))

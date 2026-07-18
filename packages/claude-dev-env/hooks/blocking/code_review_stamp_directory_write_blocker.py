@@ -47,6 +47,7 @@ try:
     )
     from code_review_stamp_write_blocker_parts.split_directory_change_into_stamp import (
         changes_through_split_directory_into_stamp,
+        directory_change_prefix,
     )
     from config.code_review_enforcement_constants import (
         ALL_GATED_SHELL_TOOL_NAMES,
@@ -65,13 +66,7 @@ try:
         CLAUDE_HOME_DIRECTORY_NAME,
         CLAUDE_HOME_TARGET_BOUNDARY_PATTERN,
         COMMAND_AFTER_DIRECTORY_CHANGE_PATTERN,
-        DIRECTORY_CHANGE_OPTION_PREFIX_PATTERN,
-        DIRECTORY_CHANGE_OPTION_TERMINATOR,
-        DIRECTORY_CHANGE_PATH_OPTIONS,
-        DIRECTORY_CHANGE_PATTERN_PREFIX,
-        DIRECTORY_CHANGE_PATTERN_SUFFIX,
         DIRECTORY_CHANGE_TARGET_PATTERN,
-        DIRECTORY_CHANGE_VERBS,
         NON_REDIRECT_FILE_WRITE_PRIMITIVE_PATTERN,
         ROOT_KEY_HEX_LENGTH,
         VERDICT_DIRECTORY_NAME_SEPARATOR_PATTERN,
@@ -79,7 +74,6 @@ try:
         VERDICT_DIRECTORY_TARGET_BOUNDARY_PATTERN,
         VERDICT_PATH_GLUE_PATTERN,
     )
-    from config.verified_commit_gate_output_constants import REGEX_ALTERNATION_SEPARATOR
 
     from hooks_constants.hook_block_logger import log_hook_block
     from hooks_constants.pre_tool_use_stdin import (
@@ -90,24 +84,6 @@ except ImportError as import_error:
         "code_review_stamp_directory_write_blocker: cannot import its dependencies; "
         "ensure the blocking directory is importable."
     ) from import_error
-
-
-def _directory_change_verbs_pattern() -> str:
-    """Build the alternation of directory-change verbs for a change matcher."""
-    return REGEX_ALTERNATION_SEPARATOR.join(
-        re.escape(each_verb) for each_verb in sorted(DIRECTORY_CHANGE_VERBS)
-    )
-
-
-def _directory_change_option_prefix_pattern() -> str:
-    """Build the optional path-option prefix that may precede a change target."""
-    option_alternation = REGEX_ALTERNATION_SEPARATOR.join(
-        re.escape(each_option)
-        for each_option in sorted(
-            DIRECTORY_CHANGE_PATH_OPTIONS | {DIRECTORY_CHANGE_OPTION_TERMINATOR}
-        )
-    )
-    return DIRECTORY_CHANGE_OPTION_PREFIX_PATTERN % option_alternation
 
 
 def _stamp_file_relative_reference_pattern() -> str:
@@ -134,10 +110,7 @@ def _references_absolute_stamp_path(command_text: str) -> bool:
 def _changes_into_claude_home_then_writes_relative(command_text: str) -> bool:
     """Decide whether a command enters the Claude home then writes the stamp dir."""
     directory_change_into_claude_pattern = re.compile(
-        DIRECTORY_CHANGE_PATTERN_PREFIX
-        + _directory_change_verbs_pattern()
-        + DIRECTORY_CHANGE_PATTERN_SUFFIX
-        + _directory_change_option_prefix_pattern()
+        directory_change_prefix()
         + DIRECTORY_CHANGE_TARGET_PATTERN
         + re.escape(CLAUDE_HOME_DIRECTORY_NAME)
         + CLAUDE_HOME_TARGET_BOUNDARY_PATTERN,
@@ -153,10 +126,7 @@ def _changes_into_claude_home_then_writes_relative(command_text: str) -> bool:
 def _changes_into_stamp_directory_then_writes(command_text: str) -> bool:
     """Decide whether a command enters the stamp directory then runs a command."""
     directory_change_into_stamp_pattern = re.compile(
-        DIRECTORY_CHANGE_PATTERN_PREFIX
-        + _directory_change_verbs_pattern()
-        + DIRECTORY_CHANGE_PATTERN_SUFFIX
-        + _directory_change_option_prefix_pattern()
+        directory_change_prefix()
         + DIRECTORY_CHANGE_TARGET_PATTERN
         + re.escape(CLAUDE_HOME_DIRECTORY_NAME)
         + r"[\\/]"
@@ -362,7 +332,7 @@ def main() -> None:
         block_reason=STAMP_DIRECTORY_GUARD_MESSAGE,
         tool_name=tool_name_for_log,
     )
-    print(json.dumps(deny_decision))
+    sys.stdout.write(json.dumps(deny_decision) + "\n")
     sys.stdout.flush()
 
 

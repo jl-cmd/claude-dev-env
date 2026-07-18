@@ -33,44 +33,26 @@ try:
     register_code_review_enforcement_constants()
     register_verified_commit_constants()
 
+    from code_review_gate_deny import (
+        build_code_review_deny_payload,
+        log_and_emit_code_review_deny,
+    )
     from code_review_stamp_store import live_surface_hash, stamp_covers_surface
     from config.code_review_enforcement_constants import (
         ALL_GATED_SHELL_TOOL_NAMES,
-        DENY_PERMISSION_DECISION,
         GH_PR_CREATE_INVOCATION_PATTERN,
         HASH_PREVIEW_LENGTH,
         MCP_CREATE_PULL_REQUEST_TOOL_NAME,
         PR_CREATE_GATE_CORRECTIVE_MESSAGE,
         PR_CREATE_GATE_HOOK_MODULE_NAME,
         PR_CREATE_REQUIRED_EFFORT,
-        PRE_TOOL_USE_HOOK_EVENT_NAME,
     )
     from verification_verdict_store import resolve_repo_root
-
-    from hooks_constants.hook_block_logger import log_hook_block
 except ImportError as import_error:
     raise ImportError(
         "the code_review_pr_create_gate dependencies did not import; "
         "ensure the hooks directory is importable."
     ) from import_error
-
-
-def build_deny_payload(deny_reason: str) -> dict[str, dict[str, str]]:
-    """Build the PreToolUse deny payload for a blocked PR create.
-
-    Args:
-        deny_reason: The corrective message naming why the create is denied.
-
-    Returns:
-        The ``hookSpecificOutput`` deny payload.
-    """
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": PRE_TOOL_USE_HOOK_EVENT_NAME,
-            "permissionDecision": DENY_PERMISSION_DECISION,
-            "permissionDecisionReason": deny_reason,
-        }
-    }
 
 
 def _strip_quoted_regions(command_text: str) -> str:
@@ -147,7 +129,7 @@ def _deny_for_directory_or_none(
     deny_reason = deny_reason_for_directory(session_directory)
     if deny_reason is None:
         return None
-    return build_deny_payload(deny_reason)
+    return build_code_review_deny_payload(deny_reason)
 
 
 def _shell_command_targets_pr_create(all_pretooluse_payload: dict[str, object]) -> bool:
@@ -188,17 +170,6 @@ def decision_for_payload(
     return _deny_for_directory_or_none(session_directory)
 
 
-def _log_and_emit_deny(deny_reason: str, tool_name: str) -> None:
-    """Log the block and write the deny payload to stdout."""
-    log_hook_block(
-        calling_hook_name=PR_CREATE_GATE_HOOK_MODULE_NAME,
-        hook_event=PRE_TOOL_USE_HOOK_EVENT_NAME,
-        block_reason=deny_reason,
-        tool_name=tool_name if isinstance(tool_name, str) else None,
-    )
-    sys.stdout.write(json.dumps(build_deny_payload(deny_reason)) + "\n")
-
-
 def main() -> None:
     """Read the PreToolUse payload and decide whether to allow the PR create."""
     try:
@@ -212,7 +183,11 @@ def main() -> None:
     deny_reason = deny_decision["hookSpecificOutput"]["permissionDecisionReason"]
     if not isinstance(deny_reason, str):
         return
-    _log_and_emit_deny(deny_reason, tool_name if isinstance(tool_name, str) else "")
+    log_and_emit_code_review_deny(
+        deny_reason,
+        tool_name if isinstance(tool_name, str) else "",
+        PR_CREATE_GATE_HOOK_MODULE_NAME,
+    )
 
 
 if __name__ == "__main__":

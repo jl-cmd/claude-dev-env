@@ -62,8 +62,12 @@ def _directory_change_option_prefix_pattern() -> str:
     return DIRECTORY_CHANGE_OPTION_PREFIX_PATTERN % option_alternation
 
 
-def _directory_change_prefix() -> str:
-    """Build the change-verb prefix shared by both directory-change matchers.
+def directory_change_prefix() -> str:
+    """Build the change-verb prefix shared by the directory-change matchers.
+
+    The stamp-directory write-blocker reuses this same prefix, so a single
+    builder feeds both this module's split-change matchers and the blocker's
+    single-step change matchers, and the two never drift.
 
     Returns:
         The regex prefix matching a directory-change verb and any leading
@@ -85,7 +89,7 @@ def _change_into_claude_pattern() -> re.Pattern[str]:
         path ending in ``.claude``.
     """
     return re.compile(
-        _directory_change_prefix()
+        directory_change_prefix()
         + DIRECTORY_CHANGE_TARGET_PATTERN
         + re.escape(CLAUDE_HOME_DIRECTORY_NAME)
         + CLAUDE_HOME_TARGET_BOUNDARY_PATTERN,
@@ -101,7 +105,7 @@ def _change_into_stamp_pattern() -> re.Pattern[str]:
         relative ``code-review-stamps`` directory.
     """
     return re.compile(
-        _directory_change_prefix() + STAMP_DIRECTORY_CHANGE_TARGET_PATTERN, re.IGNORECASE
+        directory_change_prefix() + STAMP_DIRECTORY_CHANGE_TARGET_PATTERN, re.IGNORECASE
     )
 
 

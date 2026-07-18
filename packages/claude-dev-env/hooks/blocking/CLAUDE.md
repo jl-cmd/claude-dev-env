@@ -126,6 +126,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 |---|---|
 | `_gh_body_arg_utils.py` | Parsing helpers for `gh_body_arg_blocker.py` |
 | `code_review_enforcement_config_bootstrap.py` | Binds `config.code_review_enforcement_constants` to the sibling `config/` file by explicit location, so the code-review gate family resolves its constants regardless of a foreign `config` package's `sys.path` order |
+| `code_review_gate_deny.py` | Shared deny scaffold for the push and PR-create code-review gates: the `hookSpecificOutput` deny-payload builder and the log-and-emit helper, so both gates share one deny shape |
 | `code_review_stamp_store.py` | Reads and writes the per-work-tree code-review stamp files under `~/.claude/code-review-stamps/`, and decides whether a clean stamp at the needed effort covers the live branch surface |
 | `pr_description_body_audit.py` | Body audit logic for `pr_description_enforcer.py` |
 | `pr_description_command_parser.py` | `gh` command parsing for `pr_description_enforcer.py` |
