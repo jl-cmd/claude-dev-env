@@ -64,6 +64,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
 | `reviewer_spawn_gate_constants.py` | Bash tool name, the sentinel marker, the Copilot and Bugbot trigger markers, the availability-script relative path and override env-var name, and the deny-message template for the reviewer-spawn gate |
+| `ruff_integration_constants.py` | Ruff argv tokens (executable, ``check`` subcommand, config, output-format, force-exclude, stdin flags, and the ``Fixed`` summary token) shared by the staged and native check command builders |
 | `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
@@ -92,4 +93,3 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
 - `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
 - `local_identity.py` is a loader: it reads the environment or `~/.claude/local-identity.json` (its path overridable via `CLAUDE_LOCAL_IDENTITY_PATH`) to resolve private NAS values (with committed placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`).
-
