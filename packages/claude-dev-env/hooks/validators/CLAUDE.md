@@ -39,6 +39,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 
 | Directory | Role |
 |---|---|
+| `config/` | Constants module (`directory_exemption_constants.py`) holding the exemption directory-segment names that `validate_proposed_file` staging keeps |
 | `test_files/` | Fixture files used by the validator tests — not checked-in test code |
 
 ## Conventions
