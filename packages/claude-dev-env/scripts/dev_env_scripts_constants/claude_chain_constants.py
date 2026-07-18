@@ -18,6 +18,9 @@ CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 CONFIG_FILENAME: str = "claude-chain.json"
 """Real chain-configuration filename read from the user's home directory."""
 
+CHAIN_USAGE_MODULE_NAME: str = "claude_chain_usage"
+"""Import name of the weekly-usage report module loaded lazily by the runner."""
+
 EXAMPLE_CONFIG_FILENAME: str = "claude-chain.example.json"
 """Committed template filename referenced in the config-error guidance."""
 

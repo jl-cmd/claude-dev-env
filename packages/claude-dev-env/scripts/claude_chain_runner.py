@@ -35,19 +35,20 @@ Import ``run_claude`` for the outcome object, or run the module as a CLI::
 from __future__ import annotations
 
 import argparse
+import importlib
 import io
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from types import ModuleType
+from typing import Protocol, TextIO
 
 if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
-import claude_chain_usage as chain_usage
 from dev_env_scripts_constants.claude_chain_constants import (
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -60,6 +61,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     CHAIN_EXHAUSTED_EXIT_CODE,
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
+    CHAIN_USAGE_MODULE_NAME,
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
@@ -130,10 +132,29 @@ class ChainInvocationOutcome:
     attempts: tuple[ChainAttempt, ...]
 
 
+class WeeklyUsageAccountReport(Protocol):
+    """Minimal account-report surface the runner needs for ranking and mapping."""
+
+    command: str
+
+
 chain_subprocess_runner = subprocess.run
-chain_weekly_usage_reporter: Callable[
-    ..., list[chain_usage.AccountUsageReport]
-] = chain_usage.report_chain_weekly_usage
+
+
+def _load_chain_usage_module() -> ModuleType:
+    return importlib.import_module(CHAIN_USAGE_MODULE_NAME)
+
+
+def _default_chain_weekly_usage_reporter(
+    *, config_path: Path
+) -> list[WeeklyUsageAccountReport]:
+    usage_module = _load_chain_usage_module()
+    return usage_module.report_chain_weekly_usage(config_path=config_path)
+
+
+chain_weekly_usage_reporter: Callable[..., list[WeeklyUsageAccountReport]] = (
+    _default_chain_weekly_usage_reporter
+)
 
 
 def chain_config_path() -> Path:
@@ -251,13 +272,14 @@ def _build_invocation(entry: ChainEntry, all_claude_arguments: list[str]) -> lis
 
 def _entries_ranked_by_weekly_remaining(
     all_entries: list[ChainEntry],
-    all_usage_reports: list[chain_usage.AccountUsageReport],
+    all_usage_reports: Sequence[WeeklyUsageAccountReport],
 ) -> list[ChainEntry]:
+    usage_module = _load_chain_usage_module()
     entry_by_command = {
         each_entry.command: each_entry for each_entry in all_entries
     }
-    all_ranked_reports = chain_usage.rank_accounts_by_weekly_remaining(
-        all_usage_reports
+    all_ranked_reports = usage_module.rank_accounts_by_weekly_remaining(
+        list(all_usage_reports)
     )
     return [
         entry_by_command[each_report.command]

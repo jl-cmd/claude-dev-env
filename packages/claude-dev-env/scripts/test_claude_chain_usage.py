@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -493,3 +494,22 @@ def test_load_resolve_usage_window_module_loads_real_probe_api() -> None:
     assert callable(loaded_module.extract_usage_windows)
     assert callable(loaded_module._fetch_usage_payload)
     assert sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] is loaded_module
+
+
+def test_usage_module_imports_without_preloading_runner() -> None:
+    scripts_directory = str(_SCRIPTS_DIR)
+    import_probe = (
+        "import sys; "
+        f"sys.path.insert(0, {scripts_directory!r}); "
+        "import claude_chain_usage; "
+        "assert callable(claude_chain_usage.report_chain_weekly_usage); "
+        "assert callable(claude_chain_usage.rank_accounts_by_weekly_remaining)"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", import_probe],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
