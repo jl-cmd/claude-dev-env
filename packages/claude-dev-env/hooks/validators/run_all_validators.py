@@ -791,8 +791,7 @@ def _mirrored_relative_segments(file_path: str) -> list[str]:
 
 def _path_is_within_directory(candidate_path: Path, directory_path: Path) -> bool:
     """Return True when *candidate_path* resolves to a location under *directory_path*."""
-    resolved_directory = directory_path.resolve()
-    return resolved_directory in candidate_path.resolve().parents
+    return candidate_path.resolve().is_relative_to(directory_path.resolve())
 
 
 def _is_under_system_temporary_directory(file_path: str) -> bool:
