@@ -165,6 +165,37 @@ def test_run_mypy_check_accepts_relative_path_under_nested_root(
     assert mypy_result.passed, mypy_result.output
 
 
+def test_run_mypy_check_applies_config_resolved_from_config_source_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staged file is checked under the config resolved from the original path.
+
+    A strict ``[tool.mypy]`` config flags an untyped def only when
+    ``config_source_path`` resolves it; native discovery from the detached
+    file finds no config and passes.
+    """
+    strict_repo = tmp_path / "strict_repo"
+    strict_repo.mkdir()
+    (strict_repo / "pyproject.toml").write_text(
+        "[tool.mypy]\ndisallow_untyped_defs = true\n", encoding="utf-8"
+    )
+    detached_file = tmp_path / "detached" / "untyped.py"
+    detached_file.parent.mkdir(parents=True)
+    detached_file.write_text(
+        "def annotate_nothing(value):\n    return value\n", encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    without_source = run_mypy_check([detached_file])
+    with_source = run_mypy_check(
+        [detached_file], config_source_path=strict_repo / "pyproject.toml"
+    )
+
+    assert without_source.passed, without_source.output
+    assert not with_source.passed
+
+
 def test_mypy_result_dataclass() -> None:
     """Test MypyResult dataclass creation."""
     result = MypyResult(passed=True, output="test", error_count=0)
@@ -183,6 +214,7 @@ def test_run_mypy_check_returns_passed_for_empty_files() -> None:
     """Test that run_mypy_check passes with no files."""
     result = run_mypy_check([])
     assert result.passed is True
+    assert result.error_count == 0
     assert "No files" in result.output
 
 

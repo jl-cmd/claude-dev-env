@@ -54,7 +54,7 @@ sibling-skill-a/             # one capability
 sibling-skill-b/             # one capability
 ```
 
-The orchestrator owns sequence and gates. Sub-skills own domain detail. skill-builder itself follows this shape: it orchestrates and delegates writing to `/skill-writer`.
+The orchestrator owns sequence and gates. Sub-skills own domain detail. skill-builder itself follows this shape: it orchestrates and delegates writing to the `skill-writer-agent` agent (spawned via the Agent tool).
 
 ### Within-skill vs split
 
@@ -85,12 +85,11 @@ In Process or a dedicated **Sub-skills** section:
 | Skill | When | Produces |
 |---|---|---|
 | `/reviewer-gates` | Step 1 — gate external reviewers | opt-out, Copilot quota, Bugbot trigger decisions |
-| `/skill-writer` | Step 4 — author SKILL.md | skill package files |
 
 If a listed skill is not installed, respond: `[exact refusal or degrade line]`.
 ```
 
-Self-audit requires this table (or equivalent) whenever the skill composes others.
+Self-audit requires this table (or equivalent) whenever the skill composes others. skill-builder itself delegates SKILL.md authoring to the `skill-writer-agent` agent, spawned via the Agent tool.
 
 ## Anti-patterns
 

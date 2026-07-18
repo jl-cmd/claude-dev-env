@@ -83,7 +83,7 @@ For each diagnosis from Step 2:
 6. For checkbox/tracker failures: replace markdown `- [ ]` boards with a plain task-seed list and a seed instruction (`TaskCreate` / `TodoWrite`).
 7. Verify the fix doesn’t break anything that was working.
 
-Delegate larger rewrites to `/skill-writer` using the refine-skill handoff from delegation-map.md.
+Spawn the `skill-writer-agent` agent for larger rewrites, using the refine-skill handoff from delegation-map.md.
 
 **Output:** Modified skill files with targeted fixes.
 

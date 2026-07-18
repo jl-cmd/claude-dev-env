@@ -88,16 +88,22 @@ Each reviewer-down condition below skips its own convergence-check gate. The fla
   `--copilot-down` (the Copilot review gate and the pending-requested-reviews
   gate bypassed), then mark-ready. `copilotNote` records the bypass for the
   final report.
-- **Terminal Codex gate skipped or down** — the conditional-required Codex gate
-  runs after Bugbot and Copilot. When `CLAUDE_REVIEWS_DISABLED` lists `codex`
-  (`reviews_disabled.py --reviewer codex` exit 0), the gate sets `codexDown` and
-  advances with no review. When the weekly usage probe reports `percent_left`
-  null or at/below the shared threshold (`is_codex_review_required` false), the
-  gate skips without a stamp; the convergence check applies the same rule. When
-  the wrapper classifies `codex_down`, the gate sets `codexDown` and advances.
-  A clean required run stamps `codexCleanAt` for `--codex-clean-at`. Non-code-standard
-  findings re-enter CONVERGE through the existing fix path. Standards-only findings
-  defer a follow-up, stamp `codexCleanAt`, and advance to FINALIZE (no fix push).
+- **Terminal Codex gate skipped (opt-out, usage, or `codex_down`)** — the
+  conditional-required Codex gate runs after Bugbot and Copilot. When
+  `CLAUDE_REVIEWS_DISABLED` lists `codex` (`reviews_disabled.py --reviewer codex`
+  exit 0), the gate sets `codexDown` and advances with no review. When the weekly
+  usage probe reports `percent_left` null or at/below the shared threshold
+  (`is_codex_review_required` false), the gate skips without a stamp; the
+  convergence check applies the same rule. When the codex-review wrapper
+  classifies `codex_down` — a Codex CLI error, or a review that ran past its
+  `CONFIG.codexReviewTimeoutSeconds` budget — the gate skips the same way: it sets
+  `codexDown`, records a `codexNote` so the skip stays visible in the final
+  report, clears `codexCleanAt`, and advances to `FINALIZE` (mark-ready with the
+  gate bypassed) so a Codex outage does not block convergence; Codex runs again on
+  the next convergence. A clean required run stamps `codexCleanAt` for
+  `--codex-clean-at`. Non-code-standard findings re-enter `CONVERGE` through the
+  existing fix path. Standards-only findings defer a follow-up, stamp
+  `codexCleanAt`, and advance to `FINALIZE` (no fix push).
 - **A lens agent dies** — when one parallel reading lens returns null (a terminal
   agent failure), the round proceeds on the surviving lenses. A real defect it
   would have caught surfaces in a later round or at the convergence check. A dead
