@@ -655,7 +655,7 @@ test('the workflow declares cleanAuditNote and assembles it into every result vi
   assert.match(convergeSource, /let cleanAuditNote = null/);
   assert.match(
     convergeSource,
-    /const assembleResult = \(outcomeFields\) => \(\{\n\s*\.\.\.outcomeFields,\n\s*standardsNote,\n\s*copilotNote,\n\s*cleanAuditNote,\n\s*reuseNote,\n\s*deferredPrs,\n\s*\}\)/,
+    /const assembleResult = \(outcomeFields\) => \(\{\n\s*\.\.\.outcomeFields,\n\s*standardsNote,\n\s*copilotNote,\n\s*codexNote,\n\s*cleanAuditNote,\n\s*reuseNote,\n\s*deferredPrs,\n\s*\}\)/,
   );
   const assembleCalls = convergeSource.match(/return assembleResult\(/g) || [];
   assert.ok(

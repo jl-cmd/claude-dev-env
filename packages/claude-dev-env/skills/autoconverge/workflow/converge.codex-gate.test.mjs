@@ -178,7 +178,118 @@ test('the Codex gate prompt runs the review wrapper against the PR base branch',
   assert.match(codexPrompt, /parse_codex_findings/, 'expected findings to come from the shared parser');
 });
 
-test('the CODEX phase stamps codexCleanAt on clean and clears it on skip/down', () => {
+test('the Codex gate prompt passes an explicit generous timeout so a slow-but-healthy review is not cut short', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /timeout_seconds=\$\{CONFIG\.codexReviewTimeoutSeconds\}/,
+    'expected the driver to pass CONFIG.codexReviewTimeoutSeconds, overriding the too-small wrapper default',
+  );
+});
+
+test('CONFIG.codexReviewTimeoutSeconds exceeds the observed real Codex runtime', () => {
+  const match = convergeSource.match(/codexReviewTimeoutSeconds:\s*(\d+)/);
+  assert.notEqual(match, null, 'expected CONFIG.codexReviewTimeoutSeconds to be defined');
+  const budgetSeconds = Number(match[1]);
+  assert.ok(
+    budgetSeconds >= 900,
+    `expected a budget comfortably above the ~683s measured Codex runtime, got ${budgetSeconds}`,
+  );
+});
+
+test('the Codex gate prompt runs the review in the background rather than the default foreground timeout', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /run_in_background/i,
+    'expected the review driver to run in the background — the foreground tool timeout caps below the review runtime and would kill a healthy review',
+  );
+  assert.match(
+    codexPrompt,
+    /result file/i,
+    'expected the driver to persist its outcome to a result file the agent reads once the background run finishes',
+  );
+});
+
+test('the Codex gate prompt waits for the background review inside the same turn with a bounded Monitor loop', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(codexPrompt, /Monitor tool/, 'expected a same-turn Monitor wait for the background review');
+  assert.match(codexPrompt, /until-loop/, 'expected a bounded until-loop that re-checks the result file');
+  assert.match(codexPrompt, /codexReviewPollIntervalSeconds/, 'expected a named poll interval in the wait protocol');
+  assert.match(codexPrompt, /codexReviewMaxPolls/, 'expected a named attempt budget in the wait protocol');
+  assert.match(
+    codexPrompt,
+    /Do NOT end this turn/i,
+    'expected an explicit instruction against ending the schema-bearing turn to await the background run',
+  );
+});
+
+test('the Codex background-review poll budget covers the review timeout', () => {
+  const intervalMatch = convergeSource.match(/codexReviewPollIntervalSeconds:\s*(\d+)/);
+  const pollsMatch = convergeSource.match(/codexReviewMaxPolls:\s*(\d+)/);
+  const timeoutMatch = convergeSource.match(/codexReviewTimeoutSeconds:\s*(\d+)/);
+  assert.notEqual(intervalMatch, null, 'expected codexReviewPollIntervalSeconds in CONFIG');
+  assert.notEqual(pollsMatch, null, 'expected codexReviewMaxPolls in CONFIG');
+  assert.notEqual(timeoutMatch, null, 'expected codexReviewTimeoutSeconds in CONFIG');
+  const intervalSeconds = Number(intervalMatch[1]);
+  const maxPolls = Number(pollsMatch[1]);
+  const timeoutSeconds = Number(timeoutMatch[1]);
+  assert.ok(
+    intervalSeconds * maxPolls >= timeoutSeconds,
+    `expected the poll budget ${intervalSeconds * maxPolls}s to cover the ${timeoutSeconds}s review timeout`,
+  );
+});
+
+test('the Codex gate prompt returns codex_down when the background poll budget is spent', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /full poll budget is spent with no result file[\s\S]*?down:true/,
+    'expected a spent-budget branch that returns the codex_down schema shape',
+  );
+});
+
+test('meta Codex gate phase describes codex_down as a non-blocking skip that logs a note', () => {
+  const phaseStart = convergeSource.indexOf("title: 'Codex gate'");
+  const phaseEnd = convergeSource.indexOf("title: 'Finalize'");
+  assert.notEqual(phaseStart, -1, 'expected a Codex gate phase in meta');
+  const codexPhaseDetail = convergeSource.slice(phaseStart, phaseEnd);
+  assert.match(codexPhaseDetail, /codex_down/, 'expected the phase detail to name codex_down');
+  assert.match(
+    codexPhaseDetail,
+    /codex_down, the gate skips without blocking/,
+    'expected codex_down to be described as a non-blocking skip',
+  );
+  assert.match(
+    codexPhaseDetail,
+    /logged as a note/,
+    'expected the codex_down skip to be logged as a note so the bypass stays visible',
+  );
+  assert.doesNotMatch(
+    codexPhaseDetail,
+    /holds the PR as a draft with a codex-down blocker/,
+    'codex_down must not be described as holding the PR draft with a blocker',
+  );
+});
+
+test('CODEX_SCHEMA down.description describes codex_down as a skipped, bypassed gate recorded as a note', () => {
+  const schemaStart = convergeSource.indexOf('const CODEX_SCHEMA =');
+  const schemaEnd = convergeSource.indexOf('const COPILOT_VERIFY_VERDICTS =');
+  assert.notEqual(schemaStart, -1, 'expected CODEX_SCHEMA to exist');
+  const schemaSource = convergeSource.slice(schemaStart, schemaEnd);
+  const downLineStart = schemaSource.indexOf('down: {');
+  const downLine = schemaSource.slice(downLineStart, schemaSource.indexOf('\n', downLineStart));
+  assert.match(downLine, /codex_down/, 'expected the down description to name codex_down');
+  assert.match(downLine, /skipped and bypassed/, 'expected codex_down to be described as a skipped, bypassed gate');
+  assert.match(downLine, /recorded as a note/, 'expected codex_down to be recorded as a note');
+  assert.doesNotMatch(
+    downLine,
+    /holds the PR as a draft with a codex-down blocker/,
+    'the down description must not claim codex_down holds the PR draft as a blocker',
+  );
+});
+
+test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out, usage, or down skip', () => {
   const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
   assert.notEqual(codexPhaseStart, -1, 'expected a CODEX phase block');
@@ -190,6 +301,36 @@ test('the CODEX phase stamps codexCleanAt on clean and clears it on skip/down', 
   assert.match(codexPhase, /skip-token[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
   assert.match(codexPhase, /skip-usage[\s\S]*codexDown = false[\s\S]*codexCleanAt = null/);
   assert.match(codexPhase, /kind === 'down'[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
+});
+
+test('the CODEX phase skips a genuine codex_down gracefully, recording a note and advancing to mark-ready', () => {
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
+  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
+  const codexPhase = convergeSource.slice(codexPhaseStart, finalizePhaseStart);
+  const downBranchStart = codexPhase.indexOf("codexOutcome.kind === 'down'");
+  const downBranchEnd = codexPhase.indexOf("codexOutcome.kind === 'fix'", downBranchStart);
+  assert.notEqual(downBranchStart, -1, 'expected a codex_down branch in the CODEX phase');
+  assert.notEqual(downBranchEnd, -1, 'expected a fix branch after the down branch');
+  const downBranch = codexPhase.slice(downBranchStart, downBranchEnd);
+  assert.match(downBranch, /codexNote =/, 'a genuine codex_down records a transparent note');
+  assert.match(downBranch, /codexDown = true/, 'the down branch sets the bypass flag so mark-ready skips the required Codex gate');
+  assert.match(downBranch, /codexCleanAt = null/, 'the down branch clears any codex-clean stamp');
+  assert.match(
+    downBranch,
+    /phase = 'FINALIZE'/,
+    'a genuine codex_down advances to mark-ready with the gate bypassed rather than blocking the run',
+  );
+  assert.doesNotMatch(downBranch, /blocker =/, 'a genuine codex_down must not record a blocker');
+  assert.doesNotMatch(downBranch, /\bbreak\b/, 'the down branch continues rather than breaking the loop');
+});
+
+test('the workflow return object includes codexNote so the final report surfaces the Codex skip', () => {
+  const assembleStart = convergeSource.indexOf('const assembleResult =');
+  assert.notEqual(assembleStart, -1, 'expected assembleResult to exist');
+  const assembleEnd = convergeSource.indexOf('})', assembleStart);
+  assert.notEqual(assembleEnd, -1, 'expected the assembleResult object to close');
+  const assembleSource = convergeSource.slice(assembleStart, assembleEnd);
+  assert.match(assembleSource, /codexNote,/, 'expected codexNote among the returned notes');
 });
 
 test('the CODEX phase routes findings through applyFixes and re-enters CONVERGE', () => {
@@ -311,6 +452,18 @@ test('meta lists the Codex gate phase between Copilot and Finalize', () => {
 
 test('SKILL.md names Codex among the terminal confirmation gates', () => {
   assert.match(skillSource, /Codex/i);
+});
+
+test('SKILL.md documents codexNote in the workflow return shape', () => {
+  const returnShapeMatch = skillSource.match(/`\{ converged, rounds, finalSha, blocker,[^`]*\}`/);
+  assert.ok(returnShapeMatch, 'expected the documented return shape literal in SKILL.md');
+  assert.match(returnShapeMatch[0], /codexNote/);
+});
+
+test('SKILL.md final-report template surfaces the codexNote so a bypassed Codex gate stays visible', () => {
+  const reportBlockMatch = skillSource.match(/\/autoconverge exit:[\s\S]*?```/);
+  assert.ok(reportBlockMatch, 'expected the final-report template block in SKILL.md');
+  assert.match(reportBlockMatch[0], /Codex: <codexNote>/);
 });
 
 test('stop-conditions.md documents the Codex gate skip paths as non-blockers', () => {
