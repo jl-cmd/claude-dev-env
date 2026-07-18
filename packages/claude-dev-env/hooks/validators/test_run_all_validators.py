@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from .exempt_paths import is_test_file
 from .run_all_validators import (
     ValidatorResult,
     _hooks_subprocess_working_directory_and_environment,
@@ -21,7 +22,51 @@ from .run_all_validators import (
     run_git_checks,
     run_python_style_checks,
     run_with_fallback,
+    validate_proposed_file,
 )
+
+PRINT_PRODUCTION_CONTENT = 'def run() -> None:\n    print("x")\n'
+ALL_PYTHON_TEST_EXEMPT_PATHS = [
+    "pkg/test_helpers/worker.py",
+    "pkg/conftest.py",
+    "pkg/foo_test.py",
+]
+ALL_NON_TEST_PRODUCTION_PATHS = [
+    "pkg/worker.py",
+    "pkg/latest/worker.py",
+    "pkg/protest/worker.py",
+]
+ALL_IS_TEST_FILE_PARITY_PATHS = (
+    ALL_PYTHON_TEST_EXEMPT_PATHS
+    + ALL_NON_TEST_PRODUCTION_PATHS
+    + ["pkg/data.spec.helpers/worker.py"]
+)
+
+
+def _validators_deny_print(file_path: str) -> bool:
+    all_results = validate_proposed_file(file_path, PRINT_PRODUCTION_CONTENT)
+    return any(not each_result.passed for each_result in all_results)
+
+
+@pytest.mark.parametrize("file_path", ALL_PYTHON_TEST_EXEMPT_PATHS)
+def test_staging_keeps_substring_test_exemption(file_path: str) -> None:
+    assert is_test_file(file_path) is True
+    assert _validators_deny_print(file_path) is False
+
+
+@pytest.mark.parametrize("file_path", ALL_NON_TEST_PRODUCTION_PATHS)
+def test_staging_leaves_non_test_paths_denied(file_path: str) -> None:
+    assert is_test_file(file_path) is False
+    assert _validators_deny_print(file_path) is True
+
+
+@pytest.mark.parametrize("file_path", ALL_IS_TEST_FILE_PARITY_PATHS)
+def test_staged_path_matches_is_test_file_verdict(
+    file_path: str, tmp_path: Path
+) -> None:
+    staged_path = _temporary_path_preserving_directory_signal(tmp_path, file_path)
+    staged_relative_path = staged_path.relative_to(tmp_path)
+    assert is_test_file(str(staged_relative_path)) == is_test_file(file_path)
 
 
 def _passing_mock_result() -> MagicMock:
