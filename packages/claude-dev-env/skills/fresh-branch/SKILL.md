@@ -113,7 +113,9 @@ Further edits for the new branch belong in `worktree_path`, not in the caller's 
 | `SKILL.md` | This hub: phases, checklist, constraints, gotchas |
 | `CLAUDE.md` | Package map for agents browsing the skill folder |
 | `scripts/create_fresh_branch.py` | **Execute** — deterministic fetch + worktree branch CLI |
+| `scripts/fresh_branch_git_commands.py` | Git command helpers behind the CLI (fetch, ref checks, worktree add) |
 | `scripts/test_create_fresh_branch.py` | Real-repo tests for agent/path/CLI behavior |
+| `scripts/test_fresh_branch_git_commands.py` | Real-repo tests for the git command helpers |
 | `scripts/fresh_branch_scripts_constants/` | Named constants for the CLI |
 
 ## Folder map
