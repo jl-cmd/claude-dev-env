@@ -842,3 +842,21 @@ def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
             timeout_seconds=review_timeout_seconds,
         )
     assert time.monotonic() - start_time < wall_clock_ceiling_seconds
+
+
+def test_windows_process_tree_kill_builds_taskkill_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Windows kill path issues taskkill /T /F /PID for the given process id."""
+    target_process_identifier = 4242
+    recorded_argv: list[list[str]] = []
+
+    def record_argv(all_arguments: list[str], **_keywords: object) -> None:
+        recorded_argv.append(all_arguments)
+
+    monkeypatch.setattr(wrapper.subprocess, "run", record_argv)
+    wrapper._kill_windows_process_tree(target_process_identifier)
+
+    assert recorded_argv == [
+        ["taskkill", "/T", "/F", "/PID", str(target_process_identifier)]
+    ]
