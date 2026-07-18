@@ -22,6 +22,7 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "pr_converge_scripts_constants",
         "bugteam_scripts_constants",
         "usage_pause_constants",
+        "prototype_scripts_constants",
         "codex_review_scripts_constants",
         "dev_env_scripts_constants",
         "fresh_branch_scripts_constants",
