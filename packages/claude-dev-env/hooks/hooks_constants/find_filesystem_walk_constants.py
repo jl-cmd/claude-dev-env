@@ -23,14 +23,25 @@ FIND_PROGRAM_EXECUTABLE_NAME = "find.exe"
 
 FIND_PROGRAM_INVOCATION_PATTERN = re.compile(
     r"""(?ix)
-    (?:^|[\s;&|(`])
-    (?:["'])?
     (?:
-        (?:[A-Za-z]:)?(?:[^"'`\s;&|]*[/\\])+
-    )?
-    find(?:\.exe)?
-    (?:["'])?
-    (?=[\s"'`;&|)]|$)
+        # find / find.exe at a command position: start of command, or right
+        # after a shell separator or PowerShell call operator (optional
+        # whitespace between), with an optional spaceless path prefix. A plain
+        # space is NOT a command position, so the word "find" sitting inside
+        # another command's arguments or a quoted message is not matched.
+        (?: ^ | \|\| | && | [;&|\n(`] )
+        \s*
+        (?: & \s* )?
+        (?: ["'] )?
+        (?: [A-Za-z]: )?
+        (?: [^"'`\s;&|]* [/\\] )*
+        find (?: \.exe )?
+        (?= [\s"'`;&|)] | $ )
+      |
+        # a quoted path ending in find.exe, where spaces inside the quotes are
+        # allowed (e.g. "C:\Program Files\Git\usr\bin\find.exe").
+        ["'] [^"'\n]* [/\\] find \.exe ["']
+    )
     """
 )
 

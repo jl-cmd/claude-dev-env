@@ -184,24 +184,43 @@ def parse_find_process_query_payload(
     return all_snapshots
 
 
+def _run_powershell_capturing_stdout(powershell_script: str) -> str | None:
+    """Run a PowerShell script and return its stripped stdout, or None.
+
+    Returns None when ``powershell.exe`` is absent (macOS, Linux) so callers
+    fall back to an empty result rather than letting the OSError propagate out
+    of a SessionStart sweep.
+
+    Args:
+        powershell_script: The -Command body to run under powershell.exe.
+
+    Returns:
+        Stripped stdout text, or None when the interpreter cannot be launched.
+    """
+    try:
+        completed = subprocess.run(
+            [
+                POWERSHELL_EXECUTABLE_NAME,
+                POWERSHELL_NO_PROFILE_FLAG,
+                POWERSHELL_COMMAND_FLAG,
+                powershell_script,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    return completed.stdout.strip()
+
+
 def query_git_find_processes_via_powershell() -> list[GitFindProcessSnapshot]:
     """Query live Git find.exe processes through PowerShell CIM + Get-Process.
 
     Returns:
         Snapshots for every live Git usr\\bin\\find.exe process.
     """
-    completed = subprocess.run(
-        [
-            POWERSHELL_EXECUTABLE_NAME,
-            POWERSHELL_NO_PROFILE_FLAG,
-            POWERSHELL_COMMAND_FLAG,
-            FIND_PROCESS_QUERY_SCRIPT,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    stdout_text = completed.stdout.strip()
+    stdout_text = _run_powershell_capturing_stdout(FIND_PROCESS_QUERY_SCRIPT)
     if not stdout_text:
         return []
     try:
@@ -217,20 +236,11 @@ def query_total_handle_count() -> int:
     Returns:
         Integer handle count from the Process(_Total) counter.
     """
-    completed = subprocess.run(
-        [
-            POWERSHELL_EXECUTABLE_NAME,
-            POWERSHELL_NO_PROFILE_FLAG,
-            POWERSHELL_COMMAND_FLAG,
-            TOTAL_HANDLE_COUNTER_QUERY_TEMPLATE.format(
-                counter_path=TOTAL_HANDLE_COUNTER_PATH
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    stdout_text = _run_powershell_capturing_stdout(
+        TOTAL_HANDLE_COUNTER_QUERY_TEMPLATE.format(
+            counter_path=TOTAL_HANDLE_COUNTER_PATH
+        )
     )
-    stdout_text = completed.stdout.strip()
     if not stdout_text:
         return 0
     try:
@@ -247,7 +257,8 @@ def select_runaway_git_find_processes(
 
     Args:
         all_snapshots: Live Git find snapshots.
-        handle_threshold: Inclusive lower bound that triggers a kill.
+        handle_threshold: Exclusive lower bound; a process is selected only when
+            its handle count is strictly greater than this value.
 
     Returns:
         Snapshots with handle_count greater than handle_threshold.
@@ -451,7 +462,10 @@ def main() -> None:
     """SessionStart / CLI entry point.
 
     When argv carries CLI flags, run the CLI. Otherwise run one live sweep
-    (SessionStart path) and exit 0 so the hook never blocks session start.
+    (SessionStart path) and exit 0 so the hook never blocks session start. The
+    SessionStart path stays silent unless it killed a runaway, so the common
+    zero-find session start adds no output — only a real termination prints its
+    before/after counters as evidence.
     """
     if argv_requests_cli_mode(sys.argv[1:]):
         sys.exit(run_cli(sys.argv[1:]))
@@ -462,7 +476,8 @@ def main() -> None:
         query_total_handles=query_total_handle_count,
         terminate=terminate_process,
     )
-    _print_sweep_report(sweep_report)
+    if sweep_report.all_killed_process_ids:
+        _print_sweep_report(sweep_report)
     sys.exit(0)
 
 

@@ -90,6 +90,31 @@ class TestCommandInvokesFilesystemFind:
     def test_allows_empty_command(self) -> None:
         assert not blocker.command_invokes_filesystem_find("")
 
+    def test_allows_find_as_word_in_commit_message(self) -> None:
+        assert not blocker.command_invokes_filesystem_find(
+            'git commit -m "find and replace the helper"'
+        )
+
+    def test_allows_grep_for_find_literal(self) -> None:
+        assert not blocker.command_invokes_filesystem_find('grep -rn "find" .')
+
+    def test_allows_find_word_in_echo(self) -> None:
+        assert not blocker.command_invokes_filesystem_find(
+            'echo "could not find it"'
+        )
+
+    def test_allows_npm_run_find_script(self) -> None:
+        assert not blocker.command_invokes_filesystem_find("npm run find")
+
+    def test_allows_listing_a_file_named_find(self) -> None:
+        assert not blocker.command_invokes_filesystem_find("ls /usr/bin/find")
+
+    def test_matches_find_after_pipe_separator(self) -> None:
+        assert blocker.command_invokes_filesystem_find("a | find . -name x")
+
+    def test_matches_absolute_path_find_at_command_start(self) -> None:
+        assert blocker.command_invokes_filesystem_find("/usr/bin/find / -name x")
+
 
 class TestExtractNameSearchTerm:
     def test_extracts_name_literal(self) -> None:

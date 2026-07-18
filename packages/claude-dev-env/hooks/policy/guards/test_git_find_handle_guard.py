@@ -6,6 +6,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 _GUARDS_DIR = Path(__file__).resolve().parent
 _HOOKS_ROOT = _GUARDS_DIR.parent.parent
@@ -209,3 +210,26 @@ def test_report_as_jsonable_is_serializable() -> None:
     assert decoded["handle_threshold"] == 2000
     assert decoded["all_git_find_before"][0]["process_id"] == 1
     assert decoded["all_killed_process_ids"] == []
+
+
+class TestPowerShellUnavailableFallback:
+    def test_process_query_returns_empty_without_powershell(self) -> None:
+        with patch.object(guard.subprocess, "run", side_effect=FileNotFoundError):
+            assert guard.query_git_find_processes_via_powershell() == []
+
+    def test_total_handle_count_returns_zero_without_powershell(self) -> None:
+        with patch.object(guard.subprocess, "run", side_effect=FileNotFoundError):
+            assert guard.query_total_handle_count() == 0
+
+    def test_sweep_is_clean_when_powershell_is_missing(self) -> None:
+        with patch.object(guard.subprocess, "run", side_effect=FileNotFoundError):
+            sweep_report = guard.run_guard_sweep(
+                handle_threshold=2000,
+                is_dry_run=False,
+                query_processes=guard.query_git_find_processes_via_powershell,
+                query_total_handles=guard.query_total_handle_count,
+                terminate=guard.terminate_process,
+            )
+        assert sweep_report.all_killed_process_ids == []
+        assert sweep_report.all_git_find_before == []
+        assert sweep_report.total_handles_before == 0
