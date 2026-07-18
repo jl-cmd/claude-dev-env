@@ -18,7 +18,7 @@ export const meta = {
     { title: 'Converge', detail: 'A deterministic static sweep runs first each round; then code-review, bug-audit, and self-review run in parallel on the same HEAD; one clean-coder applies all fixes; the loop repeats until every lens is clean on a stable HEAD' },
     { title: 'Bugbot gate', detail: 'A terminal confirmation gate that runs once the internal lenses are clean; when Bugbot is disabled or unavailable it spawns no agent and passes, otherwise it fetches Bugbot\'s verdict and routes any finding back into Converge' },
     { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and proceed with the gate bypassed' },
-    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, when weekly usage is at or below the shared probe threshold (or null), or when the wrapper classifies codex_down, the gate skips without blocking; when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
+    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, when weekly usage is at or below the shared probe threshold (or null), or when the wrapper classifies codex_down, the gate skips without blocking (a codex_down skip is logged as a note so the bypass stays visible); when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
@@ -37,6 +37,9 @@ const CONFIG = {
   maxIterations: 20,
   maxConsecutiveNoLensRounds: 3,
   copilotMaxPolls: 8,
+  codexReviewTimeoutSeconds: 2400,
+  codexReviewPollIntervalSeconds: 120,
+  codexReviewMaxPolls: 21,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
@@ -57,7 +60,7 @@ const HEADLESS_EDIT_PREAMBLE =
   '- Never place a destructive-command literal inside a Bash command — not in echo, not in a heredoc, and not as an argument to python -c, node -e, or awk. To exercise or verify destructive_command_blocker (or any hook) behavior, run the committed test suite, e.g. python -m pytest <test_file>, which passes the command strings as in-language data rather than as a shell command.\n' +
   '- When a commit message, or a PR / issue / review-comment body, must describe destructive-command behavior, write that text to a file and pass it by path (git commit -F <file>, gh ... --body-file <file>); never inline it with git commit -m or gh ... -b, where the literal lands in the Bash command and stalls you.\n' +
   '- Keep scratch files and cleanup inside the OS temp dir; never target a repository or worktree path.\n' +
-  '- rm shape rules — the hook grants several rm auto-allow paths. The simplest one accepts a standalone Bash call whose target resolves inside the ephemeral namespace (/tmp, /temp, the OS temp root, or the run worktree); a compound path accepts an rm joined with benign reporting segments when every rm target is an absolute ephemeral path. Both of those paths fail closed on $(...) command substitution and on backtick subshells. The compound path additionally fails closed on any $ in the target — including $CLAUDE_JOB_DIR. The standalone path declines a $-bearing target only when the literal path is not already under an ephemeral root, so it does not by itself stop a $VAR that expands inside an ephemeral root. A third, broad path matches only when the command itself declares an ephemeral working directory (it cds into one, or runs under one): that cwd-scoped path resolves the target against the declared cwd, fails closed on $(...) , backticks, and unknown variables, and resolves the known temporary variables TEMP, TMP, TMPDIR, and CLAUDE_JOB_DIR to the OS temp root, so under that declared ephemeral cwd a bare $CLAUDE_JOB_DIR/tmp/<name> target and a relative target after a cd are auto-allowed. Even so, prefer a Python helper for any cleanup whose path is variable-built or whose setup/teardown spans multiple steps: author the helper file and run it as python <file>.py, which keeps every destructive literal out of a Bash command string entirely and never depends on which auto-allow path matches.\n' +
+  '- rm shape rules — the hook grants several rm auto-allow paths. The simplest one accepts a standalone Bash call whose target resolves inside the ephemeral namespace (/tmp, /temp, the OS temp root, or the run worktree); a compound path accepts an rm joined with benign reporting segments when every rm target is an absolute ephemeral path. Both of those paths fail closed on $(...) command substitution and on backtick subshells. The compound path additionally fails closed on any $ in the target — including $CLAUDE_JOB_DIR. The standalone path declines a $-bearing target only when the literal path is not already under an ephemeral root, so it does not by itself stop a $VAR that expands inside an ephemeral root. A third, broad path matches only when the command itself declares an ephemeral working directory (it cds into one, or runs under one): that cwd-scoped path resolves the target against the declared cwd, fails closed on $(...) , backticks, and unknown variables, and resolves the known temporary variables TEMP, TMP, TMPDIR, and CLAUDE_JOB_DIR to the OS temp root, so under that declared ephemeral cwd a bare $CLAUDE_JOB_DIR/tmp/<name> target and a relative target after a cd are auto-allowed. Outside those ephemeral paths, run no bash rm at all: an rm on a repo or worktree path — most often a build cache like .mypy_cache, .pytest_cache, or __pycache__ left by ruff, mypy, or pytest — is not auto-allowed and stalls you on a prompt no human can answer. A gitignored build cache is harmless, so never delete it — leave it in place. For any genuine delete outside the ephemeral namespace, use the PowerShell tool (Remove-Item -Recurse -Force -Confirm:$false <absolute path>), which the blocker never sees because it watches only the Bash tool. For any cleanup whose path is variable-built or whose setup/teardown spans multiple steps, author a Python helper and run it as python <file>.py, which keeps every destructive literal out of a Bash command string entirely.\n' +
   '- If a step appears to require a real destructive command, use a non-destructive equivalent or report it as a blocker instead of running it.\n\n' +
   'WAITS AND POLLS — foreground sleep is blocked in this headless harness: a bare Bash "sleep N" or a PowerShell "Start-Sleep" is denied, and a wait you move to a background process — then end your turn to await it — never resumes, because a schema-bearing agent runs for a single turn. Therefore:\n' +
   '- Perform every required delay or poll-interval wait inside this same turn by pairing the Monitor tool with a bounded until-loop: the Monitor tool streams its events to you while you keep working, and the until-loop re-runs the step condition on the interval the step names, up to the attempt budget the step names, exiting the moment the condition holds or the budget is spent — consume the Monitor notifications as they arrive rather than ending your turn to await them. Never end your turn to wait for something to finish.\n' +
@@ -700,7 +703,7 @@ const CODEX_SCHEMA = {
   properties: {
     sha: { type: 'string', description: 'PR HEAD SHA this gate evaluated' },
     clean: { type: 'boolean', description: 'true when Codex reported no findings on sha, or when the gate skipped without requiring a review' },
-    down: { type: 'boolean', description: 'true when Codex is down (wrapper classifies codex_down) or opted out via the codex token — the gate is bypassed' },
+    down: { type: 'boolean', description: 'true when the wrapper classifies codex_down (the gate is skipped and bypassed, recorded as a note) or when Codex is opted out via the codex token — the gate is bypassed' },
     skipped: { type: 'boolean', description: 'true when the gate did not run the review wrapper (opt-out token or usage at/below the shared threshold)' },
     skipReason: {
       type: 'string',
@@ -2080,9 +2083,11 @@ function runCodexGate(head) {
       `3. Resolve the PR base branch (the review target is HEAD vs base, never an invented commit range). Run exactly:\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .base.ref\n` +
       `   Capture the printed base branch name.\n\n` +
-      `4. Run the codex-review wrapper against that base. From the PR worktree root, run a short Python driver that imports the skill scripts (add "${CONFIG.codexScripts}" to sys.path) and:\n` +
+      `4. Run the codex-review wrapper against that base. A real Codex review routinely runs about 11-12 minutes — longer than the default 2-minute tool timeout and longer than the 10-minute foreground tool ceiling — so it MUST run in the background, or the tool timeout kills it mid-review and it is misreported as codex_down. From the PR worktree root, write a short Python driver to a temp file that imports the skill scripts (add "${CONFIG.codexScripts}" to sys.path) and:\n` +
       `   - creates a temp run-state directory under the OS temp dir\n` +
-      `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>)\n` +
+      `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>, timeout_seconds=${CONFIG.codexReviewTimeoutSeconds})\n` +
+      `   - writes the outcome (outcome_class, exit_code, and the agent_message when completed) as JSON to a result file under the OS temp dir, then exits\n` +
+      `   Run that driver with the Bash tool in the background (run_in_background: true), never in the foreground — the foreground tool timeout caps below the review runtime and would kill a healthy review. Do NOT end this turn to await the background run — a schema-bearing turn that ends never resumes, so the result would never be collected. Wait for the background run to finish inside this same turn per the WAITS AND POLLS rule: pair the Monitor tool with a bounded until-loop that re-checks whether the result file has been written, on a ${CONFIG.codexReviewPollIntervalSeconds}-second interval up to ${CONFIG.codexReviewMaxPolls} attempts (interval x attempts covers the ${CONFIG.codexReviewTimeoutSeconds}-second review budget), consuming the Monitor notifications as they arrive; arm the Monitor with persistent:true (or a timeout_ms of at least interval x attempts) so it is not timed out before the review lands. If the full poll budget is spent with no result file written, return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop. When the background run finishes, read the result file and map its outcome:\n` +
       `   - when outcome_class is codex_down (or classify_codex_run on a non-zero exit reports codex_down) -> return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop\n` +
       `   - when outcome_class is completed: parse findings with parse_codex_findings.parse_codex_findings(agent_message)\n` +
       `     - empty findings -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:false, skipReason:'', findings:[]}\n` +
@@ -2544,6 +2549,7 @@ let copilotDown = input.copilotDisabled || false
 let codexDown = false
 let codexCleanAt = null
 let copilotNote = null
+let codexNote = null
 let standardsNote = null
 let cleanAuditNote = null
 let hasStandardsFollowUpFiled = false
@@ -2557,6 +2563,7 @@ const assembleResult = (outcomeFields) => ({
   ...outcomeFields,
   standardsNote,
   copilotNote,
+  codexNote,
   cleanAuditNote,
   reuseNote,
   deferredPrs,
@@ -2848,7 +2855,8 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (codexOutcome.kind === 'down') {
-      log('Codex gate: Codex classified codex_down — bypassing the terminal Codex gate and proceeding to mark-ready with the gate bypassed.')
+      codexNote = `Codex was unreachable this run (the codex-review wrapper classified codex_down — a Codex CLI error, or a review that ran past its timeout budget). The terminal Codex gate was skipped with the gate bypassed so a Codex outage does not hinder convergence; Codex runs again on the next convergence.`
+      log(`Codex gate: ${codexNote}`)
       codexDown = true
       codexCleanAt = null
       phase = 'FINALIZE'

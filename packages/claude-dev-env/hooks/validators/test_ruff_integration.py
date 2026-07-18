@@ -105,7 +105,8 @@ def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
     violating_file = tmp_path / "unused_import_module.py"
     violating_file.write_text("import os\n", encoding="utf-8")
 
-    result = run_ruff_check([violating_file])
+    with patch.dict("os.environ", {"FORCE_COLOR": "1"}):
+        result = run_ruff_check([violating_file])
 
     assert result.passed is False
     location_prefix = f"{violating_file}:1:8:"
@@ -113,3 +114,4 @@ def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
         each_line.startswith(location_prefix) and "F401" in each_line
         for each_line in result.output.splitlines()
     ), result.output
+    assert "\x1b[" not in result.output

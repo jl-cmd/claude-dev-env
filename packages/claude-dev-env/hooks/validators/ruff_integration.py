@@ -1,5 +1,6 @@
 """Ruff integration for fast Python linting."""
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -18,11 +19,21 @@ except ModuleNotFoundError:
 try:
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
+    from hooks_constants.ruff_integration_constants import (
+        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
+        NO_COLOR_ENABLED_VALUE,
+        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
+    )
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
+    from hooks_constants.ruff_integration_constants import (
+        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
+        NO_COLOR_ENABLED_VALUE,
+        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
+    )
 
 
 @dataclass
@@ -44,6 +55,19 @@ def check_ruff_available() -> bool:
         return result.returncode == 0
     except FileNotFoundError:
         return False
+
+
+def _ruff_subprocess_environment() -> dict[str, str]:
+    """Return an environment that forces plain, non-ANSI ruff diagnostics.
+
+    The PreToolUse gate parses ``path:line:col:`` prefixes. ANSI color codes
+    wrap those fields when FORCE_COLOR is set, so line numbers no longer parse
+    and baseline scoping fail-closes every ruff finding as new.
+    """
+    ruff_environment = os.environ.copy()
+    ruff_environment[NO_COLOR_ENVIRONMENT_VARIABLE_NAME] = NO_COLOR_ENABLED_VALUE
+    ruff_environment.pop(FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME, None)
+    return ruff_environment
 
 
 def find_pyproject_with_ruff_config(starting_file: Path) -> Path | None:
@@ -108,9 +132,14 @@ def _config_relative_stdin_filename(target_path: Path, config_directory: Path) -
         The config-relative POSIX path when the target sits under the config
         directory, else the target's basename.
     """
-    resolved_target = target_path.resolve()
     try:
-        return resolved_target.relative_to(config_directory).as_posix()
+        return target_path.relative_to(config_directory).as_posix()
+    except ValueError:
+        pass
+    resolved_target = target_path.resolve()
+    resolved_config_directory = config_directory.resolve()
+    try:
+        return resolved_target.relative_to(resolved_config_directory).as_posix()
     except ValueError:
         return resolved_target.name
 
@@ -159,6 +188,7 @@ def _staged_ruff_result(
         text=True,
         input=staged_content,
         cwd=str(resolved_pyproject.parent),
+        env=_ruff_subprocess_environment(),
     )
     return RuffResult(
         passed=result.returncode == 0,
@@ -204,6 +234,7 @@ def _run_native_ruff_check(
         check=False,
         capture_output=True,
         text=True,
+        env=_ruff_subprocess_environment(),
     )
     return RuffResult(
         passed=result.returncode == 0,
@@ -250,12 +281,12 @@ def _parse_fixed_count(fix_output: str) -> int:
     return 0
 
 
-def run_ruff_fix(files: list[Path]) -> RuffResult:
+def run_ruff_fix(all_files: list[Path]) -> RuffResult:
     """Run ruff with --fix to auto-fix violations."""
     if not check_ruff_available():
         return RuffResult(passed=True, output="Ruff not installed", fixed_count=0)
     py_files = [
-        str(each_file) for each_file in files if each_file.suffix == PYTHON_SOURCE_SUFFIX
+        str(each_file) for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not py_files:
         return RuffResult(passed=True, output="No Python files", fixed_count=0)
@@ -264,6 +295,7 @@ def run_ruff_fix(files: list[Path]) -> RuffResult:
         check=False,
         capture_output=True,
         text=True,
+        env=_ruff_subprocess_environment(),
     )
     return RuffResult(
         passed=result.returncode == 0,
