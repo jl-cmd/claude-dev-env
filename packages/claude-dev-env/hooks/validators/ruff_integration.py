@@ -18,11 +18,40 @@ except ModuleNotFoundError:
 try:
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
+    from hooks_constants.ruff_integration_constants import (
+        RUFF_CHECK_SUBCOMMAND,
+        RUFF_CONCISE_OUTPUT_FORMAT,
+        RUFF_CONFIG_FLAG,
+        RUFF_EXECUTABLE,
+        RUFF_FIXED_SUMMARY_TOKEN,
+        RUFF_FORCE_EXCLUDE_FLAG,
+        RUFF_OUTPUT_FORMAT_FLAG,
+        RUFF_STDIN_FILENAME_FLAG,
+        RUFF_STDIN_MARKER,
+    )
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
+    from hooks_constants.ruff_integration_constants import (
+        RUFF_CHECK_SUBCOMMAND,
+        RUFF_CONCISE_OUTPUT_FORMAT,
+        RUFF_CONFIG_FLAG,
+        RUFF_EXECUTABLE,
+        RUFF_FIXED_SUMMARY_TOKEN,
+        RUFF_FORCE_EXCLUDE_FLAG,
+        RUFF_OUTPUT_FORMAT_FLAG,
+        RUFF_STDIN_FILENAME_FLAG,
+        RUFF_STDIN_MARKER,
+    )
+
+_ruff_concise_check_prefix = [
+    RUFF_EXECUTABLE,
+    RUFF_CHECK_SUBCOMMAND,
+    RUFF_OUTPUT_FORMAT_FLAG,
+    RUFF_CONCISE_OUTPUT_FORMAT,
+]
 
 
 @dataclass
@@ -62,29 +91,44 @@ def find_pyproject_with_ruff_config(starting_file: Path) -> Path | None:
     return find_pyproject_configuring_tool(starting_file, RUFF_TOOL_TABLE_NAME)
 
 
-def _ruff_config_argument(config_source_path: Path | None) -> list[str]:
-    """Return the ``--config`` argument resolved from the original path, or empty.
+def _resolve_ruff_pyproject(config_source_path: Path | None) -> Path | None:
+    """Resolve the ruff pyproject from *config_source_path*, or None.
 
     ::
 
-        config_source_path resolves .../hooks/pyproject.toml
-            -> ["--config", ".../hooks/pyproject.toml"]
-        config_source_path given, no [tool.ruff] up-tree -> [] (native discovery)
-        config_source_path None -> [] (native discovery)
+        config_source_path .../hooks/validators/x.py -> .../hooks/pyproject.toml
+        config_source_path None -> None (native discovery)
 
     Args:
-        config_source_path: The original target path the staged copy stands in
-            for, or ``None`` for a native run.
+        config_source_path: The original target path, or None for a native run.
 
     Returns:
-        The ``--config`` argument vector, empty when no ruff config resolves.
+        The resolved ``pyproject.toml`` Path, or None when no ruff config applies.
     """
     if config_source_path is None:
-        return []
-    resolved_pyproject = find_pyproject_with_ruff_config(config_source_path)
+        return None
+    return find_pyproject_with_ruff_config(config_source_path)
+
+
+def _config_argument_for(resolved_pyproject: Path | None) -> list[str]:
+    """Return the ``--config`` argument for a resolved pyproject, or empty.
+
+    ::
+
+        resolved_pyproject .../hooks/pyproject.toml
+            -> ["--config", ".../hooks/pyproject.toml"]
+        resolved_pyproject None -> [] (ruff's native discovery)
+
+    Args:
+        resolved_pyproject: The ``pyproject.toml`` declaring a ``[tool.ruff]``
+            table, or ``None`` for native discovery.
+
+    Returns:
+        The ``--config`` argument vector, empty when no ruff config resolved.
+    """
     if resolved_pyproject is None:
         return []
-    return ["--config", str(resolved_pyproject)]
+    return [RUFF_CONFIG_FLAG, str(resolved_pyproject)]
 
 
 def _config_relative_stdin_filename(target_path: Path, config_directory: Path) -> str:
@@ -116,35 +160,38 @@ def _config_relative_stdin_filename(target_path: Path, config_directory: Path) -
 
 
 def _read_staged_content(staged_file: Path) -> str | None:
-    """Return the staged copy's text content, or None when it cannot be read."""
+    """Return the staged copy's text content, or None when it cannot be read.
+
+    The caller writes this content to the staged path moments earlier; reading
+    it back with a single small read keeps ``run_ruff_check`` file-based rather
+    than threading the content string through the validator call chain.
+    """
     try:
         return staged_file.read_text(encoding="utf-8")
     except OSError:
         return None
 
 
-def _single_staged_python_file(all_files: list[Path]) -> Path | None:
+def _single_staged_python_file(all_python_files: list[Path]) -> Path | None:
     """Return the sole staged Python file, or None unless there is exactly one."""
-    all_python_files = [
-        each_file for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
-    ]
     if len(all_python_files) != 1:
         return None
     return all_python_files[0]
 
 
 def _staged_ruff_command(resolved_pyproject: Path, stdin_filename: str) -> list[str]:
-    """Return the ruff argv that grades stdin under a config-relative name."""
-    concise_output_arguments = ["--output-format", "concise"]
+    """Return the ruff argv that grades stdin under a config-relative name.
+
+    ``--force-exclude`` makes ruff honor the config's exclude and extend-exclude
+    over stdin, so a target the config opts out of linting is not graded.
+    """
     return [
-        "ruff",
-        "check",
-        "--config",
-        str(resolved_pyproject),
-        *concise_output_arguments,
-        "--stdin-filename",
+        *_ruff_concise_check_prefix,
+        *_config_argument_for(resolved_pyproject),
+        RUFF_FORCE_EXCLUDE_FLAG,
+        RUFF_STDIN_FILENAME_FLAG,
         stdin_filename,
-        "-",
+        RUFF_STDIN_MARKER,
     ]
 
 
@@ -168,20 +215,22 @@ def _staged_ruff_result(
 
 
 def _run_staged_ruff_check(
-    all_files: list[Path], config_source_path: Path
+    all_python_files: list[Path],
+    config_source_path: Path,
+    resolved_pyproject: Path | None,
 ) -> RuffResult | None:
-    """Grade one staged file under the config resolved from its original path.
+    """Grade one staged Python file under the pre-resolved project config.
 
-    The staged content is piped to ruff under ``--stdin-filename`` set to the
-    original target's config-relative name, so ruff applies path-scoped
-    per-file-ignores that never match the temporary copy's own location.
-    Returns None when the staged shape does not apply: no resolvable ruff
-    config, not exactly one Python file, or an unreadable staged copy.
+    Content is piped to ruff under ``--stdin-filename`` set to the original's
+    config-relative name, so path-scoped per-file-ignores apply. Returns None on
+    three bails: no resolved config, not one Python file, or an unreadable staged
+    copy. The unreadable-copy bail alone falls to a native run that lints the
+    temp path directly, dropping path-scoped ignores — an accepted last resort.
+    ``resolved_pyproject`` is the pyproject the caller resolved once, or None.
     """
-    resolved_pyproject = find_pyproject_with_ruff_config(config_source_path)
     if resolved_pyproject is None:
         return None
-    staged_file = _single_staged_python_file(all_files)
+    staged_file = _single_staged_python_file(all_python_files)
     if staged_file is None:
         return None
     staged_content = _read_staged_content(staged_file)
@@ -194,13 +243,16 @@ def _run_staged_ruff_check(
 
 
 def _run_native_ruff_check(
-    all_python_files: list[str], config_source_path: Path | None
+    all_python_files: list[str], resolved_pyproject: Path | None
 ) -> RuffResult:
-    """Run ruff over *all_python_files* directly, resolving ``--config`` from the path."""
-    config_argument = _ruff_config_argument(config_source_path)
-    concise_output_arguments = ["--output-format", "concise"]
+    """Run ruff over *all_python_files* directly under the resolved config."""
+    native_command = [
+        *_ruff_concise_check_prefix,
+        *_config_argument_for(resolved_pyproject),
+        *all_python_files,
+    ]
     result = subprocess.run(
-        ["ruff", "check", *config_argument, *concise_output_arguments] + all_python_files,
+        native_command,
         check=False,
         capture_output=True,
         text=True,
@@ -217,9 +269,9 @@ def run_ruff_check(
 ) -> RuffResult:
     """Run ruff check on *all_files*, resolving config from *config_source_path*.
 
-    A given ``config_source_path`` grades the single staged copy under the project
-    config resolved from the original target, applying its path-scoped
-    per-file-ignores. Without it, the files are checked natively."""
+    The pyproject is resolved once and passed into both the staged branch (path-
+    scoped per-file-ignores) and the native branch, so a staged bail does not
+    re-walk the tree. Without *config_source_path* the files are checked natively."""
     if not all_files:
         return RuffResult(passed=True, output="No files to check", fixed_count=0)
 
@@ -227,26 +279,41 @@ def run_ruff_check(
         return RuffResult(passed=True, output="Ruff not installed - skipping", fixed_count=0)
 
     all_python_files = [
-        str(each_file) for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
+        each_file for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not all_python_files:
         return RuffResult(passed=True, output="No Python files", fixed_count=0)
+
+    resolved_pyproject = _resolve_ruff_pyproject(config_source_path)
     if config_source_path is not None:
-        staged_result = _run_staged_ruff_check(all_files, config_source_path)
+        staged_result = _run_staged_ruff_check(
+            all_python_files, config_source_path, resolved_pyproject
+        )
         if staged_result is not None:
             return staged_result
-    return _run_native_ruff_check(all_python_files, config_source_path)
+    native_python_files = [str(each_file) for each_file in all_python_files]
+    return _run_native_ruff_check(native_python_files, resolved_pyproject)
 
 
 def _parse_fixed_count(fix_output: str) -> int:
-    """Return the count ruff reports on its ``Fixed N`` line, or 0 when absent."""
+    """Return the count ruff reports on its ``Fixed N`` line, or 0 when absent.
+
+    ::
+
+        line "F821 Undefined name `FixedWidth`" contains "Fixed", does not parse
+        line "Fixed 2 errors." -> 2
+
+    A ``Fixed``-containing line that does not parse as a ``Fixed N`` summary keeps
+    the scan going, so a violation line quoting ``Fixed`` does not mask a real
+    summary further down.
+    """
     for each_line in fix_output.split("\n"):
-        if "Fixed" not in each_line:
+        if RUFF_FIXED_SUMMARY_TOKEN not in each_line:
             continue
         try:
             return int(each_line.split()[1])
         except (IndexError, ValueError):
-            return 0
+            continue
     return 0
 
 
