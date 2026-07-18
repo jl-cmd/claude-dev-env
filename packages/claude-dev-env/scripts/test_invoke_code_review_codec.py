@@ -6,7 +6,7 @@ from pathlib import Path
 
 import invoke_code_review as invoker
 import pytest
-from test_codec_forwarding_support import (
+from codec_forwarding_test_support import (
     FIXTURE_CHAIN_ENCODING,
     FIXTURE_CHAIN_ERRORS,
     FIXTURE_ENCODING_KEYWORD_NAME,

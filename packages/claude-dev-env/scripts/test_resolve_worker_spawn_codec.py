@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import resolve_worker_spawn as dispatcher
-from test_codec_forwarding_support import (
+from codec_forwarding_test_support import (
     FIXTURE_CHAIN_ENCODING,
     FIXTURE_CHAIN_ERRORS,
     FIXTURE_ENCODING_KEYWORD_NAME,

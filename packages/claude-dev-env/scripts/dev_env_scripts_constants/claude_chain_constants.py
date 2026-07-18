@@ -6,6 +6,8 @@ constant the runner needs lives here rather than inline in the module.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 UTF8_ENCODING: str = "utf-8"
 """Encoding used to read the chain configuration file."""
 
@@ -23,6 +25,34 @@ ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS: tuple[str, ...] = (
     SUBPROCESS_ERRORS_KEYWORD,
 )
 """Keyword names to forward from the chain runner for text-mode subprocess capture."""
+
+
+def collect_forwarded_text_codec(
+    all_keywords: Mapping[str, object],
+) -> dict[str, object]:
+    """Return only the text-codec kwargs present in ``all_keywords``.
+
+    ::
+
+        collect_forwarded_text_codec({"encoding": "utf-8", "timeout": 30})
+        # -> {"encoding": "utf-8"}
+
+        collect_forwarded_text_codec({"timeout": 30})
+        # -> {}
+
+    Args:
+        all_keywords: Keyword arguments received by a chain subprocess wrapper.
+
+    Returns:
+        Mapping of codec keyword names to their values, limited to keys listed
+        in ``ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS`` that are present in the input.
+    """
+    return {
+        each_key: all_keywords[each_key]
+        for each_key in ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS
+        if each_key in all_keywords
+    }
+
 
 CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 """Per-user directory under the home directory that holds the chain config."""

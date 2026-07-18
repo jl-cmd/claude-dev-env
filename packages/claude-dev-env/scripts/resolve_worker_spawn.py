@@ -51,7 +51,7 @@ from claude_chain_runner import (  # noqa: E402
     run_claude,
 )
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
-    ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS,
+    collect_forwarded_text_codec,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
@@ -191,11 +191,7 @@ def _run_claude_with_headless_overrides(
         ) -> subprocess.CompletedProcess[str]:
             del all_positionals
             prompt_stdin.seek(0)
-            forwarded_text_codec = {
-                each_key: all_keywords[each_key]
-                for each_key in ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS
-                if each_key in all_keywords
-            }
+            forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
             completed_process: subprocess.CompletedProcess[str] = previous_runner(
                 all_invocation_tokens,
                 capture_output=True,
