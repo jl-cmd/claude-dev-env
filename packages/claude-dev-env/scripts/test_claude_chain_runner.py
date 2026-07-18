@@ -438,6 +438,36 @@ def test_ranked_walk_preserves_extra_args_for_mapped_entry(
     ]
 
 
+def test_duplicate_command_entries_are_both_walked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path,
+        [
+            _entry("claude", extra_args=["--account", "primary"]),
+            _entry("claude", extra_args=["--account", "secondary"]),
+        ],
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {"claude": _HIGH_WEEKLY_REMAINING_PERCENT}
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {"claude": _completed("claude", 1, stderr=_A_SIGNATURE)},
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert [each_invocation[-1] for each_invocation in recorder.invocations] == [
+        "primary",
+        "secondary",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_USAGE_LIMITED,
+        ATTEMPT_STATUS_USAGE_LIMITED,
+    ]
+
+
 def test_entry_absent_from_usage_report_is_still_walked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

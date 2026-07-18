@@ -275,23 +275,24 @@ def _entries_ranked_by_weekly_remaining(
     all_usage_reports: Sequence[WeeklyUsageAccountReport],
 ) -> list[ChainEntry]:
     usage_module = _load_chain_usage_module()
-    entry_by_command = {
-        each_entry.command: each_entry for each_entry in all_entries
-    }
+    entries_by_command: dict[str, list[ChainEntry]] = {}
+    for each_entry in all_entries:
+        entries_by_command.setdefault(each_entry.command, []).append(each_entry)
     all_ranked_reports = usage_module.rank_accounts_by_weekly_remaining(
         list(all_usage_reports)
     )
     ranked_entries: list[ChainEntry] = []
     seen_commands: set[str] = set()
     for each_report in all_ranked_reports:
-        matched_entry = entry_by_command.get(each_report.command)
-        if matched_entry is None or each_report.command in seen_commands:
+        if each_report.command in seen_commands:
+            continue
+        matched_entries = entries_by_command.get(each_report.command)
+        if matched_entries is None:
             continue
         seen_commands.add(each_report.command)
-        ranked_entries.append(matched_entry)
+        ranked_entries.extend(matched_entries)
     for each_entry in all_entries:
         if each_entry.command not in seen_commands:
-            seen_commands.add(each_entry.command)
             ranked_entries.append(each_entry)
     return ranked_entries
 
