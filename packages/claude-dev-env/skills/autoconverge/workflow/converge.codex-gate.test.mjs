@@ -178,7 +178,40 @@ test('the Codex gate prompt runs the review wrapper against the PR base branch',
   assert.match(codexPrompt, /parse_codex_findings/, 'expected findings to come from the shared parser');
 });
 
-test('the CODEX phase stamps codexCleanAt on clean and clears it on skip/down', () => {
+test('the Codex gate prompt passes an explicit generous timeout so a slow-but-healthy review is not cut short', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /timeout_seconds=\$\{CONFIG\.codexReviewTimeoutSeconds\}/,
+    'expected the driver to pass CONFIG.codexReviewTimeoutSeconds, overriding the too-small wrapper default',
+  );
+});
+
+test('CONFIG.codexReviewTimeoutSeconds exceeds the observed real Codex runtime', () => {
+  const match = convergeSource.match(/codexReviewTimeoutSeconds:\s*(\d+)/);
+  assert.notEqual(match, null, 'expected CONFIG.codexReviewTimeoutSeconds to be defined');
+  const budgetSeconds = Number(match[1]);
+  assert.ok(
+    budgetSeconds >= 900,
+    `expected a budget comfortably above the ~683s measured Codex runtime, got ${budgetSeconds}`,
+  );
+});
+
+test('the Codex gate prompt runs the review in the background rather than the default foreground timeout', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /run_in_background/i,
+    'expected the review driver to run in the background — the foreground tool timeout caps below the review runtime and would kill a healthy review',
+  );
+  assert.match(
+    codexPrompt,
+    /result file/i,
+    'expected the driver to persist its outcome to a result file the agent reads once the background run finishes',
+  );
+});
+
+test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out or usage skip', () => {
   const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
   assert.notEqual(codexPhaseStart, -1, 'expected a CODEX phase block');
@@ -189,7 +222,30 @@ test('the CODEX phase stamps codexCleanAt on clean and clears it on skip/down', 
   assert.match(codexPhase, /codexCleanAt = head/, 'expected a clean pass to stamp the HEAD');
   assert.match(codexPhase, /skip-token[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
   assert.match(codexPhase, /skip-usage[\s\S]*codexDown = false[\s\S]*codexCleanAt = null/);
-  assert.match(codexPhase, /kind === 'down'[\s\S]*codexDown = true[\s\S]*codexCleanAt = null/);
+});
+
+test('the CODEX phase holds a genuine codex_down as a blocker rather than marking the PR ready', () => {
+  const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
+  const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);
+  const codexPhase = convergeSource.slice(codexPhaseStart, finalizePhaseStart);
+  const downBranchStart = codexPhase.indexOf("codexOutcome.kind === 'down'");
+  const downBranchEnd = codexPhase.indexOf("codexOutcome.kind === 'fix'", downBranchStart);
+  assert.notEqual(downBranchStart, -1, 'expected a codex_down branch in the CODEX phase');
+  assert.notEqual(downBranchEnd, -1, 'expected a fix branch after the down branch');
+  const downBranch = codexPhase.slice(downBranchStart, downBranchEnd);
+  assert.match(downBranch, /blocker =/, 'a genuine codex_down must record a blocker');
+  assert.match(downBranch, /codex-down/, 'the blocker names the codex-down stop condition');
+  assert.match(downBranch, /\bbreak\b/, 'the down branch breaks the loop rather than advancing to mark-ready');
+  assert.doesNotMatch(
+    downBranch,
+    /phase = 'FINALIZE'/,
+    'a genuine codex_down must not route to FINALIZE — that would mark the PR ready without the required gate',
+  );
+  assert.doesNotMatch(
+    downBranch,
+    /codexDown = true/,
+    'a genuine codex_down must not set the bypass flag that lets mark-ready skip the required Codex gate',
+  );
 });
 
 test('the CODEX phase routes findings through applyFixes and re-enters CONVERGE', () => {

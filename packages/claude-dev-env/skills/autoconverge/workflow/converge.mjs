@@ -29,6 +29,7 @@ const CONFIG = {
   maxIterations: 20,
   maxConsecutiveNoLensRounds: 3,
   copilotMaxPolls: 8,
+  codexReviewTimeoutSeconds: 1800,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
@@ -2072,9 +2073,11 @@ function runCodexGate(head) {
       `3. Resolve the PR base branch (the review target is HEAD vs base, never an invented commit range). Run exactly:\n` +
       `   gh api repos/${input.owner}/${input.repo}/pulls/${input.prNumber} --jq .base.ref\n` +
       `   Capture the printed base branch name.\n\n` +
-      `4. Run the codex-review wrapper against that base. From the PR worktree root, run a short Python driver that imports the skill scripts (add "${CONFIG.codexScripts}" to sys.path) and:\n` +
+      `4. Run the codex-review wrapper against that base. A real Codex review routinely runs about 11-12 minutes — longer than the default 2-minute tool timeout and longer than the 10-minute foreground tool ceiling — so it MUST run in the background, or the tool timeout kills it mid-review and it is misreported as codex_down. From the PR worktree root, write a short Python driver to a temp file that imports the skill scripts (add "${CONFIG.codexScripts}" to sys.path) and:\n` +
       `   - creates a temp run-state directory under the OS temp dir\n` +
-      `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>)\n` +
+      `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>, timeout_seconds=${CONFIG.codexReviewTimeoutSeconds})\n` +
+      `   - writes the outcome (outcome_class, exit_code, and the agent_message when completed) as JSON to a result file under the OS temp dir, then exits\n` +
+      `   Run that driver with the Bash tool in the background (run_in_background: true), never in the foreground — the foreground tool timeout caps below the review runtime and would kill a healthy review. When the background run finishes, read the result file and map its outcome:\n` +
       `   - when outcome_class is codex_down (or classify_codex_run on a non-zero exit reports codex_down) -> return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop\n` +
       `   - when outcome_class is completed: parse findings with parse_codex_findings.parse_codex_findings(agent_message)\n` +
       `     - empty findings -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:false, skipReason:'', findings:[]}\n` +
@@ -2840,11 +2843,9 @@ while (iterations < CONFIG.maxIterations) {
       continue
     }
     if (codexOutcome.kind === 'down') {
-      log('Codex gate: Codex classified codex_down — bypassing the terminal Codex gate and proceeding to mark-ready with the gate bypassed.')
-      codexDown = true
-      codexCleanAt = null
-      phase = 'FINALIZE'
-      continue
+      blocker = `codex-down: the required Codex review did not complete on HEAD ${head} — the codex-review wrapper classified codex_down (a Codex CLI error, or a run that ran past its timeout budget). The PR stays a draft instead of being marked ready without the required gate; re-run once Codex is reachable, or opt Codex out for this run through CLAUDE_REVIEWS_DISABLED to mark ready without it.`
+      log(`Codex gate: ${blocker}`)
+      break
     }
     if (codexOutcome.kind === 'fix') {
       if (isStandardsOnlyRound(codexOutcome.findings)) {
