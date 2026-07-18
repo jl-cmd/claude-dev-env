@@ -18,6 +18,7 @@ change which binary ``run_claude`` selects.
 from __future__ import annotations
 
 import argparse
+import http.client
 import importlib.util
 import json
 import sys
@@ -136,6 +137,7 @@ def _probe_weekly_utilization(credentials_path: Path) -> float:
         usage_payload = usage_window_resolver._fetch_usage_payload(access_token)
     except (
         urllib.error.URLError,
+        http.client.HTTPException,
         TimeoutError,
         OSError,
         ValueError,
