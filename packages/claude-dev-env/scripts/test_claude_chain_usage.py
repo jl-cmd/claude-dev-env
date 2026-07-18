@@ -199,6 +199,19 @@ def test_entry_without_credentials_path_uses_default(
     )
 
 
+def test_default_credentials_resolution_failure_yields_null_remaining(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def raise_probe_error() -> Path:
+        raise usage.WeeklyUtilizationProbeError("probe module not found")
+
+    monkeypatch.setattr(usage, "_default_credentials_path", raise_probe_error)
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    all_reports = usage.report_chain_weekly_usage(config_path=config_file)
+    assert all_reports[0].weekly_remaining_percent is None
+    assert all_reports[0].error == "probe module not found"
+
+
 def test_entry_credentials_path_is_passed_to_probe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -494,6 +507,12 @@ def test_load_resolve_usage_window_module_loads_real_probe_api() -> None:
     assert callable(loaded_module.extract_usage_windows)
     assert callable(loaded_module._fetch_usage_payload)
     assert sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] is loaded_module
+
+
+def test_load_resolve_usage_window_module_reuses_cached_module() -> None:
+    first_load = usage._load_resolve_usage_window_module()
+    second_load = usage._load_resolve_usage_window_module()
+    assert first_load is second_load
 
 
 def test_usage_module_imports_without_preloading_runner() -> None:
