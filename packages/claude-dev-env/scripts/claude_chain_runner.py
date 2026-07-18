@@ -121,9 +121,9 @@ def _optional_working_directory(value: object) -> str | None:
 # once, the pipe buffer fills before the parent drains it, and both sides block.
 # Redirecting each stream to a temporary file removes the pipe, so the child
 # writes freely; the files are then read back and decoded the way a pipe capture
-# would. ``capture_output`` and ``text`` are ignored in favor of file
-# redirection; ``timeout``, ``check``, ``cwd``, ``stdin``, ``input``,
-# ``encoding``, and ``errors`` are honored.
+# would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
+# redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
+# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored.
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
