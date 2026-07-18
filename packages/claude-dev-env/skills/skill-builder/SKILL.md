@@ -1,7 +1,7 @@
 ---
 name: skill-builder
 description: >-
-  Skill lifecycle: classify, scaffold, write via skill-writer, self-audit, compose
+  Skill lifecycle: classify, scaffold, write via the skill-writer-agent, self-audit, compose
   sub-skills, polish description triggers, enforce deterministic scripts. Triggers:
   build a skill, new skill workflow, improve this skill, optimize skill description,
   skill development lifecycle, skill modularity, skill composition, description
@@ -28,9 +28,9 @@ Highest-signal content. Append a bullet each time a skill build fails in a new w
 
 ## When this skill applies
 
-Trigger for requests to **build**, **improve**, or **polish** a skill. This skill orchestrates the process — it classifies, scaffolds, gathers context, delegates writing to `/skill-writer`, and self-audits the result.
+Trigger for requests to **build**, **improve**, or **polish** a skill. This skill orchestrates the process — it classifies, scaffolds, gathers context, delegates writing to the `skill-writer-agent` agent, and self-audits the result.
 
-For quick skill syntax questions or one-off SKILL.md edits, use `/skill-writer` directly instead.
+For quick skill syntax questions or one-off SKILL.md edits, spawn the `skill-writer-agent` agent directly.
 
 **Refusal cases — first match wins:**
 
@@ -161,9 +161,9 @@ Also: story-form descriptions; monolith multi-capability skills; silent reimplem
 
 After every build, improvement, or polish pass, load `${CLAUDE_SKILL_DIR}/references/self-audit-checklist.md`, **register every bullet as a session task**, and complete each with evidence. Every item must pass before delivery. Fix failures, then re-audit.
 
-## Delegation to skill-writer
+## Delegation to skill-writer-agent
 
-skill-builder orchestrates; skill-writer authors. The handoff packet from Step 4 must include:
+skill-builder orchestrates; the `skill-writer-agent` agent authors. The caller spawns it with `Agent(subagent_type="skill-writer-agent", ...)`. The handoff packet from Step 4 must include:
 
 - Skill type and folder structure
 - Gap analysis or observation findings (composition plan + description triggers + deterministic inventory)

@@ -1,12 +1,12 @@
 # skill-builder
 
-Orchestrates the skill-building lifecycle: classify type, scaffold folders, write via `skill-writer`, enforce modularity (sub-skills / composition), write description as a trigger catalog, require deterministic steps as code, self-audit, and refine from real usage.
+Orchestrates the skill-building lifecycle: classify type, scaffold folders, write via the `skill-writer-agent` agent, enforce modularity (sub-skills / composition), write description as a trigger catalog, require deterministic steps as code, self-audit, and refine from real usage.
 
 **Trigger:** build a skill, new skill workflow, improve this skill, optimize skill description, skill development lifecycle, skill modularity, description trigger catalog, deterministic skill scripts.
 
 ## Purpose
 
-Enforces craft standards for new and existing skills. For quick one-off SKILL.md edits, use `/skill-writer` directly. This skill classifies, scaffolds, gathers context (composition plan, description triggers, deterministic inventory), delegates writing, and self-audits.
+Enforces craft standards for new and existing skills. For quick one-off SKILL.md edits, spawn the `skill-writer-agent` agent directly. This skill classifies, scaffolds, gathers context (composition plan, description triggers, deterministic inventory), delegates writing, and self-audits.
 
 ## Key files
 
@@ -45,5 +45,5 @@ Enforces craft standards for new and existing skills. For quick one-off SKILL.md
 
 - Every build ends with the self-audit at `references/self-audit-checklist.md`; fix failures before delivery.
 - Modularity items, description trigger-catalog items, and deterministic-element classification are mandatory on every delivery.
-- `skill-builder` orchestrates; `skill-writer` authors. Handoff packet must include type, gap analysis, composition plan, description trigger catalog, deterministic inventory, degree-of-freedom assessment, and constraints.
+- `skill-builder` orchestrates; the `skill-writer-agent` agent authors. Handoff packet must include type, gap analysis, composition plan, description trigger catalog, deterministic inventory, degree-of-freedom assessment, and constraints.
 - Claude A / Claude B: Claude A (this session) designs; Claude B (subagents) tests the built skill on real tasks.
