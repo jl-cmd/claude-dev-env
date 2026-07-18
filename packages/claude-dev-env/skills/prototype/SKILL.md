@@ -19,18 +19,8 @@ Two safety gates stay live even in the sandbox: personal-data blocking and destr
 
 Highest-signal content. Append a bullet each time a run fails in a new way.
 
-- There is no per-worktree "disable hooks" switch and no `--no-hooks` flag. Claude Code layers hook settings by precedence and a higher layer wins for a given key, so a project `.claude/settings.json` cannot cleanly strip the user's hooks. Only `claude -p --bare` skips them. Do not invent an env var or an empty settings file.
 - A `--settings` file's hooks still load under `--bare` (the file is passed explicitly). That is the mechanism for keeping the two safety gates, not a bug.
 - The two safety hooks must point at the real installed scripts and import their `*_constants` packages at runtime. `scripts/build_sandbox_settings.py` resolves each hook's command from the live `~/.claude/settings.json` and registers it on the matchers the sandbox needs — personal-data on Write, Edit, MultiEdit, and Bash; destructive-command on Bash — so the paths stay correct on any machine and both gates cover the write surface. Do not hand-write the hook paths or matchers, and do not inherit whatever matcher the live config happens to use (a personal-data gate wired only to a narrow tool leaves disk writes ungated).
-- Never claim the sandbox is contained without probing it. Run `scripts/probe_sandbox_safety.py` and confirm both gates block before trusting them (verify-runtime-state).
-- `--bare` also skips skills, CLAUDE.md, and MCP servers. The sandbox agent cannot invoke other skills, so its task must be self-contained.
-- Promotion by pushing the sandbox branch is wrong twice over: `code_rules_enforcer` is a write-time gate that a git-applied diff bypasses, and the sandbox history carries scratch files and debug dumps. Run the clean-room protocol instead.
-- Never claim TDD compliance on promoted POC lines. The POC was built code-first. State the honest limitations from `reference/honest-limitations.md`.
-- Org-managed (enterprise) hooks survive `--bare`. That is expected, not a failure.
-
-## When this skill applies
-
-Trigger when the user wants to build something fast and rough without the standards gates in the way — a spike, a proof-of-concept, a throwaway to test an idea — and later, to turn a successful one into a real change.
 
 **Refusal cases — first match wins:**
 
