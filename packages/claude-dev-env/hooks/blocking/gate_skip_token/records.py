@@ -168,6 +168,34 @@ def _matches_target(skip_token: dict, file_path: str, content_hash: str) -> bool
     )
 
 
+def _fresh_tokens_excluding_target(
+    all_tokens: list[dict[str, object]],
+    file_path: str,
+    content_hash: str,
+    current_time: float,
+) -> list[dict[str, object]]:
+    """Return the fresh tokens whose target is not the given file path and hash.
+
+    Recording keeps these and appends the new token; consuming keeps these and
+    drops the matched token one-shot. A stale token ages out either way.
+
+    Args:
+        all_tokens: The stored token dictionaries to filter.
+        file_path: The write target whose matching token is excluded.
+        content_hash: The proposed-content sha256 whose matching token is excluded.
+        current_time: The epoch time the freshness window is measured from.
+
+    Returns:
+        Each fresh token whose target differs from the given file path and hash.
+    """
+    return [
+        each_token
+        for each_token in all_tokens
+        if _is_fresh(each_token, current_time)
+        and not _matches_target(each_token, file_path, content_hash)
+    ]
+
+
 def record_skip_token(session_id: str, file_path: str, content_hash: str) -> None:
     """Record one skip token, dropping stale tokens and any prior same-target token.
 
@@ -178,12 +206,9 @@ def record_skip_token(session_id: str, file_path: str, content_hash: str) -> Non
     """
     all_records = _read_records(session_id)
     current_time = time.time()
-    kept_tokens = [
-        each_token
-        for each_token in all_records[ALL_SKIP_TOKENS_KEY]
-        if _is_fresh(each_token, current_time)
-        and not _matches_target(each_token, file_path, content_hash)
-    ]
+    kept_tokens = _fresh_tokens_excluding_target(
+        all_records[ALL_SKIP_TOKENS_KEY], file_path, content_hash, current_time
+    )
     kept_tokens.append(
         {
             SKIP_TOKEN_SESSION_FIELD: session_id,
@@ -225,13 +250,9 @@ def consume_skip_token(session_id: str, file_path: str, content_hash: str) -> No
     """
     all_records = _read_records(session_id)
     current_time = time.time()
-    remaining_tokens = [
-        each_token
-        for each_token in all_records[ALL_SKIP_TOKENS_KEY]
-        if _is_fresh(each_token, current_time)
-        and not _matches_target(each_token, file_path, content_hash)
-    ]
-    all_records[ALL_SKIP_TOKENS_KEY] = remaining_tokens
+    all_records[ALL_SKIP_TOKENS_KEY] = _fresh_tokens_excluding_target(
+        all_records[ALL_SKIP_TOKENS_KEY], file_path, content_hash, current_time
+    )
     _write_records(session_id, all_records)
 
 

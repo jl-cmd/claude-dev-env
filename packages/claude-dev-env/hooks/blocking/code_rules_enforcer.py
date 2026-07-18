@@ -1061,22 +1061,24 @@ def _emit_ask_payload(ask_reason: str, ask_stream: TextIO) -> None:
 
 
 def _finding_identity(issue: str) -> str:
-    """Return the finding text with digit runs stripped so line numbers do not vary it.
+    """Return the finding text with its line number stripped so a shifted line matches.
 
     ::
 
-        "Line 12: banned prefix 'handle_'"  ->  "Line : banned prefix 'handle_'"
-        "Line 40: banned prefix 'handle_'"  ->  "Line : banned prefix 'handle_'"
+        "Line 12: Magic value 42 - extract"  ->  "Line : Magic value 42 - extract"
+        "Line 40: Magic value 42 - extract"  ->  "Line : Magic value 42 - extract"
 
     The proposed content and the on-disk content number the same finding on
     different lines, so an identity that keeps the line number would treat one
-    finding as two. Stripping digit runs lets a shifted-line finding match.
+    finding as two. Only the number after ``Line`` is dropped. A value inside
+    the message, such as a magic number, stays, so two findings that differ
+    only by value keep distinct identities.
 
     Args:
         issue: One blocking-issue string from ``validate_content``.
 
     Returns:
-        The issue text with every digit run removed.
+        The issue text with the line number after ``Line`` removed.
     """
     return FINDING_IDENTITY_DIGIT_RUN_PATTERN.sub("", issue)
 

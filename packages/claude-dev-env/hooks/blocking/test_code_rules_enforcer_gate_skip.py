@@ -175,3 +175,9 @@ def test_finding_identity_normalizes_line_numbers() -> None:
     later_line_finding = "Line 405: Function 'handle_thing' uses banned prefix"
     assert _finding_identity(early_line_finding) == _finding_identity(later_line_finding)
     assert "12" not in _finding_identity(early_line_finding)
+
+
+def test_finding_identity_keeps_distinct_values_distinct() -> None:
+    preexisting_value_finding = "Line 5: Magic value 42 - extract to named constant"
+    new_value_finding = "Line 5: Magic value 99 - extract to named constant"
+    assert _finding_identity(preexisting_value_finding) != _finding_identity(new_value_finding)
