@@ -24,6 +24,8 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
     ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
     ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
     ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES,
+    ALL_TRUTHY_ENV_VALUES,
+    DESTRUCTIVE_DENY_MODE_ENV_VAR,
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
     ALL_FIND_EXEC_ACTION_FLAGS,
     ALL_FIND_EXEC_ACTION_TERMINATORS,
@@ -56,12 +58,17 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
 GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
-GH_REDIRECT_ACTIVE_TRUTHY_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 def gh_redirect_is_active() -> bool:
     env_var_value = os.environ.get(GH_REDIRECT_ACTIVE_ENV_VAR, "").strip().lower()
-    return env_var_value in GH_REDIRECT_ACTIVE_TRUTHY_VALUES
+    return env_var_value in ALL_TRUTHY_ENV_VALUES
+
+
+def deny_mode_is_active() -> bool:
+    env_var_value = os.environ.get(DESTRUCTIVE_DENY_MODE_ENV_VAR, "").strip().lower()
+    return env_var_value in ALL_TRUTHY_ENV_VALUES
+
 
 def directory_is_ephemeral(directory_path: str) -> bool:
     """Return True when a directory belongs to the ephemeral auto-allow namespace.
@@ -2043,14 +2050,20 @@ def main() -> None:
         matched_description = co_resident_hazard_description
 
     if matched_description is not None:
-        ask_response = {
+        if deny_mode_is_active():
+            terminal_decision = "deny"
+            terminal_reason = f"DESTRUCTIVE: {matched_description}. Blocked in deny mode."
+        else:
+            terminal_decision = "ask"
+            terminal_reason = f"DESTRUCTIVE: {matched_description}. Requires explicit user approval."
+        terminal_response = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "permissionDecision": "ask",
-                "permissionDecisionReason": f"DESTRUCTIVE: {matched_description}. Requires explicit user approval."
+                "permissionDecision": terminal_decision,
+                "permissionDecisionReason": terminal_reason
             }
         }
-        print(json.dumps(ask_response))
+        print(json.dumps(terminal_response))
 
     sys.exit(0)
 
