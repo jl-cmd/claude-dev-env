@@ -808,3 +808,96 @@ def test_store_imports_under_foreign_config_shadow(
     )
     assert completed_probe.returncode == 0, completed_probe.stderr
     assert "IMPORT_OK" in completed_probe.stdout
+
+
+def _ledger_path(fake_home: pathlib.Path) -> pathlib.Path:
+    return (
+        fake_home
+        / constants_module.CLAUDE_HOME_DIRECTORY_NAME
+        / constants_module.LOGS_DIRECTORY_NAME
+        / constants_module.VERIFIER_VERDICTS_JSONL_FILENAME
+    )
+
+
+def _read_ledger_rows(fake_home: pathlib.Path) -> list[dict]:
+    ledger_file = _ledger_path(fake_home)
+    all_rows: list[dict] = []
+    for each_line in ledger_file.read_text(encoding="utf-8").splitlines():
+        if each_line.strip():
+            all_rows.append(json.loads(each_line))
+    return all_rows
+
+
+def test_write_verdict_appends_failing_row_that_survives_later_clean_mint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    """A failing mint's check names stay readable after a later clean mint."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: fake_home))
+    work_dir = _make_repo_with_origin(tmp_path)
+    failing_findings = [
+        {"check": "gates.import", "detail": "ImportError: boom"},
+        {"check": "task.item-2", "detail": "missing hunk"},
+    ]
+    write_verdict(
+        str(work_dir),
+        MATCHING_MANIFEST_SHA256,
+        False,
+        failing_findings,
+        "agent-fail",
+    )
+    write_verdict(
+        str(work_dir),
+        MATCHING_MANIFEST_SHA256,
+        True,
+        [],
+        "agent-pass",
+    )
+    all_rows = _read_ledger_rows(fake_home)
+    assert len(all_rows) == 2
+    failing_row = all_rows[0]
+    clean_row = all_rows[1]
+    assert failing_row[constants_module.LEDGER_KEY_ALL_PASS] is False
+    assert failing_row[constants_module.LEDGER_KEY_FINDING_COUNT] == 2
+    assert failing_row[constants_module.LEDGER_KEY_FINDING_CHECK_NAMES] == [
+        "gates.import",
+        "task.item-2",
+    ]
+    assert failing_row[constants_module.LEDGER_KEY_MINTED_FROM_AGENT_ID] == "agent-fail"
+    assert failing_row[constants_module.LEDGER_KEY_MANIFEST_HASH] == MATCHING_MANIFEST_SHA256
+    assert failing_row[constants_module.LEDGER_KEY_REPO_ROOT] == str(work_dir)
+    assert failing_row[constants_module.LEDGER_KEY_BRANCH] == "main"
+    assert clean_row[constants_module.LEDGER_KEY_ALL_PASS] is True
+    assert clean_row[constants_module.LEDGER_KEY_FINDING_COUNT] == 0
+    assert clean_row[constants_module.LEDGER_KEY_FINDING_CHECK_NAMES] == []
+    assert clean_row[constants_module.LEDGER_KEY_MINTED_FROM_AGENT_ID] == "agent-pass"
+
+
+def test_write_verdict_returns_path_when_ledger_append_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    """A ledger IO failure never changes the mint path or verdict file write."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: fake_home))
+    logs_as_file = (
+        fake_home
+        / constants_module.CLAUDE_HOME_DIRECTORY_NAME
+        / constants_module.LOGS_DIRECTORY_NAME
+    )
+    logs_as_file.parent.mkdir(parents=True, exist_ok=True)
+    logs_as_file.write_text("not-a-directory", encoding="utf-8")
+    work_dir = _make_repo_with_origin(tmp_path)
+    verdict_file = write_verdict(
+        str(work_dir),
+        MATCHING_MANIFEST_SHA256,
+        True,
+        [],
+        "agent-x",
+    )
+    assert verdict_file.is_file()
+    verdict_record = json.loads(verdict_file.read_text(encoding="utf-8"))
+    assert verdict_record[constants_module.VERDICT_KEY_ALL_PASS] is True

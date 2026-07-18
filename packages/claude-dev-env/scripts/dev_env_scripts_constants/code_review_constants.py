@@ -11,7 +11,7 @@ from __future__ import annotations
 CODE_REVIEW_SLASH_COMMAND: str = "/code-review"
 """Built-in Claude Code slash command that runs the repository review."""
 
-CODE_REVIEW_EFFORT: str = "high"
+CODE_REVIEW_EFFORT: str = "xhigh"
 """Effort level passed to the built-in review slash command."""
 
 CODE_REVIEW_FIX_FLAG: str = "--fix"
