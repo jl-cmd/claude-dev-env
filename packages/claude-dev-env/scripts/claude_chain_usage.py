@@ -223,12 +223,10 @@ def report_chain_weekly_usage(*, config_path: Path) -> list[AccountUsageReport]:
     ]
 
 
-def _nulls_last_remaining_rank(
-    config_index: int, report: AccountUsageReport
-) -> tuple[int, float, int]:
+def _nulls_last_remaining_rank(report: AccountUsageReport) -> tuple[int, float]:
     if report.weekly_remaining_percent is None:
-        return (1, 0.0, config_index)
-    return (0, -report.weekly_remaining_percent, config_index)
+        return (1, 0.0)
+    return (0, -report.weekly_remaining_percent)
 
 
 def rank_accounts_by_weekly_remaining(
@@ -248,15 +246,7 @@ def rank_accounts_by_weekly_remaining(
     Returns:
         A new list ordered by remaining weekly percent descending.
     """
-    return [
-        each_report
-        for _config_index, each_report in sorted(
-            enumerate(all_reports),
-            key=lambda each_pair: _nulls_last_remaining_rank(
-                each_pair[0], each_pair[1]
-            ),
-        )
-    ]
+    return sorted(all_reports, key=_nulls_last_remaining_rank)
 
 
 def _account_report_to_json_mapping(
