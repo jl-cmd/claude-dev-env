@@ -5,8 +5,9 @@ chain-outcome builders, its runner shortcuts, and its seam installer from here
 so the behavioral groups stay small and none of the shared support is copied
 between them.
 
-The conftest beside this file registers the scripts directory on ``sys.path``,
-so the invoker and its constants package resolve by bare name below.
+This module inserts the scripts directory on ``sys.path`` before its flat
+import list, so the invoker and its constants package resolve by bare name
+whether or not pytest's conftest has already registered the directory.
 """
 
 from __future__ import annotations
@@ -19,50 +20,27 @@ from pathlib import Path
 
 import pytest
 
-try:
-    import claude_chain_runner as chain_runner
-    import invoke_code_review as invoker
-    from claude_chain_runner import ChainAttempt, ChainInvocationOutcome
-    from dev_env_scripts_constants.code_review_constants import (
-        CLI_SESSION_MODEL_FLAG,
-        CODE_REVIEW_MODEL_ALIAS,
-        GIT_BINARY,
-        RECORD_STAMP_FLAG,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        CLI_TIMEOUT_FLAG,
-        CWD_FLAG,
-    )
-    from dev_env_scripts_constants.timing import DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import claude_chain_runner as chain_runner
-    import invoke_code_review as invoker
-    from claude_chain_runner import ChainAttempt, ChainInvocationOutcome
-    from dev_env_scripts_constants.code_review_constants import (
-        CLI_SESSION_MODEL_FLAG,
-        CODE_REVIEW_MODEL_ALIAS,
-        GIT_BINARY,
-        RECORD_STAMP_FLAG,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        CLI_TIMEOUT_FLAG,
-        CWD_FLAG,
-    )
-    from dev_env_scripts_constants.timing import DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def run_record_stamp_cli(working_directory: Path, *, effort: str) -> int:
-    return invoker.main(
-        [
-            CWD_FLAG,
-            str(working_directory),
-            CLI_SESSION_MODEL_FLAG,
-            CODE_REVIEW_MODEL_ALIAS,
-            RECORD_STAMP_FLAG,
-            effort,
-        ]
-    )
+import claude_chain_runner as chain_runner  # noqa: E402
+import invoke_code_review as invoker  # noqa: E402
+from claude_chain_runner import ChainAttempt, ChainInvocationOutcome  # noqa: E402
+from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
+    CLI_SESSION_MODEL_FLAG,
+    CODE_REVIEW_MODEL_ALIAS,
+    GIT_BINARY,
+    INVALID_EFFORT_RETURNCODE,
+    MAXIMUM_STAMP_MINT_PASSES,
+    RECORD_STAMP_FLAG,
+    STAMP_DID_NOT_CONVERGE_RETURNCODE,
+)
+from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+    CLI_TIMEOUT_FLAG,
+    CWD_FLAG,
+)
+from dev_env_scripts_constants.timing import (  # noqa: E402
+    DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+)
 
 HOST_PROFILE_CLAUDE = "Claude"
 HOST_PROFILE_THIRD_PARTY = "ThirdParty"
@@ -81,6 +59,63 @@ FIXTURE_HOST_PROFILE_ERROR_MESSAGE = "unknown host profile"
 DIRTY_FILE_NAME = "review_fix.txt"
 DIRTY_FILE_CONTENTS = "applied fix\n"
 GIT_INIT_TIMEOUT_SECONDS = 30
+REPOSITORY_USER_EMAIL = "reviewer@example.com"
+REPOSITORY_USER_NAME = "Reviewer"
+PINNED_INITIAL_BRANCH = "main"
+
+
+def _run_git(*git_arguments: str, working_directory: Path | None = None) -> None:
+    all_git_tokens = [GIT_BINARY]
+    if working_directory is not None:
+        all_git_tokens += ["-C", str(working_directory)]
+    all_git_tokens += list(git_arguments)
+    subprocess.run(
+        all_git_tokens,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=GIT_INIT_TIMEOUT_SECONDS,
+    )
+
+
+def _initialize_repository(repository_directory: Path) -> None:
+    repository_directory.mkdir(parents=True, exist_ok=True)
+    _run_git(
+        "init",
+        "--initial-branch",
+        PINNED_INITIAL_BRANCH,
+        working_directory=repository_directory,
+    )
+    _run_git(
+        "config",
+        "user.email",
+        REPOSITORY_USER_EMAIL,
+        working_directory=repository_directory,
+    )
+    _run_git(
+        "config",
+        "user.name",
+        REPOSITORY_USER_NAME,
+        working_directory=repository_directory,
+    )
+
+
+def write_dirty_tree(working_directory: Path) -> None:
+    dirty_file = working_directory / DIRTY_FILE_NAME
+    dirty_file.write_text(DIRTY_FILE_CONTENTS, encoding="utf-8")
+
+
+def run_record_stamp_cli(working_directory: Path, *, effort: str) -> int:
+    return invoker.main(
+        [
+            CWD_FLAG,
+            str(working_directory),
+            CLI_SESSION_MODEL_FLAG,
+            CODE_REVIEW_MODEL_ALIAS,
+            RECORD_STAMP_FLAG,
+            effort,
+        ]
+    )
 
 
 def claude_served(
@@ -109,27 +144,11 @@ def claude_failed() -> ChainInvocationOutcome:
     )
 
 
-def _run_git_command(repository_directory: Path, *git_arguments: str) -> None:
-    subprocess.run(
-        [GIT_BINARY, *git_arguments],
-        cwd=str(repository_directory),
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=GIT_INIT_TIMEOUT_SECONDS,
-    )
-
-
 def init_git_repository(repository_directory: Path) -> Path:
-    repository_directory.mkdir(parents=True, exist_ok=True)
-    _run_git_command(repository_directory, "init")
-    _run_git_command(
-        repository_directory, "config", "user.email", "reviewer@example.com"
-    )
-    _run_git_command(repository_directory, "config", "user.name", "Reviewer")
+    _initialize_repository(repository_directory)
     (repository_directory / "README.md").write_text("baseline\n", encoding="utf-8")
-    _run_git_command(repository_directory, "add", "README.md")
-    _run_git_command(repository_directory, "commit", "-m", "baseline")
+    _run_git("add", "README.md", working_directory=repository_directory)
+    _run_git("commit", "-m", "baseline", working_directory=repository_directory)
     return repository_directory
 
 
@@ -179,8 +198,7 @@ def _record_dirty_tree(configuration: _SeamConfiguration) -> None:
         return
     if configuration.working_directory is None:
         return
-    dirty_file = configuration.working_directory / DIRTY_FILE_NAME
-    dirty_file.write_text(DIRTY_FILE_CONTENTS, encoding="utf-8")
+    write_dirty_tree(configuration.working_directory)
 
 
 def _detect_empty_stdin(maybe_stdin: object) -> bool | None:
@@ -303,50 +321,41 @@ def install_seams(
 
 EFFORT_LOW = "low"
 REJECTED_ULTRA_EFFORT = "ultra"
-RECORD_STAMP_MINT_CAP = 3
+RECORD_STAMP_MINT_CAP = MAXIMUM_STAMP_MINT_PASSES
 SINGLE_PASS_CAP = 1
-INVALID_EFFORT_EXIT_CODE = 2
-DID_NOT_CONVERGE_EXIT_CODE = 1
+INVALID_EFFORT_EXIT_CODE = INVALID_EFFORT_RETURNCODE
+DID_NOT_CONVERGE_EXIT_CODE = STAMP_DID_NOT_CONVERGE_RETURNCODE
 MISSING_STORE_FILE_NAME = "code_review_stamp_store_absent.py"
 SURFACE_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
-SURFACE_CHANGE_SOURCE = "def add(left: int, right: int) -> int:\n    return left - right\n"
-
-
-def _run_git(repository_directory: Path, *git_arguments: str) -> None:
-    subprocess.run(
-        [GIT_BINARY, "-C", str(repository_directory), *git_arguments],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=GIT_INIT_TIMEOUT_SECONDS,
-    )
+SURFACE_CHANGE_SOURCE = (
+    "def add(left: int, right: int) -> int:\n    return left - right\n"
+)
 
 
 def _make_repo_with_change_surface(tmp_path: Path) -> Path:
     origin_directory = tmp_path / "origin.git"
     work_directory = tmp_path / "work"
-    work_directory.mkdir()
-    subprocess.run(
-        [
-            GIT_BINARY,
-            "init",
-            "--bare",
-            "--initial-branch=main",
-            str(origin_directory),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=GIT_INIT_TIMEOUT_SECONDS,
+    _run_git(
+        "init",
+        "--bare",
+        "--initial-branch",
+        PINNED_INITIAL_BRANCH,
+        str(origin_directory),
     )
-    _run_git(work_directory, "init", "--initial-branch=main")
-    _run_git(work_directory, "config", "user.email", "tests@example.com")
-    _run_git(work_directory, "config", "user.name", "Reviewer")
+    _initialize_repository(work_directory)
     (work_directory / "app.py").write_text(SURFACE_SOURCE, encoding="utf-8")
-    _run_git(work_directory, "add", "-A")
-    _run_git(work_directory, "commit", "-m", "base")
-    _run_git(work_directory, "remote", "add", "origin", str(origin_directory))
-    _run_git(work_directory, "push", "-u", "origin", "main")
+    _run_git("add", "-A", working_directory=work_directory)
+    _run_git("commit", "-m", "base", working_directory=work_directory)
+    _run_git(
+        "remote",
+        "add",
+        "origin",
+        str(origin_directory),
+        working_directory=work_directory,
+    )
+    _run_git(
+        "push", "-u", "origin", PINNED_INITIAL_BRANCH, working_directory=work_directory
+    )
     (work_directory / "app.py").write_text(SURFACE_CHANGE_SOURCE, encoding="utf-8")
     return work_directory
 
@@ -382,8 +391,7 @@ def stable_clean_review(**_review_keywords: object) -> invoker.CodeReviewOutcome
 def surface_changing_review(
     *, working_directory: Path, **_review_keywords: object
 ) -> invoker.CodeReviewOutcome:
-    applied_fix_path = working_directory / DIRTY_FILE_NAME
-    applied_fix_path.write_text(DIRTY_FILE_CONTENTS, encoding="utf-8")
+    write_dirty_tree(working_directory)
     return _chain_clean_outcome()
 
 

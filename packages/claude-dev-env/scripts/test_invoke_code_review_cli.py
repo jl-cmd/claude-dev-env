@@ -177,9 +177,16 @@ def test_cli_emits_json_on_host_profile_value_error(
 
 
 def test_cli_rejects_ultra_effort_with_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        claude_outcome=None,
+        working_directory=tmp_path,
+    )
     exit_code = invoker.main(
         [
             CWD_FLAG,
@@ -217,8 +224,9 @@ def test_cli_record_stamp_reports_missing_store_dependency(
         del all_args, all_keywords
         raise ModuleNotFoundError("store missing", name="code_review_stamp_store")
 
+    working_directory = prepared_surface_repo(monkeypatch, tmp_path)
     monkeypatch.setattr(invoker, "load_code_review_stamp_store", raise_missing_store)
-    exit_code = run_record_stamp_cli(tmp_path, effort=EFFORT_LOW)
+    exit_code = run_record_stamp_cli(working_directory, effort=EFFORT_LOW)
     assert exit_code == INVALID_EFFORT_EXIT_CODE
     captured = capsys.readouterr()
     assert "stamp store" in captured.err
