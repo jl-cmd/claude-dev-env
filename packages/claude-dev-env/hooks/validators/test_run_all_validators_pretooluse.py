@@ -164,6 +164,27 @@ class TestMirroredRelativeSegments:
         assert segments[-1] == "submission_constants.py"
         assert Path(str(absolute_target)).anchor not in segments
 
+    def test_system_temp_target_stages_flat_basename_only(self, tmp_path: Path) -> None:
+        staging_module = sys.modules[main.__module__]
+        pytest_shaped_target = (
+            tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
+        )
+        pytest_shaped_target.parent.mkdir(parents=True, exist_ok=True)
+        pytest_shaped_target.write_text(CLEAN_MARKER_FUNCTION, encoding="utf-8")
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        mirrored_path = staging_module._mirrored_staging_path(
+            str(pytest_shaped_target), staging_root
+        )
+        assert mirrored_path is None
+        staged_path = staging_module._stage_proposed_content(
+            str(pytest_shaped_target),
+            MAGIC_VALUE_MARKER_FUNCTION,
+            str(staging_root),
+        )
+        assert staged_path == staging_root / "legacy_module.py"
+        assert staged_path.read_text(encoding="utf-8") == MAGIC_VALUE_MARKER_FUNCTION
+
 
 class TestCliModeRegression:
     def test_cli_mode_reports_violations_and_exits_one(

@@ -1,8 +1,27 @@
 """Ruff integration for fast Python linting."""
 
+import os
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+
+try:
+    from hooks_constants.ruff_integration_constants import (
+        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
+        NO_COLOR_ENABLED_VALUE,
+        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
+    )
+except ModuleNotFoundError:
+    if _hooks_directory not in sys.path:
+        sys.path.insert(0, _hooks_directory)
+    from hooks_constants.ruff_integration_constants import (
+        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
+        NO_COLOR_ENABLED_VALUE,
+        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
+    )
 
 
 @dataclass
@@ -26,6 +45,22 @@ def check_ruff_available() -> bool:
         return False
 
 
+def _ruff_subprocess_environment() -> dict[str, str]:
+    """Return an environment that forces plain, non-ANSI ruff diagnostics.
+
+    The PreToolUse gate parses ``path:line:col:`` prefixes. ANSI color codes
+    wrap those fields when FORCE_COLOR is set, so line numbers no longer parse
+    and baseline scoping fail-closes every ruff finding as new.
+    """
+    no_color_environment_variable_name = NO_COLOR_ENVIRONMENT_VARIABLE_NAME
+    force_color_environment_variable_name = FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME
+    no_color_enabled_value = NO_COLOR_ENABLED_VALUE
+    ruff_environment = os.environ.copy()
+    ruff_environment[no_color_environment_variable_name] = no_color_enabled_value
+    ruff_environment.pop(force_color_environment_variable_name, None)
+    return ruff_environment
+
+
 def run_ruff_check(files: list[Path]) -> RuffResult:
     """Run ruff check on files."""
     if not files:
@@ -44,6 +79,7 @@ def run_ruff_check(files: list[Path]) -> RuffResult:
         check=False,
         capture_output=True,
         text=True,
+        env=_ruff_subprocess_environment(),
     )
 
     return RuffResult(
@@ -67,6 +103,7 @@ def run_ruff_fix(files: list[Path]) -> RuffResult:
         check=False,
         capture_output=True,
         text=True,
+        env=_ruff_subprocess_environment(),
     )
 
     fixed_count = 0

@@ -44,6 +44,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
+| `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |

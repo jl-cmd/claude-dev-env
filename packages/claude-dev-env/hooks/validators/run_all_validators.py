@@ -795,12 +795,46 @@ def _path_is_within_directory(candidate_path: Path, directory_path: Path) -> boo
     return resolved_directory in candidate_path.resolve().parents
 
 
+def _is_under_system_temporary_directory(file_path: str) -> bool:
+    """Return True when *file_path* resolves at or under the process temp directory.
+
+    ::
+
+        /tmp/pytest-of-x/test_foo0/mod.py  -> True
+        C:\\Users\\x\\AppData\\Local\\Temp\\a.py -> True
+        automation/config/constants.py     -> False
+        /repo/src/module.py                -> False
+
+    Pytest sandboxes live under the OS temp directory and name each test folder
+    with a ``test_`` prefix. Mirroring those segments into the staging tree would
+    make ``is_test_file`` treat a non-test module as a test file and skip magic
+    value, abbreviation, and similar scanners.
+
+    Args:
+        file_path: The write or edit target path from the payload.
+
+    Returns:
+        True when the resolved target sits at or under ``tempfile.gettempdir()``.
+    """
+    try:
+        resolved_target = Path(file_path).resolve()
+        temporary_root = Path(tempfile.gettempdir()).resolve()
+    except OSError:
+        return False
+    if resolved_target == temporary_root:
+        return True
+    return temporary_root in resolved_target.parents
+
+
 def _mirrored_staging_path(file_path: str, temporary_root: Path) -> Optional[Path]:
     """Return the mirrored staging path under *temporary_root*, or None to stage flat.
 
-    Returns None when the sanitized path has no segments, or when the mirrored
+    Returns None when the target sits under the process temp directory (pytest
+    sandboxes), when the sanitized path has no segments, or when the mirrored
     path would resolve outside *temporary_root*.
     """
+    if _is_under_system_temporary_directory(file_path):
+        return None
     relative_segments = _mirrored_relative_segments(file_path)
     if not relative_segments:
         return None
@@ -826,11 +860,16 @@ def _stage_proposed_content(
         target: automation/config/submission_constants.py
         staged: <tempdir>/automation/config/submission_constants.py
 
+        target: /tmp/pytest-of-x/test_foo0/legacy_module.py
+        staged: <tempdir>/legacy_module.py
+
     Preserving each directory segment lets a ``config``/``scripts``/``tests``
-    path-keyed exemption match the staged copy. A bare filename mirrors to the
-    same path flat basename staging would use. Flat basename staging is the
-    fallback when the sanitized path has no segments, when the mirrored path
-    would resolve outside the temporary root, or on an ``OSError`` building the
+    path-keyed exemption match the staged copy. Targets under the process temp
+    directory stage by basename only so pytest's ``test_*`` sandbox folders do
+    not falsely match ``is_test_file``. A bare filename mirrors to the same path
+    flat basename staging would use. Flat basename staging is also the fallback
+    when the sanitized path has no segments, when the mirrored path would
+    resolve outside the temporary root, or on an ``OSError`` building the
     directories or writing the staged file.
     """
     temporary_root = Path(temporary_directory)

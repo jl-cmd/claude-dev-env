@@ -46,3 +46,4 @@ def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
         each_line.startswith(location_prefix) and "F401" in each_line
         for each_line in result.output.splitlines()
     ), result.output
+    assert "\x1b[" not in result.output
