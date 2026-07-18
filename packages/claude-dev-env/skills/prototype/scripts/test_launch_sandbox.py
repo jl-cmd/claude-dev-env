@@ -137,6 +137,17 @@ def test_validate_sandbox_paths_reports_a_missing_task_file(tmp_path: Path) -> N
     assert "task file" in error_message
 
 
+def test_validate_sandbox_paths_reports_a_missing_settings_file(tmp_path: Path) -> None:
+    launcher = load_launcher_module()
+    worktree_path, _ = make_sandbox_worktree(tmp_path)
+    task_file_path = make_task_file(tmp_path)
+    error_message = launcher.validate_sandbox_paths(
+        worktree_path, tmp_path / "absent-settings.json", task_file_path
+    )
+    assert error_message is not None
+    assert "settings" in error_message
+
+
 def test_main_returns_the_missing_path_exit_code_for_an_absent_worktree(
     tmp_path: Path,
 ) -> None:
@@ -176,4 +187,29 @@ def test_main_runs_the_sandbox_and_returns_the_runner_exit_code(
     )
     assert exit_code == FAKE_RUNNER_EXIT_CODE
     assert recording_runner.call_count == 1
-    assert recording_runner.recorded_working_directory == worktree_path
+    assert recording_runner.recorded_working_directory == worktree_path.resolve()
+
+
+def test_main_resolves_a_relative_settings_path_to_absolute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launcher = load_launcher_module()
+    worktree_path, settings_path = make_sandbox_worktree(tmp_path)
+    task_file_path = make_task_file(tmp_path)
+    recording_runner = RecordingCommandRunner(FAKE_RUNNER_EXIT_CODE)
+    monkeypatch.setattr(launcher, "_run_via_subprocess", recording_runner)
+    monkeypatch.chdir(tmp_path)
+    launcher.main(
+        [
+            "--worktree",
+            worktree_path.name,
+            "--settings",
+            settings_path.name,
+            "--task-file",
+            task_file_path.name,
+        ]
+    )
+    recorded_settings_token = recording_runner.recorded_tokens[-1]
+    assert Path(recorded_settings_token).is_absolute()
+    assert Path(recorded_settings_token) == settings_path.resolve()
+    assert recording_runner.recorded_working_directory == worktree_path.resolve()

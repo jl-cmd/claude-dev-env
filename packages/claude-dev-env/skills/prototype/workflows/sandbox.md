@@ -19,7 +19,7 @@ It reads the live `~/.claude/settings.json`, resolves each safety hook's command
 
 Run `scripts/probe_sandbox_safety.py --settings <settings path>`.
 
-It feeds each safety hook a payload the hook is proven to block and confirms a deny-or-ask decision.
+It feeds each safety hook a payload the hook is proven to block and confirms a hard-deny decision — the block that holds even under `--dangerously-skip-permissions`, unlike an `ask` prompt the flag auto-resolves.
 
 - Exit 0 → both gates block; the sandbox is contained.
 - Exit 3 → a gate allowed its probe or errored. Stop; do not launch an uncontained sandbox. This is a runtime check, not a code read (verify-runtime-state) — do not skip it.

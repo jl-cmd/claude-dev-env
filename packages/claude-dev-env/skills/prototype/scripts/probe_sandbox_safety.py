@@ -9,7 +9,7 @@
 
 The probe reads each safety hook command from the settings, feeds it a
 PreToolUse payload the hook's own tests prove it blocks, and confirms the
-hook returns a deny-or-ask decision. It runs the hook scripts directly, so
+hook returns a hard-deny decision. It runs the hook scripts directly, so
 it confirms each script is present, imports its constants package, and
 blocks its probe payload — it does not exercise Claude Code's matcher
 dispatch.
@@ -185,7 +185,7 @@ def hook_blocks_probe(all_command_tokens: list[str], probe_payload: dict) -> boo
         probe_payload: the PreToolUse payload fed to the hook on stdin.
 
     Returns:
-        True when the hook emits a deny-or-ask decision, False when it
+        True when the hook emits a hard-deny decision, False when it asks,
         allows, emits no decision, or errors.
     """
     try:
@@ -206,7 +206,7 @@ def hook_blocks_probe(all_command_tokens: list[str], probe_payload: dict) -> boo
     except json.JSONDecodeError:
         return False
     decision = parsed_hook_reply.get(HOOK_OUTPUT_KEY, {}).get(PERMISSION_DECISION_KEY)
-    return decision in ALL_BLOCK_DECISION_VALUES
+    return decision == ALL_BLOCK_DECISION_VALUES[0]
 
 
 def probe_safety_hook(settings_document: dict, basename: str) -> bool:

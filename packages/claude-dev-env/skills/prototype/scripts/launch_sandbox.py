@@ -155,7 +155,7 @@ def _parse_arguments(all_arguments: list[str] | None) -> argparse.Namespace:
 
 
 def main(all_arguments: list[str] | None = None) -> int:
-    """Validate the paths, then run the sandbox session and print a summary.
+    """Resolve and validate the paths, run the session, and print a summary.
 
     Args:
         all_arguments: the command-line arguments, or None to read sys.argv.
@@ -165,9 +165,9 @@ def main(all_arguments: list[str] | None = None) -> int:
     """
     logging.basicConfig(format=LOGGING_FORMAT)
     arguments = _parse_arguments(all_arguments)
-    worktree_path = Path(arguments.worktree).expanduser()
-    settings_path = Path(arguments.settings).expanduser()
-    task_file_path = Path(arguments.task_file).expanduser()
+    worktree_path = Path(arguments.worktree).expanduser().resolve()
+    settings_path = Path(arguments.settings).expanduser().resolve()
+    task_file_path = Path(arguments.task_file).expanduser().resolve()
     path_error = validate_sandbox_paths(worktree_path, settings_path, task_file_path)
     if path_error is not None:
         logger.error("%s", path_error)
