@@ -40,6 +40,7 @@ import io
 import json
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,8 +88,6 @@ from dev_env_scripts_constants.claude_chain_constants import (
     NO_COMPLETED_PROCESS_RETURN_CODE,
     UTF8_ENCODING,
 )
-
-import tempfile
 
 
 def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:
