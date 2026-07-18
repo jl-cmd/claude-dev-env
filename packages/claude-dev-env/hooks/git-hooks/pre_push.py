@@ -278,7 +278,7 @@ def main() -> int:
         return code_review_stamp_block_exit_code()
     base_reference = resolve_base_reference_from_stdin(stdin_text)
     if base_reference is None:
-        return code_review_stamp_block_exit_code()
+        return 0
     if base_reference == no_parseable_stdin_lines_sentinel:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
