@@ -896,7 +896,9 @@ def _stage_proposed_content(
 
 
 def validate_proposed_file(
-    file_path: str, proposed_content: str
+    file_path: str,
+    proposed_content: str,
+    config_source_path: Optional[Path] = None,
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
@@ -919,8 +921,13 @@ def validate_proposed_file(
         staged_file = _stage_proposed_content(
             file_path, proposed_content, temporary_directory
         )
+        resolved_config_source_path = (
+            config_source_path
+            if config_source_path is not None
+            else Path(file_path)
+        )
         return run_file_scoped_validators(
-            [staged_file], config_source_path=Path(file_path)
+            [staged_file], config_source_path=resolved_config_source_path
         )
 
 

@@ -24,21 +24,11 @@ try:
         NO_COLOR_ENABLED_VALUE,
         NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
     )
-    from hooks_constants.ruff_integration_constants import (
-        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
-        NO_COLOR_ENABLED_VALUE,
-        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
-    )
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
-    from hooks_constants.ruff_integration_constants import (
-        FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
-        NO_COLOR_ENABLED_VALUE,
-        NO_COLOR_ENVIRONMENT_VARIABLE_NAME,
-    )
     from hooks_constants.ruff_integration_constants import (
         FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME,
         NO_COLOR_ENABLED_VALUE,
@@ -292,7 +282,7 @@ def _parse_fixed_count(fix_output: str) -> int:
     return 0
 
 
-def run_ruff_fix(files: list[Path]) -> RuffResult:
+def run_ruff_fix(all_files: list[Path]) -> RuffResult:
     """Run ruff with --fix to auto-fix violations."""
     if not check_ruff_available():
         return RuffResult(passed=True, output="Ruff not installed", fixed_count=0)
