@@ -26,7 +26,7 @@ Attribution and policy surface for host memory consumers that sit under WSL2, Do
 
 These are host-capture facts the matrix must not rewrite:
 
-- Docker autostart capability is the **HKCU `Run` key** entry for Docker Desktop (not the stopped `com.docker.service`).
+- Docker autostart comes from the **HKCU `Run` key** entry for Docker Desktop (not the stopped `com.docker.service`).
 - **Codex `code-index-mcp`** is a live holder of `wsl.exe`; it is not the create-time owner of `vmmemWSL` when Codex starts hours later.
 - **cowork-vm** is a **separate** HCS VM and plain `vmmem` consumer; it is not `vmmemWSL`.
 - **grok** and **claude** were **not** parents of any live `wsl.exe` in the capture.
@@ -37,7 +37,7 @@ Named gaps only — do not fill these with guesses in policy or code:
 
 1. **Exact user-mode process that first woke the WSL VM** at the `vmmemWSL` create second (Security 4688 / Sysmon not available in the capture).
 2. **Exact process that created HCS `cowork-vm-*` / plain `vmmem`** (parent chain ends at `vmwp` / `vmcompute`).
-3. **Whether a given Docker start was pure logon Run vs interactive tray open** (Run key proves capability; a dead parent PID on the backend does not by itself prove which path fired).
+3. **Whether a given Docker start was pure logon Run vs interactive tray open** (Run key proves Docker can autostart; a dead parent PID on the backend does not by itself prove which path fired).
 4. **Identity of dead parents** of mid-session Ubuntu `wslhost` processes whose PPID is already recycled.
 5. **Documented, safe idle-stop for the cowork HCS VM** when Claude UI is gone but `hcsdiag` still lists Owner=`cowork-vm-*` Running.
 6. **Whether historical sessions of grok/claude started WSL earlier in a boot** — unprovable without process-creation audit history; live snapshot negatives do not extend backward.
