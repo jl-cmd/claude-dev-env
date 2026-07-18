@@ -46,9 +46,6 @@ from dev_env_scripts_constants.claude_chain_usage_constants import (
     USAGE_PROBE_FAILED_ERROR_TEMPLATE,
     WEEKLY_UTILIZATION_MISSING_ERROR,
 )
-from usage_pause_constants.resolve_usage_window_constants import (
-    ALL_CREDENTIALS_RELATIVE_PATH_PARTS,
-)
 
 import claude_chain_runner as chain_runner
 
@@ -69,7 +66,10 @@ class AccountUsageReport:
 
 
 def _default_credentials_path() -> Path:
-    return Path.home().joinpath(*ALL_CREDENTIALS_RELATIVE_PATH_PARTS)
+    usage_window_resolver = _load_resolve_usage_window_module()
+    return Path.home().joinpath(
+        *usage_window_resolver.ALL_CREDENTIALS_RELATIVE_PATH_PARTS
+    )
 
 
 def _credentials_path_for_entry(entry: chain_runner.ChainEntry) -> Path:
@@ -89,6 +89,9 @@ def _usage_pause_scripts_directory() -> Path:
 
 
 def _load_resolve_usage_window_module() -> ModuleType:
+    already_loaded = sys.modules.get(RESOLVE_USAGE_WINDOW_MODULE_NAME)
+    if already_loaded is not None:
+        return already_loaded
     scripts_directory = _usage_pause_scripts_directory()
     module_path = scripts_directory / RESOLVE_USAGE_WINDOW_FILENAME
     if not module_path.is_file():
@@ -165,8 +168,8 @@ def _report_for_entry(
     entry: chain_runner.ChainEntry,
     active_probe: WeeklyUtilizationProbe,
 ) -> AccountUsageReport:
-    credentials_path = _credentials_path_for_entry(entry)
     try:
+        credentials_path = _credentials_path_for_entry(entry)
         weekly_utilization = active_probe(credentials_path)
     except WeeklyUtilizationProbeError as probe_error:
         return AccountUsageReport(
