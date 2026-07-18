@@ -287,7 +287,7 @@ def run_ruff_fix(all_files: list[Path]) -> RuffResult:
     if not check_ruff_available():
         return RuffResult(passed=True, output="Ruff not installed", fixed_count=0)
     py_files = [
-        str(each_file) for each_file in files if each_file.suffix == PYTHON_SOURCE_SUFFIX
+        str(each_file) for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not py_files:
         return RuffResult(passed=True, output="No Python files", fixed_count=0)
