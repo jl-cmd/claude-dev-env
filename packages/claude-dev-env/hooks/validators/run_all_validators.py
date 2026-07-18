@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .config.directory_exemption_constants import (
-    ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS,
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
 )
 from .health_check import get_system_health, get_validator_version, print_health_report
@@ -815,20 +814,11 @@ def _temporary_path_preserving_directory_signal(
         path_parts = (destination_path.name,)
 
     all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
-    claude_directory_name, hooks_directory_name = ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS
     start_index = len(path_parts) - 1
     for each_index, each_part in enumerate(path_parts[:-1]):
-        part_lower = each_part.lower()
-        if part_lower not in all_directory_exemption_segment_names:
+        if each_part.lower() not in all_directory_exemption_segment_names:
             continue
-        if (
-            part_lower == hooks_directory_name
-            and each_index > 0
-            and path_parts[each_index - 1].lower() == claude_directory_name
-        ):
-            start_index = each_index - 1
-        else:
-            start_index = each_index
+        start_index = each_index
         break
 
     selected_parts = path_parts[start_index:]

@@ -318,7 +318,9 @@ class TestDirectoryExemptionThroughPipeline:
         )
         assert not denied_result.passed
 
-    def test_config_exemption_survives_without_a_named_directory_ancestor(self) -> None:
+    def test_config_exemption_survives_with_skill_constants_directory_ancestor(
+        self,
+    ) -> None:
         exempt_result = _named_result(
             CONFIG_CONSTANTS_DIRECTORY_MAGIC_PATH,
             MAGIC_NUMBER_SOURCE,

@@ -11,13 +11,11 @@ from pathlib import Path
 from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARKERS
 from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY_NAMES
 from validators.config.directory_exemption_constants import (
-    ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS,
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_SEGMENTS_FROM_PATH_PATTERNS,
     all_directory_segments_in_path_pattern,
     directory_segment_names_from_path_patterns,
     is_filename_like_path_segment,
-    parent_and_child_directory_segments_from_patterns,
 )
 from validators.exempt_paths import (
     HOOK_INFRASTRUCTURE_PATTERNS,
@@ -59,15 +57,6 @@ def test_directory_segment_names_from_path_patterns_extracts_new_directory_token
         ALL_SYNTHETIC_DIRECTORY_PATTERNS
     )
     assert all_segment_names == ALL_EXPECTED_SYNTHETIC_SEGMENTS
-
-
-def test_hook_infrastructure_yields_claude_hooks_parent_child_pair() -> None:
-    parent_name, child_name = parent_and_child_directory_segments_from_patterns(
-        HOOK_INFRASTRUCTURE_PATTERNS
-    )
-    assert parent_name == ".claude"
-    assert child_name == "hooks"
-    assert ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS == (parent_name, child_name)
 
 
 def test_derived_segments_cover_authoritative_directory_patterns() -> None:
