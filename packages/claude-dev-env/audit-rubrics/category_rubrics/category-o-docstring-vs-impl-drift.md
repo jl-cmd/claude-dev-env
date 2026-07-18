@@ -110,6 +110,7 @@ Read the body and the docstring side by side. Apply each check that matches the 
 - **Predicate breadth.** A boolean helper whose prose promises a narrow check accepts only the inputs the prose names — no broader input class the name and prose do not mention.
 - **Exclusion-clause distinguisher.** A docstring sentence that says a named category of input "are not" / "is not" the thing the function flags keys the exclusion to the same axis the body's classification keys on. Read the body's actual branch condition, then state the exclusion on that same axis.
 - **Companion-doc ordering and content claims.** A `SKILL.md` (or sibling `.md`) sentence that names a produced artifact and claims its order or its content matches the producer function's docstring and body for that same artifact. The two move together in one commit, even when the producer edit does not touch the `.md` file.
+- **Gate-outcome status flags.** A workflow gate outcome the body routes to a blocker (`blocker = ...; break`) reads as blocked in every in-code prose string (a schema `description`, an architecture `detail`/overview string) and companion doc, never as a bypass — judgment for this lane.
 - **TYPE_CHECKING gate claim vs code.** A docstring that names a `TYPE_CHECKING` gate-detection step matches a module whose code handles TYPE_CHECKING. Gated form: `check_docstring_names_absent_type_checking_gate`.
 
 ---
