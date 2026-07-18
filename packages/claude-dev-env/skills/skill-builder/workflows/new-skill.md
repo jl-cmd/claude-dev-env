@@ -125,11 +125,11 @@ Register each task seed under **Required task seeds** in `deterministic-elements
 
 **Goal:** Produce the skill package — SKILL.md and companion files.
 
-Delegate to `/skill-writer` using the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
+Spawn the `skill-writer-agent` agent (`Agent(subagent_type="skill-writer-agent", ...)`) with the structured handoff from `${CLAUDE_SKILL_DIR}/references/delegation-map.md`.
 
 The handoff must include: skill type, folder structure, gap analysis (composition plan + description triggers + deterministic inventory), initial gotchas, degree of freedom, constraints, sub-skills to name in SKILL.md, exact description string to put in frontmatter, script/test paths for every deterministic step.
 
-After skill-writer produces the draft:
+After the `skill-writer-agent` agent produces the draft:
 
 1. Verify it follows the hub layout (principle → gotchas → when-applies → process → file index → folder map).
 2. Verify SKILL.md body is under 500 lines.

@@ -12,7 +12,7 @@ Best-practice specifications and the mandatory self-audit checklist for the `/sk
 | `skill-modularity.md` | Cross-skill modularity: one capability, sub-skills by name, composition plan, anti-monolith. |
 | `description-field.md` | Frontmatter description as trigger catalog (capability stem + Triggers). No story prose. |
 | `deterministic-elements.md` | Classify process steps; deterministic ones ship as code, task seeds, or fixed artifacts under CODE_RULES. |
-| `delegation-map.md` | Subagent handoff patterns and transcript guidance for skill-builder → skill-writer. |
+| `delegation-map.md` | Subagent handoff patterns and transcript guidance for skill-builder → skill-writer-agent. |
 | `thariq-x-post-skills.json` | Source reference data from Anthropic lessons on building Claude Code skills. |
 
 ## Conventions

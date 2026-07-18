@@ -1,10 +1,10 @@
 # Delegation Map
 
-How skill-builder delegates work to subagents and `/skill-writer`.
+How skill-builder delegates authoring to the `skill-writer-agent` agent.
 
-## Delegating to skill-writer (Step 4)
+## Delegating to skill-writer-agent (Step 4)
 
-skill-builder orchestrates; skill-writer authors the SKILL.md and companion files. The handoff must be structured so skill-writer has everything it needs.
+skill-builder orchestrates; the `skill-writer-agent` agent authors the SKILL.md and companion files. The caller spawns it with `Agent(subagent_type="skill-writer-agent", ...)`. The handoff must be structured so the agent has everything it needs.
 
 ### New skill handoff
 
