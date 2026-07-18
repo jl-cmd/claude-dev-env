@@ -3,8 +3,8 @@
 
 Loads ``~/.claude/claude-chain.json`` (or a path the caller names), probes each
 entry's weekly utilization through the usage-pause OAuth endpoint, and prints a
-JSON report. Ranking is available as an importable helper; this module does not
-change which binary ``run_claude`` selects.
+JSON report. Ranking is available as an importable helper; ``run_claude``
+consumes that ranking to choose try order.
 
 ::
 
