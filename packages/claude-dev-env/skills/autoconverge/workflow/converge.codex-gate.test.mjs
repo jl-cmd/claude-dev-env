@@ -211,6 +211,74 @@ test('the Codex gate prompt runs the review in the background rather than the de
   );
 });
 
+test('the Codex gate prompt waits for the background review inside the same turn with a bounded Monitor loop', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(codexPrompt, /Monitor tool/, 'expected a same-turn Monitor wait for the background review');
+  assert.match(codexPrompt, /until-loop/, 'expected a bounded until-loop that re-checks the result file');
+  assert.match(codexPrompt, /codexReviewPollIntervalSeconds/, 'expected a named poll interval in the wait protocol');
+  assert.match(codexPrompt, /codexReviewMaxPolls/, 'expected a named attempt budget in the wait protocol');
+  assert.match(
+    codexPrompt,
+    /Do NOT end this turn/i,
+    'expected an explicit instruction against ending the schema-bearing turn to await the background run',
+  );
+});
+
+test('the Codex background-review poll budget covers the review timeout', () => {
+  const intervalMatch = convergeSource.match(/codexReviewPollIntervalSeconds:\s*(\d+)/);
+  const pollsMatch = convergeSource.match(/codexReviewMaxPolls:\s*(\d+)/);
+  const timeoutMatch = convergeSource.match(/codexReviewTimeoutSeconds:\s*(\d+)/);
+  assert.notEqual(intervalMatch, null, 'expected codexReviewPollIntervalSeconds in CONFIG');
+  assert.notEqual(pollsMatch, null, 'expected codexReviewMaxPolls in CONFIG');
+  assert.notEqual(timeoutMatch, null, 'expected codexReviewTimeoutSeconds in CONFIG');
+  const intervalSeconds = Number(intervalMatch[1]);
+  const maxPolls = Number(pollsMatch[1]);
+  const timeoutSeconds = Number(timeoutMatch[1]);
+  assert.ok(
+    intervalSeconds * maxPolls >= timeoutSeconds,
+    `expected the poll budget ${intervalSeconds * maxPolls}s to cover the ${timeoutSeconds}s review timeout`,
+  );
+});
+
+test('the Codex gate prompt returns codex_down when the background poll budget is spent', () => {
+  const codexPrompt = functionBody('runCodexGate');
+  assert.match(
+    codexPrompt,
+    /full poll budget is spent with no result file[\s\S]*?down:true/,
+    'expected a spent-budget branch that returns the codex_down schema shape',
+  );
+});
+
+test('meta Codex gate phase describes codex_down as blocking, not a non-blocking skip', () => {
+  const phaseStart = convergeSource.indexOf("title: 'Codex gate'");
+  const phaseEnd = convergeSource.indexOf("title: 'Finalize'");
+  assert.notEqual(phaseStart, -1, 'expected a Codex gate phase in meta');
+  const codexPhaseDetail = convergeSource.slice(phaseStart, phaseEnd);
+  assert.match(codexPhaseDetail, /codex_down/, 'expected the phase detail to name codex_down');
+  assert.match(codexPhaseDetail, /draft|blocker/i, 'expected codex_down to be described as holding the PR draft');
+  assert.doesNotMatch(
+    codexPhaseDetail,
+    /codex_down, the gate skips without blocking/,
+    'codex_down must not be described as skipping without blocking',
+  );
+});
+
+test('CODEX_SCHEMA down.description separates the blocking codex_down case from the bypassed opt-out', () => {
+  const schemaStart = convergeSource.indexOf('const CODEX_SCHEMA =');
+  const schemaEnd = convergeSource.indexOf('const COPILOT_VERIFY_VERDICTS =');
+  assert.notEqual(schemaStart, -1, 'expected CODEX_SCHEMA to exist');
+  const schemaSource = convergeSource.slice(schemaStart, schemaEnd);
+  const downLineStart = schemaSource.indexOf('down: {');
+  const downLine = schemaSource.slice(downLineStart, schemaSource.indexOf('\n', downLineStart));
+  assert.match(downLine, /codex_down/, 'expected the down description to name codex_down');
+  assert.match(downLine, /blocker|draft/i, 'expected codex_down to be described as blocking');
+  assert.doesNotMatch(
+    downLine,
+    /the gate is bypassed'/,
+    'the down description must not claim codex_down is bypassed — it now holds the PR draft',
+  );
+});
+
 test('the CODEX phase stamps codexCleanAt on clean and clears it on an opt-out or usage skip', () => {
   const codexPhaseStart = convergeSource.indexOf("if (phase === 'CODEX') {");
   const finalizePhaseStart = convergeSource.indexOf("if (phase === 'FINALIZE') {", codexPhaseStart);

@@ -18,7 +18,7 @@ export const meta = {
     { title: 'Converge', detail: 'A deterministic static sweep runs first each round; then code-review, bug-audit, and self-review run in parallel on the same HEAD; one clean-coder applies all fixes; the loop repeats until every lens is clean on a stable HEAD' },
     { title: 'Bugbot gate', detail: 'A terminal confirmation gate that runs once the internal lenses are clean; when Bugbot is disabled or unavailable it spawns no agent and passes, otherwise it fetches Bugbot\'s verdict and routes any finding back into Converge' },
     { title: 'Copilot gate', detail: 'When the quota pre-check reports Copilot out of premium-request quota or unavailable, skip the gate with no agent spawned; otherwise request a Copilot review and poll up to the configured cap, then route findings by tier — self-healing findings flow back into Converge, and each code-concern finding goes to its own verifier agent that must execute a check against HEAD: a confirmed finding (defect reproduced by a run command) joins the fix round carrying its repro, a refuted finding (correct behavior demonstrated by a run command) is replied-to and resolved with the check evidence, and only inconclusive findings return blocker user-review for the orchestrator to gate on rather than auto-fixing or marking the PR ready; when Copilot is down or out of quota log a notice and proceed with the gate bypassed' },
-    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, when weekly usage is at or below the shared probe threshold (or null), or when the wrapper classifies codex_down, the gate skips without blocking; when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
+    { title: 'Codex gate', detail: 'A conditional-required terminal gate that runs after Bugbot and Copilot: when CLAUDE_REVIEWS_DISABLED lists codex, or when weekly usage is at or below the shared probe threshold (or null), the gate skips without blocking; when the wrapper classifies codex_down the gate holds the PR as a draft with a codex-down blocker rather than marking it ready without the required review; when usage is above the threshold it runs the codex-review wrapper against the PR base branch, routes findings into the fix path, and on a clean pass records the codex-clean HEAD for the convergence check' },
     { title: 'Finalize', detail: 'Run check_convergence.py; mark draft=false on a full pass' },
   ],
 }
@@ -30,6 +30,8 @@ const CONFIG = {
   maxConsecutiveNoLensRounds: 3,
   copilotMaxPolls: 8,
   codexReviewTimeoutSeconds: 2400,
+  codexReviewPollIntervalSeconds: 120,
+  codexReviewMaxPolls: 21,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
@@ -693,7 +695,7 @@ const CODEX_SCHEMA = {
   properties: {
     sha: { type: 'string', description: 'PR HEAD SHA this gate evaluated' },
     clean: { type: 'boolean', description: 'true when Codex reported no findings on sha, or when the gate skipped without requiring a review' },
-    down: { type: 'boolean', description: 'true when Codex is down (wrapper classifies codex_down) or opted out via the codex token — the gate is bypassed' },
+    down: { type: 'boolean', description: 'true when the wrapper classifies codex_down (the gate holds the PR as a draft with a codex-down blocker) or when Codex is opted out via the codex token (skipped, and the gate is bypassed)' },
     skipped: { type: 'boolean', description: 'true when the gate did not run the review wrapper (opt-out token or usage at/below the shared threshold)' },
     skipReason: {
       type: 'string',
@@ -2077,7 +2079,7 @@ function runCodexGate(head) {
       `   - creates a temp run-state directory under the OS temp dir\n` +
       `   - calls run_codex_review.run_codex_review(repository_directory=<repo root Path>, run_state_directory=<temp Path>, base_branch=<base ref from step 3>, timeout_seconds=${CONFIG.codexReviewTimeoutSeconds})\n` +
       `   - writes the outcome (outcome_class, exit_code, and the agent_message when completed) as JSON to a result file under the OS temp dir, then exits\n` +
-      `   Run that driver with the Bash tool in the background (run_in_background: true), never in the foreground — the foreground tool timeout caps below the review runtime and would kill a healthy review. When the background run finishes, read the result file and map its outcome:\n` +
+      `   Run that driver with the Bash tool in the background (run_in_background: true), never in the foreground — the foreground tool timeout caps below the review runtime and would kill a healthy review. Do NOT end this turn to await the background run — a schema-bearing turn that ends never resumes, so the result would never be collected. Wait for the background run to finish inside this same turn per the WAITS AND POLLS rule: pair the Monitor tool with a bounded until-loop that re-checks whether the result file has been written, on a ${CONFIG.codexReviewPollIntervalSeconds}-second interval up to ${CONFIG.codexReviewMaxPolls} attempts (interval x attempts covers the ${CONFIG.codexReviewTimeoutSeconds}-second review budget), consuming the Monitor notifications as they arrive; arm the Monitor with persistent:true (or a timeout_ms of at least interval x attempts) so it is not timed out before the review lands. If the full poll budget is spent with no result file written, return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop. When the background run finishes, read the result file and map its outcome:\n` +
       `   - when outcome_class is codex_down (or classify_codex_run on a non-zero exit reports codex_down) -> return {sha:${'`'}${head}${'`'}, clean:false, down:true, skipped:false, skipReason:'', findings:[]} and stop\n` +
       `   - when outcome_class is completed: parse findings with parse_codex_findings.parse_codex_findings(agent_message)\n` +
       `     - empty findings -> return {sha:${'`'}${head}${'`'}, clean:true, down:false, skipped:false, skipReason:'', findings:[]}\n` +
