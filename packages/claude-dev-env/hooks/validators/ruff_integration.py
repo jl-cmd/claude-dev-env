@@ -57,7 +57,6 @@ def check_ruff_available() -> bool:
         return False
 
 
-
 def _ruff_subprocess_environment() -> dict[str, str]:
     """Return an environment that forces plain, non-ANSI ruff diagnostics.
 

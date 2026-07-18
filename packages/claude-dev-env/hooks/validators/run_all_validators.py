@@ -902,17 +902,21 @@ def validate_proposed_file(
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Stages the content under a temporary directory that mirrors every directory
-    segment of the target path, so suffix filters, test-name filters, and
+    Stages the content under a temporary directory that mirrors the target
+    path's directory segments, so suffix filters, test-name filters, and
     path-keyed exemptions (a ``config`` ancestor or a ``tests`` segment) match
     the staged copy as they would the real target, then runs the file-scoped
-    validators against it. Ruff and mypy resolve their config by walking up from
-    *file_path*, so the staged copy is graded under the project config the real
-    path sits in rather than the temporary directory's.
+    validators against it. A target under the system temp directory stages by
+    basename only, so a pytest sandbox folder does not read as a test file.
+    Ruff and mypy resolve their config by walking up from the config source
+    path, so the staged copy is graded under the project config the real path
+    sits in rather than the temporary directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
         proposed_content: The reconstructed post-edit content of that file.
+        config_source_path: Path ruff and mypy resolve their config from;
+            defaults to *file_path* when the caller passes nothing.
 
     Returns:
         One ValidatorResult per file-scoped validator.
