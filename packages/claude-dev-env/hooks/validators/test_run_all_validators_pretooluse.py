@@ -90,7 +90,7 @@ class TestPreToolUseGate:
     def test_edit_validates_reconstructed_post_edit_content(
         self, tmp_path: Path
     ) -> None:
-        target_directory = tmp_path.parent / "neutral_edit_target"
+        target_directory = tmp_path / "neutral_edit_target"
         target_directory.mkdir(exist_ok=True)
         target_file = target_directory / "calculate.py"
         target_file.write_text(CLEAN_PYTHON_SOURCE, encoding="utf-8")
