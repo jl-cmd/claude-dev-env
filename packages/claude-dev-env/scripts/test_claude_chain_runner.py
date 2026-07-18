@@ -30,6 +30,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
+    CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
     CONFIG_CHAIN_KEY,
     CONFIG_CHAIN_NOT_LIST_REASON,
@@ -49,6 +50,14 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     NO_COMPLETED_PROCESS_RETURN_CODE,
     UTF8_ENCODING,
 )
+
+_LARGE_CAPTURE_BYTE_COUNT = 400_000
+_LARGE_CAPTURE_MARKER = "X"
+_STDIN_ECHO_PAYLOAD = "charter body for spool path"
+_UNDECODABLE_STDOUT_BYTES = b"ok \x90 end"
+_DECODED_UNDECODABLE_STDOUT = "ok \ufffd end"
+_CRLF_CHILD_STDOUT_BYTES = b"a\r\nb\rc\n"
+_CRLF_CHILD_STDOUT_NORMALIZED = "a\nb\nc\n"
 
 _A_SIGNATURE = ALL_USAGE_LIMIT_SIGNATURES[0]
 _PROMPT_ARGUMENTS = ["-p", "hello"]
@@ -953,6 +962,128 @@ def test_real_subprocess_capture_preserves_utf8_text(
     assert chain_result.served_command == sys.executable
     assert chain_result.returncode == 0
     assert chain_result.stdout == "report ✅ done"
+
+
+def test_run_captured_subprocess_spools_large_stdout_and_stderr() -> None:
+    child_code = (
+        "import sys;"
+        f"sys.stdout.write({_LARGE_CAPTURE_MARKER!r} * {_LARGE_CAPTURE_BYTE_COUNT});"
+        "sys.stderr.write('err-marker');"
+        "sys.exit(3)"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 3
+    assert len(completion.stdout) == _LARGE_CAPTURE_BYTE_COUNT
+    assert completion.stdout == _LARGE_CAPTURE_MARKER * _LARGE_CAPTURE_BYTE_COUNT
+    assert completion.stderr == "err-marker"
+
+
+def test_run_captured_subprocess_forwards_stdin_input() -> None:
+    child_code = "import sys; sys.stdout.write(sys.stdin.read())"
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=_STDIN_ECHO_PAYLOAD,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _STDIN_ECHO_PAYLOAD
+    assert completion.stderr == ""
+
+
+def test_run_captured_subprocess_replaces_undecodable_stdout_bytes() -> None:
+    child_code = (
+        "import sys;"
+        f"sys.stdout.buffer.write({_UNDECODABLE_STDOUT_BYTES!r})"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _DECODED_UNDECODABLE_STDOUT
+
+
+def test_run_captured_subprocess_normalizes_crlf_to_lf() -> None:
+    """Spool decode matches subprocess text=True universal-newline translation."""
+    child_code = (
+        "import sys;"
+        f"sys.stdout.buffer.write({_CRLF_CHILD_STDOUT_BYTES!r})"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _CRLF_CHILD_STDOUT_NORMALIZED
+
+
+def test_run_captured_subprocess_honors_cwd(tmp_path: Path) -> None:
+    child_code = "import os, sys; sys.stdout.write(os.getcwd())"
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        cwd=str(tmp_path),
+    )
+    assert completion.returncode == 0
+    assert Path(completion.stdout).resolve() == tmp_path.resolve()
+
+
+def test_run_captured_subprocess_timeout_keeps_partial_stdout() -> None:
+    child_code = (
+        "import sys, time;"
+        "sys.stdout.write('partial-before-timeout');"
+        "sys.stdout.flush();"
+        "time.sleep(30)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired) as raised:
+        runner._run_captured_subprocess(
+            [sys.executable, "-c", child_code],
+            encoding=UTF8_ENCODING,
+            errors=CODEC_ERROR_STRATEGY,
+            timeout=1,
+            check=False,
+            input=None,
+        )
+    assert raised.value.stdout == "partial-before-timeout"
+    assert isinstance(raised.value.stdout, str)
+
+
+def test_run_captured_subprocess_reads_stdin_stream(tmp_path: Path) -> None:
+    prompt_path = tmp_path / "prompt_body.txt"
+    prompt_path.write_text(_STDIN_ECHO_PAYLOAD, encoding=UTF8_ENCODING)
+    child_code = "import sys; sys.stdout.write(sys.stdin.read())"
+    with prompt_path.open(encoding=UTF8_ENCODING) as prompt_stream:
+        completion = runner._run_captured_subprocess(
+            [sys.executable, "-c", child_code],
+            encoding=UTF8_ENCODING,
+            errors=CODEC_ERROR_STRATEGY,
+            timeout=60,
+            check=False,
+            stdin=prompt_stream,
+        )
+    assert completion.returncode == 0
+    assert completion.stdout == _STDIN_ECHO_PAYLOAD
 
 
 def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
