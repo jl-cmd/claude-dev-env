@@ -154,7 +154,6 @@ def _probe_weekly_utilization(credentials_path: Path) -> float:
         TimeoutError,
         OSError,
         ValueError,
-        json.JSONDecodeError,
     ) as probe_error:
         raise WeeklyUtilizationProbeError(
             USAGE_PROBE_FAILED_ERROR_TEMPLATE.format(error=probe_error)
