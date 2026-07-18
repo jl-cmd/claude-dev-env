@@ -11,6 +11,7 @@ import pytest
 from .run_all_validators import (
     ValidatorResult,
     _hooks_subprocess_working_directory_and_environment,
+    _temporary_path_preserving_directory_signal,
     add_timing,
     build_json_output,
     create_timing_metrics,
@@ -23,6 +24,26 @@ from .run_all_validators import (
 )
 
 
+def _passing_mock_result() -> MagicMock:
+    """Return a mock validator result that reports a passing check."""
+    mock_result = MagicMock()
+    mock_result.passed = True
+    mock_result.name = "Test"
+    mock_result.checks = "test"
+    mock_result.output = ""
+    return mock_result
+
+
+def _run_main_with_argv(command_line_arguments: list[str]) -> int | None:
+    """Run ``main`` under the given argv and always restore the original argv."""
+    original_argv = sys.argv
+    try:
+        sys.argv = command_line_arguments
+        return main()
+    finally:
+        sys.argv = original_argv
+
+
 class TestFixFlag:
     """Test --fix flag functionality."""
 
@@ -31,25 +52,11 @@ class TestFixFlag:
         with patch("validators.run_all_validators.get_changed_files") as mock_get_files, \
              patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
              patch("validators.run_all_validators.run_git_checks") as mock_git:
-
             mock_get_files.return_value = []
+            mock_file.return_value = _passing_mock_result()
+            mock_git.return_value = _passing_mock_result()
 
-            mock_result = MagicMock()
-            mock_result.passed = True
-            mock_result.name = "Test"
-            mock_result.checks = "test"
-            mock_result.output = ""
-
-            mock_file.return_value = mock_result
-            mock_git.return_value = mock_result
-
-            original_argv = sys.argv
-            try:
-                sys.argv = ["run_all_validators.py", "--fix"]
-                result = main()
-                assert result == 0
-            finally:
-                sys.argv = original_argv
+            assert _run_main_with_argv(["run_all_validators.py", "--fix"]) == 0
 
     def test_fix_flag_calls_fix_python_style(self) -> None:
         """Verify --fix flag triggers fix_python_style when files exist."""
@@ -61,29 +68,12 @@ class TestFixFlag:
              patch("validators.run_all_validators.run_comment_checks") as mock_comment, \
              patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
              patch("validators.run_all_validators.run_git_checks") as mock_git:
-
             mock_get_files.return_value = [Path("test.py")]
             mock_fix.return_value = ["test.py"]
+            for each_mock in (mock_style, mock_test, mock_react, mock_comment, mock_file, mock_git):
+                each_mock.return_value = _passing_mock_result()
 
-            mock_result = MagicMock()
-            mock_result.passed = True
-            mock_result.name = "Test"
-            mock_result.checks = "test"
-            mock_result.output = ""
-
-            mock_style.return_value = mock_result
-            mock_test.return_value = mock_result
-            mock_react.return_value = mock_result
-            mock_comment.return_value = mock_result
-            mock_file.return_value = mock_result
-            mock_git.return_value = mock_result
-
-            original_argv = sys.argv
-            try:
-                sys.argv = ["run_all_validators.py", "--fix"]
-                main()
-            finally:
-                sys.argv = original_argv
+            _run_main_with_argv(["run_all_validators.py", "--fix"])
 
             mock_fix.assert_called_once()
 
@@ -97,30 +87,42 @@ class TestFixFlag:
              patch("validators.run_all_validators.run_comment_checks") as mock_comment, \
              patch("validators.run_all_validators.run_file_structure_checks") as mock_file, \
              patch("validators.run_all_validators.run_git_checks") as mock_git:
-
             mock_get_files.return_value = [Path("test.py")]
+            for each_mock in (mock_style, mock_test, mock_react, mock_comment, mock_file, mock_git):
+                each_mock.return_value = _passing_mock_result()
 
-            mock_result = MagicMock()
-            mock_result.passed = True
-            mock_result.name = "Test"
-            mock_result.checks = "test"
-            mock_result.output = ""
-
-            mock_style.return_value = mock_result
-            mock_test.return_value = mock_result
-            mock_react.return_value = mock_result
-            mock_comment.return_value = mock_result
-            mock_file.return_value = mock_result
-            mock_git.return_value = mock_result
-
-            original_argv = sys.argv
-            try:
-                sys.argv = ["run_all_validators.py"]
-                main()
-            finally:
-                sys.argv = original_argv
+            _run_main_with_argv(["run_all_validators.py"])
 
             mock_fix.assert_not_called()
+
+
+class TestStagedPathContainment:
+    """Staged validation paths must never escape the temporary root."""
+
+    def test_parent_traversal_path_stays_inside_temp_root(self, tmp_path: Path) -> None:
+        temporary_root = tmp_path / "staging"
+        temporary_root.mkdir()
+        traversal_path = "scripts/../../../../escaped_evil.py"
+
+        staged_file = _temporary_path_preserving_directory_signal(
+            temporary_root, traversal_path
+        )
+        staged_file.write_text("payload", encoding="utf-8")
+
+        assert staged_file.resolve().is_relative_to(temporary_root.resolve())
+        assert staged_file.read_text(encoding="utf-8") == "payload"
+
+    def test_absolute_component_path_stays_inside_temp_root(self, tmp_path: Path) -> None:
+        temporary_root = tmp_path / "staging"
+        temporary_root.mkdir()
+        absolute_style_path = "/etc/cron.d/evil.py"
+
+        staged_file = _temporary_path_preserving_directory_signal(
+            temporary_root, absolute_style_path
+        )
+        staged_file.write_text("payload", encoding="utf-8")
+
+        assert staged_file.resolve().is_relative_to(temporary_root.resolve())
 
 
 class TestGracefulDegradation:
@@ -128,28 +130,28 @@ class TestGracefulDegradation:
         def failing_validator() -> ValidatorResult:
             raise FileNotFoundError("validator.py not found")
 
-        result = run_with_fallback(
+        skipped_result = run_with_fallback(
             failing_validator,
             "Missing Validator",
             "99",
         )
 
-        assert result.skipped is True
-        assert "skipped" in result.output.lower()
-        assert result.passed is False
+        assert skipped_result.skipped is True
+        assert "skipped" in skipped_result.output.lower()
+        assert skipped_result.passed is False
 
     def test_validator_exception_returns_skipped_result(self) -> None:
         def crashing_validator() -> ValidatorResult:
             raise RuntimeError("Unexpected crash")
 
-        result = run_with_fallback(
+        skipped_result = run_with_fallback(
             crashing_validator,
             "Crashing Validator",
             "99",
         )
 
-        assert result.skipped is True
-        assert "skipped" in result.output.lower()
+        assert skipped_result.skipped is True
+        assert "skipped" in skipped_result.output.lower()
 
     def test_successful_validator_returns_normal_result(self) -> None:
         def working_validator() -> ValidatorResult:
@@ -160,14 +162,14 @@ class TestGracefulDegradation:
                 output="All good",
             )
 
-        result = run_with_fallback(
+        normal_result = run_with_fallback(
             working_validator,
             "Working",
             "1",
         )
 
-        assert result.skipped is False
-        assert result.passed is True
+        assert normal_result.skipped is False
+        assert normal_result.passed is True
 
 
 class TestStderrSurfacing:
@@ -244,7 +246,9 @@ class TestTimingMetrics:
 
 
 class TestVersionHeader:
-    def test_print_header_includes_version(self, capsys) -> None:
+    def test_print_header_includes_version(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         print_header()
         captured = capsys.readouterr()
 
