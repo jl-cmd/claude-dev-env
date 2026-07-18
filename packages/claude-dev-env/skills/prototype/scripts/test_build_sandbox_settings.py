@@ -211,6 +211,14 @@ def test_build_emits_blocks_in_sorted_matcher_order() -> None:
     assert emitted_matchers == sorted(emitted_matchers)
 
 
+def test_build_emits_the_deny_mode_env_block() -> None:
+    builder = load_builder_module()
+    minimal_settings = minimal_settings_for(builder, sample_settings_document())
+    assert minimal_settings[builder.ENV_KEY] == {
+        builder.DESTRUCTIVE_DENY_MODE_ENV_VAR: builder.DESTRUCTIVE_DENY_MODE_ENV_VALUE
+    }
+
+
 def test_write_minimal_settings_round_trips_the_document(tmp_path: Path) -> None:
     builder = load_builder_module()
     minimal_settings = minimal_settings_for(builder, sample_settings_document())
