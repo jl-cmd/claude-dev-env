@@ -26,6 +26,8 @@ _MIRRORED_BLOCKING_FILE_NAMES = (
     "verifier_verdict_minter.py",
     "verdict_directory_write_blocker.py",
     "verified_commit_config_bootstrap.py",
+    "code_review_enforcement_config_bootstrap.py",
+    "code_review_stamp_store.py",
 )
 _DECOY_CONFIG_INIT_SOURCE = '"""Foreign config package that must never win resolution."""\n'
 _DECOY_CONFIG_CONSTANTS_SOURCE = (

@@ -14,6 +14,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import claude_chain_runner as runner  # noqa: E402
+import claude_chain_usage as chain_usage  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -51,6 +52,10 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 
 _A_SIGNATURE = ALL_USAGE_LIMIT_SIGNATURES[0]
 _PROMPT_ARGUMENTS = ["-p", "hello"]
+_EQUAL_WEEKLY_REMAINING_PERCENT = 50.0
+_HIGH_WEEKLY_REMAINING_PERCENT = 90.0
+_MID_WEEKLY_REMAINING_PERCENT = 50.0
+_LOW_WEEKLY_REMAINING_PERCENT = 10.0
 
 
 def _completed(command, returncode, stdout="", stderr=""):
@@ -72,6 +77,43 @@ def _write_chain_config(tmp_path, chain_entries):
         json.dumps({CONFIG_CHAIN_KEY: chain_entries}), encoding=UTF8_ENCODING
     )
     return config_file
+
+
+def _config_order_usage_reporter(
+    *, config_path: Path
+) -> list[chain_usage.AccountUsageReport]:
+    all_entries = runner.load_chain(config_path)
+    return [
+        chain_usage.AccountUsageReport(
+            command=each_entry.command,
+            weekly_remaining_percent=_EQUAL_WEEKLY_REMAINING_PERCENT,
+        )
+        for each_entry in all_entries
+    ]
+
+
+def _usage_reporter_from_remaining(
+    remaining_percent_by_command: dict[str, float | None],
+):
+    call_count = {"count": 0}
+
+    def active_reporter(
+        *, config_path: Path
+    ) -> list[chain_usage.AccountUsageReport]:
+        call_count["count"] += 1
+        all_entries = runner.load_chain(config_path)
+        return [
+            chain_usage.AccountUsageReport(
+                command=each_entry.command,
+                weekly_remaining_percent=remaining_percent_by_command[
+                    each_entry.command
+                ],
+            )
+            for each_entry in all_entries
+        ]
+
+    active_reporter.call_count = call_count
+    return active_reporter
 
 
 class _Recorder:
@@ -100,12 +142,362 @@ def _install_tty_stdin(monkeypatch):
     monkeypatch.setattr(runner.sys, "stdin", _TtyStdin())
 
 
-def _install(monkeypatch, config_file, behavior_by_command):
+def _install(
+    monkeypatch,
+    config_file,
+    behavior_by_command,
+    *,
+    weekly_usage_reporter=None,
+):
     recorder = _Recorder(behavior_by_command)
     monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
     monkeypatch.setattr(runner, "chain_subprocess_runner", recorder)
+    active_reporter = (
+        weekly_usage_reporter
+        if weekly_usage_reporter is not None
+        else _config_order_usage_reporter
+    )
+    monkeypatch.setattr(runner, "chain_weekly_usage_reporter", active_reporter)
     _install_tty_stdin(monkeypatch)
     return recorder
+
+
+def test_highest_weekly_remaining_is_tried_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-claude"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude-ev"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-ev"
+    assert recorder.invocations[0][0] == "claude-ev"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev"
+    ]
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_SERVED
+
+
+def test_usage_limit_failsover_remaining_ranked_accounts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry("claude"), _entry("claude-ev"), _entry("claude-editor")]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _MID_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-editor": _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude": _completed("claude", 0, stdout="ok"),
+            "claude-editor": _completed("claude-editor", 0, stdout="should not run"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 0
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_USAGE_LIMITED
+    assert chain_result.attempts[1].status == ATTEMPT_STATUS_SERVED
+
+
+def test_non_usage_error_on_highest_ranked_stops_without_rest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 2, stderr="unknown flag"),
+            "claude": _completed("claude", 0, stdout="should not run"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude-ev"
+    assert chain_result.returncode == 2
+    assert len(chain_result.attempts) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
+
+
+def test_weekly_usage_probe_runs_once_per_run_claude(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
+            "claude-ev": _completed("claude-ev", 0, stdout="ok"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert usage_reporter.call_count["count"] == 1
+
+
+def test_usage_reporter_import_failure_falls_back_to_config_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+
+    def broken_usage_reporter(
+        *, config_path: Path
+    ) -> list[chain_usage.AccountUsageReport]:
+        raise ImportError("claude_chain_usage unavailable")
+
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-claude"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        },
+        weekly_usage_reporter=broken_usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-claude"
+    assert recorder.invocations[0][0] == "claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude"
+    ]
+
+
+def test_missing_high_remaining_binary_falls_through_to_lower_remaining(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": FileNotFoundError(),
+            "claude": _completed("claude", 0, stdout="from-claude"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_SERVED,
+    ]
+
+
+def test_all_missing_binaries_exhausts_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": FileNotFoundError(),
+            "claude": FileNotFoundError(),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command is None
+    assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+    ]
+
+
+def test_missing_later_ranked_binary_is_skipped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry("claude"), _entry("claude-ev"), _entry("claude-editor")]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _MID_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-editor": _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude": FileNotFoundError(),
+            "claude-editor": _completed("claude-editor", 0, stdout="done"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude-editor"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+        "claude-editor",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_USAGE_LIMITED,
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_SERVED,
+    ]
+
+
+def test_ranked_walk_preserves_extra_args_for_mapped_entry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path,
+        [
+            _entry("claude", extra_args=["--account", "primary"]),
+            _entry("claude-ev", extra_args=["--account", "ev"]),
+        ],
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {"claude-ev": _completed("claude-ev", 0)},
+        weekly_usage_reporter=usage_reporter,
+    )
+    runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert recorder.invocations[0] == [
+        "claude-ev",
+        "-p",
+        "hello",
+        "--account",
+        "ev",
+    ]
+
+
+def test_duplicate_command_entries_are_both_walked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path,
+        [
+            _entry("claude", extra_args=["--account", "primary"]),
+            _entry("claude", extra_args=["--account", "secondary"]),
+        ],
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {"claude": _HIGH_WEEKLY_REMAINING_PERCENT}
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {"claude": _completed("claude", 1, stderr=_A_SIGNATURE)},
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert [each_invocation[-1] for each_invocation in recorder.invocations] == [
+        "primary",
+        "secondary",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_USAGE_LIMITED,
+        ATTEMPT_STATUS_USAGE_LIMITED,
+    ]
+
+
+def test_entry_absent_from_usage_report_is_still_walked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+
+    def partial_usage_reporter(
+        *, config_path: Path
+    ) -> list[chain_usage.AccountUsageReport]:
+        return [
+            chain_usage.AccountUsageReport(
+                command="claude-ev",
+                weekly_remaining_percent=_HIGH_WEEKLY_REMAINING_PERCENT,
+            )
+        ]
+
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude": _completed("claude", 0, stdout="ok"),
+        },
+        weekly_usage_reporter=partial_usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
 
 
 def test_usage_limited_primary_falls_over_to_second(
@@ -170,7 +562,7 @@ def test_timeout_on_primary_does_not_fall_over(
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
 
 
-def test_missing_primary_binary_does_not_fall_over(
+def test_missing_primary_binary_falls_through_to_next(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
@@ -179,13 +571,21 @@ def test_missing_primary_binary_does_not_fall_over(
         config_file,
         {
             "claude": FileNotFoundError(),
-            "claude-ev": _completed("claude-ev", 0),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command is None
-    assert len(chain_result.attempts) == 1
-    assert chain_result.attempts[0].status == ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND
+    assert chain_result.served_command == "claude-ev"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-ev"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude",
+        "claude-ev",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_SERVED,
+    ]
 
 
 def test_missing_fallback_binary_is_skipped_and_walk_continues(
@@ -530,6 +930,9 @@ def test_real_subprocess_capture_replaces_undecodable_bytes(
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry(sys.executable)])
     monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner, "chain_weekly_usage_reporter", _config_order_usage_reporter
+    )
     child_code = 'import sys; sys.stdout.buffer.write(b"ok \\x90 end")'
     chain_result = runner.run_claude(["-c", child_code], timeout_seconds=60)
     assert chain_result.served_command == sys.executable
@@ -542,6 +945,9 @@ def test_real_subprocess_capture_preserves_utf8_text(
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry(sys.executable)])
     monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner, "chain_weekly_usage_reporter", _config_order_usage_reporter
+    )
     child_code = 'import sys; sys.stdout.buffer.write("report ✅ done".encode("utf-8"))'
     chain_result = runner.run_claude(["-c", child_code], timeout_seconds=60)
     assert chain_result.served_command == sys.executable

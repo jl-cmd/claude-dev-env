@@ -1,4 +1,4 @@
-"""Behavioral tests for the host-aware ``/code-review`` invoker."""
+"""Behavioral tests for the host-aware ``/code-review`` invoker and stamps."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
-    CODE_REVIEW_PROMPT,
+    DEFAULT_CODE_REVIEW_EFFORT,
     GIT_BINARY,
     GIT_PORCELAIN_FLAG,
     GIT_STATUS_SUBCOMMAND,
@@ -296,7 +296,7 @@ def test_chain_argv_assembly(
 
     assert call_log.claude_arguments == [
         SINGLE_TURN_FLAG,
-        CODE_REVIEW_PROMPT,
+        invoker.build_code_review_prompt(DEFAULT_CODE_REVIEW_EFFORT),
         MODEL_FLAG,
         CODE_REVIEW_MODEL_ALIAS,
         OUTPUT_FORMAT_FLAG,
@@ -412,7 +412,7 @@ def test_build_code_review_arguments_matches_contract() -> None:
     all_arguments = invoker.build_code_review_arguments()
     assert all_arguments == [
         SINGLE_TURN_FLAG,
-        CODE_REVIEW_PROMPT,
+        invoker.build_code_review_prompt(DEFAULT_CODE_REVIEW_EFFORT),
         MODEL_FLAG,
         CODE_REVIEW_MODEL_ALIAS,
         OUTPUT_FORMAT_FLAG,
@@ -670,3 +670,297 @@ def test_encode_code_review_outcome_shape() -> None:
         RESULT_KEY_RETURNCODE: FIXTURE_CHAIN_RETURNCODE,
         RESULT_KEY_DIRTY_TREE: True,
     }
+
+
+EFFORT_LOW = "low"
+REJECTED_ULTRA_EFFORT = "ultra"
+RECORD_STAMP_MINT_CAP = 3
+SINGLE_PASS_CAP = 1
+INVALID_EFFORT_EXIT_CODE = 2
+DID_NOT_CONVERGE_EXIT_CODE = 1
+RECORD_STAMP_CLI_FLAG = "--record-stamp"
+RESULT_STAMP_MINTED_KEY = "stamp_minted"
+RESULT_PASS_COUNT_KEY = "pass_count"
+RESULT_BOUND_HASH_KEY = "bound_hash"
+MISSING_STORE_FILE_NAME = "code_review_stamp_store_absent.py"
+SURFACE_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
+SURFACE_CHANGE_SOURCE = "def add(left: int, right: int) -> int:\n    return left - right\n"
+
+
+def _run_git(repository_directory: Path, *git_arguments: str) -> None:
+    subprocess.run(
+        [GIT_BINARY, "-C", str(repository_directory), *git_arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=GIT_INIT_TIMEOUT_SECONDS,
+    )
+
+
+def _make_repo_with_change_surface(tmp_path: Path) -> Path:
+    origin_directory = tmp_path / "origin.git"
+    work_directory = tmp_path / "work"
+    work_directory.mkdir()
+    subprocess.run(
+        [GIT_BINARY, "init", "--bare", "--initial-branch=main", str(origin_directory)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=GIT_INIT_TIMEOUT_SECONDS,
+    )
+    _run_git(work_directory, "init", "--initial-branch=main")
+    _run_git(work_directory, "config", "user.email", "tests@example.com")
+    _run_git(work_directory, "config", "user.name", "Reviewer")
+    (work_directory / "app.py").write_text(SURFACE_SOURCE, encoding="utf-8")
+    _run_git(work_directory, "add", "-A")
+    _run_git(work_directory, "commit", "-m", "base")
+    _run_git(work_directory, "remote", "add", "origin", str(origin_directory))
+    _run_git(work_directory, "push", "-u", "origin", "main")
+    (work_directory / "app.py").write_text(SURFACE_CHANGE_SOURCE, encoding="utf-8")
+    return work_directory
+
+
+def _isolate_home(monkeypatch: pytest.MonkeyPatch, fake_home: Path) -> None:
+    home_text = str(fake_home)
+    monkeypatch.setenv("HOME", home_text)
+    monkeypatch.setenv("USERPROFILE", home_text)
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+
+
+def _prepared_surface_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _isolate_home(monkeypatch, fake_home)
+    return _make_repo_with_change_surface(tmp_path)
+
+
+def _chain_clean_outcome() -> invoker.CodeReviewOutcome:
+    return invoker.CodeReviewOutcome(
+        mode=MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        returncode=FIXTURE_CHAIN_RETURNCODE,
+        is_dirty_tree=True,
+    )
+
+
+def _stable_clean_review(**_review_keywords: object) -> invoker.CodeReviewOutcome:
+    return _chain_clean_outcome()
+
+
+def _surface_changing_review(
+    *, working_directory: Path, **_review_keywords: object
+) -> invoker.CodeReviewOutcome:
+    applied_fix_path = working_directory / DIRTY_FILE_NAME
+    applied_fix_path.write_text(DIRTY_FILE_CONTENTS, encoding="utf-8")
+    return _chain_clean_outcome()
+
+
+class _DriftingReview:
+    def __init__(self) -> None:
+        self.pass_count = 0
+
+    def __call__(
+        self, *, working_directory: Path, **_review_keywords: object
+    ) -> invoker.CodeReviewOutcome:
+        self.pass_count += 1
+        drift_path = working_directory / f"fix_{self.pass_count}.txt"
+        drift_path.write_text(str(self.pass_count), encoding="utf-8")
+        return _chain_clean_outcome()
+
+
+@pytest.mark.parametrize("valid_effort", ["low", "medium", "high", "xhigh", "max"])
+def test_validate_effort_token_accepts_known_tokens(valid_effort: str) -> None:
+    assert invoker.validate_effort_token(valid_effort) is None
+
+
+def test_validate_effort_token_rejects_ultra_loudly() -> None:
+    error_message = invoker.validate_effort_token(REJECTED_ULTRA_EFFORT)
+    assert error_message is not None
+    assert REJECTED_ULTRA_EFFORT in error_message
+
+
+def test_validate_effort_token_rejects_unknown_token() -> None:
+    error_message = invoker.validate_effort_token("bogus")
+    assert error_message is not None
+    assert "bogus" in error_message
+
+
+def test_build_code_review_prompt_reads_as_slash_command() -> None:
+    assert invoker.build_code_review_prompt(EFFORT_LOW) == "/code-review low --fix"
+    assert invoker.build_code_review_prompt("xhigh") == "/code-review xhigh --fix"
+
+
+def test_cli_rejects_ultra_effort_with_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+    _install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        claude_outcome=None,
+        working_directory=working_directory,
+    )
+    exit_code = invoker.main(
+        [
+            CWD_FLAG,
+            str(working_directory),
+            CLI_SESSION_MODEL_FLAG,
+            FIXTURE_SESSION_OPUS,
+            REJECTED_ULTRA_EFFORT,
+        ]
+    )
+    assert exit_code == INVALID_EFFORT_EXIT_CODE
+    assert REJECTED_ULTRA_EFFORT in capsys.readouterr().err
+
+
+def test_record_stamp_mints_on_surface_stable_clean_pass(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _prepared_surface_repo(monkeypatch, tmp_path)
+    monkeypatch.setattr(invoker, "invoke_code_review", _stable_clean_review)
+    mint_outcome = invoker.invoke_code_review_and_record_stamp(
+        working_directory=working_directory,
+        session_model=CODE_REVIEW_MODEL_ALIAS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+        effort=EFFORT_LOW,
+    )
+    assert mint_outcome.is_stamp_minted is True
+    assert mint_outcome.bound_hash is not None
+    store_module = invoker.load_code_review_stamp_store()
+    assert store_module.stamp_covers_surface(
+        str(working_directory), mint_outcome.bound_hash, EFFORT_LOW
+    )
+
+
+def test_record_stamp_does_not_mint_when_review_changes_surface(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _prepared_surface_repo(monkeypatch, tmp_path)
+    monkeypatch.setattr(invoker, "invoke_code_review", _surface_changing_review)
+    mint_outcome = invoker.invoke_code_review_and_record_stamp(
+        working_directory=working_directory,
+        session_model=CODE_REVIEW_MODEL_ALIAS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+        effort=EFFORT_LOW,
+        maximum_passes=SINGLE_PASS_CAP,
+    )
+    assert mint_outcome.is_stamp_minted is False
+    assert mint_outcome.pass_count == SINGLE_PASS_CAP
+    assert mint_outcome.bound_hash is None
+
+
+def test_record_stamp_hits_cap_without_minting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _prepared_surface_repo(monkeypatch, tmp_path)
+    monkeypatch.setattr(invoker, "invoke_code_review", _DriftingReview())
+    mint_outcome = invoker.invoke_code_review_and_record_stamp(
+        working_directory=working_directory,
+        session_model=CODE_REVIEW_MODEL_ALIAS,
+        timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
+        effort=EFFORT_LOW,
+        maximum_passes=RECORD_STAMP_MINT_CAP,
+    )
+    assert mint_outcome.is_stamp_minted is False
+    assert mint_outcome.pass_count == RECORD_STAMP_MINT_CAP
+
+
+def test_cli_record_stamp_returns_non_convergence_code_on_cap(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    working_directory = _prepared_surface_repo(monkeypatch, tmp_path)
+    monkeypatch.setattr(invoker, "invoke_code_review", _DriftingReview())
+    exit_code = invoker.main(
+        [
+            CWD_FLAG,
+            str(working_directory),
+            CLI_SESSION_MODEL_FLAG,
+            CODE_REVIEW_MODEL_ALIAS,
+            RECORD_STAMP_CLI_FLAG,
+            EFFORT_LOW,
+        ]
+    )
+    assert exit_code == DID_NOT_CONVERGE_EXIT_CODE
+    parsed_payload = json.loads(capsys.readouterr().out)
+    assert parsed_payload[RESULT_STAMP_MINTED_KEY] is False
+    assert parsed_payload[RESULT_PASS_COUNT_KEY] == RECORD_STAMP_MINT_CAP
+    assert parsed_payload[RESULT_BOUND_HASH_KEY] is None
+
+
+def test_load_code_review_stamp_store_records_and_covers_surface(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = _prepared_surface_repo(monkeypatch, tmp_path)
+    store_module = invoker.load_code_review_stamp_store()
+    surface_hash = store_module.live_surface_hash(str(working_directory))
+    assert surface_hash is not None
+    stamp_path = store_module.record_clean_stamp(
+        str(working_directory), surface_hash, EFFORT_LOW
+    )
+    assert stamp_path.exists()
+    assert store_module.stamp_covers_surface(
+        str(working_directory), surface_hash, EFFORT_LOW
+    )
+
+
+def test_load_code_review_stamp_store_raises_when_file_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        invoker, "STAMP_STORE_MODULE_FILE_NAME", MISSING_STORE_FILE_NAME
+    )
+    with pytest.raises(ModuleNotFoundError):
+        invoker.load_code_review_stamp_store()
+
+
+def test_cli_record_stamp_reports_missing_store_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    working_directory = _init_git_repository(tmp_path / "repo")
+
+    def raise_missing_store(*all_args: object, **all_keywords: object) -> object:
+        del all_args, all_keywords
+        raise ModuleNotFoundError("store missing", name="code_review_stamp_store")
+
+    monkeypatch.setattr(invoker, "load_code_review_stamp_store", raise_missing_store)
+    exit_code = invoker.main(
+        [
+            CWD_FLAG,
+            str(working_directory),
+            CLI_SESSION_MODEL_FLAG,
+            CODE_REVIEW_MODEL_ALIAS,
+            RECORD_STAMP_CLI_FLAG,
+            EFFORT_LOW,
+        ]
+    )
+    assert exit_code == INVALID_EFFORT_EXIT_CODE
+    captured = capsys.readouterr()
+    assert "stamp store" in captured.err
+    parsed_payload = json.loads(captured.out)
+    assert parsed_payload[RESULT_STAMP_MINTED_KEY] is False
+
+
+def test_encode_stamp_mint_outcome_includes_mint_metadata() -> None:
+    review_outcome = invoker.CodeReviewOutcome(
+        mode=MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        returncode=FIXTURE_CHAIN_RETURNCODE,
+        is_dirty_tree=False,
+    )
+    mint_outcome = invoker.StampMintOutcome(
+        review_outcome=review_outcome,
+        is_stamp_minted=True,
+        pass_count=SINGLE_PASS_CAP,
+        bound_hash="abc123",
+    )
+    encoded_payload = invoker.encode_stamp_mint_outcome(mint_outcome)
+    assert encoded_payload[RESULT_STAMP_MINTED_KEY] is True
+    assert encoded_payload[RESULT_PASS_COUNT_KEY] == SINGLE_PASS_CAP
+    assert encoded_payload[RESULT_BOUND_HASH_KEY] == "abc123"

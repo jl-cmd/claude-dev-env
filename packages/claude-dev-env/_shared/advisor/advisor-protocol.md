@@ -30,7 +30,7 @@ A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` throu
    python "$HOME/.claude/scripts/claude_chain_runner.py" -- -p --model <alias> --effort <effort> --output-format json
    ```
 
-   Use `--model fable --effort high` on Fable; use `--model opus --effort max` on Opus. The chain runner walks `~/.claude/claude-chain.json` (binaries such as `claude`, `claude-ev`, `claude-editor`, `claude-mel`) and fails over only on a usage-limit signature.
+   Use `--model fable --effort high` on Fable; use `--model opus --effort max` on Opus. The chain runner probes weekly remaining via `claude_chain_usage` / the usage-pause OAuth probe, ranks accounts in `~/.claude/claude-chain.json` highest remaining first, and fails over only on a usage-limit signature.
 4. Stop at the first successful bind. Record `{tier, result: "cli"}` and set `selected_tier` to that tier. Persist `session_id` from the JSON events (any event carries it; reply text is the `type == "result"` event's `.result` field). Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
 5. **Fail closed:** when every candidate fails (chain exhausted or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
 6. Paste the **Third-party host** Advisor block into every executor spawn prompt — never the Claude SendMessage block. Executors report to the orchestrating session; that session consults the bound Claude CLI advisor and relays the four-signal reply.
@@ -122,7 +122,7 @@ The orchestrating session owns the Claude CLI advisor bind for the whole run —
 
 ## CLI chain
 
-The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" -- <claude args...>`. It walks `~/.claude/claude-chain.json` and fails over to the next binary only on a usage-limit signature, so a usage-limited primary account still gets served.
+The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" -- <claude args...>`. It ranks accounts in `~/.claude/claude-chain.json` by weekly remaining (via `claude_chain_usage` / the usage-pause OAuth probe) and fails over to the next ranked binary only on a usage-limit signature, so a usage-limited first try still gets served.
 
 **Third-party host:** this runner is the **primary** advisor bind and consult path (see **Host profiles → Third-party host**). Map each walk attempt to `--model <alias>` and the effort flags there. When the walk exhausts, fail closed.
 

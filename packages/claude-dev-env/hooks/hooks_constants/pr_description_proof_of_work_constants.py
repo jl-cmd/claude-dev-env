@@ -22,8 +22,6 @@ GH_SLURP_FLAG: str = "--slurp"
 PR_COMMENTS_API_PATH_TEMPLATE: str = "repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"
 ALL_PR_DIFF_SUBCOMMANDS: tuple[str, ...] = ("pr", "diff")
 PR_DIFF_NAME_ONLY_FLAG: str = "--name-only"
-ALL_PR_VIEW_NUMBER_ARGUMENTS: tuple[str, ...] = ("pr", "view", "--json", "number")
-PR_NUMBER_JSON_FIELD: str = "number"
 COMMENT_BODY_JSON_FIELD: str = "body"
 GH_COMMAND_TIMEOUT_SECONDS: int = 6
 MAX_DIFF_SCAN_CHARS: int = 200000
@@ -83,7 +81,6 @@ __all__ = [
     "ALL_HONEST_GAP_PHRASES",
     "ALL_PROOF_HEADING_KEYWORDS",
     "ALL_PR_DIFF_SUBCOMMANDS",
-    "ALL_PR_VIEW_NUMBER_ARGUMENTS",
     "ALL_VISUAL_FILE_SUFFIXES",
     "COMMENT_BODY_JSON_FIELD",
     "DIGIT_PATTERN",
@@ -104,7 +101,6 @@ __all__ = [
     "PROOF_PART_VISUAL_MESSAGE",
     "PR_COMMENTS_API_PATH_TEMPLATE",
     "PR_DIFF_NAME_ONLY_FLAG",
-    "PR_NUMBER_JSON_FIELD",
     "PR_READY_GATE_MESSAGE_TEMPLATE",
     "PR_READY_INVOCATION_PATTERN",
     "PR_READY_UNDO_FLAG",
