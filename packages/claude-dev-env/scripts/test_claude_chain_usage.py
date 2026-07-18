@@ -216,6 +216,25 @@ def test_entry_credentials_path_is_passed_to_probe(
     assert probed_paths == [Path(PLACEHOLDER_CREDENTIALS_TERTIARY)]
 
 
+def test_entry_credentials_path_expands_user_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tilde_credentials_path = "~/.claude-accounts/secondary/.credentials.json"
+    config_file = _write_chain_config(
+        tmp_path,
+        [_entry("claude-ev", credentials_path=tilde_credentials_path)],
+    )
+    probed_paths: list[Path] = []
+
+    def active_probe(credentials_path: Path) -> float:
+        probed_paths.append(credentials_path)
+        return 0.0
+
+    monkeypatch.setattr(usage, "weekly_utilization_probe", active_probe)
+    usage.report_chain_weekly_usage(config_path=config_file)
+    assert probed_paths == [Path(tilde_credentials_path).expanduser()]
+
+
 def test_load_chain_carries_optional_credentials_path(tmp_path: Path) -> None:
     config_file = _write_chain_config(
         tmp_path,
@@ -342,9 +361,12 @@ def test_probe_weekly_utilization_reuses_resolver_windows(
         weekly_utilization = 37.5
 
     class _FakeResolver:
-        def resolve_access_token(self, credentials_path: Path, now: object) -> str:
+        def read_oauth_access_token(self, credentials_path: Path, now: object) -> str:
             assert credentials_path == Path(PLACEHOLDER_CREDENTIALS_PRIMARY)
             return "token-value"
+
+        def resolve_access_token(self, credentials_path: Path, now: object) -> str:
+            raise AssertionError("probe must not fall back to session ingress")
 
         def _fetch_usage_payload(self, access_token: str) -> dict[str, object]:
             assert access_token == "token-value"
@@ -369,8 +391,16 @@ def test_probe_weekly_utilization_raises_when_token_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _FakeResolver:
-        def resolve_access_token(self, credentials_path: Path, now: object) -> None:
+        def read_oauth_access_token(
+            self, credentials_path: Path, now: object
+        ) -> None:
             return None
+
+        def resolve_access_token(self, credentials_path: Path, now: object) -> str:
+            return "ingress-token-must-not-be-used"
+
+        def _fetch_usage_payload(self, access_token: str) -> dict[str, object]:
+            raise AssertionError("must not probe with an ingress fallback token")
 
     monkeypatch.setattr(
         usage, "_load_resolve_usage_window_module", lambda: _FakeResolver()
@@ -379,10 +409,87 @@ def test_probe_weekly_utilization_raises_when_token_missing(
         usage._probe_weekly_utilization(Path(PLACEHOLDER_CREDENTIALS_PRIMARY))
 
 
+def test_probe_ignores_ingress_when_credential_token_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path,
+        [_entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY)],
+    )
+
+    class _FakeResolver:
+        def read_oauth_access_token(
+            self, credentials_path: Path, now: object
+        ) -> None:
+            return None
+
+        def resolve_access_token(self, credentials_path: Path, now: object) -> str:
+            return "ingress-token-must-not-be-used"
+
+        def _fetch_usage_payload(self, access_token: str) -> dict[str, object]:
+            raise AssertionError("must not probe with an ingress fallback token")
+
+    monkeypatch.setattr(
+        usage, "_load_resolve_usage_window_module", lambda: _FakeResolver()
+    )
+    monkeypatch.setattr(usage, "weekly_utilization_probe", usage._probe_weekly_utilization)
+    all_reports = usage.report_chain_weekly_usage(config_path=config_file)
+    assert all_reports[0].weekly_remaining_percent is None
+    assert all_reports[0].error is not None
+    assert "bearer token" in all_reports[0].error.lower()
+
+
+def test_load_failure_yields_per_account_error_and_cli_exits_zero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path,
+        [
+            _entry("claude", credentials_path=PLACEHOLDER_CREDENTIALS_PRIMARY),
+            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+        ],
+    )
+
+    def active_probe(credentials_path: Path) -> float:
+        path_key = credentials_path.as_posix()
+        if path_key == PLACEHOLDER_CREDENTIALS_PRIMARY:
+            raise ImportError("usage probe module failed to import")
+        return 25.0
+
+    monkeypatch.setattr(usage, "weekly_utilization_probe", active_probe)
+    exit_code = usage.main([CLI_CONFIG_PATH_FLAG, str(config_file)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload[JSON_ACCOUNTS_KEY][0][JSON_WEEKLY_REMAINING_PERCENT_KEY] is None
+    assert "failed to import" in payload[JSON_ACCOUNTS_KEY][0][JSON_ERROR_KEY]
+    assert payload[JSON_ACCOUNTS_KEY][1][JSON_WEEKLY_REMAINING_PERCENT_KEY] == pytest.approx(
+        FULL_WEEKLY_PERCENT - 25.0
+    )
+
+
+def test_failed_exec_module_does_not_poison_sys_modules(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    if RESOLVE_USAGE_WINDOW_MODULE_NAME in sys.modules:
+        del sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME]
+    (tmp_path / "resolve_usage_window.py").write_text(
+        "raise ImportError('intentional load failure')\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(usage, "_usage_pause_scripts_directory", lambda: tmp_path)
+    with pytest.raises(ImportError, match="intentional load failure"):
+        usage._load_resolve_usage_window_module()
+    assert RESOLVE_USAGE_WINDOW_MODULE_NAME not in sys.modules
+
+
 def test_load_resolve_usage_window_module_loads_real_probe_api() -> None:
     if RESOLVE_USAGE_WINDOW_MODULE_NAME in sys.modules:
         del sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME]
     loaded_module = usage._load_resolve_usage_window_module()
+    assert callable(loaded_module.read_oauth_access_token)
     assert callable(loaded_module.resolve_access_token)
     assert callable(loaded_module.extract_usage_windows)
+    assert callable(loaded_module._fetch_usage_payload)
     assert sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] is loaded_module

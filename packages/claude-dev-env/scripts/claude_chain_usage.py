@@ -75,7 +75,7 @@ def _default_credentials_path() -> Path:
 def _credentials_path_for_entry(entry: chain_runner.ChainEntry) -> Path:
     if entry.credentials_path is None:
         return _default_credentials_path()
-    return Path(entry.credentials_path)
+    return Path(entry.credentials_path).expanduser()
 
 
 def _usage_pause_scripts_directory() -> Path:
@@ -114,14 +114,20 @@ def _load_resolve_usage_window_module() -> ModuleType:
         )
     loaded_module = importlib.util.module_from_spec(module_specification)
     sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] = loaded_module
-    module_specification.loader.exec_module(loaded_module)
+    is_module_ready = False
+    try:
+        module_specification.loader.exec_module(loaded_module)
+        is_module_ready = True
+    finally:
+        if not is_module_ready:
+            sys.modules.pop(RESOLVE_USAGE_WINDOW_MODULE_NAME, None)
     return loaded_module
 
 
 def _probe_weekly_utilization(credentials_path: Path) -> float:
     usage_window_resolver = _load_resolve_usage_window_module()
     now = datetime.now().astimezone()
-    access_token = usage_window_resolver.resolve_access_token(credentials_path, now)
+    access_token = usage_window_resolver.read_oauth_access_token(credentials_path, now)
     if access_token is None:
         raise WeeklyUtilizationProbeError(
             NO_ACCESS_TOKEN_ERROR_TEMPLATE.format(credentials_path=credentials_path)
@@ -171,7 +177,7 @@ def _report_for_entry(
     try:
         credentials_path = _credentials_path_for_entry(entry)
         weekly_utilization = active_probe(credentials_path)
-    except WeeklyUtilizationProbeError as probe_error:
+    except (WeeklyUtilizationProbeError, ImportError, AttributeError) as probe_error:
         return AccountUsageReport(
             command=entry.command,
             weekly_remaining_percent=None,

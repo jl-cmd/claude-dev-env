@@ -42,7 +42,7 @@ CLI_CONFIG_PATH_FLAG: str = "--config-path"
 NO_ACCESS_TOKEN_ERROR_TEMPLATE: str = (
     "no usable bearer token from the OAuth credential file at {credentials_path}"
 )
-"""Error when neither the credential file nor ingress token yields a bearer."""
+"""Error when the entry credential file yields no usable OAuth bearer."""
 
 WEEKLY_UTILIZATION_MISSING_ERROR: str = (
     "usage response carried no weekly utilization"
