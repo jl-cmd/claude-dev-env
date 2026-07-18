@@ -829,9 +829,9 @@ def _is_under_system_temporary_directory(file_path: str) -> bool:
 def _mirrored_staging_path(file_path: str, temporary_root: Path) -> Optional[Path]:
     """Return the mirrored staging path under *temporary_root*, or None to stage flat.
 
-    Returns None when the target sits under the process temp directory (pytest
-    sandboxes), when the sanitized path has no segments, or when the mirrored
-    path would resolve outside *temporary_root*.
+    Returns None when the target sits under the process temp directory, when the
+    sanitized path has no segments, or when the mirrored path would resolve
+    outside *temporary_root*.
     """
     if _is_under_system_temporary_directory(file_path):
         return None

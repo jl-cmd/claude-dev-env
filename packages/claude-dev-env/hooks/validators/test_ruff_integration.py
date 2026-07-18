@@ -38,7 +38,8 @@ def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
     violating_file = tmp_path / "unused_import_module.py"
     violating_file.write_text("import os\n", encoding="utf-8")
 
-    result = run_ruff_check([violating_file])
+    with patch.dict("os.environ", {"FORCE_COLOR": "1"}):
+        result = run_ruff_check([violating_file])
 
     assert result.passed is False
     location_prefix = f"{violating_file}:1:8:"

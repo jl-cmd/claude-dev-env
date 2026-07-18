@@ -52,12 +52,9 @@ def _ruff_subprocess_environment() -> dict[str, str]:
     wrap those fields when FORCE_COLOR is set, so line numbers no longer parse
     and baseline scoping fail-closes every ruff finding as new.
     """
-    no_color_environment_variable_name = NO_COLOR_ENVIRONMENT_VARIABLE_NAME
-    force_color_environment_variable_name = FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME
-    no_color_enabled_value = NO_COLOR_ENABLED_VALUE
     ruff_environment = os.environ.copy()
-    ruff_environment[no_color_environment_variable_name] = no_color_enabled_value
-    ruff_environment.pop(force_color_environment_variable_name, None)
+    ruff_environment[NO_COLOR_ENVIRONMENT_VARIABLE_NAME] = NO_COLOR_ENABLED_VALUE
+    ruff_environment.pop(FORCE_COLOR_ENVIRONMENT_VARIABLE_NAME, None)
     return ruff_environment
 
 
