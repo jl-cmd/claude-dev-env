@@ -250,6 +250,16 @@ def write_agent_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
     )
 
 
+def write_task_payload(subagent_type: str, prompt: str, cwd: Path) -> str:
+    return json.dumps(
+        {
+            "tool_name": "Task",
+            "tool_input": {"subagent_type": subagent_type, "prompt": prompt},
+            "cwd": str(cwd),
+        }
+    )
+
+
 def run_hook(payload: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(HOOK_PATH)],
@@ -586,3 +596,68 @@ def test_hook_imports_real_config_when_parent_holds_shadowing_config(
 
     assert "ModuleNotFoundError" not in completed.stderr
     assert completed.returncode == 0
+
+
+def test_task_tool_code_verifier_spawn_is_gated_like_agent(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "fresh.py", VIOLATING_MODULE_SOURCE)
+    task_payload = write_task_payload("code-verifier", "verify the change", repository_root)
+    task_result = run_hook(task_payload, repository_root)
+    assert not is_allow(task_result)
+    task_reason = deny_reason(task_result)
+    assert "fresh.py" in task_reason
+    assert "CODE_RULES violations on changed lines:" in task_reason
+    clean_coder_payload = write_task_payload("clean-coder", "write code", repository_root)
+    clean_coder_result = run_hook(clean_coder_payload, repository_root)
+    assert is_allow(clean_coder_result)
+
+
+def test_engine_load_failure_denies_with_named_reason(tmp_path: Path) -> None:
+    real_hooks_directory = HOOK_PATH.parent.parent
+    real_package_directory = real_hooks_directory.parent
+
+    staged_package_directory = tmp_path / "claude-dev-env"
+    shutil.copytree(
+        real_hooks_directory,
+        staged_package_directory / "hooks",
+    )
+    shutil.copytree(
+        real_package_directory / "_shared",
+        staged_package_directory / "_shared",
+    )
+
+    enforcer_path = (
+        staged_package_directory / "hooks" / "blocking" / "code_rules_enforcer.py"
+    )
+    enforcer_path.unlink()
+
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "feature.py", CLEAN_MODULE_SOURCE)
+
+    staged_hook = (
+        staged_package_directory
+        / "hooks"
+        / "blocking"
+        / "code_verifier_spawn_preflight_gate.py"
+    )
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    completed = subprocess.run(
+        [sys.executable, str(staged_hook)],
+        check=False,
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=str(repository_root),
+        timeout=120,
+    )
+
+    assert not is_allow(completed)
+    reason = deny_reason(completed)
+    assert "CODE_RULES engine failed to load" in reason
+    assert "load_validate_content" in reason

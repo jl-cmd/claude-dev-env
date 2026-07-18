@@ -43,4 +43,4 @@ End your final message with exactly one fenced verdict block — the verifier_ve
 {"all_pass": false, "findings": [{"check": "<gate or task item>", "detail": "<command + output, or the named task item and what is missing>"}], "manifest_sha256": "<hash the CLI printed>"}
 ```
 
-Set `all_pass` to true with an empty `findings` list only when every layer came back clean. Always include `manifest_sha256` so the verdict clears the commit regardless of which work tree the verifier or the committer ran in. Any file change after you finish moves that hash and invalidates the verdict, so you are the last step before the commit.
+Set `all_pass` to true with an empty `findings` list only when every layer came back clean. Always include `manifest_sha256` so the verdict clears the commit regardless of which work tree the verifier or the committer ran in. Commit-committability gates (CODE_RULES / merge conflicts) must already be green before you are spawned; you are the last semantic check before commit. Any file change after you finish moves that hash and invalidates the verdict.
