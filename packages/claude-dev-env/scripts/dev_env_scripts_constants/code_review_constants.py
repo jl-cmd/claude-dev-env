@@ -119,18 +119,6 @@ HOST_PROFILE_ERROR_RETURNCODE: int = 1
 SUCCESSFUL_REVIEW_RETURNCODE: int = 0
 """Return code required before a clean stamp may advance past CODE_REVIEW."""
 
-SUBPROCESS_ENCODING_KEYWORD: str = "encoding"
-"""Keyword name for text encoding when forwarding chain subprocess runner kwargs."""
-
-SUBPROCESS_ERRORS_KEYWORD: str = "errors"
-"""Keyword name for text decode error policy when forwarding chain subprocess runner kwargs."""
-
-ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS: tuple[str, ...] = (
-    SUBPROCESS_ENCODING_KEYWORD,
-    SUBPROCESS_ERRORS_KEYWORD,
-)
-"""Keyword names to forward from the chain runner for text-mode subprocess capture."""
-
 RESULT_KEY_STAMP_MINTED: str = "stamp_minted"
 """JSON result key holding whether a clean stamp was written this run."""
 

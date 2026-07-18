@@ -50,7 +50,7 @@ from claude_chain_runner import (  # noqa: E402
     ChainInvocationOutcome,
     run_claude,
 )
-from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
+from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402

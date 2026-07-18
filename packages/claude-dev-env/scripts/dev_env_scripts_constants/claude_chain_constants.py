@@ -12,6 +12,18 @@ UTF8_ENCODING: str = "utf-8"
 CODEC_ERROR_STRATEGY: str = "replace"
 """Codec error handler that maps any unencodable or undecodable value to a marker."""
 
+SUBPROCESS_ENCODING_KEYWORD: str = "encoding"
+"""Keyword name for text encoding when forwarding chain subprocess runner kwargs."""
+
+SUBPROCESS_ERRORS_KEYWORD: str = "errors"
+"""Keyword name for text decode error policy when forwarding chain subprocess runner kwargs."""
+
+ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS: tuple[str, ...] = (
+    SUBPROCESS_ENCODING_KEYWORD,
+    SUBPROCESS_ERRORS_KEYWORD,
+)
+"""Keyword names to forward from the chain runner for text-mode subprocess capture."""
+
 CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 """Per-user directory under the home directory that holds the chain config."""
 

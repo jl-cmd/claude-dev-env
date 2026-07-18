@@ -56,11 +56,11 @@ from claude_chain_runner import (  # noqa: E402
     run_claude,
 )
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS,
     CHAIN_CONFIG_ERROR_EXIT_CODE,
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER,
-    ALL_SUBPROCESS_TEXT_CODEC_KEYWORDS,
     CLI_EFFORT_HELP,
     CLI_EFFORT_METAVAR,
     CLI_RECORD_STAMP_HELP,
