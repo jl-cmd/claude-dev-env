@@ -370,6 +370,38 @@ def test_ranked_walk_preserves_extra_args_for_mapped_entry(
     ]
 
 
+def test_entry_absent_from_usage_report_is_still_walked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+
+    def partial_usage_reporter(
+        *, config_path: Path
+    ) -> list[chain_usage.AccountUsageReport]:
+        return [
+            chain_usage.AccountUsageReport(
+                command="claude-ev",
+                weekly_remaining_percent=_HIGH_WEEKLY_REMAINING_PERCENT,
+            )
+        ]
+
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude": _completed("claude", 0, stdout="ok"),
+        },
+        weekly_usage_reporter=partial_usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+
+
 def test_usage_limited_primary_falls_over_to_second(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

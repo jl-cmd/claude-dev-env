@@ -281,11 +281,19 @@ def _entries_ranked_by_weekly_remaining(
     all_ranked_reports = usage_module.rank_accounts_by_weekly_remaining(
         list(all_usage_reports)
     )
-    return [
-        entry_by_command[each_report.command]
-        for each_report in all_ranked_reports
-        if each_report.command in entry_by_command
-    ]
+    ranked_entries: list[ChainEntry] = []
+    seen_commands: set[str] = set()
+    for each_report in all_ranked_reports:
+        matched_entry = entry_by_command.get(each_report.command)
+        if matched_entry is None or each_report.command in seen_commands:
+            continue
+        seen_commands.add(each_report.command)
+        ranked_entries.append(matched_entry)
+    for each_entry in all_entries:
+        if each_entry.command not in seen_commands:
+            seen_commands.add(each_entry.command)
+            ranked_entries.append(each_entry)
+    return ranked_entries
 
 
 def _is_usage_limit_failure(completion: subprocess.CompletedProcess[str]) -> bool:

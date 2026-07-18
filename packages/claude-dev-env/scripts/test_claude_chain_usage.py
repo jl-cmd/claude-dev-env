@@ -506,7 +506,7 @@ def test_usage_module_imports_without_preloading_runner() -> None:
         "assert callable(claude_chain_usage.rank_accounts_by_weekly_remaining)"
     )
     completed = subprocess.run(
-        [sys.executable, "-c", import_probe],
+        [sys.executable, "-S", "-E", "-c", import_probe],
         capture_output=True,
         text=True,
         timeout=60,
