@@ -89,6 +89,11 @@ def _usage_pause_scripts_directory() -> Path:
     )
 
 
+def _discard_sys_path_entry(path_text: str) -> None:
+    if path_text in sys.path:
+        sys.path.remove(path_text)
+
+
 def _load_resolve_usage_window_module() -> ModuleType:
     already_loaded = sys.modules.get(RESOLVE_USAGE_WINDOW_MODULE_NAME)
     if already_loaded is not None:
@@ -102,26 +107,30 @@ def _load_resolve_usage_window_module() -> ModuleType:
             )
         )
     scripts_directory_text = str(scripts_directory)
+    was_path_inserted = False
     if scripts_directory_text not in sys.path:
         sys.path.insert(0, scripts_directory_text)
-    module_specification = importlib.util.spec_from_file_location(
-        RESOLVE_USAGE_WINDOW_MODULE_NAME, module_path
-    )
-    if module_specification is None or module_specification.loader is None:
-        raise WeeklyUtilizationProbeError(
-            RESOLVE_USAGE_WINDOW_MISSING_ERROR_TEMPLATE.format(
-                module_path=module_path
-            )
-        )
-    loaded_module = importlib.util.module_from_spec(module_specification)
-    sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] = loaded_module
+        was_path_inserted = True
     is_module_ready = False
     try:
+        module_specification = importlib.util.spec_from_file_location(
+            RESOLVE_USAGE_WINDOW_MODULE_NAME, module_path
+        )
+        if module_specification is None or module_specification.loader is None:
+            raise WeeklyUtilizationProbeError(
+                RESOLVE_USAGE_WINDOW_MISSING_ERROR_TEMPLATE.format(
+                    module_path=module_path
+                )
+            )
+        loaded_module = importlib.util.module_from_spec(module_specification)
+        sys.modules[RESOLVE_USAGE_WINDOW_MODULE_NAME] = loaded_module
         module_specification.loader.exec_module(loaded_module)
         is_module_ready = True
     finally:
         if not is_module_ready:
             sys.modules.pop(RESOLVE_USAGE_WINDOW_MODULE_NAME, None)
+        if was_path_inserted:
+            _discard_sys_path_entry(scripts_directory_text)
     return loaded_module
 
 
