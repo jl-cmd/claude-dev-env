@@ -319,7 +319,15 @@ def _code_rules_report(
         validate_content = load_validate_content()
     except SystemExit:
         return ENGINE_LOAD_FAILURE_SECTION
-    except (ImportError, SyntaxError, AttributeError):
+    except (
+        ImportError,
+        SyntaxError,
+        AttributeError,
+        RuntimeError,
+        TypeError,
+        NameError,
+        OSError,
+    ):
         return ENGINE_LOAD_FAILURE_SECTION
     try:
         blocking_present, captured_report = _run_gate_capturing_stderr(
