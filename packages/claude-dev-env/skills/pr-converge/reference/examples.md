@@ -18,7 +18,7 @@ resets push-invalidated markers per [ground-rules.md](ground-rules.md) /
 at 270s, re-runs the sweep next tick]
 </example>
 
-<example> CODE_REVIEW tick, static sweep clean, `/code-review high --fix`
+<example> CODE_REVIEW tick, static sweep clean, `/code-review xhigh --fix`
 applies fixes to the working tree. Claude: [commits the applied fixes in one
 commit, pushes, resets push-invalidated markers per
 [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md) (all
@@ -26,7 +26,7 @@ commit, pushes, resets push-invalidated markers per
 stays `phase = CODE_REVIEW`, Step 4 at 270s, returns]
 </example>
 
-<example> CODE_REVIEW tick, static sweep clean and `/code-review high --fix`
+<example> CODE_REVIEW tick, static sweep clean and `/code-review xhigh --fix`
 clean (no changes applied). Claude: [sets `code_review_clean_at = HEAD`,
 `phase = BUGTEAM`, runs `Skill({skill: "bugteam", ...})` in same tick]
 </example>
@@ -94,7 +94,7 @@ applies **Convergence** from `workflows/schedule-wakeup-loop.md`]
 
 <example> CODE_REVIEW tick, review body says "found 3 potential issues"
 against HEAD (a stale prior finding) but the diff is clean. Claude: [the static
-sweep and `/code-review high --fix` both pass, sets `code_review_clean_at =
+sweep and `/code-review xhigh --fix` both pass, sets `code_review_clean_at =
 HEAD`, `phase = BUGTEAM`]
 </example>
 
