@@ -15,6 +15,15 @@ UTF8_ENCODING: str = "utf-8"
 CODEC_ERROR_STRATEGY: str = "replace"
 """Codec error handler that maps any unencodable or undecodable value to a marker."""
 
+CRLF_NEWLINE: str = "\r\n"
+"""Windows-style newline sequence normalized away when decoding spool captures."""
+
+CARRIAGE_RETURN: str = "\r"
+"""Bare carriage return normalized to LF when decoding spool captures."""
+
+LINE_FEED: str = "\n"
+"""Unix-style newline retained after universal-newline normalization."""
+
 SUBPROCESS_ENCODING_KEYWORD: str = "encoding"
 """Keyword name for text encoding when forwarding chain subprocess runner kwargs."""
 

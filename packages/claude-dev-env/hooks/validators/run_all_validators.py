@@ -840,20 +840,24 @@ def _temporary_path_preserving_directory_signal(
 
 
 def validate_proposed_file(
-    file_path: str, proposed_content: str
+    file_path: str,
+    proposed_content: str,
+    config_source_path: Optional[Path] = None,
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Writes the content to a temporary file that preserves the target's
-    directory segments and basename so directory-based exemptions, suffix-based
+    Writes the content to a temporary file that preserves the exemption-relevant
+    directory tail and basename so directory-based exemptions, suffix-based
     filtering, and test-name-based filtering match the real path, then runs the
     file-scoped validators against it. Ruff and mypy resolve their config by
-    walking up from *file_path*, so the staged copy is graded under the project
-    config the real path sits in rather than the temp directory's.
+    walking up from the config source path, so the staged copy is graded under
+    the project config the real path sits in rather than the temp directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
         proposed_content: The reconstructed post-edit content of that file.
+        config_source_path: Path ruff and mypy resolve their config from;
+            defaults to *file_path* when the caller passes nothing.
 
     Returns:
         One ValidatorResult per file-scoped validator.
@@ -863,7 +867,14 @@ def validate_proposed_file(
             Path(temporary_directory), file_path
         )
         temporary_file.write_text(proposed_content, encoding="utf-8")
-        return run_file_scoped_validators([temporary_file], Path(file_path))
+        resolved_config_source_path = (
+            config_source_path
+            if config_source_path is not None
+            else Path(file_path)
+        )
+        return run_file_scoped_validators(
+            [temporary_file], config_source_path=resolved_config_source_path
+        )
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:
