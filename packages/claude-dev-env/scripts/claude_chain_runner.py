@@ -61,7 +61,9 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CONFIG_CHAIN_KEY,
     CONFIG_CHAIN_NOT_LIST_REASON,
     CONFIG_COMMAND_KEY,
+    CONFIG_CREDENTIALS_PATH_KEY,
     CONFIG_ENTRY_COMMAND_MISSING_REASON,
+    CONFIG_ENTRY_CREDENTIALS_PATH_INVALID_REASON,
     CONFIG_ENTRY_EXTRA_ARGS_INVALID_REASON,
     CONFIG_ENTRY_NOT_OBJECT_REASON,
     CONFIG_EXTRA_ARGS_KEY,
@@ -84,10 +86,15 @@ class ChainConfigurationError(Exception):
 
 @dataclass(frozen=True)
 class ChainEntry:
-    """One binary in the fallback chain and its per-account extra arguments."""
+    """One binary in the fallback chain and its per-account extra arguments.
+
+    ``credentials_path`` is an optional path to that account's OAuth credentials
+    file. Selection walks ignore it; usage reporting reads it when present.
+    """
 
     command: str
     extra_args: tuple[str, ...]
+    credentials_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +148,18 @@ def _coerce_extra_args(raw_extra_args: object, config_path: Path) -> tuple[str, 
     return tuple(raw_extra_args)
 
 
+def _coerce_credentials_path(
+    raw_credentials_path: object, config_path: Path
+) -> str | None:
+    if raw_credentials_path is None:
+        return None
+    if not isinstance(raw_credentials_path, str) or not raw_credentials_path:
+        raise _invalid_shape_error(
+            config_path, CONFIG_ENTRY_CREDENTIALS_PATH_INVALID_REASON
+        )
+    return raw_credentials_path
+
+
 def _parse_chain_entry(raw_entry: object, config_path: Path) -> ChainEntry:
     if not isinstance(raw_entry, dict):
         raise _invalid_shape_error(config_path, CONFIG_ENTRY_NOT_OBJECT_REASON)
@@ -150,7 +169,14 @@ def _parse_chain_entry(raw_entry: object, config_path: Path) -> ChainEntry:
     extra_args = _coerce_extra_args(
         raw_entry.get(CONFIG_EXTRA_ARGS_KEY, []), config_path
     )
-    return ChainEntry(command=command, extra_args=extra_args)
+    credentials_path = _coerce_credentials_path(
+        raw_entry.get(CONFIG_CREDENTIALS_PATH_KEY), config_path
+    )
+    return ChainEntry(
+        command=command,
+        extra_args=extra_args,
+        credentials_path=credentials_path,
+    )
 
 
 def _parse_chain_entries(parsed_config: object, config_path: Path) -> list[ChainEntry]:
@@ -299,13 +325,17 @@ def run_claude(
 ) -> ChainInvocationOutcome:
     """Run *all_claude_arguments* through the configured fallback chain.
 
-    The leading binary serves the call. Only a usage-limit failure (a non-zero
-    exit whose output carries a usage-limit signature) falls over to the next
-    binary. A missing fallback binary is skipped and the walk continues. A
-    timeout, a missing primary binary, or a non-zero exit without a usage-limit
-    signature stops the walk and returns that outcome unchanged. When
-    *stdin_text* is set, that same text is supplied as stdin on every chain
-    attempt.
+    ::
+
+        primary usage-limited, fallback ok
+            -> served_command=fallback, returncode=0
+        primary nonzero without usage-limit signature
+            -> served_command=primary (no fallover)
+        stdin_text set
+            -> same text on every attempt's stdin
+
+    Leading binary serves first. Only a usage-limit failure falls over. Missing
+    fallbacks are skipped; timeout, missing primary, and other nonzero exits stop.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
