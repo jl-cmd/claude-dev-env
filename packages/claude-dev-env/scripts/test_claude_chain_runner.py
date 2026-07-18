@@ -275,7 +275,36 @@ def test_weekly_usage_probe_runs_once_per_run_claude(
     assert usage_reporter.call_count["count"] == 1
 
 
-def test_missing_first_ranked_binary_stops_walk(
+def test_usage_reporter_import_failure_falls_back_to_config_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+
+    def broken_usage_reporter(
+        *, config_path: Path
+    ) -> list[chain_usage.AccountUsageReport]:
+        raise ImportError("claude_chain_usage unavailable")
+
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-claude"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        },
+        weekly_usage_reporter=broken_usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-claude"
+    assert recorder.invocations[0][0] == "claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude"
+    ]
+
+
+def test_missing_high_remaining_binary_falls_through_to_lower_remaining(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
@@ -290,15 +319,54 @@ def test_missing_first_ranked_binary_stops_walk(
         config_file,
         {
             "claude-ev": FileNotFoundError(),
-            "claude": _completed("claude", 0, stdout="should not run"),
+            "claude": _completed("claude", 0, stdout="from-claude"),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-claude"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_SERVED,
+    ]
+
+
+def test_all_missing_binaries_exhausts_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": FileNotFoundError(),
+            "claude": FileNotFoundError(),
         },
         weekly_usage_reporter=usage_reporter,
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert chain_result.served_command is None
-    assert len(chain_result.attempts) == 1
-    assert chain_result.attempts[0].command == "claude-ev"
-    assert chain_result.attempts[0].status == ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND
+    assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude-ev",
+        "claude",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+    ]
 
 
 def test_missing_later_ranked_binary_is_skipped(
@@ -464,7 +532,7 @@ def test_timeout_on_primary_does_not_fall_over(
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
 
 
-def test_missing_primary_binary_does_not_fall_over(
+def test_missing_primary_binary_falls_through_to_next(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
@@ -473,13 +541,21 @@ def test_missing_primary_binary_does_not_fall_over(
         config_file,
         {
             "claude": FileNotFoundError(),
-            "claude-ev": _completed("claude-ev", 0),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command is None
-    assert len(chain_result.attempts) == 1
-    assert chain_result.attempts[0].status == ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND
+    assert chain_result.served_command == "claude-ev"
+    assert chain_result.returncode == 0
+    assert chain_result.stdout == "from-ev"
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        "claude",
+        "claude-ev",
+    ]
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
+        ATTEMPT_STATUS_SERVED,
+    ]
 
 
 def test_missing_fallback_binary_is_skipped_and_walk_continues(

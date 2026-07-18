@@ -121,8 +121,8 @@ class ChainInvocationOutcome:
 
     ``served_command`` names the binary whose response is returned. It is
     ``None`` when no binary served the call: every entry was usage-limited or
-    missing, the invocation timed out, or the first-ranked binary was absent.
-    The ``attempts`` trail records every binary tried and how it resolved.
+    missing, or the invocation timed out. The ``attempts`` trail records every
+    binary tried and how it resolved.
     """
 
     served_command: str | None
@@ -375,6 +375,19 @@ def _classify_completion(
     return _served_outcome(entry.command, completion, all_attempts)
 
 
+def _ranked_entries_or_config_order(
+    all_entries: list[ChainEntry],
+    config_path: Path,
+) -> list[ChainEntry]:
+    try:
+        all_usage_reports = chain_weekly_usage_reporter(config_path=config_path)
+        return _entries_ranked_by_weekly_remaining(
+            all_entries, all_usage_reports
+        )
+    except (ImportError, AttributeError):
+        return list(all_entries)
+
+
 def run_claude(
     all_claude_arguments: list[str],
     *,
@@ -393,8 +406,9 @@ def run_claude(
             -> same text on every attempt's stdin
 
     Probes weekly remaining once, ranks highest first, then walks that order.
-    Only a usage-limit failure falls over. Missing later-ranked binaries are
-    skipped; timeout, missing first-ranked binary, and other nonzero exits stop.
+    Only a usage-limit failure falls over. Missing binaries are skipped and the
+    walk continues; timeout and other nonzero exits stop. When usage ranking
+    infrastructure fails to load, the walk uses config order instead.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
@@ -412,14 +426,10 @@ def run_claude(
     """
     config_path = chain_config_path()
     all_entries = load_chain(config_path)
-    all_usage_reports = chain_weekly_usage_reporter(config_path=config_path)
-    all_ranked_entries = _entries_ranked_by_weekly_remaining(
-        all_entries, all_usage_reports
-    )
+    all_ranked_entries = _ranked_entries_or_config_order(all_entries, config_path)
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
-    for each_index, each_entry in enumerate(all_ranked_entries):
-        is_first_ranked = each_index == 0
+    for each_entry in all_ranked_entries:
         try:
             completion = chain_subprocess_runner(
                 _build_invocation(each_entry, all_claude_arguments),
@@ -440,8 +450,6 @@ def run_claude(
             all_attempts.append(
                 ChainAttempt(each_entry.command, ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND)
             )
-            if is_first_ranked:
-                return _no_process_outcome(all_attempts, None)
             continue
         terminal_outcome = _classify_completion(each_entry, completion, all_attempts)
         if terminal_outcome is not None:

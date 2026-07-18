@@ -104,7 +104,8 @@ CONFIG_ENTRY_CREDENTIALS_PATH_INVALID_REASON: str = (
 
 CONFIG_MISSING_MESSAGE_TEMPLATE: str = (
     "Claude chain config not found at {config_path}. Copy {example_filename} to "
-    "{config_path} and list your logged-in claude binaries in fallback order."
+    "{config_path} and list your account binaries. Try order comes from weekly "
+    "remaining; config order is the tiebreak."
 )
 """Guidance shown when the config file is absent."""
 
