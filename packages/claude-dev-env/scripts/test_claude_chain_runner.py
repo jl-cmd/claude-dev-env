@@ -56,6 +56,8 @@ _LARGE_CAPTURE_MARKER = "X"
 _STDIN_ECHO_PAYLOAD = "charter body for spool path"
 _UNDECODABLE_STDOUT_BYTES = b"ok \x90 end"
 _DECODED_UNDECODABLE_STDOUT = "ok \ufffd end"
+_CRLF_CHILD_STDOUT_BYTES = b"a\r\nb\rc\n"
+_CRLF_CHILD_STDOUT_NORMALIZED = "a\nb\nc\n"
 
 _A_SIGNATURE = ALL_USAGE_LIMIT_SIGNATURES[0]
 _PROMPT_ARGUMENTS = ["-p", "hello"]
@@ -1013,6 +1015,24 @@ def test_run_captured_subprocess_replaces_undecodable_stdout_bytes() -> None:
     )
     assert completion.returncode == 0
     assert completion.stdout == _DECODED_UNDECODABLE_STDOUT
+
+
+def test_run_captured_subprocess_normalizes_crlf_to_lf() -> None:
+    """Spool decode matches subprocess text=True universal-newline translation."""
+    child_code = (
+        "import sys;"
+        f"sys.stdout.buffer.write({_CRLF_CHILD_STDOUT_BYTES!r})"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _CRLF_CHILD_STDOUT_NORMALIZED
 
 
 def test_run_captured_subprocess_honors_cwd(tmp_path: Path) -> None:

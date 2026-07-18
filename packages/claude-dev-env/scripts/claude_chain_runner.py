@@ -66,8 +66,11 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
+    CARRIAGE_RETURN,
     CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
+    CRLF_NEWLINE,
+    LINE_FEED,
     CONFIG_CHAIN_KEY,
     CONFIG_CHAIN_NOT_LIST_REASON,
     CONFIG_COMMAND_KEY,
@@ -91,8 +94,16 @@ from dev_env_scripts_constants.claude_chain_constants import (
 
 
 def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:
-    """Decode captured *raw_bytes* using *encoding* and *errors*."""
-    return raw_bytes.decode(encoding, errors)
+    """Decode captured *raw_bytes* with ``text=True`` universal-newline semantics.
+
+    Spool capture writes binary temp files, so a bare ``.decode`` leaves CRLF and
+    bare CR intact. ``subprocess.run(..., text=True)`` normalized those to LF;
+    this helper restores that contract for Windows children that emit ``\\r\\n``.
+    """
+    decoded_text = raw_bytes.decode(encoding, errors)
+    return decoded_text.replace(CRLF_NEWLINE, LINE_FEED).replace(
+        CARRIAGE_RETURN, LINE_FEED
+    )
 
 
 def _optional_timeout(value: object) -> float | None:
