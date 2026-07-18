@@ -1015,6 +1015,37 @@ def test_run_captured_subprocess_replaces_undecodable_stdout_bytes() -> None:
     assert completion.stdout == _DECODED_UNDECODABLE_STDOUT
 
 
+def test_run_captured_subprocess_honors_cwd(tmp_path: Path) -> None:
+    child_code = "import os, sys; sys.stdout.write(os.getcwd())"
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        cwd=str(tmp_path),
+    )
+    assert completion.returncode == 0
+    assert Path(completion.stdout).resolve() == tmp_path.resolve()
+
+
+def test_run_captured_subprocess_reads_stdin_stream(tmp_path: Path) -> None:
+    prompt_path = tmp_path / "prompt_body.txt"
+    prompt_path.write_text(_STDIN_ECHO_PAYLOAD, encoding=UTF8_ENCODING)
+    child_code = "import sys; sys.stdout.write(sys.stdin.read())"
+    with prompt_path.open(encoding=UTF8_ENCODING) as prompt_stream:
+        completion = runner._run_captured_subprocess(
+            [sys.executable, "-c", child_code],
+            encoding=UTF8_ENCODING,
+            errors=CODEC_ERROR_STRATEGY,
+            timeout=60,
+            check=False,
+            stdin=prompt_stream,
+        )
+    assert completion.returncode == 0
+    assert completion.stdout == _STDIN_ECHO_PAYLOAD
+
+
 def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
     tmp_home = tmp_path / "home"
     claude_directory = tmp_home / CLAUDE_HOME_SUBDIRECTORY

@@ -96,7 +96,7 @@ def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str
 
 
 def _optional_timeout(value: object) -> float | None:
-    """Return *value* as a timeout in seconds, or None when it is not numeric."""
+    """Return *value* as a timeout in seconds, or None when the value is not numeric."""
     if isinstance(value, (int, float)):
         return float(value)
     return None
@@ -109,14 +109,21 @@ def _stdin_bytes(value: object, encoding: str, errors: str) -> bytes | None:
     return str(value).encode(encoding, errors)
 
 
+def _optional_working_directory(value: object) -> str | None:
+    """Return *value* as a working-directory path, or None when it is not one."""
+    if isinstance(value, str):
+        return value
+    return None
+
+
 # Capturing a large-output child through OS pipes (``capture_output=True``)
 # deadlocks on Windows: the child buffers its whole response and flushes it at
 # once, the pipe buffer fills before the parent drains it, and both sides block.
 # Redirecting each stream to a temporary file removes the pipe, so the child
 # writes freely; the files are then read back and decoded the way a pipe capture
 # would. ``capture_output`` and ``text`` are ignored in favor of file
-# redirection; ``timeout``, ``check``, ``input``, ``encoding``, and ``errors``
-# are honored.
+# redirection; ``timeout``, ``check``, ``cwd``, ``stdin``, ``input``,
+# ``encoding``, and ``errors`` are honored.
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
@@ -124,8 +131,7 @@ def _run_captured_subprocess(
     """Run *all_invocation_tokens*, spooling stdout and stderr to temp files."""
     encoding = str(all_subprocess_options.get("encoding") or UTF8_ENCODING)
     errors = str(all_subprocess_options.get("errors") or CODEC_ERROR_STRATEGY)
-    stdin_input = all_subprocess_options.get("input")
-    input_bytes = _stdin_bytes(stdin_input, encoding, errors)
+    input_bytes = _captured_stdin_bytes(all_subprocess_options, encoding, errors)
     with (
         tempfile.TemporaryFile() as stdout_file,
         tempfile.TemporaryFile() as stderr_file,
@@ -134,6 +140,7 @@ def _run_captured_subprocess(
             all_invocation_tokens,
             stdout=stdout_file,
             stderr=stderr_file,
+            cwd=_optional_working_directory(all_subprocess_options.get("cwd")),
             check=bool(all_subprocess_options.get("check", False)),
             timeout=_optional_timeout(all_subprocess_options.get("timeout")),
             input=input_bytes,
@@ -146,6 +153,32 @@ def _run_captured_subprocess(
             _decode_captured_stream(stdout_file.read(), encoding, errors),
             _decode_captured_stream(stderr_file.read(), encoding, errors),
         )
+
+
+def _captured_stdin_bytes(
+    all_subprocess_options: dict[str, object], encoding: str, errors: str
+) -> bytes | None:
+    """Return the bytes to feed the child's stdin for a spooled run.
+
+    ::
+
+        stdin=<open prompt file>  -> the file's bytes
+        stdin=subprocess.DEVNULL  -> b"" (an immediate EOF)
+        input="charter text"      -> the encoded text
+
+    A wrapper hands the runner a ``stdin`` stream or a ``DEVNULL`` sentinel; the
+    spooled run reads from an ``input`` pipe rather than the caller's handle, so
+    the stream is read into bytes here to deliver the same stdin a direct pipe
+    would. When no ``stdin`` is given, the ``input`` text is encoded instead.
+    """
+    stdin_source = all_subprocess_options.get("stdin")
+    if isinstance(stdin_source, io.TextIOBase):
+        return stdin_source.read().encode(encoding, errors)
+    if isinstance(stdin_source, (io.RawIOBase, io.BufferedIOBase)):
+        return stdin_source.read() or b""
+    if isinstance(stdin_source, int):
+        return b""
+    return _stdin_bytes(all_subprocess_options.get("input"), encoding, errors)
 
 
 class ChainConfigurationError(Exception):
