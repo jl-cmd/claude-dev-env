@@ -8,6 +8,7 @@ Named constants for every script in `_shared/pr-loop/scripts/`. Each module owns
 |---|---|
 | `claude_permissions_constants.py` | `grant_project_claude_permissions.py` and `revoke_project_claude_permissions.py` — permission rule strings and settings.json keys |
 | `claude_settings_keys_constants.py` | Top-level `~/.claude/settings.json` key names used across the permission helpers |
+| `stale_worktree_rule_sweep_constants.py` | `stale_worktree_rule_sweep.py` — the worktrees subdirectory name, the worktree path segment count, the rule-string delimiters, the `.claude` home path marker, and `get_claude_worktrees_root` |
 | `code_rules_gate_constants.py` | `code_rules_gate.py` — file extensions, git diff subcommands, test filename patterns |
 | `inline_duplicate_body_span_constants.py` | `code_rules_gate.py` — regex and capture-group indices for the same-file inline-duplicate message, which carries both the helper and the enclosing span the gate reconstructs the union from |
 | `fix_hookspath_constants.py` | `fix_hookspath.py` — verification suffix and related strings |

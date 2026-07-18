@@ -1,9 +1,10 @@
 """Constants for the usage-window resolver.
 
 Groups: the OAuth usage-endpoint probe, the CLI credential file keys, the
-session ingress token file environment variable, the usage-response field
-keys, the override parse patterns, the wakeup stage sizing, the weekly warn
-threshold, the result JSON keys, the source labels, and the exit codes.
+session ingress token file environment variable, the host entrypoint
+detection, the usage-response field keys, the override parse patterns, the
+wakeup stage sizing, the weekly warn threshold, the result JSON keys, the
+source labels, and the exit codes.
 """
 
 from __future__ import annotations
@@ -23,6 +24,9 @@ CREDENTIALS_ACCESS_TOKEN_KEY = "accessToken"
 CREDENTIALS_EXPIRES_AT_KEY = "expiresAt"
 SESSION_INGRESS_TOKEN_FILE_ENV_VAR = "CLAUDE_SESSION_INGRESS_TOKEN_FILE"
 MILLISECONDS_PER_SECOND = 1000
+
+ENTRYPOINT_ENV_VAR = "CLAUDE_CODE_ENTRYPOINT"
+DESKTOP_ENTRYPOINT_VALUE = "claude-desktop"
 
 FIVE_HOUR_BUCKET_KEY = "five_hour"
 SEVEN_DAY_BUCKET_KEY = "seven_day"

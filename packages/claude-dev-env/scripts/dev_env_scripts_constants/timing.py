@@ -13,5 +13,5 @@ DEFAULT_POLL_INTERVAL: int = 30
 WORKER_STAGGER_SECONDS: int = 15
 """Seconds between staggered headless grok worker process starts in a batch."""
 
-DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS: int = 600
+DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS: int = 2400
 """Default timeout applied to one headless `/code-review` chain invocation, in seconds."""
