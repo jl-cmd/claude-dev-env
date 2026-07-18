@@ -81,14 +81,15 @@ def _resolved_option_value(
     return value_after_option(all_following_tokens, option_index)
 
 
-def gated_invocation_directory(all_following_tokens: list[str]) -> tuple[bool, str | None]:
+def gated_invocation_directory(
+    all_following_tokens: list[str],
+    all_gated_subcommands: frozenset[str] = GATED_GIT_SUBCOMMANDS,
+) -> tuple[bool, str | None]:
     """Walk the quote-stripped tokens after a ``git`` word to its subcommand.
 
-    ``git stash push`` is not gated ("push" is an argument); ``git commit -m
-    x`` is gated ("commit" sits in subcommand position).
-
-    Returns:
-        Whether the subcommand is gated, and its ``-C``/``--work-tree`` directory.
+    Args:
+        all_following_tokens: Quote-stripped tokens after the ``git`` word.
+        all_gated_subcommands: Subcommand names that gate; defaults to commit+push.
     """
     repo_directory: str | None = None
     work_tree_directory: str | None = None
@@ -108,7 +109,7 @@ def gated_invocation_directory(all_following_tokens: list[str]) -> tuple[bool, s
         if each_token.startswith("-"):
             token_index += 1
             continue
-        return each_token.lower() in GATED_GIT_SUBCOMMANDS, repo_directory or work_tree_directory
+        return each_token.lower() in all_gated_subcommands, repo_directory or work_tree_directory
     return False, repo_directory or work_tree_directory
 
 
@@ -167,11 +168,16 @@ def _apply_directory_change(
 
 
 def _target_directory_for_match(
-    command_text: str, git_word_match: re.Match[str], active_directory: str
+    command_text: str,
+    git_word_match: re.Match[str],
+    active_directory: str,
+    all_gated_subcommands: frozenset[str],
 ) -> str | None:
     """Resolve the gated directory for one ``git`` word match, or None."""
     all_following_tokens = _following_tokens(command_text, git_word_match.end())
-    is_gated, flagged_directory = gated_invocation_directory(all_following_tokens)
+    is_gated, flagged_directory = gated_invocation_directory(
+        all_following_tokens, all_gated_subcommands
+    )
     if not is_gated:
         return None
     if flagged_directory is None:
@@ -179,18 +185,22 @@ def _target_directory_for_match(
     return resolve_against(active_directory, flagged_directory)
 
 
-def gated_repo_directories(command_text: str, fallback_directory: str) -> list[str]:
-    """Collect the directories of every git commit/push found in a command.
+def gated_repo_directories(
+    command_text: str,
+    fallback_directory: str,
+    all_gated_subcommands: frozenset[str] = GATED_GIT_SUBCOMMANDS,
+) -> list[str]:
+    """Collect the directories of every gated git call found in a command.
 
     Args:
         command_text: The raw command string from the tool payload.
-        fallback_directory: The session working directory, used as the
-            active directory until a directory-change verb changes it and
-            when the git call carries no ``-C`` flag.
+        fallback_directory: The session working directory, the active directory
+            until a directory-change verb or a ``-C`` flag overrides it.
+        all_gated_subcommands: Subcommand names that gate; defaults to commit+push.
 
     Returns:
-        One directory per detected commit/push invocation, in order; empty
-        when the command carries no gated git verb.
+        One directory per detected gated invocation, in order; empty when the
+        command carries no gated git verb.
     """
     command_text = collapse_line_continuations(command_text)
     active_directory = fallback_directory
@@ -199,7 +209,9 @@ def gated_repo_directories(command_text: str, fallback_directory: str) -> list[s
         if each_match.group().lower().strip("\"'") in DIRECTORY_CHANGE_VERBS:
             active_directory = _apply_directory_change(command_text, each_match, active_directory)
             continue
-        target_directory = _target_directory_for_match(command_text, each_match, active_directory)
+        target_directory = _target_directory_for_match(
+            command_text, each_match, active_directory, all_gated_subcommands
+        )
         if target_directory is not None:
             target_directories.append(target_directory)
     return target_directories

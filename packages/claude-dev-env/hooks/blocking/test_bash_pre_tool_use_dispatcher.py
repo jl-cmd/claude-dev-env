@@ -213,7 +213,7 @@ def test_additional_context_is_collected_from_deciding_hooks() -> None:
 
 
 def test_powershell_selects_the_three_shared_hooks() -> None:
-    """Selecting for PowerShell yields the three shared hooks in registration order."""
+    """Selecting for PowerShell yields the shared hooks in registration order."""
     powershell_paths = [
         each_entry.script_relative_path
         for each_entry in select_applicable_entries(POWERSHELL_TOOL_NAME)
@@ -222,6 +222,9 @@ def test_powershell_selects_the_three_shared_hooks() -> None:
         "blocking/pii_prevention_blocker.py",
         "blocking/verified_commit_gate.py",
         "blocking/verdict_directory_write_blocker.py",
+        "blocking/code_review_push_gate.py",
+        "blocking/code_review_pr_create_gate.py",
+        "blocking/code_review_stamp_directory_write_blocker.py",
     ]
 
 
