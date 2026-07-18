@@ -68,6 +68,11 @@ Deterministic slices of Category O that fire at Write/Edit. The free-form rest s
 | `check_docstring_unguarded_malformed_payload_claim` | Docstring promises a malformed payload resolves to None while a payload subscript sits outside the try/except whose handler returns None. |
 | `check_docstring_field_runmode_outcome` | `Attributes:` entry for a run-mode flag field (name carrying `dry_run`) whose description carries a per-record write-outcome phrase and no run-mode phrase. |
 | `check_module_docstring_scope_omits_data_schema_constants` | Module summary claims user-facing-text scope while the body also defines data-schema or runtime-config constants. |
+| `check_module_docstring_names_public_checks` | One-line check-registry module docstring omits a public `check_*` function the module dispatches. |
+| `check_docstring_tuple_enumeration_match` | Docstring enumerates inline-code tokens that drift from the literal string tuple the body reads (a listed token the tuple lacks, or a tuple member the prose omits). |
+| `check_docstring_punctuation_mark_enumeration_coverage` | Docstring names some marks of a punctuation-glyph tuple by their English names but omits one the tuple holds. |
+| `check_docstring_no_inline_literal_claim` | Constants-module docstring asserts no literals appear inline in a companion file. |
+| `check_docstring_names_undefined_constant` | Docstring names an `UPPER_SNAKE` constant identifier nothing in the module backs. |
 | `check_docstring_runon_sentence` | Narrative run-on mark (O9 backstop). |
 | `check_docstring_prose_wall_without_illustration` | Narrative longer than six prose lines with no `::` / doctest illustration (O9 backstop). |
 
