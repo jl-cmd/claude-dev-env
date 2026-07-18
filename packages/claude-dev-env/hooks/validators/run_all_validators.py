@@ -795,7 +795,7 @@ def _path_is_within_directory(candidate_path: Path, directory_path: Path) -> boo
 
 
 def _is_under_system_temporary_directory(file_path: str) -> bool:
-    """Return True when *file_path* resolves at or under the process temp directory.
+    """Return True when an absolute *file_path* sits at or under the process temp directory.
 
     ::
 
@@ -803,6 +803,11 @@ def _is_under_system_temporary_directory(file_path: str) -> bool:
         C:\\Users\\x\\AppData\\Local\\Temp\\a.py -> True
         automation/config/constants.py     -> False
         /repo/src/module.py                -> False
+
+    Only absolute targets are classified. A relative path is never reclassified
+    by an incidental process cwd under the OS temp directory (for example the
+    Windows UNC-safe temp fallback cwd), so path-keyed exemptions such as a
+    ``config`` ancestor still match after mirrored staging.
 
     Pytest sandboxes live under the OS temp directory and name each test folder
     with a ``test_`` prefix. Mirroring those segments into the staging tree would
@@ -813,8 +818,11 @@ def _is_under_system_temporary_directory(file_path: str) -> bool:
         file_path: The write or edit target path from the payload.
 
     Returns:
-        True when the resolved target sits at or under ``tempfile.gettempdir()``.
+        True when *file_path* is absolute and resolves at or under
+        ``tempfile.gettempdir()``.
     """
+    if not Path(file_path).is_absolute():
+        return False
     try:
         resolved_target = Path(file_path).resolve()
         temporary_root = Path(tempfile.gettempdir()).resolve()

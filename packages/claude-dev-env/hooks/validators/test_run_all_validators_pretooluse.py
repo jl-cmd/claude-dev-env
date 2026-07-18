@@ -8,6 +8,7 @@ when that content violates a validator, rather than grading the whole branch.
 import json
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +17,7 @@ import pytest
 
 from .run_all_validators import (
     ValidatorResult,
+    _hooks_subprocess_working_directory_and_environment,
     _scope_new_and_preexisting,
     _violation_line_number,
     main,
@@ -26,6 +28,7 @@ CONFIG_DIR_TARGET_PATH = (
     "CDP Automations/os_update_workflow/config/submission_constants.py"
 )
 PARENT_TRAVERSAL_TARGET_PATH = "../../escape_target.py"
+RELATIVE_CONFIG_TARGET_PATH = "config/x.py"
 
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
@@ -127,6 +130,42 @@ class TestPreToolUseGate:
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
 
+    def test_write_relative_config_path_not_denied_when_cwd_under_system_temp(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        system_temp_root = Path(tempfile.gettempdir()).resolve()
+        resolved_tmp_path = tmp_path.resolve()
+        assert system_temp_root == resolved_tmp_path or (
+            system_temp_root in resolved_tmp_path.parents
+        )
+        monkeypatch.setenv("TEMP", str(system_temp_root))
+        monkeypatch.setenv("TMP", str(system_temp_root))
+        monkeypatch.setenv("TMPDIR", str(system_temp_root))
+        temporary_cwd = tmp_path / "gate_cwd"
+        temporary_cwd.mkdir()
+
+        def working_directory_under_system_temp() -> tuple[str, dict[str, str]]:
+            _working_directory, environment = (
+                _hooks_subprocess_working_directory_and_environment()
+            )
+            return str(temporary_cwd), environment
+
+        with patch(
+            "validators.run_all_validators._hooks_subprocess_working_directory_and_environment",
+            side_effect=working_directory_under_system_temp,
+        ):
+            completed = run_gate(
+                {
+                    "tool_name": "Write",
+                    "tool_input": {
+                        "file_path": RELATIVE_CONFIG_TARGET_PATH,
+                        "content": VIOLATING_PYTHON_SOURCE,
+                    },
+                }
+            )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
     def test_write_to_parent_traversal_path_still_validates(self) -> None:
         completed = run_gate(
             {
@@ -184,6 +223,34 @@ class TestMirroredRelativeSegments:
         )
         assert staged_path == staging_root / "legacy_module.py"
         assert staged_path.read_text(encoding="utf-8") == MAGIC_VALUE_MARKER_FUNCTION
+
+    def test_relative_config_path_mirrors_when_cwd_under_system_temp(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        staging_module = sys.modules[main.__module__]
+        system_temp_root = Path(tempfile.gettempdir()).resolve()
+        resolved_tmp_path = tmp_path.resolve()
+        assert system_temp_root == resolved_tmp_path or (
+            system_temp_root in resolved_tmp_path.parents
+        )
+        monkeypatch.setenv("TEMP", str(system_temp_root))
+        monkeypatch.setenv("TMP", str(system_temp_root))
+        monkeypatch.setenv("TMPDIR", str(system_temp_root))
+        monkeypatch.chdir(tmp_path)
+        assert (
+            staging_module._is_under_system_temporary_directory(
+                RELATIVE_CONFIG_TARGET_PATH
+            )
+            is False
+        )
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        mirrored_path = staging_module._mirrored_staging_path(
+            RELATIVE_CONFIG_TARGET_PATH, staging_root
+        )
+        assert mirrored_path is not None
+        assert "config" in mirrored_path.parts
+        assert mirrored_path.name == "x.py"
 
 
 class TestCliModeRegression:
