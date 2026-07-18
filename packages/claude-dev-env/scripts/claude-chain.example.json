@@ -6,7 +6,15 @@
       "extra_args": [],
       "credentials_path": "/path/to/account-1/.credentials.json"
     },
-    { "command": "claude-2", "extra_args": [] },
-    { "command": "claude-3", "extra_args": [] }
+    {
+      "command": "claude-2",
+      "extra_args": [],
+      "credentials_path": "/path/to/account-2/.credentials.json"
+    },
+    {
+      "command": "claude-3",
+      "extra_args": [],
+      "credentials_path": "/path/to/account-3/.credentials.json"
+    }
   ]
 }
