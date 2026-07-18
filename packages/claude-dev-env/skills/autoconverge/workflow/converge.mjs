@@ -23,7 +23,15 @@ export const meta = {
   ],
 }
 
-const homeDirectory = (process.env.HOME || process.env.USERPROFILE || '').replace(/\\/g, '/')
+const homeDirectoryPayload = normalizeRunInput(args)
+const homeDirectoryFromEnv = typeof process !== 'undefined' && process.env ? process.env.HOME || process.env.USERPROFILE || '' : ''
+const homeDirectory = (
+  (homeDirectoryPayload && typeof homeDirectoryPayload.homeDirectory === 'string'
+    ? homeDirectoryPayload.homeDirectory
+    : '') ||
+  homeDirectoryFromEnv ||
+  ''
+).replace(/\\/g, '/')
 
 const CONFIG = {
   maxIterations: 20,
@@ -561,7 +569,7 @@ function runConvergenceCheck(context) {
   if (context.copilotDown) reviewerOptOutTokens.push('copilot')
   if (context.codexDown) reviewerOptOutTokens.push('codex')
   if (context.bugteamPostBlocked) reviewerOptOutTokens.push('bugteam')
-  const jobDirName = process.env.CLAUDE_JOB_DIR
+  const jobDirName = typeof process !== 'undefined' && process.env ? process.env.CLAUDE_JOB_DIR : undefined
   const needsCodexCleanExportFallback = Boolean(context.codexCleanAt) && !jobDirName
   if (needsCodexCleanExportFallback && !reviewerOptOutTokens.includes('codex')) {
     reviewerOptOutTokens.push('codex')

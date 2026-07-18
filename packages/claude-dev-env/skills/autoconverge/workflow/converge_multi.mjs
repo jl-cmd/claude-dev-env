@@ -109,11 +109,14 @@ function classifyMultiInput(rawArgs) {
  * fan-out honors it: bugbotDisabled skips the Bugbot phase, and copilotDisabled
  * short-circuits the Copilot quota gate when the account is out of premium
  * requests. An entry that omits an opt-out defaults it to false so the child
- * runs that phase.
+ * runs that phase. homeDirectory is a run-level value forwarded to every child
+ * so the child can build its codex-review scripts path: the workflow sandbox
+ * exposes no process global, so the child reads home from its args, not env.
  * @param {object} prEntry one validated element of the args.prs array
+ * @param {string} homeDirectory the run-level home directory for every child
  * @returns {object} the args object passed to the converge.mjs child run
  */
-function childRunInput(prEntry) {
+function childRunInput(prEntry, homeDirectory) {
   return {
     owner: prEntry.owner,
     repo: prEntry.repo,
@@ -121,6 +124,7 @@ function childRunInput(prEntry) {
     repoPath: prEntry.repoPath,
     bugbotDisabled: Boolean(prEntry.bugbotDisabled),
     copilotDisabled: Boolean(prEntry.copilotDisabled),
+    homeDirectory,
   }
 }
 
@@ -137,7 +141,7 @@ const childResults = await parallel(
   input.prs.map((eachPr) => async () => {
     const childOutcome = await workflow(
       { scriptPath: input.convergeScriptPath },
-      childRunInput(eachPr),
+      childRunInput(eachPr, input.homeDirectory),
     )
     return {
       owner: eachPr.owner,

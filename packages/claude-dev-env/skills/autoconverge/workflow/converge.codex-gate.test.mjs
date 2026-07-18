@@ -267,8 +267,8 @@ test('runConvergenceCheck tells the finalize agent to persist codex_clean_at for
 test('CONFIG expands home for the codex-review scripts directory', () => {
   assert.match(
     convergeSource,
-    /const homeDirectory = \(process\.env\.HOME \|\| process\.env\.USERPROFILE/,
-    'expected home to be resolved from process.env before CONFIG path use',
+    /const homeDirectory = \([\s\S]*?homeDirectoryPayload\.homeDirectory/,
+    'expected home to be sourced from the workflow args payload (the sandbox exposes no process)',
   );
   assert.match(
     convergeSource,
@@ -279,6 +279,25 @@ test('CONFIG expands home for the codex-review scripts directory', () => {
     convergeSource,
     /codexScripts:\s*'\$HOME\//,
     'expected no literal $HOME token in codexScripts (Python raw strings do not expand it)',
+  );
+});
+
+test('no process global is read unguarded (the workflow sandbox exposes no process)', () => {
+  const unguardedProcessLines = convergeSource
+    .split('\n')
+    .filter((sourceLine) => sourceLine.includes('process.') && !sourceLine.includes('typeof process'));
+  assert.deepEqual(
+    unguardedProcessLines,
+    [],
+    'every process.* read must sit on a line guarded by typeof process; the Bun workflow sandbox has no process global',
+  );
+});
+
+test('the home directory is sourced from the workflow args payload', () => {
+  assert.match(
+    convergeSource,
+    /const homeDirectoryPayload = normalizeRunInput\(args\)/,
+    'expected homeDirectory to read args (the only channel into the process-less sandbox), parsed via normalizeRunInput',
   );
 });
 
