@@ -50,3 +50,4 @@ ALL_GH_PR_VIEW_NUMBER_COMMAND: tuple[str, ...] = (
 )
 GH_REPO_FLAG: str = "--repo"
 REPO_SLUG_TEMPLATE: str = "{owner}/{repo}"
+GIT_URL_SUFFIX: str = ".git"

@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -12,8 +13,6 @@ import pytest
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIR))
-
-import re
 
 _GH_PR_READY_PATTERN = re.compile(r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)")
 
@@ -351,6 +350,18 @@ def test_parse_repo_flag_short_alias_full_url_form() -> None:
 def test_parse_repo_flag_ssh_form() -> None:
     assert hook_module._parse_repo_flag(
         "gh pr ready 161 --repo git@github.com:other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_ssh_form_strips_git_suffix() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo git@github.com:other-owner/other-repo.git"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_url_form_strips_git_suffix() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo https://github.com/other-owner/other-repo.git"
     ) == ("other-owner", "other-repo")
 
 

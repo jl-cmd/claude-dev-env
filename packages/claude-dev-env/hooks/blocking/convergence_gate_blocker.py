@@ -27,6 +27,7 @@ from hooks_constants.convergence_gate_blocker_constants import (  # noqa: E402
     COMMAND_SEPARATOR_PATTERN,
     GH_PR_READY_ANCHOR_PATTERN,
     GH_REPO_FLAG,
+    GIT_URL_SUFFIX,
     PR_URL_OWNER_REPO_NUMBER_PATTERN,
     REPO_OVERRIDE_FLAG_PATTERN,
     REPO_SLUG_TEMPLATE,
@@ -71,7 +72,7 @@ def _parse_repo_flag(command: str) -> tuple[str, str] | None:
     flag_match = re.search(REPO_OVERRIDE_FLAG_PATTERN, command)
     if flag_match is None:
         return None
-    return flag_match.group("owner"), flag_match.group("repo")
+    return flag_match.group("owner"), flag_match.group("repo").removesuffix(GIT_URL_SUFFIX)
 
 
 def _resolve_named_identity(
