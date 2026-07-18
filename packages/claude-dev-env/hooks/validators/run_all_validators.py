@@ -413,7 +413,9 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
     )
 
 
-def run_ruff_checks(files: List[Path]) -> ValidatorResult:
+def run_ruff_checks(
+    files: List[Path], config_source_path: Optional[Path] = None
+) -> ValidatorResult:
     """Run ruff for fast Python linting."""
     if not check_ruff_available():
         return ValidatorResult(
@@ -423,7 +425,7 @@ def run_ruff_checks(files: List[Path]) -> ValidatorResult:
             output="Ruff not installed - skipping",
         )
 
-    result = run_ruff_check(files)
+    result = run_ruff_check(files, config_source_path)
 
     return ValidatorResult(
         name="Ruff",
@@ -433,7 +435,9 @@ def run_ruff_checks(files: List[Path]) -> ValidatorResult:
     )
 
 
-def run_mypy_checks(files: List[Path]) -> ValidatorResult:
+def run_mypy_checks(
+    files: List[Path], config_source_path: Optional[Path] = None
+) -> ValidatorResult:
     """Run mypy for static type checking."""
     if not check_mypy_available():
         return ValidatorResult(
@@ -443,7 +447,7 @@ def run_mypy_checks(files: List[Path]) -> ValidatorResult:
             output="Mypy not installed - skipping",
         )
 
-    result = run_mypy_check(files)
+    result = run_mypy_check(files, config_source_path)
 
     return ValidatorResult(
         name="Mypy",
@@ -727,15 +731,16 @@ def reconstruct_proposed_content(
     return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
 
 
-def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
-    """Run every validator scoped to individual files against *all_files*.
+def run_file_scoped_validators(
+    all_files: List[Path], config_source_path: Optional[Path] = None
+) -> List[ValidatorResult]:
+    """Run every file-scoped validator against *all_files*.
 
-    Excludes the branch-scoped File Structure and Git validators, which grade
-    the whole project rather than a single proposed file.
+    Excludes the branch-scoped File Structure and Git validators.
 
     Args:
-        all_files: The files under validation — a single reconstructed file in
-            gate mode.
+        all_files: The files under validation — one reconstructed file in gate mode.
+        config_source_path: Original path ruff and mypy resolve their config from.
 
     Returns:
         One ValidatorResult per file-scoped validator, in run order.
@@ -744,8 +749,8 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
         run_python_style_checks(all_files),
         run_test_safety_checks(all_files),
         run_react_checks(all_files),
-        run_ruff_checks(all_files),
-        run_mypy_checks(all_files),
+        run_ruff_checks(all_files, config_source_path),
+        run_mypy_checks(all_files, config_source_path),
         run_abbreviation_checks(all_files),
         run_pr_reference_checks(all_files),
         run_magic_value_checks(all_files),
@@ -765,7 +770,9 @@ def validate_proposed_file(
 
     Writes the content to a temporary file that carries the target's basename so
     suffix-based and test-name-based validator filtering matches the real path,
-    then runs the file-scoped validators against it.
+    then runs the file-scoped validators against it. Ruff and mypy resolve their
+    config by walking up from *file_path*, so the staged copy is graded under the
+    project config the real path sits in rather than the temp directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
@@ -778,7 +785,7 @@ def validate_proposed_file(
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_file = Path(temporary_directory) / base_name
         temporary_file.write_text(proposed_content, encoding="utf-8")
-        return run_file_scoped_validators([temporary_file])
+        return run_file_scoped_validators([temporary_file], Path(file_path))
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:
