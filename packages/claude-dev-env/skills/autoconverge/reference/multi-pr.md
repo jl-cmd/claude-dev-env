@@ -72,6 +72,7 @@ Workflow({
   scriptPath: "<this skill dir>/workflow/converge_multi.mjs",
   args: {
     convergeScriptPath: "<this skill dir>/workflow/converge.mjs",
+    homeDirectory: "<HOME>",
     prs: [
       { owner: "<O>", repo: "<R>", prNumber: <N1>, repoPath: "<abs worktree 1>", bugbotDisabled: false, copilotDisabled: false },
       { owner: "<O>", repo: "<R>", prNumber: <N2>, repoPath: "<abs worktree 2>", bugbotDisabled: false, copilotDisabled: false }
@@ -82,7 +83,11 @@ Workflow({
 
 `convergeScriptPath` is the absolute path to `workflow/converge.mjs` in this same
 skill directory; each `repoPath` is the absolute path of the worktree that PR is
-checked out in. The workflow runs in the background and notifies the session on
+checked out in. `homeDirectory` is the absolute path to the directory that holds
+`.claude` (resolve it once from `$HOME`, or `$env:USERPROFILE` on Windows, with
+forward slashes); the fan-out forwards it to every child run, which needs it to
+build the codex-review scripts path because the workflow sandbox has no access to
+environment variables. The workflow runs in the background and notifies the session on
 completion; watch live progress with `/workflows`, where each PR's child run
 appears under its own group.
 
