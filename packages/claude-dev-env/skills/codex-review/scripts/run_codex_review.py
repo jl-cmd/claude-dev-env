@@ -18,7 +18,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,11 +33,16 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
 from codex_review_scripts_constants.run_constants import (
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
+    CAPTURE_STREAMS_KEYWORD,
+    CHECK_KEYWORD,
     CODEX_BINARY_NAME,
     CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
+    CWD_KEYWORD,
     DEFAULT_TIMEOUT_SECONDS,
+    ENCODING_KEYWORD,
+    ENVIRONMENT_KEYWORD,
     EXEC_SUBCOMMAND,
     HELP_FLAG,
     JSON_FLAG,
@@ -50,17 +57,156 @@ from codex_review_scripts_constants.run_constants import (
     MODEL_FLAG,
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
+    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     REVIEW_SUBCOMMAND,
     SHAPE_FLAG_TOKEN_TAIL_PATTERN,
     SUBPROCESS_DECODE_EXIT_CODE,
+    TEXT_MODE_KEYWORD,
     TIMEOUT_EXIT_CODE,
+    TIMEOUT_KEYWORD,
     UNCOMMITTED_TARGET_FLAG,
     UTF8_ENCODING,
     VERSION_FLAG,
     VERSION_PROBE_PATTERN,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_FORCE_FLAG,
+    WINDOWS_TASKKILL_PID_FLAG,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
-codex_subprocess_runner = subprocess.run
+
+def _kill_windows_process_tree(process_identifier: int) -> None:
+    """Kill a Windows process and every descendant it started, by PID."""
+    subprocess.run(
+        [
+            WINDOWS_TASKKILL_COMMAND,
+            WINDOWS_TASKKILL_TREE_FLAG,
+            WINDOWS_TASKKILL_FORCE_FLAG,
+            WINDOWS_TASKKILL_PID_FLAG,
+            str(process_identifier),
+        ],
+        capture_output=True,
+        check=False,
+        timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+    )
+
+
+def _kill_posix_process_group(process_identifier: int) -> None:
+    """Kill a POSIX process group so no grandchild keeps the capture pipe open."""
+    if sys.platform == "win32":
+        return
+    try:
+        process_group_identifier = os.getpgid(process_identifier)
+        os.killpg(process_group_identifier, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        return
+
+
+def _terminate_process_tree(review_process: subprocess.Popen[str]) -> None:
+    """Kill the review process and every descendant it spawned."""
+    if review_process.poll() is not None:
+        return
+    if sys.platform == "win32":
+        _kill_windows_process_tree(review_process.pid)
+        return
+    _kill_posix_process_group(review_process.pid)
+
+
+def _open_codex_popen(
+    all_arguments: list[str],
+    all_keyword_arguments: dict[str, object],
+) -> subprocess.Popen[str]:
+    """Start the codex process in its own session so its tree can be killed."""
+    should_capture = bool(all_keyword_arguments.get(CAPTURE_STREAMS_KEYWORD, False))
+    stream_target = subprocess.PIPE if should_capture else None
+    working_directory = all_keyword_arguments.get(CWD_KEYWORD)
+    stream_encoding = all_keyword_arguments.get(ENCODING_KEYWORD)
+    process_environment = all_keyword_arguments.get(ENVIRONMENT_KEYWORD)
+    return subprocess.Popen(
+        all_arguments,
+        cwd=working_directory if isinstance(working_directory, str) else None,
+        stdout=stream_target,
+        stderr=stream_target,
+        text=bool(all_keyword_arguments.get(TEXT_MODE_KEYWORD, False)),
+        encoding=stream_encoding if isinstance(stream_encoding, str) else None,
+        env=process_environment if isinstance(process_environment, dict) else None,
+        start_new_session=sys.platform != "win32",
+    )
+
+
+def _communicate_with_tree_kill_on_timeout(
+    review_process: subprocess.Popen[str],
+    timeout_seconds: float | None,
+) -> tuple[str, str]:
+    """Drain the process; on timeout kill its whole tree, then re-raise.
+
+    ::
+
+        codex -> codex.exe -> code-mode-host   grandchildren hold the stdout pipe
+        kill only the parent on timeout        drain waits for EOF, hangs
+        ok: kill the whole tree                pipe reaches EOF, timeout raised
+
+    Killing only the direct child on a timeout leaves grandchildren holding the
+    capture pipe open, so the drain read never reaches end-of-file and blocks
+    forever. Killing the entire tree lets the pipe reach end-of-file.
+    """
+    try:
+        return review_process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(review_process)
+        raise
+
+
+def _completed_from_streams(
+    all_arguments: list[str],
+    review_return_code: int,
+    captured_stdout: str,
+    captured_stderr: str,
+    should_check: bool,
+) -> subprocess.CompletedProcess[str]:
+    """Wrap captured streams in a CompletedProcess, honoring the check flag."""
+    completed_process = subprocess.CompletedProcess(
+        all_arguments, review_return_code, captured_stdout, captured_stderr
+    )
+    if should_check:
+        completed_process.check_returncode()
+    return completed_process
+
+
+def _optional_timeout_seconds(requested_timeout: object) -> float | None:
+    """Return a numeric timeout as float, or None when it is not a number."""
+    if isinstance(requested_timeout, (int, float)):
+        return float(requested_timeout)
+    return None
+
+
+def _run_codex_process(
+    all_arguments: list[str],
+    **all_keyword_arguments: object,
+) -> subprocess.CompletedProcess[str]:
+    """Run a codex process, killing its whole child tree on a timeout.
+
+    Mirrors the ``subprocess.run`` keyword arguments the review wrapper passes:
+    ``cwd``, ``capture_output``, ``text``, ``encoding``, ``check``, ``timeout``,
+    and ``env``.
+    """
+    timeout_seconds = _optional_timeout_seconds(all_keyword_arguments.get(TIMEOUT_KEYWORD))
+    should_check = bool(all_keyword_arguments.get(CHECK_KEYWORD, False))
+    with _open_codex_popen(all_arguments, all_keyword_arguments) as review_process:
+        captured_stdout, captured_stderr = _communicate_with_tree_kill_on_timeout(
+            review_process, timeout_seconds
+        )
+        review_return_code = review_process.returncode
+    return _completed_from_streams(
+        all_arguments,
+        review_return_code,
+        captured_stdout,
+        captured_stderr,
+        should_check,
+    )
+
+
+codex_subprocess_runner = _run_codex_process
 
 
 @dataclass(frozen=True)
