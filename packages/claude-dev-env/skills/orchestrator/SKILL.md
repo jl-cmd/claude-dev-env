@@ -30,32 +30,13 @@ The moment it edits a file or runs a test itself, the pairing breaks —
 its own tool use stays orchestration, run-artifact writes, and light
 verification reads.
 
-## Design rule — thin prompts, thick artifacts, thin skill
-
-Three faces of one rule (reading pinned by the audit spec on
-jl-cmd/claude-dev-env#174: thin means high-signal, not short; thick
-context lives outside the window, reachable by pointers):
-
-- **Thin prompts.** A spawn prompt is a dispatch ticket: one task,
-  pointers to the artifacts that hold the context, one done-check, a thin
-  return contract. The prompt can be thin because the context is thick
-  elsewhere.
-- **Thick artifacts.** Durable run state lives in files — the run
-  charter, one assignment file per task, result records — written once,
-  read by every agent that needs them, and still there when any one
-  agent's context is gone.
-- **Thin skill.** This file holds only what changes decisions at
-  orchestration time. Standing policy lives where it loads once:
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-  for everything advisor, the agent definitions for executor discipline.
-
 ## Process
 
 1. **Invocation guard.** One `/orchestrator` per session. When the
    refresh loop is already running, do not schedule a second one; reuse
    the live advisor bind and go to step 4.
 2. **Register the discipline reminder.** Schedule it with
-   `ScheduleWakeup` at `delaySeconds: 1800`, prompt
+   `ScheduleWakeup` at `delaySeconds: 2700`, prompt
    `/orchestrator-refresh`, where each refresh re-schedules the next one.
 3. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)

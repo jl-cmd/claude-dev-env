@@ -1,23 +1,25 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    One-shot quality gate for the hooks package — runs ruff, mypy, and the
+    One-shot quality gate — runs ruff, hooks mypy, pr-loop mypy, and the
     blocking pytest suite from a single entry point.
 
 .DESCRIPTION
     Resolves paths relative to $PSScriptRoot so the script works from any CWD
     and from both the worktree (packages/claude-dev-env/scripts/check.ps1)
     and the installed runtime (~/.claude/scripts/check.ps1, after install.mjs
-    propagates this file). Each tool runs sequentially; the first non-zero
-    exit code is preserved as the script's exit code so CI/pre-commit can
-    short-circuit on the first failure.
+    propagates this file). Tools: ruff over hooks/, mypy over hooks blocking
+    and validators, mypy-pr-loop over _shared/pr-loop/scripts production
+    modules, and optional pytest over the blocking enforcer suite. Each tool
+    runs sequentially; the first non-zero exit code is preserved as the
+    script's exit code so CI/pre-commit can short-circuit on the first failure.
 
 .PARAMETER SkipTests
     Skip the pytest run. Useful during local iteration when you want only the
     static-analysis gates.
 
 .PARAMETER SkipMypy
-    Skip the mypy run.
+    Skip both mypy runs (hooks mypy and mypy-pr-loop).
 
 .PARAMETER SkipRuff
     Skip the ruff run.
@@ -25,7 +27,7 @@
 .OUTPUTS
     Per-tool status lines on stdout. Final summary line:
         CHECK: OK
-        CHECK: FAILED tools=ruff,mypy,pytest
+        CHECK: FAILED tools=ruff,mypy,mypy-pr-loop,pytest
 #>
 [CmdletBinding()]
 param(
@@ -38,6 +40,7 @@ $ErrorActionPreference = 'Stop'
 
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
+$prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0
@@ -78,6 +81,29 @@ if (-not $SkipMypy) {
         Push-Location $hooksRoot
         try {
             mypy --config-file (Join-Path $hooksRoot 'pyproject.toml') blocking validators
+        } finally {
+            Pop-Location
+        }
+    }
+
+    Invoke-Tool -Label 'mypy-pr-loop' -Action {
+        Push-Location $prLoopScriptsRoot
+        try {
+            mypy --config-file (Join-Path $prLoopScriptsRoot 'pyproject.toml') `
+                _claude_permissions_common.py `
+                code_rules_gate.py `
+                copilot_quota.py `
+                fix_hookspath.py `
+                grant_project_claude_permissions.py `
+                post_audit_thread.py `
+                preflight_self_heal.py `
+                preflight.py `
+                reviewer_availability.py `
+                reviews_disabled.py `
+                revoke_project_claude_permissions.py `
+                terminology_sweep.py `
+                code_rules_gate_parts `
+                pr_loop_shared_constants
         } finally {
             Pop-Location
         }

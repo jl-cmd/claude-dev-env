@@ -87,6 +87,10 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
+        script_relative_path="blocking/code_review_stamp_directory_write_blocker.py",
+        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+    ),
+    HostedHookEntry(
         script_relative_path="blocking/pii_prevention_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),

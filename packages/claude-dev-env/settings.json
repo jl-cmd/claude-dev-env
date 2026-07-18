@@ -1,7 +1,10 @@
 {
   "permissions": {
     "deny": [
-      "Edit($HOME/.claude/verification/**)"
+      "Edit($HOME/.claude/verification/**)",
+      "Write($HOME/.claude/code-review-stamps/**)",
+      "Edit($HOME/.claude/code-review-stamps/**)",
+      "MultiEdit($HOME/.claude/code-review-stamps/**)"
     ]
   }
 }

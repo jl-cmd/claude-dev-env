@@ -1,7 +1,7 @@
 ---
 name: orchestrator-refresh
 description: >-
-  Fired by the /orchestrator loop reminder about every 20 minutes to
+  Fired by the /orchestrator loop reminder about every 45 minutes to
   re-assert the advisor discipline mid-run: orchestrate, route hard decisions
   to the shared advisor (ENDORSE / CORRECTION / PLAN / STOP — SendMessage on
   Claude, Claude CLI chain on a third-party host), reuse warm agents. Triggers:

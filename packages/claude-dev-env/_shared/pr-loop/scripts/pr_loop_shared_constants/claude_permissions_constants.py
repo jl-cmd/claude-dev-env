@@ -20,9 +20,9 @@ __all__ = (
 )
 
 
-ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Write", "Read")
+ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Read")
 
-ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Write", "Read", "Glob")
+ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Read")
 
 ALL_AGENT_CONFIG_PATH_PATTERNS: tuple[str, ...] = (
     "settings*.json",
@@ -70,7 +70,7 @@ _AGENT_CONFIG_PATTERN_PHRASE: str = _build_agent_config_pattern_phrase(
 
 AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE: str = (
     f"Trusted local workspace: Files under {{project_path}}/.claude/** inherit "
-    f"the workspace's trust for Edit, Write, Read, and Glob operations EXCEPT "
+    f"the workspace's trust for Edit and Read operations EXCEPT "
     f"for agent-config files: {_AGENT_CONFIG_PATTERN_PHRASE}. Edits to those "
     f"agent-config files always require explicit per-edit user approval."
 )
