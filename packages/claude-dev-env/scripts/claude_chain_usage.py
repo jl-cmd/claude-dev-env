@@ -128,13 +128,17 @@ def _load_resolve_usage_window_module() -> ModuleType:
 def _probe_weekly_utilization(credentials_path: Path) -> float:
     usage_window_resolver = _load_resolve_usage_window_module()
     now = datetime.now().astimezone()
-    access_token = usage_window_resolver.read_oauth_access_token(credentials_path, now)
-    if access_token is None:
-        raise WeeklyUtilizationProbeError(
-            NO_ACCESS_TOKEN_ERROR_TEMPLATE.format(credentials_path=credentials_path)
-        )
     try:
+        access_token = usage_window_resolver.read_oauth_access_token(
+            credentials_path, now
+        )
+        if access_token is None:
+            raise WeeklyUtilizationProbeError(
+                NO_ACCESS_TOKEN_ERROR_TEMPLATE.format(credentials_path=credentials_path)
+            )
         usage_payload = usage_window_resolver._fetch_usage_payload(access_token)
+    except WeeklyUtilizationProbeError:
+        raise
     except (
         urllib.error.URLError,
         http.client.HTTPException,
