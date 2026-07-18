@@ -4,7 +4,8 @@
 ::
 
     python build_sandbox_settings.py --out sandbox-settings.json
-    sandbox-settings.json -> {"hooks": {"PreToolUse": [
+    sandbox-settings.json -> {"env": {deny-mode override},
+        "hooks": {"PreToolUse": [
         {"matcher": "Bash",      "hooks": [pii_prevention, destructive_command]},
         {"matcher": "Edit",      "hooks": [pii_prevention]},
         {"matcher": "MultiEdit", "hooks": [pii_prevention]},
@@ -14,9 +15,11 @@ The builder resolves each safety hook's command entry from the live settings
 source, which carries the per-machine interpreter, absolute script path, and
 timeout. It then registers each entry on the matchers the sandbox requires.
 The personal-data gate covers every write surface and the command line. The
-destructive-command gate covers the command line. When either safety hook is
-absent from the source, the builder exits without writing, because a sandbox
-cannot be contained without both.
+destructive-command gate covers the command line, and the emitted ``env`` block
+runs that gate in deny mode so its block holds under
+``--dangerously-skip-permissions``. When either safety hook is absent from the
+source, the builder exits without writing, because a sandbox cannot be
+contained without both.
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ from prototype_scripts_constants.config.build_sandbox_settings_constants import 
     BUILD_SUCCESS_EXIT_CODE,
     COMMAND_KEY,
     DEFAULT_SETTINGS_SOURCE,
+    DESTRUCTIVE_DENY_MODE_ENV_VALUE,
+    DESTRUCTIVE_DENY_MODE_ENV_VAR,
+    ENV_KEY,
     HOOKS_KEY,
     JSON_INDENT_SPACES,
     MATCHER_KEY,
@@ -145,22 +151,40 @@ def _build_pre_tool_use_blocks(entry_by_basename: dict[str, dict]) -> list[dict]
     ]
 
 
+def _build_deny_mode_env_block() -> dict[str, str]:
+    """Build the env block that runs the destructive gate in deny mode.
+
+    The single key is the deny-mode env variable, mapped to its truthy value,
+    so the sandbox session runs the destructive gate with a hard block.
+
+    Returns:
+        The single-key env override the sandbox session applies.
+    """
+    return {DESTRUCTIVE_DENY_MODE_ENV_VAR: DESTRUCTIVE_DENY_MODE_ENV_VALUE}
+
+
 def build_minimal_settings(entry_by_basename: dict[str, dict]) -> dict:
     """Assemble the minimal settings document from the resolved safety entries.
 
     ::
 
-        resolved entries -> {"hooks": {"PreToolUse": [required-matcher blocks]}}
+        resolved entries -> {"env": {deny-mode override},
+                             "hooks": {"PreToolUse": [required-matcher blocks]}}
+
+    The ``env`` block runs the destructive gate in deny mode, so its block
+    holds under ``--dangerously-skip-permissions``, where an ask decision is
+    auto-resolved.
 
     Args:
         entry_by_basename: the resolved sub-hook entry per safety basename.
 
     Returns:
         The minimal settings document registering each safety entry on the
-        matchers the sandbox requires.
+        matchers the sandbox requires, with the deny-mode env override.
     """
     return {
-        HOOKS_KEY: {PRE_TOOL_USE_KEY: _build_pre_tool_use_blocks(entry_by_basename)}
+        ENV_KEY: _build_deny_mode_env_block(),
+        HOOKS_KEY: {PRE_TOOL_USE_KEY: _build_pre_tool_use_blocks(entry_by_basename)},
     }
 
 

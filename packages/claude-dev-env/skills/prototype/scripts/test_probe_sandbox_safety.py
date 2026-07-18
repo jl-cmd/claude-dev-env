@@ -84,10 +84,43 @@ def real_hook_settings_document() -> dict:
     }
 
 
+def real_hook_deny_mode_settings_document() -> dict:
+    settings_document = real_hook_settings_document()
+    settings_document["env"] = {"CLAUDE_DESTRUCTIVE_DENY_MODE": "1"}
+    return settings_document
+
+
 def write_settings_file(tmp_path: Path, settings_document: dict) -> Path:
     settings_path = tmp_path / "sandbox-settings.json"
     settings_path.write_text(json.dumps(settings_document), encoding="utf-8")
     return settings_path
+
+
+def test_settings_environment_overrides_reads_the_env_block() -> None:
+    probe = load_probe_module()
+    environment_overrides = probe.settings_environment_overrides(
+        real_hook_deny_mode_settings_document()
+    )
+    assert environment_overrides == {"CLAUDE_DESTRUCTIVE_DENY_MODE": "1"}
+
+
+def test_settings_environment_overrides_empty_without_an_env_block() -> None:
+    probe = load_probe_module()
+    environment_overrides = probe.settings_environment_overrides(
+        real_hook_settings_document()
+    )
+    assert environment_overrides == {}
+
+
+def test_main_exits_zero_when_the_real_destructive_hook_denies_in_deny_mode(
+    tmp_path: Path,
+) -> None:
+    probe = load_probe_module()
+    settings_path = write_settings_file(
+        tmp_path, real_hook_deny_mode_settings_document()
+    )
+    exit_code = probe.main(["--settings", str(settings_path)])
+    assert exit_code == PROBE_SUCCESS_EXIT_CODE
 
 
 def test_pii_basename_probe_payload_carries_the_secret() -> None:
@@ -126,7 +159,7 @@ def test_hook_blocks_probe_reports_true_for_a_deny_hook(tmp_path: Path) -> None:
     deny_hook_path.write_text(DENY_HOOK_SOURCE, encoding="utf-8")
     command_argv = [sys.executable, str(deny_hook_path)]
     probe_payload = probe.build_probe_payload_for_basename(DESTRUCTIVE_HOOK_BASENAME)
-    assert probe.hook_blocks_probe(command_argv, probe_payload) is True
+    assert probe.hook_blocks_probe(command_argv, probe_payload, {}) is True
 
 
 def test_hook_blocks_probe_reports_false_for_an_ask_hook(tmp_path: Path) -> None:
@@ -135,7 +168,7 @@ def test_hook_blocks_probe_reports_false_for_an_ask_hook(tmp_path: Path) -> None
     ask_hook_path.write_text(ASK_HOOK_SOURCE, encoding="utf-8")
     command_argv = [sys.executable, str(ask_hook_path)]
     probe_payload = probe.build_probe_payload_for_basename(DESTRUCTIVE_HOOK_BASENAME)
-    assert probe.hook_blocks_probe(command_argv, probe_payload) is False
+    assert probe.hook_blocks_probe(command_argv, probe_payload, {}) is False
 
 
 def test_hook_blocks_probe_reports_false_for_an_allow_hook(tmp_path: Path) -> None:
@@ -144,7 +177,7 @@ def test_hook_blocks_probe_reports_false_for_an_allow_hook(tmp_path: Path) -> No
     allow_hook_path.write_text(ALLOW_HOOK_SOURCE, encoding="utf-8")
     command_argv = [sys.executable, str(allow_hook_path)]
     probe_payload = probe.build_probe_payload_for_basename(DESTRUCTIVE_HOOK_BASENAME)
-    assert probe.hook_blocks_probe(command_argv, probe_payload) is False
+    assert probe.hook_blocks_probe(command_argv, probe_payload, {}) is False
 
 
 def test_probe_safety_hook_blocks_against_the_real_pii_hook() -> None:

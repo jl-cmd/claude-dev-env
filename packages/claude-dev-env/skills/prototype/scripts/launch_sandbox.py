@@ -27,6 +27,7 @@ from prototype_scripts_constants.config.launch_sandbox_constants import (
     CLAUDE_EXECUTABLE_NAME,
     DEFAULT_TIMEOUT_SECONDS,
     LAUNCH_MISSING_PATH_EXIT_CODE,
+    LAUNCH_TIMEOUT_EXIT_CODE,
     PROMPT_FLAG,
     SETTINGS_FLAG,
     SKIP_PERMISSIONS_FLAG,
@@ -97,12 +98,19 @@ def validate_sandbox_paths(
 def _run_via_subprocess(
     all_command_tokens: list[str], working_directory: Path, timeout_seconds: int | None
 ) -> int:
-    completed_process = subprocess.run(
-        all_command_tokens,
-        cwd=working_directory,
-        timeout=timeout_seconds,
-        check=False,
-    )
+    try:
+        completed_process = subprocess.run(
+            all_command_tokens,
+            cwd=working_directory,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error(
+            "sandbox session exceeded the %s-second wall-clock limit; terminated",
+            timeout_seconds,
+        )
+        return LAUNCH_TIMEOUT_EXIT_CODE
     return completed_process.returncode
 
 
@@ -123,7 +131,8 @@ def run_sandbox(
         command_runner: the callable that runs the command vector.
 
     Returns:
-        The exit code the command runner reports for the session.
+        The exit code the command runner reports for the session, which is
+        the timeout exit code when the session outran its wall-clock limit.
     """
     sandbox_command = build_sandbox_command(task_text, settings_path)
     return command_runner(sandbox_command, worktree_path, timeout_seconds)
@@ -161,7 +170,8 @@ def main(all_arguments: list[str] | None = None) -> int:
         all_arguments: the command-line arguments, or None to read sys.argv.
 
     Returns:
-        The sandbox exit code, or 2 when a required path is missing.
+        The sandbox exit code, 2 when a required path is missing, or the
+        timeout exit code when the session outran its wall-clock limit.
     """
     logging.basicConfig(format=LOGGING_FORMAT)
     arguments = _parse_arguments(all_arguments)

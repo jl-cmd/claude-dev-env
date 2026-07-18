@@ -1,4 +1,4 @@
-"""Segment-splitting and command-name constants for the destructive command blocker compound rm guard."""
+"""Segment-splitting, command-name, and deny-mode constants for the destructive command blocker."""
 
 ALL_SHELL_CONTROL_OPERATOR_TOKENS: frozenset[str] = frozenset({"&&", "||", ";", "|&", "|", "&", "\n", "\r"})
 ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS: frozenset[str] = frozenset(
@@ -191,3 +191,4 @@ ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
         "CLAUDE_JOB_DIR",
     }
 )
+DESTRUCTIVE_DENY_MODE_ENV_VAR: str = "CLAUDE_DESTRUCTIVE_DENY_MODE"

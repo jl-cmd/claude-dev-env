@@ -190,6 +190,52 @@ def test_main_runs_the_sandbox_and_returns_the_runner_exit_code(
     assert recording_runner.recorded_working_directory == worktree_path.resolve()
 
 
+def test_run_via_subprocess_returns_the_timeout_code_when_the_session_outruns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launcher = load_launcher_module()
+    worktree_path, _ = make_sandbox_worktree(tmp_path)
+
+    def raise_timeout(*_args: object, **_kwargs: object) -> object:
+        raise launcher.subprocess.TimeoutExpired(
+            cmd=[CLAUDE_EXECUTABLE_NAME], timeout=SANDBOX_TIMEOUT_SECONDS
+        )
+
+    monkeypatch.setattr(launcher.subprocess, "run", raise_timeout)
+    exit_code = launcher._run_via_subprocess(
+        [CLAUDE_EXECUTABLE_NAME], worktree_path, SANDBOX_TIMEOUT_SECONDS
+    )
+    assert exit_code == launcher.LAUNCH_TIMEOUT_EXIT_CODE
+
+
+def test_main_returns_the_timeout_code_and_emits_the_summary_on_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    launcher = load_launcher_module()
+    worktree_path, settings_path = make_sandbox_worktree(tmp_path)
+    task_file_path = make_task_file(tmp_path)
+
+    def raise_timeout(*_args: object, **_kwargs: object) -> object:
+        raise launcher.subprocess.TimeoutExpired(
+            cmd=[CLAUDE_EXECUTABLE_NAME], timeout=SANDBOX_TIMEOUT_SECONDS
+        )
+
+    monkeypatch.setattr(launcher.subprocess, "run", raise_timeout)
+    exit_code = launcher.main(
+        [
+            "--worktree",
+            str(worktree_path),
+            "--settings",
+            str(settings_path),
+            "--task-file",
+            str(task_file_path),
+        ]
+    )
+    assert exit_code == launcher.LAUNCH_TIMEOUT_EXIT_CODE
+    emitted_summary = launcher.json.loads(capsys.readouterr().out)
+    assert emitted_summary["exit_code"] == launcher.LAUNCH_TIMEOUT_EXIT_CODE
+
+
 def test_main_resolves_a_relative_settings_path_to_absolute(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

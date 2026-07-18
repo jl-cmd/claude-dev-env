@@ -21,6 +21,7 @@ Highest-signal content. Append a bullet each time a run fails in a new way.
 
 - A `--settings` file's hooks still load under `--bare` (the file is passed explicitly). That is the mechanism for keeping the two safety gates, not a bug.
 - The two safety hooks must point at the real installed scripts and import their `*_constants` packages at runtime. `scripts/build_sandbox_settings.py` resolves each hook's command from the live `~/.claude/settings.json` and registers it on the matchers the sandbox needs — personal-data on Write, Edit, MultiEdit, and Bash; destructive-command on Bash — so the paths stay correct on any machine and both gates cover the write surface. Do not hand-write the hook paths or matchers, and do not inherit whatever matcher the live config happens to use (a personal-data gate wired only to a narrow tool leaves disk writes ungated).
+- Under `--dangerously-skip-permissions` an `ask` decision is auto-resolved, so only a hard `deny` blocks a destructive command. The settings file carries an `env` block that sets `CLAUDE_DESTRUCTIVE_DENY_MODE`, which turns the destructive gate's terminal `ask` into a `deny`. The probe runs the gate under that env block and passes only on the hard deny.
 
 **Refusal cases — first match wins:**
 

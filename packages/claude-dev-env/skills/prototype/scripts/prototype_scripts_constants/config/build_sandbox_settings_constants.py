@@ -2,9 +2,9 @@
 
 Groups: the two safety hook script basenames the sandbox keeps, the matchers
 each safety hook must cover, the mapping from basename to those matchers, the
-settings JSON key names, the default live settings source, the pretty-print
-indent, the join separator for the missing-basename message, and the exit
-codes.
+settings JSON key names, the env-block key with the deny-mode env variable and
+value, the default live settings source, the pretty-print indent, the join
+separator for the missing-basename message, and the exit codes.
 """
 
 from __future__ import annotations
@@ -26,6 +26,10 @@ HOOKS_KEY = "hooks"
 PRE_TOOL_USE_KEY = "PreToolUse"
 MATCHER_KEY = "matcher"
 COMMAND_KEY = "command"
+ENV_KEY = "env"
+
+DESTRUCTIVE_DENY_MODE_ENV_VAR = "CLAUDE_DESTRUCTIVE_DENY_MODE"
+DESTRUCTIVE_DENY_MODE_ENV_VALUE = "1"
 
 DEFAULT_SETTINGS_SOURCE = "~/.claude/settings.json"
 JSON_INDENT_SPACES = 2

@@ -9,10 +9,11 @@
 
 The probe reads each safety hook command from the settings, feeds it a
 PreToolUse payload the hook's own tests prove it blocks, and confirms the
-hook returns a hard-deny decision. It runs the hook scripts directly, so
-it confirms each script is present, imports its constants package, and
-blocks its probe payload — it does not exercise Claude Code's matcher
-dispatch.
+hook returns a hard-deny decision. It runs each hook under the settings'
+``env`` block, so the destructive gate runs in deny mode and its block holds
+the way it does for the launched session. It runs the hook scripts directly,
+so it confirms each script is present, imports its constants package, and
+blocks its probe payload — it does not exercise Claude Code's matcher dispatch.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shlex
 import subprocess
 import sys
@@ -29,12 +31,12 @@ from build_sandbox_settings import read_settings_document
 from prototype_scripts_constants.config.build_sandbox_settings_constants import (
     ALL_SAFETY_HOOK_SCRIPT_BASENAMES,
     COMMAND_KEY,
+    ENV_KEY,
     HOOKS_KEY,
     MATCHER_KEY,
     PRE_TOOL_USE_KEY,
 )
 from prototype_scripts_constants.config.probe_sandbox_safety_constants import (
-    ALL_BLOCK_DECISIONS,
     ALL_DESTRUCTIVE_PROBE_COMMAND_TOKENS,
     COMMAND_TOKEN_JOIN_SEPARATOR,
     DESTRUCTIVE_PROBE_TOOL_NAME,
@@ -44,6 +46,7 @@ from prototype_scripts_constants.config.probe_sandbox_safety_constants import (
     ENVELOPE_SESSION_ID_KEY,
     ENVELOPE_TOOL_INPUT_KEY,
     ENVELOPE_TOOL_NAME_KEY,
+    HARD_DENY_DECISION,
     HOOK_SPECIFIC_REPLY_KEY,
     MATCHER_JOIN_SEPARATOR,
     PERMISSION_DECISION_KEY,
@@ -147,6 +150,24 @@ def find_hook_command_for_basename(
     return None
 
 
+def settings_environment_overrides(settings_document: dict) -> dict[str, str]:
+    """Read the env-block overrides the settings apply to each hook subprocess.
+
+    ::
+
+        {"env": {deny-mode override}}  ->  that mapping
+        settings with no env block     ->  {}
+
+    Args:
+        settings_document: the minimal sandbox settings document.
+
+    Returns:
+        The env-block mapping keyed by variable name, or an empty mapping when
+        the settings carry no env block.
+    """
+    return settings_document.get(ENV_KEY, {})
+
+
 def _find_matchers_for_basename(settings_document: dict, basename: str) -> list[str]:
     pre_tool_use_blocks = settings_document.get(HOOKS_KEY, {}).get(PRE_TOOL_USE_KEY, [])
     all_matchers = []
@@ -177,17 +198,12 @@ def parse_command_argv(command: str) -> list[str]:
     return [each_token.strip('"').strip("'") for each_token in all_tokens]
 
 
-def hook_blocks_probe(all_command_tokens: list[str], probe_payload: dict) -> bool:
-    """Run a hook against its probe payload and report whether it blocks.
-
-    Args:
-        all_command_tokens: the hook argument vector to run.
-        probe_payload: the PreToolUse payload fed to the hook on stdin.
-
-    Returns:
-        True when the hook emits a hard-deny decision, False when it asks,
-        allows, emits no decision, or errors.
-    """
+def _run_hook_and_parse_reply(
+    all_command_tokens: list[str],
+    probe_payload: dict,
+    override_by_name: dict[str, str],
+) -> dict | None:
+    child_environment = {**os.environ, **override_by_name}
     try:
         completed_process = subprocess.run(
             all_command_tokens,
@@ -196,17 +212,44 @@ def hook_blocks_probe(all_command_tokens: list[str], probe_payload: dict) -> boo
             capture_output=True,
             timeout=PROBE_HOOK_TIMEOUT_SECONDS,
             check=False,
+            env=child_environment,
         )
     except (OSError, subprocess.SubprocessError):
-        return False
+        return None
     if not completed_process.stdout.strip():
-        return False
+        return None
     try:
-        parsed_hook_reply = json.loads(completed_process.stdout)
+        return json.loads(completed_process.stdout)
     except json.JSONDecodeError:
+        return None
+
+
+def hook_blocks_probe(
+    all_command_tokens: list[str],
+    probe_payload: dict,
+    override_by_name: dict[str, str],
+) -> bool:
+    """Run a hook against its probe payload and report whether it blocks.
+
+    Args:
+        all_command_tokens: the hook argument vector to run.
+        probe_payload: the PreToolUse payload fed to the hook on stdin.
+        override_by_name: env values keyed by variable name that the settings
+            apply to the hook, overlaid on the current environment first.
+
+    Returns:
+        True when the hook emits a hard-deny decision, False when it asks,
+        allows, emits no decision, or errors.
+    """
+    parsed_hook_reply = _run_hook_and_parse_reply(
+        all_command_tokens, probe_payload, override_by_name
+    )
+    if parsed_hook_reply is None:
         return False
-    decision = parsed_hook_reply.get(HOOK_SPECIFIC_REPLY_KEY, {}).get(PERMISSION_DECISION_KEY)
-    return decision == ALL_BLOCK_DECISIONS[0]
+    decision = parsed_hook_reply.get(HOOK_SPECIFIC_REPLY_KEY, {}).get(
+        PERMISSION_DECISION_KEY
+    )
+    return decision == HARD_DENY_DECISION
 
 
 def probe_safety_hook(settings_document: dict, basename: str) -> bool:
@@ -227,7 +270,8 @@ def probe_safety_hook(settings_document: dict, basename: str) -> bool:
     logger.info("%s matchers: %s", basename, MATCHER_JOIN_SEPARATOR.join(all_matchers))
     all_command_tokens = parse_command_argv(command)
     probe_payload = build_probe_payload_for_basename(basename)
-    return hook_blocks_probe(all_command_tokens, probe_payload)
+    override_by_name = settings_environment_overrides(settings_document)
+    return hook_blocks_probe(all_command_tokens, probe_payload, override_by_name)
 
 
 def _parse_arguments(all_arguments: list[str] | None) -> argparse.Namespace:
