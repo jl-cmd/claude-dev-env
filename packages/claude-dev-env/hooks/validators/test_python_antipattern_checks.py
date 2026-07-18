@@ -4,8 +4,6 @@ import ast
 import sys
 from pathlib import Path
 
-import pytest
-
 from .python_antipattern_checks import (
     check_mutable_default_args,
     check_bare_except,
@@ -242,6 +240,9 @@ def test_exists():
 TEST_HELPER_DIRECTORY_PATH = "packages/foo/tests/helper_functions.py"
 NON_TEST_DIRECTORY_HELPER_PATH = "packages/foo/helpers/helper_functions.py"
 CONFIG_DIRECTORY_MAGIC_PATH = "packages/foo/config/threshold_values.py"
+CONFIG_CONSTANTS_DIRECTORY_MAGIC_PATH = (
+    "packages/foo/pr_converge_skill_constants/threshold_values.py"
+)
 NON_EXEMPT_MAGIC_PATH = "packages/foo/services/threshold_values.py"
 MAGIC_VALUE_VALIDATOR_NAME = "Magic Values"
 MAGIC_NUMBER_SOURCE = '''
@@ -316,3 +317,11 @@ class TestDirectoryExemptionThroughPipeline:
             NON_EXEMPT_MAGIC_PATH, MAGIC_NUMBER_SOURCE, MAGIC_VALUE_VALIDATOR_NAME
         )
         assert not denied_result.passed
+
+    def test_config_exemption_survives_without_a_named_directory_ancestor(self) -> None:
+        exempt_result = _named_result(
+            CONFIG_CONSTANTS_DIRECTORY_MAGIC_PATH,
+            MAGIC_NUMBER_SOURCE,
+            MAGIC_VALUE_VALIDATOR_NAME,
+        )
+        assert exempt_result.passed
