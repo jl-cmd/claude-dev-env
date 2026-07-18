@@ -3,13 +3,14 @@
 The gate denies an ``Agent`` or ``Task`` spawn whose ``subagent_type`` is
 ``code-verifier`` when the branch carries a merge conflict against its base
 ref, a CODE_RULES violation on a line added in the working tree since the merge
-base (committed on the branch or untracked), or a CODE_RULES engine
+base (committed on the branch or uncommitted), or a CODE_RULES engine
 import/load failure. It runs those pre-flight checks before the expensive
 verification spawn and addresses its deny reason to the spawning agent so that
 agent fixes the named issues and re-spawns. Environmental git failures stay
 fail-open; engine import/load failure is fail-closed. Every literal the hook
-body reads lives here; the hook imports ``AGENT_TOOL_NAME`` from
-``pr_converge_bugteam_enforcer_constants`` rather than redefining it.
+body reads lives here; ``AGENT_TOOL_NAME`` comes from
+``pr_converge_bugteam_enforcer_constants`` and joins ``TASK_TOOL_NAME`` in
+``ALL_CODE_VERIFIER_SPAWN_TOOL_NAMES`` so both spawn tool names share one source.
 """
 
 from __future__ import annotations
