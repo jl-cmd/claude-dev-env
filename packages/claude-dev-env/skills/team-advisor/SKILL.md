@@ -17,8 +17,8 @@ One warm, addressable advisor available at the strongest model tier the session 
 
 **Detect the host profile first** (Host profiles in
 [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-— e.g. `ADVISOR_HOST_PROFILE` or `THIRD_PARTY`). Do not start a model-floor
-walk until the host is known.
+— e.g. %USERPROFILE%\.claude\_shared\advisor\advisor-protocol.md). Do not start a model-floor
+walk until the host is known. 
 
 This session is the shared advisor's sole consumer, so its model floor is
 simply this session's own tier — no routing table to take a max against.
