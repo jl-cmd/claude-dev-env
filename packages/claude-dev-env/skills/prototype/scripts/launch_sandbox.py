@@ -111,6 +111,13 @@ def _run_via_subprocess(
             timeout_seconds,
         )
         return LAUNCH_TIMEOUT_EXIT_CODE
+    except OSError as launch_error:
+        logger.error(
+            "cannot launch the claude executable %s: %s",
+            all_command_tokens[0],
+            launch_error,
+        )
+        return LAUNCH_MISSING_PATH_EXIT_CODE
     return completed_process.returncode
 
 

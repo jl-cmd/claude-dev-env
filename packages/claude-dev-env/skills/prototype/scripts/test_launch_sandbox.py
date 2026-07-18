@@ -208,6 +208,48 @@ def test_run_via_subprocess_returns_the_timeout_code_when_the_session_outruns(
     assert exit_code == launcher.LAUNCH_TIMEOUT_EXIT_CODE
 
 
+def test_run_via_subprocess_returns_the_missing_path_code_when_claude_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launcher = load_launcher_module()
+    worktree_path, _ = make_sandbox_worktree(tmp_path)
+
+    def raise_file_not_found(*_args: object, **_kwargs: object) -> object:
+        raise FileNotFoundError(CLAUDE_EXECUTABLE_NAME)
+
+    monkeypatch.setattr(launcher.subprocess, "run", raise_file_not_found)
+    exit_code = launcher._run_via_subprocess(
+        [CLAUDE_EXECUTABLE_NAME], worktree_path, SANDBOX_TIMEOUT_SECONDS
+    )
+    assert exit_code == LAUNCH_MISSING_PATH_EXIT_CODE
+
+
+def test_main_returns_the_missing_path_code_when_claude_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    launcher = load_launcher_module()
+    worktree_path, settings_path = make_sandbox_worktree(tmp_path)
+    task_file_path = make_task_file(tmp_path)
+
+    def raise_file_not_found(*_args: object, **_kwargs: object) -> object:
+        raise FileNotFoundError(CLAUDE_EXECUTABLE_NAME)
+
+    monkeypatch.setattr(launcher.subprocess, "run", raise_file_not_found)
+    exit_code = launcher.main(
+        [
+            "--worktree",
+            str(worktree_path),
+            "--settings",
+            str(settings_path),
+            "--task-file",
+            str(task_file_path),
+        ]
+    )
+    assert exit_code == LAUNCH_MISSING_PATH_EXIT_CODE
+    emitted_summary = launcher.json.loads(capsys.readouterr().out)
+    assert emitted_summary["exit_code"] == LAUNCH_MISSING_PATH_EXIT_CODE
+
+
 def test_main_returns_the_timeout_code_and_emits_the_summary_on_timeout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

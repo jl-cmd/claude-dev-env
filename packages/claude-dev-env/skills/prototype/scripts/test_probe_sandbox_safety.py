@@ -246,6 +246,21 @@ def test_main_exits_three_when_a_hook_allows(tmp_path: Path) -> None:
     assert exit_code == PROBE_FAILURE_EXIT_CODE
 
 
+def test_main_exits_three_when_the_settings_file_is_absent(tmp_path: Path) -> None:
+    probe = load_probe_module()
+    absent_settings_path = tmp_path / "does-not-exist.json"
+    exit_code = probe.main(["--settings", str(absent_settings_path)])
+    assert exit_code == PROBE_FAILURE_EXIT_CODE
+
+
+def test_main_exits_three_when_the_settings_file_is_invalid_json(tmp_path: Path) -> None:
+    probe = load_probe_module()
+    settings_path = tmp_path / "sandbox-settings.json"
+    settings_path.write_text("{not valid json", encoding="utf-8")
+    exit_code = probe.main(["--settings", str(settings_path)])
+    assert exit_code == PROBE_FAILURE_EXIT_CODE
+
+
 def test_main_exits_three_when_a_hook_script_is_bogus(tmp_path: Path) -> None:
     probe = load_probe_module()
     bogus_pii_hook_path = tmp_path / PII_HOOK_BASENAME

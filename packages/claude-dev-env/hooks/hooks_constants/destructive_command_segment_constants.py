@@ -192,3 +192,4 @@ ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
     }
 )
 DESTRUCTIVE_DENY_MODE_ENV_VAR: str = "CLAUDE_DESTRUCTIVE_DENY_MODE"
+ALL_TRUTHY_ENV_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})

@@ -240,6 +240,29 @@ def test_main_writes_minimal_settings_and_succeeds(tmp_path: Path) -> None:
     assert set(commands_by_matcher(written)) == set(ALL_PII_REQUIRED_MATCHERS)
 
 
+def test_main_exits_when_the_settings_source_is_unreadable(tmp_path: Path) -> None:
+    builder = load_builder_module()
+    absent_source_path = tmp_path / "does-not-exist.json"
+    out_path = tmp_path / "sandbox-settings.json"
+    exit_code = builder.main(
+        ["--out", str(out_path), "--settings-source", str(absent_source_path)]
+    )
+    assert exit_code == builder.SETTINGS_SOURCE_UNREADABLE_EXIT_CODE
+    assert not out_path.exists()
+
+
+def test_main_exits_when_the_settings_source_is_invalid_json(tmp_path: Path) -> None:
+    builder = load_builder_module()
+    source_path = tmp_path / "settings.json"
+    source_path.write_text("{not valid json", encoding="utf-8")
+    out_path = tmp_path / "sandbox-settings.json"
+    exit_code = builder.main(
+        ["--out", str(out_path), "--settings-source", str(source_path)]
+    )
+    assert exit_code == builder.SETTINGS_SOURCE_UNREADABLE_EXIT_CODE
+    assert not out_path.exists()
+
+
 def test_main_exits_when_a_safety_hook_is_missing(tmp_path: Path) -> None:
     builder = load_builder_module()
     source_path = tmp_path / "settings.json"
