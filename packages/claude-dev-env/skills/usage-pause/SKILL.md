@@ -41,10 +41,10 @@ On exit 2 the script prints `{"error": ...}`. Ask the user for a manual reset ti
 
 `scripts/resolve_usage_window.py` is the source of truth for live probe behavior. Endpoint URL, header names/values, credential path and token keys, response bucket keys, stage sizing, and the weekly warn threshold all live in `scripts/usage_pause_constants/resolve_usage_window_constants.py` — read those modules for the current values; do not restate them here.
 
-In short: the resolver picks a bearer token, probes the OAuth usage endpoint the interactive `/usage` panel uses, and returns the session and weekly buckets with utilization and reset times. Token sources, in order:
+In short: the resolver picks a bearer token, probes the OAuth usage endpoint the interactive `/usage` panel uses, and returns the session and weekly buckets with utilization and reset times. Token sources depend on the host:
 
-1. The Claude Code CLI's stored OAuth access token (honored only while unexpired).
-2. The session ingress bearer token file named by `CLAUDE_SESSION_INGRESS_TOKEN_FILE` (cloud sessions).
+- **Desktop host** (the `CLAUDE_CODE_ENTRYPOINT` variable is `claude-desktop`): the resolver does not read the CLI credential file, which belongs to a different authentication session than the one the desktop app counts usage against. It uses the session ingress token when one is set, and otherwise takes the manual-override path.
+- **Every other host**: the resolver reads the Claude Code CLI's stored OAuth access token first (honored only while unexpired), then the session ingress bearer token file named by `CLAUDE_SESSION_INGRESS_TOKEN_FILE` (cloud sessions) when the credential token is unavailable.
 
 Fallbacks, in order: both token sources unavailable (expired/unreadable credential and no ingress file), a failed request, or a response with no readable session-window reset time all end in exit 2 — the manual-override ask above. The manual path works with no probe at all, so the skill functions even when both token sources are unavailable.
 
@@ -106,8 +106,9 @@ Fill each `<slot>` at schedule time: `<remaining_stage_durations>` is the tail o
 | `SKILL.md` | This flow: resolve, weekly guard, stage chain, templates |
 | `scripts/resolve_usage_window.py` | The window resolver and stage planner CLI |
 | `scripts/test_resolve_usage_window.py` | Behavioral tests for parsing, staging, token reading, extraction, CLI |
-| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, stage sizing, thresholds, result keys |
+| `scripts/usage_pause_constants/resolve_usage_window_constants.py` | Endpoint, credential keys, host detection, stage sizing, thresholds, result keys |
 
 ## Gotchas
 
 - The stored access token lives about 8 hours and the CLI rewrites it on its own schedule, so a mid-afternoon probe can find it expired even while the CLI itself still works. That is the designed exit-2 path: give a manual time.
+- On the desktop host the resolver never reads the CLI credential file, because that credential is a different authentication session than the one the desktop app counts usage against. With no session ingress token set, the desktop host takes the manual path: read the reset time from the interactive `/usage` panel and pass it, for example `/usage-pause 10:20pm`.

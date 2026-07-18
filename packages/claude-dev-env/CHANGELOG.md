@@ -1,5 +1,91 @@
 # Changelog
 
+## [2.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.2.1...claude-dev-env-v2.3.0) (2026-07-18)
+
+
+### Features
+
+* **hooks:** append durable JSONL ledger on each verdict mint ([ec807f0](https://github.com/jl-cmd/claude-dev-env/commit/ec807f04f2bb1ccddc376a28c5b127e6287ed56c))
+* **hooks:** append durable JSONL ledger on each verdict mint ([1d224d4](https://github.com/jl-cmd/claude-dev-env/commit/1d224d441aafd1205c49e0691b6ae980d32ae051))
+* **scripts:** report weekly remaining usage for chain accounts ([9d66526](https://github.com/jl-cmd/claude-dev-env/commit/9d665269c0a406731d6b7f2fd1163936c9631ae1))
+* **scripts:** report weekly remaining usage for chain accounts ([3cd25b7](https://github.com/jl-cmd/claude-dev-env/commit/3cd25b73f2ea949792c29152b3a31207c0964261))
+* **scripts:** select Claude account by highest remaining weekly usage ([a8fad2e](https://github.com/jl-cmd/claude-dev-env/commit/a8fad2edb7d2c54f04f917932a2417c918d46b44))
+* **scripts:** select Claude account by highest remaining weekly usage ([15275d6](https://github.com/jl-cmd/claude-dev-env/commit/15275d6389c3a4229f9dd57de31251f4286c98f0))
+
+
+### Bug Fixes
+
+* **hooks:** record verdict ledger timestamps in UTC ([0cd753d](https://github.com/jl-cmd/claude-dev-env/commit/0cd753d9ca53503eb6cf6e77ace298ae59dfda13))
+* **pr-converge:** complete /code-review xhigh slash migration ([2f2f61a](https://github.com/jl-cmd/claude-dev-env/commit/2f2f61a911416125c5142bfff01781670e9d81f9))
+* **pr-converge:** complete /code-review xhigh slash migration ([bf062d3](https://github.com/jl-cmd/claude-dev-env/commit/bf062d3dc0df5d06b33c748fc94d7322b5eadb89))
+* **pr-loop:** sweep flat worktree permission rules and merge main ([854e25e](https://github.com/jl-cmd/claude-dev-env/commit/854e25ee907e80b199aaacd12ed023ebf1d7a7ad))
+* **scripts:** bind chain usage probe to per-entry OAuth tokens ([dc558bc](https://github.com/jl-cmd/claude-dev-env/commit/dc558bcacd113f8bc8832f9c0771cef4bbf7a8ac))
+* **scripts:** break chain runner/usage circular import ([bf9892e](https://github.com/jl-cmd/claude-dev-env/commit/bf9892e5dbcff020d833955105c45fe2d6a8320e))
+* **scripts:** drop redundant JSONDecodeError in probe except ([8494764](https://github.com/jl-cmd/claude-dev-env/commit/849476449c6bae4af44174e8d3657c8ba24d88ad))
+* **scripts:** drop redundant weekly percent local alias ([2b38fe1](https://github.com/jl-cmd/claude-dev-env/commit/2b38fe1b39db64548cf8745a2567e7ef29279c17))
+* **scripts:** keep probe token errors out of network exception wrap ([b31a3e4](https://github.com/jl-cmd/claude-dev-env/commit/b31a3e48a71669da8163e08eb7f5ca393aee9579))
+* **scripts:** keep unreported chain accounts in usage-ranked walk ([3a5d56e](https://github.com/jl-cmd/claude-dev-env/commit/3a5d56eaccb9b8190ede891d0c2b1184d8495853))
+* **scripts:** register resolve_usage_window in sys.modules before exec ([ae54947](https://github.com/jl-cmd/claude-dev-env/commit/ae54947447c69244689401926ea4055e2a3e3b1f))
+* **scripts:** reuse sys.modules for usage-window load ([108298b](https://github.com/jl-cmd/claude-dev-env/commit/108298bf65e02a8ebe5bb71ca882fce99f2bbf8c))
+* **scripts:** roll back sys.path insert if usage-window load fails ([818d119](https://github.com/jl-cmd/claude-dev-env/commit/818d119822a7347346baffd68a90cd64a6beeb4a))
+* **scripts:** skip missing ranked binaries and soften usage rank failures ([7525b07](https://github.com/jl-cmd/claude-dev-env/commit/7525b074372f96cc67682064574fc8dbc883c8f7))
+* **scripts:** treat credentials path probe failures as null usage ([858b6e1](https://github.com/jl-cmd/claude-dev-env/commit/858b6e10d18f684c3d828fe62eb69825f4413a20))
+* **scripts:** treat HTTPException as weekly probe failure ([2d4f1c4](https://github.com/jl-cmd/claude-dev-env/commit/2d4f1c4f696b1f97127a14dfc04310895d91ff42))
+* **scripts:** walk every chain entry when commands are duplicated ([062117a](https://github.com/jl-cmd/claude-dev-env/commit/062117a0c6f59a77312d1e3d3d74282a356d1a3b))
+* stop minting unmatched Write()/Glob() permission rules in pr-loop grant constants ([b0269e6](https://github.com/jl-cmd/claude-dev-env/commit/b0269e6531785b7fcbbe4117e32720303df99a6c))
+* sweep stale per-worktree permission rules for deleted worktrees in grant/revoke ([891168e](https://github.com/jl-cmd/claude-dev-env/commit/891168ef68c049e5f31e113653ef1d60fcec9b3a))
+
+
+### Documentation
+
+* **agents:** record cold Explore keep for verifier validation pass ([5d934d4](https://github.com/jl-cmd/claude-dev-env/commit/5d934d49bc372957cc5b539aba7eaf58ce2ec64f))
+* **agents:** record cold Explore keep for verifier validation pass ([222669c](https://github.com/jl-cmd/claude-dev-env/commit/222669c31731a18ec02a001d67ad8a46f5c77412))
+* **scripts:** show per-entry credentials_path in chain example ([dd430fc](https://github.com/jl-cmd/claude-dev-env/commit/dd430fcb02ba082d7040bc1a1b520bf4a7020bcf))
+
+
+### Refactoring
+
+* **scripts:** simplify weekly remaining rank sort key ([b0a8a36](https://github.com/jl-cmd/claude-dev-env/commit/b0a8a365bd2f06ec5eae62ab60e1752be5f40295))
+
+
+### Tests
+
+* **agents:** freeze code-verifier tools without SendMessage ([177c925](https://github.com/jl-cmd/claude-dev-env/commit/177c925d9924db7c1d15749793181842cea13383))
+* **agents:** freeze code-verifier tools without SendMessage ([914756e](https://github.com/jl-cmd/claude-dev-env/commit/914756eddea9d4f855c3be8f4717093f8242182d))
+
+## [2.2.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.2.0...claude-dev-env-v2.2.1) (2026-07-17)
+
+
+### Bug Fixes
+
+* **check:** type-check pr-loop scripts in the quality gate ([fb9551d](https://github.com/jl-cmd/claude-dev-env/commit/fb9551daeda9a8a6cf4e40eae7d8d2942e0cc58e))
+* **check:** type-check pr-loop scripts in the quality gate ([d5c6e06](https://github.com/jl-cmd/claude-dev-env/commit/d5c6e06be0a6b0df2de076e32cefa298ba69e563))
+* **hooks:** count-scope gate identities and drop unlocated validator noise ([07753de](https://github.com/jl-cmd/claude-dev-env/commit/07753de6b3540273532d68ab4e94c7c80d254320))
+* **hooks:** diff-scope run_all_validators write gate to new violations ([#186](https://github.com/jl-cmd/claude-dev-env/issues/186)) ([9cb0e8f](https://github.com/jl-cmd/claude-dev-env/commit/9cb0e8f5169106c1e4776702d29bb44c30b70294))
+* **hooks:** pin ruff concise output and allow spaced paths in gate locations ([0fffc24](https://github.com/jl-cmd/claude-dev-env/commit/0fffc2446e0eb15c73c093900332faae5da19906))
+* **hooks:** skip PII write scan on ephemeral non-repo paths ([fd169eb](https://github.com/jl-cmd/claude-dev-env/commit/fd169ebd8dfb175b843dbcd1470527e5de21f2ab)), closes [#187](https://github.com/jl-cmd/claude-dev-env/issues/187)
+* **hooks:** skip PII write scan on ephemeral paths ([#187](https://github.com/jl-cmd/claude-dev-env/issues/187)) ([a63beb8](https://github.com/jl-cmd/claude-dev-env/commit/a63beb809696b4d9ab08d5947f199c67db3822b3))
+* **hooks:** skip PII write scan when no texts to inspect ([dbc224e](https://github.com/jl-cmd/claude-dev-env/commit/dbc224e1e5ebffd239eecebc3ed448ab169a786b))
+* **hooks:** thread hook_payload into PII write evaluate ([bc1294d](https://github.com/jl-cmd/claude-dev-env/commit/bc1294d407f705aa1b719f2d60adc37633710b10))
+* **usage-pause:** skip CLI credential token on the desktop host ([3340c79](https://github.com/jl-cmd/claude-dev-env/commit/3340c7988922857099207566a236a220892fe216))
+* **usage-pause:** skip CLI credential token on the desktop host ([678ea09](https://github.com/jl-cmd/claude-dev-env/commit/678ea0939b1e49ddbb7ae1a69f88af9230d38d12))
+
+
+### Documentation
+
+* **claude-md:** name all three verified-commit-gate exemption arms ([c6d485e](https://github.com/jl-cmd/claude-dev-env/commit/c6d485e5d05b0c315bc73a3fe3ef20255a1767dc))
+* **claude-md:** name all three verified-commit-gate exemption arms ([75348f8](https://github.com/jl-cmd/claude-dev-env/commit/75348f84ec043d5fa758bc0fcd1cb8ef34e3e0c1)), closes [#241](https://github.com/jl-cmd/claude-dev-env/issues/241)
+* **rules:** add cleanup-command-forms rule ([7f7cc2c](https://github.com/jl-cmd/claude-dev-env/commit/7f7cc2cba954bd4315a272b0d18c7f4a0c8b7ab4))
+* **rules:** add cleanup-command-forms rule ([6fe3f5b](https://github.com/jl-cmd/claude-dev-env/commit/6fe3f5b6bd99037d9481b9f2165883a183002c4a))
+* **rules:** correct destructive_command_blocker auto-allow description ([ae23bb4](https://github.com/jl-cmd/claude-dev-env/commit/ae23bb46509fefed75a9bc7180f13a3a97edf4d8))
+* **rules:** fix cleanup-command-forms auto-allow shapes ([4c727e7](https://github.com/jl-cmd/claude-dev-env/commit/4c727e7ee84756f0b2841adc7c826393db4bde8d))
+* **rules:** fix garbled cleanup directive and windows-filesystem-safe cross-ref ([a2372da](https://github.com/jl-cmd/claude-dev-env/commit/a2372da7ea89c345bb4d0072380ab4165c266f1f))
+
+
+### Style
+
+* **hooks:** drop whitespace-only docstring hunk from code_rules_shared ([af498e5](https://github.com/jl-cmd/claude-dev-env/commit/af498e5a3fa3320af9a942c5e4b850794fbdb322))
+
 ## [2.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.1.0...claude-dev-env-v2.2.0) (2026-07-17)
 
 
