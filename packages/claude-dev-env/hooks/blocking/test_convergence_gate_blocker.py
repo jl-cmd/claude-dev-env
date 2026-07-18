@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -12,8 +13,6 @@ import pytest
 _HOOK_DIR = pathlib.Path(__file__).parent
 if str(_HOOK_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIR))
-
-import re
 
 _GH_PR_READY_PATTERN = re.compile(r"\bgh\s+pr\s+ready\b(?![^&|;\n]*--undo)")
 
@@ -53,15 +52,44 @@ def test_does_not_match_gh_issue_close() -> None:
 
 
 def test_extracts_pr_number_from_command() -> None:
-    assert _resolve_pr_number("gh pr ready 418", None) == 418
+    assert _resolve_pr_number("gh pr ready 418", None, None, None) == 418
+
+
+def test_extracts_pr_number_when_repo_flag_precedes_number() -> None:
+    assert (
+        _resolve_pr_number(
+            "gh pr ready --repo sample-owner/target-repo 161",
+            None,
+            "sample-owner",
+            "target-repo",
+        )
+        == 161
+    )
 
 
 def test_extracts_pr_number_with_flags() -> None:
-    assert _resolve_pr_number("gh pr ready 99 --undo", None) == 99
+    assert _resolve_pr_number("gh pr ready 99 --undo", None, None, None) == 99
 
 
 def test_returns_none_when_no_number_and_no_repo() -> None:
-    assert _resolve_pr_number("gh pr ready", "/nonexistent/path") is None
+    assert _resolve_pr_number("gh pr ready", "/nonexistent/path", None, None) is None
+
+
+def test_number_resolution_binds_gh_view_to_named_repo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_commands: list[list[str]] = []
+
+    def fake_run(all_arguments: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured_commands.append(all_arguments)
+        return subprocess.CompletedProcess(args=all_arguments, returncode=0, stdout="500\n", stderr="")
+
+    monkeypatch.setattr(hook_module.subprocess, "run", fake_run)
+    assert _resolve_pr_number("gh pr ready", None, "flag-owner", "flag-repo") == 500
+    assert captured_commands
+    for each_command in captured_commands:
+        assert "--repo" in each_command
+        assert "flag-owner/flag-repo" in each_command
 
 
 def test_matches_gh_pr_ready_in_compound_command() -> None:
@@ -226,6 +254,13 @@ def test_parse_repo_flag_short_alias() -> None:
     )
 
 
+def test_parse_repo_flag_short_alias_attached_value() -> None:
+    assert hook_module._parse_repo_flag("gh pr ready 161 -Rsample-owner/target-repo") == (
+        "sample-owner",
+        "target-repo",
+    )
+
+
 def test_parse_repo_flag_absent_returns_none() -> None:
     assert hook_module._parse_repo_flag("gh pr ready 418") is None
 
@@ -247,6 +282,26 @@ def test_ready_segment_clips_at_command_separator() -> None:
         )
         == "gh pr ready 161 "
     )
+
+
+def test_ready_segment_keeps_repo_flag_on_a_continued_line() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 \\\n  --repo target-owner/target-repo"
+    )
+    assert "--repo" in segment
+    assert "target-owner/target-repo" in segment
+
+
+def test_continued_repo_flag_binds_the_gate_to_the_named_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 \\\n  --repo target-owner/target-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("target-owner", "target-repo", 161)
 
 
 def test_chained_repo_flag_does_not_misbind_the_gate(
@@ -278,3 +333,96 @@ def test_ready_segment_skips_a_leading_undo_invocation() -> None:
         hook_module._ready_command_segment("gh pr ready --undo && gh pr ready 161")
         == "gh pr ready 161"
     )
+
+
+def test_parse_repo_flag_full_url_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo https://github.com/other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_short_alias_full_url_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 -R https://github.com/other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_ssh_form() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo git@github.com:other-owner/other-repo"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_ssh_form_strips_git_suffix() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo git@github.com:other-owner/other-repo.git"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_repo_flag_url_form_strips_git_suffix() -> None:
+    assert hook_module._parse_repo_flag(
+        "gh pr ready 161 --repo https://github.com/other-owner/other-repo.git"
+    ) == ("other-owner", "other-repo")
+
+
+def test_parse_pr_url_accepts_enterprise_host() -> None:
+    assert hook_module._parse_pr_url(
+        "gh pr ready https://github.example.com/other-owner/other-repo/pull/161"
+    ) == ("other-owner", "other-repo", 161)
+
+
+def test_background_operator_clips_chained_repo_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 & gh pr comment 999 --repo other-owner/other-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("cwd-owner", "cwd-repo", 161)
+
+
+def test_trailing_redirect_keeps_earlier_repo_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 --repo other-owner/other-repo 2>&1",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("other-owner", "other-repo", 161)
+
+
+def test_stderr_redirect_dup_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 >&2 --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_stderr_to_stdout_redirect_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 2>&1 --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_append_all_output_redirect_keeps_repo_flag() -> None:
+    segment = hook_module._ready_command_segment(
+        "gh pr ready 161 &> log --repo other-owner/other-repo"
+    )
+    assert hook_module._parse_repo_flag(segment) == ("other-owner", "other-repo")
+
+
+def test_stderr_redirect_binds_repo_end_to_end(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    identity = _capture_convergence_identity(
+        monkeypatch,
+        tmp_path,
+        "gh pr ready 161 >&2 --repo other-owner/other-repo",
+        ("cwd-owner", "cwd-repo"),
+    )
+    assert identity == ("other-owner", "other-repo", 161)

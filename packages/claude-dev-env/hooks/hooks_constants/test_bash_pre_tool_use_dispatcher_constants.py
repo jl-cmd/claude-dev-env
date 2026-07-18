@@ -41,6 +41,9 @@ _EXPECTED_BASH_ORDER = (
     "blocking/gh_pr_author_enforcer.py",
     "blocking/verified_commit_gate.py",
     "blocking/verdict_directory_write_blocker.py",
+    "blocking/code_review_push_gate.py",
+    "blocking/code_review_pr_create_gate.py",
+    "blocking/code_review_stamp_directory_write_blocker.py",
 )
 
 _POWERSHELL_APPLICABLE = (
@@ -48,6 +51,9 @@ _POWERSHELL_APPLICABLE = (
     "blocking/pii_prevention_blocker.py",
     "blocking/verified_commit_gate.py",
     "blocking/verdict_directory_write_blocker.py",
+    "blocking/code_review_push_gate.py",
+    "blocking/code_review_pr_create_gate.py",
+    "blocking/code_review_stamp_directory_write_blocker.py",
 )
 
 
@@ -80,6 +86,24 @@ def test_powershell_hooks_carry_the_shared_tool_set() -> None:
     for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES:
         if each_entry.script_relative_path in _POWERSHELL_APPLICABLE:
             assert each_entry.applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+
+
+def test_code_review_gate_family_registered_for_bash_and_powershell() -> None:
+    """The three code-review shell gates run on both Bash and PowerShell."""
+    code_review_gate_paths = (
+        "blocking/code_review_push_gate.py",
+        "blocking/code_review_pr_create_gate.py",
+        "blocking/code_review_stamp_directory_write_blocker.py",
+    )
+    entry_by_path = {
+        each_entry.script_relative_path: each_entry
+        for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
+    }
+    for each_gate_path in code_review_gate_paths:
+        assert each_gate_path in entry_by_path
+        assert entry_by_path[each_gate_path].applicable_tool_names == (
+            ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+        )
 
 
 def test_every_roster_path_points_at_an_existing_hook() -> None:

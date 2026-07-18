@@ -58,6 +58,16 @@
         ]
       },
       {
+        "matcher": "mcp__plugin_github_github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_review_pr_create_gate.py",
+            "timeout": 20
+          }
+        ]
+      },
+      {
         "matcher": "mcp__plugin_github_github__.*",
         "hooks": [
           {
@@ -79,7 +89,12 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_converge_bugteam_enforcer.py",
             "timeout": 10
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_verifier_spawn_preflight_gate.py",

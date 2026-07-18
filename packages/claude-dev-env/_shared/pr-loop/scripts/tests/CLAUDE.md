@@ -27,6 +27,8 @@ pytest suite for the scripts and constants in `_shared/pr-loop/scripts/`. Each t
 | `test_reviewer_availability.py` | `reviewer_availability.py` end-to-end: Copilot and Bugbot availability, opt-out via `CLAUDE_REVIEWS_DISABLED`, and every Copilot quota outcome |
 | `test_reviewer_availability_constants.py` | `pr_loop_shared_constants/reviewer_availability_constants.py` |
 | `test_revoke_project_claude_permissions.py` | `revoke_project_claude_permissions.py` end-to-end |
+| `test_stale_worktree_rule_sweep.py` | `stale_worktree_rule_sweep.py` sweep and deduplication end-to-end |
+| `test_stale_worktree_rule_sweep_constants.py` | `pr_loop_shared_constants/stale_worktree_rule_sweep_constants.py` worktrees-root resolution and rule-format readers |
 | `test_agent_config_carveout.py` | Agent-config deny-rule carve-out logic |
 | `conftest.py` | Shared pytest fixtures |
 

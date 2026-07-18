@@ -79,4 +79,12 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry(
         "blocking/verdict_directory_write_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
     ),
+    BashHostedHookEntry("blocking/code_review_push_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
+    BashHostedHookEntry(
+        "blocking/code_review_pr_create_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    ),
+    BashHostedHookEntry(
+        "blocking/code_review_stamp_directory_write_blocker.py",
+        ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
+    ),
 )
