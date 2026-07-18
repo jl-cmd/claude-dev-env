@@ -25,6 +25,7 @@ Read the body and the docstring side by side. Apply each check that matches the 
 - **Predicate breadth** — the body accepts only the inputs the prose names.
 - **Exclusion axis** — an exclusion clause keys on the same axis the body classifies on.
 - **Companion docs** — a `SKILL.md` (or sibling) order/content claim matches the producer body.
+- **Gate-outcome status flags** — an outcome routed to a blocker (`blocker = ...; break`) reads as blocked everywhere, never as a bypass.
 - **Returns / Raises / Note claims** — each free-form claim matches the body.
 
 Many deterministic shapes of this drift have Write/Edit gates in `packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py` (and the JS/`.mjs` slices in `code_rules_imports_logging.py`). Free-form rest is judgment.
