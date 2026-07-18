@@ -18,6 +18,9 @@ CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 CONFIG_FILENAME: str = "claude-chain.json"
 """Real chain-configuration filename read from the user's home directory."""
 
+CHAIN_USAGE_MODULE_NAME: str = "claude_chain_usage"
+"""Import name of the weekly-usage report module loaded lazily by the runner."""
+
 EXAMPLE_CONFIG_FILENAME: str = "claude-chain.example.json"
 """Committed template filename referenced in the config-error guidance."""
 
@@ -29,6 +32,9 @@ CONFIG_COMMAND_KEY: str = "command"
 
 CONFIG_EXTRA_ARGS_KEY: str = "extra_args"
 """Chain-entry key holding per-account arguments appended to each invocation."""
+
+CONFIG_CREDENTIALS_PATH_KEY: str = "credentials_path"
+"""Optional chain-entry key naming that account's OAuth credentials file path."""
 
 ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
     "hit your session limit",
@@ -91,9 +97,15 @@ CONFIG_ENTRY_EXTRA_ARGS_INVALID_REASON: str = (
 )
 """Reason detail when a chain entry's extra_args value is the wrong shape."""
 
+CONFIG_ENTRY_CREDENTIALS_PATH_INVALID_REASON: str = (
+    "a chain entry's 'credentials_path' is not a non-empty string"
+)
+"""Reason detail when a chain entry's credentials_path value is the wrong shape."""
+
 CONFIG_MISSING_MESSAGE_TEMPLATE: str = (
     "Claude chain config not found at {config_path}. Copy {example_filename} to "
-    "{config_path} and list your logged-in claude binaries in fallback order."
+    "{config_path} and list your account binaries. Try order comes from weekly "
+    "remaining; config order is the tiebreak."
 )
 """Guidance shown when the config file is absent."""
 
