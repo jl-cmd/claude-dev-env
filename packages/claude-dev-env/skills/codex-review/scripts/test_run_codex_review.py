@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -810,3 +811,34 @@ def test_resolve_prefix_falls_back_to_bare_name_when_absent(
     monkeypatch.setattr(wrapper.shutil, "which", lambda _name: None)
 
     assert wrapper._resolve_codex_command_prefix() == [CODEX_BINARY_NAME]
+
+
+def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
+    tmp_path: Path,
+) -> None:
+    """The timeout fires promptly even when a grandchild holds the capture pipe.
+
+    ::
+
+        middle python -> grandchild python   grandchild inherits the stdout pipe
+        timeout at 2s, kill the whole tree    raises within a few seconds
+        flag: kill only the middle child      drain waits ~30s for the grandchild
+    """
+    grandchild_lifetime_seconds = 30
+    review_timeout_seconds = 2
+    wall_clock_ceiling_seconds = 20
+    spawn_grandchild_source = (
+        "import subprocess, sys, time; "
+        "subprocess.Popen([sys.executable, '-c', "
+        f"'import time; time.sleep({grandchild_lifetime_seconds})']); "
+        f"time.sleep({grandchild_lifetime_seconds})"
+    )
+    all_arguments = [sys.executable, "-c", spawn_grandchild_source]
+    start_time = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        wrapper._run_command(
+            all_arguments,
+            working_directory=tmp_path,
+            timeout_seconds=review_timeout_seconds,
+        )
+    assert time.monotonic() - start_time < wall_clock_ceiling_seconds
