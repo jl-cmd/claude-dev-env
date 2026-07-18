@@ -44,7 +44,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `messages.py` | Short user-facing notice strings shown when a Stop hook redirects agent behavior |
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
-| `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
 | `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
@@ -64,6 +63,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
 | `reviewer_spawn_gate_constants.py` | Bash tool name, the sentinel marker, the Copilot and Bugbot trigger markers, the availability-script relative path and override env-var name, and the deny-message template for the reviewer-spawn gate |
+| `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
