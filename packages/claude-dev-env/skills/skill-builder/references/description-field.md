@@ -44,7 +44,7 @@ description: >-
 
 ```yaml
 description: >-
-  Skill lifecycle: classify, scaffold, write via skill-writer, self-audit, compose sub-skills, polish description triggers. Triggers: build a skill, new skill workflow, improve this skill, optimize skill description, skill development lifecycle, skill modularity.
+  Skill lifecycle: classify, scaffold, write via the skill-writer-agent, self-audit, compose sub-skills, polish description triggers. Triggers: build a skill, new skill workflow, improve this skill, optimize skill description, skill development lifecycle, skill modularity.
 ```
 
 ```yaml

@@ -138,6 +138,11 @@ test('childRunInput defaults bugbotDisabled to false when the entry omits it', (
   assert.equal(childRunInput(validEntry(101)).bugbotDisabled, false);
 });
 
+test('childRunInput forwards the run-level home directory to the child run', () => {
+  const childArgs = childRunInput(validEntry(101), '/home/dev');
+  assert.equal(childArgs.homeDirectory, '/home/dev');
+});
+
 test('the malformed-input blocker return carries an empty allDeferredPrs list', async () => {
   const blockerOutcome = await runMultiWorkflowBody(
     'not json at all',

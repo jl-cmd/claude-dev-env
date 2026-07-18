@@ -1,5 +1,72 @@
 # Changelog
 
+## [2.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.3.0...claude-dev-env-v2.4.0) (2026-07-18)
+
+
+### Features
+
+* add skill-writer-agent and delegate skill-builder authoring ([bc59b67](https://github.com/jl-cmd/claude-dev-env/commit/bc59b6730090ab4d1f96c7c643ddace2d5e82f79))
+* add skill-writer-agent and rewire skill-builder delegation ([673d7c8](https://github.com/jl-cmd/claude-dev-env/commit/673d7c829900281122dcbaab375e60ea356236c7))
+* enforce code-review before push (low) and PR creation (xhigh) ([dd9f633](https://github.com/jl-cmd/claude-dev-env/commit/dd9f63343375e25d5eddd39aecf085483299fc0a))
+* enforce code-review before push and PR creation ([c68c28e](https://github.com/jl-cmd/claude-dev-env/commit/c68c28e3ab6a97f62cbcd2118d3a80f87b2135f3))
+* **skills:** add prototype skill for hookless POC sandbox and clean-room promotion ([9339463](https://github.com/jl-cmd/claude-dev-env/commit/9339463b6150549b3748a1e79002974a05966cca))
+* **skills:** add prototype skill for hookless POC sandbox and clean-room promotion ([f49db53](https://github.com/jl-cmd/claude-dev-env/commit/f49db5362cec983f92db5f6c641672e6bc6bbc94))
+
+
+### Bug Fixes
+
+* apply code-review findings ([0a3552f](https://github.com/jl-cmd/claude-dev-env/commit/0a3552fad707633b271fa8315911b263c85a944d))
+* apply code-review findings ([5423611](https://github.com/jl-cmd/claude-dev-env/commit/5423611f9324f19080f6d592d296d5b78142dead))
+* apply code-review findings ([ffbf66a](https://github.com/jl-cmd/claude-dev-env/commit/ffbf66ac8a71c86dc6eb477de7867be4f56e818b))
+* apply code-review findings ([104f5bf](https://github.com/jl-cmd/claude-dev-env/commit/104f5bf5f4b2ce41172dae3c8cef926f31912c7f))
+* apply code-review findings ([0f4a0d6](https://github.com/jl-cmd/claude-dev-env/commit/0f4a0d647c95bb1a43cf8beb88ec4464596270ee))
+* apply code-review findings ([263783f](https://github.com/jl-cmd/claude-dev-env/commit/263783f32e25d830ca33ec64ac13d17ca61f27c5))
+* **autoconverge:** address review round on Codex gate timeout fix ([720bea9](https://github.com/jl-cmd/claude-dev-env/commit/720bea97a7549e29abdbf341ee5c023d5dfe3038))
+* **autoconverge:** Codex gate timeout budget and codex_down mark-ready bypass ([42c4c30](https://github.com/jl-cmd/claude-dev-env/commit/42c4c30892576bbc565512563e150ee79b8d22cc))
+* **autoconverge:** give the Codex gate a real timeout budget and stop marking ready on codex_down ([3330787](https://github.com/jl-cmd/claude-dev-env/commit/33307877c39f673f6518f53a3aea2eaf0c74535f))
+* **autoconverge:** prevent Codex gate timeout from bypassing as clean ([a68f823](https://github.com/jl-cmd/claude-dev-env/commit/a68f8237189f949906939108c8bdc11aed9f5556))
+* **autoconverge:** skip a codex_down gate gracefully instead of blocking convergence ([8ba925e](https://github.com/jl-cmd/claude-dev-env/commit/8ba925e5f5307f6d2077cb4ccfad94afa8b0bb9e))
+* **autoconverge:** source workflow home directory from args, not process env ([7135282](https://github.com/jl-cmd/claude-dev-env/commit/7135282c54b5a93ec95db78fe0d586393b09082f))
+* **autoconverge:** source workflow home directory from args, not process.env ([1a698f7](https://github.com/jl-cmd/claude-dev-env/commit/1a698f74ae27957ebfb2ae241d77f6a12c3b183a))
+* **autoconverge:** stop agents deleting gitignored build caches in headless runs ([d0f63a7](https://github.com/jl-cmd/claude-dev-env/commit/d0f63a78c5ab2873efe0841828921238f57f0c13))
+* **fresh-branch:** create worktree branches with --no-track ([60e7863](https://github.com/jl-cmd/claude-dev-env/commit/60e7863c0a58fa2a822c08d4d5507358214f6245))
+* **git-hooks:** allow deletion pushes through unresolved base reference ([8c01271](https://github.com/jl-cmd/claude-dev-env/commit/8c01271b898c8a62c683efd5d0e0cd4dc73cb7df))
+* **hooks:** bind proof-of-work gate to --repo/-R or PR URL ([#196](https://github.com/jl-cmd/claude-dev-env/issues/196)) ([518293e](https://github.com/jl-cmd/claude-dev-env/commit/518293ec6e502f1945040c12b24bef733eb8a3dd))
+* **hooks:** fail-closed on broader code-rules engine load errors ([cdfc647](https://github.com/jl-cmd/claude-dev-env/commit/cdfc6472790634b81dcf8ea5ce7a2665762662dd))
+* **hooks:** fail-closed on re.error during code-rules engine load ([1573604](https://github.com/jl-cmd/claude-dev-env/commit/15736045a1d09186f07d289216411e850a75984a))
+* **hooks:** require a path anchor for dot-relative volatile-path markers ([332ff03](https://github.com/jl-cmd/claude-dev-env/commit/332ff03e0f0762d34df5f92c16a7d13c88db3eb7))
+* **hooks:** run commit-gate preflight before code-verifier ([9a18c87](https://github.com/jl-cmd/claude-dev-env/commit/9a18c87d5959194368528b52b03458eb741b0b1c))
+* **hooks:** tighten destructive command detection for sandbox scripts ([c053d3d](https://github.com/jl-cmd/claude-dev-env/commit/c053d3d15ac83e20db604c65ff1fb651740e8cf4))
+* **review:** address converge round findings in prototype skill and destructive command blocker ([6c31d01](https://github.com/jl-cmd/claude-dev-env/commit/6c31d012b0d573d553faec2d7ecef6b017cdf3ff))
+* **scripts:** annotate previous_runner and hoist codec test helpers ([254e403](https://github.com/jl-cmd/claude-dev-env/commit/254e40389317fc8fd50f859bd89f1d207bcad209))
+* **scripts:** forward text codec kwargs in code-review chain spawn ([a601394](https://github.com/jl-cmd/claude-dev-env/commit/a6013942d9d44b804604f69b6198083ca4b5d01f))
+* **scripts:** forward text codec kwargs in worker-spawn headless runner ([67a41d5](https://github.com/jl-cmd/claude-dev-env/commit/67a41d51c8e3969b78e75f7888dfad0b8b3461ed))
+* **scripts:** share text-codec helper and uncollect support module ([1c6e7c8](https://github.com/jl-cmd/claude-dev-env/commit/1c6e7c8d974f72a7b8b5cc8868581c7f09dcd57c))
+* **skills:** address review findings in prototype sandbox scripts ([50cea4a](https://github.com/jl-cmd/claude-dev-env/commit/50cea4aab953cb8275317372888bb498a6574c6f))
+* **skills:** move prototype constants under config/ package ([2de563c](https://github.com/jl-cmd/claude-dev-env/commit/2de563c151c82ff7e18a1ffb6c6e982d5a054a53))
+* **validators:** match path-scoped ruff per-file-ignores on staged copies ([2b88679](https://github.com/jl-cmd/claude-dev-env/commit/2b886791a512cb9aaf0e474ae93fda4c2234ab5d))
+* **validators:** resolve ruff/mypy config from original path for staged copies ([8abc9b1](https://github.com/jl-cmd/claude-dev-env/commit/8abc9b1000a4463c6507ecddfa25d5a0d2775da9))
+
+
+### Documentation
+
+* **agents:** align code-verifier agent with three-phase workflow ([e36035d](https://github.com/jl-cmd/claude-dev-env/commit/e36035dc37aaab93bdacfb26e7e1fa2eb2e5aff1))
+* dedupe docstring-prose rule against category-O rubrics ([b9eff43](https://github.com/jl-cmd/claude-dev-env/commit/b9eff438cc1f0be2711844bf1ca5ed28dbccb7b2))
+* **host:** WSL/Docker/cowork starter matrix ([#256](https://github.com/jl-cmd/claude-dev-env/issues/256)) ([8429ffd](https://github.com/jl-cmd/claude-dev-env/commit/8429ffdbc20d1a29a1dbbadae3293f94ddafe9be))
+* **scripts:** document collect_forwarded_text_codec in constants inventory ([f38e0e5](https://github.com/jl-cmd/claude-dev-env/commit/f38e0e554dd286472c04ef6fa595d3f90b6f0715))
+* **scripts:** note codec helper in claude_chain_constants module docstring ([51a09fb](https://github.com/jl-cmd/claude-dev-env/commit/51a09fbc7a1574b9436dff2490857fdaeabff869))
+
+
+### Refactoring
+
+* **scripts:** house text-codec kwargs in claude_chain_constants ([ec31b0e](https://github.com/jl-cmd/claude-dev-env/commit/ec31b0eed894ad1aa3c2073b035195e1dcc4fe66))
+* share code-review gate deny scaffold and derivations ([5c2e5e1](https://github.com/jl-cmd/claude-dev-env/commit/5c2e5e1eb326a36046399cd2193361a4e2b51bff))
+
+
+### Tests
+
+* **skills:** assert the sandbox settings builder emits the deny-mode env block ([a70133c](https://github.com/jl-cmd/claude-dev-env/commit/a70133c9801f67c5e1cb497f2386c37082f6e7c6))
+
 ## [2.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.2.1...claude-dev-env-v2.3.0) (2026-07-18)
 
 
