@@ -198,14 +198,21 @@ def emit_status(message):
 '''
 
 
-def _antipattern_result_for(file_path: str, content: str) -> ValidatorResult:
-    """Return the Python Anti-patterns result for content proposed at file_path."""
+def _named_result(
+    file_path: str, content: str, validator_name: str
+) -> ValidatorResult:
+    """Return the named validator result for content proposed at file_path."""
     all_results = validate_proposed_file(file_path, content)
     return next(
         each_result
         for each_result in all_results
-        if each_result.name == ANTIPATTERN_VALIDATOR_NAME
+        if each_result.name == validator_name
     )
+
+
+def _antipattern_result_for(file_path: str, content: str) -> ValidatorResult:
+    """Return the Python Anti-patterns result for content proposed at file_path."""
+    return _named_result(file_path, content, ANTIPATTERN_VALIDATOR_NAME)
 
 
 class TestPrintCliExemptionThroughPipeline:
@@ -231,6 +238,15 @@ USELESS_TEST_VALIDATOR_NAME = "Useless Tests"
 USELESS_TEST_SOURCE = '''
 def test_exists():
     assert callable(str)
+'''
+TEST_HELPER_DIRECTORY_PATH = "packages/foo/tests/helper_functions.py"
+NON_TEST_DIRECTORY_HELPER_PATH = "packages/foo/helpers/helper_functions.py"
+CONFIG_DIRECTORY_MAGIC_PATH = "packages/foo/config/threshold_values.py"
+NON_EXEMPT_MAGIC_PATH = "packages/foo/services/threshold_values.py"
+MAGIC_VALUE_VALIDATOR_NAME = "Magic Values"
+MAGIC_NUMBER_SOURCE = '''
+def scale_amount(quantity):
+    return quantity * 199 * 42
 '''
 
 
@@ -276,3 +292,27 @@ class TestDirectoryExemptionThroughPipeline:
         )
         assert antipattern_result.passed
         assert PRINT_FINDING_FRAGMENT not in antipattern_result.output
+
+    def test_tests_directory_recognized_without_test_basename(self) -> None:
+        exempt_result = _antipattern_result_for(
+            TEST_HELPER_DIRECTORY_PATH, PIPELINE_PRINT_SOURCE
+        )
+        assert exempt_result.passed
+        assert PRINT_FINDING_FRAGMENT not in exempt_result.output
+
+        flagged_result = _antipattern_result_for(
+            NON_TEST_DIRECTORY_HELPER_PATH, PIPELINE_PRINT_SOURCE
+        )
+        assert not flagged_result.passed
+        assert PRINT_FINDING_FRAGMENT in flagged_result.output
+
+    def test_config_directory_magic_value_exempt_through_pipeline(self) -> None:
+        exempt_result = _named_result(
+            CONFIG_DIRECTORY_MAGIC_PATH, MAGIC_NUMBER_SOURCE, MAGIC_VALUE_VALIDATOR_NAME
+        )
+        assert exempt_result.passed
+
+        denied_result = _named_result(
+            NON_EXEMPT_MAGIC_PATH, MAGIC_NUMBER_SOURCE, MAGIC_VALUE_VALIDATOR_NAME
+        )
+        assert not denied_result.passed
