@@ -762,6 +762,31 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
     ]
 
 
+def _escapes_temporary_root(path_part: str) -> bool:
+    """Return True when a path part would climb out of or re-anchor the temp root.
+
+    ::
+
+        ok:   "scripts"  -> False (stays inside)
+        flag: ".."       -> True  (climbs a level)
+        flag: "/etc"     -> True  (absolute, re-anchors the join)
+
+    A ``..`` component escapes upward and an absolute or anchored component
+    re-roots the join away from the temporary directory. Both are dropped so a
+    staged file cannot land outside the ephemeral root.
+
+    Args:
+        path_part: A single path component drawn from the destination path.
+
+    Returns:
+        True when the component must be dropped to keep staging contained.
+    """
+    if path_part == os.pardir:
+        return True
+    part_as_path = Path(path_part)
+    return part_as_path.is_absolute() or bool(part_as_path.anchor)
+
+
 def _temporary_path_preserving_directory_signal(
     temporary_directory: Path, file_path: str
 ) -> Path:
@@ -807,7 +832,14 @@ def _temporary_path_preserving_directory_signal(
         break
 
     selected_parts = path_parts[start_index:]
-    temporary_file = temporary_directory.joinpath(*selected_parts)
+    contained_parts = tuple(
+        each_part for each_part in selected_parts if not _escapes_temporary_root(each_part)
+    )
+    if not contained_parts:
+        contained_parts = (destination_path.name,)
+    temporary_file = temporary_directory.joinpath(*contained_parts)
+    if not temporary_file.resolve().is_relative_to(temporary_directory.resolve()):
+        temporary_file = temporary_directory / destination_path.name
     temporary_file.parent.mkdir(parents=True, exist_ok=True)
     return temporary_file
 
