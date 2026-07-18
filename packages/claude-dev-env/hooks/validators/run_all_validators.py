@@ -863,7 +863,7 @@ def _stage_proposed_content(
         target: /tmp/pytest-of-x/test_foo0/legacy_module.py
         staged: <tempdir>/legacy_module.py
 
-    Preserving each directory segment lets a ``config``/``scripts``/``tests``
+    Preserving each directory segment lets a ``config`` ancestor or a ``tests``
     path-keyed exemption match the staged copy. Targets under the process temp
     directory stage by basename only so pytest's ``test_*`` sandbox folders do
     not falsely match ``is_test_file``. A bare filename mirrors to the same path
@@ -890,9 +890,9 @@ def validate_proposed_file(
 
     Stages the content under a temporary directory that mirrors every directory
     segment of the target path, so suffix filters, test-name filters, and
-    path-keyed exemptions (a ``config`` ancestor, a ``scripts`` or ``tests``
-    segment) match the staged copy as they would the real target, then runs the
-    file-scoped validators against it.
+    path-keyed exemptions (a ``config`` ancestor or a ``tests`` segment) match
+    the staged copy as they would the real target, then runs the file-scoped
+    validators against it.
 
     Args:
         file_path: The destination path the write or edit targets.
