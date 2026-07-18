@@ -41,6 +41,9 @@ from pr_loop_shared_constants.claude_settings_keys_constants import (
     CLAUDE_SETTINGS_ENVIRONMENT_KEY,
     CLAUDE_SETTINGS_PERMISSIONS_KEY,
 )
+from stale_worktree_rule_sweep import (  # noqa: E402
+    sweep_stale_worktree_rules_from_settings,
+)
 
 
 def remove_values_from_list(
@@ -219,6 +222,7 @@ def revoke_permissions_for_current_directory() -> None:
         ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
     settings = load_settings(claude_user_settings_path)
+    worktree_sweep_removed_count = sweep_stale_worktree_rules_from_settings(settings)
     allow_rules_removed_count = remove_rules_from_allow_list(settings, permission_rules)
     deny_rules_removed_count = remove_rules_from_deny_list(
         settings, all_agent_config_deny_rules
@@ -234,6 +238,7 @@ def revoke_permissions_for_current_directory() -> None:
         + deny_rules_removed_count
         + directories_removed_count
         + environment_entries_removed_count
+        + worktree_sweep_removed_count
     )
     if total_changes_count == 0:
         print(f"Project path: {project_path}")
