@@ -435,6 +435,18 @@ test('SKILL.md names Codex among the terminal confirmation gates', () => {
   assert.match(skillSource, /Codex/i);
 });
 
+test('SKILL.md documents codexNote in the workflow return shape', () => {
+  const returnShapeMatch = skillSource.match(/`\{ converged, rounds, finalSha, blocker,[^`]*\}`/);
+  assert.ok(returnShapeMatch, 'expected the documented return shape literal in SKILL.md');
+  assert.match(returnShapeMatch[0], /codexNote/);
+});
+
+test('SKILL.md final-report template surfaces the codexNote so a bypassed Codex gate stays visible', () => {
+  const reportBlockMatch = skillSource.match(/\/autoconverge exit:[\s\S]*?```/);
+  assert.ok(reportBlockMatch, 'expected the final-report template block in SKILL.md');
+  assert.match(reportBlockMatch[0], /Codex: <codexNote>/);
+});
+
 test('stop-conditions.md documents the Codex gate skip paths as non-blockers', () => {
   assert.match(stopConditionsSource, /Codex/i);
   assert.match(stopConditionsSource, /codex/i);
