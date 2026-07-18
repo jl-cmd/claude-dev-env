@@ -102,22 +102,6 @@ def _optional_timeout(value: object) -> float | None:
     return None
 
 
-def _optional_cwd(value: object) -> str | None:
-    """Return *value* as a working-directory string, or None when unset."""
-    if value is None:
-        return None
-    return str(value)
-
-
-def _optional_stdin_fd(value: object, input_bytes: bytes | None) -> int | None:
-    """Return the stdin descriptor to use, or None when stdin text is supplied."""
-    if input_bytes is not None:
-        return None
-    if isinstance(value, int):
-        return value
-    return None
-
-
 def _stdin_bytes(value: object, encoding: str, errors: str) -> bytes | None:
     """Encode stdin text *value* to bytes, or None when no text is given."""
     if value is None:
@@ -131,8 +115,8 @@ def _stdin_bytes(value: object, encoding: str, errors: str) -> bytes | None:
 # Redirecting each stream to a temporary file removes the pipe, so the child
 # writes freely; the files are then read back and decoded the way a pipe capture
 # would. ``capture_output`` and ``text`` are ignored in favor of file
-# redirection; ``timeout``, ``check``, ``input``, ``stdin``, ``cwd``,
-# ``encoding``, and ``errors`` are honored.
+# redirection; ``timeout``, ``check``, ``input``, ``encoding``, and ``errors``
+# are honored.
 def _run_captured_subprocess(
     all_invocation_tokens: list[str],
     **all_subprocess_options: object,
@@ -147,12 +131,12 @@ def _run_captured_subprocess(
         tempfile.TemporaryFile() as stderr_file,
     ):
         completion = subprocess.run(
-            all_invocation_tokens, stdout=stdout_file, stderr=stderr_file,
+            all_invocation_tokens,
+            stdout=stdout_file,
+            stderr=stderr_file,
             check=bool(all_subprocess_options.get("check", False)),
             timeout=_optional_timeout(all_subprocess_options.get("timeout")),
-            cwd=_optional_cwd(all_subprocess_options.get("cwd")),
             input=input_bytes,
-            stdin=_optional_stdin_fd(all_subprocess_options.get("stdin"), input_bytes),
         )
         stdout_file.seek(0)
         stderr_file.seek(0)

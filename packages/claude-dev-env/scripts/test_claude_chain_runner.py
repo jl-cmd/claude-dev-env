@@ -30,6 +30,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
+    CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
     CONFIG_CHAIN_KEY,
     CONFIG_CHAIN_NOT_LIST_REASON,
@@ -49,6 +50,12 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     NO_COMPLETED_PROCESS_RETURN_CODE,
     UTF8_ENCODING,
 )
+
+_LARGE_CAPTURE_BYTE_COUNT = 400_000
+_LARGE_CAPTURE_MARKER = "X"
+_STDIN_ECHO_PAYLOAD = "charter body for spool path"
+_UNDECODABLE_STDOUT_BYTES = b"ok \x90 end"
+_DECODED_UNDECODABLE_STDOUT = "ok \ufffd end"
 
 _A_SIGNATURE = ALL_USAGE_LIMIT_SIGNATURES[0]
 _PROMPT_ARGUMENTS = ["-p", "hello"]
@@ -953,6 +960,59 @@ def test_real_subprocess_capture_preserves_utf8_text(
     assert chain_result.served_command == sys.executable
     assert chain_result.returncode == 0
     assert chain_result.stdout == "report ✅ done"
+
+
+def test_run_captured_subprocess_spools_large_stdout_and_stderr() -> None:
+    child_code = (
+        "import sys;"
+        f"sys.stdout.write({_LARGE_CAPTURE_MARKER!r} * {_LARGE_CAPTURE_BYTE_COUNT});"
+        "sys.stderr.write('err-marker');"
+        "sys.exit(3)"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 3
+    assert len(completion.stdout) == _LARGE_CAPTURE_BYTE_COUNT
+    assert completion.stdout == _LARGE_CAPTURE_MARKER * _LARGE_CAPTURE_BYTE_COUNT
+    assert completion.stderr == "err-marker"
+
+
+def test_run_captured_subprocess_forwards_stdin_input() -> None:
+    child_code = "import sys; sys.stdout.write(sys.stdin.read())"
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=_STDIN_ECHO_PAYLOAD,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _STDIN_ECHO_PAYLOAD
+    assert completion.stderr == ""
+
+
+def test_run_captured_subprocess_replaces_undecodable_stdout_bytes() -> None:
+    child_code = (
+        "import sys;"
+        f"sys.stdout.buffer.write({_UNDECODABLE_STDOUT_BYTES!r})"
+    )
+    completion = runner._run_captured_subprocess(
+        [sys.executable, "-c", child_code],
+        encoding=UTF8_ENCODING,
+        errors=CODEC_ERROR_STRATEGY,
+        timeout=60,
+        check=False,
+        input=None,
+    )
+    assert completion.returncode == 0
+    assert completion.stdout == _DECODED_UNDECODABLE_STDOUT
 
 
 def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
