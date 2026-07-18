@@ -2,13 +2,18 @@
 
 The worktrees root is derived from the same ~/.claude home the permission
 grant script mints its rules under, so the location is named in exactly one
-place. A worktree rule points at a directory two segments below that root::
+place. A worktree rule points at a directory one or more segments below that
+root (flat or nested layouts)::
+
+    Edit(<claude home>/worktrees/<worktree name>/.claude/**)
+                                 ^^^^^^^^^^^^^^^
+                                 segment 1 (flat)
 
     Edit(<claude home>/worktrees/<repository>/<worktree name>/.claude/**)
                                  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
-                                 segment 1     segment 2
+                                 nested layout
 
-    worktree_directory_for_rule(rule, root)  ->  <root>/<repository>/<worktree name>
+    worktree_directory_for_rule(rule, root)  ->  project directory under root
 
 A rule whose target path lies outside the worktrees root reads back as None,
 so the sweep leaves it untouched.
@@ -22,7 +27,7 @@ from pr_loop_shared_constants.claude_permissions_constants import (
 
 WORKTREES_SUBDIRECTORY_NAME: str = "worktrees"
 
-WORKTREE_PATH_SEGMENT_COUNT: int = 2
+MINIMUM_WORKTREE_PATH_SEGMENT_COUNT: int = 1
 
 RULE_PATH_OPEN_DELIMITER: str = "("
 
@@ -48,7 +53,7 @@ def get_claude_worktrees_root() -> Path:
 def extract_rule_target_path(rule: str) -> str | None:
     """Return the path a permission rule targets, or None when unparsable.
 
-    A rule reads ``Tool(<path>)``; the target is the text between the first
+    A rule reads `Tool(<path>)`; the target is the text between the first
     open delimiter and the last close delimiter::
 
         Edit(/repo/wt/.claude/**)  ->  /repo/wt/.claude/**
@@ -70,8 +75,11 @@ def extract_rule_target_path(rule: str) -> str | None:
 def worktree_directory_for_rule(rule: str, worktrees_root: Path) -> Path | None:
     """Return the worktree directory a rule targets, or None when it is not one.
 
-    Keeps the two segments below the worktrees root — repository, worktree::
+    Keeps every path segment below the worktrees root so flat
+    (`worktrees/<name>`) and nested (`worktrees/<repo>/<name>`) layouts
+    both resolve to the on-disk project directory::
 
+        Edit(<root>/flat-wt/.claude/**)  ->  <root>/flat-wt
         Edit(<root>/repo/wt/.claude/**)  ->  <root>/repo/wt
         Edit(/elsewhere/project/.claude/**)  ->  None
 
@@ -81,7 +89,7 @@ def worktree_directory_for_rule(rule: str, worktrees_root: Path) -> Path | None:
 
     Returns:
         The worktree directory, or None when the target lies outside the
-        worktrees root or is shallower than a worktree directory.
+        worktrees root or has no path segments under it.
     """
     target_path = extract_rule_target_path(rule)
     if target_path is None:
@@ -94,6 +102,6 @@ def worktree_directory_for_rule(rule: str, worktrees_root: Path) -> Path | None:
     except ValueError:
         return None
     all_segments = relative_path.parts
-    if len(all_segments) < WORKTREE_PATH_SEGMENT_COUNT:
+    if len(all_segments) < MINIMUM_WORKTREE_PATH_SEGMENT_COUNT:
         return None
-    return worktrees_root.joinpath(*all_segments[:WORKTREE_PATH_SEGMENT_COUNT])
+    return worktrees_root.joinpath(*all_segments)

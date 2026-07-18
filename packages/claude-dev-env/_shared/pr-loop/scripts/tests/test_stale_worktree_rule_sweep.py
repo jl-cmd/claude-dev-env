@@ -84,6 +84,26 @@ def test_sweep_keeps_live_worktree_rules_and_drops_dead_ones(tmp_path: Path) -> 
     assert _permission_list(all_settings, "deny") == [live_deny_rule]
 
 
+def test_sweep_keeps_live_flat_worktree_rules_and_drops_dead_ones(tmp_path: Path) -> None:
+    sweep_module = _load_sweep_module()
+    live_worktree_directory = tmp_path / "flat-live"
+    live_worktree_directory.mkdir(parents=True)
+    dead_worktree_directory = tmp_path / "flat-dead"
+    live_allow_rule = _allow_rule_for(live_worktree_directory)
+    dead_allow_rule = _allow_rule_for(dead_worktree_directory)
+    all_settings: dict[str, object] = {
+        "permissions": {
+            "allow": [live_allow_rule, dead_allow_rule],
+            "deny": [],
+        },
+    }
+    removed_count = sweep_module.sweep_and_deduplicate_permission_lists(
+        all_settings, tmp_path
+    )
+    assert removed_count == 1
+    assert _permission_list(all_settings, "allow") == [live_allow_rule]
+
+
 def test_sweep_leaves_rules_for_projects_outside_the_worktrees_root(
     tmp_path: Path,
 ) -> None:
