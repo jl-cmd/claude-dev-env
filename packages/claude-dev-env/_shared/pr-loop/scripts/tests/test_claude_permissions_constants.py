@@ -25,16 +25,14 @@ constants_module = _load_constants_module()
 
 
 def test_exposes_all_permission_allow_tools_tuple() -> None:
-    assert constants_module.ALL_PERMISSION_ALLOW_TOOLS == ("Edit", "Write", "Read")
+    assert constants_module.ALL_PERMISSION_ALLOW_TOOLS == ("Edit", "Read")
+    assert "Write" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
 
 
-def test_exposes_all_agent_config_deny_tools_tuple_with_glob() -> None:
-    assert constants_module.ALL_AGENT_CONFIG_DENY_TOOLS == (
-        "Edit",
-        "Write",
-        "Read",
-        "Glob",
-    )
+def test_exposes_all_agent_config_deny_tools_tuple() -> None:
+    assert constants_module.ALL_AGENT_CONFIG_DENY_TOOLS == ("Edit", "Read")
+    assert "Write" not in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
+    assert "Glob" not in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
     assert "Glob" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
 
 
@@ -56,13 +54,9 @@ def test_template_derives_human_readable_pattern_list_from_pattern_tuple() -> No
     template_text: str = constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE
     assert "{project_path}" in template_text
     for each_pattern in constants_module.ALL_AGENT_CONFIG_PATH_PATTERNS:
-        if each_pattern.endswith("/**"):
-            directory_name = each_pattern[: -len("/**")]
-            expected_phrase = f"anything under {directory_name}/"
-        elif each_pattern == "mcp.json":
-            expected_phrase = "the mcp.json file"
-        else:
-            expected_phrase = each_pattern
+        expected_phrase = constants_module._describe_agent_config_pattern_for_humans(
+            each_pattern
+        )
         assert expected_phrase in template_text, (
             f"template missing derived phrase for pattern {each_pattern!r}: "
             f"expected {expected_phrase!r}"
