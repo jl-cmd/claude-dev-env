@@ -813,35 +813,81 @@ def test_resolve_prefix_falls_back_to_bare_name_when_absent(
     assert wrapper._resolve_codex_command_prefix() == [CODEX_BINARY_NAME]
 
 
-def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
-    tmp_path: Path,
-) -> None:
-    """The timeout fires promptly even when a grandchild holds the capture pipe.
+def _is_process_running(process_identifier: int) -> bool:
+    if sys.platform == "win32":
+        process_listing = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {process_identifier}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return str(process_identifier) in process_listing.stdout
+    liveness_probe = subprocess.run(
+        ["kill", "-0", str(process_identifier)],
+        capture_output=True,
+        check=False,
+    )
+    return liveness_probe.returncode == 0
+
+
+def _wait_until_process_stops(
+    process_identifier: int, deadline_seconds: float
+) -> bool:
+    poll_interval_seconds = 0.1
+    deadline = time.monotonic() + deadline_seconds
+    while time.monotonic() < deadline:
+        if not _is_process_running(process_identifier):
+            return True
+        time.sleep(poll_interval_seconds)
+    return not _is_process_running(process_identifier)
+
+
+def _grandchild_spawn_source(grandchild_pid_path: Path, lifetime_seconds: int) -> str:
+    """Python source that spawns a grandchild and records its PID before sleeping.
 
     ::
 
-        middle python -> grandchild python   grandchild inherits the stdout pipe
-        timeout at 2s, kill the whole tree    raises within a few seconds
-        flag: kill only the middle child      drain waits ~30s for the grandchild
+        Popen(grandchild) -> write grandchild.pid -> sleep    grandchild holds pipe
+    """
+    return (
+        "import subprocess, sys, time, pathlib; "
+        "grandchild = subprocess.Popen([sys.executable, '-c', "
+        f"'import time; time.sleep({lifetime_seconds})']); "
+        f"pathlib.Path(r'{grandchild_pid_path}').write_text(str(grandchild.pid)); "
+        f"time.sleep({lifetime_seconds})"
+    )
+
+
+def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
+    tmp_path: Path,
+) -> None:
+    """The timeout kills the grandchild that inherited the capture pipe.
+
+    ::
+
+        middle -> grandchild, timeout at 2s    ok: grandchild PID stops running
+        kill only the middle child             flag: grandchild lives on 30s
+
+    A direct-child-only kill leaves the grandchild alive on POSIX, so asserting
+    the recorded grandchild PID stops running guards the regression in CI.
     """
     grandchild_lifetime_seconds = 30
     review_timeout_seconds = 2
     wall_clock_ceiling_seconds = 20
-    spawn_grandchild_source = (
-        "import subprocess, sys, time; "
-        "subprocess.Popen([sys.executable, '-c', "
-        f"'import time; time.sleep({grandchild_lifetime_seconds})']); "
-        f"time.sleep({grandchild_lifetime_seconds})"
+    grandchild_pid_path = tmp_path / "grandchild.pid"
+    grandchild_source = _grandchild_spawn_source(
+        grandchild_pid_path, grandchild_lifetime_seconds
     )
-    all_arguments = [sys.executable, "-c", spawn_grandchild_source]
     start_time = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
         wrapper._run_command(
-            all_arguments,
+            [sys.executable, "-c", grandchild_source],
             working_directory=tmp_path,
             timeout_seconds=review_timeout_seconds,
         )
     assert time.monotonic() - start_time < wall_clock_ceiling_seconds
+    grandchild_identifier = int(grandchild_pid_path.read_text())
+    assert _wait_until_process_stops(grandchild_identifier, wall_clock_ceiling_seconds)
 
 
 def test_windows_process_tree_kill_builds_taskkill_argv(
