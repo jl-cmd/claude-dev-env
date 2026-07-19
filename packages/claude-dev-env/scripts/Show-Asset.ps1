@@ -24,8 +24,8 @@ outlive a dead agent parent or run indefinitely:
 One or more file paths to open.
 
 .PARAMETER ParentProcessId
-Process id to watch for death. When 0 (default), the script's own parent process
-id is used. Pass an explicit id in tests.
+Process id to watch for death. When omitted, the script's own parent process id
+is used. Pass an explicit id in tests.
 
 .PARAMETER MaxLifetimeSeconds
 Maximum seconds the viewer may stay open (default 1800 = 30 minutes). When the
@@ -35,8 +35,8 @@ span elapses, forms close and the process exits.
 How often to poll the parent process and max lifetime (default 1000 ms).
 #>
 param(
-    [ValidateRange(0, [int]::MaxValue)]
-    [int]$ParentProcessId = 0,
+    [ValidateRange(1, [int]::MaxValue)]
+    [int]$ParentProcessId,
 
     [ValidateRange(1, 86400)]
     [int]$MaxLifetimeSeconds = 1800,
@@ -63,34 +63,29 @@ $imageExtensions = @('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tif', '
 $screenMargin = 80
 $minimumClientWidth = 220
 $minimumClientHeight = 160
-$openWindowCount = 0
 $allOpenForms = New-Object 'System.Collections.Generic.List[System.Windows.Forms.Form]'
 $sessionStartedAtUtc = [datetime]::UtcNow
 $maxLifetime = [timespan]::FromSeconds($MaxLifetimeSeconds)
 
-function Get-OwnParentProcessId {
-    try {
-        $ownProcessRecord = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
-        return [int]$ownProcessRecord.ParentProcessId
-    }
-    catch {
-        return 0
-    }
-}
-
-function Test-ProcessIsAlive {
+function Get-WatchedParentProcess {
     param(
-        [int]$ProcessId
+        [int]$ExplicitProcessId
     )
-    if ($ProcessId -le 0) {
-        return $true
+    $watchedProcessId = $ExplicitProcessId
+    if ($watchedProcessId -le 0) {
+        try {
+            $ownProcessRecord = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+            $watchedProcessId = [int]$ownProcessRecord.ParentProcessId
+        }
+        catch {
+            return $null
+        }
     }
     try {
-        $null = Get-Process -Id $ProcessId -ErrorAction Stop
-        return $true
+        return [System.Diagnostics.Process]::GetProcessById($watchedProcessId)
     }
     catch {
-        return $false
+        return $null
     }
 }
 
@@ -98,32 +93,10 @@ function Stop-ShowAssetSession {
     if ($null -ne $script:watchTimer) {
         $script:watchTimer.Stop()
     }
-    foreach ($eachForm in @($script:allOpenForms.ToArray())) {
-        if (-not $eachForm.IsDisposed) {
-            $eachForm.Close()
-        }
-    }
     [System.Windows.Forms.Application]::Exit()
 }
 
-function Test-ShouldEndShowAssetSession {
-    $isParentAlive = Test-ProcessIsAlive -ProcessId $script:watchedParentProcessId
-    if (-not $isParentAlive) {
-        return $true
-    }
-    $elapsedLifetime = [datetime]::UtcNow - $script:sessionStartedAtUtc
-    if ($elapsedLifetime -ge $script:maxLifetime) {
-        return $true
-    }
-    return $false
-}
-
-if ($ParentProcessId -gt 0) {
-    $watchedParentProcessId = $ParentProcessId
-}
-else {
-    $watchedParentProcessId = Get-OwnParentProcessId
-}
+$watchedParentProcess = Get-WatchedParentProcess -ExplicitProcessId $ParentProcessId
 
 foreach ($path in $Paths) {
     if (-not (Test-Path -LiteralPath $path)) { continue }
@@ -184,20 +157,20 @@ foreach ($path in $Paths) {
     $form.Add_FormClosed({
             param($sender, $eventArguments)
             [void]$script:allOpenForms.Remove($sender)
-            $script:openWindowCount--
-            if ($script:openWindowCount -le 0) { [System.Windows.Forms.Application]::Exit() }
+            if ($script:allOpenForms.Count -eq 0) { Stop-ShowAssetSession }
         })
 
-    $openWindowCount++
     [void]$allOpenForms.Add($form)
     $form.Show()
 }
 
-if ($openWindowCount -gt 0) {
+if ($allOpenForms.Count -gt 0) {
     $watchTimer = New-Object System.Windows.Forms.Timer
     $watchTimer.Interval = $ParentPollIntervalMilliseconds
     $watchTimer.Add_Tick({
-            if (Test-ShouldEndShowAssetSession) {
+            $isParentDead = $null -ne $script:watchedParentProcess -and $script:watchedParentProcess.HasExited
+            $hasLifetimeElapsed = ([datetime]::UtcNow - $script:sessionStartedAtUtc) -ge $script:maxLifetime
+            if ($isParentDead -or $hasLifetimeElapsed) {
                 Stop-ShowAssetSession
             }
         })
