@@ -239,8 +239,8 @@ Routing rules:
   the sonnet-equivalent model id for that host. A non-zero exit stops
   the coding spawn; the orchestrator reports the failure rather than
   picking a model itself. This section states the resolver's contract
-  only; the resolver script and its call wiring live outside this
-  skill.
+  only; a host where no resolver is available fails closed the same
+  way — the coding spawn stops and the orchestrator reports it.
 - Host detection follows
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
   (Host profiles section, `detect_host_profile`) — the sole detection
