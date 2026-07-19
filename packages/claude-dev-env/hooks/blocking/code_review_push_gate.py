@@ -1,7 +1,8 @@
 """PreToolUse gate: git push lands only behind a clean low code-review stamp.
 
-Fires on Bash/PowerShell tool calls when ``CODE_REVIEW_ENFORCEMENT_ENABLED`` is on (default off). When the command carries a ``git push``,
-the gate resolves each repository the push targets, computes the live
+Fires on Bash/PowerShell tool calls when ``CODE_REVIEW_ENFORCEMENT_ENABLED``
+is on (default off). When the command carries a ``git push``, the gate
+resolves each repository the push targets, computes the live
 change-surface hash against the merge base, and allows the push only when a
 clean stamp at effort ``low`` or higher covers that exact hash under
 ``~/.claude/code-review-stamps/``.

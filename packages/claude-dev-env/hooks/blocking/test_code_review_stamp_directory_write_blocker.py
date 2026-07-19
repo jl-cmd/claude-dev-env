@@ -59,8 +59,6 @@ def enable_code_review_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(blocker_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", True)
 
 
-
-
 def _isolate_home(monkeypatch: pytest.MonkeyPatch, fake_home: Path) -> None:
     home_text = str(fake_home)
     monkeypatch.setenv("HOME", home_text)
@@ -186,6 +184,7 @@ def test_chr_chain_obfuscated_stamp_path_is_blocked() -> None:
 
 def test_benign_decode_to_other_path_is_not_blocked() -> None:
     assert not blocker_module.references_stamp_directory(_hex_forge(BENIGN_OBFUSCATION_PATH))
+
 
 def test_enforcement_off_allows_stamp_directory_access(
     monkeypatch: pytest.MonkeyPatch,

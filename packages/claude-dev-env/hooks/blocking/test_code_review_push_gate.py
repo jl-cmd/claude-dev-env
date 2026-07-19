@@ -52,8 +52,6 @@ def enable_code_review_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(gate_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", True)
 
 
-
-
 def _run_git(repository_directory: Path, *git_arguments: str) -> None:
     subprocess.run(
         ["git", "-C", str(repository_directory), *git_arguments],
@@ -196,6 +194,7 @@ def test_code_review_skip_marker_allows_push(
     emitted = _run_main(monkeypatch, f"git push origin main {BYPASS_MARKER}", work_directory)
     assert emitted == ""
 
+
 def test_enforcement_off_allows_push_without_stamp(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -204,4 +203,3 @@ def test_enforcement_off_allows_push_without_stamp(
     assert gate_module.deny_reason_for_directory(str(work_directory)) is None
     emitted = _run_main(monkeypatch, "git push origin main", work_directory)
     assert emitted == ""
-

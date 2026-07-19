@@ -40,15 +40,13 @@ def _load_module(module_name: str) -> ModuleType:
 
 gate_module = _load_module("code_review_pr_create_gate")
 store_module = _load_module("code_review_stamp_store")
+deny_module = _load_module("code_review_gate_deny")
 
 
 @pytest.fixture(autouse=True)
 def enable_code_review_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
     """Behavior tests exercise the gates with enforcement on."""
     monkeypatch.setattr(gate_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", True)
-
-
-deny_module = _load_module("code_review_gate_deny")
 
 
 def _run_git(repository_directory: Path, *git_arguments: str) -> None:
@@ -192,10 +190,10 @@ def test_build_deny_payload_shape() -> None:
     assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert deny_payload["hookSpecificOutput"]["permissionDecisionReason"] == "blocked reason"
 
+
 def test_enforcement_off_allows_pr_create_without_stamp(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(gate_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", False)
     work_directory = _prepared_repo(monkeypatch, tmp_path)
     assert gate_module.deny_reason_for_directory(str(work_directory)) is None
-

@@ -1,7 +1,8 @@
 """PreToolUse gate: PR create lands only behind a clean xhigh code-review stamp.
 
-Fires when ``CODE_REVIEW_ENFORCEMENT_ENABLED`` is on (default off). Runs on Bash/PowerShell ``gh pr create`` and on the MCP
-``create_pull_request`` tool. Resolves the repository from the session
+Fires when ``CODE_REVIEW_ENFORCEMENT_ENABLED`` is on (default off). Runs on
+Bash/PowerShell ``gh pr create`` and on the MCP ``create_pull_request``
+tool. Resolves the repository from the session
 working directory (or the payload cwd), computes the live change-surface
 hash, and allows the create only when a clean stamp at effort ``xhigh`` or
 higher covers that exact hash under ``~/.claude/code-review-stamps/``.
