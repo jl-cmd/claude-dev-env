@@ -109,7 +109,7 @@ Bugfind subagent completes (findings or clean):
 
 - **PRs with findings:** spawn one fix worker per PR via
   `Agent(subagent_type="clean-coder", run_in_background=true,
-  model: sonnet)` — worker-model routing per the orchestrator skill;
+  model="sonnet")` — worker-model routing per the orchestrator skill;
   resolver-supplied sonnet-equivalent on third-party hosts. Worker:
   1. Reads outcomes XML.
   2. Applies TDD fixes (test first, then production).
