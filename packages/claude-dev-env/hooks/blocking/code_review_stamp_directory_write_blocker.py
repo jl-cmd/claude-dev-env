@@ -297,6 +297,8 @@ def decision_for_payload(
 ) -> dict[str, dict[str, str]] | None:
     """Build the deny decision for stamp-directory shell or file-tool access.
 
+    Returns None immediately when `CODE_REVIEW_ENFORCEMENT_ENABLED` is off.
+
     Args:
         all_pretooluse_payload: The PreToolUse hook payload.
 

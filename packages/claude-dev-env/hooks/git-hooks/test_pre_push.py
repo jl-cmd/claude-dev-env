@@ -542,3 +542,28 @@ def test_main_allows_deletion_push_even_when_code_review_gate_would_block(
     exit_code = pre_push.main()
 
     assert exit_code == 0
+
+def test_main_allows_when_code_review_enforcement_flag_is_off(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Native pre-push honors the real gate with enforcement off.
+
+    Points at the production push gate (not a reason stub). With the shipped
+    default `CODE_REVIEW_ENFORCEMENT_ENABLED = False`, the gate returns no
+    deny reason and the backstop allows the push — one path covering flag,
+    real gate load, and pre-push exit together.
+    """
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    real_gate_path = (
+        Path(__file__).resolve().parent.parent
+        / "blocking"
+        / "code_review_push_gate.py"
+    )
+    assert real_gate_path.is_file()
+    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(real_gate_path))
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+
