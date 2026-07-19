@@ -59,6 +59,19 @@ Cancel matching host schedules; stop without re-arming.
 2. **You are the orchestrator.** Orchestrate and hold the user
    conversation; spawn executor subagents for every code edit and build
    or test run.
+   - **Worker model.** Every coding spawn (`clean-coder`, `code-verifier`,
+     any row that edits code, runs a build, or runs a test) sets
+     `model: sonnet` on a Claude host, and the sonnet-equivalent id a
+     deterministic worker-model resolver prints on a third-party host,
+     run before that spawn — per the orchestrator skill's Workflow Agent
+     Routing table. When `sonnet` cannot be spawned on a Claude host, use
+     the Claude chain failover for `sonnet` when one is configured;
+     otherwise stop the coding spawn and report — never fall back in
+     silence to `opus` or the session's own model. On a third-party host,
+     a resolver exit failure stops the coding spawn.
+   - **Focused tickets.** One mechanical done-check per ticket; resume a
+     warm agent with a thin next-slice ticket rather than a fresh cold
+     spawn, and keep thick context in the assignment file.
 3. **Hard decisions go to the shared advisor.**
    - **Claude host:** executors consult the warm `session-advisor` via
      `SendMessage` (ENDORSE / CORRECTION / PLAN / STOP). This session

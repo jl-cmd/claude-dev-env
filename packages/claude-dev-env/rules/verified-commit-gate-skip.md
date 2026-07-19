@@ -17,7 +17,7 @@ That situation arises when the verdict fails to cover the current surface even t
 
 ## When the marker is not allowed
 
-Every other case runs the verification: spawn the `code-verifier` agent and let the SubagentStop hook mint the verdict. In particular, never use the marker to:
+Every other case runs the verification: spawn the `code-verifier` agent — `model: sonnet`, worker-model routing per the orchestrator skill; resolver-supplied sonnet-equivalent on third-party hosts — and let the SubagentStop hook mint the verdict. In particular, never use the marker to:
 
 - Skip a branch's first verification.
 - Commit or push after any real code change since the last clean verdict — one changed line means a fresh verification.

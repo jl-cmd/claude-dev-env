@@ -108,7 +108,9 @@ one agent per PR in single parallel message. Never process any PR inline.
 Bugfind subagent completes (findings or clean):
 
 - **PRs with findings:** spawn one fix worker per PR via
-  `Agent(subagent_type="clean-coder", run_in_background=true)`. Worker:
+  `Agent(subagent_type="clean-coder", run_in_background=true,
+  model: sonnet)` — worker-model routing per the orchestrator skill;
+  resolver-supplied sonnet-equivalent on third-party hosts. Worker:
   1. Reads outcomes XML.
   2. Applies TDD fixes (test first, then production).
   3. Commits, pushes one fix commit.
