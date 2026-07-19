@@ -62,7 +62,7 @@ class TestOrchestratorRefreshRescheduleGate:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         status_file_path = temporary_directory / "status.json"
-        write_status_file(status_file_path, RUN_STATUS_ACTIVE, "")
+        write_status_file(status_file_path, RUN_STATUS_ACTIVE, "", is_rearm_pending=False)
         monkeypatch.setenv("ORCHESTRATOR_RUN_STATUS_FILE", str(status_file_path))
         gate_module = load_gate_module()
         payload = {
@@ -82,7 +82,7 @@ class TestOrchestratorRefreshRescheduleGate:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         status_file_path = temporary_directory / "status.json"
-        write_status_file(status_file_path, RUN_STATUS_DONE, "")
+        write_status_file(status_file_path, RUN_STATUS_DONE, "", is_rearm_pending=False)
         monkeypatch.setenv("ORCHESTRATOR_RUN_STATUS_FILE", str(status_file_path))
         gate_module = load_gate_module()
         payload = {
@@ -116,13 +116,38 @@ class TestOrchestratorRefreshRescheduleGate:
         denial = json.loads(stdout_text)
         assert denial["hookSpecificOutput"]["permissionDecision"] == "deny"
 
+    def should_deny_when_rearm_slot_already_pending(
+        self,
+        temporary_directory: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        status_file_path = temporary_directory / "status.json"
+        write_status_file(
+            status_file_path, RUN_STATUS_ACTIVE, "", is_rearm_pending=True
+        )
+        monkeypatch.setenv("ORCHESTRATOR_RUN_STATUS_FILE", str(status_file_path))
+        gate_module = load_gate_module()
+        payload = {
+            "tool_name": "ScheduleWakeup",
+            "tool_input": {"prompt": "/orchestrator-refresh", "delaySeconds": 1200},
+            "cwd": str(temporary_directory),
+        }
+        _exit_code, stdout_text = run_main_with_payload(
+            gate_module, payload, monkeypatch
+        )
+        denial = json.loads(stdout_text)
+        assert denial["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "rearm_already_pending" in denial["hookSpecificOutput"][
+            "permissionDecisionReason"
+        ]
+
     def should_always_deny_cron_create_for_orchestrator_refresh(
         self,
         temporary_directory: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         status_file_path = temporary_directory / "status.json"
-        write_status_file(status_file_path, RUN_STATUS_ACTIVE, "")
+        write_status_file(status_file_path, RUN_STATUS_ACTIVE, "", is_rearm_pending=False)
         monkeypatch.setenv("ORCHESTRATOR_RUN_STATUS_FILE", str(status_file_path))
         gate_module = load_gate_module()
         payload = {
@@ -184,7 +209,7 @@ class TestOrchestratorRefreshRescheduleGate:
         status_file_path = temporary_directory.joinpath(
             "docs", "plans", run_slug, ".orchestrator-run-status.json"
         )
-        write_status_file(status_file_path, RUN_STATUS_ACTIVE, run_slug)
+        write_status_file(status_file_path, RUN_STATUS_ACTIVE, run_slug, is_rearm_pending=False)
         monkeypatch.delenv("ORCHESTRATOR_RUN_STATUS_FILE", raising=False)
         gate_module = load_gate_module()
         payload = {
