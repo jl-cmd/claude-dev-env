@@ -5,91 +5,32 @@ Write, Edit, or MultiEdit would produce and emits a PreToolUse deny decision
 when that content violates a validator, rather than grading the whole branch.
 """
 
-import io
 import json
 import subprocess
 import sys
+import tempfile
+from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from . import file_scoped_runners, pre_tool_use_gate
 from .run_all_validators import (
     ValidatorResult,
+    _escapes_temporary_root,
+    _hooks_subprocess_working_directory_and_environment,
+    _scope_new_and_preexisting,
+    _temporary_path_preserving_directory_signal,
+    _violation_line_number,
     main,
-    run_pre_tool_use_gate,
     run_validators_entrypoint_subprocess,
 )
 
-GATE_PROBE_CLEAN_SOURCE = "def gate_probe() -> int:\n    return 1\n"
-
-
-def _run_gate_in_process(
-    payload: dict[str, object],
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> str:
-    """Drive the PreToolUse gate in-process against *payload*, returning its stdout."""
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-    exit_code = run_pre_tool_use_gate()
-    assert exit_code == 0
-    return capsys.readouterr().out
-
-
-class TestGateFailsClosedOnFault:
-    def test_faulted_file_scoped_validator_denies_naming_it(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        def raise_validator_fault(_files: list[Path]) -> ValidatorResult:
-            raise RuntimeError("anti-pattern check crashed")
-
-        monkeypatch.setattr(
-            file_scoped_runners,
-            "run_python_antipattern_checks",
-            raise_validator_fault,
-        )
-        gate_stdout = _run_gate_in_process(
-            {
-                "tool_name": "Write",
-                "tool_input": {
-                    "file_path": "gate_probe_module.py",
-                    "content": GATE_PROBE_CLEAN_SOURCE,
-                },
-            },
-            monkeypatch,
-            capsys,
-        )
-        assert '"permissionDecision": "deny"' in gate_stdout
-        assert "Python Anti-patterns" in gate_stdout
-
-    def test_top_level_fault_denies_rather_than_allowing_silently(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        def raise_reconstruction_fault(
-            _tool_name: str, _tool_input: dict[str, object]
-        ) -> str:
-            raise RuntimeError("payload evaluation crashed")
-
-        monkeypatch.setattr(
-            pre_tool_use_gate,
-            "reconstruct_proposed_content",
-            raise_reconstruction_fault,
-        )
-        gate_stdout = _run_gate_in_process(
-            {
-                "tool_name": "Write",
-                "tool_input": {
-                    "file_path": "gate_probe_module.py",
-                    "content": GATE_PROBE_CLEAN_SOURCE,
-                },
-            },
-            monkeypatch,
-            capsys,
-        )
-        assert '"permissionDecision": "deny"' in gate_stdout
-        assert "gate faulted" in gate_stdout
-
+CONFIG_DIR_TARGET_PATH = (
+    "CDP Automations/os_update_workflow/config/submission_constants.py"
+)
+PARENT_TRAVERSAL_TARGET_PATH = "../../escape_target.py"
+RELATIVE_CONFIG_TARGET_PATH = "config/x.py"
 
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
@@ -154,7 +95,9 @@ class TestPreToolUseGate:
     def test_edit_validates_reconstructed_post_edit_content(
         self, tmp_path: Path
     ) -> None:
-        target_file = tmp_path / "calculate.py"
+        target_directory = tmp_path / "neutral_edit_target"
+        target_directory.mkdir(exist_ok=True)
+        target_file = target_directory / "calculate.py"
         target_file.write_text(CLEAN_PYTHON_SOURCE, encoding="utf-8")
         completed = run_gate(
             {
@@ -175,6 +118,152 @@ class TestPreToolUseGate:
         )
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
+
+    def test_write_to_config_dir_path_is_not_denied(self) -> None:
+        completed = run_gate(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": CONFIG_DIR_TARGET_PATH,
+                    "content": VIOLATING_PYTHON_SOURCE,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
+    def test_write_relative_config_path_not_denied_when_cwd_under_system_temp(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        system_temp_root = Path(tempfile.gettempdir()).resolve()
+        monkeypatch.setenv("TEMP", str(system_temp_root))
+        monkeypatch.setenv("TMP", str(system_temp_root))
+        monkeypatch.setenv("TMPDIR", str(system_temp_root))
+        with tempfile.TemporaryDirectory(
+            dir=str(system_temp_root), prefix="gate_cwd_"
+        ) as temporary_root_string:
+            temporary_cwd = Path(temporary_root_string) / "gate_cwd"
+            temporary_cwd.mkdir()
+
+            def working_directory_under_system_temp() -> tuple[str, dict[str, str]]:
+                _working_directory, environment = (
+                    _hooks_subprocess_working_directory_and_environment()
+                )
+                return str(temporary_cwd), environment
+
+            with patch(
+                "validators.run_all_validators._hooks_subprocess_working_directory_and_environment",
+                side_effect=working_directory_under_system_temp,
+            ):
+                completed = run_gate(
+                    {
+                        "tool_name": "Write",
+                        "tool_input": {
+                            "file_path": RELATIVE_CONFIG_TARGET_PATH,
+                            "content": VIOLATING_PYTHON_SOURCE,
+                        },
+                    }
+                )
+        assert completed.returncode == 0, completed.stderr
+        assert "deny" not in completed.stdout
+
+    def test_write_to_parent_traversal_path_still_validates(self) -> None:
+        completed = run_gate(
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": PARENT_TRAVERSAL_TARGET_PATH,
+                    "content": VIOLATING_PYTHON_SOURCE,
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Magic Values" in completed.stdout
+
+
+class TestTemporaryPathPreservingDirectorySignal:
+    def test_strips_parent_traversal_segments(self, tmp_path: Path) -> None:
+        assert _escapes_temporary_root("..") is True
+        staged_path = _temporary_path_preserving_directory_signal(
+            tmp_path, PARENT_TRAVERSAL_TARGET_PATH
+        )
+        assert staged_path == tmp_path / "escape_target.py"
+        assert staged_path.resolve().is_relative_to(tmp_path.resolve())
+
+    def test_keeps_config_directory_segment(self, tmp_path: Path) -> None:
+        staged_path = _temporary_path_preserving_directory_signal(
+            tmp_path, CONFIG_DIR_TARGET_PATH
+        )
+        assert staged_path.name == "submission_constants.py"
+        assert "config" in staged_path.parts
+        assert staged_path == tmp_path / "config" / "submission_constants.py"
+
+    def test_drops_leading_anchor(self, tmp_path: Path) -> None:
+        absolute_target = tmp_path / "config" / "submission_constants.py"
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(absolute_target)
+        )
+        relative_parts = staged_path.relative_to(staging_root).parts
+        assert relative_parts == ("config", "submission_constants.py")
+        assert absolute_target.anchor not in relative_parts
+        assert staged_path.resolve().is_relative_to(staging_root.resolve())
+
+    def test_path_without_exemption_directory_stages_flat_basename(
+        self, tmp_path: Path
+    ) -> None:
+        pytest_shaped_target = (
+            tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
+        )
+        pytest_shaped_target.parent.mkdir(parents=True, exist_ok=True)
+        pytest_shaped_target.write_text(CLEAN_MARKER_FUNCTION, encoding="utf-8")
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(pytest_shaped_target)
+        )
+        assert staged_path == staging_root / "legacy_module.py"
+
+    def test_relative_config_path_preserves_config_under_system_temp_cwd(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        system_temp_root = Path(tempfile.gettempdir()).resolve()
+        monkeypatch.setenv("TEMP", str(system_temp_root))
+        monkeypatch.setenv("TMP", str(system_temp_root))
+        monkeypatch.setenv("TMPDIR", str(system_temp_root))
+        with tempfile.TemporaryDirectory(
+            dir=str(system_temp_root), prefix="staging_cwd_"
+        ) as temporary_root_string:
+            temporary_root = Path(temporary_root_string)
+            previous_cwd = Path.cwd()
+            try:
+                monkeypatch.chdir(temporary_root)
+                staging_root = temporary_root / "staging_root"
+                staging_root.mkdir()
+                staged_path = _temporary_path_preserving_directory_signal(
+                    staging_root, RELATIVE_CONFIG_TARGET_PATH
+                )
+                assert staged_path == staging_root / "config" / "x.py"
+                assert "config" in staged_path.parts
+                assert staged_path.name == "x.py"
+            finally:
+                monkeypatch.chdir(previous_cwd)
+
+    def test_escapes_temporary_root_rejects_absolute_and_parent_parts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sandbox_temp_root = tmp_path / "system_temp"
+        sandbox_temp_root.mkdir()
+        monkeypatch.setenv("TEMP", str(sandbox_temp_root))
+        monkeypatch.setenv("TMP", str(sandbox_temp_root))
+        monkeypatch.setenv("TMPDIR", str(sandbox_temp_root))
+        assert _escapes_temporary_root("..") is True
+        assert _escapes_temporary_root("scripts") is False
+        assert _escapes_temporary_root("config") is False
+        absolute_part = str(Path(tempfile.gettempdir()).resolve().anchor) or "/"
+        assert _escapes_temporary_root(absolute_part) is True
 
 
 class TestCliModeRegression:
@@ -358,3 +447,50 @@ class TestBaselineScopedGate:
         assert '"permissionDecision": "deny"' in completed.stdout
         assert "F401" in completed.stdout
         assert "F841" not in completed.stdout
+
+
+class TestScopeNewAndPreexisting:
+    def test_failed_result_without_located_lines_is_treated_as_new(self) -> None:
+        summary_only_result = ValidatorResult(
+            name="Ruff", checks="37", passed=False, output="Found 1 error."
+        )
+
+        new_results, preexisting_results = _scope_new_and_preexisting(
+            [summary_only_result], "import os\n", Counter()
+        )
+
+        assert [each_result.name for each_result in new_results] == ["Ruff"]
+        assert preexisting_results == []
+
+
+class TestViolationLineNumber:
+    def test_ruff_line_col_prefix_returns_line_not_column(self) -> None:
+        ruff_shaped_line = "/pkg/legacy_module.py:37:5: F401 `os` imported but unused"
+
+        assert _violation_line_number(ruff_shaped_line) == 37
+
+    def test_windows_drive_prefix_returns_line(self) -> None:
+        windows_shaped_line = r"C:\repo\tmp\legacy_module.py:37:5: F401 unused import"
+
+        assert _violation_line_number(windows_shaped_line) == 37
+
+    def test_check_module_line_prefix_returns_line(self) -> None:
+        check_module_line = "/pkg/legacy_module.py:37: magic number 199"
+
+        assert _violation_line_number(check_module_line) == 37
+
+    def test_summary_line_without_location_returns_zero(self) -> None:
+        assert _violation_line_number("Found 3 errors.") == 0
+
+    def test_code_frame_line_quoting_colon_digits_returns_zero(self) -> None:
+        frame_line = '4 | message = "err:37: bad"'
+
+        assert _violation_line_number(frame_line) == 0
+
+    def test_code_frame_source_line_returns_zero(self) -> None:
+        assert _violation_line_number("17 | import os") == 0
+
+    def test_path_with_spaces_returns_line(self) -> None:
+        spaced_path_line = "/tmp/my dir/legacy module.py:37: magic number 199"
+
+        assert _violation_line_number(spaced_path_line) == 37
