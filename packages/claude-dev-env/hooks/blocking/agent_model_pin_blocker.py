@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: blocks an agent-definition Write/Edit that pins a concrete model.
+"""PreToolUse hook: blocks an agent-definition write that pins a concrete model.
 
 An agent `.md` file under `packages/claude-dev-env/agents/` (or the installed
 `~/.claude/agents/`) opens with YAML frontmatter. The `model` key either is
@@ -10,16 +10,18 @@ so a definition never pins one::
     ok:   <no model key at all>
     flag: model: opus       <- pinned concrete model, caller cannot override
 
-`frontmatter_pins_concrete_model` is the shared pin detector: the hook calls it
-to decide a write, and the agent frontmatter test suite imports the same function
-so the two surfaces cannot drift.
+The pin question is read by the shared `hooks_constants.agent_model_pin_detection`
+helpers, which the agent frontmatter test suite imports too, so the two surfaces
+cannot drift. For an Edit or MultiEdit the hook reconstructs the post-edit file
+content before reading the frontmatter, so an edit that flips `model: inherit` to
+`model: opus` still blocks even when the payload fragment alone would hide it.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
+from pathlib import Path
 
 import _path_setup  # noqa: F401
 import yaml
@@ -29,83 +31,23 @@ from hooks_constants.agent_model_pin_blocker_constants import (
     CALLING_HOOK_NAME,
     DENY_ADDITIONAL_CONTEXT,
     DENY_SYSTEM_MESSAGE,
-    EDIT_TEXT_JOIN_SEPARATOR,
-    FRONTMATTER_FENCE,
-    FRONTMATTER_SEGMENT_COUNT,
-    INHERIT_MODEL_VALUE,
-    INSTALLED_AGENTS_PATH_FRAGMENT,
-    MARKDOWN_EXTENSION,
-    MODEL_FRONTMATTER_KEY,
-    PACKAGE_AGENTS_PATH_FRAGMENT,
-    TOP_LEVEL_MODEL_LINE_PATTERN,
+)
+from hooks_constants.agent_model_pin_detection import (
+    extract_frontmatter_block,
+    frontmatter_pins_concrete_model,
+    is_agent_definition_path,
+    raw_last_model_line_pins,
 )
 from hooks_constants.hook_block_logger import log_hook_block
+from hooks_constants.multi_edit_reconstruction import apply_edits, edits_for_tool
 from hooks_constants.pre_tool_use_dispatcher_constants import (
     DENY_DECISION,
     HOOK_EVENT_NAME,
+    WRITE_TOOL_NAME,
 )
 from hooks_constants.pre_tool_use_stdin import (
     read_hook_input_dictionary_from_stdin,
 )
-
-
-def frontmatter_pins_concrete_model(frontmatter_block: str) -> bool:
-    """Return whether a frontmatter block pins a concrete model.
-
-    Isolates the top-level ``model:`` lines by a column-zero line scan, so a
-    ``description`` carrying colon-laden example prose never confuses the read,
-    then parses the last line (last-wins) with ``yaml.safe_load`` for the value::
-
-        ok:   model: inherit   -> False
-        ok:   model:           -> False (None, not a pin)
-        flag: model: opus      -> True
-
-    The comparison against ``inherit`` strips whitespace and ignores case. An
-    unterminated quote raises ``yaml.YAMLError``.
-    """
-    all_model_lines = re.findall(
-        TOP_LEVEL_MODEL_LINE_PATTERN, frontmatter_block, re.MULTILINE
-    )
-    if not all_model_lines:
-        return False
-    parsed_model_line = yaml.safe_load(all_model_lines[-1])
-    declared_model = (
-        parsed_model_line.get(MODEL_FRONTMATTER_KEY)
-        if isinstance(parsed_model_line, dict)
-        else None
-    )
-    if declared_model is None:
-        return False
-    return str(declared_model).strip().lower() != INHERIT_MODEL_VALUE
-
-
-def is_agent_definition_path(file_path: str) -> bool:
-    """Return whether a path is an agent-definition `.md` under an agents directory.
-
-    Matches the package shape ``packages/claude-dev-env/agents/<name>.md`` and the
-    installed shape ``~/.claude/agents/<name>.md``, across both slash directions.
-    """
-    normalized_path = file_path.replace("\\", "/")
-    if not normalized_path.endswith(MARKDOWN_EXTENSION):
-        return False
-    return (
-        PACKAGE_AGENTS_PATH_FRAGMENT in normalized_path
-        or INSTALLED_AGENTS_PATH_FRAGMENT in normalized_path
-    )
-
-
-def _frontmatter_block(file_content: str) -> str | None:
-    """Return the frontmatter block from file content, or None when there is none.
-
-    Content that does not open with the fence carries no frontmatter, so a
-    mid-edit fragment without an opening fence yields None.
-    """
-    if not file_content.lstrip().startswith(FRONTMATTER_FENCE):
-        return None
-    fence_segments = file_content.split(FRONTMATTER_FENCE, FRONTMATTER_SEGMENT_COUNT - 1)
-    if len(fence_segments) < FRONTMATTER_SEGMENT_COUNT:
-        return None
-    return fence_segments[1]
 
 
 def _string_value(raw_value: object) -> str:
@@ -113,29 +55,32 @@ def _string_value(raw_value: object) -> str:
     return raw_value if isinstance(raw_value, str) else ""
 
 
-def _candidate_content(tool_name: str, all_tool_input_fields: dict[str, object]) -> str:
-    """Return the text a Write/Edit/MultiEdit payload would place in the file.
-
-    A Write carries the whole file in ``content``, an Edit the replacement in
-    ``new_string``, and a MultiEdit the ``new_string`` of each edit joined.
-    """
-    if tool_name == "Write":
-        return _string_value(all_tool_input_fields.get("content"))
-    if tool_name == "Edit":
-        return _string_value(all_tool_input_fields.get("new_string"))
-    raw_edits = all_tool_input_fields.get("edits", [])
-    if not isinstance(raw_edits, list):
+def _read_existing_file(file_path: str) -> str:
+    """Return the current on-disk text of a file, or empty when it cannot be read."""
+    try:
+        return Path(file_path).read_text(encoding="utf-8")
+    except OSError:
         return ""
-    all_new_strings = [
-        _string_value(each_edit.get("new_string"))
-        for each_edit in raw_edits
-        if isinstance(each_edit, dict)
-    ]
-    return EDIT_TEXT_JOIN_SEPARATOR.join(all_new_strings)
 
 
-def _deny_reason(file_path: str) -> str:
-    """Return the deny-reason text for an agent file that pins a model."""
+def _candidate_content(
+    tool_name: str, all_tool_input_fields: dict[str, object], file_path: str
+) -> str:
+    """Return the text a Write/Edit/MultiEdit payload would leave on disk.
+
+    A Write carries the whole file in ``content``. An Edit or MultiEdit replays
+    its ``old_string`` -> ``new_string`` replacements over the current file, so
+    the frontmatter check reads the post-edit content rather than the fragment.
+    """
+    if tool_name == WRITE_TOOL_NAME:
+        return _string_value(all_tool_input_fields.get("content"))
+    existing_content = _read_existing_file(file_path)
+    all_edits = edits_for_tool(tool_name, all_tool_input_fields)
+    return apply_edits(existing_content, all_edits)
+
+
+def _pin_deny_reason(file_path: str) -> str:
+    """Return the deny-reason text for an agent file that pins a concrete model."""
     return (
         f"{file_path} pins a concrete model in frontmatter. An agent definition "
         "omits the model key or sets model: inherit, so the caller supplies the "
@@ -143,13 +88,21 @@ def _deny_reason(file_path: str) -> str:
     )
 
 
+def _malformed_model_line_deny_reason(file_path: str) -> str:
+    """Return the deny-reason text for an agent file with a malformed model line."""
+    return (
+        f"{file_path} has a malformed model line in frontmatter (an unterminated "
+        "quote). Set the model line to model: inherit, or omit the model key."
+    )
+
+
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether a Write/Edit/MultiEdit pins a concrete model in an agent file.
 
-    Gates on the tool name and the agent-definition path shape, then checks the
-    candidate frontmatter block. A malformed block raises ``yaml.YAMLError``,
-    which the hook catches to allow the write — a malformed block loads no agent
-    and a mid-edit fragment must not be blocked.
+    Gates on the tool name and the agent-definition path shape, reconstructs the
+    post-edit content, and reads its frontmatter. A model line ``yaml.safe_load``
+    cannot parse falls back to a raw-text read: a concrete model there denies with
+    a malformed-line message, while ``inherit`` or an empty value allows.
     """
     tool_name = _string_value(payload_by_key.get("tool_name"))
     if tool_name not in ALL_PIN_GATED_TOOL_NAMES:
@@ -159,14 +112,18 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     file_path = _string_value(tool_input.get("file_path"))
     if not file_path or not is_agent_definition_path(file_path):
         return None
-    frontmatter_block = _frontmatter_block(_candidate_content(tool_name, tool_input))
+    frontmatter_block = extract_frontmatter_block(
+        _candidate_content(tool_name, tool_input, file_path)
+    )
     if frontmatter_block is None:
         return None
     try:
         pins_model = frontmatter_pins_concrete_model(frontmatter_block)
     except yaml.YAMLError:
+        if raw_last_model_line_pins(frontmatter_block):
+            return _malformed_model_line_deny_reason(file_path)
         return None
-    return _deny_reason(file_path) if pins_model else None
+    return _pin_deny_reason(file_path) if pins_model else None
 
 
 def build_deny_payload(deny_reason: str) -> dict[str, object]:

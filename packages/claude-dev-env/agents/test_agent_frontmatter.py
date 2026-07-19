@@ -17,11 +17,10 @@ spawn, so no agent definition pins one::
     ok:   <no model key at all>
     flag: model: opus       <- pinned concrete model, caller can't override
 
-`frontmatter_pins_concrete_model` is the write-time hook's shared pin detector,
-imported here so the test and the hook read a pinned model the same way. It
-parses the block with `yaml.safe_load`, so a duplicate `model` key follows
-last-wins, a bare `model:` is None (not a pin), and an unterminated quote
-raises `yaml.YAMLError`.
+`frontmatter_pins_concrete_model` is the write-time hook's shared pin detector;
+importing it here reads a pin the same way the hook does. Its exhaustive value
+truth table lives beside it in
+`hooks_constants/test_agent_model_pin_detection.py`.
 
 Top-level keys are read with a line scan so an agent whose `description`
 embeds informal `<example>` prose is not mistaken for one carrying extra
@@ -31,20 +30,13 @@ keys.
 from __future__ import annotations
 
 import re
-import sys
 from functools import cache
 from pathlib import Path
 
 import pytest
 import yaml
 
-try:
-    from agent_model_pin_blocker import frontmatter_pins_concrete_model
-except ModuleNotFoundError:
-    _HOOKS_ROOT = Path(__file__).resolve().parent.parent / "hooks"
-    sys.path.insert(0, str(_HOOKS_ROOT / "blocking"))
-    sys.path.insert(0, str(_HOOKS_ROOT))
-    from agent_model_pin_blocker import frontmatter_pins_concrete_model
+from hooks_constants.agent_model_pin_detection import frontmatter_pins_concrete_model
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "tools", "model", "color"}
@@ -100,53 +92,6 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     parsed_frontmatter = yaml.safe_load(code_verifier_block)
     assert parsed_frontmatter["name"] == CODE_VERIFIER_AGENT_NAME
     assert set(parsed_frontmatter) <= ACCEPTED_FRONTMATTER_KEYS
-
-
-@pytest.mark.parametrize(
-    ("synthetic_frontmatter_block", "expected_pin_verdict"),
-    [
-        ("name: sample\nmodel: opus\n", True),
-        ("name: sample\nmodel: inherit\nmodel: opus\n", True),
-        ("name: sample\nmodel: opus\nmodel: inherit\n", False),
-        ("name: sample\nmodel: inherit#opus\n", True),
-        ('name: sample\nmodel: "inherit # not a comment"\n', True),
-        ("name: sample\nmodel: inherit\n", False),
-        ("name: sample\nmodel:\n", False),
-        ('name: sample\nmodel: "inherit"\n', False),
-        ('name: sample\nmodel: "inherit "\n', False),
-        ('name: sample\nmodel: "inherit"  # quoted then comment\n', False),
-        ("name: sample\nmodel: Inherit\n", False),
-        ("name: sample\nmodel: inherit  # loader default\n", False),
-        ("name: sample\ncolor: green\n", False),
-    ],
-    ids=[
-        "bare-alias-pin",
-        "duplicate-key-opus-last-pins",
-        "duplicate-key-inherit-last-not-a-pin",
-        "hash-embedded-pin",
-        "quoted-value-with-hash-pin",
-        "inherit",
-        "bare-model-key-none",
-        "quoted-inherit",
-        "quoted-inherit-trailing-space",
-        "quoted-inherit-then-comment",
-        "title-case-inherit",
-        "commented-inherit",
-        "no-model-key",
-    ],
-)
-def test_pinned_model_detection_flags_every_concrete_value(
-    synthetic_frontmatter_block: str, expected_pin_verdict: bool
-) -> None:
-    assert (
-        frontmatter_pins_concrete_model(synthetic_frontmatter_block)
-        is expected_pin_verdict
-    )
-
-
-def test_pinned_model_detection_raises_on_unterminated_quote() -> None:
-    with pytest.raises(yaml.YAMLError):
-        frontmatter_pins_concrete_model("name: sample\nmodel: 'inherit\n")
 
 
 @pytest.mark.parametrize(

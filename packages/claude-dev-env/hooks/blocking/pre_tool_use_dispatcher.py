@@ -24,20 +24,25 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_hooks_directory = str(Path(__file__).resolve().parent.parent)
-if _hooks_directory not in sys.path:
-    sys.path.insert(0, _hooks_directory)
+import _path_setup  # noqa: F401
 
-from plain_language_blocker import (  # noqa: E402
+from agent_model_pin_blocker import (
+    build_deny_payload as build_agent_model_pin_deny_payload,
+)
+from agent_model_pin_blocker import evaluate as evaluate_agent_model_pin
+from plain_language_blocker import (
     build_deny_payload as build_plain_language_deny_payload,
 )
-from plain_language_blocker import evaluate as evaluate_plain_language  # noqa: E402
-from state_description_blocker import (  # noqa: E402
+from plain_language_blocker import evaluate as evaluate_plain_language
+from state_description_blocker import (
     build_deny_payload as build_state_description_deny_payload,
 )
-from state_description_blocker import evaluate as evaluate_state_description  # noqa: E402
+from state_description_blocker import evaluate as evaluate_state_description
 
-from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
+from hooks_constants.agent_model_pin_blocker_constants import (
+    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
+)
+from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALL_HOSTED_HOOK_ENTRIES,
     ALLOW_DECISION,
     BLOCKING_CRASH_DENY_REASON,
@@ -49,7 +54,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
     HostedHookEntry,
 )
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 
 NativeEvaluator = Callable[[dict[str, object]], str | None]
 DenyPayloadBuilder = Callable[[str], dict[str, object]]
@@ -68,6 +73,22 @@ class NativeHook:
 
     evaluate: NativeEvaluator
     build_deny_payload: DenyPayloadBuilder
+
+
+_native_hook_by_module_name: dict[str, NativeHook] = {
+    STATE_DESCRIPTION_BLOCKER_MODULE_NAME: NativeHook(
+        evaluate=evaluate_state_description,
+        build_deny_payload=build_state_description_deny_payload,
+    ),
+    PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
+        evaluate=evaluate_plain_language,
+        build_deny_payload=build_plain_language_deny_payload,
+    ),
+    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME: NativeHook(
+        evaluate=evaluate_agent_model_pin,
+        build_deny_payload=build_agent_model_pin_deny_payload,
+    ),
+}
 
 
 @dataclass
@@ -477,17 +498,7 @@ def _run_one_hosted_hook(
         The HostedHookResult for this hook's run.
     """
     if each_entry.native_module_name is not None:
-        native_hook_by_module_name: dict[str, NativeHook] = {
-            STATE_DESCRIPTION_BLOCKER_MODULE_NAME: NativeHook(
-                evaluate=evaluate_state_description,
-                build_deny_payload=build_state_description_deny_payload,
-            ),
-            PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
-                evaluate=evaluate_plain_language,
-                build_deny_payload=build_plain_language_deny_payload,
-            ),
-        }
-        native_hook = native_hook_by_module_name[each_entry.native_module_name]
+        native_hook = _native_hook_by_module_name[each_entry.native_module_name]
         return run_native_hook(native_hook, payload_by_key, each_entry.is_blocking)
     script_path = _resolve_hook_script_path(each_entry.script_relative_path)
     return run_hosted_hook(script_path, payload_text, each_entry.is_blocking)

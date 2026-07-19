@@ -4,6 +4,10 @@ import importlib
 import pathlib
 import sys
 
+from hooks_constants.agent_model_pin_blocker_constants import (
+    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
+)
+
 _HOOKS_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
@@ -72,10 +76,10 @@ def test_agent_model_pin_blocker_registered_for_all_file_tools() -> None:
     assert {"Write", "Edit", "MultiEdit"} <= entry.applicable_tool_names
 
 
-def test_agent_model_pin_blocker_runs_via_runpy() -> None:
+def test_agent_model_pin_blocker_hosted_native() -> None:
     entry = _entry_for("blocking/agent_model_pin_blocker.py")
     assert entry is not None
-    assert entry.native_module_name is None
+    assert entry.native_module_name == AGENT_MODEL_PIN_BLOCKER_MODULE_NAME
 
 
 def test_code_review_stamp_write_blocker_registered_for_all_file_tools() -> None:

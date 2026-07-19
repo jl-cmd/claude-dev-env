@@ -1,31 +1,29 @@
-"""Tests for the agent_model_pin_blocker PreToolUse hook."""
+"""Tests for the agent_model_pin_blocker hook's evaluate() orchestration.
 
-import sys
+The pin-detection truth table lives beside the detector in
+hooks_constants/test_agent_model_pin_detection.py. These tests cover the hook's
+own decisions: tool-name and path gating, post-edit content reconstruction, and
+the deny/allow routing (including the malformed-model-line fallback).
+"""
+
 from pathlib import Path
 
 import pytest
-import yaml
 
 try:
-    from agent_model_pin_blocker import (
-        evaluate,
-        frontmatter_pins_concrete_model,
-        is_agent_definition_path,
-    )
+    from agent_model_pin_blocker import evaluate
 except ModuleNotFoundError:
+    import sys
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from agent_model_pin_blocker import (
-        evaluate,
-        frontmatter_pins_concrete_model,
-        is_agent_definition_path,
-    )
+    from agent_model_pin_blocker import evaluate
 
 PACKAGE_AGENT_PATH = "packages/claude-dev-env/agents/clean-coder.md"
 INSTALLED_AGENT_PATH = "/home/user/.claude/agents/clean-coder.md"
 WINDOWS_AGENT_PATH = r"C:\repo\packages\claude-dev-env\agents\clean-coder.md"
 NON_AGENT_PATH = "packages/claude-dev-env/docs/notes.md"
-UNTERMINATED_QUOTE_BLOCK = "name: sample\nmodel: 'inherit\n"
+DOC_FILE_PATH = "packages/claude-dev-env/agents/CLAUDE.md"
 
 
 def _write_payload(file_path: str, content: str) -> dict[str, object]:
@@ -39,67 +37,12 @@ def _pinned_agent_file(model_line: str) -> str:
     return f"---\nname: sample\n{model_line}\n---\n\nBody text.\n"
 
 
-@pytest.mark.parametrize(
-    ("frontmatter_block", "expected_pin_verdict"),
-    [
-        ("name: sample\nmodel: opus\n", True),
-        ("name: sample\nmodel: inherit\nmodel: opus\n", True),
-        ("name: sample\nmodel: opus\nmodel: inherit\n", False),
-        ("name: sample\nmodel:\n", False),
-        ("name: sample\nmodel: inherit\n", False),
-        ('name: sample\nmodel: "inherit"\n', False),
-        ('name: sample\nmodel: "inherit "\n', False),
-        ("name: sample\nmodel: Inherit\n", False),
-        ("name: sample\nmodel: inherit  # loader default\n", False),
-        ("name: sample\ncolor: green\n", False),
-    ],
-    ids=[
-        "bare-alias-pin",
-        "inherit-then-opus-last-pins",
-        "opus-then-inherit-not-a-pin",
-        "bare-model-key-none",
-        "inherit",
-        "quoted-inherit",
-        "quoted-inherit-trailing-space",
-        "title-case-inherit",
-        "commented-inherit",
-        "no-model-key",
-    ],
-)
-def test_pin_detector_flags_every_concrete_value(
-    frontmatter_block: str, expected_pin_verdict: bool
-) -> None:
-    assert frontmatter_pins_concrete_model(frontmatter_block) is expected_pin_verdict
-
-
-DESCRIPTION_WITH_COLONS_BLOCK = (
-    "name: sample\n"
-    "description: Use this agent when needed. Examples:\n"
-    "\n"
-    "  <example>\n"
-    '  Context: User wants a report\n'
-    '  user: "Research this topic"\n'
-    "  </example>\n"
-)
-
-
-def test_pin_detector_ignores_colon_laden_description_without_model() -> None:
-    assert frontmatter_pins_concrete_model(DESCRIPTION_WITH_COLONS_BLOCK) is False
-
-
-def test_pin_detector_flags_model_beside_colon_laden_description() -> None:
-    block_with_pin = DESCRIPTION_WITH_COLONS_BLOCK + "model: opus\n"
-    assert frontmatter_pins_concrete_model(block_with_pin) is True
-
-
-def test_pin_detector_raises_on_unterminated_quote() -> None:
-    with pytest.raises(yaml.YAMLError):
-        frontmatter_pins_concrete_model(UNTERMINATED_QUOTE_BLOCK)
-
-
-def test_evaluate_allows_unterminated_quote_fragment() -> None:
-    payload = _write_payload(PACKAGE_AGENT_PATH, f"---\n{UNTERMINATED_QUOTE_BLOCK}---\n\nBody.\n")
-    assert evaluate(payload) is None
+def _agent_file_on_disk(tmp_path: Path, model_line: str) -> Path:
+    agents_directory = tmp_path / ".claude" / "agents"
+    agents_directory.mkdir(parents=True, exist_ok=True)
+    agent_file = agents_directory / "probe.md"
+    agent_file.write_text(_pinned_agent_file(model_line), encoding="utf-8")
+    return agent_file
 
 
 @pytest.mark.parametrize(
@@ -111,6 +54,7 @@ def test_evaluate_denies_pinned_model_on_agent_write(agent_file_path: str) -> No
     deny_reason = evaluate(payload)
     assert deny_reason is not None
     assert agent_file_path in deny_reason
+    assert "pins a concrete model" in deny_reason
 
 
 def test_evaluate_allows_inherit_model_on_agent_write() -> None:
@@ -119,7 +63,9 @@ def test_evaluate_allows_inherit_model_on_agent_write() -> None:
 
 
 def test_evaluate_allows_agent_write_without_model_key() -> None:
-    payload = _write_payload(PACKAGE_AGENT_PATH, "---\nname: sample\ncolor: green\n---\n\nBody.\n")
+    payload = _write_payload(
+        PACKAGE_AGENT_PATH, "---\nname: sample\ncolor: green\n---\n\nBody.\n"
+    )
     assert evaluate(payload) is None
 
 
@@ -128,13 +74,20 @@ def test_evaluate_ignores_column_zero_model_line_in_body() -> None:
         "---\nname: sample\ncolor: green\n---\n\n"
         "Body prose about configuration.\nmodel: opus\nMore prose.\n"
     )
-    payload = _write_payload(PACKAGE_AGENT_PATH, content)
-    assert evaluate(payload) is None
+    assert evaluate(_write_payload(PACKAGE_AGENT_PATH, content)) is None
 
 
 def test_evaluate_ignores_non_agent_markdown() -> None:
     payload = _write_payload(NON_AGENT_PATH, _pinned_agent_file("model: opus"))
     assert evaluate(payload) is None
+
+
+def test_evaluate_ignores_doc_file_quoting_bad_example() -> None:
+    doc_content = (
+        "# agents\n\nAvoid a pinned model:\n\n"
+        "```yaml\n---\nname: sample\nmodel: opus\n---\n```\n"
+    )
+    assert evaluate(_write_payload(DOC_FILE_PATH, doc_content)) is None
 
 
 def test_evaluate_ignores_non_write_tool() -> None:
@@ -145,22 +98,57 @@ def test_evaluate_ignores_non_write_tool() -> None:
     assert evaluate(payload) is None
 
 
-def test_evaluate_denies_pinned_model_on_multiedit() -> None:
+def test_evaluate_allows_unterminated_inherit_via_fallback() -> None:
+    content = "---\nname: sample\nmodel: 'inherit\n---\n\nBody.\n"
+    assert evaluate(_write_payload(PACKAGE_AGENT_PATH, content)) is None
+
+
+def test_evaluate_denies_unterminated_concrete_model_via_fallback() -> None:
+    content = "---\nname: sample\nmodel: 'opus\n---\n\nBody.\n"
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "malformed model line" in deny_reason
+
+
+def test_evaluate_denies_edit_flipping_inherit_to_concrete(tmp_path: Path) -> None:
+    agent_file = _agent_file_on_disk(tmp_path, "model: inherit")
     payload = {
-        "tool_name": "MultiEdit",
+        "tool_name": "Edit",
         "tool_input": {
-            "file_path": PACKAGE_AGENT_PATH,
-            "edits": [{"old_string": "x", "new_string": _pinned_agent_file("model: haiku")}],
+            "file_path": str(agent_file),
+            "old_string": "model: inherit",
+            "new_string": "model: opus",
         },
     }
     deny_reason = evaluate(payload)
     assert deny_reason is not None
-    assert PACKAGE_AGENT_PATH in deny_reason
+    assert "pins a concrete model" in deny_reason
 
 
-def test_is_agent_definition_path_discriminates_markdown_from_other() -> None:
-    assert is_agent_definition_path(PACKAGE_AGENT_PATH) is True
-    assert (
-        is_agent_definition_path("packages/claude-dev-env/agents/clean-coder.py")
-        is False
-    )
+def test_evaluate_allows_edit_leaving_inherit(tmp_path: Path) -> None:
+    agent_file = _agent_file_on_disk(tmp_path, "model: inherit")
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": str(agent_file),
+            "old_string": "Body text.",
+            "new_string": "Updated body.",
+        },
+    }
+    assert evaluate(payload) is None
+
+
+def test_evaluate_denies_multiedit_flipping_inherit_to_concrete(tmp_path: Path) -> None:
+    agent_file = _agent_file_on_disk(tmp_path, "model: inherit")
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": str(agent_file),
+            "edits": [
+                {"old_string": "model: inherit", "new_string": "model: haiku"},
+            ],
+        },
+    }
+    deny_reason = evaluate(payload)
+    assert deny_reason is not None
+    assert "pins a concrete model" in deny_reason
