@@ -17,8 +17,10 @@ import pytest
 
 from .run_all_validators import (
     ValidatorResult,
+    _escapes_temporary_root,
     _hooks_subprocess_working_directory_and_environment,
     _scope_new_and_preexisting,
+    _temporary_path_preserving_directory_signal,
     _violation_line_number,
     main,
     run_validators_entrypoint_subprocess,
@@ -131,38 +133,37 @@ class TestPreToolUseGate:
         assert "deny" not in completed.stdout
 
     def test_write_relative_config_path_not_denied_when_cwd_under_system_temp(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         system_temp_root = Path(tempfile.gettempdir()).resolve()
-        resolved_tmp_path = tmp_path.resolve()
-        assert system_temp_root == resolved_tmp_path or (
-            system_temp_root in resolved_tmp_path.parents
-        )
         monkeypatch.setenv("TEMP", str(system_temp_root))
         monkeypatch.setenv("TMP", str(system_temp_root))
         monkeypatch.setenv("TMPDIR", str(system_temp_root))
-        temporary_cwd = tmp_path / "gate_cwd"
-        temporary_cwd.mkdir()
+        with tempfile.TemporaryDirectory(
+            dir=str(system_temp_root), prefix="gate_cwd_"
+        ) as temporary_root_string:
+            temporary_cwd = Path(temporary_root_string) / "gate_cwd"
+            temporary_cwd.mkdir()
 
-        def working_directory_under_system_temp() -> tuple[str, dict[str, str]]:
-            _working_directory, environment = (
-                _hooks_subprocess_working_directory_and_environment()
-            )
-            return str(temporary_cwd), environment
+            def working_directory_under_system_temp() -> tuple[str, dict[str, str]]:
+                _working_directory, environment = (
+                    _hooks_subprocess_working_directory_and_environment()
+                )
+                return str(temporary_cwd), environment
 
-        with patch(
-            "validators.run_all_validators._hooks_subprocess_working_directory_and_environment",
-            side_effect=working_directory_under_system_temp,
-        ):
-            completed = run_gate(
-                {
-                    "tool_name": "Write",
-                    "tool_input": {
-                        "file_path": RELATIVE_CONFIG_TARGET_PATH,
-                        "content": VIOLATING_PYTHON_SOURCE,
-                    },
-                }
-            )
+            with patch(
+                "validators.run_all_validators._hooks_subprocess_working_directory_and_environment",
+                side_effect=working_directory_under_system_temp,
+            ):
+                completed = run_gate(
+                    {
+                        "tool_name": "Write",
+                        "tool_input": {
+                            "file_path": RELATIVE_CONFIG_TARGET_PATH,
+                            "content": VIOLATING_PYTHON_SOURCE,
+                        },
+                    }
+                )
         assert completed.returncode == 0, completed.stderr
         assert "deny" not in completed.stdout
 
@@ -181,30 +182,38 @@ class TestPreToolUseGate:
         assert "Magic Values" in completed.stdout
 
 
-class TestMirroredRelativeSegments:
-    def test_strips_parent_traversal_segments(self) -> None:
-        staging_module = sys.modules[main.__module__]
-        segments = staging_module._mirrored_relative_segments(
-            PARENT_TRAVERSAL_TARGET_PATH
+class TestTemporaryPathPreservingDirectorySignal:
+    def test_strips_parent_traversal_segments(self, tmp_path: Path) -> None:
+        assert _escapes_temporary_root("..") is True
+        staged_path = _temporary_path_preserving_directory_signal(
+            tmp_path, PARENT_TRAVERSAL_TARGET_PATH
         )
-        assert segments == ["escape_target.py"]
+        assert staged_path == tmp_path / "escape_target.py"
+        assert staged_path.resolve().is_relative_to(tmp_path.resolve())
 
-    def test_keeps_config_directory_segment(self) -> None:
-        staging_module = sys.modules[main.__module__]
-        segments = staging_module._mirrored_relative_segments(CONFIG_DIR_TARGET_PATH)
-        assert segments[-1] == "submission_constants.py"
-        assert "config" in segments
+    def test_keeps_config_directory_segment(self, tmp_path: Path) -> None:
+        staged_path = _temporary_path_preserving_directory_signal(
+            tmp_path, CONFIG_DIR_TARGET_PATH
+        )
+        assert staged_path.name == "submission_constants.py"
+        assert "config" in staged_path.parts
+        assert staged_path == tmp_path / "config" / "submission_constants.py"
 
     def test_drops_leading_anchor(self, tmp_path: Path) -> None:
-        staging_module = sys.modules[main.__module__]
         absolute_target = tmp_path / "config" / "submission_constants.py"
-        segments = staging_module._mirrored_relative_segments(str(absolute_target))
-        assert "config" in segments
-        assert segments[-1] == "submission_constants.py"
-        assert Path(str(absolute_target)).anchor not in segments
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(absolute_target)
+        )
+        relative_parts = staged_path.relative_to(staging_root).parts
+        assert relative_parts == ("config", "submission_constants.py")
+        assert absolute_target.anchor not in relative_parts
+        assert staged_path.resolve().is_relative_to(staging_root.resolve())
 
-    def test_system_temp_target_stages_flat_basename_only(self, tmp_path: Path) -> None:
-        staging_module = sys.modules[main.__module__]
+    def test_path_without_exemption_directory_stages_flat_basename(
+        self, tmp_path: Path
+    ) -> None:
         pytest_shaped_target = (
             tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
         )
@@ -212,66 +221,49 @@ class TestMirroredRelativeSegments:
         pytest_shaped_target.write_text(CLEAN_MARKER_FUNCTION, encoding="utf-8")
         staging_root = tmp_path / "staging_root"
         staging_root.mkdir()
-        mirrored_path = staging_module._mirrored_staging_path(
-            str(pytest_shaped_target), staging_root
-        )
-        assert mirrored_path is None
-        staged_path = staging_module._stage_proposed_content(
-            str(pytest_shaped_target),
-            MAGIC_VALUE_MARKER_FUNCTION,
-            str(staging_root),
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(pytest_shaped_target)
         )
         assert staged_path == staging_root / "legacy_module.py"
-        assert staged_path.read_text(encoding="utf-8") == MAGIC_VALUE_MARKER_FUNCTION
 
-    def test_relative_config_path_mirrors_when_cwd_under_system_temp(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    def test_relative_config_path_preserves_config_under_system_temp_cwd(
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        staging_module = sys.modules[main.__module__]
         system_temp_root = Path(tempfile.gettempdir()).resolve()
-        resolved_tmp_path = tmp_path.resolve()
-        assert system_temp_root == resolved_tmp_path or (
-            system_temp_root in resolved_tmp_path.parents
-        )
         monkeypatch.setenv("TEMP", str(system_temp_root))
         monkeypatch.setenv("TMP", str(system_temp_root))
         monkeypatch.setenv("TMPDIR", str(system_temp_root))
-        monkeypatch.chdir(tmp_path)
-        assert (
-            staging_module._is_under_system_temporary_directory(
-                RELATIVE_CONFIG_TARGET_PATH
-            )
-            is False
-        )
-        staging_root = tmp_path / "staging_root"
-        staging_root.mkdir()
-        mirrored_path = staging_module._mirrored_staging_path(
-            RELATIVE_CONFIG_TARGET_PATH, staging_root
-        )
-        assert mirrored_path is not None
-        assert "config" in mirrored_path.parts
-        assert mirrored_path.name == "x.py"
+        with tempfile.TemporaryDirectory(
+            dir=str(system_temp_root), prefix="staging_cwd_"
+        ) as temporary_root_string:
+            temporary_root = Path(temporary_root_string)
+            previous_cwd = Path.cwd()
+            try:
+                monkeypatch.chdir(temporary_root)
+                staging_root = temporary_root / "staging_root"
+                staging_root.mkdir()
+                staged_path = _temporary_path_preserving_directory_signal(
+                    staging_root, RELATIVE_CONFIG_TARGET_PATH
+                )
+                assert staged_path == staging_root / "config" / "x.py"
+                assert "config" in staged_path.parts
+                assert staged_path.name == "x.py"
+            finally:
+                monkeypatch.chdir(previous_cwd)
 
-    def test_stage_falls_back_to_flat_when_resolve_raises(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    def test_escapes_temporary_root_rejects_absolute_and_parent_parts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        staging_module = sys.modules[main.__module__]
-        staging_root = tmp_path / "staging_root"
-        staging_root.mkdir()
-
-        def resolve_raises(
-            self: Path, *all_arguments: object, **all_keyword_arguments: object
-        ) -> Path:
-            raise OSError("resolve failed")
-
-        monkeypatch.setattr(Path, "resolve", resolve_raises)
-        staged_path = staging_module._stage_proposed_content(
-            CONFIG_DIR_TARGET_PATH,
-            MAGIC_VALUE_MARKER_FUNCTION,
-            str(staging_root),
-        )
-        assert staged_path == staging_root / "submission_constants.py"
-        assert staged_path.read_text(encoding="utf-8") == MAGIC_VALUE_MARKER_FUNCTION
+        sandbox_temp_root = tmp_path / "system_temp"
+        sandbox_temp_root.mkdir()
+        monkeypatch.setenv("TEMP", str(sandbox_temp_root))
+        monkeypatch.setenv("TMP", str(sandbox_temp_root))
+        monkeypatch.setenv("TMPDIR", str(sandbox_temp_root))
+        assert _escapes_temporary_root("..") is True
+        assert _escapes_temporary_root("scripts") is False
+        assert _escapes_temporary_root("config") is False
+        absolute_part = str(Path(tempfile.gettempdir()).resolve().anchor) or "/"
+        assert _escapes_temporary_root(absolute_part) is True
 
 
 class TestCliModeRegression:
