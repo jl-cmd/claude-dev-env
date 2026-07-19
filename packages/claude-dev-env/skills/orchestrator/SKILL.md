@@ -34,51 +34,69 @@ verification reads.
 
 **Prose does not keep the loop alive.** Re-arm and terminate are gated by
 `scripts/status_gate.py` (and, on Claude, the PreToolUse hook
-`orchestrator_refresh_reschedule_gate`).
+`orchestrator_refresh_reschedule_gate`). The gate is host-agnostic: a
+single pending re-arm latch in the status file, not host product names.
 
 ```
-python scripts/status_gate.py set --status active [--run-slug SLUG] [--status-file PATH]
-python scripts/status_gate.py set --status done [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py set --status active|done [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py begin-firing [--run-slug SLUG] [--status-file PATH]
 python scripts/status_gate.py should-reschedule [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py claim-rearm [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py release-rearm [--run-slug SLUG] [--status-file PATH]
 ```
 
 | Exit / output | Meaning |
 |---|---|
-| `set` → 0 | JSON status payload written (`active` or `done`) |
-| `should-reschedule` → 0 | Status file exists and `status` is `active` — one-shot re-arm allowed |
-| `should-reschedule` → 1 | Stop — missing/invalid/done status (fail closed) |
+| `set` → 0 | Status written (`active`/`done`); clears `rearm_pending` |
+| `begin-firing` → 0 | Active; clears `rearm_pending` (start of a refresh firing) |
+| `begin-firing` → 1 | Stop — missing/invalid/done (fail closed) |
+| `should-reschedule` → 0 | Active and `rearm_pending` is false (read-only) |
+| `should-reschedule` → 1 | Stop — inactive, missing, invalid, or slot already pending |
+| `claim-rearm` → 0 | Slot reserved (`rearm_pending` true); may create one host schedule |
+| `claim-rearm` → 1 | Do **not** schedule — inactive or slot already pending |
+| `release-rearm` → 0 | Cleared pending after a failed host schedule create |
 
-Default status path: file `.orchestrator-run-status.json` under the
-repo's plans directory (runtime-created), or `$ORCHESTRATOR_RUN_STATUS_FILE`.
-With `--run-slug SLUG`, the file is under the slug plans subdirectory.
-When using a slug, every `ScheduleWakeup` prompt must carry it so the
-PreToolUse hook can resolve the scoped file:
-`/orchestrator-refresh --run-slug SLUG`.
+Default status path: `.orchestrator-run-status.json` under the repo plans
+directory, or `$ORCHESTRATOR_RUN_STATUS_FILE`. With `--run-slug SLUG`,
+under the slug plans subdirectory. When using a slug, every refresh
+schedule prompt must carry it: `/orchestrator-refresh --run-slug SLUG`.
+
+### Single-pending re-arm protocol (all hosts)
+
+Exactly one delayed refresh may be outstanding. Mechanical steps:
+
+1. **Cancel matching schedules** the host can list: drop every schedule
+   whose prompt targets `/orchestrator-refresh` (and the same
+   `--run-slug` when used). Replace, never stack.
+2. **`claim-rearm`** (same path args as activate). Exit 1 → do not create
+   a schedule. Exit 0 → continue.
+3. **Create exactly one non-recurring delayed wake** (~1200–2700s) with
+   prompt `/orchestrator-refresh` (plus `--run-slug` when used). Use the
+   host's one-shot delayed schedule tool (on Claude: `ScheduleWakeup`).
+   Never recurring, never cadence, never a second create in the same
+   firing.
+4. **On create failure:** `release-rearm`, then stop or retry once from
+   step 1.
+
+On Claude, the PreToolUse hook also denies when inactive, already
+pending, or when the tool is `CronCreate`.
 
 **Rules:**
 
-- **One-shot only.** `ScheduleWakeup` with prompt
-  `/orchestrator-refresh` (plus `--run-slug SLUG` when the run uses a
-  slug) and a delay. Never `CronCreate` / never a recurring host schedule
-  for this loop (the PreToolUse hook denies CronCreate for this prompt).
 - **Activate only with open work.** After the first ledger task exists,
-  run `set --status active` (pass the same `--run-slug` for the whole
-  run if you use one). Do not activate for advisor-bind alone.
+  `set --status active` (same `--run-slug` for the whole run if used).
 - **Done is a script.** When every ledger task is completed/cancelled and
-  no executor is running, run `set --status done` with the same
-  `--run-slug` / `--status-file` as activate. Do not re-arm after that.
-- **Re-arm only after the gate.** Before any refresh schedule call, run
-  `should-reschedule` with the same path args. Exit 1 → cancel any
-  existing schedule, report stop, do not call `ScheduleWakeup`. Exit 0 →
-  one-shot re-arm only (prompt must include the same `--run-slug`).
-- Hosts without the Claude hook (e.g. third-party schedulers) still obey
-  the same exit codes; never use `recurring: true` for this loop.
+  no executor is running: `set --status done`, cancel matching host
+  schedules, stop. Do not re-arm.
+- **Invocation guard.** If `should-reschedule` is already exit 1 for
+  `rearm_already_pending`, a refresh is already queued — do not arm again.
 
 ## Process
 
 1. **Invocation guard.** One `/orchestrator` per session. When a refresh
-   one-shot is already queued, do not stack a second; reuse the live
-   advisor bind and go to step 4.
+   one-shot is already queued (`claim-rearm` / `should-reschedule` would
+   fail with pending), do not stack a second; reuse the live advisor bind
+   and go to step 4.
 2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
@@ -92,10 +110,9 @@ PreToolUse hook can resolve the scoped file:
 3. **Write the run artifacts** (next section) before the first spawn.
 4. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.
-5. **Register one-shot discipline reminder** only while the gate allows it:
-   run `should-reschedule`; on exit 0, `ScheduleWakeup` with
-   `delaySeconds: 2700`, prompt `/orchestrator-refresh` (and
-   `--run-slug SLUG` when the run uses a slug; one-shot, not recurring).
+5. **Register the discipline reminder** via the single-pending re-arm
+   protocol (cancel matching → `claim-rearm` → one non-recurring delayed
+   wake; default delay about 2700s).
 6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
    task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
@@ -107,8 +124,8 @@ PreToolUse hook can resolve the scoped file:
    STOP — `agents/session-advisor.md` defines each signal.
 8. **Terminate when done.** When every ledger task is completed or
    cancelled and no executor is running: run
-   `set --status done`, cancel any pending one-shot wakeup if the host
-   exposes cancel, report completion, and stop. Do not re-arm.
+   `set --status done`, cancel matching host schedules, report
+   completion, and stop. Do not re-arm.
 
 ## Run state lives in artifacts
 
@@ -128,7 +145,8 @@ in the repo the run works on (working files, not committed):
   The orchestrating session records each result into the run's result
   files as it reconciles the ledger.
 - **Run status file** — written only by `status_gate.py`
-  (`active` / `done`). Source of truth for reschedule.
+  (`active` / `done`, plus `rearm_pending`). Source of truth for
+  reschedule and the single-pending latch.
 
 Correctness never rides on any agent's private context: when an executor
 dies or hangs, point a fresh spawn at the same assignment file plus its
@@ -235,8 +253,9 @@ no open work remains, run `set --status done` before any re-arm attempt.
 
 - One `/orchestrator` per session; the invocation guard blocks a second
   stacked one-shot while one is already queued.
-- Reschedule is mechanical: `should-reschedule` exit code + status file;
-  never a recurring host schedule for this loop.
+- Reschedule is mechanical: status file + `claim-rearm` /
+  `should-reschedule` exit codes; never a recurring host schedule; at
+  most one pending re-arm latch.
 - The orchestrating session never edits code or runs a build or test
   itself — executors do that. Its own tool use stays orchestration,
   run-artifact writes, and light verification reads.
@@ -245,12 +264,25 @@ no open work remains, run `set --status done` before any re-arm attempt.
 - One shared advisor per orchestrated session, owned by this session per
   the protocol; executors never spawn, respawn, or shut it down.
 
+## Gotchas
+
+- **Stacking re-arms.** Creating a second delayed wake while one is
+  already queued (or using a recurring host schedule) multiplies loops
+  on each refresh. Always cancel matching schedules, then `claim-rearm`,
+  then one non-recurring create. A second `claim-rearm` exit 1 is a
+  hard stop — not a retry.
+- **Forgetting `begin-firing` on refresh.** The latch stays pending;
+  later re-arms are denied forever until a firing clears it. Refresh
+  must run `begin-firing` first.
+- **Claim without create.** If `claim-rearm` succeeds and the host
+  schedule create fails, call `release-rearm` or the slot stays stuck.
+
 ## File Index
 
 | File | Purpose |
 |---|---|
 | `SKILL.md` | Orchestrator strategy; pointers to run-control scripts. |
-| `scripts/status_gate.py` | Status file + should-reschedule gate (exit codes). |
+| `scripts/status_gate.py` | Status file, latch, and re-arm gate (exit codes). |
 | `scripts/status_gate_constants/config/constants.py` | Named constants for status_gate. |
 | `scripts/test_status_gate.py` | Gate tests. |
 

@@ -23,7 +23,9 @@ REASON_CRON_CREATE_FORBIDDEN = "cron_create_forbidden"
 
 DENY_REASON_TEMPLATE = (
     "BLOCKED: orchestrator-refresh re-arm denied ({reason}). "
-    "Use one-shot ScheduleWakeup only (never CronCreate). "
+    "Use one-shot delayed wake only (never CronCreate / never recurring). "
+    "At most one re-arm slot: begin-firing at refresh start, claim-rearm "
+    "before schedule create, release-rearm if create fails. "
     "Status must be active: "
     "python skills/orchestrator/scripts/status_gate.py set "
     "--status active. When finished: --status done. Never re-arm an idle loop."
