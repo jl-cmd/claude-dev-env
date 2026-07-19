@@ -6,11 +6,14 @@ out because it needs an interactive terminal), the effort a push and a
 pull-request creation each require, the stamp record keys, the gate and
 write-blocker messages, the store-forge shell patterns, the MCP create-PR
 tool name, and the effort comparison every gate and the stamp store share so
-the thresholds never drift between them.
+the thresholds never drift between them, and the master enable flag
+(``CODE_REVIEW_ENFORCEMENT_ENABLED``, default off) that every gate and
+the stamp-directory write-blocker read before they enforce anything.
 """
 
 from __future__ import annotations
 
+CODE_REVIEW_ENFORCEMENT_ENABLED = False
 STAMP_DIRECTORY_NAME = "code-review-stamps"
 ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER = ("low", "medium", "high", "xhigh", "max")
 PUSH_REQUIRED_EFFORT = "low"

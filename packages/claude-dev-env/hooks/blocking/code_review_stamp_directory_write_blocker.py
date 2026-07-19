@@ -53,6 +53,7 @@ try:
         ALL_GATED_SHELL_TOOL_NAMES,
         ALL_STAMP_STORE_FORGE_PATTERNS,
         ALL_WRITE_EDIT_TOOL_NAMES,
+        CODE_REVIEW_ENFORCEMENT_ENABLED,
         DENY_PERMISSION_DECISION,
         PRE_TOOL_USE_HOOK_EVENT_NAME,
         RELATIVE_STAMP_DIRECTORY_PATTERN,
@@ -303,6 +304,8 @@ def decision_for_payload(
         The deny decision mapping when a gated tool targets the stamp
         directory; None when the tool call may proceed.
     """
+    if not CODE_REVIEW_ENFORCEMENT_ENABLED:
+        return None
     tool_name = all_pretooluse_payload.get("tool_name", "")
     if not isinstance(tool_name, str):
         return None

@@ -23,6 +23,7 @@ _constants_module = importlib.util.module_from_spec(_constants_spec)
 _constants_spec.loader.exec_module(_constants_module)
 
 effort_meets_threshold = _constants_module.effort_meets_threshold
+CODE_REVIEW_ENFORCEMENT_ENABLED = _constants_module.CODE_REVIEW_ENFORCEMENT_ENABLED
 PUSH_REQUIRED_EFFORT = _constants_module.PUSH_REQUIRED_EFFORT
 PR_CREATE_REQUIRED_EFFORT = _constants_module.PR_CREATE_REQUIRED_EFFORT
 GATED_PUSH_SUBCOMMANDS = _constants_module.GATED_PUSH_SUBCOMMANDS
@@ -106,3 +107,7 @@ def test_push_gate_message_names_the_push_action_and_low_effort() -> None:
 
 def test_guard_message_directs_users_to_the_sanctioned_minter_flag() -> None:
     assert SANCTIONED_STAMP_MINTER_FLAG in STAMP_DIRECTORY_GUARD_MESSAGE
+
+
+def test_enforcement_defaults_to_off() -> None:
+    assert CODE_REVIEW_ENFORCEMENT_ENABLED is False
