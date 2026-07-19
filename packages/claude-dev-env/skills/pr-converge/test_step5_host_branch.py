@@ -32,7 +32,7 @@ NEVER_PUSHES_PHRASE = "never pushes"
 EMPTY_STDIN_PHRASE = "empty"
 CWD_FLAG = "--cwd"
 OPUS_MODEL = "opus"
-HIGH_EFFORT_SLASH = "/code-review xhigh --fix"
+HIGH_EFFORT_SLASH = "/code-review ultra --fix"
 
 
 def _read_markdown(markdown_path: Path) -> str:
