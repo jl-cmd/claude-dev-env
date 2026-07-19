@@ -220,9 +220,9 @@ workflow resume is available.
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
 
 Every row that edits code, runs a build, or runs a test is a coding row.
-The per-spawn Agent call's `model:` field carries the routing —
-`CLAUDE_CODE_SUBAGENT_MODEL` and any other environment variable set no
-model here.
+The per-spawn Agent call's `model:` field carries the routing.
+`CLAUDE_CODE_SUBAGENT_MODEL` and other environment variables do not set
+the worker model; the per-spawn `model:` field does.
 
 Routing rules:
 

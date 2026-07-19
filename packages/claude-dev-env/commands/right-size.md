@@ -3,7 +3,7 @@ description: Prevent over/under-engineering
 allowed-tools: Task
 ---
 
-Launch the clean-coder agent — `model: sonnet`, worker-model routing per the orchestrator skill; resolver-supplied sonnet-equivalent on third-party hosts — to review code for appropriate engineering practices.
+Launch the clean-coder agent — `model: sonnet`, worker-model routing per [`skills/orchestrator/SKILL.md`](../skills/orchestrator/SKILL.md#workflow-agent-routing); resolver-supplied sonnet-equivalent on third-party hosts — to review code for appropriate engineering practices.
 
 The agent will evaluate whether abstractions, patterns, and practices match the actual needs of the project, ensuring code is neither over-engineered nor under-engineered for its current scale and purpose.
 

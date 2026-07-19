@@ -15,7 +15,7 @@ The task seeds carry the full ordered detail. The shape:
 3. **Bring content as an uncommitted diff.** Copy the POC's file changes into the new branch's working tree. Do not cherry-pick or merge the sandbox commits; the sandbox history stays behind.
 4. **Cleanup.** Remove scratch files, debug dumps, and temp helpers the POC created (`cleanup-temp-files` rule).
 5. **Privacy sweep** via `privacy-hygiene` over the diff.
-6. **Verify** with the `code-verifier` agent — `model: sonnet`, worker-model routing per the orchestrator skill; resolver-supplied sonnet-equivalent on third-party hosts — in a fresh context. This is where standards re-engage. Expect findings and a repair loop — the POC was un-TDD'd.
+6. **Verify** with the `code-verifier` agent — `model: sonnet`, worker-model routing per [`skills/orchestrator/SKILL.md`](../../orchestrator/SKILL.md#workflow-agent-routing); resolver-supplied sonnet-equivalent on third-party hosts — in a fresh context. This is where standards re-engage. Expect findings and a repair loop — the POC was un-TDD'd.
 7. **Commit and PR.** Only on a clean verdict, run `/commit`, then open a draft PR per the `git-workflow` rule.
 8. **State the honest limitations** from `reference/honest-limitations.md` in the PR body or to the user.
 9. **Converge** by handing the PR to `autoconverge` by default; use `pr-converge` for paced ticks or `bugteam` for an open-loop audit.
