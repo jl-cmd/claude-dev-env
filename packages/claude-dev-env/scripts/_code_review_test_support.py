@@ -20,7 +20,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_SCRIPTS_DIRECTORY = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIRECTORY)
 
 import claude_chain_runner as chain_runner  # noqa: E402
 import invoke_code_review as invoker  # noqa: E402
@@ -29,10 +31,7 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
     GIT_BINARY,
-    INVALID_EFFORT_RETURNCODE,
-    MAXIMUM_STAMP_MINT_PASSES,
     RECORD_STAMP_FLAG,
-    STAMP_DID_NOT_CONVERGE_RETURNCODE,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLI_TIMEOUT_FLAG,
@@ -321,10 +320,7 @@ def install_seams(
 
 EFFORT_LOW = "low"
 REJECTED_ULTRA_EFFORT = "ultra"
-RECORD_STAMP_MINT_CAP = MAXIMUM_STAMP_MINT_PASSES
 SINGLE_PASS_CAP = 1
-INVALID_EFFORT_EXIT_CODE = INVALID_EFFORT_RETURNCODE
-DID_NOT_CONVERGE_EXIT_CODE = STAMP_DID_NOT_CONVERGE_RETURNCODE
 MISSING_STORE_FILE_NAME = "code_review_stamp_store_absent.py"
 SURFACE_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
 SURFACE_CHANGE_SOURCE = (
