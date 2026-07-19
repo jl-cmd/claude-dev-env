@@ -16,12 +16,15 @@ function functionBody(functionName) {
 }
 
 const productionModule = new Function(
-  `${functionBody('isP2OnlyFindings')}\n` +
+  `const SHA_COMPARISON_PREFIX_LENGTH = 7;\n` +
+    `${functionBody('normalizeShaForComparison')}\n` +
+    `${functionBody('isP2OnlyFindings')}\n` +
     `${functionBody('nextPhaseAfterP2OnlyFix')}\n` +
-    'return { isP2OnlyFindings, nextPhaseAfterP2OnlyFix };',
+    `${functionBody('routeAfterP2OnlyFix')}\n` +
+    'return { isP2OnlyFindings, nextPhaseAfterP2OnlyFix, routeAfterP2OnlyFix };',
 )();
 
-const { isP2OnlyFindings, nextPhaseAfterP2OnlyFix } = productionModule;
+const { isP2OnlyFindings, nextPhaseAfterP2OnlyFix, routeAfterP2OnlyFix } = productionModule;
 
 function finding(overrides) {
   return {
@@ -80,6 +83,20 @@ test('nextPhaseAfterP2OnlyFix advances CODEX to FINALIZE', () => {
   assert.equal(nextPhaseAfterP2OnlyFix('CODEX'), 'FINALIZE');
 });
 
+test('routeAfterP2OnlyFix re-converges when the fix moved HEAD', () => {
+  const route = routeAfterP2OnlyFix('aaa111', { newSha: 'bbb222' }, 'COPILOT');
+  assert.equal(route.didMoveHead, true);
+  assert.equal(route.fixedHead, 'bbb222');
+  assert.equal(route.nextPhase, 'CONVERGE');
+});
+
+test('routeAfterP2OnlyFix advances when HEAD is unchanged', () => {
+  const route = routeAfterP2OnlyFix('aaa111', { newSha: 'aaa111' }, 'COPILOT');
+  assert.equal(route.didMoveHead, false);
+  assert.equal(route.fixedHead, 'aaa111');
+  assert.equal(route.nextPhase, 'COPILOT');
+});
+
 test('nextPhaseAfterP2OnlyFix uses an in-function lookup map', () => {
   const body = functionBody('nextPhaseAfterP2OnlyFix');
   assert.match(body, /nextPhaseByCurrent/);
@@ -110,20 +127,21 @@ test('CONVERGE places the P2-only branch between standards-only and generic fix'
   assert.ok(p2OnlyIndex < genericFixIndex, 'P2-only must precede generic fix');
 });
 
-test('CONVERGE P2-only branch fixes once and advances to BUGBOT without re-converging', () => {
+test('CONVERGE P2-only branch fixes once and routes via routeAfterP2OnlyFix', () => {
   const convergeBranch = phaseBranch("if (phase === 'CONVERGE')");
   const p2Start = convergeBranch.indexOf('isP2OnlyFindings(findings)');
   const genericFixStart = convergeBranch.indexOf("finding(s) — applying fixes");
   const p2Branch = convergeBranch.slice(p2Start, genericFixStart);
   assert.match(p2Branch, /P2-only/);
   assert.match(p2Branch, /applyP2OnlyFix\(head, findings, 'converge-round'/);
-  assert.match(p2Branch, /head = p2Fix\.newSha/);
+  assert.match(p2Branch, /routeAfterP2OnlyFix\(head, p2Fix, advancePhase\)/);
   assert.match(p2Branch, /nextPhaseAfterP2OnlyFix\('CONVERGE'\)/);
+  assert.match(p2Branch, /head = p2Route\.fixedHead/);
+  assert.match(p2Branch, /phase = p2Route\.nextPhase/);
   assert.doesNotMatch(p2Branch, /head = null/);
-  assert.doesNotMatch(p2Branch, /phase = 'CONVERGE'/);
 });
 
-test('BUGBOT P2-only branch advances forward to COPILOT not CONVERGE', () => {
+test('BUGBOT P2-only branch routes through routeAfterP2OnlyFix', () => {
   const bugbotBranch = phaseBranch("if (phase === 'BUGBOT')");
   const standardsIndex = bugbotBranch.indexOf('isStandardsOnlyRound(bugbotOutcome.findings)');
   const p2OnlyIndex = bugbotBranch.indexOf('isP2OnlyFindings(bugbotOutcome.findings)');
@@ -134,11 +152,11 @@ test('BUGBOT P2-only branch advances forward to COPILOT not CONVERGE', () => {
   assert.match(p2Branch, /P2-only/);
   assert.match(p2Branch, /nextPhaseAfterP2OnlyFix\('BUGBOT'\)/);
   assert.match(p2Branch, /applyP2OnlyFix\(head, bugbotOutcome\.findings, 'bugbot'/);
-  assert.match(p2Branch, /head = p2Fix\.newSha/);
-  assert.doesNotMatch(p2Branch, /phase = 'CONVERGE'/);
+  assert.match(p2Branch, /routeAfterP2OnlyFix\(head, p2Fix, advancePhase\)/);
+  assert.match(p2Branch, /phase = p2Route\.nextPhase/);
 });
 
-test('COPILOT P2-only branch advances forward to CODEX not CONVERGE', () => {
+test('COPILOT P2-only branch routes through routeAfterP2OnlyFix', () => {
   const copilotBranch = phaseBranch("if (phase === 'COPILOT')");
   const standardsIndex = copilotBranch.indexOf('isStandardsOnlyRound(roundFindings)');
   const p2OnlyIndex = copilotBranch.indexOf('isP2OnlyFindings(roundFindings)');
@@ -149,11 +167,11 @@ test('COPILOT P2-only branch advances forward to CODEX not CONVERGE', () => {
   assert.match(p2Branch, /P2-only/);
   assert.match(p2Branch, /nextPhaseAfterP2OnlyFix\('COPILOT'\)/);
   assert.match(p2Branch, /applyP2OnlyFix\(head, roundFindings, 'copilot'/);
-  assert.match(p2Branch, /head = p2Fix\.newSha/);
-  assert.doesNotMatch(p2Branch, /phase = 'CONVERGE'/);
+  assert.match(p2Branch, /routeAfterP2OnlyFix\(head, p2Fix, advancePhase\)/);
+  assert.match(p2Branch, /phase = p2Route\.nextPhase/);
 });
 
-test('CODEX P2-only branch advances to FINALIZE with codexCleanAt on the fixed head', () => {
+test('CODEX P2-only branch routes through routeAfterP2OnlyFix and stamps codexCleanAt only when HEAD is stable', () => {
   const codexBranch = phaseBranch("if (phase === 'CODEX')");
   const standardsIndex = codexBranch.indexOf('isStandardsOnlyRound(codexOutcome.findings)');
   const p2OnlyIndex = codexBranch.indexOf('isP2OnlyFindings(codexOutcome.findings)');
@@ -164,9 +182,9 @@ test('CODEX P2-only branch advances to FINALIZE with codexCleanAt on the fixed h
   assert.match(p2Branch, /P2-only/);
   assert.match(p2Branch, /nextPhaseAfterP2OnlyFix\('CODEX'\)/);
   assert.match(p2Branch, /applyP2OnlyFix\(head, codexOutcome\.findings, 'codex'/);
-  assert.match(p2Branch, /head = p2Fix\.newSha/);
+  assert.match(p2Branch, /routeAfterP2OnlyFix\(head, p2Fix, advancePhase\)/);
   assert.match(p2Branch, /codexCleanAt = head/);
-  assert.doesNotMatch(p2Branch, /phase = 'CONVERGE'/);
+  assert.match(p2Branch, /didMoveHead/);
 });
 
 test('generic fix branches still re-converge for mixed or P0/P1 findings', () => {

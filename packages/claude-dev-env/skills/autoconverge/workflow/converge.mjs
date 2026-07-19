@@ -2344,6 +2344,34 @@ async function applyP2OnlyFix(head, findings, sourceLabel, stallSubject, noPushS
 }
 
 /**
+ * Route after a successful P2-only fix. HEAD-bound CLEAN/review stamps are
+ * SHA-specific: a push that moves HEAD must re-enter CONVERGE so those stamps
+ * rebuild. A no-push progress (resolvedWithoutCommit) advances to the next
+ * phase on the same HEAD.
+ *
+ * ::
+ *
+ *   routeAfterP2OnlyFix('aaa', {newSha: 'bbb'}, 'COPILOT')
+ *   -> {fixedHead: 'bbb', nextPhase: 'CONVERGE', didMoveHead: true}
+ *   routeAfterP2OnlyFix('aaa', {newSha: 'aaa'}, 'COPILOT')
+ *   -> {fixedHead: 'aaa', nextPhase: 'COPILOT', didMoveHead: false}
+ *
+ * @param {string} priorHead HEAD SHA before the P2-only fix
+ * @param {{newSha: string}} p2Fix successful applyP2OnlyFix result
+ * @param {string} advancePhase phase to enter when HEAD did not move
+ * @returns {{fixedHead: string, nextPhase: string, didMoveHead: boolean}} routing
+ */
+function routeAfterP2OnlyFix(priorHead, p2Fix, advancePhase) {
+  const fixedHead = p2Fix.newSha
+  const didMoveHead =
+    normalizeShaForComparison(fixedHead) !== normalizeShaForComparison(priorHead)
+  if (didMoveHead) {
+    return { fixedHead, nextPhase: 'CONVERGE', didMoveHead: true }
+  }
+  return { fixedHead, nextPhase: advancePhase, didMoveHead: false }
+}
+
+/**
  * Decide whether a standards-only round should file the follow-up fix issue and
  * open the environment-hardening PR. Standards findings are deferred rather than
  * fixed on this PR, so the same code-standard findings re-surface on every
@@ -2729,15 +2757,19 @@ while (iterations < CONFIG.maxIterations) {
     }
     if (isP2OnlyFindings(findings)) {
       resetNoLensRounds()
-      const nextPhase = nextPhaseAfterP2OnlyFix('CONVERGE')
-      log(`Round ${rounds}: ${findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
+      const advancePhase = nextPhaseAfterP2OnlyFix('CONVERGE')
+      log(`Round ${rounds}: ${findings.length} P2-only finding(s) — fixing once then routing from CONVERGE`)
       const p2Fix = await applyP2OnlyFix(head, findings, 'converge-round', 'converge round', 'fix lens')
       if (!p2Fix.progressed) {
         blocker = p2Fix.blocker
         break
       }
-      head = p2Fix.newSha
-      phase = nextPhase
+      const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+      head = p2Route.fixedHead
+      phase = p2Route.nextPhase
+      if (p2Route.didMoveHead) {
+        log(`Round ${rounds}: P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild`)
+      }
       continue
     }
     if (findings.length > 0) {
@@ -2813,16 +2845,20 @@ while (iterations < CONFIG.maxIterations) {
         continue
       }
       if (isP2OnlyFindings(bugbotOutcome.findings)) {
-        const nextPhase = nextPhaseAfterP2OnlyFix('BUGBOT')
-        log(`Bugbot raised ${bugbotOutcome.findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
+        const advancePhase = nextPhaseAfterP2OnlyFix('BUGBOT')
+        log(`Bugbot raised ${bugbotOutcome.findings.length} P2-only finding(s) — fixing once then routing from BUGBOT`)
         const p2Fix = await applyP2OnlyFix(head, bugbotOutcome.findings, 'bugbot', 'bugbot gate', 'bugbot fix lens')
         if (!p2Fix.progressed) {
           blocker = p2Fix.blocker
           break
         }
-        head = p2Fix.newSha
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
         bugbotDown = false
-        phase = nextPhase
+        phase = p2Route.nextPhase
+        if (p2Route.didMoveHead) {
+          log('Bugbot P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+        }
         continue
       }
       log(`Bugbot raised ${bugbotOutcome.findings.length} finding(s) — fixing and re-converging`)
@@ -2907,15 +2943,19 @@ while (iterations < CONFIG.maxIterations) {
         continue
       }
       if (isP2OnlyFindings(roundFindings)) {
-        const nextPhase = nextPhaseAfterP2OnlyFix('COPILOT')
-        log(`Copilot raised ${roundFindings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
+        const advancePhase = nextPhaseAfterP2OnlyFix('COPILOT')
+        log(`Copilot raised ${roundFindings.length} P2-only finding(s) — fixing once then routing from COPILOT`)
         const p2Fix = await applyP2OnlyFix(head, roundFindings, 'copilot', 'copilot round', 'copilot fix lens')
         if (!p2Fix.progressed) {
           blocker = p2Fix.blocker
           break
         }
-        head = p2Fix.newSha
-        phase = nextPhase
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
+        phase = p2Route.nextPhase
+        if (p2Route.didMoveHead) {
+          log('Copilot P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+        }
         continue
       }
       log(`Copilot raised ${roundFindings.length} finding(s) — fixing and re-converging`)
@@ -2979,17 +3019,25 @@ while (iterations < CONFIG.maxIterations) {
         continue
       }
       if (isP2OnlyFindings(codexOutcome.findings)) {
-        const nextPhase = nextPhaseAfterP2OnlyFix('CODEX')
-        log(`Codex raised ${codexOutcome.findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
+        const advancePhase = nextPhaseAfterP2OnlyFix('CODEX')
+        log(`Codex raised ${codexOutcome.findings.length} P2-only finding(s) — fixing once then routing from CODEX`)
         const p2Fix = await applyP2OnlyFix(head, codexOutcome.findings, 'codex', 'codex gate', 'codex fix lens')
         if (!p2Fix.progressed) {
           blocker = p2Fix.blocker
           break
         }
-        head = p2Fix.newSha
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
+        if (p2Route.didMoveHead) {
+          log('Codex P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+          codexDown = false
+          codexCleanAt = null
+          phase = p2Route.nextPhase
+          continue
+        }
         codexDown = false
         codexCleanAt = head
-        phase = nextPhase
+        phase = p2Route.nextPhase
         continue
       }
       log(`Codex raised ${codexOutcome.findings.length} finding(s) — fixing and re-converging`)

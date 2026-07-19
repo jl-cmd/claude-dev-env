@@ -110,11 +110,14 @@ Standards-only deferral still takes precedence when every finding is category
 `code-standard`.
 
 When the already-deduped findings for a phase are all severity P2 (and not
-standards-only), the phase still applies the fixes once, then treats the fixed
-HEAD as clean for that phase and advances forward without re-converging the same
-phase. The three CONVERGE reading lenses stay parallel; the P2-only decision is a
-routing branch on the deduped set after `resolveRoundOutcome` / gate
-classification. Mixed P0/P1 findings keep the existing fix + re-converge path.
+standards-only), the phase still applies the fixes once. If the fix does **not**
+move HEAD (for example `resolvedWithoutCommit`), the phase treats that HEAD as
+clean and advances forward. If the fix **does** move HEAD, the run re-enters
+CONVERGE on the fixed SHA so HEAD-bound CLEAN/review stamps rebuild before
+FINALIZE — those stamps are SHA-specific. The three CONVERGE reading lenses stay
+parallel; the P2-only decision is a routing branch on the deduped set after
+`resolveRoundOutcome` / gate classification. Mixed P0/P1 findings keep the
+existing fix + re-converge path.
 
 **BUGBOT** gate (terminal external confirmation):
 
@@ -126,8 +129,8 @@ classification. Mixed P0/P1 findings keep the existing fix + re-converge path.
   check run when needed).
 - Bugbot findings that are not standards-only and not P2-only → fix them and
   return to CONVERGE on the new HEAD.
-- Bugbot P2-only findings → fix once, then advance to the Copilot gate on the
-  fixed HEAD (no re-converge).
+- Bugbot P2-only findings → fix once; advance to Copilot only when HEAD is
+  unchanged, otherwise re-converge on the fixed HEAD.
 - Bugbot clean or approved → move to the Copilot gate.
 - Bugbot down after the poll cap → move to the Copilot gate with `bugbotDown` set.
 
@@ -137,8 +140,8 @@ classification. Mixed P0/P1 findings keep the existing fix + re-converge path.
   to the configured cap, 360 seconds apart.
 - Copilot findings that are not standards-only and not P2-only → fix them and
   return to CONVERGE on the new HEAD.
-- Copilot P2-only findings → fix once, then advance to the Codex gate on the
-  fixed HEAD (no re-converge).
+- Copilot P2-only findings → fix once; advance to Codex only when HEAD is
+  unchanged, otherwise re-converge on the fixed HEAD.
 - Copilot clean or approved → move to the Codex gate.
 - Copilot down or out of quota (an out-of-usage notice, or no review after the
   configured cap) → log a notice and move to the Codex gate with the Copilot gate
