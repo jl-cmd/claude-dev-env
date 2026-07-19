@@ -1,4 +1,12 @@
-"""Tests for the shared agent-model-pin detection helpers."""
+"""Tests for the shared agent-model-pin detection helpers.
+
+The hand-written scan reads YAML scalar semantics without a YAML library.
+`test_hand_parser_agrees_with_yaml_oracle` pins it to `yaml.safe_load` over the
+well-formed matrix, so any scalar-semantics divergence fails here rather than
+shipping. The over-catch cases sit apart: they are inputs a lenient reader treats
+as a pin while `yaml.safe_load` raises or returns a non-mapping, so the hand
+parser deliberately exceeds the oracle there.
+"""
 
 import pytest
 import yaml
@@ -7,97 +15,136 @@ from hooks_constants.agent_model_pin_detection import (
     extract_frontmatter_block,
     frontmatter_pins_concrete_model,
     is_agent_definition_path,
-    raw_last_model_line_pins,
+    pinned_model_value,
 )
 
 PACKAGE_AGENT_PATH = "packages/claude-dev-env/agents/clean-coder.md"
 INSTALLED_AGENT_PATH = "/home/user/.claude/agents/clean-coder.md"
 WINDOWS_AGENT_PATH = r"C:\Repo\Packages\Claude-Dev-Env\Agents\Clean-Coder.md"
 
+YAML_CLEAN_BLOCKS = [
+    "name: sample\nmodel: opus\n",
+    "name: sample\nmodel: inherit\n",
+    "name: sample\nmodel:\n",
+    'name: sample\nmodel: "inherit"\n',
+    "name: sample\nmodel: 'inherit'\n",
+    'name: sample\nmodel: "inherit "\n',
+    'name: sample\nmodel: "inherit"  # trailing comment\n',
+    "name: sample\nmodel: Inherit\n",
+    "name: sample\nmodel: inherit  # loader default\n",
+    "name: sample\nmodel: inherit#opus\n",
+    'name: sample\nmodel: "inherit # not a comment"\n',
+    "name: sample\nmodel: opus\nmodel: inherit\n",
+    "name: sample\nmodel: inherit\nmodel: opus\n",
+    "name: sample\nmodel : opus\n",
+    "name: sample\nmodel : inherit\n",
+    "name: sample\ncolor: green\n",
+]
+
+
+def _yaml_oracle_pins(frontmatter_block: str) -> bool:
+    parsed_frontmatter = yaml.safe_load(frontmatter_block)
+    assert isinstance(parsed_frontmatter, dict)
+    declared_model = parsed_frontmatter.get("model")
+    if declared_model is None:
+        return False
+    return str(declared_model).strip().lower() != "inherit"
+
+
+@pytest.mark.parametrize("frontmatter_block", YAML_CLEAN_BLOCKS)
+def test_hand_parser_agrees_with_yaml_oracle(frontmatter_block: str) -> None:
+    assert (
+        frontmatter_pins_concrete_model(frontmatter_block)
+        is _yaml_oracle_pins(frontmatter_block)
+    )
+
 
 @pytest.mark.parametrize(
     ("frontmatter_block", "expected_pin_verdict"),
     [
-        ("name: sample\nmodel: opus\n", True),
-        ("name: sample\nmodel: inherit\nmodel: opus\n", True),
-        ("name: sample\nmodel: opus\nmodel: inherit\n", False),
-        ("name: sample\nmodel: inherit#opus\n", True),
-        ('name: sample\nmodel: "inherit # not a comment"\n', True),
-        ("name: sample\nmodel:\n", False),
-        ("name: sample\nmodel: inherit\n", False),
-        ('name: sample\nmodel: "inherit"\n', False),
-        ('name: sample\nmodel: "inherit "\n', False),
-        ('name: sample\nmodel: "inherit"  # quoted then comment\n', False),
-        ("name: sample\nmodel: Inherit\n", False),
-        ("name: sample\nmodel: inherit  # loader default\n", False),
-        ("name: sample\ncolor: green\n", False),
+        ("name: sample\nmodel:opus\n", True),
+        ("name: sample\nmodel:inherit\n", False),
+        ("name: sample\nmodel: 'opus\n", True),
+        ("name: sample\nmodel: 'inherit\n", False),
+        ('name: sample\nmodel: "sonn\n', True),
     ],
     ids=[
-        "bare-alias-pin",
-        "duplicate-key-opus-last-pins",
-        "duplicate-key-inherit-last-not-a-pin",
-        "hash-embedded-pin",
-        "quoted-value-with-hash-pin",
-        "bare-model-key-none",
-        "inherit",
-        "quoted-inherit",
-        "quoted-inherit-trailing-space",
-        "quoted-inherit-then-comment",
-        "title-case-inherit",
-        "commented-inherit",
-        "no-model-key",
+        "no-space-opus-pins",
+        "no-space-inherit-allows",
+        "unterminated-opus-pins",
+        "unterminated-inherit-allows",
+        "unterminated-partial-pins",
     ],
 )
-def test_pin_detector_flags_every_concrete_value(
+def test_hand_parser_over_catches_yaml_gaps(
     frontmatter_block: str, expected_pin_verdict: bool
 ) -> None:
     assert frontmatter_pins_concrete_model(frontmatter_block) is expected_pin_verdict
 
 
-def test_pin_detector_raises_on_unterminated_quote() -> None:
-    with pytest.raises(yaml.YAMLError):
-        frontmatter_pins_concrete_model("name: sample\nmodel: 'inherit\n")
-
-
 @pytest.mark.parametrize(
-    ("frontmatter_block", "expected_pin_verdict"),
+    ("frontmatter_block", "expected_value"),
     [
-        ("name: sample\nmodel: 'opus\n", True),
-        ("name: sample\nmodel: 'inherit\n", False),
-        ('name: sample\nmodel: "sonn\n', True),
-        ("name: sample\nmodel:\n", False),
-        ("name: sample\ncolor: green\n", False),
+        ("name: sample\nmodel: opus\n", "opus"),
+        ("name: sample\nmodel:opus\n", "opus"),
+        ("name: sample\nmodel : haiku\n", "haiku"),
+        ("name: sample\nmodel: 'sonnet\n", "sonnet"),
+        ("name: sample\nmodel: inherit\n", None),
+        ("name: sample\nmodel:\n", None),
+        ("name: sample\ncolor: green\n", None),
     ],
     ids=[
-        "unterminated-opus-pins",
-        "unterminated-inherit-allows",
-        "unterminated-partial-model-pins",
-        "bare-model-none",
-        "no-model-key",
+        "opus",
+        "no-space-opus",
+        "space-before-haiku",
+        "unterminated-sonnet",
+        "inherit-none",
+        "bare-none",
+        "no-model-none",
     ],
 )
-def test_raw_fallback_reads_the_last_model_line(
-    frontmatter_block: str, expected_pin_verdict: bool
+def test_pinned_model_value_returns_the_value(
+    frontmatter_block: str, expected_value: str | None
 ) -> None:
-    assert raw_last_model_line_pins(frontmatter_block) is expected_pin_verdict
+    assert pinned_model_value(frontmatter_block) == expected_value
 
 
-def test_extract_frontmatter_block_returns_text_between_fences() -> None:
+def test_extract_returns_text_between_fences() -> None:
     file_content = "---\nname: sample\nmodel: inherit\n---\n\nBody.\n"
     assert extract_frontmatter_block(file_content) == "name: sample\nmodel: inherit"
 
 
-def test_extract_frontmatter_block_ignores_mid_line_fence_in_description() -> None:
+def test_extract_ignores_mid_line_fence_in_description() -> None:
     file_content = (
-        "---\nname: sample\ndescription: use a --- separator in output\nmodel: opus\n---\n\nBody.\n"
+        "---\nname: sample\ndescription: use a --- separator\nmodel: opus\n---\n"
     )
     block = extract_frontmatter_block(file_content)
     assert block is not None
     assert frontmatter_pins_concrete_model(block) is True
 
 
-def test_extract_frontmatter_block_returns_none_without_opening_fence() -> None:
+def test_extract_skips_byte_order_mark() -> None:
+    block = extract_frontmatter_block(
+        "\ufeff---\nname: sample\nmodel: opus\n---\n\nBody.\n"
+    )
+    assert block is not None
+    assert frontmatter_pins_concrete_model(block) is True
+
+
+def test_extract_skips_leading_blank_lines() -> None:
+    block = extract_frontmatter_block(
+        "\n\n---\nname: sample\nmodel: opus\n---\n\nBody.\n"
+    )
+    assert block is not None
+    assert frontmatter_pins_concrete_model(block) is True
+
+
+def test_extract_none_without_opening_fence() -> None:
     assert extract_frontmatter_block("# agents\n\nSome docs.\n") is None
+
+
+def test_extract_none_when_body_precedes_fence() -> None:
+    assert extract_frontmatter_block("# doc\n---\nmodel: opus\n---\n") is None
 
 
 @pytest.mark.parametrize(

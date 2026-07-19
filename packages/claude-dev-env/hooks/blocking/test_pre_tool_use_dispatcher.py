@@ -308,40 +308,35 @@ def test_agent_model_pin_denial_on_write_of_agent_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
 
-def test_agent_model_pin_edit_reconstruction_denies_through_dispatcher(
-    tmp_path: Path,
-) -> None:
-    """Dispatcher denies an Edit flipping an agent file's model: inherit to opus."""
+def _agent_file_pinned_by_edit(tmp_path: Path) -> Path:
+    """Write an agent file whose frontmatter reads model: inherit, and return it."""
     agents_directory = tmp_path / ".claude" / "agents"
     agents_directory.mkdir(parents=True)
     agent_file = agents_directory / "probe.md"
     agent_file.write_text(
         "---\nname: probe\nmodel: inherit\n---\n\nBody.\n", encoding="utf-8"
     )
+    return agent_file
+
+
+def test_agent_model_pin_edit_reconstruction_denies_through_dispatcher(
+    tmp_path: Path,
+) -> None:
+    """Dispatcher matches the hooks on an Edit flipping model: inherit to opus."""
+    agent_file = _agent_file_pinned_by_edit(tmp_path)
     payload_text = _edit_payload(str(agent_file), "model: inherit", "model: opus")
-    dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_is_deny, dispatcher_reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny
-    assert "pins a concrete model" in dispatcher_reason
+    _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
 
 
 def test_agent_model_pin_multi_edit_reconstruction_denies_through_dispatcher(
     tmp_path: Path,
 ) -> None:
-    """Dispatcher denies a MultiEdit flipping an agent file's model to a pin."""
-    agents_directory = tmp_path / ".claude" / "agents"
-    agents_directory.mkdir(parents=True)
-    agent_file = agents_directory / "probe.md"
-    agent_file.write_text(
-        "---\nname: probe\nmodel: inherit\n---\n\nBody.\n", encoding="utf-8"
-    )
+    """Dispatcher matches the hooks on a MultiEdit flipping model to a pin."""
+    agent_file = _agent_file_pinned_by_edit(tmp_path)
     payload_text = _multi_edit_payload(
         str(agent_file), [{"old_string": "model: inherit", "new_string": "model: opus"}]
     )
-    dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_is_deny, dispatcher_reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny
-    assert "pins a concrete model" in dispatcher_reason
+    _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
 def test_multi_edit_runs_only_group_b_hooks() -> None:

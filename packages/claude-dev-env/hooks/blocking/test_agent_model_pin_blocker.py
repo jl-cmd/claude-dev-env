@@ -98,16 +98,37 @@ def test_evaluate_ignores_non_write_tool() -> None:
     assert evaluate(payload) is None
 
 
-def test_evaluate_allows_unterminated_inherit_via_fallback() -> None:
+def test_evaluate_allows_unterminated_inherit() -> None:
     content = "---\nname: sample\nmodel: 'inherit\n---\n\nBody.\n"
     assert evaluate(_write_payload(PACKAGE_AGENT_PATH, content)) is None
 
 
-def test_evaluate_denies_unterminated_concrete_model_via_fallback() -> None:
+def test_evaluate_denies_unterminated_concrete_model_quoting_value() -> None:
     content = "---\nname: sample\nmodel: 'opus\n---\n\nBody.\n"
     deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
     assert deny_reason is not None
-    assert "malformed model line" in deny_reason
+    assert "pins a concrete model (opus)" in deny_reason
+
+
+def test_evaluate_denies_space_before_colon_pin() -> None:
+    content = "---\nname: sample\nmodel : opus\n---\n\nBody.\n"
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "pins a concrete model (opus)" in deny_reason
+
+
+def test_evaluate_denies_no_space_colon_pin() -> None:
+    content = "---\nname: sample\nmodel:opus\n---\n\nBody.\n"
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "pins a concrete model (opus)" in deny_reason
+
+
+def test_evaluate_denies_pin_after_byte_order_mark() -> None:
+    content = "\ufeff---\nname: sample\nmodel: opus\n---\n\nBody.\n"
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "pins a concrete model (opus)" in deny_reason
 
 
 def test_evaluate_denies_edit_flipping_inherit_to_concrete(tmp_path: Path) -> None:

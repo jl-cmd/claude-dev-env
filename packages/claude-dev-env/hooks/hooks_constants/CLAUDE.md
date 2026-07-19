@@ -93,6 +93,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Most files in this package are pure constants modules — no side effects, no I/O.
 - Hooks import from this package with `from hooks_constants.<module> import <CONSTANT>`.
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
-- `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they are shared across many hooks.
+- `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, `text_stripping.py`, and `agent_model_pin_detection.py` are utility modules (not pure constants) but live here because they hold logic shared across hook surfaces. `agent_model_pin_detection.py` is shared between the `agent_model_pin_blocker` hook and the `agents/` frontmatter test, so both read a pinned model the same way.
 - `local_identity.py` is a loader: it reads the environment or `~/.claude/local-identity.json` (its path overridable via `CLAUDE_LOCAL_IDENTITY_PATH`) to resolve private NAS values (with committed placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`).
 
