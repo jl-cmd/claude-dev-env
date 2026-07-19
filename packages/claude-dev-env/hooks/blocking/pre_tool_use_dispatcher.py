@@ -7,10 +7,10 @@ declared in the constants module, aggregates the results, and emits one deny
 decision when any hook denied (carrying every denying reason) or exits zero to
 allow.
 
-The per-hook coverage matrix:
-- Write  -> 20 hooks from ALL_HOSTED_HOOK_ENTRIES that list Write
-- Edit   -> 21 hooks from ALL_HOSTED_HOOK_ENTRIES that list Edit
-- MultiEdit -> 9 hooks from ALL_HOSTED_HOOK_ENTRIES that list MultiEdit
+Each tool runs the ``ALL_HOSTED_HOOK_ENTRIES`` whose ``applicable_tool_names``
+list that tool; that roster is the live source of the per-tool coverage, and the
+dispatcher roster tests in ``test_pre_tool_use_dispatcher.py`` assert the counts,
+rather than a hardcoded matrix here that would drift as hooks are added.
 """
 
 from __future__ import annotations

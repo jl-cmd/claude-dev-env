@@ -1,11 +1,11 @@
 """Tests for the shared agent-model-pin detection helpers.
 
 The hand-written scan reads YAML scalar semantics without a YAML library.
-`test_hand_parser_agrees_with_yaml_oracle` pins it to `yaml.safe_load` over the
+test_hand_parser_agrees_with_yaml_oracle pins it to yaml.safe_load over the
 well-formed matrix, so any scalar-semantics divergence fails here rather than
-shipping. The over-catch cases sit apart: they are inputs a lenient reader treats
-as a pin while `yaml.safe_load` raises or returns a non-mapping, so the hand
-parser deliberately exceeds the oracle there.
+shipping. The over-catch cases (yaml raises or returns a non-mapping) and the
+malformed cases sit in their own contract tests, since the library refuses to
+parse them the same way.
 """
 
 import pytest
@@ -16,6 +16,7 @@ from hooks_constants.agent_model_pin_detection import (
     frontmatter_pins_concrete_model,
     is_agent_definition_path,
     pinned_model_value,
+    pinned_or_malformed,
 )
 
 PACKAGE_AGENT_PATH = "packages/claude-dev-env/agents/clean-coder.md"
@@ -38,6 +39,11 @@ YAML_CLEAN_BLOCKS = [
     "name: sample\nmodel: inherit\nmodel: opus\n",
     "name: sample\nmodel : opus\n",
     "name: sample\nmodel : inherit\n",
+    "name: sample\nmodel: null\n",
+    "name: sample\nmodel: Null\n",
+    "name: sample\nmodel: NULL\n",
+    "name: sample\nmodel: ~\n",
+    "name: sample\nmodel: \xa0\n",
     "name: sample\ncolor: green\n",
 ]
 
@@ -64,22 +70,58 @@ def test_hand_parser_agrees_with_yaml_oracle(frontmatter_block: str) -> None:
     [
         ("name: sample\nmodel:opus\n", True),
         ("name: sample\nmodel:inherit\n", False),
-        ("name: sample\nmodel: 'opus\n", True),
-        ("name: sample\nmodel: 'inherit\n", False),
-        ('name: sample\nmodel: "sonn\n', True),
     ],
-    ids=[
-        "no-space-opus-pins",
-        "no-space-inherit-allows",
-        "unterminated-opus-pins",
-        "unterminated-inherit-allows",
-        "unterminated-partial-pins",
-    ],
+    ids=["no-space-opus-pins", "no-space-inherit-allows"],
 )
-def test_hand_parser_over_catches_yaml_gaps(
+def test_hand_parser_over_catches_no_space_colon(
     frontmatter_block: str, expected_pin_verdict: bool
 ) -> None:
     assert frontmatter_pins_concrete_model(frontmatter_block) is expected_pin_verdict
+
+
+@pytest.mark.parametrize(
+    "frontmatter_block",
+    [
+        "name: sample\nmodel: 'opus\n",
+        'name: sample\nmodel: "opus\n',
+        'name: sample\nmodel: "inherit"opus\n',
+        "name: sample\nmodel: \"inherit'\n",
+        "name: sample\nmodel: 'inherit'' opus-4'\n",
+        "name: sample\nmodel: |\n",
+        "name: sample\nmodel: >\n",
+    ],
+    ids=[
+        "unterminated-single",
+        "unterminated-double",
+        "content-after-close-quote",
+        "mismatched-quote",
+        "escaped-quote-then-content",
+        "block-scalar-literal",
+        "block-scalar-folded",
+    ],
+)
+def test_malformed_model_line_is_flagged(frontmatter_block: str) -> None:
+    pinned_value, is_malformed = pinned_or_malformed(frontmatter_block)
+    assert is_malformed is True
+    assert pinned_value is None
+
+
+@pytest.mark.parametrize(
+    ("frontmatter_block", "expected"),
+    [
+        ("name: sample\nmodel: opus\n", ("opus", False)),
+        ("name: sample\nmodel: inherit\n", (None, False)),
+        ("name: sample\nmodel: null\n", (None, False)),
+        ("name: sample\nmodel:\n", (None, False)),
+        ("name: sample\ncolor: green\n", (None, False)),
+        ("name: sample\nmodel: |\n", (None, True)),
+    ],
+    ids=["concrete", "inherit", "null", "bare", "no-model", "malformed"],
+)
+def test_pinned_or_malformed_classifies_the_last_line(
+    frontmatter_block: str, expected: tuple[str | None, bool]
+) -> None:
+    assert pinned_or_malformed(frontmatter_block) == expected
 
 
 @pytest.mark.parametrize(
@@ -88,20 +130,11 @@ def test_hand_parser_over_catches_yaml_gaps(
         ("name: sample\nmodel: opus\n", "opus"),
         ("name: sample\nmodel:opus\n", "opus"),
         ("name: sample\nmodel : haiku\n", "haiku"),
-        ("name: sample\nmodel: 'sonnet\n", "sonnet"),
         ("name: sample\nmodel: inherit\n", None),
+        ("name: sample\nmodel: 'opus\n", None),
         ("name: sample\nmodel:\n", None),
-        ("name: sample\ncolor: green\n", None),
     ],
-    ids=[
-        "opus",
-        "no-space-opus",
-        "space-before-haiku",
-        "unterminated-sonnet",
-        "inherit-none",
-        "bare-none",
-        "no-model-none",
-    ],
+    ids=["opus", "no-space-opus", "space-before-haiku", "inherit", "malformed", "bare"],
 )
 def test_pinned_model_value_returns_the_value(
     frontmatter_block: str, expected_value: str | None

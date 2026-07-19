@@ -36,13 +36,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-from hooks_constants.agent_model_pin_detection import frontmatter_pins_concrete_model
+from hooks_constants.agent_model_pin_detection import (
+    extract_frontmatter_block,
+    frontmatter_pins_concrete_model,
+)
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "tools", "model", "color"}
 )
-FRONTMATTER_FENCE = "---"
-FRONTMATTER_SEGMENT_COUNT = 3
 CODE_VERIFIER_AGENT_NAME = "code-verifier"
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^([a-z][a-z0-9_]*):", re.MULTILINE)
 
@@ -54,14 +55,17 @@ def _agent_definition_paths() -> tuple[Path, ...]:
     return tuple(
         each_markdown_file
         for each_markdown_file in all_markdown_files
-        if each_markdown_file.read_text(encoding="utf-8").startswith(FRONTMATTER_FENCE)
+        if extract_frontmatter_block(each_markdown_file.read_text(encoding="utf-8"))
+        is not None
     )
 
 
 def _frontmatter_block(agent_definition_path: Path) -> str:
-    agent_text = agent_definition_path.read_text(encoding="utf-8")
-    fence_segments = agent_text.split(FRONTMATTER_FENCE, FRONTMATTER_SEGMENT_COUNT - 1)
-    return fence_segments[1]
+    frontmatter_block = extract_frontmatter_block(
+        agent_definition_path.read_text(encoding="utf-8")
+    )
+    assert frontmatter_block is not None
+    return frontmatter_block
 
 
 def _top_level_keys(frontmatter_block: str) -> set[str]:

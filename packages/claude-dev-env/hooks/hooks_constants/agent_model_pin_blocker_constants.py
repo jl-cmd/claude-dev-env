@@ -1,10 +1,12 @@
 """Constants for the agent-model-pin PreToolUse blocker.
 
 Holds the frontmatter fence, the accepted non-pinning model value, the model-value
-quote characters, the markdown extension, the doc filenames excluded from the gate,
-the gated tool names, the top-level model-line pattern, the agent-file path
-fragments, the hook's dispatcher module name, and the deny-message text. The
-blocker, its detection helpers, and its tests import these by name.
+quote characters, the inline-comment pattern, the ASCII-whitespace set, the YAML
+null model values, the block-scalar indicator characters, the markdown extension,
+the doc filenames excluded from the gate, the gated tool names, the top-level
+model-line pattern, the agent-file path fragments, the hook's dispatcher module
+name, and the deny-message text. The blocker, its detection helpers, and its tests
+import these by name.
 
 ``AGENT_MODEL_PIN_BLOCKER_MODULE_NAME`` lives here, with the hook's own constants,
 for cohesion; the dispatcher roster imports it for this hook's native entry, so
@@ -16,10 +18,12 @@ from __future__ import annotations
 __all__ = [
     "FRONTMATTER_FENCE",
     "BYTE_ORDER_MARK",
-    "MODEL_FRONTMATTER_KEY",
     "INHERIT_MODEL_VALUE",
     "MODEL_VALUE_QUOTE_CHARACTERS",
     "INLINE_COMMENT_PATTERN",
+    "ASCII_WHITESPACE",
+    "ALL_NULL_MODEL_VALUES",
+    "BLOCK_SCALAR_INDICATOR_CHARACTERS",
     "MARKDOWN_EXTENSION",
     "ALL_NON_AGENT_MARKDOWN_FILENAMES",
     "ALL_PIN_GATED_TOOL_NAMES",
@@ -34,10 +38,12 @@ __all__ = [
 
 FRONTMATTER_FENCE = "---"
 BYTE_ORDER_MARK = "\ufeff"
-MODEL_FRONTMATTER_KEY = "model"
 INHERIT_MODEL_VALUE = "inherit"
 MODEL_VALUE_QUOTE_CHARACTERS = "'\""
 INLINE_COMMENT_PATTERN = r"\s#"
+ASCII_WHITESPACE = " \t\n\r\x0b\x0c"
+ALL_NULL_MODEL_VALUES = ("null", "~")
+BLOCK_SCALAR_INDICATOR_CHARACTERS = "|>"
 MARKDOWN_EXTENSION = ".md"
 
 ALL_NON_AGENT_MARKDOWN_FILENAMES = ("claude.md", "readme.md")

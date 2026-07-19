@@ -22,7 +22,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 
 ## Format
 
-Each file uses YAML frontmatter (`name`, `description`, `tools`, optional `color`, optional `model`) followed by a Markdown body with the agent's behavioral instructions. The `description` field appears in the Claude Code agent picker. Set `model` to `inherit` or leave it out — the caller supplies the model on each spawn, so an agent file names no concrete model. The `agent_model_pin_blocker` write-time hook blocks a Write or Edit that pins a concrete `model` value in an agent file.
+Each file uses YAML frontmatter (`name`, `description`, `tools`, optional `color`, optional `model`) followed by a Markdown body with the agent's behavioral instructions. The `description` field appears in the Claude Code agent picker. Set `model` to `inherit` or leave it out — the caller supplies the model on each spawn, so an agent file names no concrete model. The `agent_model_pin_blocker` write-time hook blocks a Write, Edit, or MultiEdit that pins a concrete `model` value in an agent file.
 
 ## Adding an agent
 

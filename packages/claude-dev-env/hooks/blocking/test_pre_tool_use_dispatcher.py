@@ -339,6 +339,15 @@ def test_agent_model_pin_multi_edit_reconstruction_denies_through_dispatcher(
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
+def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
+    """The dispatcher docstring names the roster, not per-tool counts that drift."""
+    dispatcher_source = Path(_DISPATCHER_SCRIPT).read_text(encoding="utf-8")
+    assert "ALL_HOSTED_HOOK_ENTRIES" in dispatcher_source
+    assert "-> 20 hooks" not in dispatcher_source
+    assert "-> 21 hooks" not in dispatcher_source
+    assert "-> 9 hooks" not in dispatcher_source
+
+
 def test_multi_edit_runs_only_group_b_hooks() -> None:
     """Dispatcher invokes only Group-B hooks on MultiEdit, not Group-A hooks.
 

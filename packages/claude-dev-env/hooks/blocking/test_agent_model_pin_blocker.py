@@ -98,16 +98,30 @@ def test_evaluate_ignores_non_write_tool() -> None:
     assert evaluate(payload) is None
 
 
-def test_evaluate_allows_unterminated_inherit() -> None:
-    content = "---\nname: sample\nmodel: 'inherit\n---\n\nBody.\n"
+def test_evaluate_allows_null_model() -> None:
+    content = "---\nname: sample\nmodel: null\n---\n\nBody.\n"
     assert evaluate(_write_payload(PACKAGE_AGENT_PATH, content)) is None
 
 
-def test_evaluate_denies_unterminated_concrete_model_quoting_value() -> None:
+def test_evaluate_denies_unterminated_quote_as_malformed() -> None:
     content = "---\nname: sample\nmodel: 'opus\n---\n\nBody.\n"
     deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
     assert deny_reason is not None
-    assert "pins a concrete model (opus)" in deny_reason
+    assert "malformed model line" in deny_reason
+
+
+def test_evaluate_denies_content_after_closing_quote_as_malformed() -> None:
+    content = '---\nname: sample\nmodel: "inherit"opus\n---\n\nBody.\n'
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "malformed model line" in deny_reason
+
+
+def test_evaluate_denies_block_scalar_as_malformed() -> None:
+    content = "---\nname: sample\nmodel: |\n---\n\nBody.\n"
+    deny_reason = evaluate(_write_payload(PACKAGE_AGENT_PATH, content))
+    assert deny_reason is not None
+    assert "malformed model line" in deny_reason
 
 
 def test_evaluate_denies_space_before_colon_pin() -> None:

@@ -36,7 +36,7 @@ from hooks_constants.agent_model_pin_blocker_constants import (
 from hooks_constants.agent_model_pin_detection import (
     extract_frontmatter_block,
     is_agent_definition_path,
-    pinned_model_value,
+    pinned_or_malformed,
 )
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import apply_edits, edits_for_tool
@@ -92,12 +92,22 @@ def _pin_deny_reason(file_path: str, pinned_model: str) -> str:
     )
 
 
+def _malformed_model_line_deny_reason(file_path: str) -> str:
+    """Return the deny-reason text for an agent file with a malformed model line."""
+    return (
+        f"{file_path} has a malformed model line in frontmatter (a bad quote or a "
+        "block-scalar value). Set the model line to model: inherit, or omit the "
+        "model key."
+    )
+
+
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether a Write/Edit/MultiEdit pins a concrete model in an agent file.
 
     Gates on the tool name and the agent-definition path shape, reconstructs the
-    post-edit content, reads its frontmatter, and denies when the last model line
-    names a concrete model — quoting that value in the reason.
+    post-edit content, and reads its frontmatter. A concrete pinned model denies
+    with its value quoted; a malformed model line denies with a malformed-line
+    message; an unset or ``inherit`` model line allows.
     """
     tool_name = _string_value(payload_by_key.get("tool_name"))
     if tool_name not in ALL_PIN_GATED_TOOL_NAMES:
@@ -112,7 +122,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     )
     if frontmatter_block is None:
         return None
-    pinned_model = pinned_model_value(frontmatter_block)
+    pinned_model, is_malformed = pinned_or_malformed(frontmatter_block)
+    if is_malformed:
+        return _malformed_model_line_deny_reason(file_path)
     return _pin_deny_reason(file_path, pinned_model) if pinned_model is not None else None
 
 
