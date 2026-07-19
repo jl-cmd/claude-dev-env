@@ -36,6 +36,7 @@ ACCEPTED_FRONTMATTER_KEYS = frozenset(
 MODEL_KEY_PATTERN = re.compile(r"^model:(?P<declared_value>.*)$", re.MULTILINE)
 INHERIT_MODEL_VALUE = "inherit"
 MODEL_VALUE_QUOTE_CHARACTERS = "'\""
+YAML_COMMENT_MARKER = "#"
 FRONTMATTER_FENCE = "---"
 FRONTMATTER_SEGMENT_COUNT = 3
 CODE_VERIFIER_AGENT_NAME = "code-verifier"
@@ -62,19 +63,23 @@ def _top_level_keys(frontmatter_block: str) -> set[str]:
     return set(TOP_LEVEL_KEY_PATTERN.findall(frontmatter_block))
 
 
-def _declared_model_value(frontmatter_block: str) -> str | None:
-    model_line_match = MODEL_KEY_PATTERN.search(frontmatter_block)
-    if model_line_match is None:
-        return None
-    raw_declared_value = model_line_match.group("declared_value").strip()
-    return raw_declared_value.strip(MODEL_VALUE_QUOTE_CHARACTERS).lower()
+def _normalized_model_value(raw_declared_value: str) -> str:
+    comment_free_value = raw_declared_value.split(YAML_COMMENT_MARKER, 1)[0].strip()
+    return comment_free_value.strip(MODEL_VALUE_QUOTE_CHARACTERS).lower()
+
+
+def _declared_model_values(frontmatter_block: str) -> list[str]:
+    return [
+        _normalized_model_value(each_model_line_match.group("declared_value"))
+        for each_model_line_match in MODEL_KEY_PATTERN.finditer(frontmatter_block)
+    ]
 
 
 def _pins_concrete_model(frontmatter_block: str) -> bool:
-    declared_model_value = _declared_model_value(frontmatter_block)
-    if declared_model_value is None:
-        return False
-    return declared_model_value != INHERIT_MODEL_VALUE
+    return any(
+        each_declared_value != INHERIT_MODEL_VALUE
+        for each_declared_value in _declared_model_values(frontmatter_block)
+    )
 
 
 @pytest.mark.parametrize(
@@ -107,28 +112,20 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     ("synthetic_frontmatter_block", "expected_pin_verdict"),
     [
         ("name: sample\nmodel: opus\n", True),
-        ('name: sample\nmodel: "opus"\n', True),
-        ("name: sample\nmodel: Opus\n", True),
-        ("name: sample\nmodel: opus-4-5\n", True),
-        ("name: sample\nmodel: gpt-4\n", True),
-        ("name: sample\nmodel: third-party\n", True),
-        ("name: sample\nmodel: claude-sonnet-4-5\n", True),
+        ("name: sample\nmodel: inherit\nmodel: opus\n", True),
         ("name: sample\nmodel: inherit\n", False),
         ('name: sample\nmodel: "inherit"\n', False),
         ("name: sample\nmodel: Inherit\n", False),
+        ("name: sample\nmodel: inherit  # loader default\n", False),
         ("name: sample\ncolor: green\n", False),
     ],
     ids=[
-        "bare-alias",
-        "quoted-alias",
-        "title-case-alias",
-        "versioned-alias",
-        "foreign-model",
-        "third-party-alias",
-        "full-model-id",
+        "bare-alias-pin",
+        "duplicate-key-last-pins",
         "inherit",
         "quoted-inherit",
         "title-case-inherit",
+        "commented-inherit",
         "no-model-key",
     ],
 )
