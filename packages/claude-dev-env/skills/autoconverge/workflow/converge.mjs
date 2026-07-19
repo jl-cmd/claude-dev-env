@@ -2304,10 +2304,43 @@ function isP2OnlyFindings(findings) {
  * @returns {string} the next phase name
  */
 function nextPhaseAfterP2OnlyFix(currentPhase) {
-  if (currentPhase === 'CONVERGE') return 'BUGBOT'
-  if (currentPhase === 'BUGBOT') return 'COPILOT'
-  if (currentPhase === 'COPILOT') return 'CODEX'
-  return 'FINALIZE'
+  const nextPhaseByCurrent = {
+    CONVERGE: 'BUGBOT',
+    BUGBOT: 'COPILOT',
+    COPILOT: 'CODEX',
+  }
+  return nextPhaseByCurrent[currentPhase] || 'FINALIZE'
+}
+
+/**
+ * Apply P2-only findings once and report whether the fixed HEAD advanced.
+ * Shared by the four phase branches that fix pure-P2 findings then advance
+ * forward without re-converging.
+ *
+ * ::
+ *
+ *   await applyP2OnlyFix(head, findings, 'bugbot', 'bugbot gate', 'bugbot fix lens')
+ *   -> { progressed: true, newSha: '<fixed>', blocker: null }
+ *
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings P2-only findings for this phase
+ * @param {string} sourceLabel short label passed to applyFixes
+ * @param {string} stallSubject noun phrase for the resolvedWithoutCommit stall message
+ * @param {string} noPushSubject subject for the no-push stall message
+ * @returns {Promise<{progressed: boolean, newSha: string, blocker: string|null}>} fix outcome
+ */
+async function applyP2OnlyFix(head, findings, sourceLabel, stallSubject, noPushSubject) {
+  const fixResult = await applyFixes(head, findings, sourceLabel)
+  const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
+  const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
+  if (fixProgress.progressed) {
+    return { progressed: true, newSha: fixProgress.newSha, blocker: null }
+  }
+  const blocker =
+    fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
+      ? `fix stalled: ${stallSubject} raised ${findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
+      : `${noPushSubject} landed no push for ${findings.length} finding(s) on HEAD ${head}`
+  return { progressed: false, newSha: head, blocker }
 }
 
 /**
@@ -2698,16 +2731,12 @@ while (iterations < CONFIG.maxIterations) {
       resetNoLensRounds()
       const nextPhase = nextPhaseAfterP2OnlyFix('CONVERGE')
       log(`Round ${rounds}: ${findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
-      const fixResult = await applyFixes(head, findings, 'converge-round')
-      const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
-      const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
-      if (!fixProgress.progressed) {
-        blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
-          ? `fix stalled: converge round raised ${findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
-          : `fix lens landed no push for ${findings.length} finding(s) on HEAD ${head}`
+      const p2Fix = await applyP2OnlyFix(head, findings, 'converge-round', 'converge round', 'fix lens')
+      if (!p2Fix.progressed) {
+        blocker = p2Fix.blocker
         break
       }
-      head = fixProgress.newSha
+      head = p2Fix.newSha
       phase = nextPhase
       continue
     }
@@ -2786,16 +2815,12 @@ while (iterations < CONFIG.maxIterations) {
       if (isP2OnlyFindings(bugbotOutcome.findings)) {
         const nextPhase = nextPhaseAfterP2OnlyFix('BUGBOT')
         log(`Bugbot raised ${bugbotOutcome.findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
-        const fixResult = await applyFixes(head, bugbotOutcome.findings, 'bugbot')
-        const hadThreadBearingFinding = bugbotOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
-        const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
-        if (!fixProgress.progressed) {
-          blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
-            ? `fix stalled: bugbot gate raised ${bugbotOutcome.findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
-            : `bugbot fix lens landed no push for ${bugbotOutcome.findings.length} finding(s) on HEAD ${head}`
+        const p2Fix = await applyP2OnlyFix(head, bugbotOutcome.findings, 'bugbot', 'bugbot gate', 'bugbot fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
           break
         }
-        head = fixProgress.newSha
+        head = p2Fix.newSha
         bugbotDown = false
         phase = nextPhase
         continue
@@ -2884,16 +2909,12 @@ while (iterations < CONFIG.maxIterations) {
       if (isP2OnlyFindings(roundFindings)) {
         const nextPhase = nextPhaseAfterP2OnlyFix('COPILOT')
         log(`Copilot raised ${roundFindings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
-        const fixResult = await applyFixes(head, roundFindings, 'copilot')
-        const hadThreadBearingFinding = roundFindings.some((each) => collectFindingThreadIds(each).length > 0)
-        const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
-        if (!fixProgress.progressed) {
-          blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
-            ? `fix stalled: copilot round raised ${roundFindings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
-            : `copilot fix lens landed no push for ${roundFindings.length} finding(s) on HEAD ${head}`
+        const p2Fix = await applyP2OnlyFix(head, roundFindings, 'copilot', 'copilot round', 'copilot fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
           break
         }
-        head = fixProgress.newSha
+        head = p2Fix.newSha
         copilotDown = false
         copilotNote = null
         phase = nextPhase
@@ -2962,16 +2983,12 @@ while (iterations < CONFIG.maxIterations) {
       if (isP2OnlyFindings(codexOutcome.findings)) {
         const nextPhase = nextPhaseAfterP2OnlyFix('CODEX')
         log(`Codex raised ${codexOutcome.findings.length} P2-only finding(s) — fixing once then advancing to ${nextPhase}`)
-        const fixResult = await applyFixes(head, codexOutcome.findings, 'codex')
-        const hadThreadBearingFinding = codexOutcome.findings.some((each) => collectFindingThreadIds(each).length > 0)
-        const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
-        if (!fixProgress.progressed) {
-          blocker = fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
-            ? `fix stalled: codex gate raised ${codexOutcome.findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
-            : `codex fix lens landed no push for ${codexOutcome.findings.length} finding(s) on HEAD ${head}`
+        const p2Fix = await applyP2OnlyFix(head, codexOutcome.findings, 'codex', 'codex gate', 'codex fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
           break
         }
-        head = fixProgress.newSha
+        head = p2Fix.newSha
         codexDown = false
         codexCleanAt = head
         phase = nextPhase
