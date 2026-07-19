@@ -92,6 +92,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Residual production carve-outs re-homed on #57 (gate friction on multi-line touch).
+"validators/run_all_validators.py" = ["PLW1510"]
 "validators/exempt_paths.py" = ["F401"]
 "test_*.py" = ["B011", "PLR2004", "F401", "F841", "PLW1510", "B905", "B033", "SIM115", "B007", "B018", "B904"]
 "*_test.py" = ["B011", "PLR2004", "F401", "F841", "PLW1510", "B905", "B033", "SIM115", "B007", "B018", "B904"]
