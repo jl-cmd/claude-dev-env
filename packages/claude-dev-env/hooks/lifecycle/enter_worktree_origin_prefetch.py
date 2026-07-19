@@ -33,12 +33,16 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from hooks_constants import (  # noqa: E402
-    enter_worktree_prefetch_constants as prefetch_constants,
+from hooks_constants.enter_worktree_prefetch_constants import (  # noqa: E402
+    ENTER_WORKTREE_PATH_INPUT_KEY,
+    ENTER_WORKTREE_TOOL_NAME,
+    GIT_FETCH_TIMEOUT_SECONDS,
+    GIT_SYMBOLIC_REF_TIMEOUT_SECONDS,
+    ORIGIN_HEAD_SYMBOLIC_REF,
+    ORIGIN_REMOTE_NAME,
+    ORIGIN_REMOTE_REF_PREFIX,
 )
-from hooks_constants import (
-    pre_tool_use_stdin,
-)
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
 
 def is_enter_worktree_creation(payload_by_field: dict[str, object]) -> bool:
@@ -54,12 +58,12 @@ def is_enter_worktree_creation(payload_by_field: dict[str, object]) -> bool:
         already-existing worktree rather than creating one, so it is False
         for that case and for every other tool.
     """
-    if payload_by_field.get("tool_name", "") != prefetch_constants.ENTER_WORKTREE_TOOL_NAME:
+    if payload_by_field.get("tool_name", "") != ENTER_WORKTREE_TOOL_NAME:
         return False
     tool_input = payload_by_field.get("tool_input", {})
     if not isinstance(tool_input, dict):
         return True
-    return not tool_input.get(prefetch_constants.ENTER_WORKTREE_PATH_INPUT_KEY)
+    return not tool_input.get(ENTER_WORKTREE_PATH_INPUT_KEY)
 
 
 def _run_git_quietly(
@@ -105,18 +109,17 @@ def resolve_origin_default_branch(repo_directory: str) -> str | None:
     """
     completed_process = _run_git_quietly(
         repo_directory,
-        ["symbolic-ref", prefetch_constants.ORIGIN_HEAD_SYMBOLIC_REF],
-        prefetch_constants.GIT_SYMBOLIC_REF_TIMEOUT_SECONDS,
+        ["symbolic-ref", ORIGIN_HEAD_SYMBOLIC_REF],
+        GIT_SYMBOLIC_REF_TIMEOUT_SECONDS,
     )
     if completed_process is None:
         return None
     if completed_process.returncode != 0:
         return None
     resolved_ref = completed_process.stdout.strip()
-    origin_ref_prefix = prefetch_constants.ORIGIN_REMOTE_REF_PREFIX
-    if not resolved_ref.startswith(origin_ref_prefix):
+    if not resolved_ref.startswith(ORIGIN_REMOTE_REF_PREFIX):
         return None
-    return resolved_ref[len(origin_ref_prefix):]
+    return resolved_ref[len(ORIGIN_REMOTE_REF_PREFIX):]
 
 
 def fetch_origin_branch(repo_directory: str, branch_name: str) -> None:
@@ -128,8 +131,8 @@ def fetch_origin_branch(repo_directory: str, branch_name: str) -> None:
     """
     _run_git_quietly(
         repo_directory,
-        ["fetch", prefetch_constants.ORIGIN_REMOTE_NAME, branch_name],
-        prefetch_constants.GIT_FETCH_TIMEOUT_SECONDS,
+        ["fetch", ORIGIN_REMOTE_NAME, branch_name],
+        GIT_FETCH_TIMEOUT_SECONDS,
     )
 
 
@@ -141,7 +144,7 @@ def main() -> None:
     before returning. Always exits 0: a fetch failure self-heals on the next
     fetch rather than blocking worktree creation.
     """
-    hook_payload = pre_tool_use_stdin.read_hook_input_dictionary_from_stdin()
+    hook_payload = read_hook_input_dictionary_from_stdin()
     if hook_payload is None:
         sys.exit(0)
     if not is_enter_worktree_creation(hook_payload):
