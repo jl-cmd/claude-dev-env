@@ -238,6 +238,16 @@ def test_remove_inert_file_permission_rules_strips_only_inert_tools() -> None:
     assert permissions_section["deny"] == ["Read(/live/.claude/hooks/**)"]
 
 
+def test_strip_inert_rules_from_settings_file_missing_path_is_noop(
+    tmp_path: Path,
+) -> None:
+    revoke_module = _load_revoke_module()
+    missing_path = revoke_module.get_claude_project_local_settings_path(tmp_path)
+    assert not missing_path.is_file()
+    assert revoke_module.strip_inert_rules_from_settings_file(missing_path) == 0
+    assert not missing_path.is_file()
+
+
 def test_strip_inert_rules_from_settings_file_updates_project_local_file(
     tmp_path: Path,
 ) -> None:
