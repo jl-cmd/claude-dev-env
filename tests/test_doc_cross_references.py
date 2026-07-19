@@ -42,6 +42,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         ".claude/CLAUDE.md",
         ".claude/plain-language-allow.json",
         ".claude/settings.json",
+        ".claude/settings.local.json",
         "docs/.claude-notes.md",
         "docs/file1.md",
         "docs/file2.md",
