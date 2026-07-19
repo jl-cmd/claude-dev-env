@@ -16,6 +16,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    SESSION_AFFINITY_FILENAME,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -1119,3 +1120,241 @@ def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
     assert completed.returncode == 0
     assert b"Traceback" not in completed.stderr
     assert "report ✅" in completed.stdout.decode(UTF8_ENCODING)
+
+
+_SESSION_ID_FOR_AFFINITY = "11111111-2222-3333-4444-555555555555"
+_SESSION_JSON_STDOUT = (
+    '{"type":"result","result":"ok","session_id":"'
+    + _SESSION_ID_FOR_AFFINITY
+    + '"}'
+)
+_SESSION_MISSING_MESSAGE = "No conversation found with session ID: " + _SESSION_ID_FOR_AFFINITY
+
+
+def _install_affinity_path(monkeypatch: pytest.MonkeyPatch, affinity_file: Path) -> None:
+    monkeypatch.setattr(runner, "session_affinity_path", lambda: affinity_file)
+
+
+def _install_affinity_map(
+    monkeypatch: pytest.MonkeyPatch, affinity_file: Path, pinned_command: str
+) -> None:
+    affinity_file.write_text(
+        json.dumps({"sessions": {_SESSION_ID_FOR_AFFINITY: pinned_command}}),
+        encoding=UTF8_ENCODING,
+    )
+    _install_affinity_path(monkeypatch, affinity_file)
+
+
+def test_session_affinity_path_points_at_home_map() -> None:
+    affinity_path = runner.session_affinity_path()
+    assert affinity_path.name == SESSION_AFFINITY_FILENAME
+    assert CLAUDE_HOME_SUBDIRECTORY in affinity_path.parts
+
+
+def test_successful_json_stdout_records_session_affinity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude-ev"), _entry("claude")])
+    affinity_file = tmp_path / "affinity.json"
+    _install_affinity_path(monkeypatch, affinity_file)
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude-ev": _completed("claude-ev", 0, stdout=_SESSION_JSON_STDOUT),
+            "claude": _completed("claude", 0, stdout="unused"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+                "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.returncode == 0
+    assert chain_result.served_command == "claude-ev"
+    stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
+    assert stored["sessions"][_SESSION_ID_FOR_AFFINITY] == "claude-ev"
+
+
+def test_resume_pins_affinity_binary_before_higher_ranked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    _install_affinity_map(monkeypatch, tmp_path / "affinity.json", "claude")
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-pinned"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ranked"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    resume_arguments = ["-p", "--resume", _SESSION_ID_FOR_AFFINITY, "hello"]
+    chain_result = runner.run_claude(resume_arguments, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.stdout == "from-pinned"
+    assert recorder.invocations[0][0] == "claude"
+
+
+def test_resume_without_affinity_keeps_ranked_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    affinity_file = tmp_path / "affinity.json"
+    _install_affinity_path(monkeypatch, affinity_file)
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-claude"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    resume_arguments = ["-p", "--resume", _SESSION_ID_FOR_AFFINITY, "hello"]
+    chain_result = runner.run_claude(resume_arguments, timeout_seconds=5)
+    assert chain_result.served_command == "claude-ev"
+    assert recorder.invocations[0][0] == "claude-ev"
+
+
+def test_resume_session_missing_falls_over_to_next_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    _install_affinity_map(monkeypatch, tmp_path / "affinity.json", "claude")
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed(
+                "claude", 1, stderr=_SESSION_MISSING_MESSAGE
+            ),
+            "claude-ev": _completed("claude-ev", 0, stdout=_SESSION_JSON_STDOUT),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _HIGH_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    resume_arguments = ["-p", "--resume", _SESSION_ID_FOR_AFFINITY]
+    chain_result = runner.run_claude(resume_arguments, timeout_seconds=5)
+    assert chain_result.served_command == "claude-ev"
+    assert chain_result.returncode == 0
+    assert [each_attempt.status for each_attempt in chain_result.attempts] == [
+        "session_missing",
+        "served",
+    ]
+    assert recorder.invocations[0][0] == "claude"
+    assert recorder.invocations[1][0] == "claude-ev"
+
+
+def test_non_resume_session_missing_does_not_fall_over(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 1, stderr=_SESSION_MISSING_MESSAGE),
+            "claude-ev": _completed("claude-ev", 0, stdout="should-not-run"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _HIGH_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert chain_result.returncode == 1
+    assert len(recorder.invocations) == 1
+
+
+def test_resume_session_id_equals_form(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    _install_affinity_map(monkeypatch, tmp_path / "affinity.json", "claude")
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="pinned"),
+            "claude-ev": _completed("claude-ev", 0, stdout="ranked"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    resume_arguments = ["-p", f"--resume={_SESSION_ID_FOR_AFFINITY}"]
+    chain_result = runner.run_claude(resume_arguments, timeout_seconds=5)
+    assert chain_result.served_command == "claude"
+    assert recorder.invocations[0][0] == "claude"
+
+
+def test_session_id_from_ndjson_stdout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    affinity_file = tmp_path / "affinity.json"
+    _install_affinity_path(monkeypatch, affinity_file)
+    ndjson_stdout = (
+        '{"type":"assistant","message":{"content":[]}}\n'
+        + _SESSION_JSON_STDOUT
+        + "\n"
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {"claude": _completed("claude", 0, stdout=ndjson_stdout)},
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.returncode == 0
+    stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
+    assert stored["sessions"][_SESSION_ID_FOR_AFFINITY] == "claude"
+
+
+def test_stale_affinity_command_missing_from_chain_keeps_ranked_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    _install_affinity_map(monkeypatch, tmp_path / "affinity.json", "missing-binary")
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            "claude": _completed("claude", 0, stdout="from-claude"),
+            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        },
+        weekly_usage_reporter=_usage_reporter_from_remaining(
+            {
+                "claude": _LOW_WEEKLY_REMAINING_PERCENT,
+                "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    resume_arguments = ["-p", "--resume", _SESSION_ID_FOR_AFFINITY]
+    chain_result = runner.run_claude(resume_arguments, timeout_seconds=5)
+    assert chain_result.served_command == "claude-ev"
+    assert recorder.invocations[0][0] == "claude-ev"
+

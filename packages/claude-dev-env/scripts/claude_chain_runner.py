@@ -21,6 +21,13 @@ A usage-limited first try falls over to the next ranked binary::
     first try (highest remaining)  -> exit 1, "usage limit reached"  (falls over)
     next ranked binary             -> exit 0                          (served)
 
+When a successful call emits a ``session_id`` (JSON ``--output-format json``),
+the runner records which chain binary served it under
+``~/.claude/claude-chain-session-affinity.json``. A later call that passes
+``--resume <session_id>`` pins that binary first so ranking cannot send the
+resume to a different account store. On a resume walk, a "no conversation
+found" miss also falls over so a stale pin can still recover.
+
 When stdin is piped (not a TTY), the runner reads it once and forwards the
 same text to every chain attempt so a piped ``-p`` charter body reaches each
 binary in the walk::
@@ -51,10 +58,12 @@ if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
 from dev_env_scripts_constants.claude_chain_constants import (
+    ALL_SESSION_MISSING_SIGNATURES,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
     ATTEMPT_STATUS_SERVED,
+    ATTEMPT_STATUS_SESSION_MISSING,
     ATTEMPT_STATUS_TIMEOUT,
     ATTEMPT_STATUS_USAGE_LIMITED,
     ATTEMPT_SUMMARY_ENTRY_TEMPLATE,
@@ -65,6 +74,8 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
     CHAIN_USAGE_MODULE_NAME,
     CLAUDE_HOME_SUBDIRECTORY,
+    CLAUDE_RESUME_FLAG,
+    CLAUDE_SESSION_ID_JSON_KEY,
     CLI_ARGUMENTS_SEPARATOR,
     CLI_TIMEOUT_FLAG,
     CODEC_ERROR_STRATEGY,
@@ -89,6 +100,9 @@ from dev_env_scripts_constants.claude_chain_constants import (
     EXAMPLE_CONFIG_FILENAME,
     LINE_FEED,
     NO_COMPLETED_PROCESS_RETURN_CODE,
+    SESSION_AFFINITY_FILENAME,
+    SESSION_AFFINITY_JSON_INDENT,
+    SESSION_AFFINITY_SESSIONS_KEY,
     UTF8_ENCODING,
 )
 
@@ -314,6 +328,11 @@ def chain_config_path() -> Path:
     return Path.home() / CLAUDE_HOME_SUBDIRECTORY / CONFIG_FILENAME
 
 
+def session_affinity_path() -> Path:
+    """Return the path to the per-user session-id → binary affinity map."""
+    return Path.home() / CLAUDE_HOME_SUBDIRECTORY / SESSION_AFFINITY_FILENAME
+
+
 def _invalid_shape_error(config_path: Path, reason: str) -> ChainConfigurationError:
     return ChainConfigurationError(
         CONFIG_INVALID_SHAPE_MESSAGE_TEMPLATE.format(
@@ -449,11 +468,139 @@ def _entries_ranked_by_weekly_remaining(
     return ranked_entries
 
 
-def _is_usage_limit_failure(completion: subprocess.CompletedProcess[str]) -> bool:
+def _completion_matches_any_signature(
+    completion: subprocess.CompletedProcess[str],
+    all_signatures: tuple[str, ...],
+) -> bool:
     combined_text = f"{completion.stdout}{completion.stderr}".lower()
-    return any(
-        each_signature in combined_text for each_signature in ALL_USAGE_LIMIT_SIGNATURES
-    )
+    return any(each_signature in combined_text for each_signature in all_signatures)
+
+
+def _is_usage_limit_failure(completion: subprocess.CompletedProcess[str]) -> bool:
+    return _completion_matches_any_signature(completion, ALL_USAGE_LIMIT_SIGNATURES)
+
+
+def _is_session_missing_failure(completion: subprocess.CompletedProcess[str]) -> bool:
+    return _completion_matches_any_signature(completion, ALL_SESSION_MISSING_SIGNATURES)
+
+
+def _resume_session_id(all_claude_arguments: Sequence[str]) -> str | None:
+    """Return the session id after ``--resume``, or None when the flag is absent."""
+    argument_count = len(all_claude_arguments)
+    equals_prefix = f"{CLAUDE_RESUME_FLAG}="
+    for each_index, each_argument in enumerate(all_claude_arguments):
+        if each_argument == CLAUDE_RESUME_FLAG:
+            next_index = each_index + 1
+            if next_index >= argument_count:
+                return None
+            candidate_session_id = all_claude_arguments[next_index]
+            if not candidate_session_id or candidate_session_id.startswith("-"):
+                return None
+            return candidate_session_id
+        if each_argument.startswith(equals_prefix):
+            candidate_session_id = each_argument[len(equals_prefix) :]
+            if not candidate_session_id:
+                return None
+            return candidate_session_id
+    return None
+
+
+def _session_id_from_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    candidate_session_id = payload.get(CLAUDE_SESSION_ID_JSON_KEY)
+    if isinstance(candidate_session_id, str) and candidate_session_id:
+        return candidate_session_id
+    return None
+
+
+def _session_id_from_stream_text(stream_text: str) -> str | None:
+    """Extract the first non-empty ``session_id`` from JSON or NDJSON stdout.
+
+    Each NDJSON line is tried first; the whole stream is the final candidate so
+    a multi-line pretty-printed JSON document still yields its session id.
+    """
+    all_candidate_texts = [*stream_text.splitlines(), stream_text]
+    for each_candidate_text in all_candidate_texts:
+        stripped_text = each_candidate_text.strip()
+        if not stripped_text:
+            continue
+        try:
+            parsed_payload = json.loads(stripped_text)
+        except json.JSONDecodeError:
+            continue
+        session_id = _session_id_from_payload(parsed_payload)
+        if session_id is not None:
+            return session_id
+    return None
+
+
+def _load_session_command_by_id(affinity_path: Path) -> dict[str, str]:
+    if not affinity_path.is_file():
+        return {}
+    try:
+        raw_text = affinity_path.read_text(encoding=UTF8_ENCODING)
+        parsed_document = json.loads(raw_text)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed_document, dict):
+        return {}
+    raw_sessions = parsed_document.get(SESSION_AFFINITY_SESSIONS_KEY)
+    if not isinstance(raw_sessions, dict):
+        return {}
+    return {
+        each_session_id: each_command
+        for each_session_id, each_command in raw_sessions.items()
+        if isinstance(each_session_id, str)
+        and each_session_id
+        and isinstance(each_command, str)
+        and each_command
+    }
+
+
+def _record_session_affinity(session_id: str, served_command: str) -> None:
+    """Persist *session_id* → *served_command*; soft-fail on I/O errors."""
+    affinity_path = session_affinity_path()
+    command_by_session_id = _load_session_command_by_id(affinity_path)
+    command_by_session_id[session_id] = served_command
+    document = {SESSION_AFFINITY_SESSIONS_KEY: command_by_session_id}
+    try:
+        affinity_path.parent.mkdir(parents=True, exist_ok=True)
+        affinity_path.write_text(
+            json.dumps(document, indent=SESSION_AFFINITY_JSON_INDENT) + LINE_FEED,
+            encoding=UTF8_ENCODING,
+        )
+    except OSError:
+        return
+
+
+def _entries_pinned_first(
+    all_entries: list[ChainEntry],
+    pinned_command: str,
+) -> list[ChainEntry]:
+    """Return *all_entries* with every entry for *pinned_command* moved first."""
+    pinned_entries = [
+        each_entry
+        for each_entry in all_entries
+        if each_entry.command == pinned_command
+    ]
+    remaining_entries = [
+        each_entry
+        for each_entry in all_entries
+        if each_entry.command != pinned_command
+    ]
+    return [*pinned_entries, *remaining_entries]
+
+
+def _maybe_record_affinity_from_outcome(
+    chain_outcome: ChainInvocationOutcome,
+) -> None:
+    if chain_outcome.returncode != 0 or chain_outcome.served_command is None:
+        return
+    session_id = _session_id_from_stream_text(chain_outcome.stdout)
+    if session_id is None:
+        return
+    _record_session_affinity(session_id, chain_outcome.served_command)
 
 
 def _served_outcome(
@@ -517,12 +664,19 @@ def _classify_completion(
     entry: ChainEntry,
     completion: subprocess.CompletedProcess[str],
     all_attempts: list[ChainAttempt],
+    *,
+    is_resume_walk: bool,
 ) -> ChainInvocationOutcome | None:
     if completion.returncode == 0:
         all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_SERVED))
         return _served_outcome(entry.command, completion, all_attempts)
     if _is_usage_limit_failure(completion):
         all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_USAGE_LIMITED))
+        return None
+    if is_resume_walk and _is_session_missing_failure(completion):
+        all_attempts.append(
+            ChainAttempt(entry.command, ATTEMPT_STATUS_SESSION_MISSING)
+        )
         return None
     all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_NONZERO_EXIT))
     return _served_outcome(entry.command, completion, all_attempts)
@@ -541,6 +695,22 @@ def _ranked_entries_or_config_order(
         return list(all_entries)
 
 
+def _ordered_entries_for_walk(
+    all_entries: list[ChainEntry],
+    config_path: Path,
+    resume_session_id: str | None,
+) -> list[ChainEntry]:
+    all_ranked_entries = _ranked_entries_or_config_order(all_entries, config_path)
+    if resume_session_id is None:
+        return all_ranked_entries
+    pinned_command = _load_session_command_by_id(session_affinity_path()).get(
+        resume_session_id
+    )
+    if pinned_command is None:
+        return all_ranked_entries
+    return _entries_pinned_first(all_ranked_entries, pinned_command)
+
+
 def run_claude(
     all_claude_arguments: list[str],
     *,
@@ -557,11 +727,17 @@ def run_claude(
             -> served_command=first try (no fallover)
         stdin_text set
             -> same text on every attempt's stdin
+        success with session_id in JSON stdout
+            -> affinity map records session_id → served binary
+        --resume <session_id> with a known affinity pin
+            -> that binary is tried first, even when ranking prefers another
 
     Probes weekly remaining once, ranks highest first, then walks that order.
-    Only a usage-limit failure falls over. Missing binaries are skipped and the
-    walk continues; timeout and other nonzero exits stop. When usage ranking
-    infrastructure fails to load, the walk uses config order instead.
+    Only a usage-limit failure falls over on a normal walk. On a ``--resume``
+    walk, a session-missing failure also falls over. Missing binaries are
+    skipped and the walk continues; timeout and other nonzero exits stop.
+    When usage ranking infrastructure fails to load, the walk uses config
+    order instead.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
@@ -579,10 +755,14 @@ def run_claude(
     """
     config_path = chain_config_path()
     all_entries = load_chain(config_path)
-    all_ranked_entries = _ranked_entries_or_config_order(all_entries, config_path)
+    resume_session_id = _resume_session_id(all_claude_arguments)
+    all_ordered_entries = _ordered_entries_for_walk(
+        all_entries, config_path, resume_session_id
+    )
+    is_resume_walk = resume_session_id is not None
     all_attempts: list[ChainAttempt] = []
-    last_usage_limited: subprocess.CompletedProcess[str] | None = None
-    for each_entry in all_ranked_entries:
+    last_soft_failure: subprocess.CompletedProcess[str] | None = None
+    for each_entry in all_ordered_entries:
         try:
             completion = chain_subprocess_runner(
                 _build_invocation(each_entry, all_claude_arguments),
@@ -604,11 +784,17 @@ def run_claude(
                 ChainAttempt(each_entry.command, ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND)
             )
             continue
-        terminal_outcome = _classify_completion(each_entry, completion, all_attempts)
+        terminal_outcome = _classify_completion(
+            each_entry,
+            completion,
+            all_attempts,
+            is_resume_walk=is_resume_walk,
+        )
         if terminal_outcome is not None:
+            _maybe_record_affinity_from_outcome(terminal_outcome)
             return terminal_outcome
-        last_usage_limited = completion
-    return _exhausted_outcome(all_attempts, last_usage_limited)
+        last_soft_failure = completion
+    return _exhausted_outcome(all_attempts, last_soft_failure)
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
