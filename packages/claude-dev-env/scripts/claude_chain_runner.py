@@ -106,27 +106,6 @@ def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str
     )
 
 
-def _optional_timeout(value: object) -> float | None:
-    """Return *value* as a timeout in seconds, or None when the value is not numeric."""
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
-
-
-def _stdin_bytes(value: object, encoding: str, errors: str) -> bytes | None:
-    """Encode stdin text *value* to bytes, or None when no text is given."""
-    if value is None:
-        return None
-    return str(value).encode(encoding, errors)
-
-
-def _optional_working_directory(value: object) -> str | None:
-    """Return *value* as a working-directory path, or None when it is not one."""
-    if isinstance(value, str):
-        return value
-    return None
-
-
 class _SpooledByteStream(Protocol):
     """Binary spool with seek/read — TemporaryFile wrappers and BufferedIO."""
 
@@ -185,6 +164,8 @@ def _run_captured_subprocess(
     encoding = str(all_subprocess_options.get("encoding") or UTF8_ENCODING)
     errors = str(all_subprocess_options.get("errors") or CODEC_ERROR_STRATEGY)
     input_bytes = _captured_stdin_bytes(all_subprocess_options, encoding, errors)
+    working_directory = all_subprocess_options.get("cwd")
+    timeout_seconds = all_subprocess_options.get("timeout")
     with (
         tempfile.TemporaryFile() as stdout_file,
         tempfile.TemporaryFile() as stderr_file,
@@ -194,9 +175,13 @@ def _run_captured_subprocess(
                 all_invocation_tokens,
                 stdout=stdout_file,
                 stderr=stderr_file,
-                cwd=_optional_working_directory(all_subprocess_options.get("cwd")),
+                cwd=working_directory if isinstance(working_directory, str) else None,
                 check=bool(all_subprocess_options.get("check", False)),
-                timeout=_optional_timeout(all_subprocess_options.get("timeout")),
+                timeout=(
+                    float(timeout_seconds)
+                    if isinstance(timeout_seconds, (int, float))
+                    else None
+                ),
                 input=input_bytes,
             )
         except subprocess.TimeoutExpired as timeout_error:
@@ -238,7 +223,10 @@ def _captured_stdin_bytes(
         return stdin_source.read() or b""
     if isinstance(stdin_source, int):
         return b""
-    return _stdin_bytes(all_subprocess_options.get("input"), encoding, errors)
+    input_text = all_subprocess_options.get("input")
+    if input_text is None:
+        return None
+    return str(input_text).encode(encoding, errors)
 
 
 class ChainConfigurationError(Exception):

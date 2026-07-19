@@ -2,102 +2,54 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-try:
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DriftingReview,
-        EFFORT_LOW,
-        FIXTURE_CHAIN_RETURNCODE,
-        FIXTURE_FAILED_RETURNCODE,
-        FIXTURE_SERVED_COMMAND,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_THIRD_PARTY,
-        MISSING_STORE_FILE_NAME,
-        RECORD_STAMP_MINT_CAP,
-        REJECTED_ULTRA_EFFORT,
-        SINGLE_PASS_CAP,
-        claude_failed,
-        init_git_repository,
-        install_seams,
-        prepared_surface_repo,
-        run_review,
-        stable_clean_review,
-        surface_changing_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CODE_REVIEW_MODEL_ALIAS,
-        DEFAULT_CODE_REVIEW_EFFORT,
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-        PERMISSION_MODE_BYPASS,
-        PERMISSION_MODE_FLAG,
-        RESULT_KEY_BOUND_HASH,
-        RESULT_KEY_DIRTY_TREE,
-        RESULT_KEY_MODE,
-        RESULT_KEY_PASS_COUNT,
-        RESULT_KEY_RETURNCODE,
-        RESULT_KEY_SERVED_COMMAND,
-        RESULT_KEY_STAMP_MINTED,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        MODEL_FLAG,
-        OUTPUT_FORMAT_FLAG,
-        OUTPUT_FORMAT_JSON,
-        SINGLE_TURN_FLAG,
-    )
-    from dev_env_scripts_constants.timing import DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DriftingReview,
-        EFFORT_LOW,
-        FIXTURE_CHAIN_RETURNCODE,
-        FIXTURE_FAILED_RETURNCODE,
-        FIXTURE_SERVED_COMMAND,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_THIRD_PARTY,
-        MISSING_STORE_FILE_NAME,
-        RECORD_STAMP_MINT_CAP,
-        REJECTED_ULTRA_EFFORT,
-        SINGLE_PASS_CAP,
-        claude_failed,
-        init_git_repository,
-        install_seams,
-        prepared_surface_repo,
-        run_review,
-        stable_clean_review,
-        surface_changing_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CODE_REVIEW_MODEL_ALIAS,
-        DEFAULT_CODE_REVIEW_EFFORT,
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-        PERMISSION_MODE_BYPASS,
-        PERMISSION_MODE_FLAG,
-        RESULT_KEY_BOUND_HASH,
-        RESULT_KEY_DIRTY_TREE,
-        RESULT_KEY_MODE,
-        RESULT_KEY_PASS_COUNT,
-        RESULT_KEY_RETURNCODE,
-        RESULT_KEY_SERVED_COMMAND,
-        RESULT_KEY_STAMP_MINTED,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        MODEL_FLAG,
-        OUTPUT_FORMAT_FLAG,
-        OUTPUT_FORMAT_JSON,
-        SINGLE_TURN_FLAG,
-    )
-    from dev_env_scripts_constants.timing import DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS
+import invoke_code_review as invoker
+from _code_review_test_support import (
+    DriftingReview,
+    EFFORT_LOW,
+    FIXTURE_CHAIN_RETURNCODE,
+    FIXTURE_FAILED_RETURNCODE,
+    FIXTURE_SERVED_COMMAND,
+    FIXTURE_SESSION_OPUS,
+    HOST_PROFILE_THIRD_PARTY,
+    MISSING_STORE_FILE_NAME,
+    REJECTED_ULTRA_EFFORT,
+    SINGLE_PASS_CAP,
+    claude_failed,
+    init_git_repository,
+    install_seams,
+    prepared_surface_repo,
+    run_review,
+    stable_clean_review,
+    surface_changing_review,
+)
+from dev_env_scripts_constants.code_review_constants import (
+    CODE_REVIEW_MODEL_ALIAS,
+    DEFAULT_CODE_REVIEW_EFFORT,
+    IN_SESSION_RETURNCODE,
+    MAXIMUM_STAMP_MINT_PASSES,
+    MODE_CHAIN,
+    MODE_IN_SESSION,
+    PERMISSION_MODE_BYPASS,
+    PERMISSION_MODE_FLAG,
+    RESULT_KEY_BOUND_HASH,
+    RESULT_KEY_DIRTY_TREE,
+    RESULT_KEY_MODE,
+    RESULT_KEY_PASS_COUNT,
+    RESULT_KEY_RETURNCODE,
+    RESULT_KEY_SERVED_COMMAND,
+    RESULT_KEY_STAMP_MINTED,
+)
+from dev_env_scripts_constants.grok_worker_constants import (
+    MODEL_FLAG,
+    OUTPUT_FORMAT_FLAG,
+    OUTPUT_FORMAT_JSON,
+    SINGLE_TURN_FLAG,
+)
+from dev_env_scripts_constants.timing import DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS
 
 CLEAN_SUCCESS_OUTCOME = invoker.CodeReviewOutcome(
     mode=MODE_CHAIN,
@@ -272,10 +224,10 @@ def test_record_stamp_hits_cap_without_minting(
         session_model=CODE_REVIEW_MODEL_ALIAS,
         timeout_seconds=DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
         effort=EFFORT_LOW,
-        maximum_passes=RECORD_STAMP_MINT_CAP,
+        maximum_passes=MAXIMUM_STAMP_MINT_PASSES,
     )
     assert mint_outcome.is_stamp_minted is False
-    assert mint_outcome.pass_count == RECORD_STAMP_MINT_CAP
+    assert mint_outcome.pass_count == MAXIMUM_STAMP_MINT_PASSES
 
 
 def test_load_code_review_stamp_store_records_and_covers_surface(

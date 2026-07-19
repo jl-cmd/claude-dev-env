@@ -2,50 +2,28 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-try:
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        FIXTURE_SESSION_HAIKU,
-        FIXTURE_SESSION_OPUS,
-        FIXTURE_SESSION_OPUS_UPPER,
-        FIXTURE_SESSION_SONNET,
-        HOST_PROFILE_CLAUDE,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-    )
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        FIXTURE_SESSION_HAIKU,
-        FIXTURE_SESSION_OPUS,
-        FIXTURE_SESSION_OPUS_UPPER,
-        FIXTURE_SESSION_SONNET,
-        HOST_PROFILE_CLAUDE,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-    )
+import invoke_code_review as invoker
+from _code_review_test_support import (
+    FIXTURE_SESSION_HAIKU,
+    FIXTURE_SESSION_OPUS,
+    FIXTURE_SESSION_OPUS_UPPER,
+    FIXTURE_SESSION_SONNET,
+    HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_THIRD_PARTY,
+    claude_served,
+    init_git_repository,
+    install_seams,
+    run_review,
+)
+from dev_env_scripts_constants.code_review_constants import (
+    IN_SESSION_RETURNCODE,
+    MODE_CHAIN,
+    MODE_IN_SESSION,
+)
 
 
 @pytest.mark.parametrize(

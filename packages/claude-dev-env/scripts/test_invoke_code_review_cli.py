@@ -3,90 +3,48 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-try:
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DID_NOT_CONVERGE_EXIT_CODE,
-        DriftingReview,
-        EFFORT_LOW,
-        FIXTURE_CHAIN_CONFIG_ERROR_MESSAGE,
-        FIXTURE_HOST_PROFILE_ERROR_MESSAGE,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_CLAUDE,
-        HOST_PROFILE_THIRD_PARTY,
-        INVALID_EFFORT_EXIT_CODE,
-        RECORD_STAMP_MINT_CAP,
-        REJECTED_ULTRA_EFFORT,
-        init_git_repository,
-        install_seams,
-        prepared_surface_repo,
-        run_record_stamp_cli,
-        run_review_cli,
-    )
-    from claude_chain_runner import ChainConfigurationError
-    from dev_env_scripts_constants.claude_chain_constants import (
-        CHAIN_CONFIG_ERROR_EXIT_CODE,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CLI_SESSION_MODEL_FLAG,
-        HOST_PROFILE_ERROR_RETURNCODE,
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-        RESULT_KEY_BOUND_HASH,
-        RESULT_KEY_DIRTY_TREE,
-        RESULT_KEY_MODE,
-        RESULT_KEY_PASS_COUNT,
-        RESULT_KEY_RETURNCODE,
-        RESULT_KEY_SERVED_COMMAND,
-        RESULT_KEY_STAMP_MINTED,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import CWD_FLAG
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DID_NOT_CONVERGE_EXIT_CODE,
-        DriftingReview,
-        EFFORT_LOW,
-        FIXTURE_CHAIN_CONFIG_ERROR_MESSAGE,
-        FIXTURE_HOST_PROFILE_ERROR_MESSAGE,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_CLAUDE,
-        HOST_PROFILE_THIRD_PARTY,
-        INVALID_EFFORT_EXIT_CODE,
-        RECORD_STAMP_MINT_CAP,
-        REJECTED_ULTRA_EFFORT,
-        init_git_repository,
-        install_seams,
-        prepared_surface_repo,
-        run_record_stamp_cli,
-        run_review_cli,
-    )
-    from claude_chain_runner import ChainConfigurationError
-    from dev_env_scripts_constants.claude_chain_constants import (
-        CHAIN_CONFIG_ERROR_EXIT_CODE,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CLI_SESSION_MODEL_FLAG,
-        HOST_PROFILE_ERROR_RETURNCODE,
-        IN_SESSION_RETURNCODE,
-        MODE_CHAIN,
-        MODE_IN_SESSION,
-        RESULT_KEY_BOUND_HASH,
-        RESULT_KEY_DIRTY_TREE,
-        RESULT_KEY_MODE,
-        RESULT_KEY_PASS_COUNT,
-        RESULT_KEY_RETURNCODE,
-        RESULT_KEY_SERVED_COMMAND,
-        RESULT_KEY_STAMP_MINTED,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import CWD_FLAG
+import invoke_code_review as invoker
+from _code_review_test_support import (
+    DriftingReview,
+    EFFORT_LOW,
+    FIXTURE_CHAIN_CONFIG_ERROR_MESSAGE,
+    FIXTURE_HOST_PROFILE_ERROR_MESSAGE,
+    FIXTURE_SESSION_OPUS,
+    HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_THIRD_PARTY,
+    REJECTED_ULTRA_EFFORT,
+    init_git_repository,
+    install_seams,
+    prepared_surface_repo,
+    run_record_stamp_cli,
+    run_review_cli,
+)
+from claude_chain_runner import ChainConfigurationError
+from dev_env_scripts_constants.claude_chain_constants import (
+    CHAIN_CONFIG_ERROR_EXIT_CODE,
+)
+from dev_env_scripts_constants.code_review_constants import (
+    CLI_SESSION_MODEL_FLAG,
+    HOST_PROFILE_ERROR_RETURNCODE,
+    IN_SESSION_RETURNCODE,
+    INVALID_EFFORT_RETURNCODE,
+    MAXIMUM_STAMP_MINT_PASSES,
+    MODE_CHAIN,
+    MODE_IN_SESSION,
+    RESULT_KEY_BOUND_HASH,
+    RESULT_KEY_DIRTY_TREE,
+    RESULT_KEY_MODE,
+    RESULT_KEY_PASS_COUNT,
+    RESULT_KEY_RETURNCODE,
+    RESULT_KEY_SERVED_COMMAND,
+    RESULT_KEY_STAMP_MINTED,
+    STAMP_DID_NOT_CONVERGE_RETURNCODE,
+)
+from dev_env_scripts_constants.grok_worker_constants import CWD_FLAG
 
 
 def test_cli_prints_result_json_only(
@@ -196,7 +154,7 @@ def test_cli_rejects_ultra_effort_with_nonzero_exit(
             REJECTED_ULTRA_EFFORT,
         ]
     )
-    assert exit_code == INVALID_EFFORT_EXIT_CODE
+    assert exit_code == INVALID_EFFORT_RETURNCODE
     assert REJECTED_ULTRA_EFFORT in capsys.readouterr().err
 
 
@@ -208,10 +166,10 @@ def test_cli_record_stamp_returns_non_convergence_code_on_cap(
     working_directory = prepared_surface_repo(monkeypatch, tmp_path)
     monkeypatch.setattr(invoker, "invoke_code_review", DriftingReview())
     exit_code = run_record_stamp_cli(working_directory, effort=EFFORT_LOW)
-    assert exit_code == DID_NOT_CONVERGE_EXIT_CODE
+    assert exit_code == STAMP_DID_NOT_CONVERGE_RETURNCODE
     parsed_payload = json.loads(capsys.readouterr().out)
     assert parsed_payload[RESULT_KEY_STAMP_MINTED] is False
-    assert parsed_payload[RESULT_KEY_PASS_COUNT] == RECORD_STAMP_MINT_CAP
+    assert parsed_payload[RESULT_KEY_PASS_COUNT] == MAXIMUM_STAMP_MINT_PASSES
     assert parsed_payload[RESULT_KEY_BOUND_HASH] is None
 
 
@@ -227,7 +185,7 @@ def test_cli_record_stamp_reports_missing_store_dependency(
     working_directory = prepared_surface_repo(monkeypatch, tmp_path)
     monkeypatch.setattr(invoker, "load_code_review_stamp_store", raise_missing_store)
     exit_code = run_record_stamp_cli(working_directory, effort=EFFORT_LOW)
-    assert exit_code == INVALID_EFFORT_EXIT_CODE
+    assert exit_code == INVALID_EFFORT_RETURNCODE
     captured = capsys.readouterr()
     assert "stamp store" in captured.err
     parsed_payload = json.loads(captured.out)

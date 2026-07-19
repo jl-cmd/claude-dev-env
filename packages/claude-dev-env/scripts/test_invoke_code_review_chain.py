@@ -2,58 +2,32 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-try:
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        FIXTURE_SESSION_OPUS,
-        FIXTURE_SESSION_SONNET,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CODE_REVIEW_MODEL_ALIAS,
-        DEFAULT_CODE_REVIEW_EFFORT,
-        PERMISSION_MODE_BYPASS,
-        PERMISSION_MODE_FLAG,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        MODEL_FLAG,
-        OUTPUT_FORMAT_FLAG,
-        OUTPUT_FORMAT_JSON,
-        SINGLE_TURN_FLAG,
-    )
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        FIXTURE_SESSION_OPUS,
-        FIXTURE_SESSION_SONNET,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        CODE_REVIEW_MODEL_ALIAS,
-        DEFAULT_CODE_REVIEW_EFFORT,
-        PERMISSION_MODE_BYPASS,
-        PERMISSION_MODE_FLAG,
-    )
-    from dev_env_scripts_constants.grok_worker_constants import (
-        MODEL_FLAG,
-        OUTPUT_FORMAT_FLAG,
-        OUTPUT_FORMAT_JSON,
-        SINGLE_TURN_FLAG,
-    )
+import invoke_code_review as invoker
+from _code_review_test_support import (
+    FIXTURE_SESSION_OPUS,
+    FIXTURE_SESSION_SONNET,
+    HOST_PROFILE_THIRD_PARTY,
+    claude_served,
+    init_git_repository,
+    install_seams,
+    run_review,
+)
+from dev_env_scripts_constants.code_review_constants import (
+    CODE_REVIEW_MODEL_ALIAS,
+    DEFAULT_CODE_REVIEW_EFFORT,
+    PERMISSION_MODE_BYPASS,
+    PERMISSION_MODE_FLAG,
+)
+from dev_env_scripts_constants.grok_worker_constants import (
+    MODEL_FLAG,
+    OUTPUT_FORMAT_FLAG,
+    OUTPUT_FORMAT_JSON,
+    SINGLE_TURN_FLAG,
+)
 
 
 def test_chain_argv_assembly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -3,55 +3,31 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-try:
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DIRTY_FILE_CONTENTS,
-        DIRTY_FILE_NAME,
-        FIXTURE_CHAIN_RETURNCODE,
-        FIXTURE_GIT_STATUS_FAILURE_RETURNCODE,
-        FIXTURE_SERVED_COMMAND,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        GIT_BINARY,
-        GIT_PORCELAIN_FLAG,
-        GIT_STATUS_SUBCOMMAND,
-        MODE_CHAIN,
-    )
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import invoke_code_review as invoker
-    from _code_review_test_support import (
-        DIRTY_FILE_CONTENTS,
-        DIRTY_FILE_NAME,
-        FIXTURE_CHAIN_RETURNCODE,
-        FIXTURE_GIT_STATUS_FAILURE_RETURNCODE,
-        FIXTURE_SERVED_COMMAND,
-        FIXTURE_SESSION_OPUS,
-        HOST_PROFILE_THIRD_PARTY,
-        claude_served,
-        init_git_repository,
-        install_seams,
-        run_review,
-    )
-    from dev_env_scripts_constants.code_review_constants import (
-        GIT_BINARY,
-        GIT_PORCELAIN_FLAG,
-        GIT_STATUS_SUBCOMMAND,
-        MODE_CHAIN,
-    )
+import invoke_code_review as invoker
+from _code_review_test_support import (
+    DIRTY_FILE_CONTENTS,
+    DIRTY_FILE_NAME,
+    FIXTURE_CHAIN_RETURNCODE,
+    FIXTURE_GIT_STATUS_FAILURE_RETURNCODE,
+    FIXTURE_SERVED_COMMAND,
+    FIXTURE_SESSION_OPUS,
+    HOST_PROFILE_THIRD_PARTY,
+    claude_served,
+    init_git_repository,
+    install_seams,
+    run_review,
+)
+from dev_env_scripts_constants.code_review_constants import (
+    GIT_BINARY,
+    GIT_PORCELAIN_FLAG,
+    GIT_STATUS_SUBCOMMAND,
+    MODE_CHAIN,
+)
 
 
 def test_dirty_tree_true_after_chain_writes_file(
