@@ -17,6 +17,7 @@ import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     SESSION_AFFINITY_FILENAME,
+    SESSION_AFFINITY_SESSIONS_KEY,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -1139,7 +1140,13 @@ def _install_affinity_map(
     monkeypatch: pytest.MonkeyPatch, affinity_file: Path, pinned_command: str
 ) -> None:
     affinity_file.write_text(
-        json.dumps({"sessions": {_SESSION_ID_FOR_AFFINITY: pinned_command}}),
+        json.dumps(
+            {
+                SESSION_AFFINITY_SESSIONS_KEY: {
+                    _SESSION_ID_FOR_AFFINITY: pinned_command
+                }
+            }
+        ),
         encoding=UTF8_ENCODING,
     )
     _install_affinity_path(monkeypatch, affinity_file)
@@ -1175,7 +1182,9 @@ def test_successful_json_stdout_records_session_affinity(
     assert chain_result.returncode == 0
     assert chain_result.served_command == "claude-ev"
     stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
-    assert stored["sessions"][_SESSION_ID_FOR_AFFINITY] == "claude-ev"
+    assert (
+        stored[SESSION_AFFINITY_SESSIONS_KEY][_SESSION_ID_FOR_AFFINITY] == "claude-ev"
+    )
 
 
 def test_resume_pins_affinity_binary_before_higher_ranked(
@@ -1234,7 +1243,8 @@ def test_resume_session_missing_falls_over_to_next_binary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
-    _install_affinity_map(monkeypatch, tmp_path / "affinity.json", "claude")
+    affinity_file = tmp_path / "affinity.json"
+    _install_affinity_map(monkeypatch, affinity_file, "claude")
     recorder = _install(
         monkeypatch,
         config_file,
@@ -1261,6 +1271,10 @@ def test_resume_session_missing_falls_over_to_next_binary(
     ]
     assert recorder.invocations[0][0] == "claude"
     assert recorder.invocations[1][0] == "claude-ev"
+    stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
+    assert (
+        stored[SESSION_AFFINITY_SESSIONS_KEY][_SESSION_ID_FOR_AFFINITY] == "claude-ev"
+    )
 
 
 def test_non_resume_session_missing_does_not_fall_over(
@@ -1331,7 +1345,52 @@ def test_session_id_from_ndjson_stdout(
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert chain_result.returncode == 0
     stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
-    assert stored["sessions"][_SESSION_ID_FOR_AFFINITY] == "claude"
+    assert stored[SESSION_AFFINITY_SESSIONS_KEY][_SESSION_ID_FOR_AFFINITY] == "claude"
+
+
+def test_corrupt_affinity_file_is_ignored_and_rewritten(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    affinity_file = tmp_path / "affinity.json"
+    affinity_file.write_text("{not-json", encoding=UTF8_ENCODING)
+    _install_affinity_path(monkeypatch, affinity_file)
+    _install(
+        monkeypatch,
+        config_file,
+        {"claude": _completed("claude", 0, stdout=_SESSION_JSON_STDOUT)},
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.returncode == 0
+    stored = json.loads(affinity_file.read_text(encoding=UTF8_ENCODING))
+    assert stored[SESSION_AFFINITY_SESSIONS_KEY][_SESSION_ID_FOR_AFFINITY] == "claude"
+
+
+def test_affinity_write_oserror_soft_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(tmp_path, [_entry("claude")])
+    affinity_file = tmp_path / "affinity.json"
+    _install_affinity_path(monkeypatch, affinity_file)
+    original_write_text = Path.write_text
+
+    def raise_on_affinity_temp_write(
+        self: Path, *all_arguments: object, **all_keywords: object
+    ) -> None:
+        if self.name.startswith(affinity_file.name):
+            raise OSError("disk full")
+        original_write_text(self, *all_arguments, **all_keywords)
+
+    monkeypatch.setattr(Path, "write_text", raise_on_affinity_temp_write)
+    _install(
+        monkeypatch,
+        config_file,
+        {"claude": _completed("claude", 0, stdout=_SESSION_JSON_STDOUT)},
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.returncode == 0
+    assert chain_result.served_command == "claude"
+    assert not affinity_file.exists()
 
 
 def test_stale_affinity_command_missing_from_chain_keeps_ranked_order(

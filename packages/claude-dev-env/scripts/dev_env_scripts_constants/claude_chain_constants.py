@@ -79,6 +79,9 @@ SESSION_AFFINITY_SESSIONS_KEY: str = "sessions"
 SESSION_AFFINITY_JSON_INDENT: int = 2
 """Indent width used when writing the session-affinity JSON file."""
 
+SESSION_AFFINITY_TEMP_SUFFIX: str = ".tmp"
+"""Suffix for the temp file used for atomic session-affinity writes."""
+
 CLAUDE_RESUME_FLAG: str = "--resume"
 """Claude CLI flag that continues an existing conversation by session id."""
 

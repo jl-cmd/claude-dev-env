@@ -103,6 +103,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     SESSION_AFFINITY_FILENAME,
     SESSION_AFFINITY_JSON_INDENT,
     SESSION_AFFINITY_SESSIONS_KEY,
+    SESSION_AFFINITY_TEMP_SUFFIX,
     UTF8_ENCODING,
 )
 
@@ -559,17 +560,25 @@ def _load_session_command_by_id(affinity_path: Path) -> dict[str, str]:
 
 
 def _record_session_affinity(session_id: str, served_command: str) -> None:
-    """Persist *session_id* → *served_command*; soft-fail on I/O errors."""
+    """Persist *session_id* → *served_command*; soft-fail on I/O errors.
+
+    Writes through a same-directory temp file then replaces the affinity path so
+    a crash mid-write cannot leave a half-written map that later loads as empty.
+    """
     affinity_path = session_affinity_path()
     command_by_session_id = _load_session_command_by_id(affinity_path)
     command_by_session_id[session_id] = served_command
     document = {SESSION_AFFINITY_SESSIONS_KEY: command_by_session_id}
+    serialized_document = (
+        json.dumps(document, indent=SESSION_AFFINITY_JSON_INDENT) + LINE_FEED
+    )
+    temporary_path = affinity_path.with_name(
+        affinity_path.name + SESSION_AFFINITY_TEMP_SUFFIX
+    )
     try:
         affinity_path.parent.mkdir(parents=True, exist_ok=True)
-        affinity_path.write_text(
-            json.dumps(document, indent=SESSION_AFFINITY_JSON_INDENT) + LINE_FEED,
-            encoding=UTF8_ENCODING,
-        )
+        temporary_path.write_text(serialized_document, encoding=UTF8_ENCODING)
+        temporary_path.replace(affinity_path)
     except OSError:
         return
 
@@ -647,15 +656,15 @@ def _no_process_outcome(
 
 def _exhausted_outcome(
     all_attempts: list[ChainAttempt],
-    last_usage_limited: subprocess.CompletedProcess[str] | None,
+    last_soft_failure: subprocess.CompletedProcess[str] | None,
 ) -> ChainInvocationOutcome:
-    if last_usage_limited is None:
+    if last_soft_failure is None:
         return _no_process_outcome(all_attempts, None)
     return ChainInvocationOutcome(
         served_command=None,
-        returncode=last_usage_limited.returncode,
-        stdout=last_usage_limited.stdout,
-        stderr=last_usage_limited.stderr,
+        returncode=last_soft_failure.returncode,
+        stdout=last_soft_failure.stdout,
+        stderr=last_soft_failure.stderr,
         attempts=tuple(all_attempts),
     )
 
