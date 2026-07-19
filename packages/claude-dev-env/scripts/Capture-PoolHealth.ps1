@@ -67,38 +67,27 @@ function Format-BytesAsGigabytes {
 }
 
 function Get-MemoryAndHandleCounters {
-    $allPaths = @(
-        '\Memory\Pool Nonpaged Bytes',
-        '\Memory\Pool Paged Bytes',
-        '\Memory\Committed Bytes',
-        '\Memory\Commit Limit',
-        '\Memory\Available MBytes',
-        '\Process(_Total)\Handle Count',
-        '\Process(_Total)\Thread Count'
-    )
-    $sample = Get-Counter -Counter $allPaths -ErrorAction Stop
-    $valueByPath = @{}
-    foreach ($eachReading in $sample.CounterSamples) {
-        $valueByPath[$eachReading.Path.ToLowerInvariant()] = [int64]$eachReading.CookedValue
+    # One source of truth for the counters: request order and lookup key both
+    # derive from this map, so a name never has to be restated at the call site.
+    $counterPathByName = [ordered]@{
+        NonpagedBytes   = '\Memory\Pool Nonpaged Bytes'
+        PagedBytes      = '\Memory\Pool Paged Bytes'
+        CommittedBytes  = '\Memory\Committed Bytes'
+        CommitLimit     = '\Memory\Commit Limit'
+        AvailableMBytes = '\Memory\Available MBytes'
+        TotalHandles    = '\Process(_Total)\Handle Count'
+        TotalThreads    = '\Process(_Total)\Thread Count'
     }
-    return $valueByPath
+    $sample = Get-Counter -Counter @($counterPathByName.Values) -ErrorAction Stop
+    $valueByName = @{}
+    $index = 0
+    foreach ($eachName in $counterPathByName.Keys) {
+        $valueByName[$eachName] = [int64]$sample.CounterSamples[$index++].CookedValue
+    }
+    return $valueByName
 }
 
-function Find-CounterValue {
-    param(
-        [hashtable]$ValueByPath,
-        [string]$Suffix
-    )
-    $needle = $Suffix.ToLowerInvariant()
-    foreach ($eachKey in $ValueByPath.Keys) {
-        if ($eachKey.EndsWith($needle)) {
-            return [int64]$ValueByPath[$eachKey]
-        }
-    }
-    return [int64](-1)
-}
-
-function Get-HighHandleProcesses {
+function Get-HighHandleProcessReport {
     param(
         [int]$HandleThreshold,
         [int]$MaximumRows
@@ -106,23 +95,30 @@ function Get-HighHandleProcesses {
     $allHotProcesses = @(
         Get-Process -ErrorAction SilentlyContinue |
             Where-Object { $_.HandleCount -gt $HandleThreshold } |
-            Sort-Object -Property HandleCount -Descending |
-            Select-Object -First $MaximumRows
+            Sort-Object -Property HandleCount -Descending
     )
-    foreach ($eachProcess in $allHotProcesses) {
-        $commandLine = ''
-        $parentProcessId = 0
+    $topProcesses = @($allHotProcesses | Select-Object -First $MaximumRows)
+    $cimByProcessId = @{}
+    if ($topProcesses.Count -gt 0) {
+        $processIdFilter = @($topProcesses | ForEach-Object { "ProcessId=$($_.Id)" }) -join ' OR '
         try {
-            $cimProcess = Get-CimInstance -ClassName Win32_Process `
-                -Filter "ProcessId=$($eachProcess.Id)" `
-                -ErrorAction SilentlyContinue
-            if ($cimProcess) {
-                $commandLine = [string]$cimProcess.CommandLine
-                $parentProcessId = [int]$cimProcess.ParentProcessId
+            foreach ($eachCimProcess in @(
+                    Get-CimInstance -ClassName Win32_Process -Filter $processIdFilter `
+                        -ErrorAction SilentlyContinue)) {
+                $cimByProcessId[[int]$eachCimProcess.ProcessId] = $eachCimProcess
             }
         }
         catch {
             $null = $_
+        }
+    }
+    $topRows = foreach ($eachProcess in $topProcesses) {
+        $commandLine = ''
+        $parentProcessId = 0
+        $cimProcess = $cimByProcessId[[int]$eachProcess.Id]
+        if ($cimProcess) {
+            $commandLine = [string]$cimProcess.CommandLine
+            $parentProcessId = [int]$cimProcess.ParentProcessId
         }
         [pscustomobject]@{
             ProcessId       = $eachProcess.Id
@@ -132,14 +128,10 @@ function Get-HighHandleProcesses {
             CommandLine     = $commandLine
         }
     }
-}
-
-function Measure-HighHandleProcessCount {
-    param([int]$HandleThreshold)
-    @(
-        Get-Process -ErrorAction SilentlyContinue |
-            Where-Object { $_.HandleCount -gt $HandleThreshold }
-    ).Count
+    return [pscustomobject]@{
+        TotalCount = $allHotProcesses.Count
+        TopRows    = @($topRows)
+    }
 }
 
 function Ensure-PoolTagCaptureType {
@@ -231,10 +223,9 @@ public static class PoolTagCapture {
             foreach (var eachTag in tags.OrderByDescending(t => t.PagedUsed).Take(topN)) {
                 report.AppendLine(FormatTag(eachTag));
             }
-            report.AppendLine("--- WATCHLIST File IoFE Toke Key FMfn ---");
-            var watchNames = new HashSet<string>(StringComparer.Ordinal) {
-                "File", "IoFE", "Toke", "Key", "FMfn"
-            };
+            var watchTagNames = new[] { "File", "IoFE", "Toke", "Key", "FMfn" };
+            var watchNames = new HashSet<string>(watchTagNames, StringComparer.Ordinal);
+            report.AppendLine("--- WATCHLIST " + string.Join(" ", watchTagNames) + " ---");
             foreach (var eachTag in tags) {
                 string cleanedName = TagName(eachTag).TrimEnd(' ', '.', '\0');
                 if (watchNames.Contains(cleanedName)) {
@@ -274,7 +265,7 @@ function Get-PoolTagReport {
     return [PoolTagCapture]::Capture($TopCount)
 }
 
-function Write-ThresholdVerdict {
+function Get-ThresholdAlerts {
     param(
         [int64]$NonpagedBytes,
         [int64]$TotalHandles,
@@ -302,18 +293,7 @@ function Write-ThresholdVerdict {
                 $ProcessHandleAlert, $HighHandleProcessCount
         ))
     }
-    Write-ReportLine ''
-    Write-ReportLine '=== THRESHOLD VERDICT ==='
-    if ($allAlerts.Count -eq 0) {
-        Write-ReportLine 'OK - all thresholds clear'
-        $script:ThresholdExitCode = 0
-        return
-    }
-    foreach ($eachAlert in $allAlerts) {
-        Write-ReportLine $eachAlert
-    }
-    Write-ReportLine 'REMEDIATE: process-object pressure (File/Toke tags) -> RC2 #255, RC3 #254, RC4 #253'
-    $script:ThresholdExitCode = 1
+    return , $allAlerts
 }
 
 # --- main ---
@@ -329,14 +309,14 @@ Write-ReportLine (
 
 Write-ReportLine ''
 Write-ReportLine '=== COUNTERS ==='
-$counterByPath = Get-MemoryAndHandleCounters
-$nonpagedBytes = Find-CounterValue -ValueByPath $counterByPath -Suffix '\memory\pool nonpaged bytes'
-$pagedBytes = Find-CounterValue -ValueByPath $counterByPath -Suffix '\memory\pool paged bytes'
-$committedBytes = Find-CounterValue -ValueByPath $counterByPath -Suffix '\memory\committed bytes'
-$commitLimitBytes = Find-CounterValue -ValueByPath $counterByPath -Suffix '\memory\commit limit'
-$availableMBytes = Find-CounterValue -ValueByPath $counterByPath -Suffix '\memory\available mbytes'
-$totalHandles = Find-CounterValue -ValueByPath $counterByPath -Suffix '\process(_total)\handle count'
-$totalThreads = Find-CounterValue -ValueByPath $counterByPath -Suffix '\process(_total)\thread count'
+$counterByName = Get-MemoryAndHandleCounters
+$nonpagedBytes = $counterByName['NonpagedBytes']
+$pagedBytes = $counterByName['PagedBytes']
+$committedBytes = $counterByName['CommittedBytes']
+$commitLimitBytes = $counterByName['CommitLimit']
+$availableMBytes = $counterByName['AvailableMBytes']
+$totalHandles = $counterByName['TotalHandles']
+$totalThreads = $counterByName['TotalThreads']
 
 Write-ReportLine ("Pool Nonpaged Bytes = {0} ({1})" -f $nonpagedBytes, (Format-BytesAsGigabytes $nonpagedBytes))
 Write-ReportLine ("Pool Paged Bytes    = {0} ({1})" -f $pagedBytes, (Format-BytesAsGigabytes $pagedBytes))
@@ -348,14 +328,14 @@ Write-ReportLine ("Thread Count Total  = {0}" -f $totalThreads)
 
 Write-ReportLine ''
 Write-ReportLine ("=== PROCESSES WITH HANDLES > {0} ===" -f $ProcessHandleAlert)
-$allHighHandleProcesses = @(Get-HighHandleProcesses `
-        -HandleThreshold $ProcessHandleAlert `
-        -MaximumRows $TopProcessCount)
-if ($allHighHandleProcesses.Count -eq 0) {
+$highHandleReport = Get-HighHandleProcessReport `
+    -HandleThreshold $ProcessHandleAlert `
+    -MaximumRows $TopProcessCount
+if ($highHandleReport.TopRows.Count -eq 0) {
     Write-ReportLine '(none)'
 }
 else {
-    foreach ($eachProcess in $allHighHandleProcesses) {
+    foreach ($eachProcess in $highHandleReport.TopRows) {
         $commandPreview = ''
         if ($eachProcess.CommandLine) {
             $commandPreview = $eachProcess.CommandLine
@@ -374,16 +354,13 @@ else {
     }
 }
 
-$highHandleProcessCount = Measure-HighHandleProcessCount -HandleThreshold $ProcessHandleAlert
+$highHandleProcessCount = $highHandleReport.TotalCount
 Write-ReportLine ("High-handle process count (all): {0}" -f $highHandleProcessCount)
 
 Write-ReportLine ''
 Write-ReportLine '=== POOL TAGS (NtQuerySystemInformation class 22) ==='
 try {
-    $tagReport = Get-PoolTagReport -TopCount $TopTagCount
-    foreach ($eachLine in ($tagReport -split "`r?`n")) {
-        Write-ReportLine $eachLine
-    }
+    Write-ReportLine (Get-PoolTagReport -TopCount $TopTagCount)
 }
 catch {
     Write-ReportLine ("POOL TAG CAPTURE FAILED: {0}" -f $_.Exception.Message)
@@ -398,14 +375,26 @@ Write-ReportLine 'RC4 #253  Block Git find walks; es.exe primary; kill find with
 Write-ReportLine 'RC5 #256  Attribute WSL/Docker starters only after measurement (VdMm secondary)'
 Write-ReportLine 'Optional: install WDK poolmon.exe for stock binary snapshots (this script needs no WDK).'
 
-$script:ThresholdExitCode = 0
-Write-ThresholdVerdict `
+$allThresholdAlerts = Get-ThresholdAlerts `
     -NonpagedBytes $nonpagedBytes `
     -TotalHandles $totalHandles `
     -HighHandleProcessCount $highHandleProcessCount `
     -NonpagedAlert $NonpagedAlertBytes `
     -ProcessHandleAlert $ProcessHandleAlert `
     -TotalHandleAlert $TotalHandleAlert
+Write-ReportLine ''
+Write-ReportLine '=== THRESHOLD VERDICT ==='
+if ($allThresholdAlerts.Count -eq 0) {
+    Write-ReportLine 'OK - all thresholds clear'
+    $thresholdExitCode = 0
+}
+else {
+    foreach ($eachAlert in $allThresholdAlerts) {
+        Write-ReportLine $eachAlert
+    }
+    Write-ReportLine 'REMEDIATE: process-object pressure (File/Toke tags) -> RC2 #255, RC3 #254, RC4 #253'
+    $thresholdExitCode = 1
+}
 
 if ($OutPath) {
     $destinationDirectory = Split-Path -Parent $OutPath
@@ -418,4 +407,4 @@ if ($OutPath) {
     Write-Output "Wrote report: $OutPath"
 }
 
-exit $script:ThresholdExitCode
+exit $thresholdExitCode
