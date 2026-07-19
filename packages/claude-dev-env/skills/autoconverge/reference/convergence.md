@@ -159,8 +159,9 @@ existing fix + re-converge path.
   applies the same rule.
 - Above threshold → run the codex-review wrapper against the PR base branch.
   Non–code-standard, non–P2-only findings → fix and return to CONVERGE.
-  P2-only findings → fix once, stamp `codexCleanAt` on the fixed HEAD, and move
-  to the convergence check (no re-converge).
+  P2-only findings → fix once; when HEAD is unchanged, stamp `codexCleanAt` and
+  move to the convergence check (no re-converge), otherwise re-converge on the
+  fixed HEAD.
   Standards-only findings → defer a follow-up, stamp `codexCleanAt`, and move to the
   convergence check (no fix push).
   Clean → stamp `codexCleanAt` and pass `--codex-clean-at` into the convergence check.
