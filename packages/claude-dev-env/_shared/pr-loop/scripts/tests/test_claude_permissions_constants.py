@@ -36,6 +36,13 @@ def test_exposes_all_agent_config_deny_tools_tuple() -> None:
     assert "Glob" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
 
 
+def test_exposes_all_legacy_permission_reap_tools_tuple() -> None:
+    assert constants_module.ALL_LEGACY_PERMISSION_REAP_TOOLS == ("Write", "Glob")
+    assert "NotebookEdit" not in constants_module.ALL_LEGACY_PERMISSION_REAP_TOOLS
+    assert "Edit" not in constants_module.ALL_LEGACY_PERMISSION_REAP_TOOLS
+    assert "Read" not in constants_module.ALL_LEGACY_PERMISSION_REAP_TOOLS
+
+
 def test_auto_mode_environment_entry_template_is_format_string() -> None:
     rendered_template_text = (
         constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(

@@ -8,9 +8,12 @@ pr_loop_shared_constants/claude_settings_keys_constants.py.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 
 def _load_revoke_module() -> ModuleType:
@@ -27,6 +30,63 @@ def _load_revoke_module() -> ModuleType:
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def _write_legacy_form_settings_file(
+    settings_path: Path, revoke_module: ModuleType, project_path: str
+) -> None:
+    """Seed a settings file with only pre-#158 legacy Write()/Glob() rules.
+
+    One Write(/.claude/**) allow rule, and a Write(/.claude/<pattern>) plus
+    a Glob(/.claude/<pattern>) deny rule for every agent-config path
+    pattern -- the exact stranded-rule shapes issue #233 describes."""
+    legacy_allow_rule = f"Write({project_path}/.claude/**)"
+    legacy_deny_rules = [
+        f"Write({project_path}/.claude/{each_pattern})"
+        for each_pattern in revoke_module.ALL_AGENT_CONFIG_PATH_PATTERNS
+    ] + [
+        f"Glob({project_path}/.claude/{each_pattern})"
+        for each_pattern in revoke_module.ALL_AGENT_CONFIG_PATH_PATTERNS
+    ]
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": [legacy_allow_rule],
+                    "deny": legacy_deny_rules,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_revoke_reaps_legacy_write_and_glob_rules_leaving_no_dead_structure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A revoke run reaps the legacy Write()/Glob() rules an older grant left.
+
+    No current-form Edit/Read rule is present, so a revoke run that reaps
+    only the mint set would remove nothing and leave every legacy rule
+    stranded. After revoke runs, the permissions section is gone entirely,
+    matching the module's "no dead structure" contract."""
+    revoke_module = _load_revoke_module()
+    project_directory = tmp_path / "project"
+    project_directory.mkdir()
+    (project_directory / ".git").mkdir()
+    settings_path = tmp_path / "home" / ".claude" / "settings.json"
+    project_path = str(project_directory).replace("\\", "/")
+    _write_legacy_form_settings_file(settings_path, revoke_module, project_path)
+
+    monkeypatch.setattr(
+        revoke_module, "get_claude_user_settings_path", lambda: settings_path
+    )
+    monkeypatch.chdir(project_directory)
+    revoke_module.revoke_permissions_for_current_directory()
+
+    saved_settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert "permissions" not in saved_settings
 
 
 def test_module_imports_constants_from_config_modules() -> None:

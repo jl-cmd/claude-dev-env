@@ -29,6 +29,7 @@ from _claude_permissions_common import (  # noqa: E402
 from pr_loop_shared_constants.claude_permissions_constants import (
     ALL_AGENT_CONFIG_DENY_TOOLS,
     ALL_AGENT_CONFIG_PATH_PATTERNS,
+    ALL_LEGACY_PERMISSION_REAP_TOOLS,
     ALL_PERMISSION_ALLOW_TOOLS,
     AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
     get_claude_user_settings_path,
@@ -44,6 +45,15 @@ from pr_loop_shared_constants.claude_settings_keys_constants import (
 from stale_worktree_rule_sweep import (  # noqa: E402
     sweep_stale_worktree_rules_from_settings,
 )
+
+
+def _reap_tool_names(all_mint_tool_names: tuple[str, ...]) -> tuple[str, ...]:
+    """Return mint tool names plus legacy Write/Glob forms a revoke run reaps.
+
+    Keeps mint tuples (Edit/Read) untouched and widens only the revoke surface
+    so inert pre-#158 Write()/Glob() rules are removed with the current mint set.
+    """
+    return all_mint_tool_names + ALL_LEGACY_PERMISSION_REAP_TOOLS
 
 
 def remove_values_from_list(
@@ -215,10 +225,12 @@ def revoke_permissions_for_current_directory() -> None:
         )
         raise SystemExit(1)
     project_path = get_current_project_path()
-    permission_rules = build_permission_rules(project_path, ALL_PERMISSION_ALLOW_TOOLS)
+    permission_rules = build_permission_rules(
+        project_path, _reap_tool_names(ALL_PERMISSION_ALLOW_TOOLS)
+    )
     all_agent_config_deny_rules = build_agent_config_deny_rules(
         project_path,
-        ALL_AGENT_CONFIG_DENY_TOOLS,
+        _reap_tool_names(ALL_AGENT_CONFIG_DENY_TOOLS),
         ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
     settings = load_settings(claude_user_settings_path)
