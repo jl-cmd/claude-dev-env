@@ -36,7 +36,7 @@ ACCEPTED_FRONTMATTER_KEYS = frozenset(
 MODEL_KEY_PATTERN = re.compile(r"^model:(?P<declared_value>.*)$", re.MULTILINE)
 INHERIT_MODEL_VALUE = "inherit"
 MODEL_VALUE_QUOTE_CHARACTERS = "'\""
-YAML_COMMENT_MARKER = "#"
+INLINE_COMMENT_PATTERN = re.compile(r"\s#")
 FRONTMATTER_FENCE = "---"
 FRONTMATTER_SEGMENT_COUNT = 3
 CODE_VERIFIER_AGENT_NAME = "code-verifier"
@@ -64,8 +64,14 @@ def _top_level_keys(frontmatter_block: str) -> set[str]:
 
 
 def _normalized_model_value(raw_declared_value: str) -> str:
-    comment_free_value = raw_declared_value.split(YAML_COMMENT_MARKER, 1)[0].strip()
-    return comment_free_value.strip(MODEL_VALUE_QUOTE_CHARACTERS).lower()
+    stripped_value = raw_declared_value.strip()
+    for each_quote_character in MODEL_VALUE_QUOTE_CHARACTERS:
+        if stripped_value.startswith(each_quote_character):
+            closing_quote_index = stripped_value.find(each_quote_character, 1)
+            if closing_quote_index != -1:
+                return stripped_value[1:closing_quote_index].lower()
+    comment_free_value = INLINE_COMMENT_PATTERN.split(stripped_value, 1)[0]
+    return comment_free_value.strip().lower()
 
 
 def _declared_model_values(frontmatter_block: str) -> list[str]:
@@ -113,8 +119,11 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     [
         ("name: sample\nmodel: opus\n", True),
         ("name: sample\nmodel: inherit\nmodel: opus\n", True),
+        ("name: sample\nmodel: inherit#opus\n", True),
+        ('name: sample\nmodel: "inherit # not a comment"\n', True),
         ("name: sample\nmodel: inherit\n", False),
         ('name: sample\nmodel: "inherit"\n', False),
+        ('name: sample\nmodel: "inherit"  # quoted then comment\n', False),
         ("name: sample\nmodel: Inherit\n", False),
         ("name: sample\nmodel: inherit  # loader default\n", False),
         ("name: sample\ncolor: green\n", False),
@@ -122,8 +131,11 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     ids=[
         "bare-alias-pin",
         "duplicate-key-last-pins",
+        "hash-embedded-pin",
+        "quoted-value-with-hash-pin",
         "inherit",
         "quoted-inherit",
+        "quoted-inherit-then-comment",
         "title-case-inherit",
         "commented-inherit",
         "no-model-key",
