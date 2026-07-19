@@ -49,6 +49,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `session-log` — logs a session report to the Obsidian vault
 - `session-tidy` — tidies the session folder
 - `task-build` — gathers open tasks
+- `build-goal` — authors a paste-ready goal-mode prompt plus a human-readable brief from the current session's context and task list
 - `privacy-hygiene` — full-repo personal-data and secret sweep plus remediation guide
 - `update` — updates the dev-env package
 - `fresh-branch` — creates a clean branch off main

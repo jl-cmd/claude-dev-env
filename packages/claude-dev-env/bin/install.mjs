@@ -180,7 +180,7 @@ const INSTALL_GROUPS = {
             'grok-spawn',
             'anthropic-plan', 'everything-search',
             'privacy-hygiene',
-            'recall', 'remember', 'task-build'
+            'recall', 'remember', 'task-build', 'build-goal'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
