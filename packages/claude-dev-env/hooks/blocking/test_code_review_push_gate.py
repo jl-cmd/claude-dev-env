@@ -46,6 +46,12 @@ gate_module = _load_module("code_review_push_gate")
 store_module = _load_module("code_review_stamp_store")
 
 
+@pytest.fixture(autouse=True)
+def enable_code_review_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Behavior tests exercise the gates with enforcement on."""
+    monkeypatch.setattr(gate_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", True)
+
+
 def _run_git(repository_directory: Path, *git_arguments: str) -> None:
     subprocess.run(
         ["git", "-C", str(repository_directory), *git_arguments],
@@ -186,4 +192,14 @@ def test_code_review_skip_marker_allows_push(
 ) -> None:
     work_directory = _prepared_code_repo(monkeypatch, tmp_path)
     emitted = _run_main(monkeypatch, f"git push origin main {BYPASS_MARKER}", work_directory)
+    assert emitted == ""
+
+
+def test_enforcement_off_allows_push_without_stamp(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(gate_module, "CODE_REVIEW_ENFORCEMENT_ENABLED", False)
+    work_directory = _prepared_code_repo(monkeypatch, tmp_path)
+    assert gate_module.deny_reason_for_directory(str(work_directory)) is None
+    emitted = _run_main(monkeypatch, "git push origin main", work_directory)
     assert emitted == ""

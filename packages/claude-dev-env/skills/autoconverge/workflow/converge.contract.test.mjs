@@ -815,6 +815,25 @@ test('preamble attributes the known-temp-var resolution to a third cwd-scoped au
   );
 });
 
+test('preamble forbids bash rm on a repo-path build cache and points cleanup at Remove-Item', () => {
+  const text = preambleText().replace(/\s+/g, ' ');
+  assert.match(
+    text,
+    /\.mypy_cache|\.pytest_cache|__pycache__/,
+    'expected the preamble to name a gitignored build cache agents must not rm',
+  );
+  assert.match(
+    text,
+    /never delete it|leave it in place/i,
+    'expected the preamble to tell agents to leave a gitignored cache rather than rm it',
+  );
+  assert.match(
+    text,
+    /Remove-Item -Recurse -Force -Confirm:\$false/,
+    'expected the preamble to point a genuine delete at the PowerShell Remove-Item form',
+  );
+});
+
 test('SKILL.md does not attribute the known-temp-var resolution to the standalone or compound paths', () => {
   assert.doesNotMatch(
     skillSource.replace(/\s+/g, ' '),

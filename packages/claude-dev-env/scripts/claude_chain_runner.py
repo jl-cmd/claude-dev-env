@@ -40,6 +40,7 @@ import io
 import json
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     ATTEMPT_STATUS_USAGE_LIMITED,
     ATTEMPT_SUMMARY_ENTRY_TEMPLATE,
     ATTEMPT_SUMMARY_JOIN_SEPARATOR,
+    CARRIAGE_RETURN,
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     CHAIN_EXHAUSTED_EXIT_CODE,
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
@@ -82,11 +84,149 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CONFIG_MISSING_MESSAGE_TEMPLATE,
     CONFIG_NOT_OBJECT_REASON,
     CONFIG_UNREADABLE_MESSAGE_TEMPLATE,
+    CRLF_NEWLINE,
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
+    LINE_FEED,
     NO_COMPLETED_PROCESS_RETURN_CODE,
     UTF8_ENCODING,
 )
+
+
+def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:
+    """Decode captured *raw_bytes* with ``text=True`` universal-newline semantics.
+
+    Spool capture writes binary temp files, so a bare ``.decode`` leaves CRLF and
+    bare CR intact. ``subprocess.run(..., text=True)`` normalized those to LF;
+    this helper restores that contract for Windows children that emit ``\\r\\n``.
+    """
+    decoded_text = raw_bytes.decode(encoding, errors)
+    return decoded_text.replace(CRLF_NEWLINE, LINE_FEED).replace(
+        CARRIAGE_RETURN, LINE_FEED
+    )
+
+
+class _SpooledByteStream(Protocol):
+    """Binary spool with seek/read — TemporaryFile wrappers and BufferedIO."""
+
+    def seek(self, target: int, whence: int = 0, /) -> int: ...
+
+    def read(self, size: int | None = -1, /) -> bytes: ...
+
+
+def _decoded_spooled_streams(
+    stdout_file: _SpooledByteStream,
+    stderr_file: _SpooledByteStream,
+    encoding: str,
+    errors: str,
+) -> tuple[str, str]:
+    """Seek both spool files to the start and decode their full contents."""
+    stdout_file.seek(0)
+    stderr_file.seek(0)
+    return (
+        _decode_captured_stream(stdout_file.read(), encoding, errors),
+        _decode_captured_stream(stderr_file.read(), encoding, errors),
+    )
+
+
+def _attach_partial_timeout_streams(
+    timeout_error: subprocess.TimeoutExpired,
+    stdout_file: _SpooledByteStream,
+    stderr_file: _SpooledByteStream,
+    encoding: str,
+    errors: str,
+) -> None:
+    """Decode partial spool contents onto *timeout_error* before re-raise."""
+    captured_stdout, captured_stderr = _decoded_spooled_streams(
+        stdout_file, stderr_file, encoding, errors
+    )
+    timeout_error.stdout = captured_stdout
+    timeout_error.stderr = captured_stderr
+
+
+# Capturing a large-output child through OS pipes (``capture_output=True``)
+# deadlocks on Windows: the child buffers its whole response and flushes it at
+# once, the pipe buffer fills before the parent drains it, and both sides block.
+# Redirecting each stream to a temporary file removes the pipe, so the child
+# writes freely; the files are then read back and decoded the way a pipe capture
+# would. ``capture_output``, ``text``, and ``env`` are ignored in favor of file
+# redirection and the parent environment; ``timeout``, ``check``, ``cwd``,
+# ``stdin``, ``input``, ``encoding``, and ``errors`` are honored. On timeout,
+# partial stdout/stderr are decoded from the temp files and attached to the
+# raised ``TimeoutExpired``. When ``check=True`` and the child exits non-zero,
+# ``CalledProcessError.stdout`` / ``.stderr`` stay unset (temp files are not
+# attached to that raised error).
+def _run_captured_subprocess(
+    all_invocation_tokens: list[str],
+    **all_subprocess_options: object,
+) -> subprocess.CompletedProcess[str]:
+    """Run *all_invocation_tokens*, spooling stdout and stderr to temp files."""
+    encoding = str(all_subprocess_options.get("encoding") or UTF8_ENCODING)
+    errors = str(all_subprocess_options.get("errors") or CODEC_ERROR_STRATEGY)
+    input_bytes = _captured_stdin_bytes(all_subprocess_options, encoding, errors)
+    working_directory = all_subprocess_options.get("cwd")
+    timeout_seconds = all_subprocess_options.get("timeout")
+    with (
+        tempfile.TemporaryFile() as stdout_file,
+        tempfile.TemporaryFile() as stderr_file,
+    ):
+        try:
+            completion = subprocess.run(
+                all_invocation_tokens,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                cwd=working_directory if isinstance(working_directory, str) else None,
+                check=bool(all_subprocess_options.get("check", False)),
+                timeout=(
+                    float(timeout_seconds)
+                    if isinstance(timeout_seconds, (int, float))
+                    else None
+                ),
+                input=input_bytes,
+            )
+        except subprocess.TimeoutExpired as timeout_error:
+            _attach_partial_timeout_streams(
+                timeout_error, stdout_file, stderr_file, encoding, errors
+            )
+            raise
+        captured_stdout, captured_stderr = _decoded_spooled_streams(
+            stdout_file, stderr_file, encoding, errors
+        )
+        return subprocess.CompletedProcess(
+            all_invocation_tokens,
+            completion.returncode,
+            captured_stdout,
+            captured_stderr,
+        )
+
+
+def _captured_stdin_bytes(
+    all_subprocess_options: dict[str, object], encoding: str, errors: str
+) -> bytes | None:
+    """Return the bytes to feed the child's stdin for a spooled run.
+
+    ::
+
+        stdin=<open prompt file>  -> the file's bytes
+        stdin=subprocess.DEVNULL  -> b"" (an immediate EOF)
+        input="charter text"      -> the encoded text
+
+    A wrapper hands the runner a ``stdin`` stream or a ``DEVNULL`` sentinel; the
+    spooled run reads from an ``input`` pipe rather than the caller's handle, so
+    the stream is read into bytes here to deliver the same stdin a direct pipe
+    would. When no ``stdin`` is given, the ``input`` text is encoded instead.
+    """
+    stdin_source = all_subprocess_options.get("stdin")
+    if isinstance(stdin_source, io.TextIOBase):
+        return stdin_source.read().encode(encoding, errors)
+    if isinstance(stdin_source, (io.RawIOBase, io.BufferedIOBase)):
+        return stdin_source.read() or b""
+    if isinstance(stdin_source, int):
+        return b""
+    input_text = all_subprocess_options.get("input")
+    if input_text is None:
+        return None
+    return str(input_text).encode(encoding, errors)
 
 
 class ChainConfigurationError(Exception):
@@ -138,7 +278,7 @@ class WeeklyUsageAccountReport(Protocol):
     command: str
 
 
-chain_subprocess_runner = subprocess.run
+chain_subprocess_runner = _run_captured_subprocess
 
 
 def _load_chain_usage_module() -> ModuleType:

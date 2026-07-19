@@ -1,7 +1,8 @@
 """PreToolUse gate: PR create lands only behind a clean xhigh code-review stamp.
 
-Fires on Bash/PowerShell ``gh pr create`` and on the MCP
-``create_pull_request`` tool. Resolves the repository from the session
+Fires when ``CODE_REVIEW_ENFORCEMENT_ENABLED`` is on (default off). Runs on
+Bash/PowerShell ``gh pr create`` and on the MCP ``create_pull_request``
+tool. Resolves the repository from the session
 working directory (or the payload cwd), computes the live change-surface
 hash, and allows the create only when a clean stamp at effort ``xhigh`` or
 higher covers that exact hash under ``~/.claude/code-review-stamps/``.
@@ -40,6 +41,7 @@ try:
     from code_review_stamp_store import live_surface_hash, stamp_covers_surface
     from config.code_review_enforcement_constants import (
         ALL_GATED_SHELL_TOOL_NAMES,
+        CODE_REVIEW_ENFORCEMENT_ENABLED,
         GH_PR_CREATE_INVOCATION_PATTERN,
         HASH_PREVIEW_LENGTH,
         MCP_CREATE_PULL_REQUEST_TOOL_NAME,
@@ -98,7 +100,7 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
 
     ::
 
-        no repo / empty surface / covering xhigh stamp   -> None (allow)
+        enforcement off / no repo / empty surface / covering xhigh stamp -> None
         production surface without xhigh-or-higher stamp -> corrective (deny)
 
     Args:
@@ -108,6 +110,8 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
         The deny reason when the surface needs a clean xhigh stamp and none
         covers it; None when the create may proceed.
     """
+    if not CODE_REVIEW_ENFORCEMENT_ENABLED:
+        return None
     repo_root = resolve_repo_root(target_directory)
     if repo_root is None:
         return None

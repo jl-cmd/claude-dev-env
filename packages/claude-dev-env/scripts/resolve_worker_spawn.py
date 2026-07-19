@@ -50,6 +50,9 @@ from claude_chain_runner import (  # noqa: E402
     ChainInvocationOutcome,
     run_claude,
 )
+from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    collect_forwarded_text_codec,
+)
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALL_AGENT_FILENAMES_BY_ROLE,
@@ -177,7 +180,9 @@ def _run_claude_with_headless_overrides(
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
     with _HEADLESS_CHAIN_RUNNER_LOCK:
-        previous_runner = chain_runner.chain_subprocess_runner
+        previous_runner: TextCapturingSubprocessRunner = (
+            chain_runner.chain_subprocess_runner
+        )
 
         def _runner_with_headless_overrides(
             all_invocation_tokens: Sequence[str],
@@ -186,6 +191,7 @@ def _run_claude_with_headless_overrides(
         ) -> subprocess.CompletedProcess[str]:
             del all_positionals
             prompt_stdin.seek(0)
+            forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
             completed_process: subprocess.CompletedProcess[str] = previous_runner(
                 all_invocation_tokens,
                 capture_output=True,
@@ -194,6 +200,7 @@ def _run_claude_with_headless_overrides(
                 check=False,
                 stdin=prompt_stdin,
                 cwd=working_directory_path,
+                **forwarded_text_codec,
             )
             return completed_process
 

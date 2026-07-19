@@ -18,6 +18,7 @@ Workflow scripts and report utilities for the `autoconverge` skill.
 | `converge.precatch.test.mjs` | Tests the pre-catch stage: static-sweep ordering and gate coverage, the adversarial second pass, the self-review lens, the terminal Bugbot gate, the read-only/edit preamble split, and the commit-recovery cap. |
 | `converge.fix-progress.test.mjs` | Tests fix-progress tracking across rounds. |
 | `converge.fix-recovery.test.mjs` | Tests recovery when a fix commit fails. |
+| `converge.p2-advance.test.mjs` | Tests P2-only fix-then-advance helpers and phase routing. |
 | `converge.run-input.test.mjs` | Tests workflow input validation. |
 | `test_aggregate_runs.py` | Tests for `aggregate_runs.py`. |
 | `test_convergence_summary.py` | Tests for `convergence_summary.py`. |

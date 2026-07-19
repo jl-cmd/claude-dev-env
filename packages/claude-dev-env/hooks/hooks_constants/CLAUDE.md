@@ -60,9 +60,11 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
 | `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
+| `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
 | `reviewer_spawn_gate_constants.py` | Bash tool name, the sentinel marker, the Copilot and Bugbot trigger markers, the availability-script relative path and override env-var name, and the deny-message template for the reviewer-spawn gate |
+| `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |

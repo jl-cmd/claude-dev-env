@@ -1,7 +1,8 @@
 """PreToolUse gate: git push lands only behind a clean low code-review stamp.
 
-Fires on Bash/PowerShell tool calls. When the command carries a ``git push``,
-the gate resolves each repository the push targets, computes the live
+Fires on Bash/PowerShell tool calls when ``CODE_REVIEW_ENFORCEMENT_ENABLED``
+is on (default off). When the command carries a ``git push``, the gate
+resolves each repository the push targets, computes the live
 change-surface hash against the merge base, and allows the push only when a
 clean stamp at effort ``low`` or higher covers that exact hash under
 ``~/.claude/code-review-stamps/``.
@@ -44,6 +45,7 @@ try:
     from config.code_review_enforcement_constants import (
         ALL_GATED_SHELL_TOOL_NAMES,
         CODE_REVIEW_BYPASS_MARKER,
+        CODE_REVIEW_ENFORCEMENT_ENABLED,
         GATED_PUSH_SUBCOMMANDS,
         HASH_PREVIEW_LENGTH,
         PUSH_GATE_CORRECTIVE_MESSAGE,
@@ -69,8 +71,9 @@ except ImportError as import_error:
 def deny_reason_for_directory(target_directory: str) -> str | None:
     """Decide whether a push from a directory must be blocked.
 
-    Allowed when the directory is no repo, has no upstream base, is a
-    mechanically exempt surface, or a clean low-or-higher stamp covers it.
+    Allowed when enforcement is off, the directory is no repo, has no upstream
+    base, is a mechanically exempt surface, or a clean low-or-higher stamp
+    covers it.
 
     Args:
         target_directory: The directory the push targets.
@@ -78,6 +81,8 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
     Returns:
         The deny reason when the surface lacks a covering low stamp, else None.
     """
+    if not CODE_REVIEW_ENFORCEMENT_ENABLED:
+        return None
     repo_root = resolve_repo_root(target_directory)
     if repo_root is None:
         return None

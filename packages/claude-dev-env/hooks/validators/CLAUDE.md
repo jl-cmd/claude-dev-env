@@ -12,6 +12,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 | `output_formatter.py` | Formats `Violation` lists into human-readable output |
 | `run_all_validators.py` | Entry point — runs every check module and aggregates results |
 | `health_check.py` | Verifies that all validator dependencies (ruff, mypy) are reachable |
+| `pyproject_config_discovery.py` | Shared walk-up primitive that resolves a tool's pyproject.toml config from an original target path, matching the `[tool.<name>]` table the tool owns |
 | `python_style_helpers.py` | Shared source-line splitting and function-discovery helpers imported by `python_style_checks.py` |
 
 ## Check modules
@@ -39,6 +40,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 
 | Directory | Role |
 |---|---|
+| `config/` | Constants module (`directory_exemption_constants.py`) holding the exemption directory-segment names that `validate_proposed_file` staging keeps |
 | `test_files/` | Fixture files used by the validator tests — not checked-in test code |
 
 ## Conventions

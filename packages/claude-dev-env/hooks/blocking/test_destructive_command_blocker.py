@@ -1,4 +1,4 @@
-"""Tests for destructive-command-blocker hook."""
+"""Tests for the destructive-command-blocker hook."""
 
 import json
 import os
