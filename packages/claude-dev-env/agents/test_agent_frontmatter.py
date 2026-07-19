@@ -9,10 +9,17 @@ idles, and dies without a report::
     flag: effort            <- unrecognized, subagent dies delivering nothing
 
 The accepted set is the one `agents/CLAUDE.md` documents (name, description,
-tools, color) plus the `model` pin the working agents carry (clean-coder pins
-opus, pr-description-writer pins haiku). Top-level keys are read with a line
-scan so an agent whose `description` embeds informal `<example>` prose is not
-mistaken for one carrying extra keys.
+tools, color) plus the optional `model` key, which every agent either omits
+or sets to `inherit` — the orchestrator supplies a concrete model on every
+spawn, so no agent definition pins one::
+
+    ok:   model: inherit
+    ok:   <no model key at all>
+    flag: model: opus       <- pinned concrete model, caller can't override
+
+Top-level keys are read with a line scan so an agent whose `description`
+embeds informal `<example>` prose is not mistaken for one carrying extra
+keys.
 """
 
 from __future__ import annotations
@@ -25,6 +32,9 @@ import yaml
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "tools", "model", "color"}
+)
+PINNED_MODEL_PATTERN = re.compile(
+    r"^model:\s*(opus|sonnet|haiku|fable|claude-\S+)\s*$", re.MULTILINE
 )
 FRONTMATTER_FENCE = "---"
 FRONTMATTER_SEGMENT_COUNT = 3
@@ -76,3 +86,19 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     parsed_frontmatter = yaml.safe_load(code_verifier_block)
     assert parsed_frontmatter["name"] == CODE_VERIFIER_AGENT_NAME
     assert set(parsed_frontmatter) <= ACCEPTED_FRONTMATTER_KEYS
+
+
+@pytest.mark.parametrize(
+    "agent_definition_path",
+    _agent_definition_paths(),
+    ids=lambda each_path: each_path.name,
+)
+def test_agent_frontmatter_carries_no_pinned_model(
+    agent_definition_path: Path,
+) -> None:
+    frontmatter_block = _frontmatter_block(agent_definition_path)
+    assert not PINNED_MODEL_PATTERN.search(frontmatter_block), (
+        f"{agent_definition_path.name} pins a concrete model in frontmatter; "
+        "the caller supplies the model on every spawn, so agent definitions "
+        "carry no model: line or only model: inherit"
+    )

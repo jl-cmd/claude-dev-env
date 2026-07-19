@@ -2,7 +2,6 @@
 name: code-verifier
 description: Post-hoc verification agent for the three-phase code workflow. Spawned by the main session after coder agents finish. Runs every check itself in a fresh context — named gates, tests against recorded baselines, two-way diff-vs-task reading — puts the draft verdict through one strongest-tier validation subagent that tries to refute it, then ends with a fenced verdict block the verifier_verdict_minter hook turns into the commit-gate verdict. Read and execute only; it never edits files.
 tools: Read, Grep, Glob, Bash, Task
-model: sonnet
 color: orange
 ---
 

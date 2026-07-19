@@ -20,7 +20,6 @@ description: Use this agent for iterative, multi-source deep research that produ
   </commentary>
   </example>
 
-model: opus
 color: cyan
 ---
 
