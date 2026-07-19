@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """PreToolUse guard: deny shell and file-tool access to the stamp directory.
 
+Runs only when ``CODE_REVIEW_ENFORCEMENT_ENABLED`` is on (default off); with
+the flag off the guard allows every stamp-directory access.
+
 The push and PR-create gates trust a single invariant: only
 ``invoke_code_review.py --record-stamp`` mints stamp files under
 ``~/.claude/code-review-stamps/``. settings.json cannot be the only shipped

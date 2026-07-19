@@ -197,4 +197,3 @@ def test_enforcement_off_allows_stamp_directory_access(
         }
     )
     assert decision is None
-

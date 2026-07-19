@@ -543,6 +543,7 @@ def test_main_allows_deletion_push_even_when_code_review_gate_would_block(
 
     assert exit_code == 0
 
+
 def test_main_allows_when_code_review_enforcement_flag_is_off(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -566,4 +567,3 @@ def test_main_allows_when_code_review_enforcement_flag_is_off(
     exit_code = pre_push.main()
 
     assert exit_code == 0
-
