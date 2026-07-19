@@ -18,9 +18,11 @@ from pathlib import Path
 from typing import NoReturn
 
 from pr_loop_shared_constants.claude_permissions_constants import (
+    ALL_INERT_FILE_PERMISSION_TOOLS,
     ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS,
     CLAUDE_SETTINGS_DIRECTORY_NAME,
     GIT_DIRECTORY_NAME,
+    HOME_PROJECT_PATH_ALIAS,
     TEXT_FILE_ENCODING as TEXT_FILE_ENCODING,
     UNIQUE_TEMPORARY_SUFFIX_BYTE_LENGTH,
 )
@@ -78,6 +80,88 @@ def get_current_project_path() -> str:
             f"be used to build permission rules safely: {normalized_project_path}"
         )
     return normalized_project_path
+
+
+def permission_rule_tool_name(permission_rule: object) -> str | None:
+    """Return the tool name prefix of a Claude permission rule, or None.
+
+    ::
+
+        permission_rule_tool_name("Edit(/repo/.claude/**)")  # ok: "Edit"
+        permission_rule_tool_name(42)  # ok: None
+
+    Args:
+        permission_rule: A Claude settings allow/deny rule value.
+
+    Returns:
+        The tool name before the first ``(``, or None when the value is not a
+        well-formed rule string.
+    """
+    if not isinstance(permission_rule, str):
+        return None
+    opening_parenthesis_index = permission_rule.find("(")
+    if opening_parenthesis_index <= 0:
+        return None
+    return permission_rule[:opening_parenthesis_index]
+
+
+def is_inert_file_permission_rule(permission_rule: object) -> bool:
+    """Return True when a rule uses Write/Glob/NotebookEdit (ignored for files).
+
+    ::
+
+        is_inert_file_permission_rule("Write(/wt/.claude/**)")  # ok: True
+        is_inert_file_permission_rule("Edit(/repo/.claude/**)")  # ok: False
+
+    Args:
+        permission_rule: A Claude settings allow/deny rule value.
+
+    Returns:
+        True when the rule's tool is in ALL_INERT_FILE_PERMISSION_TOOLS.
+    """
+    tool_name = permission_rule_tool_name(permission_rule)
+    if tool_name is None:
+        return False
+    return tool_name in ALL_INERT_FILE_PERMISSION_TOOLS
+
+
+def all_project_path_aliases_for_reap(
+    project_path: str,
+    home_directory_path: str | None = None,
+) -> tuple[str, ...]:
+    """Return project path forms a revoke run should match when removing rules.
+
+    ::
+
+        all_project_path_aliases_for_reap("/repo")  # ok: ("/repo",)
+        all_project_path_aliases_for_reap("/home/u", home_directory_path="/home/u")
+            # ok: ("/home/u", "$HOME")
+
+    Always includes the absolute POSIX project path. When that path is the
+    user home directory, also includes ``$HOME`` so grant shapes like
+    ``Edit($HOME/.claude/**)`` are reaped from home cwd.
+
+    Args:
+        project_path: POSIX-style project root path from get_current_project_path.
+        home_directory_path: Optional home path for tests; defaults to Path.home().
+
+    Returns:
+        Ordered unique path aliases used when building project-scoped remove rules.
+    """
+    normalized_project_path = project_path.replace("\\", "/").rstrip("/")
+    resolved_home_directory_path = (
+        home_directory_path
+        if home_directory_path is not None
+        else str(Path.home())
+    ).replace("\\", "/").rstrip("/")
+    all_path_aliases: list[str] = [normalized_project_path]
+    if normalized_project_path.lower() == resolved_home_directory_path.lower():
+        all_path_aliases.append(HOME_PROJECT_PATH_ALIAS)
+    all_unique_path_aliases: list[str] = []
+    for each_path_alias in all_path_aliases:
+        if each_path_alias not in all_unique_path_aliases:
+            all_unique_path_aliases.append(each_path_alias)
+    return tuple(all_unique_path_aliases)
 
 
 def build_permission_rule(tool_name: str, project_path: str) -> str:

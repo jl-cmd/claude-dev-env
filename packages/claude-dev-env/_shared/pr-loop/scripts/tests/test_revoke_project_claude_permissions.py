@@ -19,8 +19,20 @@ import pytest
 def _load_revoke_module() -> ModuleType:
     scripts_directory = Path(__file__).parent.parent
     parent_directory = str(scripts_directory.resolve())
-    if parent_directory not in sys.path:
-        sys.path.insert(0, parent_directory)
+    if parent_directory in sys.path:
+        sys.path.remove(parent_directory)
+    sys.path.insert(0, parent_directory)
+    for each_module_name in list(sys.modules):
+        if each_module_name == "pr_loop_shared_constants" or each_module_name.startswith(
+            "pr_loop_shared_constants."
+        ):
+            del sys.modules[each_module_name]
+        if each_module_name in {
+            "_claude_permissions_common",
+            "revoke_project_claude_permissions",
+            "stale_worktree_rule_sweep",
+        }:
+            del sys.modules[each_module_name]
     module_path = scripts_directory / "revoke_project_claude_permissions.py"
     specification = importlib.util.spec_from_file_location(
         "revoke_project_claude_permissions", module_path
@@ -89,6 +101,115 @@ def test_revoke_reaps_legacy_write_and_glob_rules_leaving_no_dead_structure(
     assert "permissions" not in saved_settings
 
 
+def test_revoke_strips_inert_write_glob_notebookedit_on_foreign_worktree_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Global inert strip removes Write/Glob/NotebookEdit for any path.
+
+    Foreign worktree rules are outside the cwd project's exact path, so
+    project-scoped #315 reap alone leaves them; revoke must strip by tool."""
+    revoke_module = _load_revoke_module()
+    project_directory = tmp_path / "operator_project"
+    project_directory.mkdir()
+    (project_directory / ".git").mkdir()
+    settings_path = tmp_path / "home" / ".claude" / "settings.json"
+    foreign_worktree = (
+        "c:/Users/jon/.claude/worktrees/claude-dev-env-702a0c2055d2/other-wt"
+    )
+    live_other_project = "C:/dev/live-other-project"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": [
+                        f"Write({foreign_worktree}/**)",
+                        f"NotebookEdit(**/.claude/worktrees/**)",
+                        f"Edit({live_other_project}/.claude/**)",
+                        f"Read({live_other_project}/.claude/**)",
+                        "Bash(echo hi)",
+                    ],
+                    "deny": [
+                        f"Glob({foreign_worktree}/.claude/hooks/**)",
+                        f"Write({foreign_worktree}/.claude/skills/**)",
+                        f"Edit({live_other_project}/.claude/hooks/**)",
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        revoke_module, "get_claude_user_settings_path", lambda: settings_path
+    )
+    monkeypatch.chdir(project_directory)
+    revoke_module.revoke_permissions_for_current_directory()
+
+    saved_settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    permissions_section = saved_settings["permissions"]
+    allow_rules = permissions_section["allow"]
+    deny_rules = permissions_section["deny"]
+    assert allow_rules == [
+        f"Edit({live_other_project}/.claude/**)",
+        f"Read({live_other_project}/.claude/**)",
+        "Bash(echo hi)",
+    ]
+    assert deny_rules == [f"Edit({live_other_project}/.claude/hooks/**)"]
+    for each_rule in allow_rules + deny_rules:
+        tool_name = each_rule.split("(", 1)[0]
+        assert tool_name not in ("Write", "Glob", "NotebookEdit")
+
+
+def test_revoke_from_home_reaps_dollar_home_grant_shapes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When cwd is the user home, Edit($HOME/.claude/**) shapes are reaped."""
+    revoke_module = _load_revoke_module()
+    home_directory = tmp_path / "fake_home"
+    home_directory.mkdir()
+    (home_directory / ".git").mkdir()
+    (home_directory / ".claude").mkdir()
+    settings_path = tmp_path / "settings_home" / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    live_other_project = "C:/dev/unrelated-live"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": [
+                        "Edit($HOME/.claude/**)",
+                        "Write($HOME/.claude/**)",
+                        "Read($HOME/.claude/**)",
+                        f"Edit({live_other_project}/.claude/**)",
+                    ],
+                    "deny": [
+                        "Edit($HOME/.claude/hooks/**)",
+                        "Glob($HOME/.claude/skills/**)",
+                        f"Read({live_other_project}/.claude/hooks/**)",
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        revoke_module, "get_claude_user_settings_path", lambda: settings_path
+    )
+    monkeypatch.setattr(
+        Path, "home", classmethod(lambda _cls: home_directory), raising=True
+    )
+    monkeypatch.chdir(home_directory)
+    revoke_module.revoke_permissions_for_current_directory()
+
+    saved_settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    permissions_section = saved_settings["permissions"]
+    allow_rules = permissions_section["allow"]
+    deny_rules = permissions_section["deny"]
+    assert allow_rules == [f"Edit({live_other_project}/.claude/**)"]
+    assert deny_rules == [f"Read({live_other_project}/.claude/hooks/**)"]
+    assert not any("$HOME" in each_rule for each_rule in allow_rules + deny_rules)
+
+
 def test_module_imports_constants_from_config_modules() -> None:
     revoke_module = _load_revoke_module()
     assert revoke_module.ALL_PERMISSION_ALLOW_TOOLS == ("Edit", "Read")
@@ -96,6 +217,46 @@ def test_module_imports_constants_from_config_modules() -> None:
         "Trusted local workspace:"
     )
     assert revoke_module.CLAUDE_SETTINGS_PERMISSIONS_KEY == "permissions"
+
+
+def test_remove_inert_file_permission_rules_strips_only_inert_tools() -> None:
+    revoke_module = _load_revoke_module()
+    settings: dict[str, object] = {
+        "permissions": {
+            "allow": [
+                "Write(/foreign/.claude/**)",
+                "NotebookEdit(**/.claude/worktrees/**)",
+                "Edit(/live/.claude/**)",
+            ],
+            "deny": ["Glob(/foreign/.claude/hooks/**)", "Read(/live/.claude/hooks/**)"],
+        }
+    }
+    removed_count = revoke_module.remove_inert_file_permission_rules(settings)
+    assert removed_count == 3
+    permissions_section = _section_of(settings, "permissions")
+    assert permissions_section["allow"] == ["Edit(/live/.claude/**)"]
+    assert permissions_section["deny"] == ["Read(/live/.claude/hooks/**)"]
+
+
+def test_build_project_scoped_allow_rules_for_reap_includes_legacy_tools() -> None:
+    revoke_module = _load_revoke_module()
+    all_allow_rules = revoke_module.build_project_scoped_allow_rules_for_reap(
+        "/repo/project"
+    )
+    assert "Edit(/repo/project/.claude/**)" in all_allow_rules
+    assert "Write(/repo/project/.claude/**)" in all_allow_rules
+    assert "Read(/repo/project/.claude/**)" in all_allow_rules
+    assert "Glob(/repo/project/.claude/**)" in all_allow_rules
+
+
+def test_build_project_scoped_deny_rules_for_reap_includes_legacy_tools() -> None:
+    revoke_module = _load_revoke_module()
+    all_deny_rules = revoke_module.build_project_scoped_deny_rules_for_reap(
+        "/repo/project"
+    )
+    assert "Edit(/repo/project/.claude/hooks/**)" in all_deny_rules
+    assert "Write(/repo/project/.claude/hooks/**)" in all_deny_rules
+    assert "Glob(/repo/project/.claude/skills/**)" in all_deny_rules
 
 
 def test_revoke_module_guards_sys_path_insert_against_duplicates() -> None:

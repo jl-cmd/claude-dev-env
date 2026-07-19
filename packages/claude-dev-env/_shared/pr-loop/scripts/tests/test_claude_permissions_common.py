@@ -13,14 +13,23 @@ import pytest
 def _load_common_module() -> ModuleType:
     module_path = Path(__file__).parent.parent / "_claude_permissions_common.py"
     parent_directory = str(module_path.parent.resolve())
-    if parent_directory not in sys.path:
-        sys.path.insert(0, parent_directory)
+    if parent_directory in sys.path:
+        sys.path.remove(parent_directory)
+    sys.path.insert(0, parent_directory)
+    for each_module_name in list(sys.modules):
+        if each_module_name == "pr_loop_shared_constants" or each_module_name.startswith(
+            "pr_loop_shared_constants."
+        ):
+            del sys.modules[each_module_name]
+        if each_module_name == "_claude_permissions_common":
+            del sys.modules[each_module_name]
     spec = importlib.util.spec_from_file_location(
         "_claude_permissions_common", module_path
     )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules["_claude_permissions_common"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -187,3 +196,34 @@ def test_is_valid_project_root_uses_extracted_directory_marker_constants() -> No
     assert '".git"' not in source_text
     assert "'.claude'" not in source_text
     assert '".claude"' not in source_text
+
+
+def test_permission_rule_tool_name_extracts_tool_prefix() -> None:
+    assert common.permission_rule_tool_name("Edit(/repo/.claude/**)") == "Edit"
+    assert common.permission_rule_tool_name("Write(c:/Users/jon/.claude/worktrees/x/**)") == (
+        "Write"
+    )
+    assert common.permission_rule_tool_name(None) is None
+    assert common.permission_rule_tool_name("not-a-rule") is None
+
+
+def test_is_inert_file_permission_rule_for_write_glob_notebookedit() -> None:
+    assert common.is_inert_file_permission_rule("Write(/wt/.claude/**)") is True
+    assert common.is_inert_file_permission_rule("Glob(/wt/.claude/hooks/**)") is True
+    assert common.is_inert_file_permission_rule("NotebookEdit(**/.claude/worktrees/**)") is True
+    assert common.is_inert_file_permission_rule("Edit(/repo/.claude/**)") is False
+    assert common.is_inert_file_permission_rule("Bash(echo hi)") is False
+
+
+def test_all_project_path_aliases_for_reap_adds_home_alias_when_project_is_home() -> None:
+    all_aliases = common.all_project_path_aliases_for_reap(
+        "C:/Users/jon", home_directory_path="C:/Users/jon"
+    )
+    assert all_aliases == ("C:/Users/jon", "$HOME")
+
+
+def test_all_project_path_aliases_for_reap_skips_home_alias_for_other_projects() -> None:
+    all_aliases = common.all_project_path_aliases_for_reap(
+        "C:/dev/other", home_directory_path="C:/Users/jon"
+    )
+    assert all_aliases == ("C:/dev/other",)
