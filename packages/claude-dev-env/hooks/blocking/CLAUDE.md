@@ -70,6 +70,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | File | Event | What it blocks |
 |---|---|---|
 | `orchestrator_refresh_reschedule_gate.py` | PreToolUse (ScheduleWakeup/CronCreate) | `/orchestrator-refresh` re-arm when run status is not `active` |
+| `agent_model_pin_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | An agent-definition `.md` under `agents/` (or installed `~/.claude/agents/`) whose frontmatter pins a concrete `model:` value; an agent omits the key or sets `inherit` |
 | `block_main_commit.py` | PreToolUse (Bash) | `git commit`/`git push` directly to `main` |
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |

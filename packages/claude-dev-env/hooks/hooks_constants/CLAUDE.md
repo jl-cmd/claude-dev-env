@@ -7,6 +7,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | File | What it holds |
 |---|---|
 | `__init__.py` | Package marker (`# pragma: no-tdd-gate`) |
+| `agent_model_pin_blocker_constants.py` | Frontmatter fence, the accepted `inherit` model value, the agent-file path fragments, and the deny-message text for the agent-model-pin blocker |
 | `any_type_config.py` | Config for the `Any`-type escape-hatch check |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
 | `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |

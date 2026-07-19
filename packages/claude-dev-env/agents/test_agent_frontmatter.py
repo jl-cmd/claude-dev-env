@@ -17,6 +17,12 @@ spawn, so no agent definition pins one::
     ok:   <no model key at all>
     flag: model: opus       <- pinned concrete model, caller can't override
 
+`frontmatter_pins_concrete_model` is the write-time hook's shared pin detector,
+imported here so the test and the hook read a pinned model the same way. It
+parses the block with `yaml.safe_load`, so a duplicate `model` key follows
+last-wins, a bare `model:` is None (not a pin), and an unterminated quote
+raises `yaml.YAMLError`.
+
 Top-level keys are read with a line scan so an agent whose `description`
 embeds informal `<example>` prose is not mistaken for one carrying extra
 keys.
@@ -25,32 +31,39 @@ keys.
 from __future__ import annotations
 
 import re
+import sys
+from functools import cache
 from pathlib import Path
 
 import pytest
 import yaml
 
+try:
+    from agent_model_pin_blocker import frontmatter_pins_concrete_model
+except ModuleNotFoundError:
+    _HOOKS_ROOT = Path(__file__).resolve().parent.parent / "hooks"
+    sys.path.insert(0, str(_HOOKS_ROOT / "blocking"))
+    sys.path.insert(0, str(_HOOKS_ROOT))
+    from agent_model_pin_blocker import frontmatter_pins_concrete_model
+
 ACCEPTED_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "tools", "model", "color"}
 )
-MODEL_KEY_PATTERN = re.compile(r"^model:(?P<declared_value>.*)$", re.MULTILINE)
-INHERIT_MODEL_VALUE = "inherit"
-MODEL_VALUE_QUOTE_CHARACTERS = "'\""
-INLINE_COMMENT_PATTERN = re.compile(r"\s#")
 FRONTMATTER_FENCE = "---"
 FRONTMATTER_SEGMENT_COUNT = 3
 CODE_VERIFIER_AGENT_NAME = "code-verifier"
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^([a-z][a-z0-9_]*):", re.MULTILINE)
 
 
-def _agent_definition_paths() -> list[Path]:
+@cache
+def _agent_definition_paths() -> tuple[Path, ...]:
     agents_directory = Path(__file__).parent
     all_markdown_files = sorted(agents_directory.glob("*.md"))
-    return [
+    return tuple(
         each_markdown_file
         for each_markdown_file in all_markdown_files
         if each_markdown_file.read_text(encoding="utf-8").startswith(FRONTMATTER_FENCE)
-    ]
+    )
 
 
 def _frontmatter_block(agent_definition_path: Path) -> str:
@@ -61,31 +74,6 @@ def _frontmatter_block(agent_definition_path: Path) -> str:
 
 def _top_level_keys(frontmatter_block: str) -> set[str]:
     return set(TOP_LEVEL_KEY_PATTERN.findall(frontmatter_block))
-
-
-def _normalized_model_value(raw_declared_value: str) -> str:
-    stripped_value = raw_declared_value.strip()
-    for each_quote_character in MODEL_VALUE_QUOTE_CHARACTERS:
-        if stripped_value.startswith(each_quote_character):
-            closing_quote_index = stripped_value.find(each_quote_character, 1)
-            if closing_quote_index != -1:
-                return stripped_value[1:closing_quote_index].lower()
-    comment_free_value = INLINE_COMMENT_PATTERN.split(stripped_value, 1)[0]
-    return comment_free_value.strip().lower()
-
-
-def _declared_model_values(frontmatter_block: str) -> list[str]:
-    return [
-        _normalized_model_value(each_model_line_match.group("declared_value"))
-        for each_model_line_match in MODEL_KEY_PATTERN.finditer(frontmatter_block)
-    ]
-
-
-def _pins_concrete_model(frontmatter_block: str) -> bool:
-    return any(
-        each_declared_value != INHERIT_MODEL_VALUE
-        for each_declared_value in _declared_model_values(frontmatter_block)
-    )
 
 
 @pytest.mark.parametrize(
@@ -119,10 +107,13 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     [
         ("name: sample\nmodel: opus\n", True),
         ("name: sample\nmodel: inherit\nmodel: opus\n", True),
+        ("name: sample\nmodel: opus\nmodel: inherit\n", False),
         ("name: sample\nmodel: inherit#opus\n", True),
         ('name: sample\nmodel: "inherit # not a comment"\n', True),
         ("name: sample\nmodel: inherit\n", False),
+        ("name: sample\nmodel:\n", False),
         ('name: sample\nmodel: "inherit"\n', False),
+        ('name: sample\nmodel: "inherit "\n', False),
         ('name: sample\nmodel: "inherit"  # quoted then comment\n', False),
         ("name: sample\nmodel: Inherit\n", False),
         ("name: sample\nmodel: inherit  # loader default\n", False),
@@ -130,11 +121,14 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     ],
     ids=[
         "bare-alias-pin",
-        "duplicate-key-last-pins",
+        "duplicate-key-opus-last-pins",
+        "duplicate-key-inherit-last-not-a-pin",
         "hash-embedded-pin",
         "quoted-value-with-hash-pin",
         "inherit",
+        "bare-model-key-none",
         "quoted-inherit",
+        "quoted-inherit-trailing-space",
         "quoted-inherit-then-comment",
         "title-case-inherit",
         "commented-inherit",
@@ -144,7 +138,15 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
 def test_pinned_model_detection_flags_every_concrete_value(
     synthetic_frontmatter_block: str, expected_pin_verdict: bool
 ) -> None:
-    assert _pins_concrete_model(synthetic_frontmatter_block) is expected_pin_verdict
+    assert (
+        frontmatter_pins_concrete_model(synthetic_frontmatter_block)
+        is expected_pin_verdict
+    )
+
+
+def test_pinned_model_detection_raises_on_unterminated_quote() -> None:
+    with pytest.raises(yaml.YAMLError):
+        frontmatter_pins_concrete_model("name: sample\nmodel: 'inherit\n")
 
 
 @pytest.mark.parametrize(
@@ -156,7 +158,7 @@ def test_agent_frontmatter_carries_no_pinned_model(
     agent_definition_path: Path,
 ) -> None:
     frontmatter_block = _frontmatter_block(agent_definition_path)
-    assert not _pins_concrete_model(frontmatter_block), (
+    assert not frontmatter_pins_concrete_model(frontmatter_block), (
         f"{agent_definition_path.name} pins a concrete model in frontmatter; "
         "the caller supplies the model on every spawn, so agent definitions "
         "carry no model: line or only model: inherit"

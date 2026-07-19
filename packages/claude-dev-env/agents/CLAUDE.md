@@ -22,7 +22,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 
 ## Format
 
-Each file uses YAML frontmatter (`name`, `description`, `tools`, optional `color`) followed by a Markdown body with the agent's behavioral instructions. The `description` field appears in the Claude Code agent picker.
+Each file uses YAML frontmatter (`name`, `description`, `tools`, optional `color`, optional `model`) followed by a Markdown body with the agent's behavioral instructions. The `description` field appears in the Claude Code agent picker. Set `model` to `inherit` or leave it out — the caller supplies the model on each spawn, so an agent file names no concrete model.
 
 ## Adding an agent
 

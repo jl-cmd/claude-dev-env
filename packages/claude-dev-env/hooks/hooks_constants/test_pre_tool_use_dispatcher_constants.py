@@ -63,6 +63,21 @@ def test_duplicate_rmtree_helper_blocker_runs_via_runpy() -> None:
     assert entry.native_module_name is None
 
 
+def test_agent_model_pin_blocker_registered_for_all_file_tools() -> None:
+    entry = _entry_for("blocking/agent_model_pin_blocker.py")
+    assert entry is not None, (
+        "agent_model_pin_blocker must be hosted by the dispatcher so an agent "
+        "definition that pins a concrete model is blocked at Write/Edit time"
+    )
+    assert {"Write", "Edit", "MultiEdit"} <= entry.applicable_tool_names
+
+
+def test_agent_model_pin_blocker_runs_via_runpy() -> None:
+    entry = _entry_for("blocking/agent_model_pin_blocker.py")
+    assert entry is not None
+    assert entry.native_module_name is None
+
+
 def test_code_review_stamp_write_blocker_registered_for_all_file_tools() -> None:
     entry = _entry_for("blocking/code_review_stamp_directory_write_blocker.py")
     assert entry is not None
