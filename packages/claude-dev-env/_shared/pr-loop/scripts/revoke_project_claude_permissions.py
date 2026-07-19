@@ -47,19 +47,13 @@ from stale_worktree_rule_sweep import (  # noqa: E402
 )
 
 
-def _reap_permission_allow_tools() -> tuple[str, ...]:
-    """Return the allow-list tool names a revoke run reaps.
+def _reap_tool_names(all_mint_tool_names: tuple[str, ...]) -> tuple[str, ...]:
+    """Return mint tool names plus legacy Write/Glob forms a revoke run reaps.
 
-    Spans ALL_PERMISSION_ALLOW_TOOLS plus ALL_LEGACY_PERMISSION_REAP_TOOLS,
-    so revoke removes both the mint Edit()/Read() rules and the inert
-    Write()/Glob() rule forms Claude Code accepts but never matches for
-    file permission checks. The mint tuple itself stays untouched.
+    Keeps mint tuples (Edit/Read) untouched and widens only the revoke surface
+    so inert pre-#158 Write()/Glob() rules are removed with the current mint set.
     """
-    return ALL_PERMISSION_ALLOW_TOOLS + ALL_LEGACY_PERMISSION_REAP_TOOLS
-
-
-def _reap_agent_config_deny_tools() -> tuple[str, ...]:
-    return ALL_AGENT_CONFIG_DENY_TOOLS + ALL_LEGACY_PERMISSION_REAP_TOOLS
+    return all_mint_tool_names + ALL_LEGACY_PERMISSION_REAP_TOOLS
 
 
 def remove_values_from_list(
@@ -232,11 +226,11 @@ def revoke_permissions_for_current_directory() -> None:
         raise SystemExit(1)
     project_path = get_current_project_path()
     permission_rules = build_permission_rules(
-        project_path, _reap_permission_allow_tools()
+        project_path, _reap_tool_names(ALL_PERMISSION_ALLOW_TOOLS)
     )
     all_agent_config_deny_rules = build_agent_config_deny_rules(
         project_path,
-        _reap_agent_config_deny_tools(),
+        _reap_tool_names(ALL_AGENT_CONFIG_DENY_TOOLS),
         ALL_AGENT_CONFIG_PATH_PATTERNS,
     )
     settings = load_settings(claude_user_settings_path)
