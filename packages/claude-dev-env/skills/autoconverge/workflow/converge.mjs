@@ -2915,8 +2915,6 @@ while (iterations < CONFIG.maxIterations) {
           break
         }
         head = p2Fix.newSha
-        copilotDown = false
-        copilotNote = null
         phase = nextPhase
         continue
       }
