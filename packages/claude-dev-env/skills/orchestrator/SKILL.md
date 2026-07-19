@@ -30,15 +30,56 @@ The moment it edits a file or runs a test itself, the pairing breaks —
 its own tool use stays orchestration, run-artifact writes, and light
 verification reads.
 
+## status_gate (deterministic — not optional)
+
+**Prose does not keep the loop alive.** Re-arm and terminate are gated by
+`scripts/status_gate.py` (and, on Claude, the PreToolUse hook
+`orchestrator_refresh_reschedule_gate`).
+
+```
+python scripts/status_gate.py set --status active [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py set --status done [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py should-reschedule [--run-slug SLUG] [--status-file PATH]
+```
+
+| Exit / output | Meaning |
+|---|---|
+| `set` → 0 | JSON status payload written (`active` or `done`) |
+| `should-reschedule` → 0 | Status file exists and `status` is `active` — one-shot re-arm allowed |
+| `should-reschedule` → 1 | Stop — missing/invalid/done status (fail closed) |
+
+Default status path: file `.orchestrator-run-status.json` under the
+repo's plans directory (runtime-created), or `$ORCHESTRATOR_RUN_STATUS_FILE`.
+With `--run-slug SLUG`, the file is under the slug plans subdirectory.
+When using a slug, every `ScheduleWakeup` prompt must carry it so the
+PreToolUse hook can resolve the scoped file:
+`/orchestrator-refresh --run-slug SLUG`.
+
+**Rules:**
+
+- **One-shot only.** `ScheduleWakeup` with prompt
+  `/orchestrator-refresh` (plus `--run-slug SLUG` when the run uses a
+  slug) and a delay. Never `CronCreate` / never a recurring host schedule
+  for this loop (the PreToolUse hook denies CronCreate for this prompt).
+- **Activate only with open work.** After the first ledger task exists,
+  run `set --status active` (pass the same `--run-slug` for the whole
+  run if you use one). Do not activate for advisor-bind alone.
+- **Done is a script.** When every ledger task is completed/cancelled and
+  no executor is running, run `set --status done` with the same
+  `--run-slug` / `--status-file` as activate. Do not re-arm after that.
+- **Re-arm only after the gate.** Before any refresh schedule call, run
+  `should-reschedule` with the same path args. Exit 1 → cancel any
+  existing schedule, report stop, do not call `ScheduleWakeup`. Exit 0 →
+  one-shot re-arm only (prompt must include the same `--run-slug`).
+- Hosts without the Claude hook (e.g. third-party schedulers) still obey
+  the same exit codes; never use `recurring: true` for this loop.
+
 ## Process
 
-1. **Invocation guard.** One `/orchestrator` per session. When the
-   refresh loop is already running, do not schedule a second one; reuse
-   the live advisor bind and go to step 4.
-2. **Register the discipline reminder.** Schedule it with
-   `ScheduleWakeup` at `delaySeconds: 2700`, prompt
-   `/orchestrator-refresh`, where each refresh re-schedules the next one.
-3. **Bind the shared advisor before any executor.** Follow
+1. **Invocation guard.** One `/orchestrator` per session. When a refresh
+   one-shot is already queued, do not stack a second; reuse the live
+   advisor bind and go to step 4.
+2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
    orchestrator consumer set — this session plus every tier in the
@@ -48,16 +89,26 @@ verification reads.
    message the warm agent or report here, and an executor that finds the
    advisor unreachable reports that upward — it never spawns a
    replacement itself.
-4. **Write the run artifacts** (next section) before the first spawn.
-5. **Orchestrate.** Hold the plan and the user conversation. Spawn each
+3. **Write the run artifacts** (next section) before the first spawn.
+4. **Activate status_gate** when the first open ledger task exists:
+   `python scripts/status_gate.py set --status active`.
+5. **Register one-shot discipline reminder** only while the gate allows it:
+   run `should-reschedule`; on exit 0, `ScheduleWakeup` with
+   `delaySeconds: 2700`, prompt `/orchestrator-refresh` (and
+   `--run-slug SLUG` when the run uses a slug; one-shot, not recurring).
+6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
    task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
    discipline).
-6. **Consult the advisor at hard decisions.** The trigger list, consult
+7. **Consult the advisor at hard decisions.** The trigger list, consult
    format, and reply handling live in the protocol's "Consulting the
    warm agent" section; both this session and every executor are
    consumers. Replies open with one of ENDORSE, CORRECTION, PLAN, or
    STOP — `agents/session-advisor.md` defines each signal.
+8. **Terminate when done.** When every ledger task is completed or
+   cancelled and no executor is running: run
+   `set --status done`, cancel any pending one-shot wakeup if the host
+   exposes cancel, report completion, and stop. Do not re-arm.
 
 ## Run state lives in artifacts
 
@@ -76,6 +127,8 @@ in the repo the run works on (working files, not committed):
   may write — and its reply is thin: status, artifact paths, blockers.
   The orchestrating session records each result into the run's result
   files as it reconciles the ledger.
+- **Run status file** — written only by `status_gate.py`
+  (`active` / `done`). Source of truth for reschedule.
 
 Correctness never rides on any agent's private context: when an executor
 dies or hangs, point a fresh spawn at the same assignment file plus its
@@ -175,12 +228,15 @@ the live agents at any moment. Four invariants hold at all times:
    `blockedBy` links, updated the moment the plan changes.
 
 Reconcile on every state change (spawn, completion notification, plan
-change) and on every `/orchestrator-refresh` firing.
+change) and on every `/orchestrator-refresh` firing. After reconcile, if
+no open work remains, run `set --status done` before any re-arm attempt.
 
 ## Constraints
 
 - One `/orchestrator` per session; the invocation guard blocks a second
-  reminder loop.
+  stacked one-shot while one is already queued.
+- Reschedule is mechanical: `should-reschedule` exit code + status file;
+  never a recurring host schedule for this loop.
 - The orchestrating session never edits code or runs a build or test
   itself — executors do that. Its own tool use stays orchestration,
   run-artifact writes, and light verification reads.
@@ -193,10 +249,14 @@ change) and on every `/orchestrator-refresh` firing.
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Orchestrator strategy: design rule, process, run artifacts, spawn ticket, routing table, reuse rules, ledger invariants, constraints. |
+| `SKILL.md` | Orchestrator strategy; pointers to run-control scripts. |
+| `scripts/status_gate.py` | Status file + should-reschedule gate (exit codes). |
+| `scripts/status_gate_constants/config/constants.py` | Named constants for status_gate. |
+| `scripts/test_status_gate.py` | Gate tests. |
 
 ## Folder Map
 
-- `SKILL.md` — complete orchestrator workflow instructions. Advisor
-  policy lives in
+- `SKILL.md` — orchestration process and routing.
+- `scripts/` — deterministic status_gate.
+- Advisor policy:
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
