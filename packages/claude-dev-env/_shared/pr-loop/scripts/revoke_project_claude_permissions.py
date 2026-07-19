@@ -35,6 +35,8 @@ from pr_loop_shared_constants.claude_permissions_constants import (
     ALL_PERMISSION_ALLOW_TOOLS,
     AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX,
     INERT_RULES_REMOVED_LOG_PREFIX,
+    PROJECT_LOCAL_INERT_RULES_REMOVED_LOG_PREFIX,
+    get_claude_project_local_settings_path,
     get_claude_user_settings_path,
 )
 from pr_loop_shared_constants.claude_settings_keys_constants import (
@@ -152,6 +154,40 @@ def _remove_directory_and_trust_for_path_aliases(
     return directories_removed_count, environment_entries_removed_count
 
 
+def strip_inert_rules_from_settings_file(settings_path: Path) -> int:
+    """Load *settings_path*, strip inert tools, save when anything changed.
+
+    ::
+
+        strip_inert_rules_from_settings_file(missing_path)  # ok: 0
+        strip_inert_rules_from_settings_file(local_with_Write)  # ok: N > 0
+
+    Args:
+        settings_path: User or project-local Claude settings JSON path.
+
+    Returns:
+        Number of inert rules removed; 0 when the file is missing or clean.
+    """
+    if not settings_path.is_file():
+        return 0
+    settings = load_settings(settings_path)
+    inert_rules_removed_count = remove_inert_file_permission_rules(settings)
+    if inert_rules_removed_count == 0:
+        return 0
+    prune_empty_list_then_empty_section(
+        settings,
+        CLAUDE_SETTINGS_PERMISSIONS_KEY,
+        CLAUDE_SETTINGS_ALLOW_KEY,
+    )
+    prune_empty_list_then_empty_section(
+        settings,
+        CLAUDE_SETTINGS_PERMISSIONS_KEY,
+        CLAUDE_SETTINGS_DENY_KEY,
+    )
+    save_settings(settings_path, settings)
+    return inert_rules_removed_count
+
+
 def _print_revoke_summary(
     project_path: str,
     claude_user_settings_path: Path,
@@ -160,11 +196,15 @@ def _print_revoke_summary(
     deny_rules_removed_count: int,
     agent_config_deny_rules_count: int,
     inert_rules_removed_count: int,
+    project_local_inert_rules_removed_count: int,
     directories_removed_count: int,
     environment_entries_removed_count: int,
 ) -> None:
     """Print the post-revoke summary lines to stdout."""
     inert_rules_removed_log_prefix = INERT_RULES_REMOVED_LOG_PREFIX
+    project_local_inert_rules_removed_log_prefix = (
+        PROJECT_LOCAL_INERT_RULES_REMOVED_LOG_PREFIX
+    )
     print(f"Project path: {project_path}")
     print(f"Settings file: {claude_user_settings_path}")
     print(
@@ -175,6 +215,10 @@ def _print_revoke_summary(
         f"{agent_config_deny_rules_count}"
     )
     print(f"{inert_rules_removed_log_prefix}{inert_rules_removed_count}")
+    print(
+        f"{project_local_inert_rules_removed_log_prefix}"
+        f"{project_local_inert_rules_removed_count}"
+    )
     print(f"Additional directories removed: {directories_removed_count}")
     print(
         f"Auto-mode environment entries removed: {environment_entries_removed_count}"
@@ -327,44 +371,63 @@ def prune_settings_after_revoke(all_settings: dict[str, object]) -> None:
     )
 
 
-def revoke_permissions_for_current_directory() -> None:
-    """Revoke permissions previously granted for the current project directory.
+def _apply_user_settings_revoke(
+    all_settings: dict[str, object],
+    project_path: str,
+    all_permission_rules: list[str],
+    all_agent_config_deny_rules: list[str],
+) -> tuple[int, int, int, int, int, int]:
+    """Apply project-scoped and inert removals to the user settings dict.
 
-    Reads the current project path, constructs the matching allow and deny
-    permission rules, removes them from ~/.claude/settings.json, removes
-    every trust entry for the project from autoMode.environment, and prunes
-    any newly empty sections.
-
-    Raises:
-        SystemExit: When the current directory is not a valid project root.
-        ValueError: Propagated from get_current_project_path() when the path
-                    contains glob metacharacters.
+    Returns:
+        Counts: allow, deny, directories, environment, worktree_sweep, inert.
     """
-    claude_user_settings_path: Path = get_claude_user_settings_path()
-    project_root_path = Path.cwd()
-    if not is_valid_project_root(project_root_path):
-        print(
-            f"ERROR: cwd {project_root_path} is not a project root "
-            f"(no .git or .claude). Run from a project root.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    project_path = get_current_project_path()
-    permission_rules = build_project_scoped_allow_rules_for_reap(project_path)
-    all_agent_config_deny_rules = build_project_scoped_deny_rules_for_reap(
-        project_path
+    worktree_sweep_removed_count = sweep_stale_worktree_rules_from_settings(
+        all_settings
     )
-    settings = load_settings(claude_user_settings_path)
-    worktree_sweep_removed_count = sweep_stale_worktree_rules_from_settings(settings)
-    inert_rules_removed_count = remove_inert_file_permission_rules(settings)
-    allow_rules_removed_count = remove_rules_from_allow_list(settings, permission_rules)
+    inert_rules_removed_count = remove_inert_file_permission_rules(all_settings)
+    allow_rules_removed_count = remove_rules_from_allow_list(
+        all_settings, all_permission_rules
+    )
     deny_rules_removed_count = remove_rules_from_deny_list(
-        settings, all_agent_config_deny_rules
+        all_settings, all_agent_config_deny_rules
     )
     directories_removed_count, environment_entries_removed_count = (
-        _remove_directory_and_trust_for_path_aliases(settings, project_path)
+        _remove_directory_and_trust_for_path_aliases(all_settings, project_path)
     )
-    total_changes_count = (
+    return (
+        allow_rules_removed_count,
+        deny_rules_removed_count,
+        directories_removed_count,
+        environment_entries_removed_count,
+        worktree_sweep_removed_count,
+        inert_rules_removed_count,
+    )
+
+
+def _require_valid_project_root_or_exit() -> Path:
+    """Return cwd when it is a project root, otherwise exit with an error."""
+    project_root_path = Path.cwd()
+    if is_valid_project_root(project_root_path):
+        return project_root_path
+    print(
+        f"ERROR: cwd {project_root_path} is not a project root "
+        f"(no .git or .claude). Run from a project root.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def _sum_user_settings_change_counts(
+    allow_rules_removed_count: int,
+    deny_rules_removed_count: int,
+    directories_removed_count: int,
+    environment_entries_removed_count: int,
+    worktree_sweep_removed_count: int,
+    inert_rules_removed_count: int,
+) -> int:
+    """Return the total number of user-settings mutations for this revoke."""
+    return (
         allow_rules_removed_count
         + deny_rules_removed_count
         + directories_removed_count
@@ -372,21 +435,70 @@ def revoke_permissions_for_current_directory() -> None:
         + worktree_sweep_removed_count
         + inert_rules_removed_count
     )
-    if total_changes_count == 0:
+
+
+def revoke_permissions_for_current_directory() -> None:
+    """Revoke permissions previously granted for the current project directory.
+
+    Removes matching allow/deny rules from ~/.claude/settings.json, strips
+    inert Write/Glob/NotebookEdit rules from user settings and project
+    ``.claude/settings.local.json`` when present, clears trust entries, and
+    prunes empty sections.
+
+    Raises:
+        SystemExit: When the current directory is not a valid project root.
+        ValueError: Propagated from get_current_project_path() when the path
+                    contains glob metacharacters.
+    """
+    claude_user_settings_path: Path = get_claude_user_settings_path()
+    project_root_path = _require_valid_project_root_or_exit()
+    project_path = get_current_project_path()
+    all_permission_rules = build_project_scoped_allow_rules_for_reap(project_path)
+    all_agent_config_deny_rules = build_project_scoped_deny_rules_for_reap(
+        project_path
+    )
+    all_settings = load_settings(claude_user_settings_path)
+    (
+        allow_rules_removed_count,
+        deny_rules_removed_count,
+        directories_removed_count,
+        environment_entries_removed_count,
+        worktree_sweep_removed_count,
+        inert_rules_removed_count,
+    ) = _apply_user_settings_revoke(
+        all_settings,
+        project_path,
+        all_permission_rules,
+        all_agent_config_deny_rules,
+    )
+    user_settings_changes_count = _sum_user_settings_change_counts(
+        allow_rules_removed_count,
+        deny_rules_removed_count,
+        directories_removed_count,
+        environment_entries_removed_count,
+        worktree_sweep_removed_count,
+        inert_rules_removed_count,
+    )
+    if user_settings_changes_count > 0:
+        prune_settings_after_revoke(all_settings)
+        save_settings(claude_user_settings_path, all_settings)
+    project_local_inert_rules_removed_count = strip_inert_rules_from_settings_file(
+        get_claude_project_local_settings_path(project_root_path)
+    )
+    if user_settings_changes_count + project_local_inert_rules_removed_count == 0:
         print(f"Project path: {project_path}")
         print(f"Settings file: {claude_user_settings_path}")
         print("No changes to revoke; settings file left untouched.")
         return
-    prune_settings_after_revoke(settings)
-    save_settings(claude_user_settings_path, settings)
     _print_revoke_summary(
         project_path,
         claude_user_settings_path,
         allow_rules_removed_count,
-        len(permission_rules),
+        len(all_permission_rules),
         deny_rules_removed_count,
         len(all_agent_config_deny_rules),
         inert_rules_removed_count,
+        project_local_inert_rules_removed_count,
         directories_removed_count,
         environment_entries_removed_count,
     )

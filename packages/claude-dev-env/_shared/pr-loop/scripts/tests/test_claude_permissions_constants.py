@@ -60,6 +60,18 @@ def test_exposes_home_project_path_alias() -> None:
     assert constants_module.HOME_PROJECT_PATH_ALIAS == "$HOME"
 
 
+def test_get_claude_project_local_settings_path_uses_settings_local_filename() -> None:
+    project_root = Path("C:/dev/Projects/LLM Plugins/claude-dev-env")
+    local_settings_path = constants_module.get_claude_project_local_settings_path(
+        project_root
+    )
+    assert local_settings_path.name == constants_module.CLAUDE_SETTINGS_LOCAL_FILENAME
+    assert local_settings_path.parent.name == (
+        constants_module.CLAUDE_SETTINGS_DIRECTORY_NAME
+    )
+    assert local_settings_path.parent.parent == project_root
+
+
 def test_auto_mode_environment_entry_template_is_format_string() -> None:
     rendered_template_text = (
         constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(

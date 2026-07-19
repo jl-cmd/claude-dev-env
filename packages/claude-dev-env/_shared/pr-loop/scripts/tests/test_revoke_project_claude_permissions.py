@@ -238,6 +238,94 @@ def test_remove_inert_file_permission_rules_strips_only_inert_tools() -> None:
     assert permissions_section["deny"] == ["Read(/live/.claude/hooks/**)"]
 
 
+def test_strip_inert_rules_from_settings_file_missing_path_is_noop(
+    tmp_path: Path,
+) -> None:
+    revoke_module = _load_revoke_module()
+    missing_path = revoke_module.get_claude_project_local_settings_path(tmp_path)
+    assert not missing_path.is_file()
+    assert revoke_module.strip_inert_rules_from_settings_file(missing_path) == 0
+    assert not missing_path.is_file()
+
+
+def test_strip_inert_rules_from_settings_file_updates_project_local_file(
+    tmp_path: Path,
+) -> None:
+    revoke_module = _load_revoke_module()
+    local_settings_path = revoke_module.get_claude_project_local_settings_path(tmp_path)
+    local_settings_path.parent.mkdir(parents=True, exist_ok=True)
+    local_settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": [
+                        "Write(//**/.claude/**)",
+                        r"Write(C:\\**\\.claude\\**)",
+                        "Edit(C:/dev/live/.claude/**)",
+                        "Bash(echo hi)",
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    removed_count = revoke_module.strip_inert_rules_from_settings_file(
+        local_settings_path
+    )
+    assert removed_count == 2
+    saved_settings = json.loads(local_settings_path.read_text(encoding="utf-8"))
+    allow_rules = saved_settings["permissions"]["allow"]
+    assert allow_rules == ["Edit(C:/dev/live/.claude/**)", "Bash(echo hi)"]
+
+
+def test_revoke_strips_inert_rules_from_project_settings_local_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """User settings may already be clean; project settings.local still warns.
+
+    Claude loads .claude/settings.local.json for the cwd project; revoke must
+    strip inert Write/Glob/NotebookEdit there too."""
+    revoke_module = _load_revoke_module()
+    project_directory = tmp_path / "project"
+    project_directory.mkdir()
+    (project_directory / ".git").mkdir()
+    user_settings_path = tmp_path / "home" / ".claude" / "settings.json"
+    user_settings_path.parent.mkdir(parents=True, exist_ok=True)
+    user_settings_path.write_text(json.dumps({"permissions": {"allow": []}}), encoding="utf-8")
+    local_settings_path = revoke_module.get_claude_project_local_settings_path(
+        project_directory
+    )
+    local_settings_path.parent.mkdir(parents=True, exist_ok=True)
+    local_settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": [
+                        "Write(//**/.claude/**)",
+                        r"Write(C:\\**\\.claude\\**)",
+                        "Read(C:/other/.claude/**)",
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        revoke_module, "get_claude_user_settings_path", lambda: user_settings_path
+    )
+    monkeypatch.chdir(project_directory)
+    revoke_module.revoke_permissions_for_current_directory()
+
+    local_settings = json.loads(local_settings_path.read_text(encoding="utf-8"))
+    allow_rules = local_settings["permissions"]["allow"]
+    assert allow_rules == ["Read(C:/other/.claude/**)"]
+    assert not any(
+        each_rule.split("(", 1)[0] in ("Write", "Glob", "NotebookEdit")
+        for each_rule in allow_rules
+        if isinstance(each_rule, str) and "(" in each_rule
+    )
+
+
 def test_build_project_scoped_allow_rules_for_reap_includes_legacy_tools() -> None:
     revoke_module = _load_revoke_module()
     all_allow_rules = revoke_module.build_project_scoped_allow_rules_for_reap(
