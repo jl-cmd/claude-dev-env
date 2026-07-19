@@ -20,6 +20,7 @@ import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 from build_goal_constants import write_goal_pair_constants as goal_constants
@@ -139,6 +140,27 @@ def render_numbered_table_rows(all_entries: Sequence[str]) -> str:
     return goal_constants.NEWLINE_JOIN_SEPARATOR.join(all_rows)
 
 
+def _render_task_lines(all_tasks: Sequence[dict[str, str]], line_format: str) -> str:
+    """Render each task through a shared status/id/subject format string.
+
+    Args:
+        all_tasks: Task rows carrying id, status, and subject.
+        line_format: A ``str.format`` template with mark/task_id/subject fields.
+
+    Returns:
+        Lines joined by newlines, or "" when all_tasks is empty.
+    """
+    all_lines = [
+        line_format.format(
+            mark=_task_status_mark(each_task[goal_constants.TASK_KEY_STATUS]),
+            task_id=each_task[goal_constants.TASK_KEY_ID],
+            subject=each_task[goal_constants.TASK_KEY_SUBJECT],
+        )
+        for each_task in all_tasks
+    ]
+    return goal_constants.NEWLINE_JOIN_SEPARATOR.join(all_lines)
+
+
 def render_task_table_rows(all_tasks: Sequence[dict[str, str]]) -> str:
     """Render each task as a status/id/subject markdown table row.
 
@@ -148,15 +170,7 @@ def render_task_table_rows(all_tasks: Sequence[dict[str, str]]) -> str:
     Returns:
         Table rows joined by newlines, or "" when all_tasks is empty.
     """
-    all_rows = [
-        goal_constants.TASKS_TABLE_ROW_FORMAT.format(
-            mark=_task_status_mark(each_task[goal_constants.TASK_KEY_STATUS]),
-            task_id=each_task[goal_constants.TASK_KEY_ID],
-            subject=each_task[goal_constants.TASK_KEY_SUBJECT],
-        )
-        for each_task in all_tasks
-    ]
-    return goal_constants.NEWLINE_JOIN_SEPARATOR.join(all_rows)
+    return _render_task_lines(all_tasks, goal_constants.TASKS_TABLE_ROW_FORMAT)
 
 
 def render_task_bullet_lines(all_tasks: Sequence[dict[str, str]]) -> str:
@@ -168,12 +182,7 @@ def render_task_bullet_lines(all_tasks: Sequence[dict[str, str]]) -> str:
     Returns:
         Bullet lines joined by newlines, or "" when all_tasks is empty.
     """
-    all_lines = [
-        f"{goal_constants.BULLET_LINE_PREFIX}{_task_status_mark(each_task[goal_constants.TASK_KEY_STATUS])} "
-        f"{each_task[goal_constants.TASK_KEY_ID]}: {each_task[goal_constants.TASK_KEY_SUBJECT]}"
-        for each_task in all_tasks
-    ]
-    return goal_constants.NEWLINE_JOIN_SEPARATOR.join(all_lines)
+    return _render_task_lines(all_tasks, goal_constants.TASKS_BULLET_LINE_FORMAT)
 
 
 def render_context_bullet_lines(all_context_fields: dict[str, object]) -> str:
@@ -357,10 +366,9 @@ def main() -> int:
 
 
 def _task_status_mark(status: str) -> str:
-    is_completed_task = status == goal_constants.TASK_STATUS_COMPLETED
     return (
         goal_constants.TASK_CHECKED_MARK
-        if is_completed_task
+        if status == goal_constants.TASK_STATUS_COMPLETED
         else goal_constants.TASK_UNCHECKED_MARK
     )
 
@@ -388,6 +396,7 @@ def _read_template(template_filename: str) -> str:
     return template_path.read_text(encoding=goal_constants.ENCODING_UTF8)
 
 
+@lru_cache(maxsize=1)
 def _skill_templates_directory() -> Path:
     return (
         Path(__file__).resolve().parent.parent / goal_constants.TEMPLATES_DIRECTORY_NAME
@@ -419,9 +428,7 @@ def _write_text_atomically(target_path: Path, document_text: str) -> None:
 
 
 def _require_non_empty_string(raw_field: object, error_message: str) -> str:
-    if not isinstance(raw_field, str):
-        raise GoalPacketError(error_message)
-    if not raw_field.strip():
+    if not isinstance(raw_field, str) or not raw_field.strip():
         raise GoalPacketError(error_message)
     return raw_field.strip()
 

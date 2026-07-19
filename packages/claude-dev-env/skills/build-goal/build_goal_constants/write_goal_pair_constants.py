@@ -87,6 +87,7 @@ HUMAN_BRIEF_PLACEHOLDER_EXECUTION_NOTES = "{{EXECUTION_NOTES_BULLETS}}"
 BULLET_LINE_PREFIX = "- "
 NUMBERED_TABLE_ROW_FORMAT = "| {index} | {text} |"
 TASKS_TABLE_ROW_FORMAT = "| {mark} | {task_id} | {subject} |"
+TASKS_BULLET_LINE_FORMAT = f"{BULLET_LINE_PREFIX}{{mark}} {{task_id}}: {{subject}}"
 
 # Blank-line normalization after placeholder substitution
 BLANK_LINE_COLLAPSE_PATTERN = r"\n{3,}"
