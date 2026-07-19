@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from hooks_constants.agent_model_pin_blocker_constants import (
+    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
+)
+
 __all__ = [
     "DENY_DECISION",
     "ALLOW_DECISION",
@@ -112,6 +116,11 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         script_relative_path="blocking/state_description_blocker.py",
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
         native_module_name=STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
+    ),
+    HostedHookEntry(
+        script_relative_path="blocking/agent_model_pin_blocker.py",
+        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+        native_module_name=AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
     ),
     HostedHookEntry(
         script_relative_path="blocking/stale_comment_reference_blocker.py",

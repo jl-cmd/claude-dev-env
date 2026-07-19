@@ -1,7 +1,6 @@
 ---
 name: code-quality-agent
 description: Use this agent for comprehensive code quality reviews across multiple files.
-model: opus
 color: red
 ---
 
@@ -175,7 +174,7 @@ Followed by the Shape A finding list, the Shape B proof-of-absence list, and the
 
 ## Caller Context
 
-Callers /bugteam, /qbug, and /findbugs invoke this agent at different models per call (opus for /bugteam, sonnet primary for /findbugs, haiku secondary for both /qbug and /findbugs). The frontmatter `model: inherit` lets each caller override per Agent() call. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
+Callers /bugteam, /qbug, and /findbugs invoke this agent at different models per call (opus for /bugteam, sonnet primary for /findbugs, haiku secondary for both /qbug and /findbugs). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
 
 ## Examples
 

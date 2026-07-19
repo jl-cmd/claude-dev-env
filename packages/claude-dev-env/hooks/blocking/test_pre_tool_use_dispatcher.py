@@ -48,6 +48,8 @@ _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
 _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.txt")
 _MARKDOWN_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.md")
+_AGENT_PIN_PROBE_PATH = str(_HOOKS_ROOT.parent / "agents" / "pin_probe_nonexistent.md")
+_PINNED_AGENT_CONTENT = "---\nname: probe\nmodel: opus\n---\n\nBody text.\n"
 
 
 def _run_hook_subprocess(
@@ -298,6 +300,52 @@ def test_plain_language_denial_on_multi_edit_of_markdown_file() -> None:
         [{"old_string": "old", "new_string": "Please utilize this functionality to commence."}],
     )
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
+
+
+def test_agent_model_pin_denial_on_write_of_agent_file() -> None:
+    """Dispatcher denies a Write of an agent file whose frontmatter pins a model."""
+    payload_text = _write_payload(_AGENT_PIN_PROBE_PATH, _PINNED_AGENT_CONTENT)
+    _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
+
+
+def _agent_file_pinned_by_edit(tmp_path: Path) -> Path:
+    """Write an agent file whose frontmatter reads model: inherit, and return it."""
+    agents_directory = tmp_path / ".claude" / "agents"
+    agents_directory.mkdir(parents=True)
+    agent_file = agents_directory / "probe.md"
+    agent_file.write_text(
+        "---\nname: probe\nmodel: inherit\n---\n\nBody.\n", encoding="utf-8"
+    )
+    return agent_file
+
+
+def test_agent_model_pin_edit_reconstruction_denies_through_dispatcher(
+    tmp_path: Path,
+) -> None:
+    """Dispatcher matches the hooks on an Edit flipping model: inherit to opus."""
+    agent_file = _agent_file_pinned_by_edit(tmp_path)
+    payload_text = _edit_payload(str(agent_file), "model: inherit", "model: opus")
+    _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
+
+
+def test_agent_model_pin_multi_edit_reconstruction_denies_through_dispatcher(
+    tmp_path: Path,
+) -> None:
+    """Dispatcher matches the hooks on a MultiEdit flipping model to a pin."""
+    agent_file = _agent_file_pinned_by_edit(tmp_path)
+    payload_text = _multi_edit_payload(
+        str(agent_file), [{"old_string": "model: inherit", "new_string": "model: opus"}]
+    )
+    _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
+
+
+def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
+    """The dispatcher docstring names the roster, not per-tool counts that drift."""
+    dispatcher_source = Path(_DISPATCHER_SCRIPT).read_text(encoding="utf-8")
+    assert "ALL_HOSTED_HOOK_ENTRIES" in dispatcher_source
+    assert "-> 20 hooks" not in dispatcher_source
+    assert "-> 21 hooks" not in dispatcher_source
+    assert "-> 9 hooks" not in dispatcher_source
 
 
 def test_multi_edit_runs_only_group_b_hooks() -> None:
@@ -633,8 +681,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 21, (
-        f"Write tool must apply to all 21 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 22, (
+        f"Write tool must apply to all 22 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -647,16 +695,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 22, (
-        f"expected 22 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 23, (
+        f"expected 23 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (11 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 10, (
-        f"MultiEdit tool must apply to exactly 10 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 11, (
+        f"MultiEdit tool must apply to exactly 11 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -667,7 +715,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 22 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
