@@ -2277,6 +2277,101 @@ function isStandardsOnlyRound(findings) {
 }
 
 /**
+ * Decide whether a review phase surfaced ONLY P2 findings — pure low-severity
+ * items with no P0/P1 mixed in. Such a phase still applies the fixes once, then
+ * treats the fixed HEAD as clean for that phase and advances forward rather than
+ * re-converging the same phase.
+ * @param {Array<object>} findings already-deduped findings for the phase
+ * @returns {boolean} true when every finding is severity P2
+ */
+function isP2OnlyFindings(findings) {
+  return findings.length > 0 && findings.every((each) => each.severity === 'P2')
+}
+
+/**
+ * Map the phase that just finished a P2-only fix onto the next phase to enter
+ * on the fixed HEAD. Pure P2 never returns to CONVERGE; each gate advances
+ * forward only.
+ *
+ * ::
+ *
+ *   nextPhaseAfterP2OnlyFix('CONVERGE')  -> 'BUGBOT'
+ *   nextPhaseAfterP2OnlyFix('BUGBOT')    -> 'COPILOT'
+ *   nextPhaseAfterP2OnlyFix('COPILOT')   -> 'CODEX'
+ *   nextPhaseAfterP2OnlyFix('CODEX')     -> 'FINALIZE'
+ *
+ * @param {string} currentPhase the phase that just applied the P2-only fixes
+ * @returns {string} the next phase name
+ */
+function nextPhaseAfterP2OnlyFix(currentPhase) {
+  const nextPhaseByCurrent = {
+    CONVERGE: 'BUGBOT',
+    BUGBOT: 'COPILOT',
+    COPILOT: 'CODEX',
+  }
+  return nextPhaseByCurrent[currentPhase] || 'FINALIZE'
+}
+
+/**
+ * Apply P2-only findings once and report whether the fixed HEAD advanced.
+ * Shared by the four phase branches that fix pure-P2 findings then advance
+ * forward without re-converging.
+ *
+ * ::
+ *
+ *   await applyP2OnlyFix(head, findings, 'bugbot', 'bugbot gate', 'bugbot fix lens')
+ *   -> { progressed: true, newSha: '<fixed>', blocker: null }
+ *
+ * @param {string} head PR HEAD SHA the findings were raised against
+ * @param {Array<object>} findings P2-only findings for this phase
+ * @param {string} sourceLabel short label passed to applyFixes
+ * @param {string} stallSubject noun phrase for the resolvedWithoutCommit stall message
+ * @param {string} noPushSubject subject for the no-push stall message
+ * @returns {Promise<{progressed: boolean, newSha: string, blocker: string|null}>} fix outcome
+ */
+async function applyP2OnlyFix(head, findings, sourceLabel, stallSubject, noPushSubject) {
+  const fixResult = await applyFixes(head, findings, sourceLabel)
+  const hadThreadBearingFinding = findings.some((each) => collectFindingThreadIds(each).length > 0)
+  const fixProgress = detectFixProgress(fixResult, head, hadThreadBearingFinding)
+  if (fixProgress.progressed) {
+    return { progressed: true, newSha: fixProgress.newSha, blocker: null }
+  }
+  const blocker =
+    fixResult?.resolvedWithoutCommit === true && !hadThreadBearingFinding
+      ? `fix stalled: ${stallSubject} raised ${findings.length} in-memory finding(s) with no GitHub thread, the fix judged them all stale (resolvedWithoutCommit) and moved no code on HEAD ${head} — re-raising would loop to the iteration cap`
+      : `${noPushSubject} landed no push for ${findings.length} finding(s) on HEAD ${head}`
+  return { progressed: false, newSha: head, blocker }
+}
+
+/**
+ * Route after a successful P2-only fix. HEAD-bound CLEAN/review stamps are
+ * SHA-specific: a push that moves HEAD must re-enter CONVERGE so those stamps
+ * rebuild. A no-push progress (resolvedWithoutCommit) advances to the next
+ * phase on the same HEAD.
+ *
+ * ::
+ *
+ *   routeAfterP2OnlyFix('aaa', {newSha: 'bbb'}, 'COPILOT')
+ *   -> {fixedHead: 'bbb', nextPhase: 'CONVERGE', didMoveHead: true}
+ *   routeAfterP2OnlyFix('aaa', {newSha: 'aaa'}, 'COPILOT')
+ *   -> {fixedHead: 'aaa', nextPhase: 'COPILOT', didMoveHead: false}
+ *
+ * @param {string} priorHead HEAD SHA before the P2-only fix
+ * @param {{newSha: string}} p2Fix successful applyP2OnlyFix result
+ * @param {string} advancePhase phase to enter when HEAD did not move
+ * @returns {{fixedHead: string, nextPhase: string, didMoveHead: boolean}} routing
+ */
+function routeAfterP2OnlyFix(priorHead, p2Fix, advancePhase) {
+  const fixedHead = p2Fix.newSha
+  const didMoveHead =
+    normalizeShaForComparison(fixedHead) !== normalizeShaForComparison(priorHead)
+  if (didMoveHead) {
+    return { fixedHead, nextPhase: 'CONVERGE', didMoveHead: true }
+  }
+  return { fixedHead, nextPhase: advancePhase, didMoveHead: false }
+}
+
+/**
  * Decide whether a standards-only round should file the follow-up fix issue and
  * open the environment-hardening PR. Standards findings are deferred rather than
  * fixed on this PR, so the same code-standard findings re-surface on every
@@ -2660,6 +2755,23 @@ while (iterations < CONFIG.maxIterations) {
       phase = 'BUGBOT'
       continue
     }
+    if (isP2OnlyFindings(findings)) {
+      resetNoLensRounds()
+      const advancePhase = nextPhaseAfterP2OnlyFix('CONVERGE')
+      log(`Round ${rounds}: ${findings.length} P2-only finding(s) — fixing once then routing from CONVERGE`)
+      const p2Fix = await applyP2OnlyFix(head, findings, 'converge-round', 'converge round', 'fix lens')
+      if (!p2Fix.progressed) {
+        blocker = p2Fix.blocker
+        break
+      }
+      const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+      head = p2Route.fixedHead
+      phase = p2Route.nextPhase
+      if (p2Route.didMoveHead) {
+        log(`Round ${rounds}: P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild`)
+      }
+      continue
+    }
     if (findings.length > 0) {
       resetNoLensRounds()
       log(`Round ${rounds}: ${findings.length} finding(s) — applying fixes`)
@@ -2730,6 +2842,23 @@ while (iterations < CONFIG.maxIterations) {
         if (standardsOutcome?.deferredPr) deferredPrs.push(standardsOutcome.deferredPr)
         bugbotDown = false
         phase = 'COPILOT'
+        continue
+      }
+      if (isP2OnlyFindings(bugbotOutcome.findings)) {
+        const advancePhase = nextPhaseAfterP2OnlyFix('BUGBOT')
+        log(`Bugbot raised ${bugbotOutcome.findings.length} P2-only finding(s) — fixing once then routing from BUGBOT`)
+        const p2Fix = await applyP2OnlyFix(head, bugbotOutcome.findings, 'bugbot', 'bugbot gate', 'bugbot fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
+          break
+        }
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
+        bugbotDown = false
+        phase = p2Route.nextPhase
+        if (p2Route.didMoveHead) {
+          log('Bugbot P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+        }
         continue
       }
       log(`Bugbot raised ${bugbotOutcome.findings.length} finding(s) — fixing and re-converging`)
@@ -2813,6 +2942,22 @@ while (iterations < CONFIG.maxIterations) {
         phase = 'CODEX'
         continue
       }
+      if (isP2OnlyFindings(roundFindings)) {
+        const advancePhase = nextPhaseAfterP2OnlyFix('COPILOT')
+        log(`Copilot raised ${roundFindings.length} P2-only finding(s) — fixing once then routing from COPILOT`)
+        const p2Fix = await applyP2OnlyFix(head, roundFindings, 'copilot', 'copilot round', 'copilot fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
+          break
+        }
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
+        phase = p2Route.nextPhase
+        if (p2Route.didMoveHead) {
+          log('Copilot P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+        }
+        continue
+      }
       log(`Copilot raised ${roundFindings.length} finding(s) — fixing and re-converging`)
       const fixResult = await applyFixes(head, roundFindings, 'copilot')
       const hadThreadBearingFinding = roundFindings.some((each) => collectFindingThreadIds(each).length > 0)
@@ -2871,6 +3016,28 @@ while (iterations < CONFIG.maxIterations) {
         codexDown = false
         codexCleanAt = head
         phase = 'FINALIZE'
+        continue
+      }
+      if (isP2OnlyFindings(codexOutcome.findings)) {
+        const advancePhase = nextPhaseAfterP2OnlyFix('CODEX')
+        log(`Codex raised ${codexOutcome.findings.length} P2-only finding(s) — fixing once then routing from CODEX`)
+        const p2Fix = await applyP2OnlyFix(head, codexOutcome.findings, 'codex', 'codex gate', 'codex fix lens')
+        if (!p2Fix.progressed) {
+          blocker = p2Fix.blocker
+          break
+        }
+        const p2Route = routeAfterP2OnlyFix(head, p2Fix, advancePhase)
+        head = p2Route.fixedHead
+        if (p2Route.didMoveHead) {
+          log('Codex P2-only fix moved HEAD — re-converging so HEAD-bound stamps rebuild')
+          codexDown = false
+          codexCleanAt = null
+          phase = p2Route.nextPhase
+          continue
+        }
+        codexDown = false
+        codexCleanAt = head
+        phase = p2Route.nextPhase
         continue
       }
       log(`Codex raised ${codexOutcome.findings.length} finding(s) — fixing and re-converging`)
