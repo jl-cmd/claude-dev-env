@@ -43,6 +43,23 @@ def test_exposes_all_legacy_permission_reap_tools_tuple() -> None:
     assert "Read" not in constants_module.ALL_LEGACY_PERMISSION_REAP_TOOLS
 
 
+def test_exposes_all_inert_file_permission_tools_tuple() -> None:
+    assert constants_module.ALL_INERT_FILE_PERMISSION_TOOLS == (
+        "Write",
+        "Glob",
+        "NotebookEdit",
+    )
+    assert "Edit" not in constants_module.ALL_INERT_FILE_PERMISSION_TOOLS
+    assert "Read" not in constants_module.ALL_INERT_FILE_PERMISSION_TOOLS
+    assert "Write" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
+    assert "NotebookEdit" not in constants_module.ALL_PERMISSION_ALLOW_TOOLS
+    assert "NotebookEdit" not in constants_module.ALL_AGENT_CONFIG_DENY_TOOLS
+
+
+def test_exposes_home_project_path_alias() -> None:
+    assert constants_module.HOME_PROJECT_PATH_ALIAS == "$HOME"
+
+
 def test_auto_mode_environment_entry_template_is_format_string() -> None:
     rendered_template_text = (
         constants_module.AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE.format(

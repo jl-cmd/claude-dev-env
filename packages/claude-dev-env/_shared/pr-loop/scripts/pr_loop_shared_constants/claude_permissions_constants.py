@@ -7,6 +7,7 @@ from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME
 __all__ = (
     "ALL_AGENT_CONFIG_DENY_TOOLS",
     "ALL_AGENT_CONFIG_PATH_PATTERNS",
+    "ALL_INERT_FILE_PERMISSION_TOOLS",
     "ALL_LEGACY_PERMISSION_REAP_TOOLS",
     "ALL_PERMISSION_ALLOW_TOOLS",
     "ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS",
@@ -15,6 +16,8 @@ __all__ = (
     "CLAUDE_SETTINGS_DIRECTORY_NAME",
     "CLAUDE_SETTINGS_FILENAME",
     "GIT_DIRECTORY_NAME",
+    "HOME_PROJECT_PATH_ALIAS",
+    "INERT_RULES_REMOVED_LOG_PREFIX",
     "TEXT_FILE_ENCODING",
     "UNIQUE_TEMPORARY_SUFFIX_BYTE_LENGTH",
     "get_claude_user_settings_path",
@@ -26,6 +29,14 @@ ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Read")
 ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Read")
 
 ALL_LEGACY_PERMISSION_REAP_TOOLS: tuple[str, ...] = ("Write", "Glob")
+
+ALL_INERT_FILE_PERMISSION_TOOLS: tuple[str, ...] = ("Write", "Glob", "NotebookEdit")
+
+HOME_PROJECT_PATH_ALIAS: str = "$HOME"
+
+INERT_RULES_REMOVED_LOG_PREFIX: str = (
+    "Inert Write/Glob/NotebookEdit rules removed: "
+)
 
 ALL_AGENT_CONFIG_PATH_PATTERNS: tuple[str, ...] = (
     "settings*.json",
