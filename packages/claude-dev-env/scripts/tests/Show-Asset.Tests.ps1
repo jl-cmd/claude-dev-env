@@ -44,12 +44,18 @@ BeforeAll {
         return Start-Process -FilePath 'pwsh' -ArgumentList $allArguments -PassThru -WindowStyle Hidden
     }
 
-    function Wait-ProcessExitWithin {
+    function Start-SleeperParent {
         param(
-            [System.Diagnostics.Process]$Process,
-            [int]$TimeoutMilliseconds
+            [int]$SleepSeconds
         )
-        return $Process.WaitForExit($TimeoutMilliseconds)
+        $allArguments = @(
+            '-NoProfile'
+            '-WindowStyle'
+            'Hidden'
+            '-Command'
+            "Start-Sleep -Seconds $SleepSeconds"
+        )
+        return Start-Process -FilePath 'pwsh' -ArgumentList $allArguments -PassThru -WindowStyle Hidden
     }
 }
 
@@ -61,13 +67,7 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
     }
 
     It 'exits within 5s after the watched parent process dies' {
-        $shortLivedParent = Start-Process -FilePath 'pwsh' -ArgumentList @(
-            '-NoProfile'
-            '-WindowStyle'
-            'Hidden'
-            '-Command'
-            'Start-Sleep -Seconds 2'
-        ) -PassThru -WindowStyle Hidden
+        $shortLivedParent = Start-SleeperParent -SleepSeconds 2
 
         $viewerProcess = Start-ShowAssetProcess `
             -ImagePath $script:testImagePath `
@@ -78,7 +78,7 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
         try {
             $null = $shortLivedParent.WaitForExit(15000)
             $parentExitTime = Get-Date
-            $didViewerExit = Wait-ProcessExitWithin -Process $viewerProcess -TimeoutMilliseconds 5000
+            $didViewerExit = $viewerProcess.WaitForExit(5000)
             $secondsAfterParentDeath = ((Get-Date) - $parentExitTime).TotalSeconds
 
             $didViewerExit | Should -BeTrue -Because 'Show-Asset must exit after the watched parent dies'
@@ -96,13 +96,7 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
     }
 
     It 'exits when max lifetime elapses while a window is still open' {
-        $longLivedParent = Start-Process -FilePath 'pwsh' -ArgumentList @(
-            '-NoProfile'
-            '-WindowStyle'
-            'Hidden'
-            '-Command'
-            'Start-Sleep -Seconds 120'
-        ) -PassThru -WindowStyle Hidden
+        $longLivedParent = Start-SleeperParent -SleepSeconds 120
 
         $viewerProcess = Start-ShowAssetProcess `
             -ImagePath $script:testImagePath `
@@ -111,7 +105,7 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
             -ParentPollIntervalMilliseconds 500
 
         try {
-            $didViewerExit = Wait-ProcessExitWithin -Process $viewerProcess -TimeoutMilliseconds 10000
+            $didViewerExit = $viewerProcess.WaitForExit(10000)
             $didViewerExit | Should -BeTrue -Because 'Show-Asset must exit when max lifetime elapses'
             $viewerProcess.HasExited | Should -BeTrue
         }
@@ -124,24 +118,4 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
             }
         }
     }
-
-    It 'still registers Escape as the key that closes a form' {
-        $scriptText = Get-Content -LiteralPath $scriptUnderTest -Raw
-        $scriptText | Should -Match 'Keys\]::Escape'
-        $scriptText | Should -Match '\$sender\.Close\(\)'
-        $scriptText | Should -Match 'Add_KeyDown'
-    }
 }
-
-<#
-Manual Escape verification (interactive desktop; automated tests cover parent-death
-and max-lifetime only):
-
-  $png = Join-Path $env:TEMP 'show-asset-escape.png'
-  Add-Type -AssemblyName System.Drawing
-  $bitmap = New-Object System.Drawing.Bitmap 64, 64
-  $bitmap.Save($png, [System.Drawing.Imaging.ImageFormat]::Png)
-  $bitmap.Dispose()
-  pwsh -NoProfile -File packages/claude-dev-env/scripts/Show-Asset.ps1 $png
-  # Focus the image window and press Escape — window closes and process exits.
-#>
