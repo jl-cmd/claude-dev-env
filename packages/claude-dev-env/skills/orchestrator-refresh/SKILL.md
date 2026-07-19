@@ -1,11 +1,11 @@
 ---
 name: orchestrator-refresh
 description: >-
-  Fired by the /orchestrator loop reminder about every 45 minutes to
-  re-assert the advisor discipline mid-run: orchestrate, route hard decisions
-  to the shared advisor (ENDORSE / CORRECTION / PLAN / STOP — SendMessage on
-  Claude, Claude CLI chain on a third-party host), reuse warm agents. Triggers:
-  '/orchestrator-refresh'.
+  Fired by the /orchestrator one-shot loop reminder to re-assert the advisor
+  discipline mid-run: orchestrate, route hard decisions to the shared advisor
+  (ENDORSE / CORRECTION / PLAN / STOP — SendMessage on Claude, Claude CLI chain
+  on a third-party host), reuse warm agents. Terminates when status_gate says
+  stop. Triggers: '/orchestrator-refresh'.
 ---
 
 # Orchestrator Refresh
@@ -15,8 +15,35 @@ Detect the host profile first (see Host profiles in
 Re-assert the discipline for that host only — do not invent an Agent-tool
 Claude `session-advisor` spawn on a third-party host.
 
+## 0. status_gate first (deterministic)
+
+Before anything else this firing, from the repo cwd (or with
+`$ORCHESTRATOR_RUN_STATUS_FILE` set):
+
+```
+python "%USERPROFILE%\.claude\skills\orchestrator\scripts\status_gate.py" should-reschedule [--run-slug SLUG]
+```
+
+(On Unix: `~/.claude/skills/orchestrator/scripts/status_gate.py`. From a
+package checkout: `skills/orchestrator/scripts/status_gate.py`. Pass the
+same `--run-slug` used at activate, if any.)
+
+| Exit | Action |
+|---|---|
+| **1** | Stop. Cancel any pending host schedule for this loop if the host allows it. Report that the run is inactive/done. **Do not** re-arm. Do not spawn. |
+| **0** | Continue with steps 1–6 below. |
+
+After ledger reconcile in step 1: if every task is completed/cancelled and no
+executor is running, run:
+
+```
+python "%USERPROFILE%\.claude\skills\orchestrator\scripts\status_gate.py" set --status done [--run-slug SLUG]
+```
+
+then stop without re-arming (same as exit 1).
+
 1. **Reconcile the task ledger first.** Call `TaskList` before anything else
-   this firing. The ledger is stale when any of these holds: a running or
+   this firing (after the gate). The ledger is stale when any of these holds: a running or
    finished executor has no `in_progress` task naming it as owner; a finished
    executor's task is still open (or was closed without its result merged);
    the next phase you will dispatch has no pending task; a `blockedBy` link
@@ -45,5 +72,8 @@ Claude `session-advisor` spawn on a third-party host.
 5. **Fresh spawn only for a genuine task switch.** No tool compacts or clears a
    subagent's context, so a clean context comes from a fresh spawn — never tell
    an agent to compact.
-5. **Re-schedule the next refresh** (about 1200 seconds out) when the loop
-   mechanism needs each firing to queue the following one.
+6. **One-shot re-arm only if the gate still allows it.** Re-run
+   `should-reschedule` (same `--run-slug` if any). Exit 0 → `ScheduleWakeup`
+   once with about 1200–2700 seconds delay and prompt
+   `/orchestrator-refresh` (plus `--run-slug SLUG` when used; never
+   recurring / never cadence). Exit 1 → stop; do not schedule.
