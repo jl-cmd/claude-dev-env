@@ -7,6 +7,7 @@ from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME
 __all__ = (
     "ALL_AGENT_CONFIG_DENY_TOOLS",
     "ALL_AGENT_CONFIG_PATH_PATTERNS",
+    "ALL_LEGACY_PERMISSION_REAP_TOOLS",
     "ALL_PERMISSION_ALLOW_TOOLS",
     "ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS",
     "AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX",
@@ -23,6 +24,8 @@ __all__ = (
 ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Read")
 
 ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Read")
+
+ALL_LEGACY_PERMISSION_REAP_TOOLS: tuple[str, ...] = ("Write", "Glob")
 
 ALL_AGENT_CONFIG_PATH_PATTERNS: tuple[str, ...] = (
     "settings*.json",
