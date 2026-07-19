@@ -9,6 +9,16 @@ This feature ties two git actions to a clean run of the built-in
 
 The gates follow the same shape as the `verified_commit` gate family.
 
+## Opt-in (default off)
+
+Enforcement is **off by default**. The master flag is
+`CODE_REVIEW_ENFORCEMENT_ENABLED` in
+`hooks/blocking/config/code_review_enforcement_constants.py`. Set it to
+`True` to enable the push gate, the PR-create gate, the native pre-push
+backstop (via the shared deny decision), and the stamp-directory write
+blocker. When the flag is `False`, every gate allows the action and the
+write-blocker allows stamp-directory access.
+
 ## How a stamp works
 
 A stamp is a small JSON file that records one fact: a clean `/code-review` pass
