@@ -185,7 +185,10 @@ the `persistent_agents` map
   or threads, and the report-back contract. Bump `last_used_tick`, then
   await completion.
 - **First spawn:** `Agent(subagent_type: "clean-coder", name:
-  "prc-fix-<PR#>")` — the `name` makes the agent a persistent teammate
+  "prc-fix-<PR#>", model: "sonnet")` — worker-model routing per
+  [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing);
+  resolver-supplied sonnet-equivalent on third-party hosts. The `name`
+  makes the agent a persistent teammate
   that idles awaiting messages. Record `{agent_id, created_tick,
   last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
   never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks

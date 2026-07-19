@@ -185,6 +185,18 @@ Return: status, artifact paths, blockers — nothing else.
   fit gets split in the plan — never padded into a longer prompt.
   Explore fan-outs run tiny; a `clean-coder` assignment can carry a
   whole scoped feature.
+- **Focused tickets are the house convention.** One mechanical done-check
+  per ticket; thick context lives in the assignment file, not the ticket
+  prose. The orchestrator owns splitting a big task into tickets and
+  synthesizing the results — an executor never does either. Two
+  anti-patterns to avoid: an epic ticket that bundles several
+  deliverables behind one done-check, and micro-thrash — a run of tickets
+  so thin each spawn pays more in setup than the work itself takes. See
+  Anthropic's coordinator-pattern cookbook:
+  https://github.com/anthropics/claude-cookbooks/blob/main/managed_agents/CMA_plan_big_execute_small.ipynb.
+- **Resume with a thin next-slice ticket.** A warm agent already holds
+  the assignment's thick context, so its next ticket names only the next
+  slice of work and the done-check — it does not restate the assignment.
 - **Do not restate what the agent definition carries.** The routing
   table picks the definition, and `clean-coder` already holds the code
   discipline. The ticket adds the task, the pointers, and the Advisor
@@ -201,19 +213,38 @@ workflow resume is available.
 
 | Work | Agent type | Model |
 |---|---|---|
-| Feature, bug, and refactor coding | `clean-coder` | `opus` |
-| Verification passes | `code-verifier` | `sonnet` |
-| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
+| Feature, bug, and refactor coding | `clean-coder` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Verification passes | `code-verifier` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
 | PR descriptions | `pr-description-writer` | `haiku`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
+
+Every row that edits code, runs a build, or runs a test is a coding row.
+The per-spawn Agent call's `model:` field carries the routing.
+`CLAUDE_CODE_SUBAGENT_MODEL` and other environment variables do not set
+the worker model; the per-spawn `model:` field does.
 
 Routing rules:
 
 - Each row spawns workflow-backed with a ticket; the routing row and the
   ticket together carry the agent type, model, task, and return
-  contract. A task category that maps to `clean-coder` on `opus` is not
-  served by a `general-purpose` Sonnet spawn — the table is the
-  contract, not a cost suggestion.
+  contract. A coding task category is never served by a different tier
+  as a cost call — the table is the contract.
+- **Fail closed on a Claude host.** When `sonnet` cannot be spawned, use
+  the Claude chain failover for `sonnet` when the session has one
+  configured; otherwise stop the coding spawn and report the failure —
+  never fall back in silence to `opus` or the session's own model.
+- **Fail closed on a third-party host.** Before each coding spawn, the
+  orchestrator runs a deterministic worker-model resolver that prints
+  the sonnet-equivalent model id for that host. A non-zero exit stops
+  the coding spawn; the orchestrator reports the failure rather than
+  picking a model itself. This section states the resolver's contract
+  only; a host where no resolver is available fails closed the same
+  way — the coding spawn stops and the orchestrator reports it.
+- Host detection follows
+  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+  (Host profiles section, `detect_host_profile`) — the sole detection
+  system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
 - `clean-coder` owns code edits. `code-verifier` owns verification. The

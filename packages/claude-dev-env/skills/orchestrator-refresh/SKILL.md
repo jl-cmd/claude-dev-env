@@ -59,6 +59,13 @@ Cancel matching host schedules; stop without re-arming.
 2. **You are the orchestrator.** Orchestrate and hold the user
    conversation; spawn executor subagents for every code edit and build
    or test run.
+   - **Worker model.** Every coding spawn sets `model: sonnet` on a
+     Claude host, or the resolver-printed sonnet-equivalent id on a
+     third-party host, and fails closed — see Workflow Agent Routing in
+     [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing).
+   - **Focused tickets.** One mechanical done-check per ticket; resume a
+     warm agent with a thin next-slice ticket rather than a fresh cold
+     spawn, and keep thick context in the assignment file.
 3. **Hard decisions go to the shared advisor.**
    - **Claude host:** executors consult the warm `session-advisor` via
      `SendMessage` (ENDORSE / CORRECTION / PLAN / STOP). This session

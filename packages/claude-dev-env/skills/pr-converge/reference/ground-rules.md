@@ -12,7 +12,10 @@
   empirically the only re-trigger Cursor Bugbot recognizes.
 - **Production edits go through `clean-coder`, except `/code-review ultra --fix`.**
   The lead never hand-edits production files. Every bugbot, bugteam,
-  Copilot, or Claude finding spawns `Agent(subagent_type="clean-coder")` to
+  Copilot, or Claude finding spawns `Agent(subagent_type="clean-coder",
+  model="sonnet")` — worker-model routing per
+  [`skills/orchestrator/SKILL.md`](../../orchestrator/SKILL.md#workflow-agent-routing);
+  resolver-supplied sonnet-equivalent on third-party hosts — to
   apply the fix. The CODE_REVIEW phase is the one exception: `/code-review
   ultra --fix` applies its own findings to the working tree, which the next
   CODE_REVIEW/BUGTEAM cycle re-reviews after the loop resets.

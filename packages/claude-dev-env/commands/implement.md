@@ -5,7 +5,7 @@ allowed-tools: Task, Read, Grep, Glob
 
 **Implementation with Full Context - XML-Structured Guidance**
 
-Launch a clean-coder agent with COMPREHENSIVE implementation context provided in structured XML format.
+Launch a clean-coder agent — `model: sonnet`, worker-model routing per [`skills/orchestrator/SKILL.md`](../skills/orchestrator/SKILL.md#workflow-agent-routing); resolver-supplied sonnet-equivalent on third-party hosts — with COMPREHENSIVE implementation context provided in structured XML format.
 
 ## Process:
 
