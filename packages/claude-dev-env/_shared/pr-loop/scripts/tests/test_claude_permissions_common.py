@@ -197,6 +197,7 @@ def test_is_valid_project_root_uses_extracted_directory_marker_constants() -> No
     assert "'.claude'" not in source_text
     assert '".claude"' not in source_text
 
+
 def test_permission_rule_tool_name_extracts_tool_prefix() -> None:
     assert common.permission_rule_tool_name("Edit(/repo/.claude/**)") == "Edit"
     assert common.permission_rule_tool_name("Write(c:/Users/jon/.claude/worktrees/x/**)") == (
