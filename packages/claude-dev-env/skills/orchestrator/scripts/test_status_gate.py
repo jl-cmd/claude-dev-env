@@ -96,6 +96,65 @@ class TestWriteAndDecide:
         assert reason_code == REASON_REARM_ALREADY_PENDING
 
 
+class TestSetPreservesPending:
+    def should_preserve_rearm_pending_when_reasserting_active(
+        self, temporary_directory: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        status_gate = load_status_gate_module()
+        status_file_path = temporary_directory / "status.json"
+        status_gate.write_status_file(
+            status_file_path, RUN_STATUS_ACTIVE, "demo", is_rearm_pending=False
+        )
+        assert status_gate.claim_rearm_slot(status_file_path, "demo")[0] is True
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "status_gate.py",
+                "set",
+                "--status-file",
+                str(status_file_path),
+                "--status",
+                RUN_STATUS_ACTIVE,
+                "--run-slug",
+                "demo",
+            ],
+        )
+        assert status_gate.main() == EXIT_CODE_SUCCESS
+        payload = json.loads(status_file_path.read_text(encoding="utf-8"))
+        assert payload[REARM_PENDING_FIELD_NAME] is True
+        is_allowed, reason_code = status_gate.decide_should_reschedule(
+            status_file_path
+        )
+        assert is_allowed is False
+        assert reason_code == REASON_REARM_ALREADY_PENDING
+
+    def should_clear_rearm_pending_when_setting_done(
+        self, temporary_directory: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        status_gate = load_status_gate_module()
+        status_file_path = temporary_directory / "status.json"
+        status_gate.write_status_file(
+            status_file_path, RUN_STATUS_ACTIVE, "", is_rearm_pending=True
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "status_gate.py",
+                "set",
+                "--status-file",
+                str(status_file_path),
+                "--status",
+                RUN_STATUS_DONE,
+            ],
+        )
+        assert status_gate.main() == EXIT_CODE_SUCCESS
+        payload = json.loads(status_file_path.read_text(encoding="utf-8"))
+        assert payload[STATUS_FIELD_NAME] == RUN_STATUS_DONE
+        assert payload[REARM_PENDING_FIELD_NAME] is False
+
+
 class TestBeginClaimRelease:
     def should_claim_rearm_only_once_until_begin_firing(
         self, temporary_directory: Path

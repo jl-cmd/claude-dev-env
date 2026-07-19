@@ -10,9 +10,11 @@
     python status_gate.py release-rearm
 
 ``should-reschedule`` and ``claim-rearm`` exit 0 only when status is
-``active`` and no re-arm slot is already pending. ``claim-rearm`` also
-sets the pending latch. ``begin-firing`` clears the latch at the start
-of a refresh firing. Missing or invalid status files fail closed.
+``active`` and no re-arm slot is already pending. Host re-arm order is
+create-then-claim: ``should-reschedule``, one host schedule create, then
+``claim-rearm`` (which sets the pending latch). ``begin-firing`` clears
+the latch at the start of a refresh firing. Missing or invalid status
+files fail closed.
 """
 
 from __future__ import annotations
@@ -27,7 +29,6 @@ from pathlib import Path
 from typing import TypedDict
 
 from status_gate_constants.config.constants import (
-    ALL_COMMANDS,
     ALL_DEFAULT_STATUS_DIRECTORY_PARTS,
     ALL_VALID_RUN_STATUSES,
     COMMAND_BEGIN_FIRING,
@@ -37,7 +38,6 @@ from status_gate_constants.config.constants import (
     COMMAND_SHOULD_RESCHEDULE,
     EXIT_CODE_STOP,
     EXIT_CODE_SUCCESS,
-    EXIT_CODE_USAGE_ERROR,
     JSON_INDENT_SPACES,
     REARM_PENDING_FIELD_NAME,
     REASON_ACTIVE,
@@ -383,7 +383,7 @@ def claim_rearm_slot(
     status_file_path: Path,
     run_slug: str,
 ) -> tuple[bool, str, StatusFilePayload | None]:
-    """Atomically reserve the single re-arm slot when active and free.
+    """Latch the single re-arm slot after a successful host schedule create.
 
     Args:
         status_file_path: Path to the run status file.
@@ -434,7 +434,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
     set_parser = subparsers.add_parser(
         COMMAND_SET,
-        help="Write run status (active or done); clears rearm_pending.",
+        help=(
+            "Write run status (active or done). "
+            "done clears rearm_pending; re-asserting active preserves it."
+        ),
     )
     set_parser.add_argument("--status-file", default=None)
     set_parser.add_argument(
@@ -468,20 +471,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _normalized_run_slug(run_slug: str | None) -> str:
-    """Return a non-None run slug string for path resolution.
-
-    Args:
-        run_slug: Optional CLI value.
-
-    Returns:
-        The slug, or empty string when unset.
-    """
-    if run_slug is None:
-        return ""
-    return run_slug
-
-
 def _print_gate_report(
     is_reschedule_allowed: bool,
     reason_code: str,
@@ -509,6 +498,10 @@ def _run_set_command(
 ) -> int:
     """Write status JSON for the set subcommand.
 
+    Re-asserting ``active`` when the file is already ``active`` preserves
+    ``rearm_pending`` so a second ``/orchestrator`` cannot clear a latched
+    one-shot. ``done`` always clears the latch.
+
     Args:
         status_file: Optional explicit status path.
         run_status: ``active`` or ``done``.
@@ -518,11 +511,21 @@ def _run_set_command(
         Process exit code.
     """
     status_file_path = resolve_status_file_path(status_file, None, run_slug)
+    is_rearm_pending = False
+    if run_status == RUN_STATUS_ACTIVE:
+        all_existing_fields, _load_failure_reason = _load_status_payload(
+            status_file_path
+        )
+        if (
+            all_existing_fields is not None
+            and all_existing_fields.get(STATUS_FIELD_NAME) == RUN_STATUS_ACTIVE
+        ):
+            is_rearm_pending = _is_rearm_pending(all_existing_fields)
     written_status = write_status_file(
         status_file_path=status_file_path,
         run_status=run_status,
         run_slug=run_slug,
-        is_rearm_pending=False,
+        is_rearm_pending=is_rearm_pending,
     )
     print(json.dumps(written_status, indent=JSON_INDENT_SPACES))
     return EXIT_CODE_SUCCESS
@@ -594,9 +597,7 @@ def main() -> int:
         Process exit code.
     """
     parsed_arguments = _build_argument_parser().parse_args()
-    if parsed_arguments.command not in ALL_COMMANDS:
-        return EXIT_CODE_USAGE_ERROR
-    selected_run_slug = _normalized_run_slug(parsed_arguments.run_slug)
+    selected_run_slug = parsed_arguments.run_slug or ""
     if parsed_arguments.command == COMMAND_SET:
         return _run_set_command(
             status_file=parsed_arguments.status_file,
@@ -613,14 +614,11 @@ def main() -> int:
         COMMAND_CLAIM_REARM: claim_rearm_slot,
         COMMAND_RELEASE_REARM: release_rearm_slot,
     }
-    selected_mutation = rearm_mutations.get(parsed_arguments.command)
-    if selected_mutation is not None:
-        return _run_rearm_mutation_command(
-            selected_mutation,
-            status_file=parsed_arguments.status_file,
-            run_slug=selected_run_slug,
-        )
-    return EXIT_CODE_USAGE_ERROR
+    return _run_rearm_mutation_command(
+        rearm_mutations[parsed_arguments.command],
+        status_file=parsed_arguments.status_file,
+        run_slug=selected_run_slug,
+    )
 
 
 if __name__ == "__main__":

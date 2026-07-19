@@ -47,14 +47,15 @@ python scripts/status_gate.py release-rearm [--run-slug SLUG] [--status-file PAT
 
 | Exit / output | Meaning |
 |---|---|
-| `set` → 0 | Status written (`active`/`done`); clears `rearm_pending` |
+| `set` → 0 | Status written (`active`/`done`); `done` clears latch; re-asserting `active` preserves it |
 | `begin-firing` → 0 | Active; clears `rearm_pending` (start of a refresh firing) |
 | `begin-firing` → 1 | Stop — missing/invalid/done (fail closed) |
 | `should-reschedule` → 0 | Active and `rearm_pending` is false (read-only) |
 | `should-reschedule` → 1 | Stop — inactive, missing, invalid, or slot already pending |
-| `claim-rearm` → 0 | Slot reserved (`rearm_pending` true); may create one host schedule |
-| `claim-rearm` → 1 | Do **not** schedule — inactive or slot already pending |
-| `release-rearm` → 0 | Cleared pending after a failed host schedule create |
+| `claim-rearm` → 0 | Slot latched (`rearm_pending` true) after a successful create |
+| `claim-rearm` → 1 | Slot already pending or inactive — cancel any just-created schedule |
+| `release-rearm` → 0 | Cleared pending (recovery if a latch stuck after create) |
+| `release-rearm` → 1 | Stop — missing/invalid/done; nothing to release |
 
 Default status path: `.orchestrator-run-status.json` under the repo plans
 directory, or `$ORCHESTRATOR_RUN_STATUS_FILE`. With `--run-slug SLUG`,
@@ -63,20 +64,28 @@ schedule prompt must carry it: `/orchestrator-refresh --run-slug SLUG`.
 
 ### Single-pending re-arm protocol (all hosts)
 
-Exactly one delayed refresh may be outstanding. Mechanical steps:
+Exactly one delayed refresh may be outstanding. **Create then claim**
+(order matters on Claude: PreToolUse denies `ScheduleWakeup` when the
+slot is already pending).
 
-1. **Cancel matching schedules** the host can list: drop every schedule
-   whose prompt targets `/orchestrator-refresh` (and the same
-   `--run-slug` when used). Replace, never stack.
-2. **`claim-rearm`** (same path args as activate). Exit 1 → do not create
-   a schedule. Exit 0 → continue.
+1. **Cancel matching schedules** only when the host can list and cancel
+   schedules by prompt. Drop every schedule whose prompt targets
+   `/orchestrator-refresh` (and the same `--run-slug` when used).
+   Replace, never stack. On Claude, there is no selective cancel for a
+   sibling `ScheduleWakeup` — the status-file latch
+   (`should-reschedule` / `claim-rearm`) is the sole stacking
+   enforcement there.
+2. **`should-reschedule`** (same path args as activate). Exit 1 → stop;
+   do not create. Exit 0 → continue.
 3. **Create exactly one non-recurring delayed wake** (~1200–2700s) with
    prompt `/orchestrator-refresh` (plus `--run-slug` when used). Use the
    host's one-shot delayed schedule tool (on Claude: `ScheduleWakeup`).
    Never recurring, never cadence, never a second create in the same
    firing.
-4. **On create failure:** `release-rearm`, then stop or retry once from
-   step 1.
+4. **`claim-rearm`** immediately after a successful create. Exit 0 →
+   done. Exit 1 → cancel the schedule just created and stop (race /
+   already latched).
+5. **On create failure:** do not claim; stop or retry once from step 1.
 
 On Claude, the PreToolUse hook also denies when inactive, already
 pending, or when the tool is `CronCreate`.
@@ -94,9 +103,13 @@ pending, or when the tool is `CronCreate`.
 ## Process
 
 1. **Invocation guard.** One `/orchestrator` per session. When a refresh
-   one-shot is already queued (`claim-rearm` / `should-reschedule` would
-   fail with pending), do not stack a second; reuse the live advisor bind
-   and go to step 4.
+   one-shot is already queued (`should-reschedule` exits 1 with
+   `rearm_already_pending`), do not stack a second: reuse the live
+   advisor bind and go to step 6 (Orchestrate). Skip steps 4–5 — status
+   is already active and a re-arm is already latched; re-registering
+   would attempt a redundant host schedule. (Re-asserting
+   `set --status active` preserves `rearm_pending` when already active,
+   but still do not run step 5.)
 2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
@@ -111,8 +124,8 @@ pending, or when the tool is `CronCreate`.
 4. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.
 5. **Register the discipline reminder** via the single-pending re-arm
-   protocol (cancel matching → `claim-rearm` → one non-recurring delayed
-   wake; default delay about 2700s).
+   protocol (cancel matching → `should-reschedule` → one non-recurring
+   delayed wake → `claim-rearm`; default delay about 2700s).
 6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
    task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
@@ -268,14 +281,19 @@ no open work remains, run `set --status done` before any re-arm attempt.
 
 - **Stacking re-arms.** Creating a second delayed wake while one is
   already queued (or using a recurring host schedule) multiplies loops
-  on each refresh. Always cancel matching schedules, then `claim-rearm`,
-  then one non-recurring create. A second `claim-rearm` exit 1 is a
-  hard stop — not a retry.
+  on each refresh. Always cancel matching → `should-reschedule` → one
+  create → `claim-rearm`. A second create while pending is denied on
+  Claude by PreToolUse; elsewhere `should-reschedule` / `claim-rearm`
+  exit 1 is a hard stop.
+- **Claim before create on Claude.** If you `claim-rearm` first, the
+  PreToolUse hook sees `rearm_pending` and denies `ScheduleWakeup`.
+  Create first, then claim.
 - **Forgetting `begin-firing` on refresh.** The latch stays pending;
   later re-arms are denied forever until a firing clears it. Refresh
   must run `begin-firing` first.
-- **Claim without create.** If `claim-rearm` succeeds and the host
-  schedule create fails, call `release-rearm` or the slot stays stuck.
+- **Create without claim.** If create succeeds and you skip
+  `claim-rearm`, a second create can stack. Always claim immediately
+  after a successful create.
 
 ## File Index
 

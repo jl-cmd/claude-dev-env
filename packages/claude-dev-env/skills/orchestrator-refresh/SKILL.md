@@ -76,30 +76,32 @@ Cancel matching host schedules; stop without re-arming.
 5. **Fresh spawn only for a genuine task switch.** Never tell an agent
    to compact for a clean context.
 6. **Single-pending re-arm only.** Same protocol as the orchestrator
-   skill (host-agnostic):
+   skill (host-agnostic; **create then claim**):
 
-   1. Cancel every host schedule whose prompt targets
-      `/orchestrator-refresh` (and the same `--run-slug` if used).
-   2. `python <status_gate.py> claim-rearm [--run-slug SLUG]`
+   1. Cancel matching schedules only when the host can list/cancel by
+      prompt (`/orchestrator-refresh` + `--run-slug` if used). On Claude,
+      skip selective cancel — the latch is the sole stacking enforcement.
+   2. `python <status_gate.py> should-reschedule [--run-slug SLUG]`
       - Exit **1** → stop; do not schedule.
       - Exit **0** → continue.
    3. Create **exactly one** non-recurring delayed wake (~1200–2700s)
       with prompt `/orchestrator-refresh` (plus `--run-slug` when used).
       Host one-shot tool only (on Claude: `ScheduleWakeup`). Never
       recurring / never cadence / never a second create this firing.
-   4. If create fails: `release-rearm`, then stop or retry once from
-      cancel.
+   4. `python <status_gate.py> claim-rearm [--run-slug SLUG]` right
+      after a successful create. Exit 1 → cancel that schedule and stop.
+   5. If create fails: do not claim; stop or retry once from cancel.
 
 ## Gotchas
 
 - **Stacking loops.** A second schedule create while one is already
-  queued (or a recurring host schedule) multiplies refresh firings.
-  Cancel matching → `claim-rearm` → one non-recurring create. Second
-  `claim-rearm` exit 1 means stop.
+  queued multiplies firings. Cancel → `should-reschedule` → one create
+  → `claim-rearm`. Never claim before create on Claude (PreToolUse
+  denies `ScheduleWakeup` when pending).
 - **Skipping `begin-firing`.** Prior `rearm_pending` stays set; re-arm
   stays denied. Always run step 0a first.
-- **Claim without successful create.** Call `release-rearm` on host
-  schedule failure or the latch sticks.
+- **Create without claim.** Skip claim after create and a second create
+  can stack. Claim immediately after success.
 
 ## File Index
 
