@@ -161,6 +161,24 @@ def test_ensure_grok_disables_claude_mcp_compat_appends_block(tmp_path: Path) ->
     assert "mcps = false" in configuration_text
 
 
+def test_ensure_grok_disables_claude_mcp_compat_rewrites_enabled_flag(
+    tmp_path: Path,
+) -> None:
+    grok_config_path = tmp_path / "config.toml"
+    grok_config_path.write_text(
+        "[compat.claude]\nmcps = true\n",
+        encoding="utf-8",
+    )
+    summary = policy.ensure_grok_disables_claude_mcp_compat(
+        grok_config_path,
+        is_dry_run=False,
+    )
+    assert summary["changed"] is True
+    configuration_text = grok_config_path.read_text(encoding="utf-8")
+    assert "mcps = false" in configuration_text
+    assert "mcps = true" not in configuration_text
+
+
 def test_apply_lean_mcp_policy_dry_run_returns_summaries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

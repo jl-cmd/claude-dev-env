@@ -42,6 +42,7 @@ from dev_env_scripts_constants.mcp_lifecycle_constants import (  # noqa: E402
     ENABLED_PLUGINS_KEY,
     GROK_COMPAT_CLAUDE_BLOCK,
     GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE,
+    GROK_COMPAT_CLAUDE_MCPS_ENABLED_LINE,
     GROK_COMPAT_CLAUDE_SECTION_HEADER,
     GROK_CONFIG_TOML_PATH,
     HTTP_SERVER_TYPE,
@@ -286,21 +287,27 @@ def ensure_grok_disables_claude_mcp_compat(
         return summary
     has_compat_section = GROK_COMPAT_CLAUDE_SECTION_HEADER in configuration_text
     has_mcps_disabled = GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE in configuration_text
-    if has_compat_section and has_mcps_disabled:
+    has_mcps_enabled = GROK_COMPAT_CLAUDE_MCPS_ENABLED_LINE in configuration_text
+    if has_compat_section and has_mcps_disabled and not has_mcps_enabled:
         return summary
     summary["changed"] = True
     if is_dry_run:
         return summary
     _backup_file(grok_config_path)
-    if has_compat_section and not has_mcps_disabled:
+    if has_compat_section:
         updated_text = configuration_text.replace(
-            GROK_COMPAT_CLAUDE_SECTION_HEADER,
-            (
-                f"{GROK_COMPAT_CLAUDE_SECTION_HEADER}\n"
-                f"{GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE}"
-            ),
-            1,
+            GROK_COMPAT_CLAUDE_MCPS_ENABLED_LINE,
+            GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE,
         )
+        if GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE not in updated_text:
+            updated_text = updated_text.replace(
+                GROK_COMPAT_CLAUDE_SECTION_HEADER,
+                (
+                    f"{GROK_COMPAT_CLAUDE_SECTION_HEADER}\n"
+                    f"{GROK_COMPAT_CLAUDE_MCPS_DISABLED_LINE}"
+                ),
+                1,
+            )
     else:
         separator = "" if configuration_text.endswith("\n") else "\n"
         updated_text = (
@@ -375,10 +382,9 @@ def main() -> int:
         help="Set [compat.claude] mcps=false in grok_config_path.",
     )
     parsed_arguments = argument_parser.parse_args()
-    is_dry_run = bool(parsed_arguments.dry_run)
-    is_apply = bool(parsed_arguments.apply)
-    if not is_dry_run and not is_apply:
-        return 2
+    is_dry_run = bool(parsed_arguments.dry_run) and not bool(
+        parsed_arguments.apply
+    )
     all_summaries = apply_lean_mcp_policy(
         is_dry_run=is_dry_run,
         should_disable_grok_claude_mcps=bool(
