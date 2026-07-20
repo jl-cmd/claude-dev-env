@@ -908,6 +908,43 @@ def test_windows_process_tree_kill_builds_taskkill_argv(
     ]
 
 
+def test_windows_process_tree_kill_swallows_taskkill_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung taskkill must not raise — caller falls back to Popen.kill + drain."""
+
+    def raise_taskkill_timeout(
+        _all_arguments: list[str], **_keywords: object
+    ) -> None:
+        raise subprocess.TimeoutExpired(cmd="taskkill", timeout=1)
+
+    monkeypatch.setattr(wrapper.subprocess, "run", raise_taskkill_timeout)
+    wrapper._kill_windows_process_tree(4242)
+
+
+def test_drain_joins_pipes_when_direct_kill_raises_process_lookup_error() -> None:
+    """Even when the process is already gone, drain still joins pipe readers."""
+    all_communicate_timeouts: list[float | None] = []
+
+    class _AlreadyDeadProcess:
+        def communicate(
+            self, timeout: float | None = None
+        ) -> tuple[str, str]:
+            all_communicate_timeouts.append(timeout)
+            if len(all_communicate_timeouts) == 1:
+                raise subprocess.TimeoutExpired(cmd="codex", timeout=timeout or 0)
+            return "", ""
+
+        def kill(self) -> None:
+            raise ProcessLookupError()
+
+    already_dead_process = _AlreadyDeadProcess()
+    wrapper._drain_process_after_tree_kill(
+        already_dead_process  # type: ignore[arg-type]  # duck-typed Popen stand-in
+    )
+    assert len(all_communicate_timeouts) == 2
+
+
 def test_run_command_surfaces_timeout_when_tree_kill_is_noop(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

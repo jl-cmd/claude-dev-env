@@ -75,20 +75,28 @@ from codex_review_scripts_constants.run_constants import (
 
 
 def _kill_windows_process_tree(process_identifier: int) -> None:
-    """Kill a Windows process and every descendant it started, by PID."""
-    subprocess.run(
-        [
-            WINDOWS_TASKKILL_COMMAND,
-            WINDOWS_TASKKILL_TREE_FLAG,
-            WINDOWS_TASKKILL_FORCE_FLAG,
-            WINDOWS_TASKKILL_PID_FLAG,
-            str(process_identifier),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-        timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
-    )
+    """Kill a Windows process and every descendant it started, by PID.
+
+    Swallows taskkill failures so the caller can fall back to ``Popen.kill()``
+    and a timed drain. A raised ``TimeoutExpired`` here would replace the
+    original review-timeout exception and skip that drain path.
+    """
+    try:
+        subprocess.run(
+            [
+                WINDOWS_TASKKILL_COMMAND,
+                WINDOWS_TASKKILL_TREE_FLAG,
+                WINDOWS_TASKKILL_FORCE_FLAG,
+                WINDOWS_TASKKILL_PID_FLAG,
+                str(process_identifier),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+        return
 
 
 def _kill_posix_process_group(process_identifier: int) -> None:
@@ -165,7 +173,7 @@ def _drain_process_after_tree_kill(
         try:
             review_process.kill()
         except ProcessLookupError:
-            return
+            pass
         try:
             review_process.communicate(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
