@@ -166,12 +166,18 @@ def selection_as_json_dict(
     }
 
 
-def _add_pacer_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register the pacer-selection flags on the parser.
+def build_argument_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for pacer selection.
 
-    Args:
-        parser: Parser to receive the pacer-selection flags.
+    Returns:
+        Configured argument parser.
     """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Select workflow, schedule_wakeup, or portable pacer for a "
+            "converge entry skill."
+        )
+    )
     parser.add_argument(
         CLI_SKILL_FLAG,
         required=True,
@@ -193,21 +199,6 @@ def _add_pacer_arguments(parser: argparse.ArgumentParser) -> None:
         default=GROK_MODE_FLAG_DEFAULT,
         help="1/true routes loop workers through the grok dispatcher.",
     )
-
-
-def build_argument_parser() -> argparse.ArgumentParser:
-    """Build the CLI parser for pacer selection.
-
-    Returns:
-        Configured argument parser.
-    """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Select workflow, schedule_wakeup, or portable pacer for a "
-            "converge entry skill."
-        )
-    )
-    _add_pacer_arguments(parser)
     return parser
 
 
