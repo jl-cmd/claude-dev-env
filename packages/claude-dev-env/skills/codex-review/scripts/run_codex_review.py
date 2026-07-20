@@ -20,7 +20,6 @@ import re
 import shutil
 import signal
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
