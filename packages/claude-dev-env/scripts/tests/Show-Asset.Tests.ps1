@@ -117,13 +117,39 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
             -ParentPollIntervalMilliseconds 500
 
         try {
-            $didViewerExit = $viewerProcess.WaitForExit(10000)
+            # Child startup (WinForms + image load) plus MaxLifetimeSeconds=2 and poll
+            # can exceed 10s under load; allow 20s wall clock from process start.
+            $didViewerExit = $viewerProcess.WaitForExit(20000)
             $didViewerExit | Should -BeTrue -Because 'Show-Asset must exit when max lifetime elapses'
             $viewerProcess.HasExited | Should -BeTrue
         }
         finally {
             Stop-TestProcessIfRunning -Process $viewerProcess
             Stop-TestProcessIfRunning -Process $longLivedParent
+        }
+    }
+
+    It 'does not exit early when the watched parent is already dead at start' {
+        # Simulates Start-Process from a one-shot tool shell: parent PID is dead
+        # before the first poll, so parent-death must stay disarmed and only max
+        # lifetime ends the session.
+        $alreadyDeadParent = Start-SleeperParent -SleepSeconds 120
+        Stop-Process -Id $alreadyDeadParent.Id -Force
+        $null = $alreadyDeadParent.WaitForExit(5000)
+
+        $viewerProcess = Start-ShowAssetProcess `
+            -ImagePath $script:testImagePath `
+            -ParentProcessId $alreadyDeadParent.Id `
+            -MaxLifetimeSeconds 120 `
+            -ParentPollIntervalMilliseconds 500
+
+        try {
+            Start-Sleep -Milliseconds 2500
+            $viewerProcess.HasExited | Should -BeFalse -Because 'dead-at-start parent must not arm parent-death exit'
+        }
+        finally {
+            Stop-TestProcessIfRunning -Process $viewerProcess
+            Stop-TestProcessIfRunning -Process $alreadyDeadParent
         }
     }
 }

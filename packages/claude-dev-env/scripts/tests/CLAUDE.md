@@ -16,7 +16,7 @@ pytest suite for the Python scripts and Pester suite for the PowerShell scripts 
 | File | Covers |
 |---|---|
 | `Get-SessionAccount.Tests.ps1` | `Get-SessionAccount.ps1` — noise filtering, profile-storage email recovery, CLI-vs-desktop account resolution, and output formatting |
-| `Show-Asset.Tests.ps1` | `Show-Asset.ps1` — parent-death exit within 5s, max-lifetime auto-exit (Escape dismissal is interactive-only, verified manually) |
+| `Show-Asset.Tests.ps1` | `Show-Asset.ps1` — parent-death exit within 5s after a live parent dies, no early exit when parent is already dead at start, max-lifetime auto-exit (Escape dismissal is interactive-only, verified manually) |
 
 ## Running
 

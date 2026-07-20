@@ -15,8 +15,10 @@ Callers often launch this script with Start-Process and do not wait. The script
 therefore watches its parent process and a max lifetime so orphan viewers cannot
 outlive a dead agent parent or run indefinitely:
 
-- Parent-death watch: poll the parent PID on an interval (default 1s). When the
-  parent is gone, all forms close and the process exits.
+- Parent-death watch: poll the parent PID on an interval (default 1s). Exit only
+  after that PID has been seen alive at least once and is later gone, so a
+  one-shot Start-Process launcher that is already dead at the first tick does
+  not flash-close the viewer.
 - Max lifetime: after the configured span (default 30 minutes) forms close and
   the process exits even if windows remain open.
 
@@ -66,6 +68,7 @@ $minimumClientHeight = 160
 $openWindowCount = 0
 $sessionStartedAtUtc = [datetime]::UtcNow
 $maxLifetime = [timespan]::FromSeconds($MaxLifetimeSeconds)
+$hasSeenWatchedParentAlive = $false
 
 function Get-WatchedParentProcessId {
     param(
@@ -182,9 +185,17 @@ if ($openWindowCount -gt 0) {
     $watchTimer = New-Object System.Windows.Forms.Timer
     $watchTimer.Interval = $ParentPollIntervalMilliseconds
     $watchTimer.Add_Tick({
-            $isParentDead = ($script:watchedParentProcessId -gt 0) -and -not (Test-ProcessIdIsAlive -ProcessId $script:watchedParentProcessId)
+            if ($script:watchedParentProcessId -gt 0) {
+                if (Test-ProcessIdIsAlive -ProcessId $script:watchedParentProcessId) {
+                    $script:hasSeenWatchedParentAlive = $true
+                }
+                elseif ($script:hasSeenWatchedParentAlive) {
+                    Stop-ShowAssetSession
+                    return
+                }
+            }
             $hasLifetimeElapsed = ([datetime]::UtcNow - $script:sessionStartedAtUtc) -ge $script:maxLifetime
-            if ($isParentDead -or $hasLifetimeElapsed) {
+            if ($hasLifetimeElapsed) {
                 Stop-ShowAssetSession
             }
         })
