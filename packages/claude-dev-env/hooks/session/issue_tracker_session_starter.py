@@ -99,9 +99,9 @@ def main() -> None:
         sys.exit(0)
     if not is_injection_enabled(ISSUE_TRACKER_ENV_VAR_NAME):
         sys.exit(0)
-    if not _has_github_origin_remote(_session_working_directory(payload_by_field)):
-        sys.exit(0)
     if not _issue_tracker_files_present():
+        sys.exit(0)
+    if not _has_github_origin_remote(_session_working_directory(payload_by_field)):
         sys.exit(0)
     directive_payload = build_session_start_payload(build_issue_tracker_directive())
     sys.stdout.write(json.dumps(directive_payload) + "\n")

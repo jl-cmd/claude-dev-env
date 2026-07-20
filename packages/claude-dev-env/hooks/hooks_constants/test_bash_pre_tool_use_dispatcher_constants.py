@@ -46,8 +46,6 @@ _EXPECTED_BASH_ORDER = (
     "blocking/issue_tracker_commit_reminder.py",
 )
 
-_ISSUE_TRACKER_COMMIT_REMINDER_PATH = "blocking/issue_tracker_commit_reminder.py"
-
 _POWERSHELL_APPLICABLE = (
     "blocking/pii_prevention_blocker.py",
     "blocking/verified_commit_gate.py",
@@ -110,9 +108,8 @@ def test_code_review_gate_family_registered_for_bash_and_powershell() -> None:
 def test_issue_tracker_commit_reminder_is_the_last_roster_entry() -> None:
     """The commit/push reminder runs last so deny gates short-circuit ahead of it."""
     last_entry = ALL_BASH_HOSTED_HOOK_ENTRIES[-1]
-    assert last_entry.script_relative_path == _ISSUE_TRACKER_COMMIT_REMINDER_PATH
+    assert last_entry.script_relative_path == "blocking/issue_tracker_commit_reminder.py"
     assert last_entry.applicable_tool_names == frozenset({BASH_TOOL_NAME})
-
 
 
 def test_every_roster_path_points_at_an_existing_hook() -> None:

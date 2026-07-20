@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import subprocess
-from io import StringIO
+from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
 
 import issue_tracker_session_starter as starter
 import pytest
@@ -55,21 +55,11 @@ def _point_home_at(monkeypatch: pytest.MonkeyPatch, home_directory: Path) -> Non
     monkeypatch.setenv("USERPROFILE", str(home_directory))
 
 
-def _run_main_with_payload(payload: dict[str, str]) -> str:
-    """Return stdout from running the hook's main() with payload on stdin."""
-    captured_stdout = StringIO()
-    with (
-        patch("sys.stdin", StringIO(json.dumps(payload))),
-        patch("sys.stdout", captured_stdout),
-        pytest.raises(SystemExit),
-    ):
-        starter.main()
-    return captured_stdout.getvalue()
+def _setup_eligible_repo_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Build a GitHub-remote repo and a ~/.claude tree with both tracker files present.
 
-
-def test_enabled_start_emits_the_nested_payload(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+    Returns the repo directory so the caller's payload can point ``cwd`` at it.
+    """
     repo_directory = tmp_path / "repo"
     repo_directory.mkdir()
     _init_github_repo(repo_directory)
@@ -77,10 +67,21 @@ def test_enabled_start_emits_the_nested_payload(
     home_directory.mkdir()
     _install_tracker_files(home_directory)
     _point_home_at(monkeypatch, home_directory)
+    return repo_directory
+
+
+def test_enabled_start_emits_the_nested_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+) -> None:
+    repo_directory = _setup_eligible_repo_and_home(tmp_path, monkeypatch)
     monkeypatch.delenv(ISSUE_TRACKER_ENV_VAR_NAME, raising=False)
 
     emitted = json.loads(
-        _run_main_with_payload({"source": _STARTUP_SOURCE, "cwd": str(repo_directory)})
+        run_hook_main_with_payload(
+            starter, {"source": _STARTUP_SOURCE, "cwd": str(repo_directory)}
+        )
     )
 
     nested_output = emitted[HOOK_SPECIFIC_OUTPUT_KEY]
@@ -89,40 +90,43 @@ def test_enabled_start_emits_the_nested_payload(
     assert ADDITIONAL_CONTEXT_KEY not in emitted
 
 
-def test_toggle_off_stays_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    repo_directory = tmp_path / "repo"
-    repo_directory.mkdir()
-    _init_github_repo(repo_directory)
-    home_directory = tmp_path / "home"
-    home_directory.mkdir()
-    _install_tracker_files(home_directory)
-    _point_home_at(monkeypatch, home_directory)
+def test_toggle_off_stays_silent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+) -> None:
+    repo_directory = _setup_eligible_repo_and_home(tmp_path, monkeypatch)
     monkeypatch.setenv(ISSUE_TRACKER_ENV_VAR_NAME, "off")
 
-    output = _run_main_with_payload({"source": _STARTUP_SOURCE, "cwd": str(repo_directory)})
+    output = run_hook_main_with_payload(
+        starter, {"source": _STARTUP_SOURCE, "cwd": str(repo_directory)}
+    )
 
     assert output.strip() == ""
 
 
 @pytest.mark.parametrize("ineligible_source", ["resume", "compact"])
 def test_ineligible_source_stays_silent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ineligible_source: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+    ineligible_source: str,
 ) -> None:
-    repo_directory = tmp_path / "repo"
-    repo_directory.mkdir()
-    _init_github_repo(repo_directory)
-    home_directory = tmp_path / "home"
-    home_directory.mkdir()
-    _install_tracker_files(home_directory)
-    _point_home_at(monkeypatch, home_directory)
+    repo_directory = _setup_eligible_repo_and_home(tmp_path, monkeypatch)
     monkeypatch.delenv(ISSUE_TRACKER_ENV_VAR_NAME, raising=False)
 
-    output = _run_main_with_payload({"source": ineligible_source, "cwd": str(repo_directory)})
+    output = run_hook_main_with_payload(
+        starter, {"source": ineligible_source, "cwd": str(repo_directory)}
+    )
 
     assert output.strip() == ""
 
 
-def test_no_github_remote_stays_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_github_remote_stays_silent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+) -> None:
     plain_directory = tmp_path / "plain"
     plain_directory.mkdir()
     home_directory = tmp_path / "home"
@@ -131,12 +135,18 @@ def test_no_github_remote_stays_silent(tmp_path: Path, monkeypatch: pytest.Monke
     _point_home_at(monkeypatch, home_directory)
     monkeypatch.delenv(ISSUE_TRACKER_ENV_VAR_NAME, raising=False)
 
-    output = _run_main_with_payload({"source": _STARTUP_SOURCE, "cwd": str(plain_directory)})
+    output = run_hook_main_with_payload(
+        starter, {"source": _STARTUP_SOURCE, "cwd": str(plain_directory)}
+    )
 
     assert output.strip() == ""
 
 
-def test_tracker_files_absent_stays_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tracker_files_absent_stays_silent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+) -> None:
     repo_directory = tmp_path / "repo"
     repo_directory.mkdir()
     _init_github_repo(repo_directory)
@@ -145,7 +155,9 @@ def test_tracker_files_absent_stays_silent(tmp_path: Path, monkeypatch: pytest.M
     _point_home_at(monkeypatch, home_directory)
     monkeypatch.delenv(ISSUE_TRACKER_ENV_VAR_NAME, raising=False)
 
-    output = _run_main_with_payload({"source": _STARTUP_SOURCE, "cwd": str(repo_directory)})
+    output = run_hook_main_with_payload(
+        starter, {"source": _STARTUP_SOURCE, "cwd": str(repo_directory)}
+    )
 
     assert output.strip() == ""
 

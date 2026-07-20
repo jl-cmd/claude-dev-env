@@ -7,8 +7,8 @@ gate and the environment toggle run through the production code path.
 from __future__ import annotations
 
 import json
-from io import StringIO
-from unittest.mock import patch
+from collections.abc import Callable
+from types import ModuleType
 
 import orchestrator_auto_starter as starter
 import pytest
@@ -26,24 +26,13 @@ from hooks_constants.session_start_injector_constants import (
 _STARTUP_SOURCE = "startup"
 
 
-def _run_main_with_payload(payload: dict[str, str]) -> str:
-    """Return stdout from running the hook's main() with payload on stdin."""
-    captured_stdout = StringIO()
-    with (
-        patch("sys.stdin", StringIO(json.dumps(payload))),
-        patch("sys.stdout", captured_stdout),
-        pytest.raises(SystemExit),
-    ):
-        starter.main()
-    return captured_stdout.getvalue()
-
-
 def test_enabled_start_emits_the_nested_payload(
     monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
 ) -> None:
     monkeypatch.delenv(AUTO_ORCHESTRATOR_ENV_VAR_NAME, raising=False)
 
-    emitted = json.loads(_run_main_with_payload({"source": _STARTUP_SOURCE}))
+    emitted = json.loads(run_hook_main_with_payload(starter, {"source": _STARTUP_SOURCE}))
 
     nested_output = emitted[HOOK_SPECIFIC_OUTPUT_KEY]
     assert nested_output[HOOK_EVENT_NAME_KEY] == SESSION_START_EVENT_NAME
@@ -51,21 +40,26 @@ def test_enabled_start_emits_the_nested_payload(
     assert ADDITIONAL_CONTEXT_KEY not in emitted
 
 
-def test_toggle_off_stays_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_toggle_off_stays_silent(
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+) -> None:
     monkeypatch.setenv(AUTO_ORCHESTRATOR_ENV_VAR_NAME, "off")
 
-    output = _run_main_with_payload({"source": _STARTUP_SOURCE})
+    output = run_hook_main_with_payload(starter, {"source": _STARTUP_SOURCE})
 
     assert output.strip() == ""
 
 
 @pytest.mark.parametrize("ineligible_source", ["resume", "compact"])
 def test_ineligible_source_stays_silent(
-    monkeypatch: pytest.MonkeyPatch, ineligible_source: str
+    monkeypatch: pytest.MonkeyPatch,
+    run_hook_main_with_payload: Callable[[ModuleType, dict[str, object]], str],
+    ineligible_source: str,
 ) -> None:
     monkeypatch.delenv(AUTO_ORCHESTRATOR_ENV_VAR_NAME, raising=False)
 
-    output = _run_main_with_payload({"source": ineligible_source})
+    output = run_hook_main_with_payload(starter, {"source": ineligible_source})
 
     assert output.strip() == ""
 

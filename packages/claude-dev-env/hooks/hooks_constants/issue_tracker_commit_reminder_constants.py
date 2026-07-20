@@ -6,10 +6,18 @@ token walk skips, the flag prefix, and the flag-plus-value token span), the
 shell command-separator tokens that mark a command boundary, the path
 separators the token-basename split uses, the tool-input payload keys the hook
 reads, the PreToolUse allow-payload keys and values it emits, and the reminder
-text it returns as additionalContext.
+text it returns as additionalContext. The git-token, flag-span, and separator
+values are shared with `pii_prevention_constants` rather than redeclared.
 """
 
 from __future__ import annotations
+
+from hooks_constants.pii_prevention_constants import (
+    ALL_GIT_BINARY_BASENAMES,
+    ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
+    ALL_VALUE_TAKING_GIT_OPTIONS,
+    GIT_OPTION_WITH_VALUE_STEP,
+)
 
 __all__ = [
     "ALL_GIT_EXECUTABLE_TOKENS",
@@ -31,11 +39,7 @@ __all__ = [
     "ISSUE_TRACKER_COMMIT_REMINDER_TEXT",
 ]
 
-_GIT_EXECUTABLE_NAME = "git"
-_GIT_EXECUTABLE_WINDOWS_NAME = "git.exe"
-ALL_GIT_EXECUTABLE_TOKENS: frozenset[str] = frozenset(
-    {_GIT_EXECUTABLE_NAME, _GIT_EXECUTABLE_WINDOWS_NAME}
-)
+ALL_GIT_EXECUTABLE_TOKENS: frozenset[str] = ALL_GIT_BINARY_BASENAMES
 
 _GIT_COMMIT_SUBCOMMAND = "commit"
 _GIT_PUSH_SUBCOMMAND = "push"
@@ -43,13 +47,14 @@ ALL_REMINDER_TRIGGER_SUBCOMMANDS: frozenset[str] = frozenset(
     {_GIT_COMMIT_SUBCOMMAND, _GIT_PUSH_SUBCOMMAND}
 )
 
-ALL_ARGUMENT_TAKING_GLOBAL_FLAGS: frozenset[str] = frozenset(
-    {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+_GIT_EXEC_PATH_FLAG = "--exec-path"
+ALL_ARGUMENT_TAKING_GLOBAL_FLAGS: frozenset[str] = ALL_VALUE_TAKING_GIT_OPTIONS | frozenset(
+    {_GIT_EXEC_PATH_FLAG}
 )
 FLAG_TOKEN_PREFIX = "-"
-FLAG_WITH_VALUE_TOKEN_SPAN = 2
+FLAG_WITH_VALUE_TOKEN_SPAN = GIT_OPTION_WITH_VALUE_STEP
 
-ALL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset({"&&", "||", "|", ";", "&"})
+ALL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = ALL_SHELL_COMMAND_SEPARATOR_TOKENS
 
 WINDOWS_PATH_SEPARATOR = "\\"
 POSIX_PATH_SEPARATOR = "/"
