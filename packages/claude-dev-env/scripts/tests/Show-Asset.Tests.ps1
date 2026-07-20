@@ -76,17 +76,24 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
     }
 
     It 'exits within 5s after the watched parent process dies' {
-        $shortLivedParent = Start-SleeperParent -SleepSeconds 2
+        # Keep the parent alive until the viewer has resolved GetProcessById;
+        # a 2s sleeper can exit before the viewer attaches and silently disable
+        # parent-death watch (MaxLifetimeSeconds would then keep the viewer open).
+        $watchedParent = Start-SleeperParent -SleepSeconds 120
 
         $viewerProcess = Start-ShowAssetProcess `
             -ImagePath $script:testImagePath `
-            -ParentProcessId $shortLivedParent.Id `
+            -ParentProcessId $watchedParent.Id `
             -MaxLifetimeSeconds 120 `
             -ParentPollIntervalMilliseconds 500
 
         try {
-            $null = $shortLivedParent.WaitForExit(15000)
+            Start-Sleep -Milliseconds 1500
+            $viewerProcess.HasExited | Should -BeFalse -Because 'viewer must still be running before parent kill'
+
+            Stop-Process -Id $watchedParent.Id -Force
             $parentExitTime = Get-Date
+            $null = $watchedParent.WaitForExit(5000)
             $didViewerExit = $viewerProcess.WaitForExit(5000)
             $secondsAfterParentDeath = ((Get-Date) - $parentExitTime).TotalSeconds
 
@@ -96,7 +103,7 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
         }
         finally {
             Stop-TestProcessIfRunning -Process $viewerProcess
-            Stop-TestProcessIfRunning -Process $shortLivedParent
+            Stop-TestProcessIfRunning -Process $watchedParent
         }
     }
 

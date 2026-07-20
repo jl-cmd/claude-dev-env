@@ -67,25 +67,40 @@ $openWindowCount = 0
 $sessionStartedAtUtc = [datetime]::UtcNow
 $maxLifetime = [timespan]::FromSeconds($MaxLifetimeSeconds)
 
-function Get-WatchedParentProcess {
+function Get-WatchedParentProcessId {
     param(
         [int]$ExplicitProcessId
     )
-    $watchedProcessId = $ExplicitProcessId
-    if ($watchedProcessId -le 0) {
-        try {
-            $ownProcessRecord = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
-            $watchedProcessId = [int]$ownProcessRecord.ParentProcessId
-        }
-        catch {
-            return $null
-        }
+    if ($ExplicitProcessId -gt 0) {
+        return $ExplicitProcessId
     }
     try {
-        return [System.Diagnostics.Process]::GetProcessById($watchedProcessId)
+        $ownProcessRecord = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+        return [int]$ownProcessRecord.ParentProcessId
     }
     catch {
-        return $null
+        return 0
+    }
+}
+
+function Test-ProcessIdIsAlive {
+    param(
+        [int]$ProcessId
+    )
+    if ($ProcessId -le 0) {
+        return $false
+    }
+    try {
+        $processRecord = [System.Diagnostics.Process]::GetProcessById($ProcessId)
+        try {
+            return -not $processRecord.HasExited
+        }
+        finally {
+            $processRecord.Dispose()
+        }
+    }
+    catch {
+        return $false
     }
 }
 
@@ -96,7 +111,7 @@ function Stop-ShowAssetSession {
     [System.Windows.Forms.Application]::Exit()
 }
 
-$watchedParentProcess = Get-WatchedParentProcess -ExplicitProcessId $ParentProcessId
+$watchedParentProcessId = Get-WatchedParentProcessId -ExplicitProcessId $ParentProcessId
 
 foreach ($path in $Paths) {
     if (-not (Test-Path -LiteralPath $path)) { continue }
@@ -167,7 +182,7 @@ if ($openWindowCount -gt 0) {
     $watchTimer = New-Object System.Windows.Forms.Timer
     $watchTimer.Interval = $ParentPollIntervalMilliseconds
     $watchTimer.Add_Tick({
-            $isParentDead = $null -ne $script:watchedParentProcess -and $script:watchedParentProcess.HasExited
+            $isParentDead = ($script:watchedParentProcessId -gt 0) -and -not (Test-ProcessIdIsAlive -ProcessId $script:watchedParentProcessId)
             $hasLifetimeElapsed = ([datetime]::UtcNow - $script:sessionStartedAtUtc) -ge $script:maxLifetime
             if ($isParentDead -or $hasLifetimeElapsed) {
                 Stop-ShowAssetSession
