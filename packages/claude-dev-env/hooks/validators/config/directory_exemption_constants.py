@@ -22,10 +22,6 @@ from ..exempt_paths import (
 
 POSIX_DIRECTORY_SEPARATOR = "/"
 WINDOWS_DIRECTORY_SEPARATOR = "\\"
-MINIMUM_PARENT_CHILD_SEGMENT_COUNT = 2
-HOOK_INFRASTRUCTURE_PAIR_MISSING_MESSAGE = (
-    "hook infrastructure patterns lack a parent/child directory pair"
-)
 
 ALL_AUTHORITATIVE_DIRECTORY_PATH_PATTERN_SETS: tuple[Iterable[str], ...] = (
     TEST_PATH_PATTERNS,
@@ -155,36 +151,6 @@ def substring_patterns_from_path_patterns(
     return frozenset(all_substring_patterns)
 
 
-def parent_and_child_directory_segments_from_patterns(
-    all_path_patterns: Iterable[str],
-) -> tuple[str, str]:
-    """Return the first parent/child directory pair in *all_path_patterns*.
-
-    ::
-
-        parent_and_child_directory_segments_from_patterns({"/.claude/hooks/"})
-        # ('.claude', 'hooks')
-
-    Used for the ``.claude/hooks`` staging special-case so the pair tracks
-    ``HOOK_INFRASTRUCTURE_PATTERNS`` instead of a second hand-copied literal.
-
-    Args:
-        all_path_patterns: Path substrings that may embed a two-segment tail.
-
-    Returns:
-        Lowercased ``(parent, child)`` directory names.
-
-    Raises:
-        ValueError: When no pattern yields at least two directory segments.
-    """
-    for each_pattern in all_path_patterns:
-        all_directory_segments = all_directory_segments_in_path_pattern(each_pattern)
-        if len(all_directory_segments) < MINIMUM_PARENT_CHILD_SEGMENT_COUNT:
-            continue
-        return (all_directory_segments[0], all_directory_segments[1])
-    raise ValueError(HOOK_INFRASTRUCTURE_PAIR_MISSING_MESSAGE)
-
-
 ALL_DIRECTORY_SEGMENTS_FROM_PATH_PATTERNS: frozenset[str] = frozenset().union(
     *(
         directory_segment_names_from_path_patterns(each_pattern_set)
@@ -201,8 +167,4 @@ ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS: frozenset[str] = frozenset().union(
         substring_patterns_from_path_patterns(each_pattern_set)
         for each_pattern_set in ALL_AUTHORITATIVE_DIRECTORY_PATH_PATTERN_SETS
     )
-)
-
-ALL_CLAUDE_HOOKS_PARENT_AND_CHILD_SEGMENTS: tuple[str, str] = (
-    parent_and_child_directory_segments_from_patterns(HOOK_INFRASTRUCTURE_PATTERNS)
 )
