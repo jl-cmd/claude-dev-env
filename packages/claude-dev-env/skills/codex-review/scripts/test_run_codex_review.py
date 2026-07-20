@@ -833,7 +833,7 @@ def _is_process_running(process_identifier: int) -> bool:
 def _wait_until_process_stops(
     process_identifier: int, deadline_seconds: float
 ) -> bool:
-    poll_interval_seconds = 0.1
+    poll_interval_seconds = 0.5
     deadline = time.monotonic() + deadline_seconds
     while time.monotonic() < deadline:
         if not _is_process_running(process_identifier):

@@ -84,7 +84,8 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
             WINDOWS_TASKKILL_PID_FLAG,
             str(process_identifier),
         ],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         check=False,
         timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     )
