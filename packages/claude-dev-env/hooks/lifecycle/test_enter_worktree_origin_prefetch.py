@@ -169,8 +169,15 @@ def test_main_exits_zero_for_non_enter_worktree_tool(
     assert exit_info.value.code == 0
 
 
-def test_main_exits_zero_on_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+@pytest.mark.parametrize(
+    "stdin_text",
+    ["not json", "", "   \n\t  ", "[]", "42"],
+    ids=["malformed-json", "empty", "whitespace-only", "json-array-root", "json-scalar-root"],
+)
+def test_main_exits_zero_on_fail_soft_stdin(
+    stdin_text: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_text))
 
     with pytest.raises(SystemExit) as exit_info:
         hook_module.main()

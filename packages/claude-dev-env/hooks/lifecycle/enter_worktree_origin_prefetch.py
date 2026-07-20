@@ -25,7 +25,6 @@ or slow fetch never blocks worktree creation.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +42,7 @@ from hooks_constants.enter_worktree_prefetch_constants import (  # noqa: E402
     ORIGIN_REMOTE_NAME,
     ORIGIN_REMOTE_REF_PREFIX,
 )
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
 
 def is_enter_worktree_creation(payload_by_field: dict[str, object]) -> bool:
@@ -66,6 +66,36 @@ def is_enter_worktree_creation(payload_by_field: dict[str, object]) -> bool:
     return not tool_input.get(ENTER_WORKTREE_PATH_INPUT_KEY)
 
 
+def _run_git_quietly(
+    repo_directory: str,
+    all_git_arguments: list[str],
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str] | None:
+    """Run ``git`` with the given arguments, or return None when it cannot run.
+
+    Args:
+        repo_directory: Working directory to run ``git`` in.
+        all_git_arguments: The git subcommand and its arguments, without the
+            leading ``"git"`` (for example ``["fetch", "origin", "main"]``).
+        timeout_seconds: Seconds to wait before abandoning the command.
+
+    Returns:
+        The completed process, or None when git is unavailable, the OS refuses
+        to start it, or the command exceeds ``timeout_seconds``.
+    """
+    try:
+        return subprocess.run(
+            ["git", *all_git_arguments],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            cwd=repo_directory,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
 def resolve_origin_default_branch(repo_directory: str) -> str | None:
     """Return the branch name origin's HEAD points at, or None if unresolved.
 
@@ -77,16 +107,12 @@ def resolve_origin_default_branch(repo_directory: str) -> str | None:
         ``refs/remotes/origin/HEAD``, or None when the symbolic ref is
         unset, git is unavailable, or the command times out.
     """
-    try:
-        completed_process = subprocess.run(
-            ["git", "symbolic-ref", ORIGIN_HEAD_SYMBOLIC_REF],
-            capture_output=True,
-            text=True,
-            timeout=GIT_SYMBOLIC_REF_TIMEOUT_SECONDS,
-            cwd=repo_directory,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    completed_process = _run_git_quietly(
+        repo_directory,
+        ["symbolic-ref", ORIGIN_HEAD_SYMBOLIC_REF],
+        GIT_SYMBOLIC_REF_TIMEOUT_SECONDS,
+    )
+    if completed_process is None:
         return None
     if completed_process.returncode != 0:
         return None
@@ -103,17 +129,11 @@ def fetch_origin_branch(repo_directory: str, branch_name: str) -> None:
         repo_directory: Working directory to run ``git`` in.
         branch_name: Branch to fetch from the ``origin`` remote.
     """
-    try:
-        subprocess.run(
-            ["git", "fetch", ORIGIN_REMOTE_NAME, branch_name],
-            capture_output=True,
-            text=True,
-            timeout=GIT_FETCH_TIMEOUT_SECONDS,
-            cwd=repo_directory,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return
+    _run_git_quietly(
+        repo_directory,
+        ["fetch", ORIGIN_REMOTE_NAME, branch_name],
+        GIT_FETCH_TIMEOUT_SECONDS,
+    )
 
 
 def main() -> None:
@@ -124,11 +144,8 @@ def main() -> None:
     before returning. Always exits 0: a fetch failure self-heals on the next
     fetch rather than blocking worktree creation.
     """
-    try:
-        hook_payload = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    if not isinstance(hook_payload, dict):
+    hook_payload = read_hook_input_dictionary_from_stdin()
+    if hook_payload is None:
         sys.exit(0)
     if not is_enter_worktree_creation(hook_payload):
         sys.exit(0)
