@@ -797,10 +797,9 @@ def resolve_github_token() -> str:
     Raises:
         UserInputError: every source above failed or returned empty.
     """
-    for each_env_var_name in ALL_GH_TOKEN_ENV_VAR_NAMES:
-        env_token_value = os.environ.get(each_env_var_name, "").strip()
-        if env_token_value:
-            return env_token_value
+    env_token = _first_env_token()
+    if env_token:
+        return env_token
     try:
         completion = subprocess.run(
             list(ALL_GH_AUTH_TOKEN_COMMAND_PARTS),
