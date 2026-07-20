@@ -193,7 +193,7 @@ Write it again when the result lands, so the handoff carries the final run id an
 names the teardown phase the fresh session picks up from.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs }`,
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, codexNote, cleanAuditNote, reuseNote, deferredPrs }`,
 plus a `userReview` field on a `blocker: "user-review"` return. `cleanAuditNote` is
 non-null when the environment refused the CLEAN bugteam review post and the run
 recorded the bypass — see
@@ -363,6 +363,7 @@ ready again — then run the checkpoints.
    Blocker: <blocker>        # only when blocked
    Standards: <standardsNote> # only when a round deferred code-standard findings
    Copilot: <copilotNote>     # only when Copilot was down or out of quota
+   Codex: <codexNote>         # only when the Codex gate was bypassed (codex_down or opt-out)
    Clean-audit: <cleanAuditNote> # only when the CLEAN bugteam post was bypassed
    Reuse: <reuseNote>         # only when the reuse pass identified an improvement
    ```
