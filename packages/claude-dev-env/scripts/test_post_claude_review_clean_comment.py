@@ -134,6 +134,13 @@ def _make_gh_runner(
     return fake_run
 
 
+@pytest.fixture
+def worktree(tmp_path: Path) -> Path:
+    workdir = tmp_path / FIXTURE_WORKDIR_NAME
+    workdir.mkdir()
+    return workdir
+
+
 def test_build_head_sha_line_embeds_sha() -> None:
     head_line = poster.build_head_sha_line(FIXTURE_HEAD_SHA)
     assert head_line == f"head_sha: {FIXTURE_HEAD_SHA}"
@@ -180,7 +187,7 @@ def test_has_existing_clean_comment_matches_same_head() -> None:
 
 
 def test_post_skips_when_existing_comment_same_sha(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     existing_body = poster.build_comment_body(
@@ -197,8 +204,6 @@ def test_post_skips_when_existing_comment_same_sha(
             recorded_calls=recorded_calls,
         ),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     outcome = poster.post_clean_review_comment(
         working_directory=worktree,
         head_sha=FIXTURE_HEAD_SHA,
@@ -215,7 +220,7 @@ def test_post_skips_when_existing_comment_same_sha(
 
 
 def test_post_succeeds_and_uses_body_file(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorded_calls: list[list[str]] = []
@@ -224,8 +229,6 @@ def test_post_succeeds_and_uses_body_file(
         "run",
         _make_gh_runner(recorded_calls=recorded_calls),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     outcome = poster.post_clean_review_comment(
         working_directory=worktree,
         head_sha=FIXTURE_HEAD_SHA,
@@ -249,7 +252,7 @@ def test_post_succeeds_and_uses_body_file(
 
 
 def test_post_soft_fails_when_gh_comment_errors(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -257,8 +260,6 @@ def test_post_soft_fails_when_gh_comment_errors(
         "run",
         _make_gh_runner(is_comment_ok=False),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     outcome = poster.post_clean_review_comment(
         working_directory=worktree,
         head_sha=FIXTURE_HEAD_SHA,
@@ -272,7 +273,7 @@ def test_post_soft_fails_when_gh_comment_errors(
 
 
 def test_post_soft_fails_when_pr_unresolved(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -280,8 +281,6 @@ def test_post_soft_fails_when_pr_unresolved(
         "run",
         _make_gh_runner(is_pr_view_ok=False),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     outcome = poster.post_clean_review_comment(
         working_directory=worktree,
         head_sha=FIXTURE_HEAD_SHA,
@@ -294,7 +293,7 @@ def test_post_soft_fails_when_pr_unresolved(
 
 
 def test_dry_run_prints_body_without_posting(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorded_calls: list[list[str]] = []
@@ -303,8 +302,6 @@ def test_dry_run_prints_body_without_posting(
         "run",
         _make_gh_runner(recorded_calls=recorded_calls),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     outcome = poster.post_clean_review_comment(
         working_directory=worktree,
         head_sha=FIXTURE_HEAD_SHA,
@@ -321,7 +318,7 @@ def test_dry_run_prints_body_without_posting(
 
 
 def test_main_always_exits_success_on_soft_fail(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -330,8 +327,6 @@ def test_main_always_exits_success_on_soft_fail(
         "run",
         _make_gh_runner(is_pr_view_ok=False),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     exit_code = poster.main(
         [
             CLI_CWD_FLAG,
@@ -352,7 +347,7 @@ def test_main_always_exits_success_on_soft_fail(
 
 
 def test_main_dry_run_includes_body_in_json(
-    tmp_path: Path,
+    worktree: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -361,8 +356,6 @@ def test_main_dry_run_includes_body_in_json(
         "run",
         _make_gh_runner(),
     )
-    worktree = tmp_path / FIXTURE_WORKDIR_NAME
-    worktree.mkdir()
     exit_code = poster.main(
         [
             CLI_CWD_FLAG,
