@@ -71,7 +71,7 @@ Capture `number`, `head.sha` (= `current_head`), owner/repo, branch.
 
 The **PR worktree** is the local working tree of the PR's repo on its head
 branch. Every local operation this tick runs there: the CODE_REVIEW static sweep
-and `/code-review ultra --fix`, every `clean-coder` fix spawn, and every commit and
+and `/code-review xhigh --fix`, every `clean-coder` fix spawn, and every commit and
 push. `/code-review` and `git` both act on the repo of the current working
 directory, so the working directory must be the PR worktree before any local
 work begins. Re-resolve it every tick — a rebase or a fresh HEAD can move the

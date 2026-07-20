@@ -162,3 +162,87 @@ def test_install_seams_auto_probe_forces_chain_without_live_subprocess(
 
     assert review_outcome.mode == MODE_CHAIN
     assert call_log.claude_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("host_profile", "session_model", "expected_is_decisive"),
+    [
+        (HOST_PROFILE_CLAUDE, FIXTURE_SESSION_OPUS, True),
+        (HOST_PROFILE_CLAUDE, FIXTURE_SESSION_OPUS_UPPER, True),
+        (HOST_PROFILE_CLAUDE, FIXTURE_SESSION_SONNET, False),
+        (HOST_PROFILE_THIRD_PARTY, FIXTURE_SESSION_OPUS, False),
+        (HOST_PROFILE_THIRD_PARTY, FIXTURE_SESSION_SONNET, False),
+    ],
+)
+def test_is_usage_probe_decisive(
+    host_profile: str, session_model: str, expected_is_decisive: bool
+) -> None:
+    assert (
+        invoker.is_usage_probe_decisive(
+            host_profile=host_profile, session_model=session_model
+        )
+        is expected_is_decisive
+    )
+
+
+def test_resolve_session_has_usage_left_prefers_explicit_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _never_probe() -> object:
+        raise AssertionError("probe must not run when the flag is explicit")
+
+    monkeypatch.setattr(invoker, "review_usage_probe", _never_probe)
+    assert invoker.resolve_session_has_usage_left(True) is True
+    assert invoker.resolve_session_has_usage_left(False) is False
+
+
+def test_resolve_session_has_usage_left_probes_when_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        invoker,
+        "review_usage_probe",
+        lambda: invoker.ClaudeUsageProbeReport(
+            session_utilization=100.0,
+            weekly_utilization=None,
+            weekly_near_cap=None,
+            session_has_usage_left=False,
+            source="test-seam",
+            probe_ok=True,
+        ),
+    )
+    assert invoker.resolve_session_has_usage_left(None) is False
+
+
+def test_resolve_session_has_usage_left_returns_none_on_probe_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _failing_probe() -> object:
+        raise OSError("probe unavailable")
+
+    monkeypatch.setattr(invoker, "review_usage_probe", _failing_probe)
+    assert invoker.resolve_session_has_usage_left(None) is None
+
+
+def test_third_party_host_never_spends_a_usage_probe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A third-party host chains for every meter reading, so it must not probe."""
+    working_directory = init_git_repository(tmp_path / "repo")
+    install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_THIRD_PARTY,
+        claude_outcome=claude_served(),
+        working_directory=working_directory,
+    )
+
+    def _never_probe() -> object:
+        raise AssertionError("third-party host must not run the usage probe")
+
+    monkeypatch.setattr(invoker, "review_usage_probe", _never_probe)
+
+    review_outcome = run_review(
+        working_directory, session_model=FIXTURE_SESSION_SONNET
+    )
+
+    assert review_outcome.mode == MODE_CHAIN

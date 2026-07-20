@@ -14,6 +14,7 @@ Usage::
         [--head-sha <sha>] \\
         [--mode chain|in_session] \\
         [--served-command <name>] \\
+        [--effort <token>] \\
         [--dry-run]
 """
 
@@ -32,7 +33,8 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
-    CODE_REVIEW_PROMPT,
+    CODE_REVIEW_PROMPT_TEMPLATE,
+    DEFAULT_CODE_REVIEW_EFFORT,
 )
 from dev_env_scripts_constants.post_claude_review_clean_comment_constants import (  # noqa: E402
     BODY_FILE_SUFFIX,
@@ -46,6 +48,7 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     CLEAN_COMMENT_UNKNOWN_MODE,
     CLI_CWD_FLAG,
     CLI_DRY_RUN_FLAG,
+    CLI_EFFORT_FLAG,
     CLI_HEAD_SHA_FLAG,
     CLI_MODE_FLAG,
     CLI_SERVED_COMMAND_FLAG,
@@ -57,10 +60,8 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     GH_COMMENT_SUBCOMMAND,
     GH_JSON_FLAG,
     GH_PAGINATE_FLAG,
-    GH_PR_HEAD_OID_JSON_KEY,
     GH_PR_NUMBER_JSON_KEY,
     GH_PR_TOKEN,
-    GH_PR_URL_JSON_KEY,
     GH_PR_VIEW_JSON_FIELDS,
     GH_REPO_NAME_WITH_OWNER_JSON_KEY,
     GH_REPO_TOKEN,
@@ -73,6 +74,7 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     ISSUE_COMMENTS_API_PATH_TEMPLATE,
     ISSUE_COMMENTS_PAGE_SIZE,
     MESSAGE_ALREADY_POSTED,
+    MESSAGE_ARGUMENTS_REJECTED,
     MESSAGE_DRY_RUN,
     MESSAGE_HEAD_RESOLVE_FAILED,
     MESSAGE_LIST_COMMENTS_FAILED,
@@ -103,8 +105,6 @@ class PullRequestTarget:
     pr_number: int
     owner: str
     repo: str
-    pr_url: str
-    head_ref_oid: str
 
 
 @dataclass(frozen=True)
@@ -244,20 +244,12 @@ def _resolve_pull_request_target(
     if parsed_payload is None:
         return None
     maybe_number = parsed_payload.get(GH_PR_NUMBER_JSON_KEY)
-    maybe_url = parsed_payload.get(GH_PR_URL_JSON_KEY)
-    maybe_head = parsed_payload.get(GH_PR_HEAD_OID_JSON_KEY)
-    if not isinstance(maybe_number, int):
-        return None
-    if not isinstance(maybe_url, str) or not maybe_url:
-        return None
-    if not isinstance(maybe_head, str) or not maybe_head:
+    if not isinstance(maybe_number, int) or isinstance(maybe_number, bool):
         return None
     return PullRequestTarget(
         pr_number=maybe_number,
         owner=owner_name,
         repo=repo_name,
-        pr_url=maybe_url,
-        head_ref_oid=maybe_head,
     )
 
 
@@ -273,40 +265,71 @@ def build_head_sha_line(head_sha: str) -> str:
     return CLEAN_COMMENT_HEAD_LINE_TEMPLATE.format(head_sha=head_sha)
 
 
+def build_served_command_label(served_command: str | None) -> str:
+    """Return the public label for a served binary, path segments stripped.
+
+    ::
+
+        build_served_command_label("claude")                  # ok: "claude"
+        build_served_command_label("C:/u/alice/w/claude.exe") # ok: "claude.exe"
+        build_served_command_label(None)                      # ok: "null"
+
+    A chain entry's ``command`` may be an absolute path into a per-account
+    home directory. The body lands on a public pull request, so only the
+    final path segment is written.
+
+    Args:
+        served_command: Chain binary, in-session token, or None.
+
+    Returns:
+        The final path segment, or the null label when nothing was served.
+    """
+    if not served_command:
+        return CLEAN_COMMENT_NULL_SERVED_COMMAND
+    normalized_command = served_command.replace("\\", "/").rstrip("/")
+    final_segment = normalized_command.rsplit("/", 1)[-1]
+    if not final_segment:
+        return CLEAN_COMMENT_NULL_SERVED_COMMAND
+    return final_segment
+
+
 def build_comment_body(
     *,
     head_sha: str,
     mode: str | None,
     served_command: str | None,
+    effort: str | None = None,
 ) -> str:
     """Build the deterministic clean-pass issue-comment body.
 
     ::
 
-        build_comment_body(head_sha="abc", mode="chain", served_command="claude")
-        # ok: starts with "## claude-review CLEAN" and embeds head_sha
+        build_comment_body(head_sha="abc", mode="chain",
+                           served_command="claude", effort="low")
+        # ok: prompt line reads "/code-review low --fix"
+
+    The prompt line records the effort the run actually used, so the comment
+    never attests an effort the review did not run at.
 
     Args:
         head_sha: SHA the review stamped clean.
         mode: Review mode, or None when unknown.
         served_command: Chain binary or in-session token, or None.
+        effort: Effort token the review ran at, or None for the default.
 
     Returns:
         Full markdown body for ``gh pr comment --body-file``.
     """
     resolved_mode = mode if mode else CLEAN_COMMENT_UNKNOWN_MODE
-    resolved_served = (
-        served_command
-        if served_command
-        else CLEAN_COMMENT_NULL_SERVED_COMMAND
-    )
+    resolved_effort = effort if effort else DEFAULT_CODE_REVIEW_EFFORT
+    review_prompt = CODE_REVIEW_PROMPT_TEMPLATE.format(effort=resolved_effort)
     all_lines = [
         CLEAN_COMMENT_MARKER_TITLE,
         build_head_sha_line(head_sha),
-        CLEAN_COMMENT_PROMPT_LINE_TEMPLATE.format(prompt=CODE_REVIEW_PROMPT),
+        CLEAN_COMMENT_PROMPT_LINE_TEMPLATE.format(prompt=review_prompt),
         CLEAN_COMMENT_MODE_LINE_TEMPLATE.format(mode=resolved_mode),
         CLEAN_COMMENT_SERVED_COMMAND_LINE_TEMPLATE.format(
-            served_command=resolved_served
+            served_command=build_served_command_label(served_command)
         ),
     ]
     return CLEAN_COMMENT_BODY_JOIN.join(all_lines) + CLEAN_COMMENT_BODY_JOIN
@@ -395,21 +418,43 @@ def has_existing_clean_comment(
     return False
 
 
+def _remove_body_file(body_path: str) -> None:
+    """Delete the temporary body file, never masking the post result.
+
+    ::
+
+        file present            -> removed
+        file held by a scanner  -> left on disk, no exception raised
+
+    On Windows an indexer or scanner can hold the freshly written file open,
+    so an unguarded unlink would raise from a ``finally`` block and turn a
+    posted comment into a reported failure.
+
+    Args:
+        body_path: Path to the temporary markdown body file.
+    """
+    try:
+        Path(body_path).unlink(missing_ok=True)
+    except OSError:
+        return
+
+
 def _post_issue_comment(
     *,
     pull_request: PullRequestTarget,
     comment_body: str,
     working_directory: Path,
 ) -> bool:
-    with tempfile.NamedTemporaryFile(
+    body_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
         mode="w",
         suffix=BODY_FILE_SUFFIX,
         delete=False,
         encoding=UTF8_ENCODING,
-    ) as body_file:
-        body_file.write(comment_body)
-        body_path = body_file.name
+    )
+    body_path = body_file.name
     try:
+        with body_file:
+            body_file.write(comment_body)
         completion = _run_command(
             [
                 GH_BINARY_NAME,
@@ -422,7 +467,7 @@ def _post_issue_comment(
             working_directory=working_directory,
         )
     finally:
-        Path(body_path).unlink(missing_ok=True)
+        _remove_body_file(body_path)
     return completion.returncode == 0
 
 
@@ -456,20 +501,36 @@ def _failed_outcome(
     )
 
 
-def _resolve_head_or_fail(
+def _resolve_head_sha(
     *,
     working_directory: Path,
     head_sha: str | None,
-) -> str | CleanCommentOutcome:
-    resolved_head = head_sha if head_sha else _resolve_git_head(working_directory)
-    if not resolved_head:
-        return _failed_outcome(
-            head_sha="",
-            pr_number=None,
-            message=MESSAGE_HEAD_RESOLVE_FAILED,
-            body="",
-        )
-    return resolved_head
+) -> str | None:
+    """Resolve the SHA to stamp, failing closed on an explicitly empty flag.
+
+    ::
+
+        head_sha=None  -> git rev-parse HEAD
+        head_sha="abc" -> "abc"
+        head_sha=""    -> None (caller must not stamp)
+
+    An omitted ``--head-sha`` means "read the worktree". An empty value means
+    the caller had no SHA to give, so resolving a live HEAD here would stamp a
+    commit no review covered.
+
+    Args:
+        working_directory: Git working tree to read HEAD from.
+        head_sha: Caller-stated SHA, empty string, or None when omitted.
+
+    Returns:
+        The SHA to stamp, or None when the caller passed an empty value or
+        git HEAD could not be read.
+    """
+    if head_sha is None:
+        return _resolve_git_head(working_directory)
+    if not head_sha.strip():
+        return None
+    return head_sha
 
 
 def _attempt_live_post(
@@ -565,6 +626,7 @@ def post_clean_review_comment(
     mode: str | None,
     served_command: str | None,
     is_dry_run: bool,
+    effort: str | None = None,
 ) -> CleanCommentOutcome:
     """Resolve the PR and post (or skip) the clean-pass issue comment.
 
@@ -574,21 +636,27 @@ def post_clean_review_comment(
         mode: Review mode, or None when unknown.
         served_command: Served binary/token, or None when unknown.
         is_dry_run: When True, print body without posting.
+        effort: Effort token the review ran at, or None for the default.
 
     Returns:
         Structured soft-fail outcome (never raises for gh/git failures).
     """
-    resolved_or_error = _resolve_head_or_fail(
+    resolved_head = _resolve_head_sha(
         working_directory=working_directory,
         head_sha=head_sha,
     )
-    if isinstance(resolved_or_error, CleanCommentOutcome):
-        return resolved_or_error
-    resolved_head = resolved_or_error
+    if not resolved_head:
+        return _failed_outcome(
+            head_sha="",
+            pr_number=None,
+            message=MESSAGE_HEAD_RESOLVE_FAILED,
+            body="",
+        )
     comment_body = build_comment_body(
         head_sha=resolved_head,
         mode=mode,
         served_command=served_command,
+        effort=effort,
     )
     if is_dry_run:
         return CleanCommentOutcome(
@@ -618,6 +686,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(CLI_HEAD_SHA_FLAG, default=None)
     parser.add_argument(CLI_MODE_FLAG, default=None)
     parser.add_argument(CLI_SERVED_COMMAND_FLAG, default=None)
+    parser.add_argument(CLI_EFFORT_FLAG, default=None)
     parser.add_argument(CLI_DRY_RUN_FLAG, action="store_true")
     return parser
 
@@ -629,13 +698,30 @@ def main(all_argv: Sequence[str]) -> int:
         all_argv: Argument vector without program name.
 
     Returns:
-        Always ``EXIT_SUCCESS`` so comment flakes never fail the review. Any
-        unforeseen error is caught here and reported as a failed outcome, so
-        the one-JSON-object-then-exit-0 contract holds structurally rather
-        than resting on every helper choosing to return instead of raise.
+        Always ``EXIT_SUCCESS`` so comment flakes never fail the review. A
+        rejected argument vector and any unforeseen error are both caught here
+        and reported as a failed outcome, so the one-JSON-object-then-exit-0
+        contract holds structurally rather than resting on every helper
+        choosing to return instead of raise.
     """
     parser = _build_argument_parser()
-    parsed_arguments = parser.parse_args(list(all_argv))
+    try:
+        parsed_arguments = parser.parse_args(list(all_argv))
+    except SystemExit:
+        print(
+            json.dumps(
+                _outcome_payload(
+                    _failed_outcome(
+                        head_sha="",
+                        pr_number=None,
+                        message=MESSAGE_ARGUMENTS_REJECTED,
+                        body="",
+                    )
+                ),
+                sort_keys=True,
+            )
+        )
+        return EXIT_SUCCESS
     try:
         outcome = post_clean_review_comment(
             working_directory=Path(parsed_arguments.cwd),
@@ -643,6 +729,7 @@ def main(all_argv: Sequence[str]) -> int:
             mode=parsed_arguments.mode,
             served_command=parsed_arguments.served_command,
             is_dry_run=bool(parsed_arguments.dry_run),
+            effort=parsed_arguments.effort,
         )
     except (
         OSError,
@@ -651,7 +738,6 @@ def main(all_argv: Sequence[str]) -> int:
         ValueError,
         KeyError,
         AttributeError,
-        json.JSONDecodeError,
         subprocess.SubprocessError,
     ):
         outcome = _failed_outcome(

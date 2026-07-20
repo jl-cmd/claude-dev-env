@@ -47,8 +47,9 @@ from dev_env_scripts_constants.claude_usage_probe_constants import (  # noqa: E4
     SKILLS_DIRECTORY_NAME,
     SOURCE_UNAVAILABLE,
     USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME,
-    USAGE_PAUSE_SKILL_DIRECTORY_NAME,
+    USAGE_PAUSE_SKILL_NAME,
     USAGE_PROBE_DECODE_ERROR_POLICY,
+    USAGE_PROBE_ENCODING,
     USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS,
 )
 
@@ -116,7 +117,7 @@ def locate_resolve_usage_window_script() -> Path:
     checkout_script_path = (
         package_root
         / SKILLS_DIRECTORY_NAME
-        / USAGE_PAUSE_SKILL_DIRECTORY_NAME
+        / USAGE_PAUSE_SKILL_NAME
         / USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME
         / RESOLVE_USAGE_WINDOW_SCRIPT_NAME
     )
@@ -131,7 +132,7 @@ def locate_resolve_usage_window_script() -> Path:
         home_directory
         / CLAUDE_HOME_SUBDIRECTORY
         / SKILLS_DIRECTORY_NAME
-        / USAGE_PAUSE_SKILL_DIRECTORY_NAME
+        / USAGE_PAUSE_SKILL_NAME
         / USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME
         / RESOLVE_USAGE_WINDOW_SCRIPT_NAME
     )
@@ -264,6 +265,7 @@ def probe_claude_usage() -> ClaudeUsageProbeReport:
             [sys.executable, str(script_path)],
             capture_output=True,
             text=True,
+            encoding=USAGE_PROBE_ENCODING,
             errors=USAGE_PROBE_DECODE_ERROR_POLICY,
             timeout=USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
@@ -331,21 +333,15 @@ def _as_optional_bool(maybe_flag: object) -> bool | None:
 def _report_from_resolver_stdout(
     resolver_stdout: str | None,
 ) -> ClaudeUsageProbeReport:
-    if not resolver_stdout:
-        return build_unavailable_usage_probe_report()
-    stripped_stdout = resolver_stdout.strip()
-    if not stripped_stdout:
-        return build_unavailable_usage_probe_report()
     try:
-        decoded_payload = json.loads(stripped_stdout)
+        decoded_payload = json.loads(resolver_stdout or "")
     except json.JSONDecodeError:
         return build_unavailable_usage_probe_report()
     if not isinstance(decoded_payload, dict):
         return build_unavailable_usage_probe_report()
     maybe_source = decoded_payload.get(RESULT_KEY_SOURCE)
-    source_label = (
-        maybe_source if isinstance(maybe_source, str) else SOURCE_UNAVAILABLE
-    )
+    if not isinstance(maybe_source, str) or not maybe_source:
+        return build_unavailable_usage_probe_report()
     return build_usage_probe_report(
         session_utilization=_as_optional_float(
             decoded_payload.get(RESULT_KEY_SESSION_UTILIZATION)
@@ -356,7 +352,7 @@ def _report_from_resolver_stdout(
         weekly_near_cap=_as_optional_bool(
             decoded_payload.get(RESULT_KEY_WEEKLY_NEAR_CAP)
         ),
-        source=source_label,
+        source=maybe_source,
     )
 
 

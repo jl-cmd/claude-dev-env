@@ -571,6 +571,39 @@ def parse_session_has_usage_left_token(
     )
 
 
+def is_usage_probe_decisive(
+    *,
+    host_profile: str,
+    session_model: str,
+) -> bool:
+    """Return True when the session usage meter can change the review mode.
+
+    ::
+
+        is_usage_probe_decisive(host_profile="Claude", session_model="opus")
+            # ok: True  (usage left decides in_session vs chain)
+        is_usage_probe_decisive(host_profile="ThirdParty", session_model="opus")
+            # ok: False (chain either way)
+        is_usage_probe_decisive(host_profile="Claude", session_model="sonnet")
+            # ok: False (chain either way)
+
+    Only a Claude host on opus can run in-session, so only there does a
+    drained meter change the answer. Everywhere else the mode is chain for
+    every meter reading, and probing would spend an OAuth round trip and up
+    to the probe timeout on a result that cannot matter.
+
+    Args:
+        host_profile: Detected host profile (``Claude`` or ``ThirdParty``).
+        session_model: Caller-stated session model short alias.
+
+    Returns:
+        True only when host and model together allow the in-session path.
+    """
+    if host_profile != HOST_PROFILE_CLAUDE:
+        return False
+    return is_opus_session_model(session_model)
+
+
 def resolve_session_has_usage_left(
     session_has_usage_left: bool | None,
 ) -> bool | None:
@@ -642,9 +675,13 @@ def invoke_code_review(
             effort=effort,
         )
     host_profile = review_host_profile_detector()
-    resolved_session_has_usage_left = resolve_session_has_usage_left(
-        session_has_usage_left
-    )
+    resolved_session_has_usage_left = session_has_usage_left
+    if is_usage_probe_decisive(
+        host_profile=host_profile, session_model=session_model
+    ):
+        resolved_session_has_usage_left = resolve_session_has_usage_left(
+            session_has_usage_left
+        )
     review_mode = decide_review_mode(
         host_profile=host_profile,
         session_model=session_model,
@@ -899,6 +936,7 @@ def _add_review_arguments(parser: argparse.ArgumentParser) -> None:
         CLI_SESSION_HAS_USAGE_LEFT_FLAG,
         dest="session_has_usage_left_token",
         default=SESSION_HAS_USAGE_LEFT_UNKNOWN,
+        type=str.lower,
         choices=(
             SESSION_HAS_USAGE_LEFT_TRUE,
             SESSION_HAS_USAGE_LEFT_FALSE,

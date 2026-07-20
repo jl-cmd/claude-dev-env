@@ -16,10 +16,13 @@ USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS: int = 20
 USAGE_PROBE_DECODE_ERROR_POLICY: str = "replace"
 """Decode policy so an undecodable byte never leaves resolver stdout as None."""
 
+USAGE_PROBE_ENCODING: str = "utf-8"
+"""Codec for resolver stdout, so a non-UTF-8 console locale never mangles it."""
+
 SKILLS_DIRECTORY_NAME: str = "skills"
 """Directory under the package root and under ``~/.claude`` that holds skills."""
 
-USAGE_PAUSE_SKILL_DIRECTORY_NAME: str = "usage-pause"
+USAGE_PAUSE_SKILL_NAME: str = "usage-pause"
 """Skill folder that owns the OAuth usage-window resolver."""
 
 USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME: str = "scripts"

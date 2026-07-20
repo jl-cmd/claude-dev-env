@@ -245,6 +245,64 @@ def test_probe_claude_usage_unavailable_on_timeout(
     assert probe_report.probe_ok is False
 
 
+@pytest.mark.parametrize(
+    "resolver_payload",
+    [
+        {RESULT_KEY_SESSION_UTILIZATION: 5, RESULT_KEY_WEEKLY_UTILIZATION: 10},
+        {RESULT_KEY_SESSION_UTILIZATION: 5, RESULT_KEY_SOURCE: 7},
+        {RESULT_KEY_SESSION_UTILIZATION: 5, RESULT_KEY_SOURCE: ""},
+    ],
+)
+def test_probe_reports_unavailable_when_source_is_not_a_label(
+    monkeypatch: pytest.MonkeyPatch,
+    resolver_payload: dict[str, object],
+) -> None:
+    """probe_ok true must never pair with the unavailable source label."""
+
+    def _fake_runner(
+        all_invocation_tokens: list[str],
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_invocation_tokens, all_keywords
+        return _completed_process(
+            returncode=FIXTURE_RESOLVER_RETURNCODE_OK,
+            stdout=json.dumps(resolver_payload),
+        )
+
+    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_resolve_script_path",
+        Path(__file__),
+    )
+    probe_report = usage_probe.probe_claude_usage()
+    assert probe_report.probe_ok is False
+    assert probe_report.source == SOURCE_UNAVAILABLE
+    assert probe_report.session_utilization is None
+
+
+def test_probe_reports_unavailable_on_non_dict_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_runner(
+        all_invocation_tokens: list[str],
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_invocation_tokens, all_keywords
+        return _completed_process(
+            returncode=FIXTURE_RESOLVER_RETURNCODE_OK,
+            stdout=json.dumps([1, 2, 3]),
+        )
+
+    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_resolve_script_path",
+        Path(__file__),
+    )
+    assert usage_probe.probe_claude_usage().probe_ok is False
+
+
 def test_locate_resolve_usage_window_script_prefers_checkout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -58,7 +58,7 @@ Respond with the quoted line exactly and stop:
 | Peer | When | Produces |
 |---|---|---|
 | `pr-fix-protocol` | After a successful review leaves a dirty tree (converge callers) | Fix sequence, commit, push when the caller requires it |
-| `usage-pause` (via `claude_usage_probe.py`) | Layer A before invoke; invoker also auto-probes when flag omitted/`unknown` | Session/weekly utilization JSON; never reimplement OAuth here |
+| `usage-pause` (via `claude_usage_probe.py`) | Layer A before invoke; invoker also auto-probes when flag omitted/`unknown` and the host/model pair can run in-session | Session/weekly use JSON; never reimplement OAuth here |
 
 If `pr-fix-protocol` is missing when fixes applied, stop with:
 `/claude-review needs the pr-fix-protocol skill to apply review fixes.`
@@ -96,7 +96,7 @@ git rev-parse HEAD
 git status --porcelain
 ```
 
-Standalone runs require an empty porcelain status before the review. Converge
+Standalone runs need an empty porcelain status before the review. Converge
 callers own re-entry after mid-flight fixes.
 
 ### Step 1 — Static sweep (converge callers)
@@ -138,13 +138,13 @@ session_has_usage_left, source, probe_ok}`.
 
 | Reading | Action |
 |---|---|
-| Probe succeeds, `session_utilization` is null | Proceed; note unknown session meter (`session_has_usage_left` null) |
+| Probe succeeds, `session_utilization` is null | Go ahead; note unknown session meter (`session_has_usage_left` null) |
 | Probe succeeds, `session_utilization` ≥ threshold (`SESSION_UTILIZATION_NO_USAGE_THRESHOLD`, default **100**) | Primary session has **no usage left**; still run review **only through chain runner** — pass `--session-has-usage-left false` so Claude+opus does not take the in-session path |
 | `weekly_near_cap` true | WARN only; do not block the review solely on weekly (same WARN posture as usage-pause) |
 | Probe unavailable (`probe_ok` false / `source` unavailable) | Proceed; report `usage_probe: unavailable` — **never** block the whole skill on probe failure |
 
-`session_has_usage_left` is true only when utilization is known and strictly
-below the threshold; false at/above; null when unknown.
+`session_has_usage_left` is true only when the session meter is known and
+strictly below the threshold; false at/above; null when unknown.
 
 ### Step 3 — Invoke host-aware review (Layer B)
 
@@ -214,8 +214,14 @@ python "$HOME/.claude/scripts/post_claude_review_clean_comment.py" \
   --cwd "$(git rev-parse --show-toplevel)" \
   --head-sha "$(git rev-parse HEAD)" \
   [--mode chain|in_session] \
-  [--served-command <name>]
+  [--served-command <name>] \
+  [--effort <token>]
 ```
+
+Pass `--effort` the same token the review ran at, so the comment's `prompt:`
+line names that effort. Omitted, it falls back to the default effort. The
+`served_command` line records only the final path segment of the binary, so a
+per-account home path never lands on a public pull request.
 
 Portable converge emits this argv in `commands` from `after-code-review` when
 the clean path stamps. Soft-fail: a post flake prints JSON with `posted=false`
@@ -224,7 +230,7 @@ and still leaves the clean stamp intact. Constants:
 
 ## Ground rules
 
-- **One capability:** thorough built-in `/code-review xhigh --fix` on opus over the
+- **One job:** thorough built-in `/code-review xhigh --fix` on opus over the
   full diff, via the host-aware invoker, plus optional clean-pass issue comment.
 - **Two-layer redundancy:** (A) usage probe before invoke; (B) headless always via
   `claude_chain_runner`.

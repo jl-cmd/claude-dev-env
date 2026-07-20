@@ -10,7 +10,7 @@ review on opus, clean comment, or colloquial ultra-review.
 
 ## Purpose
 
-One capability: run the thorough local built-in review path and interpret the
+One job: run the thorough local built-in review path and interpret the
 invoker outcome (`mode`, `served_command`, `returncode`, `dirty_tree`). Layer A
 is the session usage probe (compose `usage-pause` via the probe wrapper); Layer B
 is headless serve through `claude_chain_runner`. Static sweep and fix protocol

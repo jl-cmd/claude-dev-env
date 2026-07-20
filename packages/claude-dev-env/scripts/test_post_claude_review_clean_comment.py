@@ -36,10 +36,14 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     GH_SLURP_FLAG,
     GH_VIEW_SUBCOMMAND,
     MESSAGE_ALREADY_POSTED,
+    MESSAGE_ARGUMENTS_REJECTED,
     MESSAGE_DRY_RUN,
+    MESSAGE_HEAD_RESOLVE_FAILED,
+    MESSAGE_LIST_COMMENTS_FAILED,
     MESSAGE_POST_FAILED,
     MESSAGE_POSTED,
     MESSAGE_PR_RESOLVE_FAILED,
+    MESSAGE_REPO_RESOLVE_FAILED,
     RESULT_KEY_BODY,
     RESULT_KEY_DRY_RUN,
     RESULT_KEY_HEAD_SHA,
@@ -57,9 +61,16 @@ FIXTURE_PR_URL = "https://github.com/owner/repo/pull/264"
 FIXTURE_MODE_CHAIN = "chain"
 FIXTURE_SERVED_COMMAND = "claude.exe"
 FIXTURE_WORKDIR_NAME = "worktree"
+FIXTURE_LOW_EFFORT = "low"
+FIXTURE_UNKNOWN_FLAG = "--no-such-flag"
+FIXTURE_ACCOUNT_PATH_COMMAND = (
+    "C:/Users/someone/.claude-accounts/work/claude.exe"
+)
 
 
-def _pr_view_stdout() -> str:
+def _pr_view_stdout(pr_view_payload: dict[str, object] | None = None) -> str:
+    if pr_view_payload is not None:
+        return json.dumps(pr_view_payload)
     return json.dumps(
         {
             "number": FIXTURE_PR_NUMBER,
@@ -84,6 +95,7 @@ def _make_gh_runner(
     is_list_ok: bool = True,
     is_comment_ok: bool = True,
     recorded_calls: list[list[str]] | None = None,
+    pr_view_payload: dict[str, object] | None = None,
 ) -> Callable[..., subprocess.CompletedProcess[str]]:
     if all_comment_body_pages is not None:
         comment_body_pages = [list(each_page) for each_page in all_comment_body_pages]
@@ -106,7 +118,7 @@ def _make_gh_runner(
                     all_arguments, 1, "", "pr view failed"
                 )
             return subprocess.CompletedProcess(
-                all_arguments, 0, _pr_view_stdout(), ""
+                all_arguments, 0, _pr_view_stdout(pr_view_payload), ""
             )
         if (
             GH_REPO_TOKEN in all_arguments
@@ -416,6 +428,152 @@ def test_main_always_exits_success_on_soft_fail(
     assert printed_payload[RESULT_KEY_POSTED] is False
     assert printed_payload[RESULT_KEY_HEAD_SHA] == FIXTURE_HEAD_SHA
     assert printed_payload[RESULT_KEY_MESSAGE] == MESSAGE_PR_RESOLVE_FAILED
+
+
+def test_comment_body_records_the_effort_that_ran() -> None:
+    comment_body = poster.build_comment_body(
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        effort=FIXTURE_LOW_EFFORT,
+    )
+    assert f"/code-review {FIXTURE_LOW_EFFORT} --fix" in comment_body
+    assert CODE_REVIEW_PROMPT not in comment_body
+
+
+def test_comment_body_falls_back_to_default_effort() -> None:
+    comment_body = poster.build_comment_body(
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        effort=None,
+    )
+    assert CODE_REVIEW_PROMPT in comment_body
+
+
+@pytest.mark.parametrize(
+    ("served_command", "expected_label"),
+    [
+        ("claude", "claude"),
+        ("C:/Users/someone/.claude-accounts/work/claude.exe", "claude.exe"),
+        (r"C:\Users\someone\.claude-accounts\work\claude.exe", "claude.exe"),
+        ("/home/someone/bin/claude", "claude"),
+        (None, "null"),
+        ("", "null"),
+    ],
+)
+def test_served_command_label_strips_path_segments(
+    served_command: str | None, expected_label: str
+) -> None:
+    assert poster.build_served_command_label(served_command) == expected_label
+
+
+def test_comment_body_never_carries_a_home_path(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess, "run", _make_gh_runner())
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_ACCOUNT_PATH_COMMAND,
+        is_dry_run=True,
+    )
+    assert FIXTURE_ACCOUNT_PATH_COMMAND not in outcome.body
+    assert "served_command: claude.exe" in outcome.body
+
+
+def test_explicitly_empty_head_sha_fails_closed(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(recorded_calls=recorded_calls),
+    )
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha="",
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    assert outcome.is_posted is False
+    assert outcome.message == MESSAGE_HEAD_RESOLVE_FAILED
+    assert recorded_calls == []
+
+
+def test_main_prints_json_and_exits_zero_on_rejected_arguments(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = poster.main([FIXTURE_UNKNOWN_FLAG])
+    assert exit_code == EXIT_SUCCESS
+    printed_payload = json.loads(capsys.readouterr().out)
+    assert printed_payload[RESULT_KEY_POSTED] is False
+    assert printed_payload[RESULT_KEY_MESSAGE] == MESSAGE_ARGUMENTS_REJECTED
+
+
+def test_post_succeeds_when_pr_view_returns_number_only(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(pr_view_payload={"number": FIXTURE_PR_NUMBER}),
+    )
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    assert outcome.is_posted is True
+    assert outcome.message == MESSAGE_POSTED
+
+
+def test_post_soft_fails_when_repo_unresolved(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(is_repo_view_ok=False),
+    )
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    assert outcome.is_posted is False
+    assert outcome.message == MESSAGE_REPO_RESOLVE_FAILED
+
+
+def test_post_soft_fails_when_comment_list_unreadable(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(is_list_ok=False),
+    )
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    assert outcome.is_posted is False
+    assert outcome.message == MESSAGE_LIST_COMMENTS_FAILED
 
 
 def test_main_dry_run_includes_body_in_json(

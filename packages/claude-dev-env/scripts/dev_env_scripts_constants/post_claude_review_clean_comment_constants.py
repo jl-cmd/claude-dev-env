@@ -65,7 +65,7 @@ GH_SLURP_FLAG: str = "--slurp"
 """gh api flag that wraps every paginated page in one JSON array of pages,
 so a cross-page read sees the whole set instead of the last page only."""
 
-GH_PR_VIEW_JSON_FIELDS: str = "number,url,headRefOid"
+GH_PR_VIEW_JSON_FIELDS: str = "number"
 """Comma-separated fields requested from ``gh pr view --json``."""
 
 GH_REPO_VIEW_JSON_FIELDS: str = "nameWithOwner"
@@ -117,6 +117,9 @@ CLI_SERVED_COMMAND_FLAG: str = "--served-command"
 
 CLI_DRY_RUN_FLAG: str = "--dry-run"
 """CLI flag that prints the body without posting to GitHub."""
+
+CLI_EFFORT_FLAG: str = "--effort"
+"""CLI flag naming the effort token the review actually ran at."""
 
 RESULT_KEY_POSTED: str = "posted"
 """JSON result key: True when a new comment was created on the PR."""
@@ -177,6 +180,9 @@ NAME_WITH_OWNER_SEGMENT_COUNT: int = 2
 
 MESSAGE_UNEXPECTED_FAILURE: str = "clean comment failed unexpectedly"
 """Outcome message when an unforeseen error reaches the CLI boundary."""
+
+MESSAGE_ARGUMENTS_REJECTED: str = "clean comment arguments rejected"
+"""Outcome message when argparse refuses the argument vector."""
 
 SUBPROCESS_TIMEOUT_SECONDS: int = 60
 """Bound on one ``gh`` or ``git`` call so a stalled binary soft-fails."""

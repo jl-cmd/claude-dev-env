@@ -68,16 +68,18 @@ DEFAULT_CODE_REVIEW_EFFORT: str = "xhigh"
 CODE_REVIEW_SLASH_COMMAND: str = "/code-review"
 """Built-in Claude Code slash command that runs the repository review."""
 
-CODE_REVIEW_EFFORT: str = "xhigh"
-"""Pinned effort for the thorough claude-review skill path."""
-
 CODE_REVIEW_FIX_FLAG: str = "--fix"
 """Slash-command flag that applies automatic fixes for review findings."""
 
-CODE_REVIEW_PROMPT: str = (
-    f"{CODE_REVIEW_SLASH_COMMAND} {CODE_REVIEW_EFFORT} {CODE_REVIEW_FIX_FLAG}"
+CODE_REVIEW_PROMPT_TEMPLATE: str = (
+    f"{CODE_REVIEW_SLASH_COMMAND} {{effort}} {CODE_REVIEW_FIX_FLAG}"
 )
-"""Single-turn prompt that runs the built-in review slash command with fixes."""
+"""Prompt template; ``effort`` is the token the run actually used."""
+
+CODE_REVIEW_PROMPT: str = CODE_REVIEW_PROMPT_TEMPLATE.format(
+    effort=DEFAULT_CODE_REVIEW_EFFORT
+)
+"""Prompt for the default effort, used when a caller states no effort token."""
 
 CODE_REVIEW_MODEL_ALIAS: str = "opus"
 """CLI `--model` short alias the review always pins to."""

@@ -33,13 +33,13 @@ against `origin/main` (see Claude Code local diff review docs).
 | `session_utilization` | number or null | 5-hour percent spent |
 | `weekly_utilization` | number or null | Weekly percent spent |
 | `weekly_near_cap` | bool or null | Weekly WARN flag from usage-pause |
-| `session_has_usage_left` | bool or null | True when utilization known and below threshold |
+| `session_has_usage_left` | bool or null | True when the session meter is known and below threshold |
 | `source` | string | Resolver source, or `unavailable` |
 | `probe_ok` | bool | True only when the usage-pause resolver succeeded |
 
 Callers may pass the decision as `--session-has-usage-left true|false|unknown`.
 When the flag is omitted or `unknown`, `invoke_code_review.py` auto-runs the
-probe and maps `session_has_usage_left` into mode selection. Explicit
+probe and maps `session_has_usage_left` into the mode choice. Explicit
 `true`/`false` skip the auto-probe. `false` forces `mode=chain` even on
 Claude+opus. Probe failure does not block the review.
 
@@ -98,15 +98,20 @@ comment** (not a review thread) via the clean-comment poster:
 
 ```bash
 python "$HOME/.claude/scripts/post_claude_review_clean_comment.py" \
-  --cwd <PR-worktree> --head-sha <sha> [--mode ...] [--served-command ...]
+  --cwd <PR-worktree> --head-sha <sha> [--mode ...] [--served-command ...] \
+  [--effort ...]
 ```
 
-Body starts with `## claude-review CLEAN` and includes `head_sha`, the locked
-`/code-review xhigh --fix` prompt, and mode / served_command when known.
-Named tokens live in
+Body starts with `## claude-review CLEAN` and includes `head_sha`, the review
+prompt built from `--effort`, and mode / served_command when known. Named
+tokens live in
 `dev_env_scripts_constants/post_claude_review_clean_comment_constants.py`.
 
 - **Idempotent:** same marker + same `head_sha` line → skip repost.
+- **Fails closed on an empty `--head-sha`:** an explicitly empty value never
+  falls back to live git HEAD, so no comment stamps a SHA no review covered.
+- **Served command is a bare name:** only the final path segment reaches the
+  comment body.
 - **Soft-fail:** helper always exits `0`; `posted=false` never undoes the stamp.
 - Portable `after-code-review` emits this argv in `commands` on the clean path.
 

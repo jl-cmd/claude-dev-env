@@ -143,9 +143,11 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
     PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS,
     POST_CLEAN_COMMENT_CWD_FLAG,
+    POST_CLEAN_COMMENT_EFFORT_FLAG,
     POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
     POST_CLEAN_COMMENT_MODE_CHAIN,
     POST_CLEAN_COMMENT_MODE_FLAG,
+    POST_CLEAN_COMMENT_MODE_IN_SESSION,
     POST_CLEAN_COMMENT_RELATIVE_PATH,
     POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
     NEXT_APPLY_FIXES,
@@ -362,6 +364,7 @@ def _reset_push_invalidated_markers(all_state: dict[str, object]) -> None:
     all_state["inline_lag_streak"] = 0
     all_state["bugbot_down"] = False
     all_state[STATE_KEY_CODEX_DOWN] = False
+    all_state[STATE_KEY_SERVED_COMMAND] = ""
 
 
 def _sync_task_list_from_down_flags(all_state: dict[str, object]) -> None:
@@ -481,12 +484,8 @@ def _code_review_commands(
 def _code_review_commands_from_state(
     all_state: Mapping[str, object],
 ) -> list[str]:
-    stored_cwd = all_state.get(STATE_KEY_CWD)
     stored_session_model = all_state.get(STATE_KEY_SESSION_MODEL)
-    if isinstance(stored_cwd, str) and stored_cwd:
-        cwd_path = Path(stored_cwd)
-    else:
-        cwd_path = Path.cwd()
+    cwd_path = _cwd_path_from_state(all_state)
     if isinstance(stored_session_model, str) and stored_session_model:
         session_model = stored_session_model
     else:
@@ -507,7 +506,7 @@ def _resolve_clean_comment_mode(served_command: str) -> str | None:
     if not served_command:
         return None
     if served_command == SERVED_COMMAND_IN_SESSION:
-        return SERVED_COMMAND_IN_SESSION
+        return POST_CLEAN_COMMENT_MODE_IN_SESSION
     return POST_CLEAN_COMMENT_MODE_CHAIN
 
 
@@ -525,6 +524,8 @@ def _clean_comment_commands(
         str(cwd_path),
         POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
         head_sha,
+        POST_CLEAN_COMMENT_EFFORT_FLAG,
+        INVOKE_CODE_REVIEW_EFFORT_ARGUMENT,
     ]
     if served_command:
         all_arguments += [
@@ -905,8 +906,11 @@ def run_after_code_review(
         state_file: Loop state path.
         returncode: Helper process exit code.
         is_dirty_tree: Working tree dirty after review.
-        served_command: Informational only (empty, ``in_session``, or chain
-            argv). Success is decided solely by ``returncode == 0``.
+        served_command: Serving binary, ``in_session``, or empty when unknown.
+            Success is decided solely by ``returncode == 0``, but on the clean
+            path this value is stored in state and drives the ``--mode`` and
+            ``--served-command`` flags of the emitted clean-comment argv, so an
+            empty or wrong token degrades the posted comment.
         current_head: SHA after the review step.
 
     Returns:
