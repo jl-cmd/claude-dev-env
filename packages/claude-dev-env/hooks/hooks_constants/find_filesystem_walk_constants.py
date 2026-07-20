@@ -50,6 +50,26 @@ NAME_SEARCH_FLAG_PATTERN = re.compile(
     """
 )
 
+# Windows System32 find text-search flags (/i /v /c /n /off). A find that only
+# uses these is not a filesystem walk, so the PreToolUse blocker must allow it.
+WINDOWS_TEXT_FIND_FLAG_PATTERN = re.compile(
+    r"""(?ix)
+    find (?: \.exe )?
+    \s+
+    /+ (?: i | v | c | n | off ) \b
+    """
+)
+
+# POSIX find walk signals. When present, the command is a filesystem walk even
+# if a Windows-style slash flag also appears.
+POSIX_FIND_WALK_FLAG_PATTERN = re.compile(
+    r"""(?ix)
+    - (?: name | iname | type | maxdepth | mindepth | path | regex | prune
+        | print | exec | delete | empty | size | mtime | atime | ctime )
+    \b
+    """
+)
+
 WILDCARD_CHARACTERS_TO_STRIP = "*?"
 
 ES_EXE_WINDOWS_PATH = r"C:\Program Files\Everything\es.exe"

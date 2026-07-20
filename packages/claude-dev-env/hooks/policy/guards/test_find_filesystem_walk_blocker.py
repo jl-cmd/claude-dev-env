@@ -115,6 +115,21 @@ class TestCommandInvokesFilesystemFind:
     def test_matches_absolute_path_find_at_command_start(self) -> None:
         assert blocker.command_invokes_filesystem_find("/usr/bin/find / -name x")
 
+    def test_allows_windows_text_find_after_pipe(self) -> None:
+        assert not blocker.command_invokes_filesystem_find(
+            'echo hello | find /i "foo"'
+        )
+
+    def test_allows_windows_text_find_with_v_flag(self) -> None:
+        assert not blocker.command_invokes_filesystem_find(
+            'type notes.txt | find /v ""'
+        )
+
+    def test_still_denies_posix_walk_after_pipe(self) -> None:
+        assert blocker.command_invokes_filesystem_find(
+            "a | find . -name config.py"
+        )
+
 
 class TestExtractNameSearchTerm:
     def test_extracts_name_literal(self) -> None:

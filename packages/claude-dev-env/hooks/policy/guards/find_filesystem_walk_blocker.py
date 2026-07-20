@@ -33,7 +33,9 @@ from hooks_constants.find_filesystem_walk_constants import (  # noqa: E402
     HOOK_EVENT_NAME,
     NAME_SEARCH_FLAG_PATTERN,
     PERMISSION_DENY,
+    POSIX_FIND_WALK_FLAG_PATTERN,
     WILDCARD_CHARACTERS_TO_STRIP,
+    WINDOWS_TEXT_FIND_FLAG_PATTERN,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
@@ -46,17 +48,26 @@ def command_invokes_filesystem_find(command: str) -> bool:
 
         command_invokes_filesystem_find('find / -name nest_asyncio.py')
         ok:   True
-        flag: False for findstr, es.exe, or git rev-list --find-object
+        flag: False for findstr, es.exe, git rev-list --find-object,
+              or Windows text-find pipes like 'echo x | find /i foo'
 
     Args:
         command: Full Bash or PowerShell command text from the tool payload.
 
     Returns:
-        True when a find / find.exe program token is present as an invocation.
+        True when a find / find.exe program token is present as a filesystem-walk
+        invocation. Windows System32 text-search find (flags /i /v /c /n /off
+        without POSIX walk flags) is not a walk and returns False.
     """
     if not command:
         return False
-    return bool(FIND_PROGRAM_INVOCATION_PATTERN.search(command))
+    if not FIND_PROGRAM_INVOCATION_PATTERN.search(command):
+        return False
+    if WINDOWS_TEXT_FIND_FLAG_PATTERN.search(command) and not (
+        POSIX_FIND_WALK_FLAG_PATTERN.search(command)
+    ):
+        return False
+    return True
 
 
 def extract_name_search_term(command: str) -> str:

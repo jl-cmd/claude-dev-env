@@ -106,6 +106,28 @@ class TestParseFindProcessQueryPayload:
         )
         assert [each.process_id for each in all_snapshots] == [10, 20]
 
+    def test_skips_rows_with_non_numeric_process_id(self) -> None:
+        all_snapshots = guard.parse_find_process_query_payload(
+            {
+                "ProcessId": "not-a-pid",
+                "HandleCount": 5000,
+                "ExecutablePath": r"C:\Program Files\Git\usr\bin\find.exe",
+                "CommandLine": "find / -name x",
+            }
+        )
+        assert all_snapshots == []
+
+    def test_skips_rows_with_non_numeric_handle_count(self) -> None:
+        all_snapshots = guard.parse_find_process_query_payload(
+            {
+                "ProcessId": 42,
+                "HandleCount": "many",
+                "ExecutablePath": r"C:\Program Files\Git\usr\bin\find.exe",
+                "CommandLine": "find / -name x",
+            }
+        )
+        assert all_snapshots == []
+
 
 class TestSelectRunaway:
     def test_selects_only_over_threshold(self) -> None:

@@ -130,6 +130,35 @@ def is_git_usr_bin_find(executable_path: str) -> bool:
     return normalize_executable_path(executable_path).endswith(GIT_FIND_PATH_SUFFIX)
 
 
+def _coerce_int_field(raw_value: object) -> int | None:
+    """Coerce a CIM field to int, or None when the value is not numeric.
+
+    ::
+
+        _coerce_int_field("42") -> 42
+        ok:   42
+        flag: None for "abc" or True (bool is not treated as int)
+
+    Args:
+        raw_value: ProcessId or HandleCount from ConvertTo-Json output.
+
+    Returns:
+        Integer value, or None when coercion fails.
+    """
+    if isinstance(raw_value, bool):
+        return None
+    if isinstance(raw_value, int):
+        return raw_value
+    if isinstance(raw_value, float):
+        return int(raw_value)
+    if isinstance(raw_value, str):
+        try:
+            return int(raw_value)
+        except ValueError:
+            return None
+    return None
+
+
 def parse_find_process_query_payload(
     query_payload: object,
 ) -> list[GitFindProcessSnapshot]:
@@ -159,10 +188,10 @@ def parse_find_process_query_payload(
         raw_handle_count = each_row.get("HandleCount", 0)
         raw_executable_path = each_row.get("ExecutablePath", "")
         raw_command_line = each_row.get("CommandLine", "")
-        process_id = int(raw_process_id) if isinstance(raw_process_id, (int, float, str)) else 0
-        handle_count = (
-            int(raw_handle_count) if isinstance(raw_handle_count, (int, float, str)) else 0
-        )
+        process_id = _coerce_int_field(raw_process_id)
+        handle_count = _coerce_int_field(raw_handle_count)
+        if process_id is None or handle_count is None:
+            continue
         executable_path = (
             raw_executable_path if isinstance(raw_executable_path, str) else ""
         )
