@@ -32,6 +32,6 @@ files during fix phase in multi-PR mode.
 regardless of phase. A new commit **resets the full convergence cycle**: a
 code-review clean, a bugteam clean, and a Bugbot clean on an older SHA do
 **not** count toward convergence on the new `HEAD`. Re-run the static sweep and
-`/code-review ultra --fix` on `current_head`, then bugteam, then the terminal
+`/code-review xhigh --fix` on `current_head`, then bugteam, then the terminal
 Bugbot gate, all on the same `HEAD` with no intervening push. Re-entering in the
 same tick saves a wakeup cycle.
