@@ -93,7 +93,7 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
 
 def _kill_posix_process_group(process_identifier: int) -> None:
     """Kill a POSIX process group so no grandchild keeps the capture pipe open."""
-    if sys.platform == "win32":
+    if os.name == WINDOWS_OS_NAME:
         return
     try:
         process_group_identifier = os.getpgid(process_identifier)
@@ -103,13 +103,24 @@ def _kill_posix_process_group(process_identifier: int) -> None:
 
 
 def _terminate_process_tree(review_process: subprocess.Popen[str]) -> None:
-    """Kill the review process and every descendant it spawned."""
+    """Kill the review process and every descendant it spawned.
+
+    Tree kill first (taskkill /T or killpg). When the direct child is still
+    alive after that, fall back to ``Popen.kill()`` so ``Popen.__exit__`` never
+    hits an unbounded wait on a surviving process.
+    """
     if review_process.poll() is not None:
         return
-    if sys.platform == "win32":
+    if os.name == WINDOWS_OS_NAME:
         _kill_windows_process_tree(review_process.pid)
+    else:
+        _kill_posix_process_group(review_process.pid)
+    if review_process.poll() is not None:
         return
-    _kill_posix_process_group(review_process.pid)
+    try:
+        review_process.kill()
+    except ProcessLookupError:
+        return
 
 
 def _open_codex_popen(
@@ -130,30 +141,59 @@ def _open_codex_popen(
         text=bool(all_keyword_arguments.get(TEXT_MODE_KEYWORD, False)),
         encoding=stream_encoding if isinstance(stream_encoding, str) else None,
         env=process_environment if isinstance(process_environment, dict) else None,
-        start_new_session=sys.platform != "win32",
+        start_new_session=os.name != WINDOWS_OS_NAME,
     )
+
+
+def _drain_process_after_tree_kill(
+    review_process: subprocess.Popen[str],
+) -> None:
+    """Join pipe reader threads after a tree kill; never block unbounded.
+
+    ::
+
+        kill tree -> communicate(grace)    ok: pipe EOF, threads join
+        kill incomplete, no drain          flag: Popen.__exit__ wait() hangs
+
+    Windows needs a post-kill ``communicate()`` so timed-out reader threads
+    join. Every platform needs a timed join so an incomplete tree kill cannot
+    leave ``Popen.__exit__`` waiting forever.
+    """
+    try:
+        review_process.communicate(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        try:
+            review_process.kill()
+        except ProcessLookupError:
+            return
+        try:
+            review_process.communicate(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return
 
 
 def _communicate_with_tree_kill_on_timeout(
     review_process: subprocess.Popen[str],
     timeout_seconds: float | None,
 ) -> tuple[str, str]:
-    """Drain the process; on timeout kill its whole tree, then re-raise.
+    """Drain the process; on timeout kill its whole tree, drain again, re-raise.
 
     ::
 
         codex -> codex.exe -> code-mode-host   grandchildren hold the stdout pipe
         kill only the parent on timeout        drain waits for EOF, hangs
-        ok: kill the whole tree                pipe reaches EOF, timeout raised
+        ok: kill the whole tree, then drain    pipe reaches EOF, timeout raised
 
     Killing only the direct child on a timeout leaves grandchildren holding the
     capture pipe open, so the drain read never reaches end-of-file and blocks
-    forever. Killing the entire tree lets the pipe reach end-of-file.
+    forever. Killing the entire tree and then draining with a grace timeout lets
+    the pipe reach end-of-file without an unbounded wait.
     """
     try:
         return review_process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
         _terminate_process_tree(review_process)
+        _drain_process_after_tree_kill(review_process)
         raise
 
 

@@ -906,3 +906,35 @@ def test_windows_process_tree_kill_builds_taskkill_argv(
     assert recorded_argv == [
         ["taskkill", "/T", "/F", "/PID", str(target_process_identifier)]
     ]
+
+
+def test_run_command_surfaces_timeout_when_tree_kill_is_noop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An incomplete tree kill still raises TimeoutExpired inside a wall ceiling.
+
+    ::
+
+        terminate is a no-op, child sleeps 60s    ok: TimeoutExpired < 25s wall
+        no post-kill drain / fallback kill        flag: hang past ceiling on wait
+
+    The post-kill grace drain and direct-child kill fallback keep the caller
+    from blocking forever when taskkill/killpg leave the direct child alive.
+    """
+    review_timeout_seconds = 1
+    wall_clock_ceiling_seconds = 25
+    sleep_source = "import time; time.sleep(60)"
+
+    def leave_process_alive(_review_process: object) -> None:
+        return None
+
+    monkeypatch.setattr(wrapper, "_terminate_process_tree", leave_process_alive)
+    start_time = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        wrapper._run_command(
+            [sys.executable, "-c", sleep_source],
+            working_directory=tmp_path,
+            timeout_seconds=review_timeout_seconds,
+        )
+    assert time.monotonic() - start_time < wall_clock_ceiling_seconds
