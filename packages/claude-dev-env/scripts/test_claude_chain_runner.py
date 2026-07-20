@@ -16,8 +16,6 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
-    SESSION_AFFINITY_FILENAME,
-    SESSION_AFFINITY_SESSIONS_KEY,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -50,6 +48,8 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
     NO_COMPLETED_PROCESS_RETURN_CODE,
+    SESSION_AFFINITY_FILENAME,
+    SESSION_AFFINITY_SESSIONS_KEY,
     UTF8_ENCODING,
 )
 
