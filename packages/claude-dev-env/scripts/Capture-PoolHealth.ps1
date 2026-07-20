@@ -277,7 +277,7 @@ function Get-ThresholdAlerts {
     $allAlerts = [System.Collections.Generic.List[string]]::new()
     if ($NonpagedBytes -gt $NonpagedAlert) {
         $allAlerts.Add((
-            "ALERT nonpaged={0} threshold={1}" -f `
+            "ALERT nonpaged={0} threshold={1}" -f
                 (Format-BytesAsGigabytes $NonpagedBytes),
                 (Format-BytesAsGigabytes $NonpagedAlert)
         ))
@@ -289,7 +289,7 @@ function Get-ThresholdAlerts {
     }
     if ($HighHandleProcessCount -gt 0) {
         $allAlerts.Add((
-            "ALERT processes_over_{0}_handles={1}" -f `
+            "ALERT processes_over_{0}_handles={1}" -f
                 $ProcessHandleAlert, $HighHandleProcessCount
         ))
     }
@@ -301,7 +301,7 @@ $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'
 Write-ReportLine "TIMESTAMP: $timestamp"
 Write-ReportLine "HOST: $env:COMPUTERNAME"
 Write-ReportLine (
-    "THRESHOLDS: nonpaged>{0}; process_handles>{1}; total_handles>{2}" -f `
+    "THRESHOLDS: nonpaged>{0}; process_handles>{1}; total_handles>{2}" -f
         (Format-BytesAsGigabytes $NonpagedAlertBytes),
         $ProcessHandleAlert,
         $TotalHandleAlert
@@ -344,7 +344,7 @@ else {
             }
         }
         Write-ReportLine (
-            "PID={0} Name={1} Handles={2} Parent={3} Cmd={4}" -f `
+            "PID={0} Name={1} Handles={2} Parent={3} Cmd={4}" -f
                 $eachProcess.ProcessId,
                 $eachProcess.Name,
                 $eachProcess.HandleCount,
