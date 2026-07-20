@@ -74,6 +74,11 @@ CODE_REVIEW_EFFORT: str = "xhigh"
 CODE_REVIEW_FIX_FLAG: str = "--fix"
 """Slash-command flag that applies automatic fixes for review findings."""
 
+CODE_REVIEW_PROMPT: str = (
+    f"{CODE_REVIEW_SLASH_COMMAND} {CODE_REVIEW_EFFORT} {CODE_REVIEW_FIX_FLAG}"
+)
+"""Single-turn prompt that runs the built-in review slash command with fixes."""
+
 CODE_REVIEW_MODEL_ALIAS: str = "opus"
 """CLI `--model` short alias the review always pins to."""
 
