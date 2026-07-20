@@ -1,8 +1,8 @@
 ---
 name: issue-tracker
-description: Primary handler for a single GitHub issue op on a work-stream — open an epic, file a sub-issue under it, update an issue's status in place, refresh the epic checklist, or close a sub-issue. Spawn it with one issue op and the issue-candidate record or issue number it needs; it loads the issue-tracker skill, runs that one op, and returns the affected issue number(s) and URL(s). Model sonnet.
+description: Primary handler for a single GitHub issue op on a work-stream — open an epic, file a sub-issue under it, update an issue's status in place, refresh the epic checklist, or close a sub-issue. Spawn it with one issue op and the issue-candidate record or issue number it needs; it loads the issue-tracker skill, runs that one op, and returns the affected issue number(s) and URL(s).
 tools: Read, Bash, Skill, mcp__github__search_issues, mcp__github__issue_read, mcp__github__issue_write, mcp__github__sub_issue_write, mcp__github__add_issue_comment
-model: sonnet
+model: inherit
 color: green
 ---
 
