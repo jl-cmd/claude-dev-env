@@ -19,6 +19,7 @@ import argparse
 import json
 import shutil
 import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -145,15 +146,21 @@ def _backup_file(target_path: Path) -> Path:
     return backup_path
 
 
-def rewrite_json_mcp_servers(
+def _rewrite_json_top_level_key(
     configuration_path: Path,
     *,
+    top_level_key: str,
+    changed_names_summary_key: str,
+    transform_fn: Callable[[dict[str, object]], tuple[dict[str, object], list[str]]],
     is_dry_run: bool,
 ) -> dict[str, object]:
-    """Remove heavy stdio MCP servers from a JSON config file.
+    """Rewrite one top-level dict key of a JSON config file via transform_fn.
 
     Args:
-        configuration_path: Path to a Claude JSON config.
+        configuration_path: Path to a JSON config file.
+        top_level_key: Top-level dict key to read and rewrite.
+        changed_names_summary_key: Summary key holding transform_fn's changed names.
+        transform_fn: Maps the current top-level dict to (updated dict, changed names).
         is_dry_run: When True, do not write.
 
     Returns:
@@ -162,7 +169,7 @@ def rewrite_json_mcp_servers(
     summary: dict[str, object] = {
         "path": str(configuration_path),
         "changed": False,
-        "removed_servers": [],
+        changed_names_summary_key: [],
         "skipped": False,
     }
     if not configuration_path.is_file():
@@ -181,27 +188,48 @@ def rewrite_json_mcp_servers(
         summary["skipped"] = True
         summary["reason"] = "root-not-object"
         return summary
-    server_by_name = configuration_payload.get(MCP_SERVERS_KEY)
-    if not isinstance(server_by_name, dict):
+    top_level_mapping = configuration_payload.get(top_level_key)
+    if not isinstance(top_level_mapping, dict):
         summary["skipped"] = True
-        summary["reason"] = "no-mcpServers"
+        summary["reason"] = f"no-{top_level_key}"
         return summary
-    filtered_server_by_name, all_removed_server_names = filter_mcp_servers(
-        server_by_name
-    )
-    summary["removed_servers"] = all_removed_server_names
-    if not all_removed_server_names:
+    updated_mapping, all_changed_names = transform_fn(top_level_mapping)
+    summary[changed_names_summary_key] = all_changed_names
+    if not all_changed_names:
         return summary
     summary["changed"] = True
     if is_dry_run:
         return summary
     _backup_file(configuration_path)
-    configuration_payload[MCP_SERVERS_KEY] = filtered_server_by_name
+    configuration_payload[top_level_key] = updated_mapping
     configuration_path.write_text(
         json.dumps(configuration_payload, indent=JSON_INDENT_SPACES) + "\n",
         encoding=UTF8_ENCODING,
     )
     return summary
+
+
+def rewrite_json_mcp_servers(
+    configuration_path: Path,
+    *,
+    is_dry_run: bool,
+) -> dict[str, object]:
+    """Remove heavy stdio MCP servers from a JSON config file.
+
+    Args:
+        configuration_path: Path to a Claude JSON config.
+        is_dry_run: When True, do not write.
+
+    Returns:
+        Summary dictionary for the file.
+    """
+    return _rewrite_json_top_level_key(
+        configuration_path,
+        top_level_key=MCP_SERVERS_KEY,
+        changed_names_summary_key="removed_servers",
+        transform_fn=filter_mcp_servers,
+        is_dry_run=is_dry_run,
+    )
 
 
 def rewrite_settings_plugins(
@@ -218,49 +246,13 @@ def rewrite_settings_plugins(
     Returns:
         Summary dictionary for the file.
     """
-    summary: dict[str, object] = {
-        "path": str(settings_path),
-        "changed": False,
-        "disabled_plugins": [],
-        "skipped": False,
-    }
-    if not settings_path.is_file():
-        summary["skipped"] = True
-        summary["reason"] = "missing"
-        return summary
-    try:
-        settings_payload = json.loads(
-            settings_path.read_text(encoding=UTF8_ENCODING)
-        )
-    except (OSError, json.JSONDecodeError, UnicodeError):
-        summary["skipped"] = True
-        summary["reason"] = "unreadable"
-        return summary
-    if not isinstance(settings_payload, dict):
-        summary["skipped"] = True
-        summary["reason"] = "root-not-object"
-        return summary
-    all_plugin_enabled_by_name = settings_payload.get(ENABLED_PLUGINS_KEY)
-    if not isinstance(all_plugin_enabled_by_name, dict):
-        summary["skipped"] = True
-        summary["reason"] = "no-enabledPlugins"
-        return summary
-    updated_plugins, all_changed_plugin_keys = _disable_playwright_plugins(
-        all_plugin_enabled_by_name
+    return _rewrite_json_top_level_key(
+        settings_path,
+        top_level_key=ENABLED_PLUGINS_KEY,
+        changed_names_summary_key="disabled_plugins",
+        transform_fn=_disable_playwright_plugins,
+        is_dry_run=is_dry_run,
     )
-    summary["disabled_plugins"] = all_changed_plugin_keys
-    if not all_changed_plugin_keys:
-        return summary
-    summary["changed"] = True
-    if is_dry_run:
-        return summary
-    _backup_file(settings_path)
-    settings_payload[ENABLED_PLUGINS_KEY] = updated_plugins
-    settings_path.write_text(
-        json.dumps(settings_payload, indent=JSON_INDENT_SPACES) + "\n",
-        encoding=UTF8_ENCODING,
-    )
-    return summary
 
 
 def ensure_grok_disables_claude_mcp_compat(
@@ -332,23 +324,19 @@ def apply_lean_mcp_policy(
     Returns:
         List of per-file summary dictionaries.
     """
-    all_configuration_paths = [
-        Path(CLAUDE_JSON_PATH),
-        Path(CLAUDE_DOT_CLAUDE_JSON_PATH),
-        Path(CLAUDE_DESKTOP_CONFIG_PATH),
-        Path(CLAUDE_SETTINGS_JSON_PATH),
-        Path(CLAUDE_SETTINGS_LOCAL_JSON_PATH),
+    all_configuration_targets: list[
+        tuple[Path, Callable[..., dict[str, object]]]
+    ] = [
+        (Path(CLAUDE_JSON_PATH), rewrite_json_mcp_servers),
+        (Path(CLAUDE_DOT_CLAUDE_JSON_PATH), rewrite_json_mcp_servers),
+        (Path(CLAUDE_DESKTOP_CONFIG_PATH), rewrite_json_mcp_servers),
+        (Path(CLAUDE_SETTINGS_JSON_PATH), rewrite_settings_plugins),
+        (Path(CLAUDE_SETTINGS_LOCAL_JSON_PATH), rewrite_settings_plugins),
     ]
-    all_summaries: list[dict[str, object]] = []
-    for each_path in all_configuration_paths:
-        if each_path.name in {"settings.json", "settings.local.json"}:
-            all_summaries.append(
-                rewrite_settings_plugins(each_path, is_dry_run=is_dry_run)
-            )
-            continue
-        all_summaries.append(
-            rewrite_json_mcp_servers(each_path, is_dry_run=is_dry_run)
-        )
+    all_summaries: list[dict[str, object]] = [
+        each_handler(each_path, is_dry_run=is_dry_run)
+        for each_path, each_handler in all_configuration_targets
+    ]
     if should_disable_grok_claude_mcps:
         all_summaries.append(
             ensure_grok_disables_claude_mcp_compat(

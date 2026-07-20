@@ -17,6 +17,7 @@ never issues a blanket kill by process name alone.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import subprocess
@@ -380,8 +381,11 @@ def teardown_mcp_descendants_for_host(
         host_pid=host_pid,
         all_processes=all_processes,
     )
-    for each_process_id in all_mcp_process_ids:
-        terminate_process_tree(each_process_id)
+    if all_mcp_process_ids:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(all_mcp_process_ids)
+        ) as executor:
+            list(executor.map(terminate_process_tree, all_mcp_process_ids))
     return all_mcp_process_ids
 
 

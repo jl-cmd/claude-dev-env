@@ -14,6 +14,7 @@ from the live process table — never kills MCP children of a still-running host
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import sys
 from pathlib import Path
@@ -80,19 +81,27 @@ def reap_orphaned_mcp_processes(*, is_dry_run: bool) -> dict[str, object]:
     all_processes = lifecycle.list_windows_processes()
     all_orphaned_process_ids = collect_orphaned_mcp_process_ids(all_processes)
     all_terminated_process_ids: list[int] = []
-    if not is_dry_run:
-        for each_process_id in all_orphaned_process_ids:
-            if lifecycle.terminate_process_tree(each_process_id):
-                all_terminated_process_ids.append(each_process_id)
-    script_dir = Path(__file__).resolve().parent
-    hooks_dir = script_dir.parent.parent / "hooks"
+    if not is_dry_run and all_orphaned_process_ids:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(all_orphaned_process_ids)
+        ) as executor:
+            all_terminate_succeeded_flags = list(
+                executor.map(
+                    lifecycle.terminate_process_tree, all_orphaned_process_ids
+                )
+            )
+        all_terminated_process_ids = [
+            each_process_id
+            for each_process_id, each_terminated in zip(
+                all_orphaned_process_ids, all_terminate_succeeded_flags
+            )
+            if each_terminated
+        ]
     return {
         "orphan_count": len(all_orphaned_process_ids),
         "orphan_pids": all_orphaned_process_ids,
         "terminated_pids": all_terminated_process_ids,
         "dry_run": is_dry_run,
-        "script_dir": str(script_dir),
-        "hooks_dir": str(hooks_dir),
     }
 
 
