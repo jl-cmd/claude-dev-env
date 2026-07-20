@@ -226,6 +226,41 @@ def _optional_timeout_seconds(requested_timeout: object) -> float | None:
     return None
 
 
+def _close_popen_streams(review_process: subprocess.Popen[str]) -> None:
+    """Close the child's stdio pipes without waiting for process exit."""
+    for each_stream in (review_process.stdout, review_process.stderr, review_process.stdin):
+        if each_stream is None:
+            continue
+        try:
+            each_stream.close()
+        except OSError:
+            pass
+
+
+def _reap_process_with_grace(review_process: subprocess.Popen[str]) -> None:
+    """Kill and wait with a grace timeout so cleanup never blocks unbounded.
+
+    ::
+
+        poll None after incomplete drain   ok: kill + wait(grace), then return
+        Popen.__exit__ wait() no timeout   flag: hang forever on surviving child
+
+    ``Popen`` as a context manager always ends in ``wait()`` with no timeout.
+    After a timed-out drain that still leaves the child alive, that wait would
+    hang. This path kills once more and bounds the reap.
+    """
+    if review_process.poll() is not None:
+        return
+    try:
+        review_process.kill()
+    except ProcessLookupError:
+        return
+    try:
+        review_process.wait(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return
+
+
 def _run_codex_process(
     all_arguments: list[str],
     **all_keyword_arguments: object,
@@ -234,15 +269,20 @@ def _run_codex_process(
 
     Mirrors the ``subprocess.run`` keyword arguments the review wrapper passes:
     ``cwd``, ``capture_output``, ``text``, ``encoding``, ``check``, ``timeout``,
-    and ``env``.
+    and ``env``. Avoids ``Popen`` as a context manager so a surviving child after
+    a timed-out drain cannot hang on an unbounded ``wait()``.
     """
     timeout_seconds = _optional_timeout_seconds(all_keyword_arguments.get(TIMEOUT_KEYWORD))
     should_check = bool(all_keyword_arguments.get(CHECK_KEYWORD, False))
-    with _open_codex_popen(all_arguments, all_keyword_arguments) as review_process:
+    review_process = _open_codex_popen(all_arguments, all_keyword_arguments)
+    try:
         captured_stdout, captured_stderr = _communicate_with_tree_kill_on_timeout(
             review_process, timeout_seconds
         )
         review_return_code = review_process.returncode
+    finally:
+        _close_popen_streams(review_process)
+        _reap_process_with_grace(review_process)
     return _completed_from_streams(
         all_arguments,
         review_return_code,

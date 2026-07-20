@@ -945,6 +945,30 @@ def test_drain_joins_pipes_when_direct_kill_raises_process_lookup_error() -> Non
     assert len(all_communicate_timeouts) == 2
 
 
+def test_reap_process_with_grace_bounds_wait_when_child_survives() -> None:
+    """Cleanup kills a surviving child and waits with a grace timeout, not forever."""
+    all_wait_timeouts: list[float | None] = []
+    all_kill_calls: list[bool] = []
+
+    class _SurvivingProcess:
+        def poll(self) -> int | None:
+            return None
+
+        def kill(self) -> None:
+            all_kill_calls.append(True)
+
+        def wait(self, timeout: float | None = None) -> int:
+            all_wait_timeouts.append(timeout)
+            raise subprocess.TimeoutExpired(cmd="codex", timeout=timeout or 0)
+
+    surviving_process = _SurvivingProcess()
+    wrapper._reap_process_with_grace(
+        surviving_process  # type: ignore[arg-type]  # duck-typed Popen stand-in
+    )
+    assert all_kill_calls == [True]
+    assert all_wait_timeouts == [wrapper.PROCESS_TREE_KILL_TIMEOUT_SECONDS]
+
+
 def test_run_command_surfaces_timeout_when_tree_kill_is_noop(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
