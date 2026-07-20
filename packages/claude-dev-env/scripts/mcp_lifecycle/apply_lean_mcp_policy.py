@@ -195,7 +195,7 @@ def _rewrite_json_top_level_key(
         return summary
     updated_mapping, all_changed_names = transform_fn(top_level_mapping)
     summary[changed_names_summary_key] = all_changed_names
-    if not all_changed_names:
+    if updated_mapping == top_level_mapping:
         return summary
     summary["changed"] = True
     if is_dry_run:

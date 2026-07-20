@@ -46,6 +46,7 @@ from hooks_constants.mcp_session_lifecycle_constants import (  # noqa: E402
     REGISTRY_SESSION_ID_KEY,
     SESSION_ID_PAYLOAD_KEY,
     SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
+    SESSION_START_SOURCE_PAYLOAD_KEY,
     STATE_FILE_DEFAULT_SESSION_ID,
     TASKKILL_EXECUTABLE_NAME,
     TASKKILL_SUBPROCESS_TIMEOUT_SECONDS,
@@ -287,7 +288,7 @@ def collect_mcp_descendant_process_ids(
         all_processes: Process rows from the process list.
 
     Returns:
-        Deduplicated MCP process ids under the host, deepest first.
+        Deduplicated MCP process ids under the host, in process-table order.
     """
     all_parent_pid_by_child_pid = build_parent_pid_by_child_pid(all_processes)
     matched_process_ids: list[int] = []
@@ -401,7 +402,7 @@ def resolve_hook_event_name(payload_by_field: dict[str, object]) -> str:
     explicit_event_name = payload_by_field.get(HOOK_EVENT_NAME_PAYLOAD_KEY)
     if isinstance(explicit_event_name, str) and explicit_event_name:
         return explicit_event_name
-    if "source" in payload_by_field:
+    if SESSION_START_SOURCE_PAYLOAD_KEY in payload_by_field:
         return HOOK_EVENT_SESSION_START
     return HOOK_EVENT_SESSION_END
 

@@ -197,3 +197,14 @@ def test_parse_process_list_json_accepts_single_object() -> None:
     all_processes = lifecycle.parse_process_list_json(payload)
     assert len(all_processes) == 1
     assert all_processes[0]["ProcessId"] == 1
+
+
+def test_resolve_hook_event_name_uses_source_key_as_session_start() -> None:
+    assert (
+        lifecycle.resolve_hook_event_name({"session_id": "s", "source": "startup"})
+        == "SessionStart"
+    )
+    assert (
+        lifecycle.resolve_hook_event_name({"session_id": "s"})
+        == "SessionEnd"
+    )

@@ -12,8 +12,6 @@ SESSION_START_SOURCE_PAYLOAD_KEY: str = "source"
 HOOK_EVENT_SESSION_START: str = "SessionStart"
 HOOK_EVENT_SESSION_END: str = "SessionEnd"
 
-SESSION_START_SOURCE_FRESH_STARTUP: str = "startup"
-
 SESSION_ID_UNSAFE_CHARACTERS_PATTERN = re.compile(r"[^A-Za-z0-9_-]")
 STATE_FILE_DEFAULT_SESSION_ID: str = "unknown-session"
 

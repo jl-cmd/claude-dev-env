@@ -68,6 +68,34 @@ def test_filter_mcp_servers_keeps_unrelated_stdio() -> None:
     assert "filesystem" in filtered_server_by_name
 
 
+def test_rewrite_json_mcp_servers_clears_always_load_without_removals(
+    tmp_path: Path,
+) -> None:
+    configuration_path = tmp_path / "claude.json"
+    configuration_path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "filesystem": {
+                        "command": "npx",
+                        "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                        "alwaysLoad": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary = policy.rewrite_json_mcp_servers(
+        configuration_path,
+        is_dry_run=False,
+    )
+    assert summary["changed"] is True
+    assert summary["removed_servers"] == []
+    rewritten_payload = json.loads(configuration_path.read_text(encoding="utf-8"))
+    assert "alwaysLoad" not in rewritten_payload["mcpServers"]["filesystem"]
+
+
 def test_rewrite_json_mcp_servers_applies_backup(tmp_path: Path) -> None:
     configuration_path = tmp_path / "claude.json"
     configuration_path.write_text(

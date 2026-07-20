@@ -149,8 +149,6 @@ def run_recipe() -> dict[str, object]:
             "child_pid": child_process_id,
             "host_pid": host_pid,
             "platform": sys.platform,
-            "script_dir": str(_SCRIPT_DIR),
-            "hooks_dir": str(_HOOKS_DIR),
         }
 
 
