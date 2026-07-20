@@ -71,12 +71,14 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     GIT_HEAD_REF,
     GIT_REV_PARSE_SUBCOMMAND,
     ISSUE_COMMENTS_API_PATH_TEMPLATE,
+    ISSUE_COMMENTS_PAGE_SIZE,
     MESSAGE_ALREADY_POSTED,
     MESSAGE_DRY_RUN,
     MESSAGE_HEAD_RESOLVE_FAILED,
     MESSAGE_LIST_COMMENTS_FAILED,
     MESSAGE_POST_FAILED,
     MESSAGE_POSTED,
+    MESSAGE_UNEXPECTED_FAILURE,
     MESSAGE_PR_RESOLVE_FAILED,
     MESSAGE_REPO_RESOLVE_FAILED,
     NAME_WITH_OWNER_SEGMENT_COUNT,
@@ -87,6 +89,9 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     RESULT_KEY_POSTED,
     RESULT_KEY_PR_NUMBER,
     RESULT_KEY_SKIPPED,
+    SUBPROCESS_LAUNCH_FAILURE_RETURNCODE,
+    SUBPROCESS_TIMEOUT_SECONDS,
+    UTF8_DECODE_ERROR_POLICY,
     UTF8_ENCODING,
 )
 
@@ -120,14 +125,44 @@ def _run_command(
     *,
     working_directory: Path,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(all_arguments),
-        cwd=str(working_directory),
-        capture_output=True,
-        text=True,
-        encoding=UTF8_ENCODING,
-        check=False,
-    )
+    """Run one gh/git call, standing in a failed result for a launch problem.
+
+    ::
+
+        _run_command(["gh", "pr", "view"], working_directory=worktree)
+            # ok:   CompletedProcess(returncode=0, stdout='{"number": 7}')
+            # flag: gh absent -> CompletedProcess(returncode=127, stdout="")
+
+    A missing binary, an unreadable cwd, and a stalled call all become a
+    non-zero result rather than an exception, so every caller stays on the
+    soft-fail path. Undecodable bytes are replaced instead of killing the
+    reader thread and leaving ``stdout`` as None.
+
+    Args:
+        all_arguments: Full argv, binary first.
+        working_directory: Directory the call runs in.
+
+    Returns:
+        The completed process, or a synthetic failed result.
+    """
+    try:
+        return subprocess.run(
+            list(all_arguments),
+            cwd=str(working_directory),
+            capture_output=True,
+            text=True,
+            encoding=UTF8_ENCODING,
+            errors=UTF8_DECODE_ERROR_POLICY,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return subprocess.CompletedProcess(
+            args=list(all_arguments),
+            returncode=SUBPROCESS_LAUNCH_FAILURE_RETURNCODE,
+            stdout="",
+            stderr="",
+        )
 
 
 def _resolve_git_head(working_directory: Path) -> str | None:
@@ -189,6 +224,9 @@ def _resolve_repository_slug(
 
 def _resolve_pull_request_target(
     working_directory: Path,
+    *,
+    owner_name: str,
+    repo_name: str,
 ) -> PullRequestTarget | None:
     completion = _run_command(
         [
@@ -214,10 +252,6 @@ def _resolve_pull_request_target(
         return None
     if not isinstance(maybe_head, str) or not maybe_head:
         return None
-    maybe_slug = _resolve_repository_slug(working_directory)
-    if maybe_slug is None:
-        return None
-    owner_name, repo_name = maybe_slug
     return PullRequestTarget(
         pr_number=maybe_number,
         owner=owner_name,
@@ -307,6 +341,7 @@ def _list_issue_comment_bodies(
         owner=pull_request.owner,
         repo=pull_request.repo,
         pr_number=pull_request.pr_number,
+        page_size=ISSUE_COMMENTS_PAGE_SIZE,
     )
     completion = _run_command(
         [GH_BINARY_NAME, GH_API_TOKEN, api_path, GH_PAGINATE_FLAG, GH_SLURP_FLAG],
@@ -346,12 +381,16 @@ def has_existing_clean_comment(
 
     Returns:
         True when marker title and head_sha line both appear in one body.
+        The SHA line must match a whole line, so an abbreviated SHA never
+        matches a longer SHA that merely starts with it.
     """
     head_line = build_head_sha_line(head_sha)
     for each_body in all_bodies:
         if CLEAN_COMMENT_MARKER_TITLE not in each_body:
             continue
-        if head_line in each_body:
+        if any(
+            each_line.strip() == head_line for each_line in each_body.splitlines()
+        ):
             return True
     return False
 
@@ -439,19 +478,25 @@ def _attempt_live_post(
     resolved_head: str,
     comment_body: str,
 ) -> CleanCommentOutcome:
-    pull_request = _resolve_pull_request_target(working_directory)
+    maybe_slug = _resolve_repository_slug(working_directory)
+    if maybe_slug is None:
+        return _failed_outcome(
+            head_sha=resolved_head,
+            pr_number=None,
+            message=MESSAGE_REPO_RESOLVE_FAILED,
+            body=comment_body,
+        )
+    owner_name, repo_name = maybe_slug
+    pull_request = _resolve_pull_request_target(
+        working_directory,
+        owner_name=owner_name,
+        repo_name=repo_name,
+    )
     if pull_request is None:
         return _failed_outcome(
             head_sha=resolved_head,
             pr_number=None,
             message=MESSAGE_PR_RESOLVE_FAILED,
-            body=comment_body,
-        )
-    if not pull_request.owner or not pull_request.repo:
-        return _failed_outcome(
-            head_sha=resolved_head,
-            pr_number=pull_request.pr_number,
-            message=MESSAGE_REPO_RESOLVE_FAILED,
             body=comment_body,
         )
     return _post_or_skip_existing(
@@ -584,17 +629,37 @@ def main(all_argv: Sequence[str]) -> int:
         all_argv: Argument vector without program name.
 
     Returns:
-        Always ``EXIT_SUCCESS`` so comment flakes never fail the review.
+        Always ``EXIT_SUCCESS`` so comment flakes never fail the review. Any
+        unforeseen error is caught here and reported as a failed outcome, so
+        the one-JSON-object-then-exit-0 contract holds structurally rather
+        than resting on every helper choosing to return instead of raise.
     """
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(list(all_argv))
-    outcome = post_clean_review_comment(
-        working_directory=Path(parsed_arguments.cwd),
-        head_sha=parsed_arguments.head_sha,
-        mode=parsed_arguments.mode,
-        served_command=parsed_arguments.served_command,
-        is_dry_run=bool(parsed_arguments.dry_run),
-    )
+    try:
+        outcome = post_clean_review_comment(
+            working_directory=Path(parsed_arguments.cwd),
+            head_sha=parsed_arguments.head_sha,
+            mode=parsed_arguments.mode,
+            served_command=parsed_arguments.served_command,
+            is_dry_run=bool(parsed_arguments.dry_run),
+        )
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        AttributeError,
+        json.JSONDecodeError,
+        subprocess.SubprocessError,
+    ):
+        outcome = _failed_outcome(
+            head_sha=parsed_arguments.head_sha or "",
+            pr_number=None,
+            message=MESSAGE_UNEXPECTED_FAILURE,
+            body="",
+        )
     print(json.dumps(_outcome_payload(outcome), sort_keys=True))
     return EXIT_SUCCESS
 

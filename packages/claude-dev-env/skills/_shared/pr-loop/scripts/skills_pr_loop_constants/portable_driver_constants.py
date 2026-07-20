@@ -177,6 +177,8 @@ POST_CLEAN_COMMENT_HEAD_SHA_FLAG: str = "--head-sha"
 POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG: str = "--served-command"
 POST_CLEAN_COMMENT_MODE_FLAG: str = "--mode"
 POST_CLEAN_COMMENT_MODE_CHAIN: str = "chain"
+STATE_KEY_SERVED_COMMAND: str = "served_command"
+STATE_KEY_CODE_REVIEW_CLEAN_AT: str = "code_review_clean_at"
 CHECK_CONVERGENCE_RELATIVE_PATH: str = (
     ".claude/skills/pr-converge/scripts/check_convergence.py"
 )

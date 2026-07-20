@@ -33,6 +33,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
 - `pr-converge` — paced convergence loop across `ScheduleWakeup` ticks
 - `bugteam` — open-loop audit-fix until convergence
+- `claude-review` — thorough built-in `/code-review xhigh --fix` on opus over the full `origin/main...HEAD` diff, with a session usage probe, host-aware in-session or chain invoke, and a clean-pass PR issue comment
 - `copilot-review` — requests and polls a GitHub Copilot review
 - `copilot-finding-triage` — tiers each Copilot gate finding, verifies each code concern with an executed check, then routes it (auto-fix a confirmed defect, resolve a refuted one, page the user only for an inconclusive one)
 - `reviewer-gates` — availability gates for external reviewers (opt-out parse, Copilot quota, Bugbot trigger/detect)

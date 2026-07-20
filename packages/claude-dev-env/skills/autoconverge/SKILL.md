@@ -165,9 +165,14 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false, homeDirectory: "<HOME>" }
 })
 ```
+
+`homeDirectory` is the absolute home path the workflow joins to reach the
+`codex-review` scripts the Codex gate calls. The workflow runs in a sandbox with
+no environment variables, so `args` is the only channel that carries it; leave it
+out and the Codex gate cannot find those scripts.
 
 `scriptPath` is the absolute path to `workflow/converge.mjs` inside this skill's
 own directory (on this install,

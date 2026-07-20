@@ -13,6 +13,9 @@ SESSION_UTILIZATION_NO_USAGE_THRESHOLD: float = 100.0
 USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS: int = 20
 """Timeout for one ``resolve_usage_window.py`` subprocess invocation, in seconds."""
 
+USAGE_PROBE_DECODE_ERROR_POLICY: str = "replace"
+"""Decode policy so an undecodable byte never leaves resolver stdout as None."""
+
 SKILLS_DIRECTORY_NAME: str = "skills"
 """Directory under the package root and under ``~/.claude`` that holds skills."""
 

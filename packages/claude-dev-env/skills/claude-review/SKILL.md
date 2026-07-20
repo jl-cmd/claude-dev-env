@@ -259,8 +259,8 @@ pr-fix-protocol, push, re-enter CODE_REVIEW; on clean stamps
 
 ## Gotchas
 
-- **`xhigh` vs `high`:** Docs and the invoker must both say `xhigh`. Older copy and
-  constants used `high`; the locked prompt is `/code-review xhigh --fix`.
+- **Effort token is `xhigh`:** Docs and the invoker both say `xhigh`. The locked
+  prompt is `/code-review xhigh --fix`.
 - **Probe unavailable ≠ fail:** `probe_ok` false means report
   `usage_probe: unavailable` and continue with `--session-has-usage-left unknown`.
 - **Primary drained → force chain:** When `session_has_usage_left` is false, pass

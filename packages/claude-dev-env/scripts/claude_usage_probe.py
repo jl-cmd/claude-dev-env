@@ -48,6 +48,7 @@ from dev_env_scripts_constants.claude_usage_probe_constants import (  # noqa: E4
     SOURCE_UNAVAILABLE,
     USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PAUSE_SKILL_DIRECTORY_NAME,
+    USAGE_PROBE_DECODE_ERROR_POLICY,
     USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS,
 )
 
@@ -263,10 +264,11 @@ def probe_claude_usage() -> ClaudeUsageProbeReport:
             [sys.executable, str(script_path)],
             capture_output=True,
             text=True,
+            errors=USAGE_PROBE_DECODE_ERROR_POLICY,
             timeout=USAGE_PROBE_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.SubprocessError):
         return build_unavailable_usage_probe_report()
     if completed_process.returncode != 0:
         return build_unavailable_usage_probe_report()
@@ -326,7 +328,11 @@ def _as_optional_bool(maybe_flag: object) -> bool | None:
     return None
 
 
-def _report_from_resolver_stdout(resolver_stdout: str) -> ClaudeUsageProbeReport:
+def _report_from_resolver_stdout(
+    resolver_stdout: str | None,
+) -> ClaudeUsageProbeReport:
+    if not resolver_stdout:
+        return build_unavailable_usage_probe_report()
     stripped_stdout = resolver_stdout.strip()
     if not stripped_stdout:
         return build_unavailable_usage_probe_report()

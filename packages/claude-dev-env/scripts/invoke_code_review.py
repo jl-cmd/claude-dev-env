@@ -59,6 +59,7 @@ from claude_chain_runner import (  # noqa: E402
 from claude_usage_probe import (  # noqa: E402
     ClaudeUsageProbeReport,
     probe_claude_usage,
+    should_force_chain_mode,
 )
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
@@ -286,7 +287,7 @@ def decide_review_mode(
         ``MODE_IN_SESSION`` only for Claude host on opus with usage left
         unknown or true; otherwise ``MODE_CHAIN``.
     """
-    if session_has_usage_left is False:
+    if should_force_chain_mode(session_has_usage_left):
         return MODE_CHAIN
     is_claude_host = host_profile == HOST_PROFILE_CLAUDE
     if is_claude_host and is_opus_session_model(session_model):
@@ -600,6 +601,7 @@ def resolve_session_has_usage_left(
     except (OSError, RuntimeError, TypeError, ValueError, AttributeError):
         return None
     return probe_report.session_has_usage_left
+
 
 def invoke_code_review(
     *,

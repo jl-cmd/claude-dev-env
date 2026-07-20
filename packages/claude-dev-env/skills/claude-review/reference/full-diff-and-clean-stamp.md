@@ -3,6 +3,7 @@
 ## Contents
 
 - [Full-diff rule](#full-diff-rule)
+- [Usage probe (pre-step)](#usage-probe-pre-step)
 - [Invoker JSON shape](#invoker-json-shape)
 - [Successful serve](#successful-serve)
 - [Clean stamp](#clean-stamp)

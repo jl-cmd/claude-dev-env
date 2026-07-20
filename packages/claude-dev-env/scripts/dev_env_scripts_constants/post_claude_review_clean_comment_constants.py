@@ -24,8 +24,9 @@ CLEAN_COMMENT_SERVED_COMMAND_LINE_TEMPLATE: str = (
 )
 """Body line carrying the chain binary (or in-session token) when known."""
 
-CLEAN_COMMENT_BODY_JOIN: str = "\n"
-"""Newline used to join comment body lines."""
+CLEAN_COMMENT_BODY_JOIN: str = "\n\n"
+"""Blank line between body lines, so GitHub renders each field on its own line
+instead of collapsing them into one paragraph."""
 
 CLEAN_COMMENT_UNKNOWN_MODE: str = "unknown"
 """Mode label written when the caller did not supply ``--mode``."""
@@ -86,9 +87,12 @@ GH_COMMENT_BODY_JSON_KEY: str = "body"
 """JSON key for the text body of an issue comment."""
 
 ISSUE_COMMENTS_API_PATH_TEMPLATE: str = (
-    "repos/{owner}/{repo}/issues/{pr_number}/comments"
+    "repos/{owner}/{repo}/issues/{pr_number}/comments?per_page={page_size}"
 )
 """REST path template listing issue comments on a pull request."""
+
+ISSUE_COMMENTS_PAGE_SIZE: int = 100
+"""Comments requested per page, the endpoint maximum, to bound the walk."""
 
 GIT_BINARY: str = "git"
 """Executable name resolved on PATH for HEAD resolution."""
@@ -170,3 +174,15 @@ MESSAGE_REPO_RESOLVE_FAILED: str = "could not resolve owner/repo for worktree"
 
 NAME_WITH_OWNER_SEGMENT_COUNT: int = 2
 """Expected slash-separated segment count in a ``owner/repo`` slug."""
+
+MESSAGE_UNEXPECTED_FAILURE: str = "clean comment failed unexpectedly"
+"""Outcome message when an unforeseen error reaches the CLI boundary."""
+
+SUBPROCESS_TIMEOUT_SECONDS: int = 60
+"""Bound on one ``gh`` or ``git`` call so a stalled binary soft-fails."""
+
+SUBPROCESS_LAUNCH_FAILURE_RETURNCODE: int = 127
+"""Return code stood in when a binary is absent, the cwd is gone, or the call times out."""
+
+UTF8_DECODE_ERROR_POLICY: str = "replace"
+"""Decode policy so a non-UTF-8 byte in gh output never kills the reader thread."""

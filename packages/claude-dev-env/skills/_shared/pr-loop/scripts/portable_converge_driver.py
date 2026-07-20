@@ -193,7 +193,9 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     STATE_KEY_CODEX_CLEAN_AT,
     STATE_KEY_CODEX_DOWN,
     STATE_KEY_CODEX_REQUIRED,
+    STATE_KEY_CODE_REVIEW_CLEAN_AT,
     STATE_KEY_CWD,
+    STATE_KEY_SERVED_COMMAND,
     STATE_KEY_PENDING_NEXT,
     STATE_KEY_PENDING_WAIT_SECONDS,
     STATE_KEY_SESSION_MODEL,
@@ -523,9 +525,12 @@ def _clean_comment_commands(
         str(cwd_path),
         POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
         head_sha,
-        POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
-        served_command,
     ]
+    if served_command:
+        all_arguments += [
+            POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
+            served_command,
+        ]
     resolved_mode = _resolve_clean_comment_mode(served_command)
     if resolved_mode is not None:
         all_arguments += [POST_CLEAN_COMMENT_MODE_FLAG, resolved_mode]
@@ -938,7 +943,8 @@ def run_after_code_review(
             all_extra_fields=None,
         )
 
-    all_state["code_review_clean_at"] = current_head
+    all_state[STATE_KEY_CODE_REVIEW_CLEAN_AT] = current_head
+    all_state[STATE_KEY_SERVED_COMMAND] = served_command
     all_state["phase"] = PHASE_BUGTEAM
     all_state["blocker"] = None
     return _finish_ok(
@@ -1648,6 +1654,12 @@ def _dispatch_show_state(
     elif next_action == NEXT_CHECK_READY:
         all_payload[RESULT_KEY_COMMANDS] = (
             _check_convergence_commands_from_state(all_state)
+        )
+    elif next_action == NEXT_RUN_BUGTEAM:
+        all_payload[RESULT_KEY_COMMANDS] = _clean_comment_commands_from_state(
+            all_state,
+            head_sha=str(all_state.get(STATE_KEY_CODE_REVIEW_CLEAN_AT) or ""),
+            served_command=str(all_state.get(STATE_KEY_SERVED_COMMAND) or ""),
         )
     elif next_action == NEXT_MARK_READY:
         all_payload[RESULT_KEY_COMMANDS] = _mark_ready_commands(all_state)
