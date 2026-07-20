@@ -195,7 +195,7 @@ def main() -> None:
         ready_denial_reason = evaluate_pr_ready_gate(command)
         if ready_denial_reason is not None:
             _emit_denial(ready_denial_reason)
-        sys.exit(0)
+            sys.exit(0)
 
     body_owning_invocation = get_logical_first_line(command)
     has_any_body_flag = _command_carries_body_flag(body_owning_invocation)

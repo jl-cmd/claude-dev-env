@@ -242,3 +242,24 @@ def should_judge_a_chained_command_by_the_invocation_owning_the_body(tmp_path: p
     denial_reason = _run_hook_and_capture_denial_reason(command)
     assert denial_reason is not None
     assert HARDCODED_TEST_COUNT_MESSAGE not in denial_reason
+
+
+def should_audit_create_body_when_gh_pr_ready_is_chained_after_it(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trailing `gh pr ready` must not skip the create body's hand-typed-count gate.
+
+    Agents often chain create then ready. The ready path used to short-circuit the
+    whole command once ready was present, so a drift-prone create body slipped through.
+    """
+    monkeypatch.setattr(hook_module, "evaluate_pr_ready_gate", lambda _command: None)
+    create_invocation = _body_file_command(
+        'gh pr create --title "Add probe suite"',
+        DRIFT_PRONE_BODY,
+        tmp_path,
+    )
+    command = f"{create_invocation}\ngh pr ready"
+    denial_reason = _run_hook_and_capture_denial_reason(command)
+    assert denial_reason is not None
+    assert HARDCODED_TEST_COUNT_MESSAGE in denial_reason
