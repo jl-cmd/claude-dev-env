@@ -84,12 +84,12 @@ def validate_goal_packet(all_packet_fields: dict[str, object]) -> GoalPacket:
     objective = _require_non_empty_string(
         all_packet_fields.get(goal_constants.PACKET_KEY_OBJECTIVE),
         goal_constants.ERROR_OBJECTIVE_REQUIRED,
-    )  # noqa: E501
+    )
     done_when = _require_non_empty_string_list(
         all_packet_fields.get(goal_constants.PACKET_KEY_DONE_WHEN),
         goal_constants.ERROR_DONE_WHEN_REQUIRED,
         goal_constants.ERROR_DONE_WHEN_ENTRY_INVALID,
-    )  # noqa: E501
+    )
     return GoalPacket(
         objective=objective,
         done_when=done_when,
@@ -97,12 +97,12 @@ def validate_goal_packet(all_packet_fields: dict[str, object]) -> GoalPacket:
             all_packet_fields,
             goal_constants.PACKET_KEY_IN_SCOPE,
             goal_constants.ERROR_IN_SCOPE_ENTRY_INVALID,
-        ),  # noqa: E501
+        ),
         out_of_scope=_scoped_list(
             all_packet_fields,
             goal_constants.PACKET_KEY_OUT_OF_SCOPE,
             goal_constants.ERROR_OUT_OF_SCOPE_ENTRY_INVALID,
-        ),  # noqa: E501
+        ),
         tasks=_validate_tasks(all_packet_fields.get(goal_constants.PACKET_KEY_TASKS)),
         context=_validate_context(
             all_packet_fields.get(goal_constants.PACKET_KEY_CONTEXT)
@@ -111,7 +111,7 @@ def validate_goal_packet(all_packet_fields: dict[str, object]) -> GoalPacket:
             all_packet_fields,
             goal_constants.PACKET_KEY_EXECUTION_NOTES,
             goal_constants.ERROR_EXECUTION_NOTES_ENTRY_INVALID,
-        ),  # noqa: E501
+        ),
     )
 
 
@@ -119,7 +119,7 @@ def render_bullet_lines(all_entries: Sequence[str]) -> str:
     """Render each entry as its own markdown bullet line, or "" when empty."""
     return goal_constants.NEWLINE_JOIN_SEPARATOR.join(
         f"{goal_constants.BULLET_LINE_PREFIX}{each_entry}" for each_entry in all_entries
-    )  # noqa: E501
+    )
 
 
 def render_numbered_table_rows(all_entries: Sequence[str]) -> str:
@@ -199,7 +199,7 @@ def render_context_bullet_lines(all_context_fields: dict[str, object]) -> str:
     if isinstance(all_paths, tuple) and all_paths:
         all_lines.append(
             f"{goal_constants.CONTEXT_PATHS_LABEL}{goal_constants.CONTEXT_PATHS_JOIN_SEPARATOR.join(all_paths)}"
-        )  # noqa: E501
+        )
     all_constraints = all_context_fields.get(goal_constants.CONTEXT_KEY_CONSTRAINTS)
     if isinstance(all_constraints, tuple):
         all_lines.extend(all_constraints)
@@ -387,7 +387,7 @@ def _finalize_document(rendered_text: str) -> str:
         goal_constants.BLANK_LINE_COLLAPSE_PATTERN,
         goal_constants.BLANK_LINE_COLLAPSE_REPLACEMENT,
         rendered_text,
-    )  # noqa: E501
+    )
     return collapsed_text.strip() + "\n"
 
 
@@ -492,7 +492,7 @@ def _validate_task_entry(raw_task: object) -> dict[str, str]:
         goal_constants.TASK_KEY_ID: task_id.strip(),
         goal_constants.TASK_KEY_STATUS: status,
         goal_constants.TASK_KEY_SUBJECT: subject.strip(),
-    }  # noqa: E501
+    }
 
 
 def _validate_context(raw_field: object) -> dict[str, object]:
@@ -511,17 +511,17 @@ def _validate_context(raw_field: object) -> dict[str, object]:
         if each_field_content is not None:
             normalized_context[each_key] = _require_non_empty_string(
                 each_field_content, goal_constants.ERROR_CONTEXT_SCALAR_FIELD_INVALID
-            )  # noqa: E501
+            )
     normalized_context[goal_constants.CONTEXT_KEY_PATHS] = _scoped_list(
         context_object,
         goal_constants.CONTEXT_KEY_PATHS,
         goal_constants.ERROR_CONTEXT_PATHS_NOT_LIST,
-    )  # noqa: E501
+    )
     normalized_context[goal_constants.CONTEXT_KEY_CONSTRAINTS] = _scoped_list(
         context_object,
         goal_constants.CONTEXT_KEY_CONSTRAINTS,
         goal_constants.ERROR_CONTEXT_CONSTRAINTS_NOT_LIST,
-    )  # noqa: E501
+    )
     return normalized_context
 
 
