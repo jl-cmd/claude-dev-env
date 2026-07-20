@@ -101,6 +101,15 @@ def test_temporary_path_preserves_tests_directory_segment(tmp_path: Path) -> Non
     assert staged_path == tmp_path / "tests" / "helper_functions.py"
 
 
+def test_temporary_path_preserves_substring_test_helpers_directory(
+    tmp_path: Path,
+) -> None:
+    staged_path = _temporary_path_preserving_directory_signal(
+        tmp_path, "packages/demo/test_helpers/worker.py"
+    )
+    assert staged_path == tmp_path / "test_helpers" / "worker.py"
+
+
 def test_substring_patterns_from_path_patterns_skips_directory_tokens() -> None:
     all_substring_patterns = substring_patterns_from_path_patterns(
         {"test_", "/tests/", "conftest", "\\tests\\"}
@@ -117,4 +126,6 @@ def test_directory_exemption_substring_patterns_are_non_empty_and_separator_free
 
 def test_directory_exemption_substring_patterns_include_test_fragments() -> None:
     assert "test_" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert "_test." in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert ".spec." in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
     assert "conftest" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS

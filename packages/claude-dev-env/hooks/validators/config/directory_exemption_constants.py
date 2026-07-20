@@ -1,9 +1,13 @@
-"""Directory-segment names that anchor validator temp-path staging.
+"""Directory-segment signals that anchor validator temp-path staging.
 
-``validate_proposed_file`` keeps the target's path from the first segment named
-here, so the staged copy matches the real path's exemptions. Segment names are
-derived from the authoritative path-exemption pattern sets and CLI markers,
-then unioned with the config-directory allowlist.
+``validate_proposed_file`` keeps the target's path from the first directory
+segment that either matches an exemption directory name exactly or contains a
+separator-free substring pattern (``test_``, ``conftest``, ``.spec.``, and
+siblings). Exact names come from the authoritative path-exemption pattern sets
+and CLI markers, unioned with the config-directory allowlist. Substring
+patterns come from the separator-free members of those same pattern sets so a
+directory such as ``pkg/test_helpers/`` stages with the same test exemption as
+the real path.
 """
 
 from __future__ import annotations
