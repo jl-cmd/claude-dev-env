@@ -11,4 +11,5 @@ Mark complete only with evidence. Do not use markdown checkboxes as the live boa
 6. Read JSON outcome: mode, served_command, returncode, dirty_tree.
 7. Classify failed vs dirty vs clean per full-diff-and-clean-stamp.md.
 8. On dirty tree from a converge caller, invoke `pr-fix-protocol` (or refuse if missing).
-9. Report outcome to the caller without inventing a clean stamp on failed serve.
+9. On clean, run the clean-comment poster script (best-effort; soft-fail).
+10. Report outcome to the caller without inventing a clean stamp on failed serve.

@@ -39,6 +39,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     PHASE_COPILOT_WAIT,
     PHASE_READY,
     RESULT_KEY_BLOCKER,
+    RESULT_KEY_COMMANDS,
     RESULT_KEY_NEXT,
     RESULT_KEY_PACER,
     RESULT_KEY_PHASE,
@@ -102,6 +103,11 @@ def test_after_code_review_clean_advances_to_bugteam(state_file: Path) -> None:
     assert payload[RESULT_KEY_PHASE] == PHASE_BUGTEAM
     reloaded = driver.load_state(state_file)
     assert reloaded["code_review_clean_at"] == "abc123"
+    joined = _command_joined(payload)
+    assert "post_claude_review_clean_comment.py" in joined
+    assert "--head-sha" in joined
+    assert "abc123" in joined
+    assert "claude.exe" in joined
 
 
 def test_after_code_review_dirty_tree_requests_fixes(state_file: Path) -> None:
@@ -115,6 +121,9 @@ def test_after_code_review_dirty_tree_requests_fixes(state_file: Path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_APPLY_FIXES
     assert payload[RESULT_KEY_PHASE] == PHASE_CODE_REVIEW
+    assert payload.get(RESULT_KEY_COMMANDS) == []
+    joined = _command_joined(payload)
+    assert "post_claude_review_clean_comment.py" not in joined
 
 
 def test_after_code_review_failed_serve_stays_code_review(
@@ -390,6 +399,8 @@ def test_after_code_review_empty_served_command_is_successful(
     assert payload[RESULT_KEY_PHASE] == PHASE_BUGTEAM
     reloaded = driver.load_state(state_file)
     assert reloaded["code_review_clean_at"] == "abc123"
+    joined = _command_joined(payload)
+    assert "post_claude_review_clean_comment.py" in joined
 
 
 def test_after_code_review_in_session_token_is_successful(

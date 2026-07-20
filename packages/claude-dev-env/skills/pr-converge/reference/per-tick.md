@@ -276,11 +276,12 @@ c. Decide (three branches; match first whose predicate holds):
      re-enters the internal passes on the new HEAD.
    - **Clean (successful serve: `returncode == 0`, chain `served_command`
      non-null when `mode == chain`, and `dirty_tree` false):** Set
-     `code_review_clean_at = current_head`, `phase = BUGTEAM`. Continue
-     BUGTEAM in same tick — back-to-back convergence requires code-review and
-     bugteam clean on the same HEAD before the terminal gates run. Helper
-     contract: `is_code_review_clean_stamp_allowed` is true only for this
-     branch.
+     `code_review_clean_at = current_head`, `phase = BUGTEAM`. Portable
+     driver emits `post_claude_review_clean_comment.py` in `commands` (best-
+     effort issue comment; soft-fail). Continue BUGTEAM in same tick —
+     back-to-back convergence requires code-review and bugteam clean on the
+     same HEAD before the terminal gates run. Helper contract:
+     `is_code_review_clean_stamp_allowed` is true only for this branch.
 
 ### `phase == BUGTEAM`
 
