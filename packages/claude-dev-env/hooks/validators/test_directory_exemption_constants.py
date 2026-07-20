@@ -110,6 +110,30 @@ def test_temporary_path_preserves_substring_test_helpers_directory(
     assert staged_path == tmp_path / "test_helpers" / "worker.py"
 
 
+def test_temporary_path_preserves_absolute_project_test_helpers_directory(
+    tmp_path: Path,
+) -> None:
+    absolute_helpers_path = "C:/workspace/pkg/test_helpers/worker.py"
+    staged_path = _temporary_path_preserving_directory_signal(
+        tmp_path, absolute_helpers_path
+    )
+    assert staged_path == tmp_path / "test_helpers" / "worker.py"
+
+
+def test_absolute_system_temp_pytest_shaped_path_stages_flat_basename(
+    tmp_path: Path,
+) -> None:
+    pytest_shaped_target = (
+        tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
+    )
+    staging_root = tmp_path / "staging_root"
+    staging_root.mkdir()
+    staged_path = _temporary_path_preserving_directory_signal(
+        staging_root, str(pytest_shaped_target)
+    )
+    assert staged_path == staging_root / "legacy_module.py"
+
+
 def test_substring_patterns_from_path_patterns_skips_directory_tokens() -> None:
     all_substring_patterns = substring_patterns_from_path_patterns(
         {"test_", "/tests/", "conftest", "\\tests\\"}

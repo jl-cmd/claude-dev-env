@@ -792,29 +792,67 @@ def _escapes_temporary_root(path_part: str) -> bool:
     return part_as_path.is_absolute() or bool(part_as_path.anchor)
 
 
-def _directory_segment_signals_exemption(segment_lower: str) -> bool:
+def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
+    """Return True when *file_path* is absolute and resolves under the OS temp root.
+
+    ::
+
+        ok:   "C:/Users/.../Temp/pytest-of-x/test_foo0/a.py" -> True
+        flag: "packages/demo/test_helpers/worker.py"         -> False (relative)
+        flag: "C:/repo/pkg/test_helpers/worker.py"           -> False (project)
+
+    Absolute paths under the system temporary directory often carry pytest
+    ``tmp_path`` segments named ``test_*``. Those segments must not be treated
+    as project exemption signals, or a production file staged from a pytest
+    path would inherit a false test-file exemption.
+
+    Args:
+        file_path: Destination path the write or edit targets.
+
+    Returns:
+        True when *file_path* is absolute and lives under ``tempfile.gettempdir()``.
+    """
+    destination_path = Path(file_path)
+    if not destination_path.is_absolute():
+        return False
+    try:
+        resolved_destination = destination_path.resolve()
+        temporary_root = Path(tempfile.gettempdir()).resolve()
+    except OSError:
+        return False
+    return resolved_destination.is_relative_to(temporary_root)
+
+
+def _directory_segment_signals_exemption(
+    segment_lower: str, *, is_substring_match_enabled: bool
+) -> bool:
     """Return True when a directory segment carries a path-exemption signal.
 
     ::
 
-        ok:   "test_helpers" -> True  (contains the ``test_`` fragment)
-        ok:   "scripts"      -> True  (exact CLI-marker segment name)
-        flag: "latest"       -> False (neither exact name nor a fragment)
+        ok:   "test_helpers" (substring on)  -> True  (contains the ``test_`` fragment)
+        ok:   "scripts"                      -> True  (exact CLI-marker segment name)
+        flag: "latest"                       -> False (neither exact name nor a fragment)
+        flag: "test_edit_foo0" (substring off) -> False (pytest-shaped; exact-only mode)
 
     A segment is kept during staging when its name exactly matches an exemption
-    directory name or contains a separator-free substring pattern that
-    ``is_test_file`` and its siblings match anywhere in a path. The substring
-    branch is what preserves ``pkg/test_helpers/`` so the staged copy earns the
-    same test exemption the real path does.
+    directory name. When *is_substring_match_enabled* is True, a separator-free
+    substring pattern that ``is_test_file`` matches anywhere in a path also
+    counts — that is what preserves ``pkg/test_helpers/``. Substring matching is
+    disabled for absolute paths under the system temporary directory so pytest
+    ``tmp_path`` parents named ``test_*`` do not falsely trip test exemptions.
 
     Args:
         segment_lower: One lowercased directory component of the target path.
+        is_substring_match_enabled: When False, only exact exemption names count.
 
     Returns:
         True when staging must keep this segment to reproduce the exemption.
     """
     if segment_lower in ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES:
         return True
+    if not is_substring_match_enabled:
+        return False
     return any(
         each_pattern in segment_lower
         for each_pattern in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
@@ -830,9 +868,11 @@ def _temporary_path_preserving_directory_signal(
     path fragments (``test_`` inside ``test_helpers``) match substrings of the
     real file path. Staging under a flat temp basename drops those segments.
     Mirroring the first exemption-signaling directory through the basename
-    restores that signal without copying absolute system prefixes such as
-    pytest ``tmp_path`` parents that contain ``test_`` and would falsely trip
-    test-file exemptions.
+    restores that signal. Substring fragment matching is skipped for absolute
+    paths under the system temporary directory so pytest ``tmp_path`` parents
+    that contain ``test_`` do not falsely trip test-file exemptions; exact
+    exemption directory names (``config``, ``scripts``, ``tests``, ...) still
+    anchor staging on those absolute temp paths.
 
     Args:
         temporary_directory: Root of the ephemeral staging tree.
@@ -849,10 +889,15 @@ def _temporary_path_preserving_directory_signal(
     if not path_parts:
         path_parts = (destination_path.name,)
 
+    is_substring_match_enabled = not _is_absolute_path_under_system_temporary_directory(
+        file_path
+    )
     start_index = len(path_parts) - 1
     for each_index, each_part in enumerate(path_parts[:-1]):
         part_lower = each_part.lower()
-        if not _directory_segment_signals_exemption(part_lower):
+        if not _directory_segment_signals_exemption(
+            part_lower, is_substring_match_enabled=is_substring_match_enabled
+        ):
             continue
         start_index = each_index
         break
