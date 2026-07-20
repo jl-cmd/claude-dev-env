@@ -185,10 +185,7 @@ the `persistent_agents` map
   or threads, and the report-back contract. Bump `last_used_tick`, then
   await completion.
 - **First spawn:** `Agent(subagent_type: "clean-coder", name:
-  "prc-fix-<PR#>", model: "sonnet")` — worker-model routing per
-  [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing);
-  resolver-supplied sonnet-equivalent on third-party hosts. The `name`
-  makes the agent a persistent teammate
+  "prc-fix-<PR#>")` — the `name` makes the agent a persistent teammate
   that idles awaiting messages. Record `{agent_id, created_tick,
   last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
   never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks
@@ -197,7 +194,7 @@ the `persistent_agents` map
   within one bounded wait, drop the map entry, spawn a fresh named agent,
   record it, and continue the tick. Never abort a tick on a stale id;
   never retry the same dead id.
-- **Fresh every round (never persisted):** the Step 5 host-aware
+- **Fresh every round (never persisted):** the Step 5 **claude-review** /
   `invoke_code_review.py` / `/code-review xhigh --fix` pass and the Step 6
   bugteam audit (unbiased eyes each round; the enforcer needs the formal
   Skill call), and every `code-verifier` — a named code-verifier never fires
@@ -341,23 +338,26 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § CODE_REVIEW entry](reference/per-tick.md).
       Pre-condition: cwd is the Step 1.5 PR worktree on `current_head`.
       Scope: FULL `origin/main...HEAD` diff every tick (no path args, no delta cut).
-      Review always runs at effort high on model opus through
-      `invoke_code_review.py`. Mode decision inputs: host profile + session
-      model. Call:
+      Built-in review is owned by **claude-review**
+      ([`../claude-review/SKILL.md`](../claude-review/SKILL.md)): effort
+      xhigh on model opus via `invoke_code_review.py` (auto usage probe +
+      `claude_chain_runner`). Prefer `Skill({skill: "claude-review"})`;
+      otherwise call the invoker. Mode decision inputs: host profile + session
+      model + usage probe. Call:
       `python "$HOME/.claude/scripts/invoke_code_review.py" --cwd <PR-worktree>
-      --session-model <alias>`. Chain mode uses that cwd and empty stdin; the
-      chain process never commits and never pushes. JSON stdout carries
-      `mode` (`in_session` | `chain`), `served_command`, `returncode`, and
-      `dirty_tree`. Config/host errors still emit that JSON with non-zero
-      `returncode` (no traceback-only failure).
+      --session-model <alias>`. Omitted usage flag auto-probes; chain mode uses
+      that cwd and empty stdin; the chain process never commits and never pushes.
+      JSON stdout carries `mode` (`in_session` | `chain`), `served_command`,
+      `returncode`, and `dirty_tree`. Config/host errors still emit that JSON
+      with non-zero `returncode` (no traceback-only failure).
 
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
       - [ ] **`mode == in_session`** (Claude host, session model opus) → run
             `/code-review xhigh --fix` in-session (no path args)
-      - [ ] **`mode == chain`** (any other host or non-opus session) → helper
-            already ran the headless review; read `returncode`,
-            `served_command`, and `dirty_tree` from JSON
+      - [ ] **`mode == chain`** (any other host, non-opus session, or drained
+            primary) → helper already ran the headless review; read
+            `returncode`, `served_command`, and `dirty_tree` from JSON
       - [ ] **failed review** (`returncode != 0`, or chain with null
             `served_command`) → do not set `code_review_clean_at` → stay
             CODE_REVIEW → Step 5
@@ -443,6 +443,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 | Skill / path | Role |
 |---|---|
 | `pr-loop-lifecycle` | Open (permission grant + worktree preflight) and Close (cleanup, PR description, revoke) |
+| `claude-review` | Step 5 built-in full-diff review (usage probe + invoker + chain runner) |
 | `reviewer-gates` | Copilot quota gate, Bugbot availability, Bugbot trigger flow |
 | `copilot-finding-triage` | Tier, verify, and route each Copilot finding |
 | `bugteam` | Full-diff bug audit in Step 6 (Skill invocation mandatory) |

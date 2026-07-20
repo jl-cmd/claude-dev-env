@@ -129,21 +129,26 @@ branch (Agent-tool handoff vs headless claude chain).
 
 ## Code-review host routing
 
-Claude-only slash steps need a Claude Code harness. The built-in
-`/code-review` command is the main case. The host-routing pair is:
+Claude-only slash steps need a Claude Code harness. The thorough built-in
+review procedure is owned by the **claude-review** skill
+(`skills/claude-review/SKILL.md`). The executable is `invoke_code_review`
+(usage probe Layer A + host-aware chain Layer B). The host-routing pair is:
 
 - `detect_host_profile()` from `tier_model_ids` — same host detection as the
   worker-spawn dispatcher above
 - `invoke_code_review` — host-aware invoker for `/code-review` (lives next to
-  `resolve_worker_spawn` under the package scripts tree)
+  `resolve_worker_spawn` under the package scripts tree); auto-runs
+  `claude_usage_probe` when `--session-has-usage-left` is omitted or
+  `unknown`, and forces chain when the primary session is drained
 
 Mode decision:
 
-| Host profile | Session model | Mode | Who runs `/code-review` |
-|---|---|---|---|
-| `Claude` | `opus` | `in_session` | The calling skill runs the slash command in-process |
-| `Claude` | any other alias | `chain` | Headless spawn through `claude_chain_runner` |
-| `ThirdParty` | any | `chain` | Headless spawn through `claude_chain_runner` |
+| Host profile | Session model | Usage left | Mode | Who runs `/code-review` |
+|---|---|---|---|---|
+| `Claude` | `opus` | true / unknown | `in_session` | The calling skill runs the slash command in-process |
+| `Claude` | `opus` | false (drained) | `chain` | Headless spawn through `claude_chain_runner` |
+| `Claude` | any other alias | any | `chain` | Headless spawn through `claude_chain_runner` |
+| `ThirdParty` | any | any | `chain` | Headless spawn through `claude_chain_runner` |
 
 The review always runs at effort **xhigh** on model **opus**. Chain mode builds
 a single-turn prompt `/code-review xhigh --fix`, pins `--model opus`, sets

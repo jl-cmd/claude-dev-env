@@ -68,10 +68,13 @@ confirmation gates that are expected to return zero.
      The built-in `/code-review` surface is a separate path owned by the
      **claude-review** skill
      ([`../../claude-review/SKILL.md`](../../claude-review/SKILL.md)):
-     full-diff `/code-review xhigh --fix` via `invoke_code_review.py`.
+     full-diff `/code-review xhigh --fix` via `invoke_code_review.py`
+     (usage probe + `claude_chain_runner`).
      On `pacer=workflow`, the workflow lens runs inside `converge.mjs`.
-     On `pacer=portable`, the continuous driver uses the pr-converge CODE_REVIEW
-     phase, which invokes claude-review / `invoke_code_review.py`
+     On `pacer=portable`, the continuous driver **must** run claude-review
+     (prefer `Skill({skill: "claude-review"})`, or the invoker path with auto
+     usage probe + chain) — never a bare ad-hoc `/code-review` without the skill
+     contract
      ([`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md);
      [`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)).
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the

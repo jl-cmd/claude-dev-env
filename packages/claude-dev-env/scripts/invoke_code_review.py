@@ -56,6 +56,10 @@ from claude_chain_runner import (  # noqa: E402
     ChainInvocationOutcome,
     run_claude,
 )
+from claude_usage_probe import (  # noqa: E402
+    ClaudeUsageProbeReport,
+    probe_claude_usage,
+)
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     collect_forwarded_text_codec,
@@ -165,6 +169,7 @@ class StampMintOutcome:
 review_claude_runner = run_claude
 review_host_profile_detector = detect_host_profile
 review_git_status_runner = subprocess.run
+review_usage_probe: Callable[[], ClaudeUsageProbeReport] = probe_claude_usage
 
 TextCapturingSubprocessRunner = Callable[
     ...,

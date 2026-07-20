@@ -66,7 +66,11 @@ Transport still needs authenticated GitHub access for the PR's owner (`gh` or
 
 The code-review lens boundary (workflow agent versus the built-in `/code-review`
 command) is defined on the **Code-review lens** bullet in
-[`reference/convergence.md`](reference/convergence.md).
+[`reference/convergence.md`](reference/convergence.md). On `pacer=portable`,
+the built-in path is **claude-review**
+([`../claude-review/SKILL.md`](../claude-review/SKILL.md)) via the portable
+driver / `invoke_code_review.py`. On `pacer=workflow`, the lens stays
+`runCodeReviewLens` / `code-quality-agent` inside `converge.mjs`.
 
 ## Transport check (before any GitHub step)
 
@@ -161,18 +165,13 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false, homeDirectory: "<HOME>" }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
 })
 ```
 
 `scriptPath` is the absolute path to `workflow/converge.mjs` inside this skill's
 own directory (on this install,
-`<home>/.claude/skills/autoconverge/workflow/converge.mjs`). `homeDirectory` is
-the absolute path to the directory that holds `.claude` (resolve it once from
-`$HOME`, or `$env:USERPROFILE` on Windows, with forward slashes). The workflow
-runs in a sandbox with no access to environment variables, so the run reads the
-home directory from this arg to build the path to the codex-review scripts the
-Codex gate calls; leave it out and the Codex gate cannot find those scripts. Set
+`<home>/.claude/skills/autoconverge/workflow/converge.mjs`). Set
 `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
 own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
@@ -194,7 +193,7 @@ Write it again when the result lands, so the handoff carries the final run id an
 names the teardown phase the fresh session picks up from.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, codexNote, cleanAuditNote, reuseNote, deferredPrs }`,
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs }`,
 plus a `userReview` field on a `blocker: "user-review"` return. `cleanAuditNote` is
 non-null when the environment refused the CLEAN bugteam review post and the run
 recorded the bypass — see
@@ -364,7 +363,6 @@ ready again — then run the checkpoints.
    Blocker: <blocker>        # only when blocked
    Standards: <standardsNote> # only when a round deferred code-standard findings
    Copilot: <copilotNote>     # only when Copilot was down or out of quota
-   Codex: <codexNote>         # only when the Codex gate was bypassed (codex_down or opt-out)
    Clean-audit: <cleanAuditNote> # only when the CLEAN bugteam post was bypassed
    Reuse: <reuseNote>         # only when the reuse pass identified an improvement
    ```

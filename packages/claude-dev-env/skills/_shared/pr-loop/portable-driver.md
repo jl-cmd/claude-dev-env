@@ -138,7 +138,7 @@ sections unchanged.
 | Task list | `build_converge_task_list.py` |
 | Pacer | `select_converge_pacer.py` |
 | Worktree | `preflight_worktree.py` |
-| Code review | `$HOME/.claude/scripts/invoke_code_review.py` |
+| Code review | **claude-review** skill + `$HOME/.claude/scripts/invoke_code_review.py` (auto usage probe + `claude_chain_runner`; portable `_code_review_commands` calls the invoker alone) |
 | Workers | `$HOME/.claude/scripts/resolve_worker_spawn.py` |
 | Ready | `pr-converge/scripts/check_convergence.py` |
 | Handoff | `write_handoff.py` |
