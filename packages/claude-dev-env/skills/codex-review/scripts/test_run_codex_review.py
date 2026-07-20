@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -810,3 +811,191 @@ def test_resolve_prefix_falls_back_to_bare_name_when_absent(
     monkeypatch.setattr(wrapper.shutil, "which", lambda _name: None)
 
     assert wrapper._resolve_codex_command_prefix() == [CODEX_BINARY_NAME]
+
+
+def _is_process_running(process_identifier: int) -> bool:
+    if sys.platform == "win32":
+        process_listing = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {process_identifier}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return str(process_identifier) in process_listing.stdout
+    liveness_probe = subprocess.run(
+        ["kill", "-0", str(process_identifier)],
+        capture_output=True,
+        check=False,
+    )
+    return liveness_probe.returncode == 0
+
+
+def _wait_until_process_stops(
+    process_identifier: int, deadline_seconds: float
+) -> bool:
+    poll_interval_seconds = 0.5
+    deadline = time.monotonic() + deadline_seconds
+    while time.monotonic() < deadline:
+        if not _is_process_running(process_identifier):
+            return True
+        time.sleep(poll_interval_seconds)
+    return not _is_process_running(process_identifier)
+
+
+def _grandchild_spawn_source(grandchild_pid_path: Path, lifetime_seconds: int) -> str:
+    """Python source that spawns a grandchild and records its PID before sleeping.
+
+    ::
+
+        Popen(grandchild) -> write grandchild.pid -> sleep    grandchild holds pipe
+    """
+    return (
+        "import subprocess, sys, time, pathlib; "
+        "grandchild = subprocess.Popen([sys.executable, '-c', "
+        f"'import time; time.sleep({lifetime_seconds})']); "
+        f"pathlib.Path(r'{grandchild_pid_path}').write_text(str(grandchild.pid)); "
+        f"time.sleep({lifetime_seconds})"
+    )
+
+
+def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
+    tmp_path: Path,
+) -> None:
+    """The timeout kills the grandchild that inherited the capture pipe.
+
+    ::
+
+        middle -> grandchild, timeout at 2s    ok: grandchild PID stops running
+        kill only the middle child             flag: grandchild lives on 30s
+
+    A direct-child-only kill leaves the grandchild alive on POSIX, so asserting
+    the recorded grandchild PID stops running guards the regression in CI.
+    """
+    grandchild_lifetime_seconds = 30
+    review_timeout_seconds = 2
+    wall_clock_ceiling_seconds = 20
+    grandchild_pid_path = tmp_path / "grandchild.pid"
+    grandchild_source = _grandchild_spawn_source(
+        grandchild_pid_path, grandchild_lifetime_seconds
+    )
+    start_time = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        wrapper._run_command(
+            [sys.executable, "-c", grandchild_source],
+            working_directory=tmp_path,
+            timeout_seconds=review_timeout_seconds,
+        )
+    assert time.monotonic() - start_time < wall_clock_ceiling_seconds
+    grandchild_identifier = int(grandchild_pid_path.read_text())
+    assert _wait_until_process_stops(grandchild_identifier, wall_clock_ceiling_seconds)
+
+
+def test_windows_process_tree_kill_builds_taskkill_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Windows kill path issues taskkill /T /F /PID for the given process id."""
+    target_process_identifier = 4242
+    recorded_argv: list[list[str]] = []
+
+    def record_argv(all_arguments: list[str], **_keywords: object) -> None:
+        recorded_argv.append(all_arguments)
+
+    monkeypatch.setattr(wrapper.subprocess, "run", record_argv)
+    wrapper._kill_windows_process_tree(target_process_identifier)
+
+    assert recorded_argv == [
+        ["taskkill", "/T", "/F", "/PID", str(target_process_identifier)]
+    ]
+
+
+def test_windows_process_tree_kill_swallows_taskkill_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung taskkill must not raise — caller falls back to Popen.kill + drain."""
+
+    def raise_taskkill_timeout(
+        _all_arguments: list[str], **_keywords: object
+    ) -> None:
+        raise subprocess.TimeoutExpired(cmd="taskkill", timeout=1)
+
+    monkeypatch.setattr(wrapper.subprocess, "run", raise_taskkill_timeout)
+    wrapper._kill_windows_process_tree(4242)
+
+
+def test_drain_joins_pipes_when_direct_kill_raises_process_lookup_error() -> None:
+    """Even when the process is already gone, drain still joins pipe readers."""
+    all_communicate_timeouts: list[float | None] = []
+
+    class _AlreadyDeadProcess:
+        def communicate(
+            self, timeout: float | None = None
+        ) -> tuple[str, str]:
+            all_communicate_timeouts.append(timeout)
+            if len(all_communicate_timeouts) == 1:
+                raise subprocess.TimeoutExpired(cmd="codex", timeout=timeout or 0)
+            return "", ""
+
+        def kill(self) -> None:
+            raise ProcessLookupError()
+
+    already_dead_process = _AlreadyDeadProcess()
+    wrapper._drain_process_after_tree_kill(
+        already_dead_process  # type: ignore[arg-type]  # duck-typed Popen stand-in
+    )
+    assert len(all_communicate_timeouts) == 2
+
+
+def test_reap_process_with_grace_bounds_wait_when_child_survives() -> None:
+    """Cleanup kills a surviving child and waits with a grace timeout, not forever."""
+    all_wait_timeouts: list[float | None] = []
+    all_kill_calls: list[bool] = []
+
+    class _SurvivingProcess:
+        def poll(self) -> int | None:
+            return None
+
+        def kill(self) -> None:
+            all_kill_calls.append(True)
+
+        def wait(self, timeout: float | None = None) -> int:
+            all_wait_timeouts.append(timeout)
+            raise subprocess.TimeoutExpired(cmd="codex", timeout=timeout or 0)
+
+    surviving_process = _SurvivingProcess()
+    wrapper._reap_process_with_grace(
+        surviving_process  # type: ignore[arg-type]  # duck-typed Popen stand-in
+    )
+    assert all_kill_calls == [True]
+    assert all_wait_timeouts == [wrapper.PROCESS_TREE_KILL_TIMEOUT_SECONDS]
+
+
+def test_run_command_surfaces_timeout_when_tree_kill_is_noop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An incomplete tree kill still raises TimeoutExpired inside a wall ceiling.
+
+    ::
+
+        terminate is a no-op, child sleeps 60s    ok: TimeoutExpired < 25s wall
+        no post-kill drain / fallback kill        flag: hang past ceiling on wait
+
+    The post-kill grace drain and direct-child kill fallback keep the caller
+    from blocking forever when taskkill/killpg leave the direct child alive.
+    """
+    review_timeout_seconds = 1
+    wall_clock_ceiling_seconds = 25
+    sleep_source = "import time; time.sleep(60)"
+
+    def leave_process_alive(_review_process: object) -> None:
+        return None
+
+    monkeypatch.setattr(wrapper, "_terminate_process_tree", leave_process_alive)
+    start_time = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        wrapper._run_command(
+            [sys.executable, "-c", sleep_source],
+            working_directory=tmp_path,
+            timeout_seconds=review_timeout_seconds,
+        )
+    assert time.monotonic() - start_time < wall_clock_ceiling_seconds

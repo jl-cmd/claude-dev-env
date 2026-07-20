@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,15 +28,24 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     WINDOWS_COMMAND_SHELL,
     WINDOWS_COMMAND_SHELL_RUN_FLAG,
     WINDOWS_OS_NAME,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_FORCE_FLAG,
+    WINDOWS_TASKKILL_PID_FLAG,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 from codex_review_scripts_constants.run_constants import (
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
+    CAPTURE_STREAMS_KEYWORD,
+    CHECK_KEYWORD,
     CODEX_BINARY_NAME,
     CODEX_MODEL_PIN,
     COMMIT_TARGET_FLAG,
     CUSTOM_INSTRUCTIONS_PROMPT,
+    CWD_KEYWORD,
     DEFAULT_TIMEOUT_SECONDS,
+    ENCODING_KEYWORD,
+    ENVIRONMENT_KEYWORD,
     EXEC_SUBCOMMAND,
     HELP_FLAG,
     JSON_FLAG,
@@ -50,17 +60,239 @@ from codex_review_scripts_constants.run_constants import (
     MODEL_FLAG,
     OUTCOME_CLASS_CODEX_DOWN,
     OUTCOME_CLASS_COMPLETED,
+    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     REVIEW_SUBCOMMAND,
     SHAPE_FLAG_TOKEN_TAIL_PATTERN,
     SUBPROCESS_DECODE_EXIT_CODE,
+    TEXT_MODE_KEYWORD,
     TIMEOUT_EXIT_CODE,
+    TIMEOUT_KEYWORD,
     UNCOMMITTED_TARGET_FLAG,
     UTF8_ENCODING,
     VERSION_FLAG,
     VERSION_PROBE_PATTERN,
 )
 
-codex_subprocess_runner = subprocess.run
+
+def _kill_windows_process_tree(process_identifier: int) -> None:
+    """Kill a Windows process and every descendant it started, by PID.
+
+    Swallows taskkill failures so the caller can fall back to ``Popen.kill()``
+    and a timed drain. A raised ``TimeoutExpired`` here would replace the
+    original review-timeout exception and skip that drain path.
+    """
+    try:
+        subprocess.run(
+            [
+                WINDOWS_TASKKILL_COMMAND,
+                WINDOWS_TASKKILL_TREE_FLAG,
+                WINDOWS_TASKKILL_FORCE_FLAG,
+                WINDOWS_TASKKILL_PID_FLAG,
+                str(process_identifier),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return
+
+
+def _kill_posix_process_group(process_identifier: int) -> None:
+    """Kill a POSIX process group so no grandchild keeps the capture pipe open."""
+    try:
+        process_group_identifier = os.getpgid(process_identifier)
+        os.killpg(process_group_identifier, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        return
+
+
+def _terminate_process_tree(review_process: subprocess.Popen[str]) -> None:
+    """Kill the review process and every descendant it spawned.
+
+    Tree kill first (taskkill /T or killpg). When the direct child is still
+    alive after that, fall back to ``Popen.kill()`` so ``Popen.__exit__`` never
+    hits an unbounded wait on a surviving process.
+    """
+    if review_process.poll() is not None:
+        return
+    if os.name == WINDOWS_OS_NAME:
+        _kill_windows_process_tree(review_process.pid)
+    else:
+        _kill_posix_process_group(review_process.pid)
+    if review_process.poll() is not None:
+        return
+    try:
+        review_process.kill()
+    except ProcessLookupError:
+        return
+
+
+def _open_codex_popen(
+    all_arguments: list[str],
+    all_keyword_arguments: dict[str, object],
+) -> subprocess.Popen[str]:
+    """Start the codex process in its own session so its tree can be killed."""
+    should_capture = bool(all_keyword_arguments.get(CAPTURE_STREAMS_KEYWORD, False))
+    stream_target = subprocess.PIPE if should_capture else None
+    working_directory = all_keyword_arguments.get(CWD_KEYWORD)
+    stream_encoding = all_keyword_arguments.get(ENCODING_KEYWORD)
+    process_environment = all_keyword_arguments.get(ENVIRONMENT_KEYWORD)
+    return subprocess.Popen(
+        all_arguments,
+        cwd=working_directory if isinstance(working_directory, str) else None,
+        stdout=stream_target,
+        stderr=stream_target,
+        text=bool(all_keyword_arguments.get(TEXT_MODE_KEYWORD, False)),
+        encoding=stream_encoding if isinstance(stream_encoding, str) else None,
+        env=process_environment if isinstance(process_environment, dict) else None,
+        start_new_session=os.name != WINDOWS_OS_NAME,
+    )
+
+
+def _drain_process_after_tree_kill(
+    review_process: subprocess.Popen[str],
+) -> None:
+    """Join pipe reader threads after a tree kill; never block unbounded.
+
+    ::
+
+        kill tree -> communicate(grace)    ok: pipe EOF, threads join
+        kill incomplete, no drain          flag: Popen.__exit__ wait() hangs
+
+    Windows needs a post-kill ``communicate()`` so timed-out reader threads
+    join. Every platform needs a timed join so an incomplete tree kill cannot
+    leave ``Popen.__exit__`` waiting forever.
+    """
+    try:
+        review_process.communicate(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        try:
+            review_process.kill()
+        except ProcessLookupError:
+            pass
+        try:
+            review_process.communicate(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return
+
+
+def _communicate_with_tree_kill_on_timeout(
+    review_process: subprocess.Popen[str],
+    timeout_seconds: float | None,
+) -> tuple[str, str]:
+    """Drain the process; on timeout kill its whole tree, drain again, re-raise.
+
+    ::
+
+        codex -> codex.exe -> code-mode-host   grandchildren hold the stdout pipe
+        kill only the parent on timeout        drain waits for EOF, hangs
+        ok: kill the whole tree, then drain    pipe reaches EOF, timeout raised
+
+    Killing only the direct child on a timeout leaves grandchildren holding the
+    capture pipe open, so the drain read never reaches end-of-file and blocks
+    forever. Killing the entire tree and then draining with a grace timeout lets
+    the pipe reach end-of-file without an unbounded wait.
+    """
+    try:
+        return review_process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(review_process)
+        _drain_process_after_tree_kill(review_process)
+        raise
+
+
+def _completed_from_streams(
+    all_arguments: list[str],
+    review_return_code: int,
+    captured_stdout: str,
+    captured_stderr: str,
+    should_check: bool,
+) -> subprocess.CompletedProcess[str]:
+    """Wrap captured streams in a CompletedProcess, honoring the check flag."""
+    completed_process = subprocess.CompletedProcess(
+        all_arguments, review_return_code, captured_stdout, captured_stderr
+    )
+    if should_check:
+        completed_process.check_returncode()
+    return completed_process
+
+
+def _optional_timeout_seconds(requested_timeout: object) -> float | None:
+    """Return a numeric timeout as float, or None when it is not a number."""
+    if isinstance(requested_timeout, (int, float)):
+        return float(requested_timeout)
+    return None
+
+
+def _close_popen_streams(review_process: subprocess.Popen[str]) -> None:
+    """Close the child's stdio pipes without waiting for process exit."""
+    for each_stream in (review_process.stdout, review_process.stderr, review_process.stdin):
+        if each_stream is None:
+            continue
+        try:
+            each_stream.close()
+        except OSError:
+            pass
+
+
+def _reap_process_with_grace(review_process: subprocess.Popen[str]) -> None:
+    """Kill and wait with a grace timeout so cleanup never blocks unbounded.
+
+    ::
+
+        poll None after incomplete drain   ok: kill + wait(grace), then return
+        Popen.__exit__ wait() no timeout   flag: hang forever on surviving child
+
+    ``Popen`` as a context manager always ends in ``wait()`` with no timeout.
+    After a timed-out drain that still leaves the child alive, that wait would
+    hang. This path kills once more and bounds the reap.
+    """
+    if review_process.poll() is not None:
+        return
+    try:
+        review_process.kill()
+    except ProcessLookupError:
+        return
+    try:
+        review_process.wait(timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return
+
+
+def _run_codex_process(
+    all_arguments: list[str],
+    **all_keyword_arguments: object,
+) -> subprocess.CompletedProcess[str]:
+    """Run a codex process, killing its whole child tree on a timeout.
+
+    Mirrors the ``subprocess.run`` keyword arguments the review wrapper passes:
+    ``cwd``, ``capture_output``, ``text``, ``encoding``, ``check``, ``timeout``,
+    and ``env``. Avoids ``Popen`` as a context manager so a surviving child after
+    a timed-out drain cannot hang on an unbounded ``wait()``.
+    """
+    timeout_seconds = _optional_timeout_seconds(all_keyword_arguments.get(TIMEOUT_KEYWORD))
+    should_check = bool(all_keyword_arguments.get(CHECK_KEYWORD, False))
+    review_process = _open_codex_popen(all_arguments, all_keyword_arguments)
+    try:
+        captured_stdout, captured_stderr = _communicate_with_tree_kill_on_timeout(
+            review_process, timeout_seconds
+        )
+        review_return_code = review_process.returncode
+    finally:
+        _close_popen_streams(review_process)
+        _reap_process_with_grace(review_process)
+    return _completed_from_streams(
+        all_arguments,
+        review_return_code,
+        captured_stdout,
+        captured_stderr,
+        should_check,
+    )
+
+
+codex_subprocess_runner = _run_codex_process
 
 
 @dataclass(frozen=True)
