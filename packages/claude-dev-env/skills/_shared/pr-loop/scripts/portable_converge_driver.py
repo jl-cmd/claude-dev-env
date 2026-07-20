@@ -139,10 +139,13 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     EXIT_SUCCESS,
     EXIT_USAGE_ERROR,
     INLINE_LAG_STREAK_CAP,
+    INVOKE_CODE_REVIEW_EFFORT_ARGUMENT,
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
     PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS,
     POST_CLEAN_COMMENT_CWD_FLAG,
     POST_CLEAN_COMMENT_HEAD_SHA_FLAG,
+    POST_CLEAN_COMMENT_MODE_CHAIN,
+    POST_CLEAN_COMMENT_MODE_FLAG,
     POST_CLEAN_COMMENT_RELATIVE_PATH,
     POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
     NEXT_APPLY_FIXES,
@@ -180,6 +183,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     RESULT_KEY_STATUS,
     RESULT_KEY_TICK_COUNT,
     RESULT_KEY_WAIT_SECONDS,
+    SERVED_COMMAND_IN_SESSION,
     STATE_FILENAME,
     STATE_JSON_INDENT,
     MARK_READY_GH_BINARY,
@@ -468,6 +472,7 @@ def _code_review_commands(
         str(cwd_path),
         "--session-model",
         session_model,
+        INVOKE_CODE_REVIEW_EFFORT_ARGUMENT,
     ]
 
 
@@ -496,6 +501,14 @@ def _cwd_path_from_state(all_state: Mapping[str, object]) -> Path:
     return Path.cwd()
 
 
+def _resolve_clean_comment_mode(served_command: str) -> str | None:
+    if not served_command:
+        return None
+    if served_command == SERVED_COMMAND_IN_SESSION:
+        return SERVED_COMMAND_IN_SESSION
+    return POST_CLEAN_COMMENT_MODE_CHAIN
+
+
 def _clean_comment_commands(
     *,
     cwd_path: Path,
@@ -503,7 +516,7 @@ def _clean_comment_commands(
     served_command: str,
 ) -> list[str]:
     post_path = _home_path(*POST_CLEAN_COMMENT_RELATIVE_PATH.split("/"))
-    return [
+    all_arguments = [
         "python",
         str(post_path),
         POST_CLEAN_COMMENT_CWD_FLAG,
@@ -513,6 +526,10 @@ def _clean_comment_commands(
         POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG,
         served_command,
     ]
+    resolved_mode = _resolve_clean_comment_mode(served_command)
+    if resolved_mode is not None:
+        all_arguments += [POST_CLEAN_COMMENT_MODE_FLAG, resolved_mode]
+    return all_arguments
 
 
 def _clean_comment_commands_from_state(

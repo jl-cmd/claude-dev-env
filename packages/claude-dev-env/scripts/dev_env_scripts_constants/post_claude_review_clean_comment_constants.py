@@ -60,6 +60,10 @@ GH_BODY_FILE_FLAG: str = "--body-file"
 GH_PAGINATE_FLAG: str = "--paginate"
 """gh api flag that walks every page of a list endpoint."""
 
+GH_SLURP_FLAG: str = "--slurp"
+"""gh api flag that wraps every paginated page in one JSON array of pages,
+so a cross-page read sees the whole set instead of the last page only."""
+
 GH_PR_VIEW_JSON_FIELDS: str = "number,url,headRefOid"
 """Comma-separated fields requested from ``gh pr view --json``."""
 

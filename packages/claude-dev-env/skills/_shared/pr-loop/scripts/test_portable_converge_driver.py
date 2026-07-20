@@ -23,6 +23,7 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     EXIT_SUCCESS,
     EXIT_USAGE_ERROR,
     INLINE_LAG_STREAK_CAP,
+    INVOKE_CODE_REVIEW_EFFORT_ARGUMENT,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
     NEXT_MARK_READY,
@@ -38,6 +39,8 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     PHASE_CODE_REVIEW,
     PHASE_COPILOT_WAIT,
     PHASE_READY,
+    POST_CLEAN_COMMENT_MODE_CHAIN,
+    POST_CLEAN_COMMENT_MODE_FLAG,
     RESULT_KEY_BLOCKER,
     RESULT_KEY_COMMANDS,
     RESULT_KEY_NEXT,
@@ -358,6 +361,7 @@ def test_open_run_portable_seeds_state_and_code_review_commands(
     all_commands = payload["commands"]
     assert isinstance(all_commands, list)
     assert all_commands[0] == "python"
+    assert all_commands[-1] == INVOKE_CODE_REVIEW_EFFORT_ARGUMENT
     assert "tasks" in payload
     reloaded = driver.load_state(state_dir / "pr-converge-state.json")
     assert reloaded[STATE_KEY_PENDING_NEXT] == NEXT_RUN_CODE_REVIEW
@@ -415,6 +419,36 @@ def test_after_code_review_in_session_token_is_successful(
     )
     assert exit_code == EXIT_SUCCESS
     assert payload[RESULT_KEY_NEXT] == NEXT_RUN_BUGTEAM
+
+
+@pytest.mark.parametrize(
+    ("served_command", "expected_mode"),
+    [
+        ("", None),
+        (SERVED_COMMAND_IN_SESSION, SERVED_COMMAND_IN_SESSION),
+        ("claude", POST_CLEAN_COMMENT_MODE_CHAIN),
+    ],
+)
+def test_after_code_review_clean_comment_includes_mode_when_known(
+    state_file: Path,
+    served_command: str,
+    expected_mode: str | None,
+) -> None:
+    payload, exit_code = driver.run_after_code_review(
+        state_file=state_file,
+        returncode=0,
+        is_dirty_tree=False,
+        served_command=served_command,
+        current_head="abc123",
+    )
+    assert exit_code == EXIT_SUCCESS
+    all_commands = payload["commands"]
+    assert isinstance(all_commands, list)
+    if expected_mode is None:
+        assert POST_CLEAN_COMMENT_MODE_FLAG not in all_commands
+    else:
+        mode_index = all_commands.index(POST_CLEAN_COMMENT_MODE_FLAG)
+        assert all_commands[mode_index + 1] == expected_mode
 
 
 def test_after_bugbot_inline_lag_polls_under_cap(state_file: Path) -> None:

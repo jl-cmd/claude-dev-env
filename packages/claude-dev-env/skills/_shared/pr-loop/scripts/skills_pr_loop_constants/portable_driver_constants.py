@@ -168,12 +168,15 @@ COMMAND_SHOW_STATE: str = "show-state"
 DEFAULT_SESSION_MODEL: str = "third-party"
 
 INVOKE_CODE_REVIEW_RELATIVE_PATH: str = ".claude/scripts/invoke_code_review.py"
+INVOKE_CODE_REVIEW_EFFORT_ARGUMENT: str = "xhigh"
 POST_CLEAN_COMMENT_RELATIVE_PATH: str = (
     ".claude/scripts/post_claude_review_clean_comment.py"
 )
 POST_CLEAN_COMMENT_CWD_FLAG: str = "--cwd"
 POST_CLEAN_COMMENT_HEAD_SHA_FLAG: str = "--head-sha"
 POST_CLEAN_COMMENT_SERVED_COMMAND_FLAG: str = "--served-command"
+POST_CLEAN_COMMENT_MODE_FLAG: str = "--mode"
+POST_CLEAN_COMMENT_MODE_CHAIN: str = "chain"
 CHECK_CONVERGENCE_RELATIVE_PATH: str = (
     ".claude/skills/pr-converge/scripts/check_convergence.py"
 )

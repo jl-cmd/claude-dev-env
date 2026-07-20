@@ -23,6 +23,9 @@ from dev_env_scripts_constants.code_review_constants import (
     IN_SESSION_RETURNCODE,
     MODE_CHAIN,
     MODE_IN_SESSION,
+    SESSION_HAS_USAGE_LEFT_FALSE,
+    SESSION_HAS_USAGE_LEFT_TRUE,
+    SESSION_HAS_USAGE_LEFT_UNKNOWN,
 )
 
 
@@ -97,3 +100,65 @@ def test_decide_review_mode(
         )
         == expected_mode
     )
+
+
+@pytest.mark.parametrize(
+    ("session_has_usage_left", "expected_mode"),
+    [
+        (False, MODE_CHAIN),
+        (True, MODE_IN_SESSION),
+        (None, MODE_IN_SESSION),
+    ],
+)
+def test_decide_review_mode_session_has_usage_left(
+    session_has_usage_left: bool | None, expected_mode: str
+) -> None:
+    assert (
+        invoker.decide_review_mode(
+            host_profile=HOST_PROFILE_CLAUDE,
+            session_model=FIXTURE_SESSION_OPUS,
+            session_has_usage_left=session_has_usage_left,
+        )
+        == expected_mode
+    )
+
+
+@pytest.mark.parametrize(
+    ("session_has_usage_left_token", "expected_value"),
+    [
+        (SESSION_HAS_USAGE_LEFT_TRUE, True),
+        (SESSION_HAS_USAGE_LEFT_FALSE, False),
+        (SESSION_HAS_USAGE_LEFT_UNKNOWN, None),
+        ("TRUE", True),
+    ],
+)
+def test_parse_session_has_usage_left_token(
+    session_has_usage_left_token: str, expected_value: bool | None
+) -> None:
+    assert (
+        invoker.parse_session_has_usage_left_token(session_has_usage_left_token)
+        is expected_value
+    )
+
+
+def test_parse_session_has_usage_left_token_rejects_unsupported_label() -> None:
+    with pytest.raises(ValueError):
+        invoker.parse_session_has_usage_left_token("bogus")
+
+
+def test_install_seams_auto_probe_forces_chain_without_live_subprocess(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    working_directory = init_git_repository(tmp_path / "repo")
+    call_log = install_seams(
+        monkeypatch,
+        host_profile=HOST_PROFILE_CLAUDE,
+        claude_outcome=claude_served(),
+        working_directory=working_directory,
+        session_has_usage_left=False,
+    )
+
+    review_outcome = run_review(working_directory, session_model=FIXTURE_SESSION_OPUS)
+
+    assert review_outcome.mode == MODE_CHAIN
+    assert call_log.claude_calls == 1

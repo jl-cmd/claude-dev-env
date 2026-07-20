@@ -62,7 +62,7 @@ ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER: tuple[str, ...] = (
 RECORD_STAMP_FLAG: str = _ENFORCEMENT_CONSTANTS.SANCTIONED_STAMP_MINTER_FLAG
 """CLI flag that forces chain mode and mints a clean stamp on a stable pass."""
 
-DEFAULT_CODE_REVIEW_EFFORT: str = "high"
+DEFAULT_CODE_REVIEW_EFFORT: str = "xhigh"
 """Default effort when the caller omits the positional effort token."""
 
 CODE_REVIEW_SLASH_COMMAND: str = "/code-review"
@@ -153,7 +153,7 @@ CLI_EFFORT_METAVAR: str = "effort"
 
 CLI_EFFORT_HELP: str = (
     "Review effort token: low, medium, high, xhigh, or max "
-    "(ultra is rejected; default high)."
+    "(ultra is rejected; default xhigh)."
 )
 """Help text for the positional effort argument."""
 

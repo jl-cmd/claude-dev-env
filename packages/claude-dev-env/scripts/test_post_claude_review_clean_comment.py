@@ -30,8 +30,10 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     GH_BINARY_NAME,
     GH_BODY_FILE_FLAG,
     GH_COMMENT_SUBCOMMAND,
+    GH_PAGINATE_FLAG,
     GH_PR_TOKEN,
     GH_REPO_TOKEN,
+    GH_SLURP_FLAG,
     GH_VIEW_SUBCOMMAND,
     MESSAGE_ALREADY_POSTED,
     MESSAGE_DRY_RUN,
@@ -47,6 +49,7 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
 )
 
 FIXTURE_HEAD_SHA = "abcdef0123456789abcdef0123456789abcdef01"
+FIXTURE_OTHER_HEAD_SHA = "1111111111111111111111111111111111111a"
 FIXTURE_PR_NUMBER = 264
 FIXTURE_OWNER = "owner"
 FIXTURE_REPO = "repo"
@@ -75,15 +78,17 @@ def _repo_view_stdout() -> str:
 def _make_gh_runner(
     *,
     all_comment_bodies: list[str] | None = None,
+    all_comment_body_pages: list[list[str]] | None = None,
     is_pr_view_ok: bool = True,
     is_repo_view_ok: bool = True,
     is_list_ok: bool = True,
     is_comment_ok: bool = True,
     recorded_calls: list[list[str]] | None = None,
 ) -> Callable[..., subprocess.CompletedProcess[str]]:
-    comment_bodies = (
-        [] if all_comment_bodies is None else list(all_comment_bodies)
-    )
+    if all_comment_body_pages is not None:
+        comment_body_pages = [list(each_page) for each_page in all_comment_body_pages]
+    else:
+        comment_body_pages = [[] if all_comment_bodies is None else list(all_comment_bodies)]
     calls = recorded_calls if recorded_calls is not None else []
 
     def fake_run(
@@ -119,9 +124,12 @@ def _make_gh_runner(
                 return subprocess.CompletedProcess(
                     all_arguments, 1, "", "list failed"
                 )
-            all_entries = [{"body": each_body} for each_body in comment_bodies]
+            all_pages = [
+                [{"body": each_body} for each_body in each_page]
+                for each_page in comment_body_pages
+            ]
             return subprocess.CompletedProcess(
-                all_arguments, 0, json.dumps(all_entries), ""
+                all_arguments, 0, json.dumps(all_pages), ""
             )
         if GH_COMMENT_SUBCOMMAND in all_arguments:
             if not is_comment_ok:
@@ -201,6 +209,70 @@ def test_post_skips_when_existing_comment_same_sha(
         "run",
         _make_gh_runner(
             all_comment_bodies=[existing_body],
+            recorded_calls=recorded_calls,
+        ),
+    )
+    outcome = poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    assert outcome.is_skipped is True
+    assert outcome.is_posted is False
+    assert outcome.message == MESSAGE_ALREADY_POSTED
+    assert not any(
+        GH_COMMENT_SUBCOMMAND in each_call for each_call in recorded_calls
+    )
+
+
+def test_list_comments_call_uses_paginate_and_slurp(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(recorded_calls=recorded_calls),
+    )
+    poster.post_clean_review_comment(
+        working_directory=worktree,
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+        is_dry_run=False,
+    )
+    all_api_calls = [
+        each_call for each_call in recorded_calls if GH_API_TOKEN in each_call
+    ]
+    assert len(all_api_calls) == 1
+    api_call = all_api_calls[0]
+    assert GH_PAGINATE_FLAG in api_call
+    assert GH_SLURP_FLAG in api_call
+
+
+def test_post_skips_when_existing_comment_spans_multiple_slurped_pages(
+    worktree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing_body = poster.build_comment_body(
+        head_sha=FIXTURE_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+    )
+    other_body = poster.build_comment_body(
+        head_sha=FIXTURE_OTHER_HEAD_SHA,
+        mode=FIXTURE_MODE_CHAIN,
+        served_command=FIXTURE_SERVED_COMMAND,
+    )
+    recorded_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_runner(
+            all_comment_body_pages=[[other_body], [existing_body]],
             recorded_calls=recorded_calls,
         ),
     )

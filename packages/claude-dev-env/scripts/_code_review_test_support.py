@@ -27,6 +27,7 @@ if _SCRIPTS_DIRECTORY not in sys.path:
 import claude_chain_runner as chain_runner  # noqa: E402
 import invoke_code_review as invoker  # noqa: E402
 from claude_chain_runner import ChainAttempt, ChainInvocationOutcome  # noqa: E402
+from claude_usage_probe import ClaudeUsageProbeReport  # noqa: E402
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
@@ -61,6 +62,7 @@ GIT_INIT_TIMEOUT_SECONDS = 30
 REPOSITORY_USER_EMAIL = "reviewer@example.com"
 REPOSITORY_USER_NAME = "Reviewer"
 PINNED_INITIAL_BRANCH = "main"
+FIXTURE_USAGE_PROBE_SOURCE = "test-seam"
 
 
 def _run_git(*git_arguments: str, working_directory: Path | None = None) -> None:
@@ -190,6 +192,7 @@ class _SeamConfiguration:
     claude_outcome: ChainInvocationOutcome | BaseException | None
     should_dirty_tree_on_chain: bool
     working_directory: Path | None
+    session_has_usage_left: bool | None
 
 
 def _record_dirty_tree(configuration: _SeamConfiguration) -> None:
@@ -213,6 +216,22 @@ def _detect_empty_stdin(maybe_stdin: object) -> bool | None:
     if callable(maybe_seek):
         maybe_seek(0)
     return stdin_contents == ""
+
+
+def _build_usage_probe_seam(
+    configuration: _SeamConfiguration,
+) -> Callable[[], ClaudeUsageProbeReport]:
+    def fake_usage_probe() -> ClaudeUsageProbeReport:
+        return ClaudeUsageProbeReport(
+            session_utilization=None,
+            weekly_utilization=None,
+            weekly_near_cap=None,
+            session_has_usage_left=configuration.session_has_usage_left,
+            source=FIXTURE_USAGE_PROBE_SOURCE,
+            probe_ok=True,
+        )
+
+    return fake_usage_probe
 
 
 def _build_host_profile_seam(
@@ -297,6 +316,11 @@ def _apply_seams(
         "chain_subprocess_runner",
         _build_subprocess_seam(call_log),
     )
+    monkeypatch.setattr(
+        invoker,
+        "review_usage_probe",
+        _build_usage_probe_seam(configuration),
+    )
 
 
 def install_seams(
@@ -306,6 +330,7 @@ def install_seams(
     claude_outcome: ChainInvocationOutcome | BaseException | None = None,
     should_dirty_tree_on_chain: bool = False,
     working_directory: Path | None = None,
+    session_has_usage_left: bool | None = True,
 ) -> SeamCallLog:
     call_log = SeamCallLog()
     configuration = _SeamConfiguration(
@@ -313,6 +338,7 @@ def install_seams(
         claude_outcome=claude_outcome,
         should_dirty_tree_on_chain=should_dirty_tree_on_chain,
         working_directory=working_directory,
+        session_has_usage_left=session_has_usage_left,
     )
     _apply_seams(monkeypatch, call_log, configuration)
     return call_log

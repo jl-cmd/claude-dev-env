@@ -65,6 +65,7 @@ from dev_env_scripts_constants.post_claude_review_clean_comment_constants import
     GH_REPO_NAME_WITH_OWNER_JSON_KEY,
     GH_REPO_TOKEN,
     GH_REPO_VIEW_JSON_FIELDS,
+    GH_SLURP_FLAG,
     GH_VIEW_SUBCOMMAND,
     GIT_BINARY,
     GIT_HEAD_REF,
@@ -282,30 +283,53 @@ def _list_issue_comment_bodies(
     pull_request: PullRequestTarget,
     working_directory: Path,
 ) -> list[str] | None:
+    """Read every comment body on a PR through the paginated issues API.
+
+    ::
+
+        gh api ... --paginate --slurp
+            # ok: [[{"body": "a"}, {"body": "b"}], [{"body": "c"}]]
+            #     one JSON array of pages; flatten after reading every page
+
+    The query runs ``gh api --paginate --slurp`` so every page lands in one
+    JSON array of pages, and the flattening happens here after the full
+    pagination rather than per page.
+
+    Args:
+        pull_request: Resolved PR identity whose comments to read.
+        working_directory: PR worktree used as cwd for the ``gh`` call.
+
+    Returns:
+        The comment bodies across all pages, or None when gh fails or the
+        output is not the slurped page-array shape.
+    """
     api_path = ISSUE_COMMENTS_API_PATH_TEMPLATE.format(
         owner=pull_request.owner,
         repo=pull_request.repo,
         pr_number=pull_request.pr_number,
     )
     completion = _run_command(
-        [GH_BINARY_NAME, GH_API_TOKEN, api_path, GH_PAGINATE_FLAG],
+        [GH_BINARY_NAME, GH_API_TOKEN, api_path, GH_PAGINATE_FLAG, GH_SLURP_FLAG],
         working_directory=working_directory,
     )
     if completion.returncode != 0:
         return None
     try:
-        parsed_payload = json.loads(completion.stdout)
+        all_comment_pages = json.loads(completion.stdout)
     except json.JSONDecodeError:
         return None
-    if not isinstance(parsed_payload, list):
+    if not isinstance(all_comment_pages, list):
         return None
     all_bodies: list[str] = []
-    for each_entry in parsed_payload:
-        if not isinstance(each_entry, dict):
+    for each_page in all_comment_pages:
+        if not isinstance(each_page, list):
             continue
-        maybe_body = each_entry.get(GH_COMMENT_BODY_JSON_KEY)
-        if isinstance(maybe_body, str):
-            all_bodies.append(maybe_body)
+        for each_entry in each_page:
+            if not isinstance(each_entry, dict):
+                continue
+            maybe_body = each_entry.get(GH_COMMENT_BODY_JSON_KEY)
+            if isinstance(maybe_body, str):
+                all_bodies.append(maybe_body)
     return all_bodies
 
 
