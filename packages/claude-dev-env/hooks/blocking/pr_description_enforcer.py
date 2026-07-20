@@ -2,8 +2,11 @@
 
 Reads a PreToolUse JSON payload on stdin, audits body-carrying gh pr
 create/edit/comment invocations against the Anthropic claude-code style
-rules plus the proof-of-work audit for proof-shaped comment bodies, and
-denies gh pr ready while the PR carries no passing proof comment.
+rules, denies a create or edit body that hand-types a pytest count, runs
+the proof-of-work audit on proof-shaped comment bodies, and denies gh pr
+ready while the PR carries no passing proof comment. Each subcommand flag
+is read from the same logical line the audited body comes from, so a later
+segment of a chained command never decides which rules apply.
 Readability-management CLI flags short-circuit the stdin path to adjust
 the persisted readability state.
 """
@@ -26,6 +29,9 @@ from blocking.pr_description_body_audit import (  # noqa: E402
     _matches_self_closing_reference,
     _opens_with_this_pr_phrase,
     contains_hardcoded_test_count_claim,
+)
+from blocking._gh_body_arg_utils import (  # noqa: E402
+    get_logical_first_line,
 )
 from blocking.pr_description_command_parser import (  # noqa: E402
     extract_body_from_command,
@@ -191,10 +197,11 @@ def main() -> None:
             _emit_denial(ready_denial_reason)
         sys.exit(0)
 
-    has_any_body_flag = _command_carries_body_flag(command)
-    is_pr_create = "gh pr create" in command and has_any_body_flag
-    is_pr_edit = "gh pr edit" in command and has_any_body_flag
-    is_pr_comment = "gh pr comment" in command and has_any_body_flag
+    body_owning_invocation = get_logical_first_line(command)
+    has_any_body_flag = _command_carries_body_flag(body_owning_invocation)
+    is_pr_create = "gh pr create" in body_owning_invocation and has_any_body_flag
+    is_pr_edit = "gh pr edit" in body_owning_invocation and has_any_body_flag
+    is_pr_comment = "gh pr comment" in body_owning_invocation and has_any_body_flag
 
     if not (is_pr_create or is_pr_edit or is_pr_comment):
         sys.exit(0)

@@ -14,6 +14,10 @@ PR_GUIDE_PATH: str = os.path.join(_PLUGIN_ROOT, "docs", "PR_DESCRIPTION_GUIDE.md
 MINIMUM_SUBSTANTIVE_PROSE_CHARS: int = 40
 
 FENCED_CODE_BLOCK_PATTERN: re.Pattern[str] = re.compile(r"```.*?```", re.DOTALL)
+TILDE_FENCED_CODE_BLOCK_PATTERN: re.Pattern[str] = re.compile(
+    r"^[ ]{0,3}~~~.*?^[ ]{0,3}~~~[^\n]*",
+    re.DOTALL | re.MULTILINE,
+)
 INLINE_CODE_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
 HEADING_LINE_PATTERN: re.Pattern[str] = re.compile(r"^#+[ \t].*$", re.MULTILINE)
 BOLD_PAIR_PATTERN: re.Pattern[str] = re.compile(r"\*\*([^*]+?)\*\*")
@@ -28,15 +32,20 @@ VAGUE_LANGUAGE_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
-PYTEST_INVOCATION_PATTERN: re.Pattern[str] = re.compile(r"\bpytest\b", re.IGNORECASE)
+INLINE_CODE_PLACEHOLDER: str = "code"
+PYTEST_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
+    r"(?<![\w-])pytest(?![\w-]|\.\w)",
+    re.IGNORECASE,
+)
 HARDCODED_TEST_COUNT_PATTERN: re.Pattern[str] = re.compile(
-    r"\b\d+\s+(?:passed|failed)\b",
+    r"(?<![\w#-])\d+[^\S\n]+(?:passed|failed)(?![\w-])",
     re.IGNORECASE,
 )
 HARDCODED_TEST_COUNT_MESSAGE: str = (
-    "PR description hand-types a pytest count (N passed/failed) -- the count drifts "
-    "as commits land and tests are added; move it to the proof comment as pasted "
-    "command output rather than a hand-typed number in the description"
+    "PR body hand-types a pytest count (N passed/failed) in prose -- the count "
+    "drifts as commits land and tests are added. Paste the run output into a code "
+    "fence in the description, or state the measured numbers in a gh pr comment "
+    "proof post as a bullet or table row"
 )
 
 SUMMARY_HEADER: str = "## Summary"
@@ -153,10 +162,11 @@ __all__ = [
     "HEAVY_MIN_BODY_CHARS_FOR_CLASSIFICATION",
     "HEAVY_SHAPE",
     "INLINE_CODE_PATTERN",
+    "INLINE_CODE_PLACEHOLDER",
     "LINK_TEXT_PATTERN",
     "MINIMUM_SUBSTANTIVE_PROSE_CHARS",
     "PR_GUIDE_PATH",
-    "PYTEST_INVOCATION_PATTERN",
+    "PYTEST_REFERENCE_PATTERN",
     "READABILITY_AVG_SENTENCE_WORDS_CEILING",
     "READABILITY_ENABLED_STATE_FILE",
     "READABILITY_FLESCH_LOOSEN_FACTOR",
@@ -174,6 +184,7 @@ __all__ = [
     "STANDARD_SHAPE",
     "TABLE_ROW_LINE_PATTERN",
     "THIS_PR_OPENING_PATTERN",
+    "TILDE_FENCED_CODE_BLOCK_PATTERN",
     "TRIVIAL_BODY_CHAR_THRESHOLD",
     "TRIVIAL_SHAPE",
     "VAGUE_LANGUAGE_PATTERN",
