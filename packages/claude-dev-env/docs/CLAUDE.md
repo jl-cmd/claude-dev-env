@@ -18,6 +18,7 @@ Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. T
 | `nas-ssh-invocation.md` | Full NAS ssh policy behind the `rules/nas-ssh-invocation.md` kernel: the OpenSSH binary form, config sources, and hook enforcement |
 | `worker-completion-gate.md` | Full worker-completion gate behind the `rules/workers-done-before-complete.md` kernel: the checklist, examples, and run-state records |
 | `wsl-docker-cowork-starter-matrix.md` | Host matrix: WSL/Docker/cowork component → starter → required? → shutdown; policy options with costs; no unmeasured `.wslconfig` memory cap |
+| `host-pool-health-monitor.md` | Operator recipe for Windows pool/handle health: thresholds, clean-shell re-run of `Capture-PoolHealth.ps1`, RC2/RC3/RC4 remediation map |
 
 ## Subdirectory
 

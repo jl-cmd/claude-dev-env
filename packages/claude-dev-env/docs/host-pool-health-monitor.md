@@ -41,15 +41,15 @@ pwsh -NoProfile -File "$HOME\.claude\scripts\Capture-PoolHealth.ps1" `
   -OutPath "$env:TEMP\pool-health-$(Get-Date -Format yyyyMMdd-HHmmss).txt"
 ```
 
-Exit code: `0` = all thresholds clear; `1` = one or more alerts; non-zero also on hard capture failure.
+Exit code: `0` = all thresholds clear; `1` = one or more alerts. Hard capture failures (for example Get-Counter) stop with a non-zero exit. Soft failures (for example pool-tag walk unavailable) print a warning and can still exit `0` when thresholds are clear.
 
 ### What the script prints
 
 1. **Counters** — nonpaged/paged pool, commit, available MB, total handles/threads  
 2. **High-handle processes** — every process over the handle threshold (top N by default)  
 3. **Pool tags** — top nonpaged, top paged, plus File/IoFE/Toke/Key/FMfn watchlist via `NtQuerySystemInformation` class 22 (same source PoolMon uses; no admin and no WDK required)  
-4. **Threshold verdict** — `OK` or `ALERT ...` lines  
-5. **Remediation map** — RC issue pointers below  
+4. **Remediation map** — RC issue pointers below  
+5. **Threshold verdict** — `OK` or `ALERT ...` lines (last; drives exit code)  
 
 ### Counters-only one-liner (no tags)
 
