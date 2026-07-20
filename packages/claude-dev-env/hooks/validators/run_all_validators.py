@@ -826,12 +826,13 @@ def _temporary_path_preserving_directory_signal(
 ) -> Path:
     """Build a temp path that keeps exemption directory tails and the basename.
 
-    Directory-based exemptions (for example ``/scripts/`` CLI markers and
-    ``/tests/`` test-path patterns) match substrings of the file path. Staging
-    under a flat temp basename drops those segments. Mirroring only the
-    exemption-relevant directory tail (plus basename) restores that signal
-    without copying absolute system prefixes such as pytest ``tmp_path`` parents
-    that contain ``test_`` and would falsely trip test-file exemptions.
+    Directory-name exemptions (``/scripts/``, ``/tests/``) and separator-free
+    path fragments (``test_`` inside ``test_helpers``) match substrings of the
+    real file path. Staging under a flat temp basename drops those segments.
+    Mirroring the first exemption-signaling directory through the basename
+    restores that signal without copying absolute system prefixes such as
+    pytest ``tmp_path`` parents that contain ``test_`` and would falsely trip
+    test-file exemptions.
 
     Args:
         temporary_directory: Root of the ephemeral staging tree.
