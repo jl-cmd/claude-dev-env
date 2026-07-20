@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,19 @@ def _resolver_stdout(
             RESULT_KEY_SOURCE: source,
         }
     )
+
+
+def _stub_runner(
+    *, returncode: int, stdout: str
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    def _fake_runner(
+        all_invocation_tokens: list[str],
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_invocation_tokens, all_keywords
+        return _completed_process(returncode=returncode, stdout=stdout)
+
+    return _fake_runner
 
 
 @pytest.mark.parametrize(
@@ -160,18 +174,13 @@ def test_probe_claude_usage_maps_successful_resolver_stdout(
     resolver_stdout = _resolver_stdout(
         session_utilization=FIXTURE_SESSION_UTILIZATION_AVAILABLE
     )
-
-    def _fake_runner(
-        all_invocation_tokens: list[str],
-        **all_keywords: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del all_invocation_tokens, all_keywords
-        return _completed_process(
-            returncode=FIXTURE_RESOLVER_RETURNCODE_OK,
-            stdout=resolver_stdout,
-        )
-
-    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_subprocess_runner",
+        _stub_runner(
+            returncode=FIXTURE_RESOLVER_RETURNCODE_OK, stdout=resolver_stdout
+        ),
+    )
     monkeypatch.setattr(
         usage_probe,
         "usage_probe_resolve_script_path",
@@ -186,17 +195,14 @@ def test_probe_claude_usage_maps_successful_resolver_stdout(
 def test_probe_claude_usage_unavailable_on_non_zero_resolver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_runner(
-        all_invocation_tokens: list[str],
-        **all_keywords: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del all_invocation_tokens, all_keywords
-        return _completed_process(
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_subprocess_runner",
+        _stub_runner(
             returncode=FIXTURE_RESOLVER_RETURNCODE_FAIL,
             stdout=json.dumps({"error": "no token"}),
-        )
-
-    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+        ),
+    )
     monkeypatch.setattr(
         usage_probe,
         "usage_probe_resolve_script_path",
@@ -259,17 +265,14 @@ def test_probe_reports_unavailable_when_source_is_not_a_label(
 ) -> None:
     """probe_ok true must never pair with the unavailable source label."""
 
-    def _fake_runner(
-        all_invocation_tokens: list[str],
-        **all_keywords: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del all_invocation_tokens, all_keywords
-        return _completed_process(
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_subprocess_runner",
+        _stub_runner(
             returncode=FIXTURE_RESOLVER_RETURNCODE_OK,
             stdout=json.dumps(resolver_payload),
-        )
-
-    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+        ),
+    )
     monkeypatch.setattr(
         usage_probe,
         "usage_probe_resolve_script_path",
@@ -284,17 +287,14 @@ def test_probe_reports_unavailable_when_source_is_not_a_label(
 def test_probe_reports_unavailable_on_non_dict_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_runner(
-        all_invocation_tokens: list[str],
-        **all_keywords: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del all_invocation_tokens, all_keywords
-        return _completed_process(
+    monkeypatch.setattr(
+        usage_probe,
+        "usage_probe_subprocess_runner",
+        _stub_runner(
             returncode=FIXTURE_RESOLVER_RETURNCODE_OK,
             stdout=json.dumps([1, 2, 3]),
-        )
-
-    monkeypatch.setattr(usage_probe, "usage_probe_subprocess_runner", _fake_runner)
+        ),
+    )
     monkeypatch.setattr(
         usage_probe,
         "usage_probe_resolve_script_path",
