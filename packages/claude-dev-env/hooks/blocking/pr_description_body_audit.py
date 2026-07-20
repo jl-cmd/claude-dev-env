@@ -2,9 +2,10 @@
 
 Strips Markdown ceremony to measure substantive prose, classifies the body as
 trivial, standard, or heavy, enumerates section headers, prepares the prose
-scanned for vague language, and flags self-closing references to the PR's own
-number and the discouraged "This PR ..." opening. Vague-language enforcement
-runs in validate_pr_body in pr_description_enforcer.py.
+scanned for vague language, flags self-closing references to the PR's own
+number and the discouraged "This PR ..." opening, and detects hand-typed
+pytest pass/fail count claims in prose. Vague-language and create/edit count
+enforcement run in pr_description_enforcer.py.
 """
 
 import re

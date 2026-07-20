@@ -2,6 +2,10 @@
 
 Authoritative reference for the `pr-description-writer` agent and the `pr_description_enforcer` PreToolUse hook. PR bodies that match this guide pass the enforcer on first attempt.
 
+## Hard block: hand-typed pytest counts on create/edit
+
+On `gh pr create` and `gh pr edit`, the enforcer denies a body that both mentions `pytest` and carries a hand-typed `N passed` / `N failed` claim in free prose (after Markdown ceremony strip). Fenced and inline-code pytest output is exempt — counts vanish with the fence. `gh pr comment` is out of scope so proof comments may still carry measured counts.
+
 ## Anthropic style basis
 
 The shape rules and header vocabulary derive from a 120-PR sample. Sources: `anthropics/claude-code` (40 PRs), `anthropics/claude-code-action` (40 PRs), and `anthropics/claude-code-sdk-python` (40 PRs). The corpus was sampled from merged PRs.
