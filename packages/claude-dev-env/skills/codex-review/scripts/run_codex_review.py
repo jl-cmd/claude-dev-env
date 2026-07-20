@@ -95,14 +95,12 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
             check=False,
             timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, OSError):
         return
 
 
 def _kill_posix_process_group(process_identifier: int) -> None:
     """Kill a POSIX process group so no grandchild keeps the capture pipe open."""
-    if os.name == WINDOWS_OS_NAME:
-        return
     try:
         process_group_identifier = os.getpgid(process_identifier)
         os.killpg(process_group_identifier, signal.SIGKILL)
