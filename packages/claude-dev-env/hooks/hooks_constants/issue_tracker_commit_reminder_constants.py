@@ -6,16 +6,20 @@ token walk skips, the flag prefix, and the flag-plus-value token span), the
 shell command-separator tokens that mark a command boundary, the path
 separators the token-basename split uses, the tool-input payload keys the hook
 reads, the PreToolUse allow-payload keys and values it emits, and the reminder
-text it returns as additionalContext. The git-token, flag-span, and separator
-values are shared with `pii_prevention_constants` rather than redeclared.
+text it returns as additionalContext. The git-token, flag-span, separator,
+wrapper-skip, and env-assignment values are shared with
+`pii_prevention_constants` rather than redeclared.
 """
 
 from __future__ import annotations
 
 from hooks_constants.pii_prevention_constants import (
     ALL_GIT_BINARY_BASENAMES,
+    ALL_LEADING_SKIPPABLE_COMMAND_TOKENS,
+    ALL_ONE_OPERAND_WRAPPER_TOKENS,
     ALL_SHELL_COMMAND_SEPARATOR_TOKENS,
     ALL_VALUE_TAKING_GIT_OPTIONS,
+    ENVIRONMENT_ASSIGNMENT_PATTERN,
     GIT_OPTION_WITH_VALUE_STEP,
 )
 
@@ -24,6 +28,9 @@ __all__ = [
     "ALL_REMINDER_TRIGGER_SUBCOMMANDS",
     "ALL_ARGUMENT_TAKING_GLOBAL_FLAGS",
     "ALL_COMMAND_SEPARATOR_TOKENS",
+    "ALL_LEADING_SKIPPABLE_COMMAND_TOKENS",
+    "ALL_ONE_OPERAND_WRAPPER_TOKENS",
+    "ENVIRONMENT_ASSIGNMENT_PATTERN",
     "FLAG_TOKEN_PREFIX",
     "FLAG_WITH_VALUE_TOKEN_SPAN",
     "WINDOWS_PATH_SEPARATOR",

@@ -45,6 +45,9 @@ def _run_main_with_command(command_text: str) -> str:
         "git -C /repo push origin main",
         "cd repo && git commit --amend",
         "git.exe commit -m x",
+        "git status; git push",
+        "sudo git commit -m x",
+        "FOO=1 git push",
     ],
 )
 def test_commit_or_push_returns_allow_with_reminder(
@@ -74,7 +77,15 @@ def test_non_git_commit_stays_silent(non_commit_command: str) -> None:
 
 @pytest.mark.parametrize(
     "matching_command",
-    ["git commit", "git push", "git -C /repo commit -m y"],
+    [
+        "git commit",
+        "git push",
+        "git -C /repo commit -m y",
+        "git status; git push",
+        "sudo git commit -m x",
+        "FOO=1 git push",
+        "timeout 5 git commit -m x",
+    ],
 )
 def test_is_git_commit_or_push_command_matches(matching_command: str) -> None:
     assert reminder.is_git_commit_or_push_command(matching_command) is True
@@ -82,7 +93,7 @@ def test_is_git_commit_or_push_command_matches(matching_command: str) -> None:
 
 @pytest.mark.parametrize(
     "non_matching_command",
-    ["git status", "ls", "echo push", "git remote -v"],
+    ["git status", "ls", "echo push", "git remote -v", "git status; git log"],
 )
 def test_is_git_commit_or_push_command_rejects(non_matching_command: str) -> None:
     assert reminder.is_git_commit_or_push_command(non_matching_command) is False

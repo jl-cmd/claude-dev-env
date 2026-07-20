@@ -21,9 +21,12 @@ from hooks_constants.issue_tracker_commit_reminder_constants import (
     ALL_ARGUMENT_TAKING_GLOBAL_FLAGS,
     ALL_COMMAND_SEPARATOR_TOKENS,
     ALL_GIT_EXECUTABLE_TOKENS,
+    ALL_LEADING_SKIPPABLE_COMMAND_TOKENS,
+    ALL_ONE_OPERAND_WRAPPER_TOKENS,
     ALL_REMINDER_TRIGGER_SUBCOMMANDS,
     ALLOW_PERMISSION_DECISION,
     COMMAND_INPUT_KEY,
+    ENVIRONMENT_ASSIGNMENT_PATTERN,
     FLAG_TOKEN_PREFIX,
     FLAG_WITH_VALUE_TOKEN_SPAN,
     HOOK_EVENT_NAME_KEY,
@@ -39,9 +42,18 @@ from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_s
 
 
 def _tokenize_command(command_text: str) -> list[str]:
-    """Split a shell command into tokens, falling back to whitespace on a parse error."""
+    """Split a shell command into tokens, treating separators as their own tokens.
+
+    Uses ``punctuation_chars=True`` so ``git status; git push`` yields a bare
+    ``;`` token rather than gluing it onto ``status;`` — the same shell-aware
+    split the PII commit detector uses.
+    """
+    lexer = shlex.shlex(command_text, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.escape = ""
+    lexer.commenters = ""
     try:
-        return shlex.split(command_text, posix=True)
+        return list(lexer)
     except ValueError:
         return command_text.split()
 
@@ -71,12 +83,49 @@ def _is_command_start_position(all_tokens: list[str], token_position: int) -> bo
     return all_tokens[token_position - 1] in ALL_COMMAND_SEPARATOR_TOKENS
 
 
+def _git_token_position_from_command_start(
+    all_tokens: list[str], command_start_position: int
+) -> int | None:
+    """Return the git-binary index after skippable prefixes, or None.
+
+    Walks from a command boundary past env assignments (``FOO=1``), shell
+    keywords, and wrapper commands (``sudo``, ``env``, ``timeout`` + operand)
+    until the first non-skippable word. That word must be a git binary.
+    """
+    cursor = command_start_position
+    total_token_count = len(all_tokens)
+    while cursor < total_token_count:
+        candidate_token = all_tokens[cursor]
+        if candidate_token in ALL_COMMAND_SEPARATOR_TOKENS:
+            return None
+        if ENVIRONMENT_ASSIGNMENT_PATTERN.match(candidate_token):
+            cursor += 1
+            continue
+        token_basename = _token_basename(candidate_token)
+        if token_basename in ALL_LEADING_SKIPPABLE_COMMAND_TOKENS:
+            cursor += 1
+            if (
+                token_basename in ALL_ONE_OPERAND_WRAPPER_TOKENS
+                and cursor < total_token_count
+                and all_tokens[cursor] not in ALL_COMMAND_SEPARATOR_TOKENS
+                and _token_basename(all_tokens[cursor]) not in ALL_GIT_EXECUTABLE_TOKENS
+            ):
+                cursor += 1
+            continue
+        if token_basename in ALL_GIT_EXECUTABLE_TOKENS:
+            return cursor
+        return None
+    return None
+
+
 def _first_subcommand_after(all_tokens: list[str], git_token_position: int) -> str:
     """Return the git subcommand following the git token, skipping global flags."""
     cursor = git_token_position + 1
     total_token_count = len(all_tokens)
     while cursor < total_token_count:
         candidate_token = all_tokens[cursor]
+        if candidate_token in ALL_COMMAND_SEPARATOR_TOKENS:
+            return ""
         if candidate_token in ALL_ARGUMENT_TAKING_GLOBAL_FLAGS:
             cursor += FLAG_WITH_VALUE_TOKEN_SPAN
             continue
@@ -92,14 +141,18 @@ def is_git_commit_or_push_command(command_text: str) -> bool:
 
     ::
 
-        "git commit -m x"      -> True
-        "git -C /repo push"    -> True
-        "cd repo && git push"  -> True
-        "echo git commit"      -> False
-        "git status"           -> False
+        "git commit -m x"           -> True
+        "git -C /repo push"         -> True
+        "cd repo && git push"       -> True
+        "git status; git push"      -> True
+        "sudo git commit -m x"      -> True
+        "FOO=1 git push"            -> True
+        "echo git commit"           -> False
+        "git status"                -> False
 
-    The command is tokenized. At each command-start git executable token the walk
-    steps past the global flags to the first subcommand, which decides the match.
+    The command is tokenized with punctuation-aware splitting. At each command
+    boundary the walk skips env assignments and wrapper prefixes, then treats a
+    git binary's first subcommand as the match key.
 
     Args:
         command_text: The Bash command string from the tool payload.
@@ -111,9 +164,15 @@ def is_git_commit_or_push_command(command_text: str) -> bool:
     for each_position in range(len(all_tokens)):
         if not _is_command_start_position(all_tokens, each_position):
             continue
-        if _token_basename(all_tokens[each_position]) not in ALL_GIT_EXECUTABLE_TOKENS:
+        git_token_position = _git_token_position_from_command_start(
+            all_tokens, each_position
+        )
+        if git_token_position is None:
             continue
-        if _first_subcommand_after(all_tokens, each_position) in ALL_REMINDER_TRIGGER_SUBCOMMANDS:
+        if (
+            _first_subcommand_after(all_tokens, git_token_position)
+            in ALL_REMINDER_TRIGGER_SUBCOMMANDS
+        ):
             return True
     return False
 
