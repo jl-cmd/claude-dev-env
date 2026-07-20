@@ -57,6 +57,15 @@ BeforeAll {
         )
         return Start-Process -FilePath 'pwsh' -ArgumentList $allArguments -PassThru -WindowStyle Hidden
     }
+
+    function Stop-TestProcessIfRunning {
+        param(
+            [System.Diagnostics.Process]$Process
+        )
+        if (-not $Process.HasExited) {
+            Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
@@ -86,12 +95,8 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
             $viewerProcess.HasExited | Should -BeTrue
         }
         finally {
-            if (-not $viewerProcess.HasExited) {
-                Stop-Process -Id $viewerProcess.Id -Force -ErrorAction SilentlyContinue
-            }
-            if (-not $shortLivedParent.HasExited) {
-                Stop-Process -Id $shortLivedParent.Id -Force -ErrorAction SilentlyContinue
-            }
+            Stop-TestProcessIfRunning -Process $viewerProcess
+            Stop-TestProcessIfRunning -Process $shortLivedParent
         }
     }
 
@@ -110,12 +115,8 @@ Describe 'Show-Asset.ps1 parent-death and max-lifetime exit' {
             $viewerProcess.HasExited | Should -BeTrue
         }
         finally {
-            if (-not $viewerProcess.HasExited) {
-                Stop-Process -Id $viewerProcess.Id -Force -ErrorAction SilentlyContinue
-            }
-            if (-not $longLivedParent.HasExited) {
-                Stop-Process -Id $longLivedParent.Id -Force -ErrorAction SilentlyContinue
-            }
+            Stop-TestProcessIfRunning -Process $viewerProcess
+            Stop-TestProcessIfRunning -Process $longLivedParent
         }
     }
 }

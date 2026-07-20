@@ -63,7 +63,7 @@ $imageExtensions = @('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tif', '
 $screenMargin = 80
 $minimumClientWidth = 220
 $minimumClientHeight = 160
-$allOpenForms = New-Object 'System.Collections.Generic.List[System.Windows.Forms.Form]'
+$openWindowCount = 0
 $sessionStartedAtUtc = [datetime]::UtcNow
 $maxLifetime = [timespan]::FromSeconds($MaxLifetimeSeconds)
 
@@ -155,16 +155,15 @@ foreach ($path in $Paths) {
             if ($eventArguments.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $sender.Close() }
         })
     $form.Add_FormClosed({
-            param($sender, $eventArguments)
-            [void]$script:allOpenForms.Remove($sender)
-            if ($script:allOpenForms.Count -eq 0) { Stop-ShowAssetSession }
+            $script:openWindowCount--
+            if ($script:openWindowCount -le 0) { Stop-ShowAssetSession }
         })
 
-    [void]$allOpenForms.Add($form)
+    $openWindowCount++
     $form.Show()
 }
 
-if ($allOpenForms.Count -gt 0) {
+if ($openWindowCount -gt 0) {
     $watchTimer = New-Object System.Windows.Forms.Timer
     $watchTimer.Interval = $ParentPollIntervalMilliseconds
     $watchTimer.Add_Tick({
