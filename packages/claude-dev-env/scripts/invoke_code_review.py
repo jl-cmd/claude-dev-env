@@ -21,7 +21,8 @@ and mints a clean stamp only when a pass exits 0 with a stable surface hash.
 Import ``invoke_code_review`` for the outcome object, or run as a CLI::
 
     python invoke_code_review.py --cwd <dir> --session-model <alias>
-        [--timeout-seconds N] [--record-stamp] [effort]
+        [--timeout-seconds N] [--session-has-usage-left true|false|unknown]
+        [--record-stamp] [effort]
 """
 
 from __future__ import annotations
@@ -64,6 +65,7 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_EFFORT_HELP,
     CLI_EFFORT_METAVAR,
     CLI_RECORD_STAMP_HELP,
+    CLI_SESSION_HAS_USAGE_LEFT_FLAG,
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_FIX_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
@@ -90,6 +92,9 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     RESULT_KEY_RETURNCODE,
     RESULT_KEY_SERVED_COMMAND,
     RESULT_KEY_STAMP_MINTED,
+    SESSION_HAS_USAGE_LEFT_FALSE,
+    SESSION_HAS_USAGE_LEFT_TRUE,
+    SESSION_HAS_USAGE_LEFT_UNKNOWN,
     STAMP_DID_NOT_CONVERGE_MESSAGE,
     STAMP_DID_NOT_CONVERGE_RETURNCODE,
     STAMP_STORE_IMPORT_FAILURE_MESSAGE,
@@ -244,7 +249,12 @@ def is_opus_session_model(session_model: str) -> bool:
     return session_model.strip().lower() == CODE_REVIEW_MODEL_ALIAS
 
 
-def decide_review_mode(*, host_profile: str, session_model: str) -> str:
+def decide_review_mode(
+    *,
+    host_profile: str,
+    session_model: str,
+    session_has_usage_left: bool | None = None,
+) -> str:
     """Return ``in_session`` or ``chain`` from host profile and session model.
 
     ::
@@ -253,14 +263,26 @@ def decide_review_mode(*, host_profile: str, session_model: str) -> str:
             # ok: "in_session"
         decide_review_mode(host_profile="Claude", session_model="sonnet")
             # ok: "chain"
+        decide_review_mode(
+            host_profile="Claude",
+            session_model="opus",
+            session_has_usage_left=False,
+        )  # ok: "chain"
 
     Args:
         host_profile: Detected host profile (``Claude`` or ``ThirdParty``).
         session_model: Caller-stated session model short alias.
+        session_has_usage_left: Usage-probe decision for the primary session.
+            ``False`` forces chain so another chain binary can serve when the
+            primary account is drained. ``True`` and ``None`` keep host/model
+            rules.
 
     Returns:
-        ``MODE_IN_SESSION`` only for Claude host on opus; otherwise ``MODE_CHAIN``.
+        ``MODE_IN_SESSION`` only for Claude host on opus with usage left
+        unknown or true; otherwise ``MODE_CHAIN``.
     """
+    if session_has_usage_left is False:
+        return MODE_CHAIN
     is_claude_host = host_profile == HOST_PROFILE_CLAUDE
     if is_claude_host and is_opus_session_model(session_model):
         return MODE_IN_SESSION
@@ -510,6 +532,70 @@ def _run_chain_review(
     return _chain_outcome(chain_outcome, working_directory=working_directory)
 
 
+def parse_session_has_usage_left_token(
+    session_has_usage_left_token: str,
+) -> bool | None:
+    """Parse the CLI ``--session-has-usage-left`` token into a tri-state bool.
+
+    ::
+
+        parse_session_has_usage_left_token("true")     # ok: True
+        parse_session_has_usage_left_token("false")    # ok: False
+        parse_session_has_usage_left_token("unknown")  # ok: None
+
+    Args:
+        session_has_usage_left_token: One of ``true``, ``false``, or ``unknown``
+            (letter case ignored).
+
+    Returns:
+        True, False, or None for the three probe outcomes.
+
+    Raises:
+        ValueError: The token is not one of the three allowed labels.
+    """
+    normalized_token = session_has_usage_left_token.strip().lower()
+    if normalized_token == SESSION_HAS_USAGE_LEFT_TRUE:
+        return True
+    if normalized_token == SESSION_HAS_USAGE_LEFT_FALSE:
+        return False
+    if normalized_token == SESSION_HAS_USAGE_LEFT_UNKNOWN:
+        return None
+    raise ValueError(
+        f"unsupported session-has-usage-left token: {session_has_usage_left_token!r}"
+    )
+
+
+def resolve_session_has_usage_left(
+    session_has_usage_left: bool | None,
+) -> bool | None:
+    """Return an explicit usage flag, or auto-probe when the flag is unknown.
+
+    ::
+
+        resolve_session_has_usage_left(True)   # ok: True (no probe)
+        resolve_session_has_usage_left(False)  # ok: False (no probe)
+        resolve_session_has_usage_left(None)   # ok: probe.session_has_usage_left
+
+    Explicit ``True``/``False`` win and skip the probe. ``None`` (CLI omitted
+    or ``unknown``) runs ``review_usage_probe`` and maps its
+    ``session_has_usage_left``. Probe failure yields ``None`` so mode
+    selection proceeds as unknown and the review still runs.
+
+    Args:
+        session_has_usage_left: Caller-stated probe decision, or None when
+            unknown.
+
+    Returns:
+        True, False, or None after optional auto-probe.
+    """
+    if session_has_usage_left is not None:
+        return session_has_usage_left
+    try:
+        probe_report = review_usage_probe()
+    except (OSError, RuntimeError, TypeError, ValueError, AttributeError):
+        return None
+    return probe_report.session_has_usage_left
+
 def invoke_code_review(
     *,
     working_directory: Path,
@@ -517,6 +603,7 @@ def invoke_code_review(
     timeout_seconds: int,
     effort: str = DEFAULT_CODE_REVIEW_EFFORT,
     is_force_chain: bool = False,
+    session_has_usage_left: bool | None = None,
 ) -> CodeReviewOutcome:
     """Run or hand off ``/code-review`` based on host profile and session model.
 
@@ -533,6 +620,9 @@ def invoke_code_review(
         effort: Effort token embedded in the ``/code-review`` prompt.
         is_force_chain: When True, always spawn chain mode (used by
             ``--record-stamp`` so the invoker observes the review).
+        session_has_usage_left: Optional usage-probe decision. ``False`` forces
+            chain mode even on Claude+opus so another chain binary can serve.
+            ``None`` auto-probes via ``claude_usage_probe``.
 
     Returns:
         Structured outcome including mode, served binary, return code, and
@@ -545,9 +635,13 @@ def invoke_code_review(
             effort=effort,
         )
     host_profile = review_host_profile_detector()
+    resolved_session_has_usage_left = resolve_session_has_usage_left(
+        session_has_usage_left
+    )
     review_mode = decide_review_mode(
         host_profile=host_profile,
         session_model=session_model,
+        session_has_usage_left=resolved_session_has_usage_left,
     )
     if review_mode == MODE_IN_SESSION:
         return _in_session_outcome()
@@ -795,6 +889,20 @@ def _add_review_arguments(parser: argparse.ArgumentParser) -> None:
         help="Caller session model short alias (for example opus or sonnet).",
     )
     parser.add_argument(
+        CLI_SESSION_HAS_USAGE_LEFT_FLAG,
+        dest="session_has_usage_left_token",
+        default=SESSION_HAS_USAGE_LEFT_UNKNOWN,
+        choices=(
+            SESSION_HAS_USAGE_LEFT_TRUE,
+            SESSION_HAS_USAGE_LEFT_FALSE,
+            SESSION_HAS_USAGE_LEFT_UNKNOWN,
+        ),
+        help=(
+            "Usage-probe decision for the primary session: true, false, or "
+            "unknown (default). false forces chain mode."
+        ),
+    )
+    parser.add_argument(
         CLI_TIMEOUT_FLAG,
         dest="timeout_seconds",
         type=int,
@@ -926,12 +1034,16 @@ def _run_record_stamp_cli(
 
 
 def _run_plain_review_cli(*, parsed_arguments: argparse.Namespace, effort: str) -> int:
+    session_has_usage_left = parse_session_has_usage_left_token(
+        parsed_arguments.session_has_usage_left_token
+    )
     try:
         review_outcome = invoke_code_review(
             working_directory=parsed_arguments.working_directory,
             session_model=parsed_arguments.session_model,
             timeout_seconds=parsed_arguments.timeout_seconds,
             effort=effort,
+            session_has_usage_left=session_has_usage_left,
         )
     except ChainConfigurationError:
         review_outcome = _failure_code_review_outcome(CHAIN_CONFIG_ERROR_EXIT_CODE)
