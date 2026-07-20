@@ -92,7 +92,6 @@ def test_staged_path_matches_is_test_file_verdict(
     assert is_test_file(str(staged_relative_path)) == is_test_file(file_path)
 
 
-
 def _passing_mock_result() -> MagicMock:
     """Return a mock validator result that reports a passing check."""
     mock_result = MagicMock()
