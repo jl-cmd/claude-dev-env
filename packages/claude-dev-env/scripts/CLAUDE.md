@@ -27,6 +27,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `check.ps1` | Runs the full code-quality check suite |
 | `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
 | `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |
+| `Capture-PoolHealth.ps1` | Captures Windows memory pool counters, high-handle processes, and kernel pool tags (via `NtQuerySystemInformation` class 22), prints a threshold verdict with a remediation map, and exits non-zero when any alert threshold fires |
 
 ## Subdirectories
 
