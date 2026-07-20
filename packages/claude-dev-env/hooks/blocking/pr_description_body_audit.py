@@ -41,6 +41,18 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
 )
 
 
+def _strip_fenced_code_regions(body: str) -> str:
+    """Return the body with backtick-fenced and tilde-fenced code regions removed."""
+    without_backtick_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
+    return TILDE_FENCED_CODE_BLOCK_PATTERN.sub("", without_backtick_fences)
+
+
+def _drop_quoted_and_tabulated_lines(body: str) -> str:
+    """Return the body with whole blockquote lines and table rows removed."""
+    without_blockquote_lines = BLOCKQUOTE_LINE_PATTERN.sub("", body)
+    return TABLE_ROW_LINE_PATTERN.sub("", without_blockquote_lines)
+
+
 def strip_markdown_ceremony(body: str) -> str:
     """Return the body with Markdown ceremony stripped to leave underlying prose.
 
@@ -49,9 +61,8 @@ def strip_markdown_ceremony(body: str) -> str:
     link targets. Whitespace is preserved so callers can collapse or measure it
     as needed.
     """
-    body_without_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
-    body_without_tilde_fences = TILDE_FENCED_CODE_BLOCK_PATTERN.sub("", body_without_fences)
-    body_without_inline_code = INLINE_CODE_PATTERN.sub("", body_without_tilde_fences)
+    body_without_fences = _strip_fenced_code_regions(body)
+    body_without_inline_code = INLINE_CODE_PATTERN.sub("", body_without_fences)
     body_without_blockquotes = BLOCKQUOTE_MARKER_PATTERN.sub("", body_without_inline_code)
     body_without_headings = HEADING_LINE_PATTERN.sub("", body_without_blockquotes)
     body_without_bullets = BULLET_MARKER_PATTERN.sub("", body_without_headings)
@@ -69,10 +80,8 @@ def _extract_author_written_region(body: str) -> str:
     body's own claim, so a number appearing only in pasted run output, a quoted
     reply, or an example table is out of scope for every claim check.
     """
-    without_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
-    without_tilde_fences = TILDE_FENCED_CODE_BLOCK_PATTERN.sub("", without_fences)
-    without_blockquote_lines = BLOCKQUOTE_LINE_PATTERN.sub("", without_tilde_fences)
-    return TABLE_ROW_LINE_PATTERN.sub("", without_blockquote_lines)
+    without_fences = _strip_fenced_code_regions(body)
+    return _drop_quoted_and_tabulated_lines(without_fences)
 
 
 def contains_hardcoded_test_count_claim(body: str) -> bool:
@@ -127,9 +136,8 @@ def _extract_vague_scan_text(body: str) -> str:
     single leading pipe, or a borderless table row with no leading pipe, stays in
     scope.
     """
-    without_blockquote_lines = BLOCKQUOTE_LINE_PATTERN.sub("", body)
-    without_table_rows = TABLE_ROW_LINE_PATTERN.sub("", without_blockquote_lines)
-    return strip_markdown_ceremony(without_table_rows)
+    without_quoted_or_tables = _drop_quoted_and_tabulated_lines(body)
+    return strip_markdown_ceremony(without_quoted_or_tables)
 
 
 def _iter_section_headers(body: str) -> list[str]:
@@ -141,12 +149,13 @@ def _iter_section_headers(body: str) -> list[str]:
     strings, so matching every heading level keeps the parser permissive
     without changing behaviour for the canonical two-hash header shape.
 
-    Fenced code blocks are stripped first so example markdown nested inside ``` fences
-    (a PR body that demonstrates the Heavy shape, for instance) is not counted as a
-    structural header. This keeps the shape classifier and Heavy required-header check
-    aligned with `strip_markdown_ceremony`, which already strips fences before measuring.
+    Fenced code blocks (backtick and tilde) are stripped first so example markdown
+    nested inside fences (a PR body that demonstrates the Heavy shape, for instance)
+    is not counted as a structural header. This keeps the shape classifier and Heavy
+    required-header check aligned with `strip_markdown_ceremony`, which already strips
+    fences before measuring.
     """
-    body_without_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
+    body_without_fences = _strip_fenced_code_regions(body)
     all_headers: list[str] = []
     for each_match in HEADING_LINE_PATTERN.finditer(body_without_fences):
         header_text = each_match.group(0).strip()
