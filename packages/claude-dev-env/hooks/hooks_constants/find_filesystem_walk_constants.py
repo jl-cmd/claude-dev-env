@@ -18,9 +18,6 @@ ALL_FIND_BLOCKER_TOOL_NAMES: frozenset[str] = frozenset(
 HOOK_EVENT_NAME = "PreToolUse"
 PERMISSION_DENY = "deny"
 
-FIND_PROGRAM_BASENAME = "find"
-FIND_PROGRAM_EXECUTABLE_NAME = "find.exe"
-
 FIND_PROGRAM_INVOCATION_PATTERN = re.compile(
     r"""(?ix)
     (?:
@@ -102,18 +99,6 @@ GUARD_HOOK_SCRIPT_NAME = "git_find_handle_guard.py"
 CLI_WATCH_FLAG = "--watch"
 CLI_DRY_RUN_FLAG = "--dry-run"
 CLI_THRESHOLD_FLAG = "--threshold"
-CLI_THRESHOLD_EQUALS_PREFIX = "--threshold="
-CLI_HELP_SHORT_FLAG = "-h"
-CLI_HELP_LONG_FLAG = "--help"
-ALL_CLI_MODE_FLAGS: frozenset[str] = frozenset(
-    {
-        CLI_WATCH_FLAG,
-        CLI_DRY_RUN_FLAG,
-        CLI_THRESHOLD_FLAG,
-        CLI_HELP_SHORT_FLAG,
-        CLI_HELP_LONG_FLAG,
-    }
-)
 
 CLI_DESCRIPTION_TEMPLATE = (
     "Kill Git usr\\bin\\find.exe processes whose handle count exceeds {threshold}."

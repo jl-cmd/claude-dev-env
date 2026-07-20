@@ -34,11 +34,9 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.find_filesystem_walk_constants import (  # noqa: E402
-    ALL_CLI_MODE_FLAGS,
     CLI_DESCRIPTION_TEMPLATE,
     CLI_DRY_RUN_FLAG,
     CLI_DRY_RUN_HELP,
-    CLI_THRESHOLD_EQUALS_PREFIX,
     CLI_THRESHOLD_FLAG,
     CLI_THRESHOLD_HELP_TEMPLATE,
     CLI_WATCH_FLAG,
@@ -411,7 +409,7 @@ def _print_sweep_report(sweep_report: GuardSweepReport) -> None:
 
 
 def argv_requests_cli_mode(all_arguments: list[str]) -> bool:
-    """Return True when argv carries a CLI mode flag or any non-empty args.
+    """Return True when argv carries any arguments, requesting CLI mode.
 
     Args:
         all_arguments: sys.argv[1:] style argument list.
@@ -419,14 +417,7 @@ def argv_requests_cli_mode(all_arguments: list[str]) -> bool:
     Returns:
         True when the process should run as a CLI rather than SessionStart.
     """
-    if not all_arguments:
-        return False
-    for each_argument in all_arguments:
-        if each_argument in ALL_CLI_MODE_FLAGS:
-            return True
-        if each_argument.startswith(CLI_THRESHOLD_EQUALS_PREFIX):
-            return True
-    return True
+    return bool(all_arguments)
 
 
 def run_cli(all_argv: list[str] | None = None) -> int:
