@@ -119,9 +119,6 @@ def main() -> int:
     mode_group.add_argument("--apply", action="store_true")
     parsed_arguments = argument_parser.parse_args()
     is_dry_run = bool(parsed_arguments.dry_run)
-    is_apply = bool(parsed_arguments.apply)
-    if not is_dry_run and not is_apply:
-        return 2
     summary = reap_orphaned_mcp_processes(is_dry_run=is_dry_run)
     print(json.dumps(summary, indent=JSON_INDENT_SPACES))
     return 0
