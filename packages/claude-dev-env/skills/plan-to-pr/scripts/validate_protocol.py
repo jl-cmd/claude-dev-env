@@ -25,6 +25,9 @@ from config.constants import (
     ALLOWED_WORKER_ROLE,
     ARGUMENT_COUNT_REQUIRED,
     ARGUMENT_COUNT_WITH_WORKTREE,
+    OPTION_ARGUMENT_INDEX,
+    WORKTREE_OPTION,
+    WORKTREE_PATH_ARGUMENT_INDEX,
     COMMIT_HASH_ERROR_TEMPLATE,
     COMMIT_HASH_PATTERN,
     EXIT_CODE_INVALID_RECORD,
@@ -310,7 +313,7 @@ def _require_text(
 
 def _require_string_list(
     all_task_run_record: Mapping[str, object], field_name: str, record_name: str
-) -> None:
+) -> list[str]:
     """Require a list containing only non-empty strings.
 
     Args:
@@ -332,6 +335,7 @@ def _require_string_list(
         raise ProtocolValidationError(
             f"{record_name}.{field_name} must be a string list"
         )
+    return all_field_entries
 
 
 def _require_non_empty_string_list(
@@ -350,8 +354,9 @@ def _require_non_empty_string_list(
     Raises:
         ProtocolValidationError: If the field is not a non-empty string list.
     """
-    _require_string_list(all_task_run_record, field_name, record_name)
-    all_field_entries = all_task_run_record[field_name]
+    all_field_entries = _require_string_list(
+        all_task_run_record, field_name, record_name
+    )
     if not all_field_entries:
         raise ProtocolValidationError(f"{record_name}.{field_name} must not be empty")
 
@@ -450,9 +455,12 @@ def _validate_verification_record(
     _require_fields(all_verification_record, ALL_VERIFICATION_FIELDS, record_name)
     for each_field_name in ALL_VERIFICATION_FIELDS:
         _require_text(all_verification_record, each_field_name, record_name)
-        if each_field_name != "surface_hash" and not all_verification_record[
-            each_field_name
-        ].lower().startswith(PASSED_EVIDENCE_PREFIX):
+        field_text = all_verification_record[each_field_name]
+        if (
+            each_field_name != "surface_hash"
+            and isinstance(field_text, str)
+            and not field_text.lower().startswith(PASSED_EVIDENCE_PREFIX)
+        ):
             raise ProtocolValidationError(
                 f"{record_name}.{each_field_name} must be explicit passed evidence"
             )
@@ -485,6 +493,8 @@ def _validate_semantics(all_task_run_record: Mapping[str, object]) -> None:
     if review_record["resolved_model"] != ALLOWED_REVIEW_MODEL or review_record["effort"] != ALLOWED_WORKER_EFFORT:
         raise ProtocolValidationError("review_record must use fast low-effort Luna")
     command = review_record["command"]
+    if not isinstance(command, str):
+        raise ProtocolValidationError("review_record.command must be a string")
     if command != NATIVE_REVIEW_COMMAND or "--fix" in command:
         raise ProtocolValidationError("review_record.command must be exactly /e-code-review low")
     findings = review_record["findings"]
@@ -564,7 +574,12 @@ def validate_record(
     _validate_semantics(all_task_run_record)
     worktree = all_task_run_record.get("worktree")
     if isinstance(worktree, str):
-        all_allowed_files = [_normalize_allowed_path(each_path) for each_path in all_task_run_record["allowed_files"] if isinstance(each_path, str)]
+        all_allowed_files = [
+            _normalize_allowed_path(each_path)
+            for each_path in _require_string_list(
+                all_task_run_record, "allowed_files", "record"
+            )
+        ]
         committed_hash = _committed_surface_hash(Path(worktree), str(all_task_run_record["commit"]), all_allowed_files)
         recorded_hash = _require_record(all_task_run_record, "verification_record")["surface_hash"]
         if committed_hash != recorded_hash:
@@ -585,7 +600,7 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         ARGUMENT_COUNT_WITH_WORKTREE,
     } or (
         len(all_cli_arguments) == ARGUMENT_COUNT_WITH_WORKTREE
-        and all_cli_arguments[2] != "--worktree"
+        and all_cli_arguments[OPTION_ARGUMENT_INDEX] != WORKTREE_OPTION
     ):
         print("usage: validate_protocol.py <record.json> [--worktree PATH]", file=sys.stderr)
         return EXIT_CODE_INVALID_RECORD
@@ -593,7 +608,8 @@ def main(all_cli_arguments: Sequence[str]) -> int:
     try:
         record = _load_json_object(Path(all_cli_arguments[1]))
         if len(all_cli_arguments) == ARGUMENT_COUNT_WITH_WORKTREE:
-            record["worktree"] = all_cli_arguments[3]
+            record = dict(record)
+            record["worktree"] = all_cli_arguments[WORKTREE_PATH_ARGUMENT_INDEX]
         validate_record(record, schema_path)
     except ProtocolValidationError as error:
         print(f"protocol validation failed: {error}", file=sys.stderr)

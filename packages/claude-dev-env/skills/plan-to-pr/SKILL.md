@@ -1,14 +1,13 @@
 ---
-name: skill-protocol-workflow
+name: plan-to-pr
 description: >-
-  Coordinates source-grounded skill implementation through planned task tickets,
-  fixed model routing, verified commits, independent Luna review, and publication
-  gates. Triggers: "skill protocol workflow", "implement a skill protocol",
-  "build this skill with one task per commit", "run the skill workflow",
-  "validate skill workflow", "publish a skill workflow".
+  Coordinates source-grounded implementation through planned task tickets, fixed
+  model routing, verified commits, independent Luna review, and publication gates.
+  Triggers: "Plan-to-PR", "plan to PR", "implement this with one task per commit",
+  "run the Plan-to-PR workflow", "validate Plan-to-PR", "publish the PR".
 ---
 
-# Skill Protocol Workflow
+# Plan-to-PR
 
 ## Contents
 
@@ -30,7 +29,7 @@ description: >-
 
 ## When this applies
 
-Use this skill for a source-grounded skill implementation with an approved plan,
+Use this skill for source-grounded implementation with an approved plan,
 one deliverable per task, one allowed file set, one acceptance check, and one
 commit. Refuse the first matching case under [Refusal cases](#refusal-cases).
 
@@ -57,10 +56,10 @@ failed and the concise reason is written to stderr.
 
 ## Capability boundary
 
-This skill coordinates a multi-task skill implementation from an approved plan
+This skill coordinates a multi-task implementation from an approved plan
 through publication. It owns composition, task records, model routing, commit
 order, verification order, and final release decisions. It does not replace the
-peer skills that plan, orchestrate, advise, or build and audit skills.
+peer skills that plan, orchestrate, or advise.
 
 ## Refusal cases
 
@@ -73,8 +72,7 @@ Refuse the first matching case and stop:
 - The user asks to bypass verification, `verified_commit_gate`, independent review,
   final validation, or a publication gate.
 
-Report the missing input or unavailable capability. Do not guess, substitute a
-weaker model, widen scope, combine tasks, or publish a partial result.
+Return exactly: `Plan-to-PR blocked: <missing input or capability>.`
 
 ## Task seeding
 
@@ -96,7 +94,7 @@ before self-audit. If no host task tool exists, stop and report the blocker.
 
 ## Peer-skill composition
 
-Use these four named peer skills. Invoke them at the stated point, record their
+Use these three named peer skills. Invoke them at the stated point, record their
 produced artifact, and stop when the skill is missing.
 
 | Peer skill | When to invoke | Produces | Missing behavior |
@@ -104,17 +102,17 @@ produced artifact, and stop when the skill is missing.
 | `anthropic-plan` | Before any implementation, when the request needs a source-grounded plan | Approved `docs/plans/<slug>/` packet and acceptance contract | Refuse implementation and report that planning is unavailable |
 | `orchestrator` | After approval, when multiple tasks need delegated execution and ledger control | Run charter, task ledger, assignment records, and reconciled results | Refuse execution and report that orchestration is unavailable |
 | `team-advisor` | Before hard decisions, task completion, commits, or when blocked | A reachable high-tier advisor decision using the shared advisor protocol | Refuse the gated decision; do not answer for the advisor |
-| `skill-builder` | During skill composition and before publication | Skill self-audit evidence and modularity, trigger, and deterministic-elements findings | Refuse publication and report that the self-audit is unavailable |
 
 Do not reproduce the peers' fixed tables or workflows here. Follow the companion
 references and the installed peer skill contracts instead.
 
 ## Model contract
 
-The planner and final validator use the same strongest reachable high-level tier.
-The orchestrator uses the fixed mid-level tier. Every implementation, review,
-and repair worker uses fast, low-effort Luna. The exact model names, floor rules,
-and fallback behavior are defined only in
+The planner and final validator use Luna xhigh and consult a Sol xhigh advisor
+heavily at decisive points. The orchestrator uses the max route and
+delegates every work task to fast, low-effort Luna workers. Every implementation,
+review, and repair worker uses fast, low-effort Luna. The exact model names, floor
+rules, advisor cadence, and fallback behavior are defined only in
 [`reference/model-routing.md`](reference/model-routing.md).
 
 Unavailable models fail closed. Never silently promote a worker, demote a planner,
@@ -146,10 +144,9 @@ Before every commit, require fresh verification and `verified_commit_gate` again
 the exact task surface. A passing test alone is not a commit authorization.
 
 After the commit, a separate fast low-effort Luna review worker invokes the
-active host's native low-effort correctness review capability. For Codex, the
-binding is `/e-code-review low`. The review reads the committed diff and
-returns findings only; it has no repair flag. Fail closed if the native review
-or required verifier is unavailable.
+native low-effort correctness review capability at `/e-code-review low`. The
+review reads the committed diff and returns findings only; it has no repair
+flag. Fail closed if the native review or required verifier is unavailable.
 
 A separate fast low-effort Luna repair worker applies only confirmed findings.
 Record the resolved model, effort, command, findings, repair status, and
@@ -167,10 +164,23 @@ all acceptance checks, fresh verifier output, `verified_commit_gate` evidence, a
 the post-commit review records. Any unmapped commit, missing record, failed gate,
 or unresolved finding blocks publication.
 
-Run the `skill-builder` self-audit and retain its evidence. Confirm all required
+Run the workflow self-audit and retain its evidence. Confirm all required
 references, peer skills, tools, and model routes are available. Publish only when
 the final validator and self-audit both pass; otherwise report the exact blocker
 and stop without publishing.
+
+## Post-PR cleanup and max review
+
+After the PR branch is finalized and pushed, run a Luna xhigh `/e-simplify` pass.
+Apply its validated cleanup fixes directly, then commit and push those changes.
+This pass is cleanup-only and does not replace correctness review.
+
+Next, run a Luna low `/e-code-review max loop` pass. The review returns findings;
+a separate Luna low repair worker applies confirmed bugs or nits. Run the required
+checks, commit, and push every repair, then repeat the max loop. Finish only when
+the review is clean; nits must be fixed and pushed before the next loop, and any
+non-nit finding blocks publication until repaired. Do not add a repair flag to
+the review command.
 
 ## Companion references
 
@@ -189,13 +199,13 @@ The hub names these contracts without reimplementing their fixed tables.
 | `SKILL.md` | Hub, routing, gates, and direct reference index |
 | `reference/model-routing.md` | Model roles and route gates |
 | `reference/task-ticket.md` | Human-readable task-ticket contract |
-| `reference/run-record.schema.json` | Machine-checkable task-run record |
+| [`reference/run-record.schema.json`](reference/run-record.schema.json) | Machine-checkable task-run record |
 | `scripts/validate_protocol.py` | Deterministic task-run record validator |
 | `reference/review-loop.md` | Native review and repair loop |
 | `reference/process-inventory.md` | Process classification and evidence homes |
 | `reference/task-seeds.md` | Ordered implementation task catalog |
 | `reference/final-validation-tasks.md` | Final-validation task seeds |
-| `reference/self-audit-tasks.md` | Skill-builder self-audit task seeds |
+| `reference/self-audit-tasks.md` | Workflow self-audit task seeds |
 | `test_skill_contract.py` | Hub and routing contract tests |
 | `test_task_ticket_contract.py` | Task-record and reference contract tests |
 | `scripts/test_validate_protocol.py` | CLI validation tests |

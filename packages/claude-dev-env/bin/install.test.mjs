@@ -170,8 +170,8 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
 
 test('core skill allowlist includes the packet-backed protocol workflow', () => {
     assert.ok(
-        INSTALL_GROUPS.core.skills.includes('skill-protocol-workflow'),
-        'skill-protocol-workflow must ship with --only core',
+        INSTALL_GROUPS.core.skills.includes('plan-to-pr'),
+        'plan-to-pr must ship with --only core',
     );
 });
 

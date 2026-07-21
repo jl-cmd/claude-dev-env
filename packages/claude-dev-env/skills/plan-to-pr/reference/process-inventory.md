@@ -16,4 +16,6 @@ judgment remains in the hub or companion reference.
 | Decide whether a finding is confirmed | judgment | `reference/review-loop.md` | Repair record names the confirmed finding | N/A: review judgment |
 | Repeat until clean | borderline | `reference/review-loop.md` | Amended commit and clean review record | `test_task_ticket_contract.py` |
 | Validate cumulative release | deterministic | `task-seed:reference/final-validation-tasks.md` | Final validator task evidence | task-tool |
-| Self-audit the skill | deterministic | `task-seed:reference/self-audit-tasks.md` | Self-audit task evidence | task-tool |
+| Self-audit the workflow | deterministic | `task-seed:reference/self-audit-tasks.md` | Self-audit task evidence | task-tool |
+| Run post-PR cleanup | deterministic | `SKILL.md` and `reference/model-routing.md` | Luna xhigh `/e-simplify` result and pushed cleanup commit | task-tool |
+| Run post-PR max review | deterministic | `reference/review-loop.md` | Luna low max-loop findings, repairs, pushes, and clean result | task-tool |

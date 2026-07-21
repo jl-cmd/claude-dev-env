@@ -9,4 +9,7 @@ PASS, FAIL plus file and line evidence, or N/A plus a reason.
 4. Confirm every repair has acceptance output, fresh exact-surface verification, and an amended commit before the next review.
 5. Confirm all review records are clean and all verifier records pass.
 6. Confirm the complete allowed-file ledger contains no extra changed files.
-7. Confirm final validation and self-audit evidence are present before release.
+7. Confirm final validation and workflow self-audit evidence are present before release.
+8. Confirm the finalized PR branch receives Luna xhigh `/e-simplify` cleanup with
+   fixes, then Luna low `/e-code-review max loop` with separate repairs, required
+   checks, commits, pushes, and a clean final max review.

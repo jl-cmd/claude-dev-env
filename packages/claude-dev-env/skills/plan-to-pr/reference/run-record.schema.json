@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Skill protocol task run record",
+  "title": "Plan-to-PR task run record",
   "type": "object",
   "additionalProperties": false,
   "required": ["task_identity", "deliverable", "allowed_files", "acceptance_check", "baseline", "worker_route", "commit", "review_record", "repair_record", "reverification_record", "verification_record"],

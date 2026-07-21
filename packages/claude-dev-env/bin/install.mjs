@@ -180,7 +180,7 @@ export const INSTALL_GROUPS = {
             'grok-spawn',
             'anthropic-plan', 'everything-search',
             'privacy-hygiene',
-            'recall', 'remember', 'task-build', 'skill-protocol-workflow'
+            'recall', 'remember', 'task-build', 'plan-to-pr'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,

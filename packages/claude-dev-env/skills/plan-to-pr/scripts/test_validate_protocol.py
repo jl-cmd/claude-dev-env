@@ -1,17 +1,22 @@
 """Exercise the protocol validator through its command-line interface."""
 
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from validate_protocol import ProtocolValidationError, validate_record
-
 SCRIPT_PATH = Path(__file__).with_name("validate_protocol.py")
 SCHEMA_PATH = SCRIPT_PATH.parent.parent / "reference" / "run-record.schema.json"
+sys.path.insert(0, str(SCRIPT_PATH.parent))
+VALIDATE_PROTOCOL_SPEC = importlib.util.spec_from_file_location("validate_protocol", SCRIPT_PATH)
+assert VALIDATE_PROTOCOL_SPEC is not None
+assert VALIDATE_PROTOCOL_SPEC.loader is not None
+VALIDATE_PROTOCOL_MODULE = importlib.util.module_from_spec(VALIDATE_PROTOCOL_SPEC)
+VALIDATE_PROTOCOL_SPEC.loader.exec_module(VALIDATE_PROTOCOL_MODULE)
+ProtocolValidationError = VALIDATE_PROTOCOL_MODULE.ProtocolValidationError
+validate_record = VALIDATE_PROTOCOL_MODULE.validate_record
 
 
 def valid_record() -> dict[str, object]:
@@ -27,6 +32,17 @@ def valid_record() -> dict[str, object]:
 
 def run_validator(record_path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, str(SCRIPT_PATH), str(record_path)], capture_output=True, text=True, check=False)
+
+
+def mutate_record(record: dict[str, object], field_name: str, mutated_field: object) -> None:
+    if field_name in ("findings_only", "review_extra"):
+        review_record = record["review_record"]
+        assert isinstance(review_record, dict)
+        review_record[field_name] = mutated_field
+    elif mutated_field is None:
+        del record[field_name]
+    else:
+        record[field_name] = mutated_field
 
 
 def test_cli_accepts_valid_record(tmp_path: Path) -> None:
@@ -50,21 +66,10 @@ def test_cli_rejects_invalid_utf8_record(tmp_path: Path) -> None:
 
 
 def test_cli_rejects_invalid_mutations(tmp_path: Path) -> None:
-    mutations = (("bad-commit", "commit", "not-a-commit"), ("bad-review", "findings_only", False), ("missing-evidence", "verification_record", None), ("bad-type", "allowed_files", "file.py"), ("empty-allowed-files", "allowed_files", []), ("extra-review-field", "review_extra", "unexpected"))
+    mutations: tuple[tuple[str, str, object], ...] = (("bad-commit", "commit", "not-a-commit"), ("bad-review", "findings_only", False), ("missing-evidence", "verification_record", None), ("bad-type", "allowed_files", "file.py"), ("empty-allowed-files", "allowed_files", []), ("extra-review-field", "review_extra", "unexpected"))
     for each_name, each_field, mutated_field in mutations:
         record = valid_record()
-        if each_field == "findings_only":
-            review_record = record["review_record"]
-            assert isinstance(review_record, dict)
-            review_record[each_field] = mutated_field
-        elif each_field == "review_extra":
-            review_record = record["review_record"]
-            assert isinstance(review_record, dict)
-            review_record[each_field] = mutated_field
-        elif mutated_field is None:
-            del record[each_field]
-        else:
-            record[each_field] = mutated_field
+        mutate_record(record, each_field, mutated_field)
         record_path = tmp_path / f"{each_name}.json"
         record_path.write_text(json.dumps(record), encoding="utf-8")
         completed_run = run_validator(record_path)

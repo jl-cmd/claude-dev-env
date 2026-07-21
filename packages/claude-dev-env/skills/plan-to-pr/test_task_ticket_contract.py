@@ -14,7 +14,7 @@ REFERENCE_NAMES = (
     "process-inventory.md",
     "self-audit-tasks.md",
 )
-FORBIDDEN_ROUTE_TEXT = ("provider", "helper", "cleanup", "e-simplify", "--fix", "C:\\Users\\")
+FORBIDDEN_ROUTE_TEXT = ("provider", "helper", "skill-builder", "--fix", "C:\\Users\\")
 
 
 def read_reference_texts() -> str:
@@ -59,13 +59,27 @@ def test_review_loop_requires_separate_native_review_and_repair() -> None:
     contract_text = read_reference_texts()
 
     assert "separate fast low-effort Luna review worker" in contract_text
-    assert "native findings-only correctness capability" in contract_text
+    assert "native findings-only" in contract_text
+    assert "/e-code-review low" in contract_text
+    assert "correctness" in contract_text
     assert "/e-code-review low" in contract_text
     assert "has no repair flag" in contract_text
     assert "separate fast low-effort Luna repair worker" in contract_text
     assert "confirmed findings" in contract_text
     assert "amend the task commit" in contract_text
     assert "repeat the native review until clean" in contract_text
+
+
+def test_post_pr_cleanup_and_max_review_are_distinct() -> None:
+    contract_text = read_reference_texts()
+
+    assert "Luna xhigh `/e-simplify`" in contract_text
+    assert "cleanup-only" in contract_text
+    assert "Luna low `/e-code-review max loop`" in contract_text
+    assert "separate Luna low repair worker" in contract_text
+    assert "commit, and push" in contract_text
+    assert "clean" in contract_text
+    assert "skill-builder" not in contract_text
 
 
 def test_task_seeding_and_audit_inventories_are_present() -> None:

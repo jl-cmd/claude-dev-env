@@ -3,8 +3,8 @@
 Run this loop for every committed task. Store each pass in the task record.
 
 1. A separate fast low-effort Luna review worker reads the committed task diff.
-2. It invokes the active host's native findings-only correctness capability. The
-   Codex binding is `/e-code-review low`; the review has no repair flag.
+2. It invokes the native findings-only `/e-code-review low` correctness
+   capability; the review has no repair flag.
 3. Record resolved model, effort, command, findings, repair status, and surface
    hash. Missing native review or verifier capability fails closed.
 4. A separate fast low-effort Luna repair worker applies only confirmed findings.
@@ -21,3 +21,14 @@ output are recorded against the amended commit.
 
 `review: findings=["missing field"]` → `repair: confirmed=["missing field"]` →
 `acceptance: PASS` → `verification: PASS` → `amend` → `review: clean`.
+
+## Post-PR max loop
+
+After the PR branch is finalized and pushed, Luna xhigh runs `/e-simplify` and
+applies only cleanup fixes. Commit and push those fixes before correctness review.
+
+Then Luna low invokes `/e-code-review max loop`. It returns findings only. A
+separate Luna low repair worker applies confirmed bugs or nits, runs required
+checks, commits, and pushes. Repeat the max loop until it is clean. Fix and push
+all nits before the next loop; any non-nit finding blocks readiness until repaired.
+The review command has no repair flag.

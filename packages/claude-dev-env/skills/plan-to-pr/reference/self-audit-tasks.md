@@ -10,5 +10,5 @@ FAIL plus file and line evidence, or N/A plus a reason.
 5. Confirm final-validation and self-audit seed lists are present.
 6. Confirm concrete review-loop examples show findings, repair, reverify, amend, and clean review.
 7. Confirm the schema requires task identity, commit, review, repair, reverification, and verification records.
-8. Confirm no vendor-specific route strings or absolute machine paths appear.
+8. Confirm no unrelated route strings or absolute machine paths appear.
 9. Confirm the focused contract tests pass and the owned-file diff is complete.

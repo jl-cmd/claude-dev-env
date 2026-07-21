@@ -1,6 +1,7 @@
 """Regression tests for set-level task validation."""
 
 import json
+import importlib.util
 import subprocess
 import sys
 from collections.abc import Callable
@@ -8,11 +9,29 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from test_validate_protocol import SCHEMA_PATH, valid_record
-from validate_protocol import ProtocolValidationError
-from validate_run import main, validate_run
+SCRIPT_DIRECTORY = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIRECTORY))
+VALIDATE_PROTOCOL_SPEC = importlib.util.spec_from_file_location("validate_protocol", SCRIPT_DIRECTORY / "validate_protocol.py")
+assert VALIDATE_PROTOCOL_SPEC is not None
+assert VALIDATE_PROTOCOL_SPEC.loader is not None
+VALIDATE_PROTOCOL_MODULE = importlib.util.module_from_spec(VALIDATE_PROTOCOL_SPEC)
+sys.modules["validate_protocol"] = VALIDATE_PROTOCOL_MODULE
+VALIDATE_PROTOCOL_SPEC.loader.exec_module(VALIDATE_PROTOCOL_MODULE)
+SCHEMA_PATH = SCRIPT_DIRECTORY.parent / "reference" / "run-record.schema.json"
+ProtocolValidationError = VALIDATE_PROTOCOL_MODULE.ProtocolValidationError
+TEST_VALIDATE_PROTOCOL_SPEC = importlib.util.spec_from_file_location("test_validate_protocol", SCRIPT_DIRECTORY / "test_validate_protocol.py")
+assert TEST_VALIDATE_PROTOCOL_SPEC is not None
+assert TEST_VALIDATE_PROTOCOL_SPEC.loader is not None
+TEST_VALIDATE_PROTOCOL_MODULE = importlib.util.module_from_spec(TEST_VALIDATE_PROTOCOL_SPEC)
+TEST_VALIDATE_PROTOCOL_SPEC.loader.exec_module(TEST_VALIDATE_PROTOCOL_MODULE)
+valid_record = TEST_VALIDATE_PROTOCOL_MODULE.valid_record
+VALIDATE_RUN_SPEC = importlib.util.spec_from_file_location("validate_run", SCRIPT_DIRECTORY / "validate_run.py")
+assert VALIDATE_RUN_SPEC is not None
+assert VALIDATE_RUN_SPEC.loader is not None
+VALIDATE_RUN_MODULE = importlib.util.module_from_spec(VALIDATE_RUN_SPEC)
+VALIDATE_RUN_SPEC.loader.exec_module(VALIDATE_RUN_MODULE)
+main = VALIDATE_RUN_MODULE.main
+validate_run = VALIDATE_RUN_MODULE.validate_run
 
 
 def test_validate_run_accepts_one_record_per_commit() -> None:
@@ -83,40 +102,35 @@ def test_validate_run_rejects_count_mismatch_without_mapping() -> None:
         validate_run([valid_record()], {"a1b2c3d", "deadbeef"}, SCHEMA_PATH, {})
 
 
+def create_committed_worktree(worktree_path: Path) -> str:
+    worktree_path.mkdir()
+    initialize_worktree(worktree_path)
+    tracked_file = worktree_path / "validator.py"
+    tracked_file.write_text("validated\n", encoding="utf-8")
+    commit_file(worktree_path)
+    return read_head(worktree_path)
+
+
+def initialize_worktree(worktree_path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=worktree_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=worktree_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Protocol Test"], cwd=worktree_path, check=True)
+
+
+def commit_file(worktree_path: Path) -> None:
+    subprocess.run(["git", "add", "validator.py"], cwd=worktree_path, check=True)
+    subprocess.run(["git", "commit", "-m", "validated"], cwd=worktree_path, check=True, capture_output=True)
+
+
+def read_head(worktree_path: Path) -> str:
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=worktree_path, check=True, capture_output=True, text=True).stdout.strip()
+
+
 def test_main_rejects_surface_mismatch_when_worktree_is_selected(
     tmp_path: Path,
 ) -> None:
     worktree_path = tmp_path / "worktree"
-    worktree_path.mkdir()
-    subprocess.run(
-        ["git", "init"], cwd=worktree_path, check=True, capture_output=True
-    )
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"],
-        cwd=worktree_path,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Protocol Test"],
-        cwd=worktree_path,
-        check=True,
-    )
-    tracked_file = worktree_path / "validator.py"
-    tracked_file.write_text("validated\n", encoding="utf-8")
-    subprocess.run(["git", "add", "validator.py"], cwd=worktree_path, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", "validated"],
-        cwd=worktree_path,
-        check=True,
-        capture_output=True,
-    )
-    commit_hash = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=worktree_path,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    commit_hash = create_committed_worktree(worktree_path)
     task_record = valid_record()
     task_record["commit"] = commit_hash
     task_record["allowed_files"] = ["validator.py"]
@@ -131,15 +145,14 @@ def test_main_rejects_surface_mismatch_when_worktree_is_selected(
         nested_record["surface_hash"] = "0" * 64
     record_path = tmp_path / "records.json"
     record_path.write_text(json.dumps([task_record]), encoding="utf-8")
-
     exit_code = main(
         [
             "validate_run.py",
             str(record_path),
             "--commits",
             commit_hash,
+            "--worktree",
             str(worktree_path),
         ]
     )
-
     assert exit_code == 2

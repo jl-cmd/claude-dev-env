@@ -10,11 +10,13 @@ FORBIDDEN_ROUTE_TEXT = (
     "claude",
     "provider",
     "helper",
-    "cleanup",
-    "e-simplify",
     "--fix",
     "invoke_code_review.py",
     "C:\\Users\\",
+)
+EXPECTED_TASK_PROTOCOL_HEADING = (
+    "## One-task and one-"
+    "commit protocol"
 )
 
 
@@ -32,7 +34,7 @@ def read_reference_texts() -> tuple[str, str]:
 def test_skill_frontmatter_defines_third_person_trigger_catalog() -> None:
     skill_text = read_skill_text()
 
-    assert skill_text.startswith("---\nname: skill-protocol-workflow\n")
+    assert skill_text.startswith("---\nname: plan-to-pr\n")
     description_text = skill_text.split("description:", 1)[1].split("---", 1)[0]
     assert "Triggers:" in description_text
     assert "Coordinates" in description_text
@@ -49,15 +51,13 @@ def test_skill_contract_names_capability_boundary_and_refusals() -> None:
     assert "one acceptance check" in skill_text
     assert "one commit" in skill_text
     assert "fail closed" in skill_text
-    assert "Do not guess, substitute a" in skill_text
-    assert "weaker model" in skill_text
-    assert "widen scope" in skill_text
+    assert "Plan-to-PR blocked: <missing input or capability>." in skill_text
 
 
 def test_skill_contract_composes_all_peer_skills_with_missing_behavior() -> None:
     skill_text = read_skill_text()
 
-    for each_peer_skill in ("anthropic-plan", "orchestrator", "team-advisor", "skill-builder"):
+    for each_peer_skill in ("anthropic-plan", "orchestrator", "team-advisor"):
         peer_rows = [
             each_line
             for each_line in skill_text.splitlines()
@@ -71,15 +71,17 @@ def test_skill_contract_composes_all_peer_skills_with_missing_behavior() -> None
     assert "Approved `docs/plans/<slug>/` packet" in skill_text
     assert "Run charter, task ledger" in skill_text
     assert "A reachable high-tier advisor decision" in skill_text
-    assert "Skill self-audit evidence" in skill_text
+    assert "workflow self-audit" in skill_text
 
 
 def test_skill_contract_pins_model_roles_and_worker_routing() -> None:
     skill_text = read_skill_text()
 
-    assert "planner and final validator use the same strongest reachable high-level tier" in skill_text
-    assert "orchestrator uses the fixed mid-level tier" in skill_text
-    assert "Every implementation, review,\nand repair worker uses fast, low-effort Luna" in skill_text
+    assert "planner and final validator use Luna xhigh" in skill_text
+    assert "orchestrator uses the max route" in skill_text
+    assert "Sol xhigh advisor" in skill_text
+    assert "heavily at decisive points" in skill_text
+    assert "Every implementation,\nreview, and repair worker uses fast, low-effort Luna" in skill_text
     assert "separate fast low-effort Luna review worker" in skill_text
     assert "separate fast low-effort Luna repair worker" in skill_text
     assert "Unavailable models fail closed" in skill_text
@@ -88,12 +90,12 @@ def test_skill_contract_pins_model_roles_and_worker_routing() -> None:
 def test_skill_contract_enforces_task_commit_and_review_order() -> None:
     skill_text = read_skill_text()
 
-    assert "## One-task and one-commit protocol" in skill_text
+    assert EXPECTED_TASK_PROTOCOL_HEADING in skill_text
     assert "fresh verification and `verified_commit_gate`" in skill_text
     assert "native low-effort correctness review" in skill_text
-    assert "For Codex, the" in skill_text
-    assert "binding is `/e-code-review low`" in skill_text
-    assert "returns findings only; it has no repair flag" in skill_text
+    assert "native low-effort correctness review capability at `/e-code-review low`" in skill_text
+    assert "returns findings only" in skill_text
+    assert "has no repair" in skill_text
     assert "separate fast low-effort Luna repair worker" in skill_text
     assert "rerun the task acceptance check and fresh" in skill_text
     assert "exact-surface verification" in skill_text
@@ -112,6 +114,10 @@ def test_skill_contract_uses_only_the_native_review_route() -> None:
     assert "no repair flag" in all_contract_text
     assert "separate fast low-effort Luna" in all_contract_text
     assert "fresh exact-surface verification" in all_contract_text
+    assert "/e-simplify" in all_contract_text
+    assert "cleanup-only" in all_contract_text
+    assert "does not replace correctness review" in all_contract_text
+    assert "skill-builder" not in all_contract_text
     for each_forbidden_route_text in FORBIDDEN_ROUTE_TEXT:
         assert each_forbidden_route_text not in all_contract_text
 
@@ -140,6 +146,7 @@ def test_skill_contract_references_future_fixed_artifacts_without_copying_tables
     assert "scripts/validate_protocol.py" in skill_text
     assert "fixed routing and gate matrix lives only" not in skill_text
     assert "fixed fields live in" in skill_text
+    assert "[`reference/run-record.schema.json`](reference/run-record.schema.json)" in skill_text
 
 
 def test_skill_contract_companion_reference_paths_exist() -> None:
@@ -159,7 +166,10 @@ def test_skill_contract_companion_reference_paths_exist() -> None:
 def test_skill_contract_requires_self_audit_and_publication_gates() -> None:
     skill_text = read_skill_text()
 
-    assert "Run the `skill-builder` self-audit" in skill_text
+    assert "Run the workflow self-audit" in skill_text
     assert "Any unmapped commit, missing record, failed gate," in skill_text
     assert "unresolved finding blocks publication." in skill_text
     assert "Publish only when\nthe final validator and self-audit both pass" in skill_text
+    assert "Luna xhigh `/e-simplify`" in skill_text
+    assert "Luna low `/e-code-review max loop`" in skill_text
+    assert "Do not add a repair flag" in skill_text

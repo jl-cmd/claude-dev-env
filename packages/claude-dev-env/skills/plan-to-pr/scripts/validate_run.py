@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from config.constants import (
+    COMMIT_RANGE_ARGUMENT_INDEX,
     COMMIT_RANGE_SEPARATOR,
     EXIT_CODE_INVALID_SET,
     EXIT_CODE_VALID_SET,
@@ -16,11 +17,15 @@ from config.constants import (
     RUN_ARGUMENT_COUNT_REQUIRED,
     RUN_ARGUMENT_COUNT_WITH_WORKTREE,
     SET_VALIDATION_PASSED,
+    OPTION_ARGUMENT_INDEX,
+    WORKTREE_OPTION_ARGUMENT_INDEX,
+    WORKTREE_PATH_ARGUMENT_INDEX,
+    WORKTREE_OPTION,
 )
 from validate_protocol import ProtocolValidationError, validate_record
 
 
-def _load_record_list(record_path: Path) -> list[Mapping[str, object]]:
+def _load_record_list(record_path: Path) -> list[dict[str, object]]:
     try:
         parsed_records = json.loads(record_path.read_text(encoding=JSON_ENCODING))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -68,13 +73,21 @@ def validate_run(
         ProtocolValidationError: If task identity, commit coverage, or record
             schema validation fails.
     """
-    task_ids = [each_record.get("task_identity") for each_record in all_task_records]
-    commits = [each_record.get("commit") for each_record in all_task_records]
-    if any(not isinstance(each_task_id, str) for each_task_id in task_ids):
+    task_ids = [
+        each_task_id
+        for each_record in all_task_records
+        if isinstance((each_task_id := each_record.get("task_identity")), str)
+    ]
+    commits = [
+        each_commit
+        for each_record in all_task_records
+        if isinstance((each_commit := each_record.get("commit")), str)
+    ]
+    if len(task_ids) != len(all_task_records):
         raise ProtocolValidationError("every task record needs a task_identity")
     if len(task_ids) != len(set(task_ids)):
         raise ProtocolValidationError("task identities must be unique")
-    if any(not isinstance(each_commit, str) for each_commit in commits):
+    if len(commits) != len(all_task_records):
         raise ProtocolValidationError("every task record needs a commit")
     if not all_explicit_mapping and len(all_task_records) != len(all_commit_hashes):
         raise ProtocolValidationError("task and commit counts differ without an explicit mapping")
@@ -111,20 +124,26 @@ def main(all_cli_arguments: Sequence[str]) -> int:
     if len(all_cli_arguments) not in {
         RUN_ARGUMENT_COUNT_REQUIRED,
         RUN_ARGUMENT_COUNT_WITH_WORKTREE,
+        RUN_ARGUMENT_COUNT_WITH_WORKTREE + 1,
     }:
         print("usage: validate_run.py <records.json> --base-head <BASE..HEAD> [--worktree PATH]", file=sys.stderr)
         return EXIT_CODE_INVALID_SET
     record_path = Path(all_cli_arguments[1])
-    option = all_cli_arguments[2]
-    commit_range = all_cli_arguments[3]
-    worktree = (
-        Path(all_cli_arguments[4])
-        if len(all_cli_arguments) == RUN_ARGUMENT_COUNT_WITH_WORKTREE
-        else Path.cwd()
-    )
+    option = all_cli_arguments[OPTION_ARGUMENT_INDEX]
+    commit_range = all_cli_arguments[COMMIT_RANGE_ARGUMENT_INDEX]
+    has_legacy_worktree_argument = len(all_cli_arguments) == RUN_ARGUMENT_COUNT_WITH_WORKTREE
+    has_flagged_worktree_argument = len(all_cli_arguments) == RUN_ARGUMENT_COUNT_WITH_WORKTREE + 1
+    if has_flagged_worktree_argument and all_cli_arguments[WORKTREE_OPTION_ARGUMENT_INDEX] != WORKTREE_OPTION:
+        print("usage: validate_run.py <records.json> --base-head <BASE..HEAD> [--worktree PATH]", file=sys.stderr)
+        return EXIT_CODE_INVALID_SET
+    worktree = Path.cwd()
+    if has_legacy_worktree_argument:
+        worktree = Path(all_cli_arguments[WORKTREE_OPTION_ARGUMENT_INDEX])
+    if has_flagged_worktree_argument:
+        worktree = Path(all_cli_arguments[WORKTREE_PATH_ARGUMENT_INDEX])
     try:
         all_task_records = _load_record_list(record_path)
-        if len(all_cli_arguments) == RUN_ARGUMENT_COUNT_WITH_WORKTREE:
+        if has_legacy_worktree_argument or has_flagged_worktree_argument:
             for each_record in all_task_records:
                 each_record["worktree"] = str(worktree)
         if option == "--base-head":
