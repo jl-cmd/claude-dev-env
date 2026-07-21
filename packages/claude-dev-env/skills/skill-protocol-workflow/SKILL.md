@@ -166,6 +166,7 @@ The hub names these contracts without reimplementing their fixed tables.
 | `reference/model-routing.md` | Model roles and route gates |
 | `reference/task-ticket.md` | Human-readable task-ticket contract |
 | `reference/run-record.schema.json` | Machine-checkable task-run record |
+| `scripts/validate_protocol.py` | Deterministic task-run record validator |
 | `reference/review-loop.md` | Native review and repair loop |
 | `reference/process-inventory.md` | Process classification and evidence homes |
 | `reference/task-seeds.md` | Ordered implementation task catalog |
@@ -173,6 +174,12 @@ The hub names these contracts without reimplementing their fixed tables.
 | `reference/self-audit-tasks.md` | Skill-builder self-audit task seeds |
 | `test_skill_contract.py` | Hub and routing contract tests |
 | `test_task_ticket_contract.py` | Task-record and reference contract tests |
+| `scripts/test_validate_protocol.py` | CLI validation tests |
+
+Run [`scripts/validate_protocol.py`](scripts/validate_protocol.py) with a completed
+task-run record before final validation. Exit `0` means the host-neutral
+contract and evidence are valid. Exit `2` means validation failed; the concise
+reason is printed to stderr.
 
 ## Folder map
 

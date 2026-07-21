@@ -8,7 +8,7 @@ judgment remains in the hub or companion reference.
 |---|---|---|---|---|
 | Approve scope and acceptance | judgment | `SKILL.md` | Approved plan and acceptance contract | N/A: human decision |
 | Seed implementation work | deterministic | `task-seed:reference/task-seeds.md` | Host task IDs and evidence | task-tool |
-| Record task fields | deterministic | `reference/run-record.schema.json` | Schema validation result | `test_task_ticket_contract.py` |
+| Record task fields | deterministic | `reference/run-record.schema.json` and `scripts/validate_protocol.py` | Validator output and exit code | `scripts/test_validate_protocol.py` |
 | Implement one deliverable | judgment | `SKILL.md` | Worker report and diff | N/A: implementation choice |
 | Verify exact surface | deterministic | `task-seed:reference/task-seeds.md` | Verifier output and `verified_commit_gate` | task-tool |
 | Review committed task | deterministic | `reference/review-loop.md` | Findings-only native review record | `test_task_ticket_contract.py` |

@@ -137,7 +137,7 @@ def test_skill_contract_references_future_fixed_artifacts_without_copying_tables
 
     assert "reference/model-routing.md" in skill_text
     assert "reference/task-ticket.md" in skill_text
-    assert "scripts/validate_protocol.py" not in skill_text
+    assert "scripts/validate_protocol.py" in skill_text
     assert "fixed routing and gate matrix lives only" not in skill_text
     assert "fixed fields live in" in skill_text
 
