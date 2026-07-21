@@ -204,6 +204,7 @@ Slash commands for common workflows.
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
+| `skill-protocol-workflow` | Packet-backed, per-task protocol workflow with native findings-only review, separate repair, and final validation |
 | `closeout` | Harvest session obstacles into quoted, user-approved GitHub issues at session end, dedupe against open and closed issues, route each to its repo, file children then a parent checklist, and print a computed cloud handoff prompt |
 | `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
 | `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
