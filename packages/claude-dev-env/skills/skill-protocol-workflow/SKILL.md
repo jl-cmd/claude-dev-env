@@ -10,6 +10,27 @@ description: >-
 
 # Skill Protocol Workflow
 
+## Contents
+
+- [When this applies](#when-this-applies)
+- [Gotchas](#gotchas)
+- [File index](#file-index)
+- [Folder map](#folder-map)
+
+## When this applies
+
+Use this skill for a source-grounded skill implementation with an approved plan,
+one deliverable per task, one allowed file set, one acceptance check, and one
+commit. Refuse the first matching case under [Refusal cases](#refusal-cases).
+
+## Gotchas
+
+- A passing acceptance check does not replace a commit, review, repair,
+  reverification, or verifier record.
+- Native review is findings-only. A separate fast low-effort Luna repair worker
+  handles confirmed findings, followed by acceptance and exact-surface verification.
+- Missing task tools, native review binding, or verifier capability fails closed.
+
 ## Capability boundary
 
 This skill coordinates a multi-task skill implementation from an approved plan
@@ -43,6 +64,11 @@ The standalone task record and its fixed fields live in
 [`reference/task-ticket.md`](reference/task-ticket.md). The fixed routing and gate
 matrix lives in [`reference/model-routing.md`](reference/model-routing.md). Fail
 closed if either required reference is absent.
+
+Seed the ordered catalog in [`reference/task-seeds.md`](reference/task-seeds.md)
+before implementation. Seed [`reference/final-validation-tasks.md`](reference/final-validation-tasks.md)
+before final validation and [`reference/self-audit-tasks.md`](reference/self-audit-tasks.md)
+before self-audit. If no host task tool exists, stop and report the blocker.
 
 ## Peer-skill composition
 
@@ -127,5 +153,28 @@ and stop without publishing.
 - [`reference/model-routing.md`](reference/model-routing.md) — fixed model and gate matrix.
 - [`reference/task-ticket.md`](reference/task-ticket.md) — standalone task, commit,
   and review record contract.
+- [`reference/review-loop.md`](reference/review-loop.md) — native review and repair loop.
+- [`reference/process-inventory.md`](reference/process-inventory.md) — process classification and evidence homes.
 
 The hub names these contracts without reimplementing their fixed tables.
+
+## File index
+
+| File | Purpose |
+|---|---|
+| `SKILL.md` | Hub, routing, gates, and direct reference index |
+| `reference/model-routing.md` | Model roles and route gates |
+| `reference/task-ticket.md` | Human-readable task-ticket contract |
+| `reference/run-record.schema.json` | Machine-checkable task-run record |
+| `reference/review-loop.md` | Native review and repair loop |
+| `reference/process-inventory.md` | Process classification and evidence homes |
+| `reference/task-seeds.md` | Ordered implementation task catalog |
+| `reference/final-validation-tasks.md` | Final-validation task seeds |
+| `reference/self-audit-tasks.md` | Skill-builder self-audit task seeds |
+| `test_skill_contract.py` | Hub and routing contract tests |
+| `test_task_ticket_contract.py` | Task-record and reference contract tests |
+
+## Folder map
+
+- `reference/` — fixed contracts, catalogs, inventories, and task seeds.
+- `SKILL.md` — the one-level workflow hub.

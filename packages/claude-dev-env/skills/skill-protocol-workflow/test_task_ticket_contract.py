@@ -1,0 +1,89 @@
+import json
+import re
+from pathlib import Path
+
+
+SKILL_DIRECTORY = Path(__file__).parent
+REFERENCE_DIRECTORY = SKILL_DIRECTORY / "reference"
+SKILL_PATH = SKILL_DIRECTORY / "SKILL.md"
+SCHEMA_PATH = REFERENCE_DIRECTORY / "run-record.schema.json"
+REFERENCE_NAMES = (
+    "review-loop.md",
+    "task-seeds.md",
+    "final-validation-tasks.md",
+    "process-inventory.md",
+    "self-audit-tasks.md",
+)
+FORBIDDEN_ROUTE_TEXT = ("provider", "helper", "cleanup", "e-simplify", "--fix", "C:\\Users\\")
+
+
+def read_reference_texts() -> str:
+    return "\n".join(
+        [SKILL_PATH.read_text(encoding="utf-8")]
+        + [
+            (REFERENCE_DIRECTORY / each_name).read_text(encoding="utf-8")
+            for each_name in REFERENCE_NAMES
+        ]
+    )
+
+
+def test_references_exist_and_are_linked_directly() -> None:
+    skill_text = SKILL_PATH.read_text(encoding="utf-8")
+
+    for each_name in REFERENCE_NAMES:
+        assert (REFERENCE_DIRECTORY / each_name).exists()
+        assert f"reference/{each_name}" in skill_text
+
+
+def test_run_record_schema_requires_task_and_review_records() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    required_fields = set(schema["required"])
+
+    assert {
+        "task_identity",
+        "commit",
+        "review_record",
+        "repair_record",
+        "reverification_record",
+        "verification_record",
+    } <= required_fields
+    review_fields = set(schema["$defs"]["review_record"]["required"])
+    assert {"findings_only", "has_repair_flag", "command"} <= review_fields
+    assert schema["$defs"]["review_record"]["properties"]["command"] == {
+        "type": "string",
+        "minLength": 1,
+    }
+
+
+def test_review_loop_requires_separate_native_review_and_repair() -> None:
+    contract_text = read_reference_texts()
+
+    assert "separate fast low-effort Luna review worker" in contract_text
+    assert "native findings-only correctness capability" in contract_text
+    assert "/e-code-review low" in contract_text
+    assert "has no repair flag" in contract_text
+    assert "separate fast low-effort Luna repair worker" in contract_text
+    assert "confirmed findings" in contract_text
+    assert "amend the task commit" in contract_text
+    assert "repeat the native review until clean" in contract_text
+
+
+def test_task_seeding_and_audit_inventories_are_present() -> None:
+    contract_text = read_reference_texts()
+
+    assert "TaskCreate" in contract_text
+    assert "TodoWrite" in contract_text
+    assert "deterministic" in contract_text
+    assert "judgment" in contract_text
+    assert "borderline" in contract_text
+    assert "final-validation" in contract_text
+    assert "self-audit" in contract_text
+    assert re.search(r"\n1\. .*\n2\. .*\n3\. ", contract_text)
+
+
+def test_contract_avoids_forbidden_route_strings_and_absolute_paths() -> None:
+    contract_text = read_reference_texts()
+
+    for each_forbidden_route_text in FORBIDDEN_ROUTE_TEXT:
+        assert each_forbidden_route_text not in contract_text
+    assert not re.search(r"[A-Za-z]:[/\\]", contract_text)
