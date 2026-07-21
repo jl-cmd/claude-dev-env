@@ -26,5 +26,6 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "codex_review_scripts_constants",
         "dev_env_scripts_constants",
         "fresh_branch_scripts_constants",
+        "build_goal_constants",
     }
 )
