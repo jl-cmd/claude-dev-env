@@ -1,5 +1,6 @@
 """Exercise the protocol validator through its command-line interface."""
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -14,12 +15,12 @@ SCHEMA_PATH = SCRIPT_PATH.parent.parent / "reference" / "run-record.schema.json"
 
 
 def valid_record() -> dict[str, object]:
-    verification = {"acceptance_output": "passed", "verifier_output": "passed", "verified_commit_gate": "passed", "surface_hash": "surface"}
+    verification = {"acceptance_output": "passed: pytest", "verifier_output": "passed: clean", "verified_commit_gate": "passed: exact surface", "surface_hash": "a" * 64}
     return {
         "task_identity": "task-3", "deliverable": "validator", "allowed_files": ["validator.py"],
-        "acceptance_check": "pytest", "baseline": "clean", "worker_route": "worker", "commit": "a1b2c3d",
-        "review_record": {"resolved_model": "model", "effort": "low", "command": "native review", "findings": [], "repair_status": "clean", "surface_hash": "surface", "findings_only": True, "has_repair_flag": False},
-        "repair_record": {"resolved_model": "model", "effort": "low", "confirmed_findings": [], "repair_status": "clean", "surface_hash": "surface"},
+        "acceptance_check": "pytest", "baseline": "clean", "worker_route": "implementation worker; effort=low", "commit": "a1b2c3d",
+        "review_record": {"resolved_model": "Luna", "effort": "low", "command": "/e-code-review low", "findings": [], "repair_status": "clean", "surface_hash": "a" * 64, "findings_only": True, "has_repair_flag": False},
+        "repair_record": {"resolved_model": "Luna", "effort": "low", "confirmed_findings": [], "repair_status": "not-required", "surface_hash": "a" * 64},
         "reverification_record": verification, "verification_record": verification.copy(),
     }
 
@@ -72,6 +73,19 @@ def test_cli_rejects_invalid_mutations(tmp_path: Path) -> None:
         assert completed_run.stderr.startswith("protocol validation failed:")
 
 
+def test_validate_record_rejects_absolute_allowed_file_paths() -> None:
+    for each_absolute_path in ("/absolute/file.py", r"C:\absolute\file.py", "C:/absolute/file.py"):
+        record = valid_record()
+        record["allowed_files"] = [each_absolute_path]
+
+        try:
+            validate_record(record, SCHEMA_PATH)
+        except ProtocolValidationError as error:
+            assert str(error) == "allowed_files contains an absolute path"
+        else:
+            raise AssertionError("absolute allowed file paths must be rejected")
+
+
 def test_validate_record_enforces_modified_schema(tmp_path: Path) -> None:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     assert isinstance(schema, dict)
@@ -87,3 +101,30 @@ def test_validate_record_enforces_modified_schema(tmp_path: Path) -> None:
         assert "schema_added_field" in str(error)
     else:
         raise AssertionError("modified schema must reject a record missing its new required field")
+
+
+def test_validate_record_accepts_worktree_with_matching_committed_surface_hash(tmp_path: Path) -> None:
+    worktree_path = tmp_path / "worktree"
+    worktree_path.mkdir()
+    subprocess.run(["git", "init"], cwd=worktree_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=worktree_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Protocol Test"], cwd=worktree_path, check=True)
+    tracked_file = worktree_path / "validator.py"
+    tracked_file.write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "add", "validator.py"], cwd=worktree_path, check=True)
+    subprocess.run(["git", "commit", "-m", "baseline"], cwd=worktree_path, check=True, capture_output=True)
+    tracked_file.write_text("validated\n", encoding="utf-8")
+    subprocess.run(["git", "add", "validator.py"], cwd=worktree_path, check=True)
+    subprocess.run(["git", "commit", "-m", "validated"], cwd=worktree_path, check=True, capture_output=True)
+    commit_hash = subprocess.run(["git", "rev-parse", "HEAD"], cwd=worktree_path, check=True, capture_output=True, text=True).stdout.strip()
+    committed_surface = subprocess.run(["git", "diff", f"{commit_hash}^", commit_hash, "--", "validator.py"], cwd=worktree_path, check=True, capture_output=True).stdout
+    surface_hash = hashlib.sha256(committed_surface).hexdigest()
+    record = valid_record()
+    record["worktree"] = str(worktree_path)
+    record["commit"] = commit_hash
+    for each_field_name in ("review_record", "repair_record", "reverification_record", "verification_record"):
+        nested_record = record[each_field_name]
+        assert isinstance(nested_record, dict)
+        nested_record["surface_hash"] = surface_hash
+
+    validate_record(record, SCHEMA_PATH)

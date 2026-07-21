@@ -2,7 +2,37 @@
 
 import re
 
+ALLOWED_WORKER_ROLE: str = "implementation worker"
+ALLOWED_WORKER_EFFORT: str = "low"
+ALLOWED_REVIEW_MODEL: str = "Luna"
+NATIVE_REVIEW_COMMAND: str = "/e-code-review low"
+PASSED_EVIDENCE_PREFIX: str = "passed:"
+SURFACE_HASH_PATTERN: re.Pattern[str] = re.compile(r"^[0-9a-f]{64}$")
+PATH_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(r"[/\\]+")
+DOCS_PLANS_PATH_PATTERN: re.Pattern[str] = re.compile(r"^docs/plans(?:/|$)")
+COMMIT_RANGE_SEPARATOR: str = ".."
+EXIT_CODE_USAGE_ERROR: int = 2
+EXIT_CODE_VALID_SET: int = 0
+EXIT_CODE_INVALID_SET: int = 2
+VALIDATION_PASSED: str = "run validation passed"
+SET_VALIDATION_PASSED: str = "run set validation passed"
+WORKTREE_OPTION: str = "--worktree"
+BASE_HEAD_OPTION: str = "--base-head"
+COMMIT_SET_OPTION: str = "--commits"
+FINDING_STATUS_CONFIRMED: str = "confirmed"
+FINDING_STATUS_DISMISSED: str = "dismissed"
+REPAIR_STATUS_COMPLETE: str = "complete"
+REPAIR_STATUS_NOT_REQUIRED: str = "not-required"
+REVIEW_STATUS_CLEAN: str = "clean"
+GIT_COMMAND: str = "git"
+GIT_DIFF_FORMAT: str = "--format="
+GIT_DIFF_SEPARATOR: str = "\n"
+SHA256_ALGORITHM: str = "sha256"
+
 ARGUMENT_COUNT_REQUIRED: int = 2
+ARGUMENT_COUNT_WITH_WORKTREE: int = 4
+RUN_ARGUMENT_COUNT_REQUIRED: int = 4
+RUN_ARGUMENT_COUNT_WITH_WORKTREE: int = 5
 COMMIT_HASH_PATTERN: re.Pattern[str] = re.compile(r"^[0-9a-f]{7,40}$")
 COMMIT_HASH_ERROR_TEMPLATE: str = "record.commit must be a %d-%d character lowercase commit hash"
 EXIT_CODE_INVALID_RECORD: int = 2
@@ -27,6 +57,7 @@ ALL_RECORD_FIELDS: tuple[str, ...] = (
     "reverification_record",
     "verification_record",
 )
+ALL_ALLOWED_RECORD_FIELDS: tuple[str, ...] = ALL_RECORD_FIELDS + ("worktree",)
 ALL_TOP_LEVEL_TEXT_FIELDS: tuple[str, ...] = (
     "task_identity",
     "deliverable",

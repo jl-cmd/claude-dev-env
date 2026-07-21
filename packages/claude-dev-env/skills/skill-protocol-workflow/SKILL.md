@@ -13,7 +13,18 @@ description: >-
 ## Contents
 
 - [When this applies](#when-this-applies)
+- [Process classification](#process-classification)
 - [Gotchas](#gotchas)
+- [Capability boundary](#capability-boundary)
+- [Refusal cases](#refusal-cases)
+- [Runtime prerequisites](#runtime-prerequisites)
+- [Task seeding](#task-seeding)
+- [Peer-skill composition](#peer-skill-composition)
+- [Model contract](#model-contract)
+- [One-task and one-commit protocol](#one-task-and-one-commit-protocol)
+- [Review and verification order](#review-and-verification-order)
+- [Final validation and publication](#final-validation-and-publication)
+- [Companion references](#companion-references)
 - [File index](#file-index)
 - [Folder map](#folder-map)
 
@@ -23,6 +34,12 @@ Use this skill for a source-grounded skill implementation with an approved plan,
 one deliverable per task, one allowed file set, one acceptance check, and one
 commit. Refuse the first matching case under [Refusal cases](#refusal-cases).
 
+## Process classification
+
+This skill is an orchestrator/business-process workflow. It coordinates fixed
+task, routing, review, verification, and publication decisions across peer
+skills and deterministic validation scripts.
+
 ## Gotchas
 
 - A passing acceptance check does not replace a commit, review, repair,
@@ -30,6 +47,13 @@ commit. Refuse the first matching case under [Refusal cases](#refusal-cases).
 - Native review is findings-only. A separate fast low-effort Luna repair worker
   handles confirmed findings, followed by acceptance and exact-surface verification.
 - Missing task tools, native review binding, or verifier capability fails closed.
+
+## Runtime prerequisites
+
+The validator uses Python 3 standard library only; no third-party packages are
+required. Run `python scripts/validate_protocol.py <record.json>` from this
+skill directory. Exit `0` means the record is valid; exit `2` means validation
+failed and the concise reason is written to stderr.
 
 ## Capability boundary
 
@@ -175,6 +199,8 @@ The hub names these contracts without reimplementing their fixed tables.
 | `test_skill_contract.py` | Hub and routing contract tests |
 | `test_task_ticket_contract.py` | Task-record and reference contract tests |
 | `scripts/test_validate_protocol.py` | CLI validation tests |
+| `scripts/config/__init__.py` | Validator configuration package marker |
+| `scripts/config/constants.py` | Validator constants |
 
 Run [`scripts/validate_protocol.py`](scripts/validate_protocol.py) with a completed
 task-run record before final validation. Exit `0` means the host-neutral
@@ -184,4 +210,6 @@ reason is printed to stderr.
 ## Folder map
 
 - `reference/` — fixed contracts, catalogs, inventories, and task seeds.
+- `scripts/` — deterministic validator and its tests.
+- `scripts/config/` — validator configuration package and constants.
 - `SKILL.md` — the one-level workflow hub.
