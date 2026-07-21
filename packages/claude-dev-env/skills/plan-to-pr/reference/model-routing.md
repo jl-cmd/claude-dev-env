@@ -1,13 +1,14 @@
 # Model Routing Contract
 
-This reference fixes the model role for every stage of the Plan-to-PR workflow.
+This reference fixes the model role for native packet planning, task execution,
+review, repair, validation, and post-PR cleanup.
 Unavailable models or unavailable model-selection tools fail closed.
 
 ## Role matrix
 
 | Role | Required route | Required behavior |
 |---|---|---|
-| Planner | Luna xhigh with Sol xhigh advisor | Creates the source-grounded plan and acceptance contract; consults the warm advisor heavily at decisive planning points |
+| Planner | Luna xhigh with Sol xhigh advisor | Creates and validates the native packet before task seeding; consults the warm advisor heavily at decisive planning points |
 | Orchestrator | Max route | Assigns tickets, owns the ledger, delegates every work task, and reconciles results |
 | Implementation worker | Fast, low-effort Luna | Changes only the ticket's allowed files and runs its acceptance check |
 | Review worker | Fast, low-effort Luna | Invokes the native `/e-code-review low` correctness review against the committed diff and returns findings only |

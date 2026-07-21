@@ -1,6 +1,7 @@
 # Task Ticket Contract
 
-Each ticket describes one independently verifiable deliverable. The orchestrator
+Each ticket is created from an approved native plan packet after packet validation
+passes. It describes one independently verifiable deliverable. The orchestrator
 must reject a ticket that combines deliverables, file sets, acceptance checks, or
 commits.
 

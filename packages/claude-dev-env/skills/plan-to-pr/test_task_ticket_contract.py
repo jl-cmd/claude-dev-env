@@ -8,13 +8,20 @@ REFERENCE_DIRECTORY = SKILL_DIRECTORY / "reference"
 SKILL_PATH = SKILL_DIRECTORY / "SKILL.md"
 SCHEMA_PATH = REFERENCE_DIRECTORY / "run-record.schema.json"
 REFERENCE_NAMES = (
+    "packet-contract.md",
     "review-loop.md",
     "task-seeds.md",
     "final-validation-tasks.md",
     "process-inventory.md",
     "self-audit-tasks.md",
 )
-FORBIDDEN_ROUTE_TEXT = ("provider", "helper", "skill-builder", "--fix", "C:\\Users\\")
+FORBIDDEN_ROUTE_TEXT = (
+    "external planning provider",
+    "Workflow dependency",
+    "skill-builder",
+    "--fix",
+    "C:\\Users\\",
+)
 
 
 def read_reference_texts() -> str:
@@ -33,6 +40,34 @@ def test_references_exist_and_are_linked_directly() -> None:
     for each_name in REFERENCE_NAMES:
         assert (REFERENCE_DIRECTORY / each_name).exists()
         assert f"reference/{each_name}" in skill_text
+
+    assert (REFERENCE_DIRECTORY / "packet-schema.json").exists()
+    assert "reference/packet-schema.json" in skill_text
+    assert (SKILL_DIRECTORY / "scripts" / "validate_protocol.py").exists()
+    assert (SKILL_DIRECTORY / "scripts" / "validate_run.py").exists()
+
+
+def test_packet_schema_requires_native_planning_fields() -> None:
+    packet_schema = json.loads(
+        (REFERENCE_DIRECTORY / "packet-schema.json").read_text(encoding="utf-8")
+    )
+
+    assert {
+        "schema_version",
+        "slug",
+        "status",
+        "request",
+        "allowed_files",
+        "sources",
+        "decisions",
+        "open_questions",
+        "tasks",
+        "validation",
+    } <= set(packet_schema["required"])
+    assert packet_schema["properties"]["status"]["enum"] == ["draft", "approved"]
+    assert packet_schema["$defs"]["validation"]["properties"]["validated_by"] == {
+        "const": "native-plan-to-pr"
+    }
 
 
 def test_run_record_schema_requires_task_and_review_records() -> None:
@@ -66,8 +101,9 @@ def test_review_loop_requires_separate_native_review_and_repair() -> None:
     assert "has no repair flag" in contract_text
     assert "separate fast low-effort Luna repair worker" in contract_text
     assert "confirmed findings" in contract_text
-    assert "amend the task commit" in contract_text
+    assert "Amend the task commit" in contract_text
     assert "repeat the native review until clean" in contract_text
+    assert "packet is complete before `TaskCreate` or `TodoWrite` runs" in contract_text
 
 
 def test_post_pr_cleanup_and_max_review_are_distinct() -> None:
@@ -77,9 +113,21 @@ def test_post_pr_cleanup_and_max_review_are_distinct() -> None:
     assert "cleanup-only" in contract_text
     assert "Luna low `/e-code-review max loop`" in contract_text
     assert "separate Luna low repair worker" in contract_text
-    assert "commit, and push" in contract_text
+    assert "commits, and pushes" in contract_text
     assert "clean" in contract_text
     assert "skill-builder" not in contract_text
+
+
+def test_packet_planning_precedes_task_seeding_and_has_no_external_dependency() -> None:
+    contract_text = read_reference_texts()
+
+    assert "before any `TaskCreate` or `TodoWrite` seeding" in contract_text
+    assert (
+        "Only a passing packet with `status: approved` may seed host tasks"
+        in contract_text
+    )
+    assert "external planning provider" not in contract_text
+    assert "Workflow dependency" not in contract_text
 
 
 def test_task_seeding_and_audit_inventories_are_present() -> None:
