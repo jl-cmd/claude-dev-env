@@ -199,6 +199,8 @@ The hub names these contracts without reimplementing their fixed tables.
 | `test_skill_contract.py` | Hub and routing contract tests |
 | `test_task_ticket_contract.py` | Task-record and reference contract tests |
 | `scripts/test_validate_protocol.py` | CLI validation tests |
+| `scripts/validate_run.py` | Deterministic set-level task-record validator |
+| `scripts/test_validate_run.py` | Set-level validator tests |
 | `scripts/config/__init__.py` | Validator configuration package marker |
 | `scripts/config/constants.py` | Validator constants |
 
@@ -206,6 +208,11 @@ Run [`scripts/validate_protocol.py`](scripts/validate_protocol.py) with a comple
 task-run record before final validation. Exit `0` means the host-neutral
 contract and evidence are valid. Exit `2` means validation failed; the concise
 reason is printed to stderr.
+
+Run [`scripts/validate_run.py`](scripts/validate_run.py) with a JSON list of
+task-run records and either `--base-head BASE..HEAD` or `--commits HASH[,HASH]`
+to validate the complete task-record set against its commit set. Add
+`--worktree PATH` when the commit set belongs to another worktree.
 
 ## Folder map
 
