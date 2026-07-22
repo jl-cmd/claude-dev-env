@@ -74,9 +74,9 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `block_main_commit.py` | PreToolUse (Bash) | `git commit`/`git push` directly to `main` |
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |
-| `code_review_pr_create_gate.py` | PreToolUse (Bash/MCP GitHub) | `gh pr create` or the MCP `create_pull_request` tool without a clean `xhigh` code-review stamp covering the branch surface |
-| `code_review_push_gate.py` | PreToolUse (Bash/PowerShell) | `git push` without a clean `low` code-review stamp covering the branch surface |
-| `code_review_stamp_directory_write_blocker.py` | PreToolUse (Bash/PowerShell/Write/Edit/MultiEdit) | Shell or file-tool writes into `~/.claude/code-review-stamps/`, and shell references to the stamp store module or its mint call, outside the sanctioned invoker |
+| `code_review_pr_create_gate.py` | Claude source inventory | Claude-specific PR-create review policy retained for source mapping |
+| `code_review_push_gate.py` | Claude source inventory | Claude-specific push review policy retained for source mapping |
+| `code_review_stamp_directory_write_blocker.py` | Claude source inventory | Claude-specific review-stamp protection retained for source mapping |
 | `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent) | Spawning the `code-verifier` subagent when the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line, or the CODE_RULES engine fails to load |
 | `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `conventional_pr_title_gate.py` | PreToolUse (Bash) | `gh pr create`/`gh pr edit` with a `--title` that is not a Conventional Commit, in a repo whose CI runs a semantic-pull-request title check |

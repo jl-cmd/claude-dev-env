@@ -350,6 +350,17 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
 ]);
 
 /**
+ * Claude review hooks retired from the active registration surface. Keep their
+ * paths managed so an installation update removes stale commands from the
+ * user's settings while preserving unrelated user-authored hooks.
+ */
+export const RETIRED_CLAUDE_REVIEW_HOOK_RELATIVE_PATHS = new Set([
+    'blocking/code_review_push_gate.py',
+    'blocking/code_review_pr_create_gate.py',
+    'blocking/code_review_stamp_directory_write_blocker.py',
+]);
+
+/**
  * After-write hook script paths the installer manages even though hooks.json
  * carries no standalone entry for them. mypy_validator and auto_formatter run
  * hosted inside the PostToolUse dispatcher; doc_gist_auto_publish and
@@ -371,8 +382,8 @@ export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
  * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
  * `python3 -c` commands reference the hooks directory without a script tail and
  * contribute nothing. Also includes every path from FOLDED_HOOK_RELATIVE_PATHS
- * and POST_FOLDED_HOOK_RELATIVE_PATHS so a reinstall from an older settings shape
- * prunes both the PreToolUse and the PostToolUse folded entries.
+ * and POST_FOLDED_HOOK_RELATIVE_PATHS plus retired Claude review paths so an
+ * update prunes stale PreToolUse and PostToolUse entries.
  *
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
  * @returns {Set<string>} Forward-slash relative script paths under hooks/.
@@ -381,6 +392,7 @@ export function managedHookScriptRelativePaths(hooksConfig) {
     const relativePaths = new Set([
         ...FOLDED_HOOK_RELATIVE_PATHS,
         ...POST_FOLDED_HOOK_RELATIVE_PATHS,
+        ...RETIRED_CLAUDE_REVIEW_HOOK_RELATIVE_PATHS,
     ]);
     const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {
