@@ -25,7 +25,7 @@ advisor capabilities used by later phases.
 
 Run this phase before task seeding and before implementation:
 
-1. The Luna xhigh planner reads the request, repository guidance, relevant
+1. The Luna max planner reads the request, repository guidance, relevant
    source, tests, and documentation, then selects a unique lowercase slug.
 2. The planner consults a Sol xhigh advisor heavily at scope, dependency,
    task-boundary, acceptance, and risk decisions. The advisor supports planning
@@ -86,7 +86,7 @@ contracts in `reference/task-ticket.md`, `reference/model-routing.md`,
 
 ## Model contract
 
-The planner and final validator use Luna xhigh with Sol xhigh advisory heavily
+The planner and final validator use Luna max with Sol xhigh advisory heavily
 at decisive points. The orchestrator uses the max route and delegates every work
 task. Every implementation,
 review, and repair worker uses fast, low-effort Luna. Unavailable models or routing tools
@@ -127,14 +127,14 @@ gate after cleanup.
 
 ## Final validation and publication
 
-The Luna xhigh final validator maps every commit to one packet task and checks
+The Luna max final validator maps every commit to one packet task and checks
 cumulative behavior, the allowed-file ledger, acceptance checks, verifier
 output, `verified_commit_gate` evidence, and post-commit review records. Any
 unmapped commit, missing record, failed gate, or unresolved finding blocks
 publication.
 
 Run the workflow self-audit and retain its evidence. Publish only when final validation
-and self-audit pass. After the branch is finalized and pushed, run Luna xhigh `/e-simplify`
+and self-audit pass. After the branch is finalized and pushed, run Luna max `/e-simplify`
 for cleanup-only fixes, then Luna low `/e-code-review max loop` with a separate
 Luna low repair worker. commit, and push every validated repair;
 finish only when the max review is clean.

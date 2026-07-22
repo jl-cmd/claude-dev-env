@@ -56,7 +56,7 @@ def test_skill_contract_requires_native_packet_planning_before_task_seeding() ->
 
     assert "## Native planning phase" in skill_text
     assert "before task seeding and before implementation" in skill_text
-    assert "Luna xhigh planner" in skill_text
+    assert "Luna max planner" in skill_text
     assert "Sol xhigh advisor" in skill_text
     assert "native planning packet" in skill_text
     assert (
@@ -73,7 +73,7 @@ def test_skill_contract_requires_native_packet_planning_before_task_seeding() ->
 def test_skill_contract_pins_model_roles_and_worker_routing() -> None:
     skill_text = read_skill_text()
 
-    assert "planner and final validator use Luna xhigh" in skill_text
+    assert "planner and final validator use Luna max" in skill_text
     assert "orchestrator uses the max route" in skill_text
     assert "Sol xhigh advisor" in skill_text
     assert "Sol xhigh advisor heavily at scope" in skill_text
@@ -181,7 +181,7 @@ def test_skill_contract_requires_self_audit_and_publication_gates() -> None:
     assert "Run the workflow self-audit and retain its evidence." in skill_text
     assert "unresolved finding blocks\npublication." in skill_text
     assert "Publish only when final validation\nand self-audit pass." in skill_text
-    assert "Luna xhigh `/e-simplify`" in skill_text
+    assert "Luna max `/e-simplify`" in skill_text
     assert "Luna low `/e-code-review max loop`" in skill_text
     assert "no repair flag" in skill_text
 

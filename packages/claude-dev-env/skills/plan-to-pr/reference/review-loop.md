@@ -24,11 +24,10 @@ output are recorded against the amended commit.
 
 ## Post-PR max loop
 
-After the PR branch is finalized and pushed, Luna xhigh runs `/e-simplify` and
+After the PR branch is finalized and pushed, Luna max runs `/e-simplify` and
 applies only cleanup fixes. Commit and push those fixes before correctness review.
 
 Then Luna low invokes `/e-code-review max loop`. It returns findings only. A
 separate Luna low repair worker applies confirmed bugs or nits, runs required
 checks, commits, and pushes. Repeat the max loop until it is clean. Fix and push
 all nits before the next loop; any non-nit finding blocks readiness until repaired.
-The review command has no repair flag.

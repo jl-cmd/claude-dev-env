@@ -109,7 +109,7 @@ def test_review_loop_requires_separate_native_review_and_repair() -> None:
 def test_post_pr_cleanup_and_max_review_are_distinct() -> None:
     contract_text = read_reference_texts()
 
-    assert "Luna xhigh `/e-simplify`" in contract_text
+    assert "Luna max `/e-simplify`" in contract_text
     assert "cleanup-only" in contract_text
     assert "Luna low `/e-code-review max loop`" in contract_text
     assert "separate Luna low repair worker" in contract_text

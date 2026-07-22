@@ -14,7 +14,7 @@ commits.
 | Allowed files | The complete file set the worker may change |
 | Acceptance check | Exactly one command or deterministic check |
 | Baseline | Fresh output captured before implementation |
-| Worker route | The model role and selected route from `reference/model-routing.md`; planner and final-validator records include Luna xhigh plus Sol xhigh advisor evidence, and orchestrator records the max route |
+| Worker route | The model role and selected route from `reference/model-routing.md`; planner and final-validator records include Luna max plus Sol xhigh advisor evidence, and orchestrator records the max route |
 | Commit record | Exactly one commit hash for this ticket |
 | Review record | Separate fast low-effort Luna review output that invokes native `/e-code-review low` and returns findings only, followed by separate fast low-effort Luna repair output, including resolved model, effort, command, findings, repair status, and surface hash |
 | Verification record | Fresh verifier output and `verified_commit_gate` result for the exact surface |
