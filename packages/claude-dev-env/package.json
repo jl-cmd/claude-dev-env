@@ -4,7 +4,8 @@
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
-        "claude-dev-env": "bin/install.mjs"
+        "claude-dev-env": "bin/install.mjs",
+        "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
         "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
@@ -19,6 +20,7 @@
         "hooks/",
         "system-prompts/",
         "scripts/",
+        "codex-capability-map.json",
         "_shared/",
         "audit-rubrics/",
         "CLAUDE.md"

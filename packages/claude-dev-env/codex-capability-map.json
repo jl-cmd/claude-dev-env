@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "capabilities": [
+    {"source": "TaskList", "aliases": ["task_list", "tasks", "Task.list"], "target": "update_plan", "transformation": "snapshot", "status": "fallback", "confidence": "medium", "manual_review": true, "required_fields": {"plan": "plan"}},
+    {"source": "TaskCreate", "aliases": ["task_create", "tasks.create", "create_task"], "target": "update_plan", "transformation": "append/replace-plan-item", "status": "mapped", "confidence": "high", "manual_review": false, "required_fields": {"name": "string", "status": "status"}},
+    {"source": "TaskUpdate", "aliases": ["task_update", "tasks.update", "update_task"], "target": "update_plan", "transformation": "status mutation", "status": "mapped", "confidence": "high", "manual_review": false, "required_fields": {"name": "string", "status": "status"}},
+    {"source": "Task", "aliases": ["Agent", "task", "agent", "spawn_agent", "spawn", "spawnAgent"], "target": "multi_agent_v1__spawn_agent", "transformation": "spawn request", "status": "mapped", "confidence": "medium", "manual_review": true, "required_fields": {"prompt": "string"}},
+    {"source": "SendMessage", "aliases": ["send_message", "agent.send", "send_input", "message", "sendMessage"], "target": "multi_agent_v1__send_input", "transformation": "agent input", "status": "mapped", "confidence": "high", "manual_review": false, "required_fields": {"message": "string"}},
+    {"source": "TaskOutput", "aliases": ["task_output", "wait", "TaskWait"], "target": "multi_agent_v1__wait_agent", "transformation": "wait request", "status": "mapped", "confidence": "high", "manual_review": false, "required_fields": {"task_id": "string"}},
+    {"source": "TaskStop", "aliases": ["task_stop", "stop_task", "close_agent", "stop", "stopAgent"], "target": "multi_agent_v1__close_agent", "transformation": "close request", "status": "mapped", "confidence": "high", "manual_review": false, "required_fields": {"task_id": "string"}},
+    {"source": "ScheduleWakeup", "aliases": ["schedule_wakeup", "wake_up", "cron_wakeup"], "target": null, "transformation": "explicit unsupported result; future automation surface requires confirmation", "status": "unsupported", "confidence": "high", "manual_review": true}
+  ]
+}
