@@ -66,19 +66,6 @@ def test_batched_pytest_arguments_keeps_oversized_argument_in_its_own_batch() ->
     assert all_batches == [["wide_argument"]]
 
 
-def test_pytest_target_paths_drops_conftest_and_keeps_real_tests() -> None:
-    all_staged_paths = [
-        Path("pkg_a/conftest.py"),
-        Path("pkg_b/conftest.py"),
-        Path("pkg_a/test_alpha.py"),
-        Path("pkg_b/tests/conftest.py"),
-    ]
-
-    all_targets = staged_test_running._pytest_target_paths(all_staged_paths)
-
-    assert all_targets == [Path("pkg_a/test_alpha.py")]
-
-
 def test_run_staged_test_files_returns_zero_when_only_multiple_confests_staged(
     tmp_path: Path,
 ) -> None:

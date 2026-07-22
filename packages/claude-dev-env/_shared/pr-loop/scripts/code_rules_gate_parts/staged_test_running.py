@@ -50,32 +50,13 @@ from pr_loop_shared_constants.preflight_constants import (
 from terminology_sweep import repository_environment
 
 from code_rules_gate_parts.git_file_sets import paths_from_git_staged
+from code_rules_gate_parts.staged_pytest_entry import _mapped_snapshot_path
 from code_rules_gate_parts.wrapper_plumb_check import is_test_path
 
 
 def _is_conftest_path(file_path: Path) -> bool:
     """Return True when *file_path* is a pytest ``conftest.py`` fixture module."""
     return file_path.name == TEST_CONFTEST_FILENAME
-
-
-def _pytest_target_paths(all_test_paths: list[Path]) -> list[Path]:
-    """Return staged test paths that pytest should collect as targets.
-
-    ::
-
-        ok:   [pkg/test_a.py, pkg/conftest.py] -> [pkg/test_a.py]
-        ok:   [a/conftest.py, b/conftest.py]   -> []
-        flag: bare confests collected as targets share basename ``conftest``
-
-    Args:
-        all_test_paths: Staged paths that match the test-file classifier.
-
-    Returns:
-        The same paths with every ``conftest.py`` removed.
-    """
-    return [
-        each_path for each_path in all_test_paths if not _is_conftest_path(each_path)
-    ]
 
 
 def _staged_test_relative_paths(repository_root: Path) -> list[Path]:
@@ -199,12 +180,7 @@ def _resolve_gate_python_executable(repository_root: Path) -> str:
 def _mapped_python_path(
     path_text: str, repository_root: Path, snapshot_root: Path
 ) -> str:
-    candidate_path = Path(path_text)
-    try:
-        relative_path = candidate_path.resolve().relative_to(repository_root)
-    except ValueError:
-        return path_text
-    return str(snapshot_root / relative_path)
+    return str(_mapped_snapshot_path(Path(path_text), repository_root, snapshot_root))
 
 
 def _rewritten_pythonpath(
@@ -435,15 +411,7 @@ def _git_text(repository_root: Path, all_command: tuple[str, ...]) -> str | None
 
 
 def _run_git_command(repository_root: Path, all_command: list[str]) -> bool:
-    completed_process = subprocess.run(
-        all_command,
-        cwd=str(repository_root),
-        check=False,
-        capture_output=True,
-        timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
-        env=repository_environment(),
-    )
-    return completed_process.returncode == 0
+    return _git_text(repository_root, tuple(all_command)) is not None
 
 
 def _create_snapshot_worktree(
@@ -459,9 +427,11 @@ def _create_snapshot_worktree(
 
 
 def _remove_snapshot_worktree(repository_root: Path, snapshot_root: Path) -> None:
-    _run_git_command(
+    is_worktree_removed = _run_git_command(
         repository_root, [*ALL_GIT_WORKTREE_REMOVE_COMMAND, str(snapshot_root)]
     )
+    if is_worktree_removed:
+        return
     _run_git_command(repository_root, list(ALL_GIT_WORKTREE_PRUNE_COMMAND))
 
 

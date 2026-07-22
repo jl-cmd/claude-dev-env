@@ -218,6 +218,4 @@ def has_current_staged_attestation(repository_root: Path) -> bool:
         stored_payload = json.loads(stored_attestation_path.read_text(STAGED_ATTESTATION_ENCODING))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return False
-    if not isinstance(stored_payload, dict):
-        return False
     return stored_payload == _attestation_payload(expected_attestation)

@@ -10,6 +10,21 @@ import pytest
 from code_rules_gate_parts import staged_attestation
 
 
+def _initialize_repository(repository_root: Path) -> None:
+    all_git_commands = (
+        ("git", "init", "--initial-branch=main"),
+        ("git", "config", "user.email", "test@example.com"),
+        ("git", "config", "user.name", "Test"),
+    )
+    for each_command in all_git_commands:
+        subprocess.run(
+            each_command,
+            cwd=str(repository_root),
+            check=True,
+            capture_output=True,
+        )
+
+
 def test_invalid_utf8_attestation_is_not_current(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -141,24 +156,7 @@ def test_nested_repository_path_binds_attestation_to_top_level(tmp_path: Path) -
     repository_root = tmp_path / "repo"
     nested_directory = repository_root / "nested" / "deeper"
     nested_directory.mkdir(parents=True)
-    subprocess.run(
-        ["git", "init", "--initial-branch=main"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
+    _initialize_repository(repository_root)
     (repository_root / "tracked.txt").write_text("tracked\n", encoding="utf-8")
     subprocess.run(
         ["git", "add", "tracked.txt"],
@@ -185,24 +183,7 @@ def test_nested_repository_path_binds_attestation_to_top_level(tmp_path: Path) -
 def test_unborn_head_snapshot_mint_and_staged_gate_succeed(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
-    subprocess.run(
-        ["git", "init", "--initial-branch=main"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=str(repository_root),
-        check=True,
-        capture_output=True,
-    )
+    _initialize_repository(repository_root)
     configuration_path = repository_root / "config" / "constants.py"
     configuration_path.parent.mkdir()
     configuration_path.write_text("IS_READY = True\n", encoding="utf-8")
