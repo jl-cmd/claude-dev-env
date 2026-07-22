@@ -217,6 +217,67 @@ def test_staged_mode_with_nothing_staged_reports_zero_inspected(
     assert "inspected 0 file(s)" in captured.err
 
 
+def test_filtered_staged_run_never_mints_full_index_attestation(
+    temporary_git_repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    all_events: list[str] = []
+    arguments = gate_module.argparse.Namespace(only_under=["src"])
+    monkeypatch.setattr(
+        gate_module.staged_attestation,
+        "clear_staged_attestation",
+        lambda _root: all_events.append("clear") or True,
+    )
+    monkeypatch.setattr(gate_module, "_report_terminology_findings", lambda _findings: None)
+    monkeypatch.setattr(gate_module, "staged_terminology_findings", lambda _root: [])
+    monkeypatch.setattr(gate_module, "paths_from_git_staged", lambda _root: [])
+    monkeypatch.setattr(gate_module, "_staged_pytest_exit_code_for_current_python", lambda _root: 0)
+    monkeypatch.setattr(
+        gate_module.staged_attestation,
+        "mint_staged_attestation",
+        lambda _root, _before: all_events.append("mint") or True,
+    )
+
+    exit_code = gate_module._run_staged_mode(lambda *_arguments: [], arguments, temporary_git_repository)
+
+    assert exit_code == 0
+    assert all_events == []
+
+
+def test_staged_rule_failure_skips_pytest_after_snapshot(
+    temporary_git_repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    all_events: list[str] = []
+    arguments = gate_module.argparse.Namespace(only_under=[])
+    staged_path = temporary_git_repository / "module.py"
+    attestation = object()
+    monkeypatch.setattr(
+        gate_module.staged_attestation,
+        "clear_staged_attestation",
+        lambda _root: all_events.append("clear") or True,
+    )
+    monkeypatch.setattr(
+        gate_module.staged_attestation,
+        "snapshot_staged_attestation",
+        lambda _root: all_events.append("snapshot") or attestation,
+    )
+    monkeypatch.setattr(gate_module, "_report_terminology_findings", lambda _findings: None)
+    monkeypatch.setattr(gate_module, "staged_terminology_findings", lambda _root: [])
+    monkeypatch.setattr(gate_module, "paths_from_git_staged", lambda _root: [staged_path])
+    monkeypatch.setattr(gate_module, "filter_paths_under_prefixes", lambda *arguments: [staged_path])
+    monkeypatch.setattr(gate_module, "added_lines_by_file_staged", lambda *_arguments: {})
+    monkeypatch.setattr(gate_module, "run_gate", lambda *_arguments, **_keywords: 1)
+    monkeypatch.setattr(
+        gate_module,
+        "_staged_pytest_exit_code_for_current_python",
+        lambda _root: all_events.append("pytest") or 0,
+    )
+
+    exit_code = gate_module._run_staged_mode(lambda *_arguments: [], arguments, temporary_git_repository)
+
+    assert exit_code == 1
+    assert all_events == ["clear", "snapshot"]
+
+
 def test_untracked_paths_helper_lists_only_untracked_files(
     temporary_git_repository: Path,
 ) -> None:

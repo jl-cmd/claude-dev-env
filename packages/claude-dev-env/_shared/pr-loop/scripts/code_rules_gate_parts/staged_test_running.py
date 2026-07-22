@@ -13,12 +13,22 @@ in one session collides on the shared module basename.
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
+    ALL_GIT_CHECKOUT_INDEX_COMMAND,
+    ALL_GIT_EMPTY_TREE_COMMIT_COMMAND,
+    ALL_GIT_HEAD_COMMAND,
+    ALL_GIT_READ_TREE_COMMAND,
+    ALL_GIT_TOP_LEVEL_COMMAND,
+    ALL_GIT_WORKTREE_ADD_COMMAND,
+    ALL_GIT_WORKTREE_PRUNE_COMMAND,
+    ALL_GIT_WORKTREE_REMOVE_COMMAND,
+    ALL_GIT_WRITE_TREE_COMMAND,
     ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
     ALL_PYTEST_CONFIG_FILE_SECTIONS,
-    ALL_PYTEST_MODULE_INVOCATION,
+    ALL_STAGED_PYTEST_ARGUMENTS,
     ALL_VENV_DIRECTORY_NAMES,
     ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
     CODE_RULES_GATE_PYTHON_ENV_VAR,
@@ -28,6 +38,8 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     PYTHON_FILE_EXTENSION,
     PYTHONPATH_ENV_VAR,
     STAGED_PYTEST_TIMEOUT_SECONDS,
+    STAGED_TEST_ORIGINAL_ROOT_ENV_VAR,
+    STAGED_TEST_SNAPSHOT_ROOT_ENV_VAR,
     STAGED_TEST_FAILURE_HEADER,
     STAGED_TEST_GROUP_FAILURE_MESSAGE,
     TEST_CONFTEST_FILENAME,
@@ -66,22 +78,21 @@ def _pytest_target_paths(all_test_paths: list[Path]) -> list[Path]:
     ]
 
 
-def _staged_test_file_paths(repository_root: Path) -> list[Path]:
-    """Return the staged Python test files that exist under a repository.
+def _staged_test_relative_paths(repository_root: Path) -> list[Path]:
+    """Return collectable staged Python test paths relative to the top level.
 
     Args:
         repository_root: The repository root whose staged index is read.
 
     Returns:
-        Staged paths whose extension is Python, whose name matches a test-file
-        pattern, and which exist on disk.
+        Relative staged Python test paths, excluding bare conftest modules.
     """
     all_test_paths: list[Path] = []
     for each_path in paths_from_git_staged(repository_root):
         if each_path.suffix != PYTHON_FILE_EXTENSION:
             continue
-        if is_test_path(str(each_path)) and each_path.is_file():
-            all_test_paths.append(each_path)
+        if is_test_path(str(each_path)) and not _is_conftest_path(each_path):
+            all_test_paths.append(each_path.relative_to(repository_root))
     return all_test_paths
 
 
@@ -185,7 +196,30 @@ def _resolve_gate_python_executable(repository_root: Path) -> str:
     return sys.executable
 
 
-def _staged_pytest_environment() -> dict[str, str]:
+def _mapped_python_path(
+    path_text: str, repository_root: Path, snapshot_root: Path
+) -> str:
+    candidate_path = Path(path_text)
+    try:
+        relative_path = candidate_path.resolve().relative_to(repository_root)
+    except ValueError:
+        return path_text
+    return str(snapshot_root / relative_path)
+
+
+def _rewritten_pythonpath(
+    pythonpath_text: str, repository_root: Path, snapshot_root: Path
+) -> str:
+    return os.pathsep.join(
+        _mapped_python_path(each_path, repository_root, snapshot_root)
+        for each_path in pythonpath_text.split(os.pathsep)
+        if each_path
+    )
+
+
+def _staged_pytest_environment(
+    repository_root: Path | None = None, snapshot_root: Path | None = None
+) -> dict[str, str]:
     """Return the subprocess environment for the staged-test pytest run.
 
     Returns:
@@ -193,14 +227,22 @@ def _staged_pytest_environment() -> dict[str, str]:
         prepended to ``PYTHONPATH`` when it is set.
     """
     environment = repository_environment()
-    configured_pythonpath = os.environ.get(CODE_RULES_GATE_PYTHONPATH_ENV_VAR)
-    if not configured_pythonpath:
-        return environment
+    configured_pythonpath = os.environ.get(CODE_RULES_GATE_PYTHONPATH_ENV_VAR, "")
     existing_pythonpath = environment.get(PYTHONPATH_ENV_VAR, "")
-    environment[PYTHONPATH_ENV_VAR] = (
-        configured_pythonpath
-        if not existing_pythonpath
-        else os.pathsep.join([configured_pythonpath, existing_pythonpath])
+    all_pythonpath_entries = [configured_pythonpath, existing_pythonpath]
+    if repository_root is not None and snapshot_root is not None:
+        all_pythonpath_entries.insert(0, str(Path(__file__).resolve().parent.parent))
+    combined_pythonpath = os.pathsep.join(
+        each_path for each_path in all_pythonpath_entries if each_path
+    )
+    if repository_root is None or snapshot_root is None:
+        if combined_pythonpath:
+            environment[PYTHONPATH_ENV_VAR] = combined_pythonpath
+        return environment
+    environment[STAGED_TEST_ORIGINAL_ROOT_ENV_VAR] = str(repository_root)
+    environment[STAGED_TEST_SNAPSHOT_ROOT_ENV_VAR] = str(snapshot_root)
+    environment[PYTHONPATH_ENV_VAR] = _rewritten_pythonpath(
+        combined_pythonpath, repository_root, snapshot_root
     )
     return environment
 
@@ -256,7 +298,12 @@ def _batched_pytest_arguments(
     return all_batches
 
 
-def _pytest_batch_exit_code(all_batch_command: list[str], group_root: Path) -> int:
+def _pytest_batch_exit_code(
+    all_batch_command: list[str],
+    group_root: Path,
+    repository_root: Path | None = None,
+    snapshot_root: Path | None = None,
+) -> int:
     """Run one pytest invocation and normalize its exit code.
 
     Args:
@@ -272,7 +319,7 @@ def _pytest_batch_exit_code(all_batch_command: list[str], group_root: Path) -> i
         cwd=str(group_root),
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
-        env=_staged_pytest_environment(),
+        env=_staged_pytest_environment(repository_root, snapshot_root),
     )
     if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
         return 0
@@ -283,24 +330,37 @@ def _pytest_fixed_command(repository_root: Path) -> list[str]:
     """Return the interpreter-and-pytest prefix shared by every batch."""
     return [
         _resolve_gate_python_executable(repository_root),
-        *ALL_PYTEST_MODULE_INVOCATION,
+        str(Path(__file__).with_name("staged_pytest_entry.py")),
+        *ALL_STAGED_PYTEST_ARGUMENTS,
     ]
 
 
 def _first_failing_batch_exit_code(
-    all_fixed_command: list[str], all_batches: list[list[str]], group_root: Path
+    all_fixed_command: list[str],
+    all_batches: list[list[str]],
+    group_root: Path,
+    repository_root: Path,
+    snapshot_root: Path,
 ) -> int:
     """Run each batch and return the first non-zero pytest exit code, or zero."""
     first_failing_exit_code = 0
     for each_batch in all_batches:
-        batch_exit_code = _pytest_batch_exit_code([*all_fixed_command, *each_batch], group_root)
+        batch_exit_code = _pytest_batch_exit_code(
+            [*all_fixed_command, *each_batch],
+            group_root,
+            repository_root,
+            snapshot_root,
+        )
         if batch_exit_code != 0 and first_failing_exit_code == 0:
             first_failing_exit_code = batch_exit_code
     return first_failing_exit_code
 
 
 def _run_pytest_for_group(
-    group_root: Path, all_group_test_paths: list[Path], repository_root: Path
+    group_root: Path,
+    all_group_test_paths: list[Path],
+    repository_root: Path,
+    snapshot_root: Path | None = None,
 ) -> int:
     """Run pytest over one group's test files, split into budget-safe batches.
 
@@ -321,26 +381,95 @@ def _run_pytest_for_group(
         [_relative_pytest_argument(each_path, group_root) for each_path in all_group_test_paths],
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS - fixed_command_length,
     )
-    return _first_failing_batch_exit_code(all_fixed_command, all_batches, group_root)
+    resolved_snapshot_root = snapshot_root or repository_root
+    return _first_failing_batch_exit_code(
+        all_fixed_command,
+        all_batches,
+        group_root,
+        repository_root,
+        resolved_snapshot_root,
+    )
 
 
 def _run_grouped_staged_tests(
-    all_tests_by_root: dict[Path, list[Path]], repository_root: Path
+    all_tests_by_root: dict[Path, list[Path]],
+    materialized_root: Path,
+    repository_root: Path,
 ) -> int:
-    """Run each staged test group and return the first failing exit code, or zero."""
+    """Run snapshot test groups and report their source-tree roots."""
     first_failing_exit_code = 0
-    for each_group_root in sorted(all_tests_by_root):
+    for each_materialized_group_root in sorted(all_tests_by_root):
+        group_relative_path = each_materialized_group_root.relative_to(materialized_root)
+        source_group_root = repository_root / group_relative_path
         group_exit_code = _run_pytest_for_group(
-            each_group_root, all_tests_by_root[each_group_root], repository_root
+            each_materialized_group_root,
+            all_tests_by_root[each_materialized_group_root],
+            repository_root,
+            materialized_root,
         )
         if group_exit_code == 0:
             continue
         sys.stderr.write(
-            STAGED_TEST_GROUP_FAILURE_MESSAGE.format(group_root=each_group_root) + "\n"
+            STAGED_TEST_GROUP_FAILURE_MESSAGE.format(group_root=source_group_root) + "\n"
         )
         if first_failing_exit_code == 0:
             first_failing_exit_code = group_exit_code
     return first_failing_exit_code
+
+
+def _git_text(repository_root: Path, all_command: tuple[str, ...]) -> str | None:
+    completed_process = subprocess.run(
+        list(all_command),
+        cwd=str(repository_root),
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
+        env=repository_environment(),
+    )
+    if completed_process.returncode != 0:
+        return None
+    return completed_process.stdout.strip()
+
+
+def _run_git_command(repository_root: Path, all_command: list[str]) -> bool:
+    completed_process = subprocess.run(
+        all_command,
+        cwd=str(repository_root),
+        check=False,
+        capture_output=True,
+        timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
+        env=repository_environment(),
+    )
+    return completed_process.returncode == 0
+
+
+def _create_snapshot_worktree(
+    repository_root: Path, snapshot_root: Path, head_oid: str, index_tree_oid: str
+) -> bool:
+    if not _run_git_command(
+        repository_root, [*ALL_GIT_WORKTREE_ADD_COMMAND, str(snapshot_root), head_oid]
+    ):
+        return False
+    if not _run_git_command(snapshot_root, [*ALL_GIT_READ_TREE_COMMAND, index_tree_oid]):
+        return False
+    return _run_git_command(snapshot_root, list(ALL_GIT_CHECKOUT_INDEX_COMMAND))
+
+
+def _remove_snapshot_worktree(repository_root: Path, snapshot_root: Path) -> None:
+    _run_git_command(
+        repository_root, [*ALL_GIT_WORKTREE_REMOVE_COMMAND, str(snapshot_root)]
+    )
+    _run_git_command(repository_root, list(ALL_GIT_WORKTREE_PRUNE_COMMAND))
+
+
+def _canonical_repository_root(repository_root: Path) -> Path | None:
+    top_level_text = _git_text(repository_root, ALL_GIT_TOP_LEVEL_COMMAND)
+    if not top_level_text:
+        return None
+    return Path(top_level_text).resolve()
 
 
 def run_staged_test_files(repository_root: Path) -> int:
@@ -358,12 +487,37 @@ def run_staged_test_files(repository_root: Path) -> int:
         tests, or when every group passes. The first failing group's exit code
         otherwise.
     """
-    all_test_paths = _staged_test_file_paths(repository_root)
-    all_pytest_targets = _pytest_target_paths(all_test_paths)
-    if not all_pytest_targets:
+    canonical_root = _canonical_repository_root(repository_root)
+    if canonical_root is None:
+        return 1
+    all_staged_test_paths = _staged_test_relative_paths(canonical_root)
+    if not all_staged_test_paths:
         return 0
-    all_tests_by_root = _group_staged_tests_by_root(all_pytest_targets, repository_root)
-    first_failing_exit_code = _run_grouped_staged_tests(all_tests_by_root, repository_root)
+    head_oid = _git_text(canonical_root, ALL_GIT_HEAD_COMMAND)
+    if not head_oid:
+        head_oid = _git_text(canonical_root, ALL_GIT_EMPTY_TREE_COMMIT_COMMAND)
+    index_tree_oid = _git_text(canonical_root, ALL_GIT_WRITE_TREE_COMMAND)
+    if not head_oid or not index_tree_oid:
+        return 1
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        materialized_root = Path(temporary_directory) / "worktree"
+        if not _create_snapshot_worktree(
+            canonical_root, materialized_root, head_oid, index_tree_oid
+        ):
+            _remove_snapshot_worktree(canonical_root, materialized_root)
+            return 1
+        try:
+            all_materialized_test_paths = [
+                materialized_root / each_path for each_path in all_staged_test_paths
+            ]
+            all_tests_by_root = _group_staged_tests_by_root(
+                all_materialized_test_paths, materialized_root
+            )
+            first_failing_exit_code = _run_grouped_staged_tests(
+                all_tests_by_root, materialized_root, canonical_root
+            )
+        finally:
+            _remove_snapshot_worktree(canonical_root, materialized_root)
     if first_failing_exit_code != 0:
         sys.stderr.write(STAGED_TEST_FAILURE_HEADER + "\n")
     return first_failing_exit_code

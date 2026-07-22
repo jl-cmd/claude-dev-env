@@ -13,7 +13,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, HOOKS_DIRECTORY)
+
+from hooks_constants.code_verifier_spawn_preflight_gate_constants import GATE_SCRIPTS_RELATIVE_PATH
+
 HOOK_PATH = Path(__file__).resolve().parent / "code_verifier_spawn_preflight_gate.py"
+SCRIPTS_DIRECTORY = str(HOOK_PATH.parents[2] / GATE_SCRIPTS_RELATIVE_PATH)
+if SCRIPTS_DIRECTORY not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIRECTORY)
+
+from code_rules_gate_parts import staged_attestation
+
+CODE_RULES_GATE_PATH = Path(SCRIPTS_DIRECTORY) / "code_rules_gate.py"
 
 CLEAN_MODULE_SOURCE = '''"""Increment helper used by the preflight gate tests."""
 
@@ -284,6 +297,28 @@ def run_hook(payload: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def run_staged_code_rules_gate(repository_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(CODE_RULES_GATE_PATH),
+            "--repo-root",
+            str(repository_root),
+            "--staged",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(repository_root),
+        timeout=120,
+    )
+
+
+def establish_current_staged_attestation(repository_root: Path) -> None:
+    staged_gate = run_staged_code_rules_gate(repository_root)
+    assert staged_gate.returncode == 0, staged_gate.stderr
+
+
 def is_allow(result: subprocess.CompletedProcess[str]) -> bool:
     stdout_text = result.stdout.strip()
     if not stdout_text:
@@ -365,13 +400,85 @@ def test_clean_surface_allows(tmp_path: Path) -> None:
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
     write_working_tree_file(repository_root, "feature.py", CLEAN_MODULE_SOURCE)
+    run_git(repository_root, "add", "feature.py")
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert is_allow(result)
 
 
+def test_no_prior_staged_gate_denies(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    payload = write_agent_payload("code-verifier", "verify the change", repository_root)
+    result = run_hook(payload, repository_root)
+    assert not is_allow(result)
+    assert "Staged CODE_RULES attestation" in deny_reason(result)
+
+
+def test_stale_index_attestation_denies_for_agent_and_task(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "feature.py", CLEAN_MODULE_SOURCE)
+    run_git(repository_root, "add", "feature.py")
+    establish_current_staged_attestation(repository_root)
+    write_working_tree_file(repository_root, "second.py", CLEAN_MODULE_SOURCE_EDITED)
+    run_git(repository_root, "add", "second.py")
+    for tool_name in ("Agent", "Task"):
+        payload = _spawn_payload(tool_name, "code-verifier", "verify", repository_root)
+        result = run_hook(payload, repository_root)
+        assert not is_allow(result)
+        assert "Staged CODE_RULES attestation" in deny_reason(result)
+
+
+def test_blocked_staged_run_requires_repair_and_fresh_pass(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    write_working_tree_file(repository_root, "feature.py", VIOLATING_MODULE_SOURCE)
+    run_git(repository_root, "add", "feature.py")
+    failed_gate = run_staged_code_rules_gate(repository_root)
+    assert failed_gate.returncode != 0
+    payload = write_agent_payload("code-verifier", "verify", repository_root)
+    assert not is_allow(run_hook(payload, repository_root))
+    write_working_tree_file(repository_root, "feature.py", CLEAN_MODULE_SOURCE)
+    run_git(repository_root, "add", "feature.py")
+    assert not is_allow(run_hook(payload, repository_root))
+    establish_current_staged_attestation(repository_root)
+    assert is_allow(run_hook(payload, repository_root))
+
+
+def test_malformed_and_wrong_identity_attestations_deny(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    initialize_repository(repository_root)
+    run_git(repository_root, "checkout", "-b", "feature")
+    establish_current_staged_attestation(repository_root)
+    attestation_file = staged_attestation.attestation_path(repository_root)
+    assert attestation_file is not None
+    payload = write_agent_payload("code-verifier", "verify", repository_root)
+    attestation_file.write_text("{", encoding="utf-8")
+    assert not is_allow(run_hook(payload, repository_root))
+    establish_current_staged_attestation(repository_root)
+    attestation = json.loads(attestation_file.read_text(encoding="utf-8"))
+    attestation["worktree"] = "wrong-worktree"
+    attestation_file.write_text(json.dumps(attestation), encoding="utf-8")
+    assert not is_allow(run_hook(payload, repository_root))
+    establish_current_staged_attestation(repository_root)
+    attestation = json.loads(attestation_file.read_text(encoding="utf-8"))
+    attestation["head_oid"] = "wrong-head"
+    attestation_file.write_text(json.dumps(attestation), encoding="utf-8")
+    assert not is_allow(run_hook(payload, repository_root))
+
+
 def test_real_conflict_denies_naming_files(tmp_path: Path) -> None:
     repository_root = make_conflict_repository(tmp_path)
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert not is_allow(result)
@@ -386,6 +493,7 @@ def test_real_code_rules_violation_on_added_line_denies(tmp_path: Path) -> None:
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
     commit_file(repository_root, "tracked.py", CLEAN_MODULE_SOURCE, "add tracked")
+    establish_current_staged_attestation(repository_root)
     write_working_tree_file(repository_root, "tracked.py", VIOLATING_MODULE_SOURCE)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
@@ -401,6 +509,7 @@ def test_committed_on_branch_violation_with_clean_working_tree_denies(tmp_path: 
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
     commit_file(repository_root, "committed.py", VIOLATING_MODULE_SOURCE, "commit violation")
+    establish_current_staged_attestation(repository_root)
     status_output = run_git(repository_root, "status", "--porcelain")
     assert status_output == "", "working tree must be clean so the deny comes from the committed line"
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
@@ -421,6 +530,7 @@ def test_preexisting_violation_on_untouched_line_allows(tmp_path: Path) -> None:
     run_git(repository_root, "update-ref", "refs/remotes/origin/main", carrier_sha)
     run_git(repository_root, "checkout", "-b", "feature")
     write_working_tree_file(repository_root, "carrier.py", PREEXISTING_VIOLATION_EDITED_SOURCE)
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert is_allow(result)
@@ -431,6 +541,7 @@ def test_untracked_new_violating_file_denies(tmp_path: Path) -> None:
     repository_root.mkdir()
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
+    establish_current_staged_attestation(repository_root)
     write_working_tree_file(repository_root, "fresh.py", VIOLATING_MODULE_SOURCE)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
@@ -447,12 +558,13 @@ def test_tooling_scratch_file_is_ignored(tmp_path: Path) -> None:
     scratch_directory = repository_root / ".claude" / "verification"
     scratch_directory.mkdir(parents=True)
     (scratch_directory / "x.py").write_text(VIOLATING_MODULE_SOURCE, encoding="utf-8")
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert is_allow(result)
 
 
-def test_missing_base_ref_fails_open(tmp_path: Path) -> None:
+def test_missing_base_ref_denies_after_current_attestation(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
     run_git(repository_root, "init")
@@ -462,9 +574,30 @@ def test_missing_base_ref_fails_open(tmp_path: Path) -> None:
     (repository_root / "base.py").write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
     run_git(repository_root, "add", "base.py")
     run_git(repository_root, "commit", "-m", "initial")
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
-    assert is_allow(result)
+    assert not is_allow(result)
+    assert "Base reference could not be resolved" in deny_reason(result)
+
+
+def test_no_origin_without_attestation_denies_agent_and_task(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    run_git(repository_root, "init")
+    run_git(repository_root, "config", "user.email", "tests@example.com")
+    run_git(repository_root, "config", "user.name", "Preflight Tests")
+    disable_native_git_hooks(repository_root)
+    (repository_root / "base.py").write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+    run_git(repository_root, "add", "base.py")
+    run_git(repository_root, "commit", "-m", "initial")
+    for tool_name in ("Agent", "Task"):
+        payload = _spawn_payload(tool_name, "code-verifier", "verify", repository_root)
+        result = run_hook(payload, repository_root)
+        assert not is_allow(result)
+        reason = deny_reason(result)
+        assert "Staged CODE_RULES attestation" in reason
+        assert "Base reference could not be resolved" in reason
 
 
 def test_non_repo_cwd_fails_open(tmp_path: Path) -> None:
@@ -483,6 +616,7 @@ def test_behind_but_conflict_free_allows(tmp_path: Path) -> None:
     run_git(repository_root, "checkout", "-b", "feature")
     commit_file(repository_root, "shared.py", SHARED_FEATURE_SOURCE, "feature edit")
     advance_origin_main_divergent(repository_root, base_sha, "other.py", OTHER_DIVERGENT_SOURCE)
+    establish_current_staged_attestation(repository_root)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
     assert is_allow(result)
@@ -493,6 +627,7 @@ def test_unreadable_changed_file_alone_fails_open(tmp_path: Path) -> None:
     repository_root.mkdir()
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
+    establish_current_staged_attestation(repository_root)
     write_invalid_utf8_file(repository_root, "binary.py")
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
@@ -504,6 +639,7 @@ def test_unreadable_changed_file_does_not_mask_real_violation(tmp_path: Path) ->
     repository_root.mkdir()
     initialize_repository(repository_root)
     run_git(repository_root, "checkout", "-b", "feature")
+    establish_current_staged_attestation(repository_root)
     write_invalid_utf8_file(repository_root, "binary.py")
     write_working_tree_file(repository_root, "fresh.py", VIOLATING_MODULE_SOURCE)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
@@ -515,6 +651,7 @@ def test_unreadable_changed_file_does_not_mask_real_violation(tmp_path: Path) ->
 
 def test_conflict_and_violation_single_deny_names_both(tmp_path: Path) -> None:
     repository_root = make_conflict_repository(tmp_path)
+    establish_current_staged_attestation(repository_root)
     write_working_tree_file(repository_root, "violator.py", VIOLATING_MODULE_SOURCE)
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
     result = run_hook(payload, repository_root)
@@ -528,6 +665,7 @@ def test_conflict_and_violation_single_deny_names_both(tmp_path: Path) -> None:
 
 def test_stale_self_upstream_still_judges_default_branch(tmp_path: Path) -> None:
     repository_root = make_stale_self_upstream_conflict_repository(tmp_path)
+    establish_current_staged_attestation(repository_root)
     tracked_upstream = run_git(
         repository_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"
     )
@@ -547,6 +685,7 @@ def test_staged_resolved_merge_allows(tmp_path: Path) -> None:
     run_git(repository_root, "add", "shared.py")
     remaining_unmerged = run_git(repository_root, "diff", "--name-only", "--diff-filter=U")
     assert remaining_unmerged == "", "the staged resolution must clear every unmerged index entry"
+    establish_current_staged_attestation(repository_root)
     merge_head_sha = run_git(repository_root, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
     assert merge_head_sha, "a merge must still be in progress so MERGE_HEAD is present"
     payload = write_agent_payload("code-verifier", "verify the change", repository_root)
