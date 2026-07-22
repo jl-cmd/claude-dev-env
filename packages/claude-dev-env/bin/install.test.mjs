@@ -10,6 +10,7 @@ import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
+    INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
@@ -163,6 +164,14 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),
         'scripts must ship with --only core so claude_chain_runner.py is available for advisor CLI fallback',
+    );
+});
+
+
+test('core skill allowlist includes the packet-backed protocol workflow', () => {
+    assert.ok(
+        INSTALL_GROUPS.core.skills.includes('plan-to-pr'),
+        'plan-to-pr must ship with --only core',
     );
 });
 

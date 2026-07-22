@@ -172,7 +172,7 @@ function discoverDependencyGroups() {
 const dependencyDiscovery = discoverDependencyGroups();
 const UNRESOLVED_DEPENDENCY_NAMES = dependencyDiscovery.unresolvedDependencyNames;
 
-const INSTALL_GROUPS = {
+export const INSTALL_GROUPS = {
     core: {
         description: 'Development standards, hooks, agents, commands',
         skills: [
@@ -180,7 +180,7 @@ const INSTALL_GROUPS = {
             'grok-spawn',
             'anthropic-plan', 'everything-search',
             'privacy-hygiene',
-            'recall', 'remember', 'task-build'
+            'recall', 'remember', 'task-build', 'plan-to-pr'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,

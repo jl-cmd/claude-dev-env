@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Native Plan-to-PR packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "slug", "status", "request", "allowed_files", "sources", "decisions", "open_questions", "tasks", "validation"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "slug": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"},
+    "status": {"enum": ["draft", "approved"]},
+    "request": {"type": "string", "minLength": 1},
+    "allowed_files": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"}},
+    "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+    "decisions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "open_questions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "tasks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/task"}},
+    "validation": {"$ref": "#/$defs/validation"}
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "locator", "fact"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"},
+        "locator": {"type": "string", "minLength": 1, "pattern": "^(?:[lL][iI][nN][eE][sS]?|[sS][eE][cC][tT][iI][oO][nN])\\s+\\S(?:.*\\S)?$"},
+        "fact": {"type": "string", "minLength": 1}
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "deliverable", "allowed_files", "acceptance_command", "test_command", "verification_command", "commit"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^task-[0-9]+$"},
+        "deliverable": {"type": "string", "minLength": 1},
+        "allowed_files": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "dependencies": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^task-[0-9]+$"}},
+        "acceptance_command": {"type": "string", "minLength": 1},
+        "test_command": {"type": "string", "minLength": 1},
+        "verification_command": {"type": "string", "minLength": 1},
+        "commit": {"const": 1}
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_valid", "boundary_valid", "markdown_matches", "validated_by"],
+      "properties": {
+        "schema_valid": {"type": "boolean"},
+        "boundary_valid": {"type": "boolean"},
+        "markdown_matches": {"type": "boolean"},
+        "validated_by": {"const": "native-plan-to-pr"}
+      }
+    }
+  }
+}

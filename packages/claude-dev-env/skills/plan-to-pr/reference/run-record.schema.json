@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plan-to-PR task run record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_identity", "deliverable", "allowed_files", "acceptance_check", "baseline", "worker_route", "commit", "review_record", "repair_record", "reverification_record", "verification_record"],
+  "properties": {
+    "task_identity": {"type": "string", "minLength": 1},
+    "deliverable": {"type": "string", "minLength": 1},
+    "allowed_files": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+    "acceptance_check": {"type": "string", "minLength": 1},
+    "baseline": {"type": "string", "minLength": 1},
+    "worker_route": {"type": "string", "minLength": 1},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "worktree": {"type": "string", "minLength": 1},
+    "review_record": {"$ref": "#/$defs/review_record"},
+    "repair_record": {"$ref": "#/$defs/repair_record"},
+    "reverification_record": {"$ref": "#/$defs/verification_record"},
+    "verification_record": {"$ref": "#/$defs/verification_record"}
+  },
+  "$defs": {
+    "finding": {"type": "object", "additionalProperties": false, "required": ["finding", "disposition"], "properties": {"finding": {"type": "string", "minLength": 1}, "disposition": {"enum": ["confirmed", "dismissed"]}}},
+    "review_record": {"type": "object", "additionalProperties": false, "required": ["resolved_model", "effort", "command", "findings", "repair_status", "surface_hash", "findings_only", "has_repair_flag"], "properties": {"resolved_model": {"type": "string", "minLength": 1}, "effort": {"type": "string", "minLength": 1}, "command": {"type": "string", "minLength": 1}, "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}, "repair_status": {"type": "string", "minLength": 1}, "surface_hash": {"type": "string", "minLength": 1}, "findings_only": {"const": true}, "has_repair_flag": {"const": false}}},
+    "repair_record": {"type": "object", "additionalProperties": false, "required": ["resolved_model", "effort", "confirmed_findings", "repair_status", "surface_hash"], "properties": {"resolved_model": {"type": "string", "minLength": 1}, "effort": {"type": "string", "minLength": 1}, "confirmed_findings": {"type": "array", "items": {"type": "string", "minLength": 1}}, "repair_status": {"type": "string", "minLength": 1}, "surface_hash": {"type": "string", "minLength": 1}}},
+    "verification_record": {"type": "object", "additionalProperties": false, "required": ["acceptance_output", "verifier_output", "verified_commit_gate", "surface_hash"], "properties": {"acceptance_output": {"type": "string", "minLength": 1}, "verifier_output": {"type": "string", "minLength": 1}, "verified_commit_gate": {"type": "string", "minLength": 1}, "surface_hash": {"type": "string", "minLength": 1}}}
+  }
+}
