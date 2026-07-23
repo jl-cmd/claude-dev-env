@@ -4,18 +4,28 @@
 
 - [Framing](#framing)
 - [Phase 0 — Gather the diff](#phase-0--gather-the-diff)
-- [Phase 1 — Find candidates](#phase-1--find-candidates-5-correctness-angles--3-cleanup-angles--1-altitude-angle--1-conventions-angle-up-to-8-each)
-- [Phase 2 — Verify](#phase-2--verify-1-vote-3-state)
+- [Phase 1 — Find candidates](#phase-1--find-candidates)
+- [Phase 2 — Verify](#phase-2--verify-batched-3-state)
 - [Phase 3 — Sweep for gaps](#phase-3--sweep-for-gaps)
+- [When the Agent tool is unavailable](#when-the-agent-tool-is-unavailable)
 - [Output](#output)
+- [Clean Result](#clean-result)
+- [Nit Only Result](#nit-only-result)
 
 ## Framing
 
-`xhigh effort → 5+5 angles × candidates × 1-vote verify → sweep → every validated finding`
+`xhigh effort → 5 grouped-lens hunters → one batched verify → verified sweep → every validated finding`
 
 You are reviewing for recall at extra-high effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives — a
 missed bug ships. Err on the side of surfacing.
+
+You are the **orchestrator** of this review. You own the flow end to end: gather
+the diff, split it across the finder subagents, then merge, dedup, and rank
+their findings into the final list. The subagents hunt and verify; the merge is
+yours. Hand every subagent the same Phase 0 diff verbatim and enough context to
+work on its own — never make a subagent re-derive the scope with its own
+`git diff`.
 
 ## Phase 0 — Gather the diff
 
@@ -24,14 +34,27 @@ if there's no upstream) to get the unified diff under review. If there are
 uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
 include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
-review that target instead. Treat this diff as the review scope.
+review that target instead. Treat this diff as the review scope, and pass it
+verbatim to every subagent you spawn.
 
-## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, all candidates identified by each angle)
+## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, grouped into 5 lens subagents)
 
-Run 10 independent finder angles via the Agent tool. Each
-surfaces all candidate findings it identifies. Do NOT let one angle's conclusions
-suppress another's — if two angles flag the same line for different reasons,
-record both.
+Run the 10 finder angles via the Agent tool as **five grouped lens subagents** —
+breadth at moderate cost. Spawn them in parallel: one Agent-tool call per
+subagent, all in a single batch so they run at once. Hand each subagent the full
+Phase 0 diff, permission to Read the enclosing functions and Grep the repo, and
+its grouped angles:
+
+- **Subagent 1 — Close-read lens:** Angle A + Angle D.
+- **Subagent 2 — Trace lens:** Angle B + Angle C.
+- **Subagent 3 — Structure lens:** Angle E.
+- **Subagent 4 — Cleanup lens:** Reuse, Simplification, Efficiency, Altitude.
+- **Subagent 5 — Conventions lens:** CLAUDE.md conventions.
+
+Each subagent surfaces all candidate findings it identifies across its angles. Do
+NOT let one angle's conclusions suppress another's — if two angles flag the same
+line for different reasons, record both. Merge every subagent's list into one
+candidate pool for Phase 2.
 
 ### Angle A — line-by-line diff scan
 
@@ -118,14 +141,16 @@ Cleanup, altitude, and conventions candidates use the same
 `file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
 cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) instead of a crash. Correctness bugs always outrank cleanup,
-altitude, and conventions findings
+altitude, and conventions findings when you rank the output (see
+[Output](#output)).
 
-## Phase 2 — Verify (1-vote, 3-state)
+## Phase 2 — Verify (batched, 3-state)
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
-the most concrete failure scenario. For each remaining candidate, run one
-verifier via the Agent tool: give it the diff, the relevant
-file(s), and the candidate, and have it return exactly one of:
+the most concrete failure scenario. Then run **one batched verifier subagent**
+over the whole merged candidate list — not one verifier per candidate. Give it
+the diff, the relevant file(s), and every candidate; it returns exactly one of
+these per candidate:
 
 * CONFIRMED — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
@@ -147,9 +172,27 @@ or anchor; second-tier footguns (dataclass default evaluated once, `hash()`
 non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.
 
-Surface every additional candidate, each naming a defect not already on the list. Verify each sweep candidate with the same verifier states from Phase 2, then retain every candidate marked CONFIRMED or PLAUSIBLE. If nothing new, return an empty sweep — do not pad.
+Surface every additional candidate, each naming a defect not already on the
+list. Then run a **second batched verifier pass** over the sweep candidates with
+the same three states, and retain every candidate marked CONFIRMED or PLAUSIBLE.
+xhigh runs exactly two verifier calls total — the Phase 2 pool and this sweep
+pass. If nothing new, return an empty sweep — do not pad.
+
+## When the Agent tool is unavailable
+
+If this context cannot spawn subagents, do not skip angles. Run all 10 angles
+yourself, sequentially, in this one context; then run the verify as a single
+self-check pass over your own candidates, and sweep as one more self-check read.
+This is the single-context fallback — it trades the independent-context recall
+of the fan-out for a working review when no Agent tool is present. Name this
+shape in the closing summary so the reader knows the fan-out did not run.
 
 ## Output
+
+Dedup before you rank: candidates naming the same file, the same line, and the
+same root cause are one finding — keep the strongest wording. Then rank the
+survivors: correctness bugs (`severity: bug`) before nits (`severity: nit`),
+then by verifier confidence (CONFIRMED before PLAUSIBLE), then by blast radius.
 
 Return findings as a JSON array containing every finding that survives verification:
 
@@ -158,18 +201,24 @@ Return findings as a JSON array containing every finding that survives verificat
   {
     "file": "path/to/file.ext",
     "line": 123,
+    "severity": "bug | nit",
     "summary": "one-sentence statement of the bug",
     "failure_scenario": "concrete inputs/state → wrong output/crash"
   }
 ]
 ```
 
-Ranked most-severe first.
-If nothing survives verification, return `[]`.
+Ranked most-severe first. If nothing survives verification, return `[]`. Do not
+call the ReportFindings tool even if it is available — this JSON block is the
+review's output contract.
+
+State which execution shape actually ran — the grouped-5 fan-out (parallel lens
+hunters, a batched verifier, a verified sweep) or the single-context fallback —
+so the reader knows what executed.
 
 ## Clean Result
 
-Mark ready on clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
+Mark ready on a clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
 
 ## Nit Only Result
 

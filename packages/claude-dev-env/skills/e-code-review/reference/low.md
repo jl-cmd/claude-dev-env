@@ -25,8 +25,11 @@ helper visible in the diff context, and dead code the diff leaves behind.
 Do **not** flag style, naming, perf, missing tests, or anything outside the
 hunk.
 
-Return every finding, most-severe first, one
-line each: `path/to/file.ext:123 — what's wrong and the concrete failure`.
-If you have no findings, do one more pass focused on the largest changed file
-and on any **removed** code blocks. Output `(none)` only if the diff is
-trivially correct after that pass.
+Return every finding, most-severe first (bugs before nits), one line each,
+tagging each with its severity: `path/to/file.ext:123 — [bug|nit] what's wrong
+and the concrete failure`. Do not call the ReportFindings tool even if it is
+available — these plain lines are the output. If you have no findings, do one
+more pass focused on the largest changed file and on any **removed** code
+blocks. Output `(none)` only if the diff is trivially correct after that pass.
+This procedure runs single-pass with no subagents — say so if asked what
+executed.

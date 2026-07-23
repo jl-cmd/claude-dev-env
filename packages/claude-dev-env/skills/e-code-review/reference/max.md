@@ -4,18 +4,29 @@
 
 - [Framing](#framing)
 - [Phase 0 — Gather the diff](#phase-0--gather-the-diff)
-- [Phase 1 — Find candidates](#phase-1--find-candidates-5-correctness-angles--3-cleanup-angles--1-altitude-angle--1-conventions-angle-up-to-8-each)
+- [Phase 1 — Find candidates](#phase-1--find-candidates)
 - [Phase 2 — Verify](#phase-2--verify-1-vote-3-state)
 - [Phase 3 — Sweep for gaps](#phase-3--sweep-for-gaps)
+- [When the Agent tool is unavailable](#when-the-agent-tool-is-unavailable)
 - [Output](#output)
+- [Optional loop mode](#optional-loop-mode)
+- [Clean Result](#clean-result)
+- [Nit Only Result](#nit-only-result)
 
 ## Framing
 
-`max effort → 5+5 angles × candidates → 1-vote verify → sweep → every validated finding`
+`max effort → 10 one-angle hunters → per-candidate verify → verified sweep → every validated finding`
 
 You are reviewing for **recall** at maximum effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives — a
 missed bug ships. Err on the side of surfacing.
+
+You are the **orchestrator** of this review. You own the flow end to end: gather
+the diff, split it across the finder subagents, then merge, dedup, and rank
+their findings into the final list. The subagents hunt and verify; the merge is
+yours. Hand every subagent the same Phase 0 diff verbatim and enough context to
+work on its own — never make a subagent re-derive the scope with its own
+`git diff`.
 
 ## Phase 0 — Gather the diff
 
@@ -24,14 +35,19 @@ if there's no upstream) to get the unified diff under review. If there are
 uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
 include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
-review that target instead. Treat this diff as the review scope.
+review that target instead. Treat this diff as the review scope, and pass it
+verbatim to every subagent you spawn.
 
 ## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, all candidates identified by each angle)
 
-Run **10 independent finder angles** via the Agent tool. Each
-surfaces **all candidate findings it identifies**. Do NOT let one angle's conclusions
-suppress another's — if two angles flag the same line for different reasons,
-record both.
+Run **10 independent finder angles via the Agent tool — one angle per
+subagent**, for the most independent contexts. Spawn them in parallel: one
+Agent-tool call per subagent, all in a single batch so they run at once. Hand
+each subagent the full Phase 0 diff, permission to Read the enclosing functions
+and Grep the repo, and its one assigned angle. Each surfaces **all candidate
+findings it identifies**. Do NOT let one angle's conclusions suppress
+another's — if two angles flag the same line for different reasons, record both.
+Merge every subagent's list into one candidate pool for Phase 2.
 
 ### Angle A — line-by-line diff scan
 
@@ -119,7 +135,8 @@ Cleanup, altitude, and conventions candidates use the same
 `file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
 cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) instead of a crash. Correctness bugs always outrank cleanup,
-altitude, and conventions findings
+altitude, and conventions findings when you rank the output (see
+[Output](#output)).
 
 ## Phase 2 — Verify (1-vote, 3-state)
 
@@ -150,11 +167,25 @@ non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.
 
 Surface **every additional candidate**, each naming a defect not already on
-the list. Verify each sweep candidate with the same verifier states from Phase
-2, then retain every candidate marked CONFIRMED or PLAUSIBLE. If nothing new,
-return an empty sweep — do not pad.
+the list. Verify each sweep candidate with the same per-candidate verifier and
+states from Phase 2, then retain every candidate marked CONFIRMED or PLAUSIBLE.
+If nothing new, return an empty sweep — do not pad.
+
+## When the Agent tool is unavailable
+
+If this context cannot spawn subagents, do not skip angles. Run all 10 angles
+yourself, sequentially, in this one context; then run Phase 2 as a separate
+self-check pass over your own candidates, and Phase 3 as one more self-check
+read. This is the single-context fallback — it trades the independent-context
+recall of the fan-out for a working review when no Agent tool is present. Name
+this shape in the closing summary so the reader knows the fan-out did not run.
 
 ## Output
+
+Dedup before you rank: candidates naming the same file, the same line, and the
+same root cause are one finding — keep the strongest wording. Then rank the
+survivors: correctness bugs (`severity: bug`) before nits (`severity: nit`),
+then by verifier confidence (CONFIRMED before PLAUSIBLE), then by blast radius.
 
 Return findings as a JSON array containing every finding that survives verification:
 
@@ -170,26 +201,34 @@ Return findings as a JSON array containing every finding that survives verificat
 ]
 ```
 
-Ranked most-severe first.
-If nothing survives verification, return `[]`.
+Ranked most-severe first. If nothing survives verification, return `[]`. Do not
+call the ReportFindings tool even if it is available — this JSON block is the
+review's output contract.
+
+State which execution shape actually ran — the full multi-agent fan-out
+(parallel hunters, per-candidate verifier, verified sweep) or the
+single-context fallback — so the reader knows what executed. In loop mode, state
+it once per iteration's findings output.
 
 ## Optional loop mode
 
 When the hub invocation includes loop, repeat the max review/fix cycle until one of these outcomes is reached:
 
-- **Clean:** the review returns no findings. Mark the change ready.
-- **Nits only:** every finding is a nit. Fix all nits, run the required checks, push the fixes, and run another max review. Repeat this outcome until a review is clean, then post the proof-of-work PR comment and run `gh pr ready`.
+- **Clean:** the review returns no findings. Follow [Clean Result](#clean-result).
+- **Nits only:** every finding is a nit. Fix all nits, run the required checks,
+  push the fixes, and run another max review. Repeat this outcome until a review
+  is clean, then follow [Clean Result](#clean-result).
 
 Treat a finding as a `nit` only when its verified severity is `nit`; any
 runtime-correctness, security, data-loss, compatibility, or other non-nit
 finding is `bug`. If any finding is a `bug`, return every validated finding and
 stop without marking the change ready. Do not silently discard findings to
-reach either ready outcome. Without loop, run one max review and return every
+reach either outcome. Without loop, run one max review and return every
 validated finding without applying this convergence behavior.
 
 ## Clean Result
 
-Mark ready on clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
+Mark ready on a clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
 
 ## Nit Only Result
 
