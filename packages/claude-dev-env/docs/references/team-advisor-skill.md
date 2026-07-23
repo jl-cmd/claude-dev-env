@@ -11,4 +11,4 @@ Consult the spawned advisor before big decisions, before declaring work complete
 
 ## Relationship to the advisor tool
 
-`/team-advisor` and the `advisor()` tool (see `advisor-tool.md` in this directory) serve different moments in a session, and both get used as the moment calls for it: `advisor()` for a fast, history-forwarding check before substantive work; `/team-advisor` for a standing reviewer consulted at decision points.
+`/team-advisor` works standalone; it needs no `advisor()` tool present. When both are available (see `advisor-tool.md` in this directory), use `advisor()` for a fast, history-forwarding check before substantive work, and `/team-advisor` for a standing reviewer consulted at decision points.
