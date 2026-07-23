@@ -70,6 +70,24 @@ CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 CONFIG_FILENAME: str = "claude-chain.json"
 """Real chain-configuration filename read from the user's home directory."""
 
+SESSION_AFFINITY_FILENAME: str = "claude-chain-session-affinity.json"
+"""Per-user map of Claude CLI session_id values to the chain binary that served them."""
+
+SESSION_AFFINITY_SESSIONS_KEY: str = "sessions"
+"""Top-level key in the session-affinity file whose value is session_id → command."""
+
+SESSION_AFFINITY_JSON_INDENT: int = 2
+"""Indent width used when writing the session-affinity JSON file."""
+
+SESSION_AFFINITY_TEMP_SUFFIX: str = ".tmp"
+"""Suffix for the temp file used for atomic session-affinity writes."""
+
+CLAUDE_RESUME_FLAG: str = "--resume"
+"""Claude CLI flag that continues an existing conversation by session id."""
+
+CLAUDE_SESSION_ID_JSON_KEY: str = "session_id"
+"""JSON field name Claude emits for the conversation id in --output-format json."""
+
 CHAIN_USAGE_MODULE_NAME: str = "claude_chain_usage"
 """Import name of the weekly-usage report module loaded lazily by the runner."""
 
@@ -96,11 +114,20 @@ ALL_USAGE_LIMIT_SIGNATURES: tuple[str, ...] = (
 )
 """Case-insensitive substrings that mark a non-zero exit as a usage-limit refusal."""
 
+ALL_SESSION_MISSING_SIGNATURES: tuple[str, ...] = (
+    "no conversation found with session id",
+    "no conversation found",
+)
+"""Case-insensitive substrings that mark a resume miss on the wrong account binary."""
+
 ATTEMPT_STATUS_SERVED: str = "served"
 """Status recorded when a binary exits zero and serves the call."""
 
 ATTEMPT_STATUS_USAGE_LIMITED: str = "usage_limited"
 """Status recorded when a binary fails with a usage-limit signature."""
+
+ATTEMPT_STATUS_SESSION_MISSING: str = "session_missing"
+"""Status recorded when a resume call finds no conversation on that binary."""
 
 ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND: str = "executable_not_found"
 """Status recorded when a binary is not installed."""
