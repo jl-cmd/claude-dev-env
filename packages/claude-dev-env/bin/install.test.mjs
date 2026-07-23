@@ -10,6 +10,7 @@ import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
+    CORE_SKILLS,
     INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
@@ -168,10 +169,19 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
 });
 
 
-test('core skill allowlist includes the packet-backed protocol workflow', () => {
+test('CORE_SKILLS ships issue-tracker so the core group installs the skill the SessionStart injector needs', () => {
     assert.ok(
-        INSTALL_GROUPS.core.skills.includes('plan-to-pr'),
-        'plan-to-pr must ship with --only core',
+        CORE_SKILLS.includes('issue-tracker'),
+        'issue-tracker must be in CORE_SKILLS so --only core ships it alongside the SessionStart hooks',
+    );
+    assert.ok(
+        INSTALL_GROUPS.core.skills.includes('issue-tracker'),
+        'the resolved core group must ship issue-tracker',
+    );
+    assert.equal(
+        INSTALL_GROUPS.core.skills,
+        CORE_SKILLS,
+        'the core group skills array must read CORE_SKILLS so the two never drift',
     );
 });
 

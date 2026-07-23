@@ -39,6 +39,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'grok-spawn',
     'grokify',
     'implement',
+    'issue-tracker',
     'log-audit',
     'logifix',
     'monitor-open-prs',

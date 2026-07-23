@@ -49,6 +49,8 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `session-log` — logs a session report to the Obsidian vault
 - `session-tidy` — tidies the session folder
 - `task-build` — gathers open tasks
+- `issue-tracker` — one consistent way to create, update in place, and close GitHub issues for a work-stream: one epic parent with native sub-issues, dedup-first, marker-delimited body sections edited in place, and an epic checklist mirroring the children
+- `closeout` — session-end entry that harvests obstacles into issue-candidate records and delegates filing to the `issue-tracker` agent (skill fallback), keeping the user-validation gate on each draft
 - `privacy-hygiene` — full-repo personal-data and secret sweep plus remediation guide
 - `update` — updates the dev-env package
 - `fresh-branch` — creates a clean branch off main
