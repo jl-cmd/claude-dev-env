@@ -122,6 +122,8 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `workflow_substitution_slot_blocker.py` | PreToolUse (Write/Edit) | Workflow templates with bare per-iteration tokens missing angle-bracket slots |
 | `write_existing_file_blocker.py` | PreToolUse (Write) | Write to a path where a file already exists |
 
+| `issue_tracker_commit_reminder.py` | PreToolUse (Bash/PowerShell) | Reminds the agent to put `Closes #N` on commit/push when an issue-tracker sub-issue is in flight |
+
 ## Supporting modules
 
 | File | Role |
