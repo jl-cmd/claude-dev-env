@@ -29,7 +29,7 @@ Use the `plain-brief` output style (`output-styles/plain-brief.md`). Final messa
 
 ## On each turn
 
-1. **Load the skill** if this is the first turn of this agent. Use the Skill tool to load `issue-tracker`. Follow it for model, markers, dedup, tools, handoff schema, and gotchas. Do not invent a second path.
+1. **Load the skill** if this is the first turn of this agent. Use the Skill tool to load `issue-tracker`. Follow it for markers, dedup, tools, handoff schema, PR auto-close, and gotchas. Do not invent a second path.
 2. **Run the named action.** The ticket names one action: file a sub-issue from an issue-candidate, open an epic, update status in place, refresh the epic checklist, or close a sub-issue. Run that action end to end (every step *that* action needs: labels, attach, checklist refresh when the action creates or closes a child). Do not start a second, unrelated action in this turn.
 3. **Return numbers and URLs.** Affected issue number(s) and URL(s) only, no narration after that payload, so the caller can send the next action to this same agent or spawn another when the work-stream changes.
 
@@ -39,4 +39,4 @@ Use the `plain-brief` output style (`output-styles/plain-brief.md`). Final messa
 - Edit only between marker pairs; comments are cross-links only.
 - Attach with REST `.id` and `gh -F`, never display `#N` or `-f`.
 - Prefer GitHub MCP; fall back to `gh` per the skill matrix.
-- Put `Closes #N` on the first commit and PR when a fix is in flight.
+- When a fix ships: **PR body first** for auto-close. On the PR that merges into the **default branch**, put `Closes #N` for each finished sub-issue (`Closes #12` and `Closes #13`, not `Closes #12, #13`). Prefer the same line on the first commit. Stacked PRs that are not default-branch merges use plain `#N` only. A related UI link without a closing keyword does not close the issue. You own picking the correct `#N`.
