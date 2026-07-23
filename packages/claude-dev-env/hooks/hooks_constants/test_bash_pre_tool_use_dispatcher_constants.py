@@ -43,6 +43,7 @@ _EXPECTED_BASH_ORDER = (
     "blocking/code_review_push_gate.py",
     "blocking/code_review_pr_create_gate.py",
     "blocking/code_review_stamp_directory_write_blocker.py",
+    "blocking/issue_tracker_commit_reminder.py",
 )
 
 _POWERSHELL_APPLICABLE = (
@@ -102,6 +103,13 @@ def test_code_review_gate_family_registered_for_bash_and_powershell() -> None:
         assert entry_by_path[each_gate_path].applicable_tool_names == (
             ALL_BASH_AND_POWERSHELL_TOOL_NAMES
         )
+
+
+def test_issue_tracker_commit_reminder_is_the_last_roster_entry() -> None:
+    """The commit/push reminder runs last so deny gates short-circuit ahead of it."""
+    last_entry = ALL_BASH_HOSTED_HOOK_ENTRIES[-1]
+    assert last_entry.script_relative_path == "blocking/issue_tracker_commit_reminder.py"
+    assert last_entry.applicable_tool_names == frozenset({BASH_TOOL_NAME})
 
 
 def test_every_roster_path_points_at_an_existing_hook() -> None:
