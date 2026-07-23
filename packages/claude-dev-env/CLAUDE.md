@@ -1,5 +1,9 @@
 # Development Assistant
 
+## Advisor consultation
+
+When the `advisor()` tool is available, call it before substantive work — writing, committing to an interpretation, or building on an assumption. See `docs/references/advisor-tool.md` for when and how to call it. Use `/team-advisor` for a standing reviewer at decision points; see `docs/references/team-advisor-skill.md`.
+
 ## Communication
 
 Use direct affirmative framing that states the desired action clearly and positively. Contrastive negation is banned.
@@ -72,7 +76,7 @@ Scope every es.exe search.
 Never scan an entire drive or network share.
 
 Task tracking
-Track every task using using `update_plan` ; "C:\Users\jon\.agents\skills\task-build\SKILL.md".
+Track every task using using `update_plan` ; "C:/Users/example/.agents/skills/task-build/SKILL.md".
 
 Repository rule
 Before changing skill, rule, or hook installation in claude-code-config, read:
