@@ -2,7 +2,7 @@
 
 ## Advisor consultation
 
-When the `advisor()` tool is available, reference `docs/references/advisor-tool.md`. Reference `docs/references/team-advisor-skill.md` for the `/team-advisor` skill.
+When the `advisor()` tool is available, reference `docs/references/advisor-tool.md`. For complex tasks, always reference `docs/references/team-advisor-skill.md` and use the `/team-advisor` skill.
 
 ## Communication
 
