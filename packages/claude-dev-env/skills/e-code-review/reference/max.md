@@ -211,5 +211,5 @@ it once per iteration's findings output.
 ## Loop
 
 When the hub invocation includes `loop`, return this findings set to the hub and
-follow `SKILL.md` Optional loop mode. Each re-review re-runs **this max
-procedure**. Without `loop`, return the findings and stop.
+follow `reference/loop.md`. Each re-review re-runs **this max procedure**.
+Without `loop`, return the findings and stop.
