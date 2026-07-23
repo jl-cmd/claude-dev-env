@@ -189,6 +189,11 @@
           },
           {
             "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/issue_tracker_session_starter.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/orchestrator_auto_starter.py",
             "timeout": 10
           }
