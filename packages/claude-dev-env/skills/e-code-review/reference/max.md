@@ -9,9 +9,7 @@
 - [Phase 3 — Sweep for gaps](#phase-3--sweep-for-gaps)
 - [When the Agent tool is unavailable](#when-the-agent-tool-is-unavailable)
 - [Output](#output)
-- [Optional loop mode](#optional-loop-mode)
-- [Clean Result](#clean-result)
-- [Nit Only Result](#nit-only-result)
+- [Loop](#loop)
 
 ## Framing
 
@@ -210,18 +208,8 @@ State which execution shape actually ran — the full multi-agent fan-out
 single-context fallback — so the reader knows what executed. In loop mode, state
 it once per iteration's findings output.
 
-## Optional loop mode
+## Loop
 
-When the hub invocation includes loop, that invocation authorizes action. After Phases 2–3 produce a verified findings set, execute the matching branch immediately. Do not ask whether to fix, which nits to keep, whether to commit or push, or whether to re-review. Do not open a plan fork or end the turn on a recommendation. Report progress only while working; the next user-facing stop is a terminal outcome below.
-
-Repeat the max review/fix cycle until one of these outcomes:
-
-• Clean — review returns no findings. Mark ready: gh pr ready for a draft PR; otherwise state ready.
-• Nits only — every surviving finding is severity nit. Fix all of them on the PR branch worktree (or the review target), run required checks, commit (one commit per loop round), push, and run another full max review on the new head. Repeat until clean, then mark ready.
-• Any bug — any surviving finding is severity bug. Return every validated finding (bugs and nits), stop the loop, do not mark ready, and do not ask whether to continue; wait for a new user instruction.
-
-A finding is a nit only when its verified severity is nit. Runtime-correctness, security, data-loss, compatibility, and every other non-nit finding is a bug. Do not discard findings to force a ready outcome. Without loop, run one max review and return every validated finding; do not apply this convergence behavior.
-
-Loop autonomy
-
-No mid-loop confirmation questions, “should I fix these?”, “want me to push?”, or option menus. Auto-fix only verified findings on the review target; do not expand into deferred PR-body follow-ups or unrelated refactors. House git gates still apply (draft PR, verified commit, one commit per round, proof-of-work when required)—satisfy them by doing the steps, not by asking permission.
+With `loop`, hand findings to the hub and follow `reference/loop.md`. Each
+re-review re-runs **this max procedure**. Without `loop`, return the findings
+and stop.

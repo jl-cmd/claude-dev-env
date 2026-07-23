@@ -1,43 +1,46 @@
 ---
 name: e-code-review
 description: >-
-  Max-recall code review at a selectable effort level (low, xhigh, max), with an optional loop mode for max.
-  Triggers: /e-code-review, /e-code-review low, /e-code-review xhigh,
-  /e-code-review max, /e-code-review max loop.
+  Max-recall code review at a selectable effort level (low, xhigh, max), with an
+  optional auto-execute loop for any level. Triggers: /e-code-review,
+  /e-code-review low, /e-code-review xhigh, /e-code-review max,
+  /e-code-review <level> loop.
 ---
 
 # e-code-review
 
-**Core principle:** One review procedure per effort level (`low`, `xhigh`, `max`), each a separate reference file; this hub only routes to the right one.
+**Pick a level, run that review, optionally loop.** Each level has its own procedure file. Shared fix-and-re-review lives in `reference/loop.md`.
 
 ## Gotchas
 
-- `low`'s procedure spawns no subagents at all (one diff read, one findings pass) — its whole point is a fast, single-pass review. Don't add agent spawns to `low`; that defeats the point.
+- **`low` stays single-pass.** Do not spawn subagents. One diff read, one findings pass.
+- **`loop` never asks.** After findings, fix nits or stop on bugs. Load `reference/loop.md` and follow it.
 
 ## When this skill applies
 
-Triggers: `/e-code-review <level> [loop]` where `<level>` is `low`, `xhigh`, or `max`. `loop` is optional and applies to the `max` procedure.
+Triggers: `/e-code-review <level> [loop]`. `<level>` is `low`, `xhigh`, or `max`. `loop` is optional on every level.
 
-**Refusal cases — first match wins:**
+**Refusal — first match wins:**
 
-- **No level given, or an unrecognized level.** Respond exactly: `Which effort level — low, xhigh, or max?`
-- **`loop` with `low` or `xhigh`.** Respond exactly: `The loop argument is only supported with max.`
+- **No level, or an unknown level.** Respond exactly: `Which effort level — low, xhigh, or max?`
 
 ## The process
 
-1. Read the level argument (`low` / `xhigh` / `max`) and optional `loop` flag. Apply the refusal cases above before anything else, including rejecting `loop` unless the level is `max`.
-2. Load the matching file — `reference/low.md`, `reference/xhigh.md`, or `reference/max.md` — and follow its procedure exactly as written.
+1. Read `<level>` and the optional `loop` flag. Apply the refusal first.
+2. Load `reference/low.md`, `reference/xhigh.md`, or `reference/max.md`. Run that file as one review cycle.
+3. If `loop` is set, load `reference/loop.md` and follow it. Each re-review re-runs the same level file from step 2. Without `loop`, return the cycle findings and stop.
 
 ## File index
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | This hub — routing by effort level, refusal cases |
-| `reference/xhigh.md` | Full xhigh-effort review procedure (defined) |
-| `reference/max.md` | Full max-effort review procedure (defined) |
-| `reference/low.md` | Fast single-pass low-effort review procedure (defined) |
+| `SKILL.md` | Route by level; dispatch `loop` |
+| `reference/loop.md` | Auto-execute fix cycle for any level |
+| `reference/xhigh.md` | xhigh review procedure |
+| `reference/max.md` | max review procedure |
+| `reference/low.md` | low review procedure |
 
 ## Folder map
 
-- `SKILL.md` — hub: routing, refusals.
-- `reference/` — one procedure file per effort level.
+- `SKILL.md` — route and dispatch.
+- `reference/` — one procedure per level, plus `loop.md`.

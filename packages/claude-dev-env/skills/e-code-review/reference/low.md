@@ -33,3 +33,10 @@ more pass focused on the largest changed file and on any **removed** code
 blocks. Output `(none)` only if the diff is trivially correct after that pass.
 This procedure runs single-pass with no subagents — say so if asked what
 executed.
+
+## Loop
+
+With `loop`, hand findings to the hub and follow `reference/loop.md`. Each
+re-review re-runs **this low procedure**. Tag lines `[bug|nit]` when the hunk
+supports that label. Untagged findings count as `bug`. `(none)` is clean.
+Without `loop`, return the findings and stop.
