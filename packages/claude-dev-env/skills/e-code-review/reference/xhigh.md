@@ -9,8 +9,7 @@
 - [Phase 3 — Sweep for gaps](#phase-3--sweep-for-gaps)
 - [When the Agent tool is unavailable](#when-the-agent-tool-is-unavailable)
 - [Output](#output)
-- [Clean Result](#clean-result)
-- [Nit Only Result](#nit-only-result)
+- [Loop](#loop)
 
 ## Framing
 
@@ -214,12 +213,11 @@ review's output contract.
 
 State which execution shape actually ran — the grouped-5 fan-out (parallel lens
 hunters, a batched verifier, a verified sweep) or the single-context fallback —
-so the reader knows what executed.
+so the reader knows what executed. In loop mode, state it once per iteration's
+findings output.
 
-## Clean Result
+## Loop
 
-Mark ready on a clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
-
-## Nit Only Result
-
-Fix the nit, commit, and push with the PR still in draft. Post the proof-of-work PR comment, then run `gh pr ready`.
+When the hub invocation includes `loop`, return this findings set to the hub and
+follow `SKILL.md` Optional loop mode. Each re-review re-runs **this xhigh
+procedure**. Without `loop`, return the findings and stop.
