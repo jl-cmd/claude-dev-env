@@ -62,7 +62,7 @@ Feedback loop: a push that fails with the `origin/HEAD` message means this step 
 
 Call `mcp__github__get_me` and record the login. Key every identity rule to that live login, not to a fixed account name:
 
-- On a PR the MCP login authored, post `COMMENT` reviews only — GitHub blocks `APPROVE` and `REQUEST_CHANGES` on one's own PR. On a PR another account authored, any review type works.
+- On a PR the MCP login authored, post `COMMENT` reviews — GitHub blocks `APPROVE` and `REQUEST_CHANGES` on one's own PR. A `COMMENT` that downgrades from an audit APPROVE or REQUEST_CHANGES carries an appended transport disclosure at the end of its body. On a PR another account authored, any review type works.
 - Leave `BUGTEAM_REVIEWER_ACCOUNT` unset and skip every account-swap step; the swap path has no cloud form.
 - A second identity rides raw REST: a body posted with `GH_TOKEN` lands as the `claude[bot]` GitHub App. Self-PR checks and bot filters account for the split.
 

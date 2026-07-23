@@ -69,6 +69,14 @@ with `--skill bugteam`: map findings to the review-comment JSON (the
 unanchored comments, honor the self-PR reviewer toggle
 (`BUGTEAM_REVIEWER_ACCOUNT`) and the exit codes, and harvest the ids.
 
+A CLEAN pass posts an `APPROVE` review; a DIRTY pass posts `REQUEST_CHANGES`
+with one inline comment per finding. When the author reviews their own PR and
+`BUGTEAM_REVIEWER_ACCOUNT` names no alternate account, GitHub rejects the
+self-approval and the event downgrades to `COMMENT`: CLEAN posts `COMMENT` in
+place of `APPROVE`, DIRTY keeps its inline comments, the review body ends with
+an appended transport disclosure, and stdout adds a second line marking the
+downgrade.
+
 Bugteam-only obligations:
 
 - The lead runs the posting step; the FIX teammate waits for the harvested
@@ -108,7 +116,7 @@ end-to-end mental model before starting Step 0.
 | `--bugbot-retrigger` flag behavior | [reference/team-setup.md](reference/team-setup.md) |
 | AUDIT action and code-rules pre-audit gate, pre-cycle walk, cycle decision tree | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
 | FIX action and verify-push semantics | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
-| Posting the end-of-pass audit review (APPROVE on CLEAN, REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting), which runs [`_shared/pr-loop/scripts/post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py) |
+| Posting the end-of-pass audit review (APPROVE on CLEAN, REQUEST_CHANGES with inline anchored comments on DIRTY, COMMENT downgrade on a self-PR with no alternate reviewer account) | [§ Audit posting](#audit-posting), which runs [`_shared/pr-loop/scripts/post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py) |
 | Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
 | Teardown, PR description rewrite composed by the lead, permission revoke, final report | [../pr-loop-lifecycle/reference/teardown-publish-permissions.md](../pr-loop-lifecycle/reference/teardown-publish-permissions.md) |
 | Spawn-prompt XML, A–Q category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |

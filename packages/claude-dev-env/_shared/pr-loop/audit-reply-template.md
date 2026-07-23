@@ -140,6 +140,8 @@ The audit review body posted by `post_audit_thread.py` (consumers: `bugteam`, `f
 
 The audit review body announces a complete audit pass; the reply template addresses one specific thread. They use the same `**Title** —— <status>` header convention so a reader scanning a PR sees consistent visual anchoring across both surfaces.
 
+On a self-PR downgrade to a `COMMENT` review, `post_audit_thread.py` appends a one-sentence transport disclosure to the end of the review body, after the skeleton above. The header line stays first, and the disclosure never lands on line 1.
+
 ## Cross-references
 
 - [`audit-contract.md`](audit-contract.md) — finding schema (Shape A / Shape B), adversarial second pass, post-fix self-audit, persistence layout. The fields in a Shape A finding (`file`, `line`, `failure_mode`) feed the placeholders in this template. Replies cite the same `<file>:<line>` anchors that the originating audit recorded.
