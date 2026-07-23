@@ -36,8 +36,7 @@ executed.
 
 ## Loop
 
-When the hub invocation includes `loop`, return this findings set to the hub and
-follow `reference/loop.md`. Each re-review re-runs **this low procedure**. Low
-tags `[bug|nit]` when the hunk supports that label; any untagged non-empty
-finding counts as a `bug` under loop. `(none)` is clean. Without `loop`, return
-the findings and stop.
+With `loop`, hand findings to the hub and follow `reference/loop.md`. Each
+re-review re-runs **this low procedure**. Tag lines `[bug|nit]` when the hunk
+supports that label. Untagged findings count as `bug`. `(none)` is clean.
+Without `loop`, return the findings and stop.
