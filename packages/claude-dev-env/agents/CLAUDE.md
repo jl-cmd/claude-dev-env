@@ -15,7 +15,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 | `deep-research.md` | Deep Research | Citation-grounded research with web search |
 | `docs-agent.md` | Docs Agent | Documentation authoring and maintenance |
 | `git-commit-crafter.md` | Git Commit Crafter | Stages changes, writes conventional commit messages, creates commits |
-| `issue-tracker.md` | Issue Tracker | Primary handler for one GitHub issue op per spawn — epic plus native sub-issues, dedup-first, in-place marker-section body edits; loads the issue-tracker skill and returns issue numbers and URLs |
+| `issue-tracker.md` | Issue Tracker | Primary handler for one GitHub issue action per spawn; loads the issue-tracker skill (plain-brief); returns issue numbers and URLs |
 | `plan-packet-validator.md` | Plan Packet Validator | Fresh-context validator for workflow-generated plan packets under `docs/plans/` |
 | `pr-description-writer.md` | PR Description Writer | Authors PR descriptions in Anthropic-style shapes that pass the `pr_description_enforcer` hook's body audit |
 | `session-advisor.md` | Session Advisor | Standing multi-consumer reviewer; SendMessage only; returns endorse/correction/plan/stop |
