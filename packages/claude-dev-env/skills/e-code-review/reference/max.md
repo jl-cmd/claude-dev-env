@@ -212,24 +212,16 @@ it once per iteration's findings output.
 
 ## Optional loop mode
 
-When the hub invocation includes loop, repeat the max review/fix cycle until one of these outcomes is reached:
+When the hub invocation includes loop, that invocation authorizes action. After Phases 2–3 produce a verified findings set, execute the matching branch immediately. Do not ask whether to fix, which nits to keep, whether to commit or push, or whether to re-review. Do not open a plan fork or end the turn on a recommendation. Report progress only while working; the next user-facing stop is a terminal outcome below.
 
-- **Clean:** the review returns no findings. Follow [Clean Result](#clean-result).
-- **Nits only:** every finding is a nit. Fix all nits, run the required checks,
-  push the fixes, and run another max review. Repeat this outcome until a review
-  is clean, then follow [Clean Result](#clean-result).
+Repeat the max review/fix cycle until one of these outcomes:
 
-Treat a finding as a `nit` only when its verified severity is `nit`; any
-runtime-correctness, security, data-loss, compatibility, or other non-nit
-finding is `bug`. If any finding is a `bug`, return every validated finding and
-stop without marking the change ready. Do not silently discard findings to
-reach either outcome. Without loop, run one max review and return every
-validated finding without applying this convergence behavior.
+• Clean — review returns no findings. Mark ready: gh pr ready for a draft PR; otherwise state ready.
+• Nits only — every surviving finding is severity nit. Fix all of them on the PR branch worktree (or the review target), run required checks, commit (one commit per loop round), push, and run another full max review on the new head. Repeat until clean, then mark ready.
+• Any bug — any surviving finding is severity bug. Return every validated finding (bugs and nits), stop the loop, do not mark ready, and do not ask whether to continue; wait for a new user instruction.
 
-## Clean Result
+A finding is a nit only when its verified severity is nit. Runtime-correctness, security, data-loss, compatibility, and every other non-nit finding is a bug. Do not discard findings to force a ready outcome. Without loop, run one max review and return every validated finding; do not apply this convergence behavior.
 
-Mark ready on a clean review (return = `[]`): post the proof-of-work PR comment, then run `gh pr ready`.
+Loop autonomy
 
-## Nit Only Result
-
-Fix the nit, commit, and push with the PR still in draft. Post the proof-of-work PR comment, then run `gh pr ready`.
+No mid-loop confirmation questions, “should I fix these?”, “want me to push?”, or option menus. Auto-fix only verified findings on the review target; do not expand into deferred PR-body follow-ups or unrelated refactors. House git gates still apply (draft PR, verified commit, one commit per round, proof-of-work when required)—satisfy them by doing the steps, not by asking permission.
