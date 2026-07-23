@@ -2,7 +2,7 @@
 
 ## Advisor consultation
 
-When the `advisor()` tool is available, call it before substantive work — writing, committing to an interpretation, or building on an assumption. See `docs/references/advisor-tool.md` for when and how to call it. Use `/team-advisor` for a standing reviewer at decision points; see `docs/references/team-advisor-skill.md`.
+When the `advisor()` tool is available, reference `docs/references/advisor-tool.md`. Reference `docs/references/team-advisor-skill.md` for the `/team-advisor` skill.
 
 ## Communication
 
