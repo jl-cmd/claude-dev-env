@@ -180,7 +180,8 @@ export const INSTALL_GROUPS = {
             'grok-spawn',
             'anthropic-plan', 'everything-search',
             'privacy-hygiene',
-            'recall', 'remember', 'task-build', 'plan-to-pr'
+            'recall', 'remember', 'task-build', 'plan-to-pr',
+            'e-simplify', 'review-tier', 'review-router'
         ],
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
@@ -283,7 +284,7 @@ function collectFiles(directory) {
 }
 
 function copyTree(sourceBase, destBase) {
-    const files = collectFiles(sourceBase);
+    const files = collectFiles(sourceBase).filter(file => !file.replace(/\\/g, '/').includes('/__pycache__/') && !file.endsWith('.pyc'));
     const stats = { created: 0, updated: 0, paths: [] };
     for (const sourceFile of files) {
         const relativePath = relative(sourceBase, sourceFile);
@@ -301,6 +302,20 @@ function copyTree(sourceBase, destBase) {
         }
     }
     return stats;
+}
+
+function removeSkillCacheArtifacts(skillDirectory) {
+    if (!existsSync(skillDirectory)) return;
+    for (const entry of readdirSync(skillDirectory, { withFileTypes: true })) {
+        const entryPath = join(skillDirectory, entry.name);
+        if (entry.isDirectory() && entry.name === '__pycache__') {
+            rmSync(entryPath, { recursive: true, force: true });
+        } else if (entry.isDirectory()) {
+            removeSkillCacheArtifacts(entryPath);
+        } else if (entry.name.endsWith('.pyc')) {
+            unlinkSync(entryPath);
+        }
+    }
 }
 
 /**
@@ -829,7 +844,9 @@ function install(selectedGroups, options = {}) {
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
             if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
-            const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
+            const installedSkillDirectory = join(CLAUDE_HOME, 'skills', skillDir.name);
+            removeSkillCacheArtifacts(installedSkillDirectory);
+            const stats = copyTree(join(skillsSource, skillDir.name), installedSkillDirectory);
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
