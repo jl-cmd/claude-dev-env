@@ -22,6 +22,7 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 - **Clean tree required for real execute.** Dirty worktree → stop. Prefer a dedicated worktree if the session cwd is dirty; do not silently stash.
 - **Shared files (lockfiles, package.json).** Heuristics put them in `config`. If a later slice needs them earlier, move those paths in the plan **before** approval — do not invent second copies of the same path.
 - **`other` layer is a smell.** Re-bucket `other` paths by reading the file’s role before proposing. Empty `other` is ideal.
+- **Decision brief before the gate.** Print how the split looks and what re-bucket decisions you made in chat **before** `AskUserQuestion`. The question is the approval control, not the first place the plan appears.
 - **Draft PRs only.** Always `--draft`. Never mark ready from this skill.
 - **Proof-of-work is human-owned.** The skill leaves every split PR in **draft** and does **not** post a five-part proof comment. Before `gh pr ready` on any slice, a human (or a later skill) must post proof per `proof-of-work-pr-comments`. Silent ready is the failure mode.
 - **Bodies use `--body-file`.** Never `gh … --body` with markdown (hook + backtick corruption).
@@ -72,13 +73,14 @@ Path rules: [reference/path-layers.md](reference/path-layers.md).
 ### Phase 3 — Propose (mandatory gate)
 
 1. Build the proposal per [reference/proposal-format.md](reference/proposal-format.md).
-2. Call **`AskUserQuestion`** with:
-   - Recommended: **Approve recommended split** (lists slice count, file counts, branch names).
-   - **Adjust** (user will name changes in Other / follow-up).
+2. **Print the decision brief in chat** (required before the tool call): source PR, re-bucket decisions, slice table, merge order, execute mode, source branch intact. See proposal-format § Decision brief.
+3. Call **`AskUserQuestion`** with a short confirm and:
+   - Recommended: **Approve recommended split**.
+   - **Approve local branches only**.
    - **Abort**.
-3. On Abort → stop without git mutations.
-4. On Adjust → edit plan, re-verify, re-ask (still one coherent proposal each time).
-5. On Approve → Phase 4.
+4. On Abort → stop without git mutations.
+5. On Adjust (Other) → edit plan, re-verify, print a fresh decision brief, re-ask (still one coherent proposal each time).
+6. On Approve → Phase 4.
 
 ### Phase 4 — Execute
 
