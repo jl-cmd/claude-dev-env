@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "tiers": ["T1", "T2", "T3"],
+  "thresholds": {"T1": 0, "T2": 2, "T3": 5},
+  "hard_triggers": ["security", "migration", "public-api", "release"],
+  "axes": ["files", "lines", "packages", "risk", "public_api", "dependencies"],
+  "axis_weights": {"files": 1, "lines": 1, "packages": 2, "risk": 2, "public_api": 2, "dependencies": 1},
+  "approved_downgrades": ["T1", "T2"]
+}

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "routes": {
+    "e-simplify": {"status": "SUPPORTED", "skill": "e-simplify", "tiers": ["T1", "T2", "T3"], "models": {"T1": {"role": "executor", "model": "gpt-5.6-luna", "effort": "high", "pass_ids": ["simplify-01"]}, "T2": {"role": "executor", "model": "gpt-5.6-luna", "effort": "max", "pass_ids": ["simplify-01"]}, "T3": {"role": "executor", "model": "gpt-5.6-luna", "effort": "high", "pass_ids": ["simplify-01", "simplify-02", "simplify-03", "simplify-04", "simplify-05", "simplify-06"]}}},
+    "e-code-review": {"status": "UNSUPPORTED_ROUTE", "skill": "e-code-review", "tiers": []}
+  }
+}
