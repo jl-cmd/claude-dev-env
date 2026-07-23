@@ -74,6 +74,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `session_start_injector.py` | Shared helper that builds the nested SessionStart `hookSpecificOutput` payload used by SessionStart injector hooks |
 | `session_start_injector_constants.py` | The environment off-values, inject-eligible session sources, SessionStart payload field names, and nested `hookSpecificOutput` payload keys and event name shared by the SessionStart injector hooks |
+| `orchestrator_auto_starter_constants.py` | The `CLAUDE_AUTO_ORCHESTRATOR` toggle name and the `/orchestrator` start directive text for the orchestrator SessionStart injector hook |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
