@@ -1,9 +1,9 @@
 # Team-Advisor Skill Invocation
 
-`/team-advisor` spawns a standing review agent for the session at the strongest reachable model tier, run at the highest reasoning effort. Use it to get a second opinion from a distinct model line than the one driving the session:
+`/team-advisor` spawns a standing review agent for the session at the strongest reachable model tier, run at the highest reasoning effort. Use it to get a second opinion from a distinct model line than the one driving the session. For example:
 
-- Sonnet session -> consult Fable xhigh
-- Codex/Luna session -> consult Sol xhigh
+- Claude session -> consult Fable xhigh
+- Codex session -> consult Sol xhigh
 
 ## When to use it
 
