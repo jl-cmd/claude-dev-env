@@ -2,8 +2,11 @@
 
 Reads a PreToolUse JSON payload on stdin, audits body-carrying gh pr
 create/edit/comment invocations against the Anthropic claude-code style
-rules plus the proof-of-work audit for proof-shaped comment bodies, and
-denies gh pr ready while the PR carries no passing proof comment.
+rules, denies a create or edit body that hand-types a pytest count, runs
+the proof-of-work audit on proof-shaped comment bodies, and denies gh pr
+ready while the PR carries no passing proof comment. Each subcommand flag
+is read from the same logical line the audited body comes from, so a later
+segment of a chained command never decides which rules apply.
 Readability-management CLI flags short-circuit the stdin path to adjust
 the persisted readability state.
 """
@@ -25,6 +28,10 @@ from blocking.pr_description_body_audit import (  # noqa: E402
     _iter_section_headers,
     _matches_self_closing_reference,
     _opens_with_this_pr_phrase,
+    contains_hardcoded_test_count_claim,
+)
+from blocking._gh_body_arg_utils import (  # noqa: E402
+    get_logical_first_line,
 )
 from blocking.pr_description_command_parser import (  # noqa: E402
     extract_body_from_command,
@@ -53,6 +60,7 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     ALL_HEAVY_OPENING_HEADERS,
     ALL_HEAVY_TESTING_HEADERS,
     ALL_READABILITY_CLI_FLAG_TOKENS,
+    HARDCODED_TEST_COUNT_MESSAGE,
     HEAVY_SHAPE,
     MINIMUM_SUBSTANTIVE_PROSE_CHARS,
     PR_GUIDE_PATH,
@@ -187,12 +195,13 @@ def main() -> None:
         ready_denial_reason = evaluate_pr_ready_gate(command)
         if ready_denial_reason is not None:
             _emit_denial(ready_denial_reason)
-        sys.exit(0)
+            sys.exit(0)
 
-    has_any_body_flag = _command_carries_body_flag(command)
-    is_pr_create = "gh pr create" in command and has_any_body_flag
-    is_pr_edit = "gh pr edit" in command and has_any_body_flag
-    is_pr_comment = "gh pr comment" in command and has_any_body_flag
+    body_owning_invocation = get_logical_first_line(command)
+    has_any_body_flag = _command_carries_body_flag(body_owning_invocation)
+    is_pr_create = "gh pr create" in body_owning_invocation and has_any_body_flag
+    is_pr_edit = "gh pr edit" in body_owning_invocation and has_any_body_flag
+    is_pr_comment = "gh pr comment" in body_owning_invocation and has_any_body_flag
 
     if not (is_pr_create or is_pr_edit or is_pr_comment):
         sys.exit(0)
@@ -207,6 +216,9 @@ def main() -> None:
         extracted_pr_number = _extract_pr_number_from_command(command)
 
     violations = validate_pr_body(body, pr_number=extracted_pr_number)
+
+    if (is_pr_create or is_pr_edit) and contains_hardcoded_test_count_claim(body):
+        violations.append(HARDCODED_TEST_COUNT_MESSAGE)
 
     if is_pr_comment and is_proof_shaped_body(body):
         violations.extend(audit_proof_comment_body(body, extracted_pr_number))

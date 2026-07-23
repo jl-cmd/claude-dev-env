@@ -152,6 +152,7 @@ Reply with the PR body and your intended commit message. The maintainer tunes th
 - **Vague language.** `fix bug`, `update code`, `minor changes`, `various improvements`. Each trips the `VAGUE_LANGUAGE_PATTERN` check.
 - **`This PR` openings.** Hard block. Open with an imperative verb.
 - **Self-closing references.** `Fixes #<this PR>` in a `gh pr edit` body. Self-reference adds zero context. Triggers a block on `gh pr edit` and `gh pr comment` invocations where the PR number is known.
+- **Hand-typed test counts.** `Ran pytest: 40 passed` written as the body's own claim. Hard block on `gh pr create` and `gh pr edit`. The number goes stale as commits land, so paste the run output into a code fence and let the fence carry the count. A count inside a fence, inline code, a blockquote, or a table row is exempt, and `gh pr comment` is out of scope so proof comments carry the measured numbers.
 - **Code snippets in prose.** The diff shows the code. Bodies describe intent.
 - **Implementation-detail dumping.** Reviewers do not need every parameter name and call site. Describe the behavior change.
 - **Filler.** `In this PR I have made the following changes:` adds zero signal. Start with the action.

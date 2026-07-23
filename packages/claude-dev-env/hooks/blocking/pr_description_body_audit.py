@@ -2,9 +2,10 @@
 
 Strips Markdown ceremony to measure substantive prose, classifies the body as
 trivial, standard, or heavy, enumerates section headers, prepares the prose
-scanned for vague language, and flags self-closing references to the PR's own
-number and the discouraged "This PR ..." opening. Vague-language enforcement
-runs in validate_pr_body in pr_description_enforcer.py.
+scanned for vague language, and detects self-closing references to the PR's
+own number, the discouraged "This PR ..." opening, and hand-typed pytest
+pass/fail count claims. Every detector here reports only what it finds;
+pr_description_enforcer.py turns each result into a violation message.
 """
 
 import re
@@ -21,29 +22,46 @@ from hooks_constants.pr_description_enforcer_constants import (  # noqa: E402
     BOLD_PAIR_PATTERN,
     BULLET_MARKER_PATTERN,
     FENCED_CODE_BLOCK_PATTERN,
+    HARDCODED_TEST_COUNT_PATTERN,
     HEADING_LINE_PATTERN,
     HEAVY_MIN_BODY_CHARS_FOR_CLASSIFICATION,
     HEAVY_SHAPE,
     INLINE_CODE_PATTERN,
+    INLINE_CODE_PLACEHOLDER,
     LINK_TEXT_PATTERN,
+    PYTEST_REFERENCE_PATTERN,
     SELF_REFERENCE_PATTERN_TEMPLATE,
     STANDARD_SHAPE,
     TABLE_ROW_LINE_PATTERN,
     THIS_PR_OPENING_PATTERN,
+    TILDE_FENCED_CODE_BLOCK_PATTERN,
     TRIVIAL_BODY_CHAR_THRESHOLD,
     TRIVIAL_SHAPE,
     WHITESPACE_RUN_PATTERN,
 )
 
 
+def _strip_fenced_code_regions(body: str) -> str:
+    """Return the body with backtick-fenced and tilde-fenced code regions removed."""
+    without_backtick_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
+    return TILDE_FENCED_CODE_BLOCK_PATTERN.sub("", without_backtick_fences)
+
+
+def _drop_quoted_and_tabulated_lines(body: str) -> str:
+    """Return the body with whole blockquote lines and table rows removed."""
+    without_blockquote_lines = BLOCKQUOTE_LINE_PATTERN.sub("", body)
+    return TABLE_ROW_LINE_PATTERN.sub("", without_blockquote_lines)
+
+
 def strip_markdown_ceremony(body: str) -> str:
     """Return the body with Markdown ceremony stripped to leave underlying prose.
 
-    Removes fenced code, inline code, heading lines, blockquote markers,
-    bullet list markers, bold/emphasis markers, and Markdown link targets.
-    Whitespace is preserved so callers can collapse or measure it as needed.
+    Removes backtick-fenced and tilde-fenced code, inline code, heading lines,
+    blockquote markers, bullet list markers, bold/emphasis markers, and Markdown
+    link targets. Whitespace is preserved so callers can collapse or measure it
+    as needed.
     """
-    body_without_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
+    body_without_fences = _strip_fenced_code_regions(body)
     body_without_inline_code = INLINE_CODE_PATTERN.sub("", body_without_fences)
     body_without_blockquotes = BLOCKQUOTE_MARKER_PATTERN.sub("", body_without_inline_code)
     body_without_headings = HEADING_LINE_PATTERN.sub("", body_without_blockquotes)
@@ -52,6 +70,47 @@ def strip_markdown_ceremony(body: str) -> str:
     body_without_emphasis = body_without_bold.replace("*", "")
     body_without_links = LINK_TEXT_PATTERN.sub(r"\1", body_without_emphasis)
     return body_without_links
+
+
+def _extract_author_written_region(body: str) -> str:
+    """Return the body with pasted, quoted, and tabulated regions removed.
+
+    Drops backtick and tilde fences, whole blockquote lines, and whole
+    pipe-delimited table rows. What is left is text the author wrote as the
+    body's own claim, so a number appearing only in pasted run output, a quoted
+    reply, or an example table is out of scope for every claim check.
+    """
+    without_fences = _strip_fenced_code_regions(body)
+    return _drop_quoted_and_tabulated_lines(without_fences)
+
+
+def contains_hardcoded_test_count_claim(body: str) -> bool:
+    """Return True when a PR body hand-types a pytest count as its own claim.
+
+    ::
+
+        flag: `python -m pytest scripts/` -> 40 passed
+        ok:   `python -m pytest scripts/` -> `40 passed`  (count in inline code)
+        ok:   40 passed, pasted inside a code fence
+        ok:   the importer wrote 40 rows                  (a count, but no pytest)
+
+    A hand-typed count goes stale as commits land and tests are added, so the
+    rule wants a pasted number instead. The pytest reference may sit in inline
+    code, since naming the command is how an author cites the run; the count may
+    not, since backticks around a typed number carry no proof it was measured.
+
+    Args:
+        body: The PR body markdown text.
+
+    Returns:
+        True when the author's own text references pytest and carries a
+        hand-typed pass or fail count; False otherwise.
+    """
+    author_region = _extract_author_written_region(body)
+    if PYTEST_REFERENCE_PATTERN.search(author_region) is None:
+        return False
+    prose_outside_inline_code = INLINE_CODE_PATTERN.sub(INLINE_CODE_PLACEHOLDER, author_region)
+    return HARDCODED_TEST_COUNT_PATTERN.search(prose_outside_inline_code) is not None
 
 
 def _count_substantive_prose_chars(body: str) -> int:
@@ -77,9 +136,8 @@ def _extract_vague_scan_text(body: str) -> str:
     single leading pipe, or a borderless table row with no leading pipe, stays in
     scope.
     """
-    without_blockquote_lines = BLOCKQUOTE_LINE_PATTERN.sub("", body)
-    without_table_rows = TABLE_ROW_LINE_PATTERN.sub("", without_blockquote_lines)
-    return strip_markdown_ceremony(without_table_rows)
+    without_quoted_or_tables = _drop_quoted_and_tabulated_lines(body)
+    return strip_markdown_ceremony(without_quoted_or_tables)
 
 
 def _iter_section_headers(body: str) -> list[str]:
@@ -91,12 +149,13 @@ def _iter_section_headers(body: str) -> list[str]:
     strings, so matching every heading level keeps the parser permissive
     without changing behaviour for the canonical two-hash header shape.
 
-    Fenced code blocks are stripped first so example markdown nested inside ``` fences
-    (a PR body that demonstrates the Heavy shape, for instance) is not counted as a
-    structural header. This keeps the shape classifier and Heavy required-header check
-    aligned with `strip_markdown_ceremony`, which already strips fences before measuring.
+    Fenced code blocks (backtick and tilde) are stripped first so example markdown
+    nested inside fences (a PR body that demonstrates the Heavy shape, for instance)
+    is not counted as a structural header. This keeps the shape classifier and Heavy
+    required-header check aligned with `strip_markdown_ceremony`, which already strips
+    fences before measuring.
     """
-    body_without_fences = FENCED_CODE_BLOCK_PATTERN.sub("", body)
+    body_without_fences = _strip_fenced_code_regions(body)
     all_headers: list[str] = []
     for each_match in HEADING_LINE_PATTERN.finditer(body_without_fences):
         header_text = each_match.group(0).strip()

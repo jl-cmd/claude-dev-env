@@ -69,6 +69,7 @@ Routes every `gh api .../reviews` and `.../comments` call through `--paginate --
 - **Trivial shape with `## Summary` header.** A four-line body wrapped in `## Summary` trips the ceremony-on-Trivial check. Keep tiny bodies as plain prose.
 - **Heavy shape missing a testing header.** A 600-line PR body with `## Problem` and `## Fix` but no `## Test plan` / `## Testing` / `## Tests` block trips the Heavy required-headers check.
 - **`This PR` opening on any shape.** Hard block regardless of size.
+- **Hand-typed pytest counts on create/edit.** On `gh pr create` / `gh pr edit`, a body whose own prose references `pytest` and carries an `N passed` / `N failed` count is denied. Paste the run output into a code fence, or put the measured numbers in a `gh pr comment` proof post. A count inside a fence, inline code, a blockquote, or a table row is exempt. Full rule: `docs/PR_DESCRIPTION_GUIDE.md`.
 - **Dual-mode dispatch (unique pattern in `hooks/blocking/`).** The `pr_description_enforcer.py` hook reads `sys.argv` for `--readability-*` CLI flags as well as its stdin-JSON hook input. This dual-mode pattern is the only one of its kind across the blocking hooks directory. When extending the hook, preserve the precedence: CLI flags handled first and exited; stdin-JSON path falls through.
 
 ## Readability targets
