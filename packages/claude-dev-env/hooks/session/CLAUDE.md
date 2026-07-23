@@ -21,6 +21,9 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `_path_setup.py` | - | Inserts the hooks directory on `sys.path` so session entry-point hooks import `hooks_constants` with imports kept at module top. |
 | `test__path_setup.py` | - | Tests for `_path_setup.py` |
 
+| `orchestrator_auto_starter.py` | SessionStart | Injects a directive telling Claude to run `/orchestrator`, gated on an inject-eligible source and the `CLAUDE_AUTO_ORCHESTRATOR` toggle. Emits the nested SessionStart payload; stays silent on any failed gate. |
+| `test_orchestrator_auto_starter.py` | - | Tests for `orchestrator_auto_starter.py` |
+
 ## Conventions
 
 - `session_env_cleanup.py` is Windows-specific in effect but safe to run on all platforms; it exits 0 when the target directory does not exist.
