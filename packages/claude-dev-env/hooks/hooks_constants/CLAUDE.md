@@ -72,6 +72,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
+| `session_start_injector.py` | Shared helper that builds the nested SessionStart `hookSpecificOutput` payload used by SessionStart injector hooks |
+| `session_start_injector_constants.py` | The environment off-values, inject-eligible session sources, SessionStart payload field names, and nested `hookSpecificOutput` payload keys and event name shared by the SessionStart injector hooks |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |

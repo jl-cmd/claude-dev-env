@@ -18,6 +18,9 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `test_untracked_repo_detector.py` | — | Tests for `untracked_repo_detector.py` |
 | `test_task_list_loop_starter.py` | — | Tests for `task_list_loop_starter.py` |
 
+| `_path_setup.py` | - | Inserts the hooks directory on `sys.path` so session entry-point hooks import `hooks_constants` with imports kept at module top. |
+| `test__path_setup.py` | - | Tests for `_path_setup.py` |
+
 ## Conventions
 
 - `session_env_cleanup.py` is Windows-specific in effect but safe to run on all platforms; it exits 0 when the target directory does not exist.
