@@ -205,6 +205,10 @@ Slash commands for common workflows.
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
 | `issue-tracker` | One consistent way to create, update in place, and close GitHub issues for a work-stream: one epic parent with native sub-issues, dedup-first against open and closed issues, marker-delimited body sections edited in place, and an epic checklist mirroring the children; the `issue-tracker` agent runs one op per call, this skill is the fallback |
+| `plan-to-pr` | Packet-backed, per-task Plan-to-PR workflow with native findings-only review, separate repair, and final validation |
+| `e-simplify` | Cleanup-only review routed through the enforced Luna runtime slice |
+| `review-tier` | Canonical pull-request surface inventory and automatic `review_tier` classification |
+| `review-router` | Resolve, arm, enforce, and close supported review routes |
 | `closeout` | Harvest session obstacles into quoted, user-approved GitHub issues at session end, then delegate filing to the `issue-tracker` agent (skill fallback) so each runs the full tracker path; print a computed cloud handoff prompt |
 | `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
 | `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
