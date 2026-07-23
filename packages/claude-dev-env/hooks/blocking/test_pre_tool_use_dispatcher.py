@@ -681,8 +681,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 22, (
-        f"Write tool must apply to all 22 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 21, (
+        f"Write tool must apply to all 21 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -695,16 +695,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 23, (
-        f"expected 23 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 22, (
+        f"expected 22 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (11 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 11, (
-        f"MultiEdit tool must apply to exactly 11 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 10, (
+        f"MultiEdit tool must apply to exactly 10 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -715,7 +715,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 22 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
