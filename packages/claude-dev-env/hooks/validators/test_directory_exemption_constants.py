@@ -12,10 +12,12 @@ from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARK
 from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY_NAMES
 from validators.config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+    ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
     ALL_DIRECTORY_SEGMENTS_FROM_PATH_PATTERNS,
     all_directory_segments_in_path_pattern,
     directory_segment_names_from_path_patterns,
     is_filename_like_path_segment,
+    substring_patterns_from_path_patterns,
 )
 from validators.exempt_paths import (
     HOOK_INFRASTRUCTURE_PATTERNS,
@@ -97,3 +99,57 @@ def test_temporary_path_preserves_tests_directory_segment(tmp_path: Path) -> Non
         tmp_path, "packages/demo/tests/helper_functions.py"
     )
     assert staged_path == tmp_path / "tests" / "helper_functions.py"
+
+
+def test_temporary_path_preserves_substring_test_helpers_directory(
+    tmp_path: Path,
+) -> None:
+    staged_path = _temporary_path_preserving_directory_signal(
+        tmp_path, "packages/demo/test_helpers/worker.py"
+    )
+    assert staged_path == tmp_path / "test_helpers" / "worker.py"
+
+
+def test_temporary_path_preserves_absolute_project_test_helpers_directory(
+    tmp_path: Path,
+) -> None:
+    absolute_helpers_path = "C:/workspace/pkg/test_helpers/worker.py"
+    staged_path = _temporary_path_preserving_directory_signal(
+        tmp_path, absolute_helpers_path
+    )
+    assert staged_path == tmp_path / "test_helpers" / "worker.py"
+
+
+def test_absolute_system_temp_pytest_shaped_path_stages_flat_basename(
+    tmp_path: Path,
+) -> None:
+    pytest_shaped_target = (
+        tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
+    )
+    staging_root = tmp_path / "staging_root"
+    staging_root.mkdir()
+    staged_path = _temporary_path_preserving_directory_signal(
+        staging_root, str(pytest_shaped_target)
+    )
+    assert staged_path == staging_root / "legacy_module.py"
+
+
+def test_substring_patterns_from_path_patterns_skips_directory_tokens() -> None:
+    all_substring_patterns = substring_patterns_from_path_patterns(
+        {"test_", "/tests/", "conftest", "\\tests\\"}
+    )
+    assert all_substring_patterns == frozenset({"test_", "conftest"})
+
+
+def test_directory_exemption_substring_patterns_are_non_empty_and_separator_free() -> None:
+    assert ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    for each_pattern in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS:
+        assert "/" not in each_pattern
+        assert "\\" not in each_pattern
+
+
+def test_directory_exemption_substring_patterns_include_test_fragments() -> None:
+    assert "test_" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert "_test." in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert ".spec." in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
+    assert "conftest" in ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS
