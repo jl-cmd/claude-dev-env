@@ -25,6 +25,25 @@ converge product to ready (or a named blocker).
 `pr-converge` selects `schedule_wakeup` or `portable` the same way. Both
 entry skills share the helper scripts and the convergence gate.
 
+## Grok mode (the `grok` arg)
+
+When the skill argument begins with the token `grok` (optionally followed by
+`:`), grok mode is on: strip that leading token, a following `:`, and
+surrounding whitespace, then parse the rest as the scope argument. Otherwise
+grok mode is off.
+
+Grok mode has three effects:
+
+- `pacer=portable` is forced and the `converge.mjs` Workflow path is skipped.
+  The pacer script decides this from `--grok-mode`; the Workflow `agent()`
+  primitive spawns Claude subagents only, so grok mode drives the portable loop.
+- Loop edit, audit, and fix workers route through `resolve_worker_spawn.py`
+  (grok-first, Claude fallback), per the worker routing in
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+- Code-review and the code-verifier verdict stay on Claude.
+
+Resume command carries the token: `/autoconverge grok: <PR URL>`.
+
 ## Run scope: one PR or several
 
 Decide the scope from how many PRs the user named, then follow that path:
@@ -50,8 +69,11 @@ Scan the tool list for `Workflow` and `ScheduleWakeup`, then select the pacer:
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   --skill autoconverge \
   --has-workflow <0|1> \
-  --has-schedule-wakeup <0|1>
+  --has-schedule-wakeup <0|1> \
+  --grok-mode <0|1>
 ```
+
+Pass `--grok-mode 1` under grok mode; the script then returns `portable`.
 
 - `pacer=workflow` — continue with Pre-flight and **Run the workflow** below.
 - `pacer=portable` — continue with Pre-flight (portable worktree rules when

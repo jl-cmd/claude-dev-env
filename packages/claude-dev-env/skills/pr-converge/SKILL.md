@@ -17,6 +17,28 @@ invocation and the next tick is scheduled. On `pacer=portable`, ticks run
 continuously in-session (see
 [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)).
 
+## Grok mode (the `grok` arg)
+
+When the skill argument begins with the token `grok` (optionally followed by
+`:`), grok mode is on: strip that leading token, a following `:`, and
+surrounding whitespace, then parse the rest as the scope argument. Otherwise
+grok mode is off.
+
+Under grok mode:
+
+- The fix worker (Step 5/6 `fix_executor`) and any bug-audit or self-review
+  worker the loop spawns directly route through
+  `resolve_worker_spawn.py --role clean-coder` (grok-first, Claude fallback), as
+  a fresh dispatcher call each tick rather than the persistent teammate.
+- Code-review (Step 5 `invoke_code_review.py`) and the code-verifier verdict
+  stay on Claude. bugteam (Step 6) already routes through the dispatcher.
+
+`grok_mode` persists in `pr-converge-state.json`: set from the `grok` arg at run
+open, read on tick entry, written on tick exit, and carried into the handoff
+`state-copy.json`. It is not reset on push, so the mode holds for the whole run.
+
+Resume command carries the token: `/pr-converge grok: <PR URL>`.
+
 ## Transport check (before any GitHub step)
 
 Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
@@ -168,7 +190,7 @@ when `$CLAUDE_JOB_DIR` is gone.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `merge_state_status`, `current_head`,
-`bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
+`bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`, `grok_mode`,
 `bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`,
 `agents_session_id`, `persistent_agents`.
 
@@ -193,12 +215,18 @@ the `persistent_agents` map
   last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
   never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks
   audit-shaped clean-coder spawns during the BUGTEAM phase.
+- **Under grok mode:** dispatch the fix worker via
+  `resolve_worker_spawn.py --role clean-coder` (a fresh dispatcher call each
+  tick) rather than this persistent teammate; on grok fallthrough or
+  `claude_agent_required`, spawn the one-shot Claude fix worker as today.
+  Invocation shape:
+  [`../bugteam/reference/audit-and-teammates.md`](../bugteam/reference/audit-and-teammates.md).
 - **Stale or dead id:** on a `SendMessage` failure, or no acknowledgment
   within one bounded wait, drop the map entry, spawn a fresh named agent,
   record it, and continue the tick. Never abort a tick on a stale id;
   never retry the same dead id.
 - **Fresh every round (never persisted):** the Step 5 host-aware
-  `invoke_code_review.py` / `/code-review ultra --fix` pass and the Step 6
+  `invoke_code_review.py` / `/code-review high --fix` pass and the Step 6
   bugteam audit (unbiased eyes each round; the enforcer needs the formal
   Skill call), and every `code-verifier` — a named code-verifier never fires
   `SubagentStop`, so no verdict mints (see the named-`code-verifier` entry
@@ -256,7 +284,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
   Windows is Git Bash which cannot execute PowerShell cmdlets. Route all
   PowerShell work through the PowerShell tool or `pwsh -NoProfile -File`.
 - **Cross-repo PR: route cwd into the PR worktree before Step 5 review** —
-  `invoke_code_review.py` and `/code-review ultra --fix` audit the repo of the
+  `invoke_code_review.py` and `/code-review high --fix` audit the repo of the
   cwd (the helper's `--cwd`). When the session is rooted in a different repo
   than the PR, `EnterWorktree` cannot re-root (it is scoped to the session's
   repo); resolve the PR worktree and `cd` into it per
@@ -354,7 +382,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **Static sweep fails** → apply shared fix protocol → push → reset markers
             → stay CODE_REVIEW → Step 5
       - [ ] **`mode == in_session`** (Claude host, session model opus) → run
-            `/code-review ultra --fix` in-session (no path args)
+            `/code-review high --fix` in-session (no path args)
       - [ ] **`mode == chain`** (any other host or non-opus session) → helper
             already ran the headless review; read `returncode`,
             `served_command`, and `dirty_tree` from JSON

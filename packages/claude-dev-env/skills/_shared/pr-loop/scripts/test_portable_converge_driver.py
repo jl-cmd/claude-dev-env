@@ -355,6 +355,35 @@ def test_open_run_portable_seeds_state_and_code_review_commands(
     assert reloaded["current_head"] == "deadbeef"
 
 
+def test_open_run_grok_mode_overrides_workflow_to_portable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        driver, "_run_preflight", lambda **_kwargs: (None, EXIT_SUCCESS)
+    )
+    monkeypatch.setattr(
+        driver, "_read_git_head", lambda _cwd: ("cafef00d", None, EXIT_SUCCESS)
+    )
+    payload, exit_code = driver.run_open_run(
+        entry_skill="autoconverge",
+        has_workflow=True,
+        has_schedule_wakeup=False,
+        owner="owner",
+        repo="repo",
+        pr_number=221,
+        cwd_path=tmp_path / "worktree",
+        state_dir=tmp_path / "state",
+        session_model="third-party",
+        is_copilot_down=False,
+        is_bugbot_down=False,
+        is_grok_mode=True,
+    )
+    assert exit_code == EXIT_SUCCESS
+    assert payload[RESULT_KEY_STATUS] == STATUS_OK
+    assert payload.get(RESULT_KEY_BLOCKER) != BLOCKER_NOT_PORTABLE
+    assert payload[RESULT_KEY_NEXT] == NEXT_RUN_CODE_REVIEW
+
+
 def test_main_after_code_review_cli(state_file: Path) -> None:
     exit_code = driver.main(
         [

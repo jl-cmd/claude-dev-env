@@ -205,3 +205,82 @@ def test_build_argument_parser_requires_skill_and_host_flags() -> None:
     assert parsed_namespace.skill == ENTRY_SKILL_AUTOCONVERGE
     assert parsed_namespace.has_workflow == "1"
     assert parsed_namespace.has_schedule_wakeup == "0"
+
+
+def test_autoconverge_with_workflow_and_grok_mode_selects_portable() -> None:
+    selection = pacer_module.select_converge_pacer(
+        entry_skill=ENTRY_SKILL_AUTOCONVERGE,
+        has_workflow=True,
+        has_schedule_wakeup=False,
+        is_grok_mode=True,
+    )
+    assert selection.pacer == PACER_PORTABLE
+    assert selection.grok_mode is True
+
+
+def test_autoconverge_with_workflow_without_grok_mode_selects_workflow() -> None:
+    selection = pacer_module.select_converge_pacer(
+        entry_skill=ENTRY_SKILL_AUTOCONVERGE,
+        has_workflow=True,
+        has_schedule_wakeup=False,
+        is_grok_mode=False,
+    )
+    assert selection.pacer == PACER_WORKFLOW
+    assert selection.grok_mode is False
+
+
+def test_autoconverge_without_workflow_and_grok_mode_selects_portable() -> None:
+    selection = pacer_module.select_converge_pacer(
+        entry_skill=ENTRY_SKILL_AUTOCONVERGE,
+        has_workflow=False,
+        has_schedule_wakeup=False,
+        is_grok_mode=True,
+    )
+    assert selection.pacer == PACER_PORTABLE
+    assert selection.grok_mode is True
+
+
+def test_pr_converge_with_schedule_wakeup_ignores_grok_mode() -> None:
+    selection = pacer_module.select_converge_pacer(
+        entry_skill=ENTRY_SKILL_PR_CONVERGE,
+        has_workflow=False,
+        has_schedule_wakeup=True,
+        is_grok_mode=True,
+    )
+    assert selection.pacer == PACER_SCHEDULE_WAKEUP
+
+
+def test_selection_as_json_dict_carries_grok_mode() -> None:
+    selection = pacer_module.select_converge_pacer(
+        entry_skill=ENTRY_SKILL_AUTOCONVERGE,
+        has_workflow=True,
+        has_schedule_wakeup=False,
+        is_grok_mode=True,
+    )
+    payload = pacer_module.selection_as_json_dict(selection)
+    assert payload[pacer_module.RESULT_KEY_GROK_MODE] is True
+    assert payload[RESULT_KEY_PACER] == PACER_PORTABLE
+
+
+def test_cli_grok_mode_forces_portable_for_autoconverge() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            CLI_SKILL_FLAG,
+            ENTRY_SKILL_AUTOCONVERGE,
+            CLI_HAS_WORKFLOW_FLAG,
+            "1",
+            CLI_HAS_SCHEDULE_WAKEUP_FLAG,
+            "0",
+            pacer_module.CLI_GROK_MODE_FLAG,
+            "1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == EXIT_SUCCESS, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload[RESULT_KEY_PACER] == PACER_PORTABLE
+    assert payload[pacer_module.RESULT_KEY_GROK_MODE] is True

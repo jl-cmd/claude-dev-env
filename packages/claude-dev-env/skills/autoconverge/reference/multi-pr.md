@@ -50,8 +50,12 @@ Select the pacer once for the multi-PR run (same helper as single-PR):
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   --skill autoconverge \
   --has-workflow <0|1> \
-  --has-schedule-wakeup <0|1>
+  --has-schedule-wakeup <0|1> \
+  --grok-mode <0|1>
 ```
+
+Under grok mode pass `--grok-mode 1` here too, so the multi-PR run selects
+portable; grok mode does not use the `converge.mjs` fan-out.
 
 ### `pacer=portable`
 

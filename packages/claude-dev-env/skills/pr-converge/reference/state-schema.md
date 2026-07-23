@@ -68,6 +68,13 @@ live ONLY in the single-PR `$CLAUDE_JOB_DIR/pr-converge-state.json` file
   review gate and the pending-requested-reviews gate and the run marks ready on
   the remaining signals. Unlike `bugbot_down`, it is not reset on push — a
   quota outage holds for the whole run.
+- `grok_mode`: boolean, init `false`. Set from the run's `grok` arg at run open;
+  read every tick; written on tick exit; carried into the handoff
+  `state-copy.json`. Not reset on push, so the mode holds for the whole run.
+  While `true`, the fix worker and any directly-spawned bug-audit or self-review
+  worker route through `resolve_worker_spawn.py --role clean-coder` (grok-first,
+  Claude fallback) as a fresh dispatcher call each tick; code-review and the
+  code-verifier verdict stay on Claude.
 - `inline_lag_streak`: integer, init `0`. Consecutive ticks where review
   body shows findings against `current_head` but inline API returns zero
   matching. Reset to `0` on any other branch outcome.
