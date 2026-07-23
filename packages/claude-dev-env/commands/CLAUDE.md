@@ -13,6 +13,7 @@ Slash-command definitions installed into `~/.claude/commands/` by `bin/install.m
 | `implement.md` | `/implement` | Provides full implementation context to a right-sized engineer in XML format |
 | `initialize.md` | `/initialize` | Bootstraps a new project with standard Claude Code config |
 | `plan.md` | `/plan` | Plans a feature through the `anthropic-plan` skill and workflow |
+| `split-pr.md` | `/split-pr` | Splits one large PR into a stacked file-based draft chain via the `split-pr` skill |
 | `pr-comments.md` | `/pr-comments` | Fetches and formats PR review comments for response |
 | `review-plan.md` | `/review-plan` | Reviews the current plan packet against code standards |
 | `right-size.md` | `/right-size` | Checks an implementation against the Right-Sized Engineering rules |
