@@ -89,8 +89,14 @@ confirmation gates that are expected to return zero.
    test-first commit, a push, then a reply and resolve on each finding that
    carries a GitHub review thread. Before its turn ends, the edit step dry-runs
    the CODE_RULES commit gate (`code_rules_gate.py --staged`) over its staged
-   changes and keeps fixing until that gate would accept the commit, so the
-   later commit step never hits a gate rejection. A round progresses when the
+   changes and keeps fixing until that gate would accept the commit. The staged
+   index stays intact through code-verifier review, which reads `git diff HEAD`
+   to inspect staged and unstaged changes together. A rebase repair also reads
+   `git diff origin/main...HEAD` to verify committed conflict resolutions. A
+   passing verdict leaves the exact attested index ready for the verified commit
+   gate. A finding routes to recovery, which unstages, repairs, re-attests, and
+   re-verifies before commit.
+   A round progresses when the
    fix lens lands a push that moves HEAD, or when every finding was already
    addressed so no code change is needed yet each finding thread is still
    resolved (the fix lens reports `resolvedWithoutCommit` and the run

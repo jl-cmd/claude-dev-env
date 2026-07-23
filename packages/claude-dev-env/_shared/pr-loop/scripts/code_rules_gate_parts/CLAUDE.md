@@ -15,9 +15,15 @@ surface for the test suite.
 | `violation_scoping.py` | Recovers a violation's line span from the enforcer message and partitions violations into blocking versus advisory |
 | `wrapper_plumb_check.py` | Flags a public wrapper that drops a same-file delegate's optional keyword arguments; holds the code-path and test-path classifiers |
 | `gate_running.py` | Validates the eligible file set, reports the inspected-file count, and prints the partitioned violation report |
-| `staged_test_running.py` | Runs the staged Python test files, grouped by their owning pytest config, in command-line-length-safe batches |
+| `staged_test_running.py` | Prefilters staged Python tests, materializes the captured index in a disposable detached worktree, and runs tests by owning pytest config in command-line-length-safe batches |
+| `staged_pytest_entry.py` | Rewrites live-worktree Python paths and editable-install mappings to the staged snapshot, runs pytest, and rejects live project imports |
+| `staged_attestation.py` | Clears, snapshots, atomically stores, and validates staged attestations in each worktree's `private_git_directory`, using a stable sentinel for an unborn HEAD |
 | `gate_arguments.py` | Parses the gate's command-line arguments |
 | `__init__.py` | Package marker |
+
+Staged pytest registers one detached disposable worktree in the repository's
+shared Git administration area. It removes and prunes that registration after
+the run. The source worktree's refs, index, and files stay unchanged.
 
 ## Subdirectory
 

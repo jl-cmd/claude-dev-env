@@ -77,7 +77,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_review_pr_create_gate.py` | PreToolUse (Bash/MCP GitHub) | `gh pr create` or the MCP `create_pull_request` tool without a clean `xhigh` code-review stamp covering the branch surface |
 | `code_review_push_gate.py` | PreToolUse (Bash/PowerShell) | `git push` without a clean `low` code-review stamp covering the branch surface |
 | `code_review_stamp_directory_write_blocker.py` | PreToolUse (Bash/PowerShell/Write/Edit/MultiEdit) | Shell or file-tool writes into `~/.claude/code-review-stamps/`, and shell references to the stamp store module or its mint call, outside the sanctioned invoker |
-| `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent) | Spawning the `code-verifier` subagent when the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line, or the CODE_RULES engine fails to load |
+| `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent\|Task) | Spawning the `code-verifier` subagent when a current staged CODE_RULES attestation is absent, malformed, worktree/HEAD/index-stale, the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line, or the CODE_RULES engine fails to load |
 | `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `conventional_pr_title_gate.py` | PreToolUse (Bash) | `gh pr create`/`gh pr edit` with a `--title` that is not a Conventional Commit, in a repo whose CI runs a semantic-pull-request title check |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |

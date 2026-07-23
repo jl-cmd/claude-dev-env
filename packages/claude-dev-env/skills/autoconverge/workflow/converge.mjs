@@ -219,6 +219,7 @@ function runFixerTask(task, context) {
   return convergeAgent(
     `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
       `The verify step's objections:\n${objection}\n\n` +
+      VERIFIER_FINDING_UNSTAGE_STEP +
       `Rules:\n` +
       `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
       `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
@@ -407,6 +408,7 @@ function runCodeEditorTask(task, context) {
   return convergeAgent(
     `You are the VERIFY-RECOVERY fixer (attempt ${attempt}) for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The verify step rejected the working-tree fixes; its verdict named what is still unresolved. A separate verify step then a separate commit step run after you.\n\n` +
       `The verify step's objections:\n${objection}\n\n` +
+      VERIFIER_FINDING_UNSTAGE_STEP +
       `Rules:\n` +
       `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
       `- Address every objection above test-first (failing test, then minimum code to pass) per CODE_RULES, so each named concern is genuinely resolved the way the verdict requires. Do not touch GitHub review threads — the edit step already handled those.\n` +
@@ -434,7 +436,7 @@ function runVerifierTask(task, context) {
         `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
-        `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
+        `2. Verify the uncommitted working-tree changes resolve every finding above: inspect the complete change surface with git diff HEAD, which includes staged and unstaged changes. Run the relevant tests and named gates against that surface, then confirm each finding is fixed test-first per CODE_RULES. A passing verdict preserves the staged, gate-attested index for the commit step.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
       { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
     )
@@ -448,7 +450,7 @@ function runVerifierTask(task, context) {
         `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
-        `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
+        `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Inspect the complete change surface with git diff HEAD, which includes staged and unstaged changes. Inspect committed rebase conflict resolutions with git diff origin/main...HEAD. Run the relevant tests and named gates against both surfaces. A passing verdict preserves the staged, gate-attested index for the commit step.\n` +
         `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
       { label, phase: 'Finalize', agentType: 'code-verifier', ...TIERS.sonnetMedium },
     )
@@ -458,7 +460,7 @@ function runVerifierTask(task, context) {
       `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
       `Steps:\n` +
       `1. cd into ${context.hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
-      `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
+      `2. Verify the uncommitted working-tree change in REPO: inspect the complete change surface with git diff HEAD, which includes staged and unstaged changes. Run the hook/rule tests in that repo, confirming each violation class is now blocked. A passing verdict preserves the staged, gate-attested index for the commit step.\n` +
       `3. Compute the binding hash for the live surface:\n` +
       `   The hardening branch is: ${context.hardeningBranch}\n` +
       `   Run exactly:\n` +
@@ -609,7 +611,10 @@ function runConvergenceCheck(context) {
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
   `   python "${CONFIG.prLoopScripts}/code_rules_gate.py" --repo-root "<that root>" --staged\n` +
-  `Exit 0 means the commit gate would accept the commit. On any non-zero exit, read every violation it prints, fix each one test-first per CODE_RULES, and re-run the gate until it exits 0. Then unstage with git restore --staged . so the verify step reads the working-tree diff. Make NO git commit and NO git push here — this is a dry committability check; the separate verify and commit steps run after you, and the verified-commit gate is their job, not yours. Your turn does not end while the commit gate would reject the commit.`
+  `Exit 0 means the commit gate would accept the commit. On any non-zero exit, read every violation it prints, fix each one test-first per CODE_RULES, and re-run the gate until it exits 0. Leave every gate-passing change staged so the verifier and verified-commit gate share the exact attested index. Make NO git commit and NO git push here — this is a dry committability check; the separate verify and commit steps run after you, and the verified-commit gate is their job, not yours. Your turn does not end while the commit gate would reject the commit.`
+
+const VERIFIER_FINDING_UNSTAGE_STEP =
+  `\n\nVERIFIER-FINDING RECOVERY — the verifier returned findings. Before any repair edit, run git restore --staged . to release the failed staged index. Apply the minimal repair, then re-stage and re-attest the repaired surface through the final pre-commit gate step before the verifier runs again.`
 
 const LENS_SCHEMA = {
   type: 'object',
