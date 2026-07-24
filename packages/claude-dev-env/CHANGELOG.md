@@ -1,5 +1,176 @@
 # Changelog
 
+## [2.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.4.0...claude-dev-env-v2.5.0) (2026-07-24)
+
+
+### Features
+
+* add condensing instructions skill ([4e83b98](https://github.com/jl-cmd/claude-dev-env/commit/4e83b9838031bcef55018f2922296d51220033a8))
+* add condensing instructions skill ([c291004](https://github.com/jl-cmd/claude-dev-env/commit/c291004d2bf148f3b8c330cd79126431592c1d2c))
+* add skill protocol workflow hub ([d0d8e25](https://github.com/jl-cmd/claude-dev-env/commit/d0d8e257c0284e3626d6eb8d2242f70ddc2dad4e))
+* **agents:** add issue-tracker agent for single-op issue handling ([b5ce609](https://github.com/jl-cmd/claude-dev-env/commit/b5ce6097aa0a6d7ce1894df59cf05a24a8a2232a))
+* **agents:** add issue-tracker agent for single-op issue handling ([4ecd883](https://github.com/jl-cmd/claude-dev-env/commit/4ecd88359333f5d7b06618d3abfccbc0952b5d28))
+* **autoconverge:** P2-only fix-then-advance without re-converge ([37d7f24](https://github.com/jl-cmd/claude-dev-env/commit/37d7f240745d8964976dc7e4c5ac8cf9568400fc))
+* **autoconverge:** P2-only fix-then-advance without re-converge ([9865bca](https://github.com/jl-cmd/claude-dev-env/commit/9865bca8e9e49f8401601ba4e0b6167d0f4aa360))
+* define skill protocol task records ([eb6c1cd](https://github.com/jl-cmd/claude-dev-env/commit/eb6c1cd8c214680b1dbac4a27eab5b6167c17ad8))
+* **e-code-review:** differentiate max vs xhigh by orchestration shape ([f06a893](https://github.com/jl-cmd/claude-dev-env/commit/f06a89356365373ee859ae294b37d38ab9add8b4)), closes [#361](https://github.com/jl-cmd/claude-dev-env/issues/361)
+* **e-code-review:** differentiate max vs xhigh by orchestration shape; harden all levels ([eb4fb89](https://github.com/jl-cmd/claude-dev-env/commit/eb4fb89f18b50959ac5d25af86481ac85a63e271))
+* **e-code-review:** enable loop for every effort level ([572f718](https://github.com/jl-cmd/claude-dev-env/commit/572f71827c48f04bfb1616cedcf8303b2da65fb4))
+* **e-code-review:** enable loop for every effort level ([f3e6283](https://github.com/jl-cmd/claude-dev-env/commit/f3e628398e9611b39e65bc7090ae594050f8d85a))
+* make code-review enforcement opt-in (default off) ([b8e54b4](https://github.com/jl-cmd/claude-dev-env/commit/b8e54b4383afe61be29eb156810d9141b50d2401))
+* make code-review enforcement opt-in (default off) ([bfb0255](https://github.com/jl-cmd/claude-dev-env/commit/bfb025580217d3ea1d55724004a62f01cee832bd))
+* **permissions:** strip inert rules from project settings.local.json ([5f3043e](https://github.com/jl-cmd/claude-dev-env/commit/5f3043ed2b943646817a23c99898fab277bb0af4))
+* **permissions:** strip inert rules from project settings.local.json ([5df924e](https://github.com/jl-cmd/claude-dev-env/commit/5df924e85f3ba3824b876533cad48cff5365fec0))
+* **permissions:** strip inert Write/Glob/NotebookEdit and reap $HOME ([5b3b263](https://github.com/jl-cmd/claude-dev-env/commit/5b3b263ed2241583f430e652394d0085633f11a7))
+* **permissions:** strip inert Write/Glob/NotebookEdit and reap $HOME ([371d855](https://github.com/jl-cmd/claude-dev-env/commit/371d8550008cc2b713a81b82678fbf24dfe01ac2))
+* register skill in installer and README ([d53309a](https://github.com/jl-cmd/claude-dev-env/commit/d53309a602ec2ab40ca24e23d1f0498f21e90ba8))
+* **release-notes-html:** add skill with model invocation enabled ([55810eb](https://github.com/jl-cmd/claude-dev-env/commit/55810eb919cb036cb2dcb7a35fb1835c62e4ab4c))
+* **release-notes-html:** add skill with model invocation enabled ([ce992b8](https://github.com/jl-cmd/claude-dev-env/commit/ce992b8d5e8d3fe452f44af19a9be94bf9eca7c1))
+* rename skill workflow to plan-to-pr ([eef508e](https://github.com/jl-cmd/claude-dev-env/commit/eef508e509135f90dc5d0ce1df26ac9775941012))
+* rename skill workflow to Plan-to-PR ([3d8a79a](https://github.com/jl-cmd/claude-dev-env/commit/3d8a79af157309138b17e81e511e304be8bc00e5))
+* route task-build through available host tools ([4b31baa](https://github.com/jl-cmd/claude-dev-env/commit/4b31baaa45b96078f2155d1ec6aecd1099cc103b))
+* route task-build through the best available host tool ([be74b08](https://github.com/jl-cmd/claude-dev-env/commit/be74b0871655202abb95d800acd68c17baf598c2))
+* **scripts:** add host pool health capture and alert recipe ([c814a27](https://github.com/jl-cmd/claude-dev-env/commit/c814a2714e3d35645ce6060636573409411323c6)), closes [#257](https://github.com/jl-cmd/claude-dev-env/issues/257)
+* **scripts:** host pool health monitor recipe ([#257](https://github.com/jl-cmd/claude-dev-env/issues/257)) ([8d57fec](https://github.com/jl-cmd/claude-dev-env/commit/8d57fec96f888d2a9fb68a643ecdee04fdf05bac))
+* **skills:** add e-code-review skill ([24111fd](https://github.com/jl-cmd/claude-dev-env/commit/24111fd69a410930e56dcf1a23731b328180a06b))
+* **skills:** add e-code-review skill ([fdafb14](https://github.com/jl-cmd/claude-dev-env/commit/fdafb14250b63b1db43734e1f3e55f7038b798cb))
+* **skills:** add e-simplify skill ([bb96c33](https://github.com/jl-cmd/claude-dev-env/commit/bb96c336259b6b58fbbea64ae6e45862838595fb))
+* **skills:** add e-simplify skill ([4e5812e](https://github.com/jl-cmd/claude-dev-env/commit/4e5812ef934faaead496642a7c008cdb3db3cf5b))
+* **skills:** add issue-tracker skill and thin closeout filing ([eb87740](https://github.com/jl-cmd/claude-dev-env/commit/eb877400e6357c744f98d4df2909afbc987df7e2))
+* **skills:** add issue-tracker skill and thin closeout filing ([776adad](https://github.com/jl-cmd/claude-dev-env/commit/776adad927cd51b3488ac18264183806cafb170c))
+* support compact instruction authoring ([31ae959](https://github.com/jl-cmd/claude-dev-env/commit/31ae9596e1d699c641dcc2f0d17ebd54b5e40b1f))
+* support compact instruction authoring ([6081fda](https://github.com/jl-cmd/claude-dev-env/commit/6081fda34bc762591286be0c2db51521b7dcd302))
+* validate skill protocol task records ([b47e7b7](https://github.com/jl-cmd/claude-dev-env/commit/b47e7b720396c51eb3cbebb30a7083a4bd976da4))
+
+
+### Bug Fixes
+
+* **agents:** resolve review findings — YAML-faithful pin detection, write-time hook, doc rows ([c661eaf](https://github.com/jl-cmd/claude-dev-env/commit/c661eaf16aac2d5a58cfdbe05dfb69299f219338))
+* **agents:** round-2 review — post-edit reconstruction, shared detector, native hosting ([37741f4](https://github.com/jl-cmd/claude-dev-env/commit/37741f4768b507f952c05e74838d12b94a90b5c6))
+* **agents:** round-3 review — drop YAML runtime dep, close detection bypasses ([289de1a](https://github.com/jl-cmd/claude-dev-env/commit/289de1a17b0f2a929b376e6fe162dee42ce6a79c))
+* **agents:** round-4 review — harden model-line scan, doc and test nits ([181b2d0](https://github.com/jl-cmd/claude-dev-env/commit/181b2d01d5520f930f0d15d1234caeb4cd0bc891))
+* **autoconverge:** drop redundant copilot resets on P2-only advance ([27c919a](https://github.com/jl-cmd/claude-dev-env/commit/27c919a39c0182d804a58696fcc725eff1b50aad))
+* **autoconverge:** re-converge after HEAD-moving P2-only fixes ([5c08095](https://github.com/jl-cmd/claude-dev-env/commit/5c0809516c0f226b4a3aac6042cd4a10cdb8da6c))
+* **codex-review:** bound Popen cleanup wait after timeout drain ([1ae6d1c](https://github.com/jl-cmd/claude-dev-env/commit/1ae6d1cfa9e310711a1e13195ab2b2fd698e1eee))
+* **codex-review:** dedupe Windows taskkill constants and cover kill path ([8261132](https://github.com/jl-cmd/claude-dev-env/commit/8261132dd735b37cee6460ca9e18f0ac90fbb734))
+* **codex-review:** drain pipes after process-tree kill on timeout ([cf390e9](https://github.com/jl-cmd/claude-dev-env/commit/cf390e9d0480b362bf34d94946ed0ffd53f79637))
+* **codex-review:** drop unused sys import after os.name platform gate ([e886545](https://github.com/jl-cmd/claude-dev-env/commit/e886545f55fb5a71d0bdeb9615bc68a5a0fd0f34))
+* **codex-review:** keep timeout drain when taskkill fails ([82f0405](https://github.com/jl-cmd/claude-dev-env/commit/82f040557e42a02ed37d1cf6f3a83fd2d0db4b50))
+* **codex-review:** terminate the codex process tree on review timeout ([df60e96](https://github.com/jl-cmd/claude-dev-env/commit/df60e96a7cb6f10a2d2bafc2503e208cde2d8f49))
+* **codex-review:** terminate the codex process tree on review timeout ([4d35d4e](https://github.com/jl-cmd/claude-dev-env/commit/4d35d4e0445b9fb56819ee16b74b4e601172f3b0))
+* **hooks:** ignore ruff PLR0917 for quality gate parity ([1f3e811](https://github.com/jl-cmd/claude-dev-env/commit/1f3e81181797e397642cfe677af7a9a32f0f9feb))
+* **hooks:** use documented hooks_constants import form and pin fail-soft stdin cases ([f21c19f](https://github.com/jl-cmd/claude-dev-env/commit/f21c19f686d508a224d42a32023c57a18875d1b1))
+* **orchestrator:** create-then-claim latch and preserve pending on reassert ([047b44f](https://github.com/jl-cmd/claude-dev-env/commit/047b44f755772fea5cd7dfc6fdde2e0ba63578dc))
+* **orchestrator:** deterministic status_gate for refresh terminate ([a0759f9](https://github.com/jl-cmd/claude-dev-env/commit/a0759f98f330569ec29217a46ee42eb4174bad71))
+* **orchestrator:** deterministic status_gate for refresh terminate ([3c04982](https://github.com/jl-cmd/claude-dev-env/commit/3c049820c11bac4afcd10ad487539d5cbacbefcb))
+* **orchestrator:** single-pending re-arm latch (create-then-claim) ([d8dca63](https://github.com/jl-cmd/claude-dev-env/commit/d8dca63ac69ab61eef794e6a6892f4d15c88121e))
+* **orchestrator:** single-pending re-arm latch for refresh loops ([a06dc64](https://github.com/jl-cmd/claude-dev-env/commit/a06dc64ce86ace65b5c2bd04474317f3c8026072))
+* **permissions:** widen revoke's reap set to include legacy Write()/Glob() rules ([765db1b](https://github.com/jl-cmd/claude-dev-env/commit/765db1bdeb9dcddacffd1613b1cebcf4028b7144))
+* **permissions:** widen revoke's reap set to include legacy Write()/Glob() rules ([f451dde](https://github.com/jl-cmd/claude-dev-env/commit/f451dded0604b133b7b1a03052cc2ec3c3949adc)), closes [#233](https://github.com/jl-cmd/claude-dev-env/issues/233)
+* **pr-converge:** migrate code-review slash from xhigh to ultra ([6bafaea](https://github.com/jl-cmd/claude-dev-env/commit/6bafaea5d4d6e50b1b1aa1e43e06d5b9146da645))
+* **pr-converge:** migrate code-review slash from xhigh to ultra ([84497b1](https://github.com/jl-cmd/claude-dev-env/commit/84497b17564067833fd19cf1b946d41d355291ce))
+* replace external plan dependency in plan-to-pr ([08e915e](https://github.com/jl-cmd/claude-dev-env/commit/08e915e5d455a4ced828d13ba35dbe9bff83ba4b))
+* **scripts:** normalize CRLF in chain-runner spool decode to match text=True ([5aa8e19](https://github.com/jl-cmd/claude-dev-env/commit/5aa8e1960253bfcdf0abe85f691bfe134c8629c1))
+* validate run against selected worktree ([083b905](https://github.com/jl-cmd/claude-dev-env/commit/083b905f443f08bac95f6c3a057eb328eff6d2d2))
+* **validators:** encode staged ruff stdin as UTF-8 ([a54104d](https://github.com/jl-cmd/claude-dev-env/commit/a54104df5a723ddf1fdfa675f5e24f6537f5c9a1))
+* **validators:** encode staged ruff stdin as UTF-8 ([ee8bb7b](https://github.com/jl-cmd/claude-dev-env/commit/ee8bb7b13286de155ed3e28b884be9106621a65a)), closes [#385](https://github.com/jl-cmd/claude-dev-env/issues/385)
+* **validators:** forward config_source_path through validate_proposed_file ([5508ff7](https://github.com/jl-cmd/claude-dev-env/commit/5508ff72fe1de67858ad8b721726abeef3e28e80))
+* **validators:** preserve directory exemptions in validate_proposed_file ([5d62829](https://github.com/jl-cmd/claude-dev-env/commit/5d6282916a1153ae36666a20101979802fee18ef))
+* **validators:** preserve path context in pre-tool-use staged validation ([46878c2](https://github.com/jl-cmd/claude-dev-env/commit/46878c26c0c10be2743854b7eee08c3cfbea090d))
+* **validators:** restore ruff NO_COLOR and Windows relative_to after main merge ([640354d](https://github.com/jl-cmd/claude-dev-env/commit/640354d35acd2bd56be21e81d234b89fa9e9906d))
+* **validators:** retarget pretooluse staging tests to current API ([5d0a943](https://github.com/jl-cmd/claude-dev-env/commit/5d0a943780ddf99e209b7eb35f5691779efae448))
+* **validators:** retarget pretooluse staging tests to current API ([f864166](https://github.com/jl-cmd/claude-dev-env/commit/f8641662153b69f1e3cf7dd4714614ae9221e465))
+* **validators:** tolerant decode for staged ruff output ([d62b1e4](https://github.com/jl-cmd/claude-dev-env/commit/d62b1e47621a253e7b4b0cc0b6763fab626ec8f3))
+* **validators:** use all_files param in run_ruff_fix after merge ([62469c1](https://github.com/jl-cmd/claude-dev-env/commit/62469c12efc98369517d9af5d21580af8c636683))
+
+
+### Documentation
+
+* add advisor tool and team-advisor skill reference docs ([3717751](https://github.com/jl-cmd/claude-dev-env/commit/3717751ad15ee1badad030cdfaf19d66780fb3d5))
+* add advisor tool and team-advisor skill reference docs ([1961da4](https://github.com/jl-cmd/claude-dev-env/commit/1961da4093edbd0c4ce3a6c72d8b97c8184dc930))
+* **agents:** drop em dashes from issue-tracker agent ([b4f731c](https://github.com/jl-cmd/claude-dev-env/commit/b4f731ca12020ad454a9f86c0646320099a6155c))
+* **agents:** plain-brief issue-tracker agent body ([b6c68b9](https://github.com/jl-cmd/claude-dev-env/commit/b6c68b9053a865f28eb86c6f807da24f92ac9085))
+* **audit:** align gate-outcome mechanism term across all five surfaces ([5eaabcc](https://github.com/jl-cmd/claude-dev-env/commit/5eaabcc9c0812110b20886ac9ab373d2277c1fd0))
+* **audit:** fix O8 single-skill assumption and tighten checklist bullet ([8a56873](https://github.com/jl-cmd/claude-dev-env/commit/8a568732dd26ad262bff6f93412da8c34e837fc5))
+* **audit:** flag codex gate-outcome status flags documented as bypass ([1126fa1](https://github.com/jl-cmd/claude-dev-env/commit/1126fa139d219346868286e1575fdef334610b32))
+* **audit:** mirror gate-outcome checklist bullet into rubric ([6073465](https://github.com/jl-cmd/claude-dev-env/commit/6073465c6c111faad123eb80759a2bfd617aebbb))
+* **audit:** tighten gate-outcome status flag additions for O6/O8 parity ([1fb16fd](https://github.com/jl-cmd/claude-dev-env/commit/1fb16fd0a8c94529abe4efee254b34cefb1afa74))
+* **audit:** widen O8 gate-outcome search from bullet to line ([81c627a](https://github.com/jl-cmd/claude-dev-env/commit/81c627aa42c33dd5afa5a771230e2e2644828fee))
+* **autoconverge:** align Codex P2-only routing with HEAD-move rule ([a0b8579](https://github.com/jl-cmd/claude-dev-env/commit/a0b8579f49e4c88a5f9149c5c1a8b5a96315a466))
+* clarify team-advisor works without the advisor tool ([d57be13](https://github.com/jl-cmd/claude-dev-env/commit/d57be13969fb59c92e34612e55349e54a39b0576))
+* document set-level validator and file index ([4249b2b](https://github.com/jl-cmd/claude-dev-env/commit/4249b2b53af2df7eda0bd47a5c6bbeb4c59e682b))
+* **e-code-review:** plain-brief pass on hub and loop ([9deb6c6](https://github.com/jl-cmd/claude-dev-env/commit/9deb6c63a911885883814069f1e4f7ed57551690))
+* **hooks:** inventory ruff_integration_constants in CLAUDE.md ([45ccf5c](https://github.com/jl-cmd/claude-dev-env/commit/45ccf5ce7ef2d56e93afb0acab7396e4ba3e651e))
+* **issue-tracker:** PR-body-first auto-close contract ([a80ea66](https://github.com/jl-cmd/claude-dev-env/commit/a80ea668bc885d0b952d52f8dd959e808b49f313))
+* **issue-tracker:** PR-body-first auto-close contract ([e15f0cc](https://github.com/jl-cmd/claude-dev-env/commit/e15f0ccc3a1ac7ee3490a24a05d082e35ffe03f9))
+* **issue-tracker:** warm agent reuse; drop model frontmatter ([47f8165](https://github.com/jl-cmd/claude-dev-env/commit/47f8165da557bdffdf80fe7de1982da2361d85a1))
+* **issue-tracker:** warm agent reuse; drop model frontmatter ([d9d7339](https://github.com/jl-cmd/claude-dev-env/commit/d9d73392d5ceb90a2b7b45287e79c7a077d12ae1))
+* **orchestrator:** align spawn-call syntax and timeless routing prose ([818e77c](https://github.com/jl-cmd/claude-dev-env/commit/818e77c3505214987a6da8756bd0697dc02c1129))
+* **orchestrator:** link worker-model cross-references and tidy routing prose ([87f8319](https://github.com/jl-cmd/claude-dev-env/commit/87f83193f85e2ed3a9e19b2e6966b321bfa01250))
+* **orchestrator:** route coding workers to sonnet ([b610676](https://github.com/jl-cmd/claude-dev-env/commit/b6106760cf7ca6a84c550424dca62ebc22dfc5ca))
+* **orchestrator:** route coding workers to sonnet ([f73c110](https://github.com/jl-cmd/claude-dev-env/commit/f73c11004e4abaf7a0f3ea80bae2ceafcba2d058))
+* **orchestrator:** state missing-resolver behavior as fail closed ([b1b0e7b](https://github.com/jl-cmd/claude-dev-env/commit/b1b0e7bc828a9564837e26abe85973643b44b2c3))
+* **pool-health:** inventory host-pool-health-monitor; align exit and print order ([2a4effb](https://github.com/jl-cmd/claude-dev-env/commit/2a4effb567364f968cd88dcdff3461febaf519b2))
+* simplify team-advisor cross-model example with a Codex case ([23270b3](https://github.com/jl-cmd/claude-dev-env/commit/23270b3a98bde71c95da654bb558e39b27d129d8))
+* trim advisor pointer in CLAUDE.md to a bare reference ([833b1db](https://github.com/jl-cmd/claude-dev-env/commit/833b1db68725d0e2b76d3acb3256ced3b911c1ef))
+* **validators:** document config_source_path and sort chain imports ([316cd60](https://github.com/jl-cmd/claude-dev-env/commit/316cd6039cf2692623e490d88c5de6d4fdefb002))
+
+
+### Maintenance
+
+* LF-normalize files before reverting accidental main merge ([7eca2bc](https://github.com/jl-cmd/claude-dev-env/commit/7eca2bcf53e013b20971650b46381073b3437365))
+* normalize committed CRLF blobs to LF and widen .gitattributes ([d51aa76](https://github.com/jl-cmd/claude-dev-env/commit/d51aa76c14020bbc54f7ab30ca72aa5f0df80d60))
+* normalize committed CRLF blobs to LF and widen .gitattributes ([2a55faa](https://github.com/jl-cmd/claude-dev-env/commit/2a55faa16db0fa6072688151153e870ef04cfd5e))
+* simplify Plan-to-PR routing language ([c588dac](https://github.com/jl-cmd/claude-dev-env/commit/c588dacced7034fa540f1fa5b6b95574c26725b8))
+
+
+### Refactoring
+
+* **agents:** drop pinned model frontmatter from agent definitions ([742ae30](https://github.com/jl-cmd/claude-dev-env/commit/742ae30131ba7171bcfb98baf25ccaa5f80b4afa))
+* **agents:** drop pinned model frontmatter from agent definitions ([7a55557](https://github.com/jl-cmd/claude-dev-env/commit/7a55557921fe065ade0ccdaa7a0ca24fd9638cac))
+* **autoconverge:** extract applyP2OnlyFix for P2-only phases ([90b37e1](https://github.com/jl-cmd/claude-dev-env/commit/90b37e1e3860ec47aec110084cecdb709f79939b))
+* **codex-review:** Sonnet /simplify pass for PR 345 ([6b6e6a4](https://github.com/jl-cmd/claude-dev-env/commit/6b6e6a453ae9fdf34140dc192840752a520310fe))
+* **codex-review:** trim redundant process-tree kill guards ([1f0519a](https://github.com/jl-cmd/claude-dev-env/commit/1f0519a4e3e185e14a7a12cb519e4b1022125339))
+* **e-code-review:** extract shared loop into reference/loop.md ([3a27e4b](https://github.com/jl-cmd/claude-dev-env/commit/3a27e4b4db556d6fc3a7f31f2bdf9149fdc097f5))
+* **hooks:** collapse fail-soft stdin cases into one parametrized test ([7eeffd2](https://github.com/jl-cmd/claude-dev-env/commit/7eeffd2e942151a46a9708c936730ec59b6559e1))
+* **hooks:** reuse shared stdin parser and dedupe git wrappers in EnterWorktree prefetch hook ([bfbeaa4](https://github.com/jl-cmd/claude-dev-env/commit/bfbeaa42bbc184e1936bc2ab5d18167f63eafee4))
+* **hooks:** reuse shared stdin parser and dedupe git wrappers in EnterWorktree prefetch hook ([3b5bccc](https://github.com/jl-cmd/claude-dev-env/commit/3b5bccc944dcef8c8bbb4085e65f8d3098ad1c43))
+* **permissions:** collapse dual reap helpers into one ([fee397c](https://github.com/jl-cmd/claude-dev-env/commit/fee397c924391d1ce86ea4db447e792f21e6f6a8))
+* **scripts:** dedupe code-review test-support seams and builders ([38c72b9](https://github.com/jl-cmd/claude-dev-env/commit/38c72b95537c574128d4688eaf63ce19b0bb41fb))
+* **scripts:** split test_invoke_code_review into cohesive modules under the line cap ([f56c812](https://github.com/jl-cmd/claude-dev-env/commit/f56c812ba3525cb9adc092358031112c6d84d78e))
+* **validators:** reuse RUFF_STDIN_ENCODING and drop inert test config ([3859e17](https://github.com/jl-cmd/claude-dev-env/commit/3859e178b79185ff5f489da219da58a6c30857e3))
+
+
+### Style
+
+* ruff spacing for enforcement-flag tests and write-blocker doc ([5a30e06](https://github.com/jl-cmd/claude-dev-env/commit/5a30e06bbae14ee2eb3586f1ac752cffc42c41dd))
+* simplify PR [#259](https://github.com/jl-cmd/claude-dev-env/issues/259) code-review test modules (code-simplifier) ([fe9f413](https://github.com/jl-cmd/claude-dev-env/commit/fe9f413f7420e22e858f9a54dfb03af175aba1d5))
+* simplify PR [#262](https://github.com/jl-cmd/claude-dev-env/issues/262) (code-simplifier) ([28de695](https://github.com/jl-cmd/claude-dev-env/commit/28de69566d556834f97f643631677ec78d2f31ec))
+* **tests:** use PEP 8 two-blank-line spacing before new helpers tests ([a600a1a](https://github.com/jl-cmd/claude-dev-env/commit/a600a1a074a41d8498fb36c75a63e20b08ae64f6))
+* tidy enforcement-flag test layout and gate docstrings ([0b761d8](https://github.com/jl-cmd/claude-dev-env/commit/0b761d8abb32dbd07639eb9b53b8278dd470f2de))
+* **validators:** normalize ruff_integration.py to LF ([734202f](https://github.com/jl-cmd/claude-dev-env/commit/734202f8469d3dfe5cf82d0eb9644d1d7a4ac2cb))
+* **validators:** normalize validator Python sources to LF and pin eol=lf ([6a4967b](https://github.com/jl-cmd/claude-dev-env/commit/6a4967bf489d7cba4c94e2e4aaf6feb4f39f684c))
+
+
+### Tests
+
+* **agents:** generalize pinned-model guard beyond a spelling denylist ([85cbc26](https://github.com/jl-cmd/claude-dev-env/commit/85cbc2607e086ad949489035a2a3212051aee274))
+* **agents:** guard every model key occurrence and trim corollary cases ([eb8f4a6](https://github.com/jl-cmd/claude-dev-env/commit/eb8f4a6776ab33abbc8e546dcd96e243cd30a7b0))
+* **agents:** treat hash as comment only after whitespace in model guard ([9d68e6c](https://github.com/jl-cmd/claude-dev-env/commit/9d68e6cb51750243c77c9577ac490150ec38b6fd))
+* **codex-review:** assert grandchild process actually stops on timeout ([74d8019](https://github.com/jl-cmd/claude-dev-env/commit/74d8019aaf03c8a3523a9d62717c65855e7e2fc6))
+* cover pre-push allow when code-review enforcement is off ([1182550](https://github.com/jl-cmd/claude-dev-env/commit/11825501340d8eff3df88190be99faa270728bc5))
+* **permissions:** cover missing settings.local no-op for inert strip ([e8bb267](https://github.com/jl-cmd/claude-dev-env/commit/e8bb2674deacedbf42e7cc961a022c0c7534e6c1))
+* **validators:** drop dead TestMirroredRelativeSegments; simplify code-review test support ([c95c68d](https://github.com/jl-cmd/claude-dev-env/commit/c95c68d522bc5aba850e8011948aba56c0b0b084))
+* write LF blobs in temp-repo test helper on Windows ([2badc8d](https://github.com/jl-cmd/claude-dev-env/commit/2badc8ddaf84237a9fb66a2212b58042d2715eb6))
+* write LF blobs in temp-repo test helper on Windows ([49521af](https://github.com/jl-cmd/claude-dev-env/commit/49521afe65a670e71ad83e9d9cd2595e3a4bc30f))
+
+
+### Reverts
+
+* undo accidental merges API merge of [#286](https://github.com/jl-cmd/claude-dev-env/issues/286) into main ([c7244ea](https://github.com/jl-cmd/claude-dev-env/commit/c7244ea2db4be0a18447803e574f40af6cbc3cf9))
+* undo accidental merges API merge of [#286](https://github.com/jl-cmd/claude-dev-env/issues/286) into main ([c7244ea](https://github.com/jl-cmd/claude-dev-env/commit/c7244ea2db4be0a18447803e574f40af6cbc3cf9))
+* undo accidental merges API merge of [#286](https://github.com/jl-cmd/claude-dev-env/issues/286) into main ([49a4f56](https://github.com/jl-cmd/claude-dev-env/commit/49a4f5681de9c7e64eaa031c316dc340a90d085c))
+
 ## [2.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.3.0...claude-dev-env-v2.4.0) (2026-07-18)
 
 
