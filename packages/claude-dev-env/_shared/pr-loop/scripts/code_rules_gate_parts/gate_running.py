@@ -18,7 +18,9 @@ from code_rules_gate_parts.added_line_maps import _resolved_under_root
 from code_rules_gate_parts.enforcer_loading import ValidateContentCallable
 from code_rules_gate_parts.git_blob_readers import (
     read_prior_committed_content,
+    read_prior_committed_contents_batch,
     read_staged_content,
+    read_staged_contents_batch,
     staged_blob_exists,
 )
 from code_rules_gate_parts.violation_scoping import split_violations_by_scope
@@ -28,6 +30,8 @@ from code_rules_gate_parts.wrapper_plumb_check import (
 )
 
 PartitionedViolations = tuple[dict[Path, list[str]], dict[Path, list[str]], int]
+PriorContentByRelativePath = dict[str, str]
+StagedContentByRelativePath = dict[str, str | None]
 
 
 def _path_is_eligible_for_validation(
@@ -75,15 +79,87 @@ def _eligible_resolved_paths(
     return all_eligible
 
 
+def _relative_posix_for(resolved_path: Path, resolved_root: Path) -> str:
+    """Return the repository-relative POSIX path for *resolved_path*."""
+    return str(resolved_path.relative_to(resolved_root)).replace("\\", "/")
+
+
+def _prefetch_blob_maps(
+    all_eligible_paths: list[Path],
+    repository_root: Path,
+    should_read_staged_content: bool,
+) -> tuple[PriorContentByRelativePath, StagedContentByRelativePath | None]:
+    """Fetch HEAD (and staged, when requested) blob maps for the eligible set.
+
+    ::
+
+        both modes  -> one HEAD batch for every eligible relative path
+        staged mode -> one staged batch as well
+
+    Args:
+        all_eligible_paths: Already-resolved eligible files for this gate run.
+        repository_root: Repository root used as the git working directory.
+        should_read_staged_content: When True, also batch-fetch staged blobs.
+
+    Returns:
+        A pair of the HEAD content map and the staged content map (or None when
+        the run is not in staged mode).
+    """
+    resolved_root = repository_root.resolve()
+    all_relative_paths = [
+        _relative_posix_for(each_path, resolved_root) for each_path in all_eligible_paths
+    ]
+    prior_content_by_relative_path = read_prior_committed_contents_batch(
+        resolved_root, all_relative_paths
+    )
+    if not should_read_staged_content:
+        return prior_content_by_relative_path, None
+    staged_content_by_relative_path = read_staged_contents_batch(
+        resolved_root, all_relative_paths
+    )
+    return prior_content_by_relative_path, staged_content_by_relative_path
+
+
+def _lookup_prior_content(
+    resolved_root: Path,
+    relative_posix: str,
+    prior_content_by_relative_path: PriorContentByRelativePath | None,
+) -> str:
+    """Return HEAD content from the map, falling back to the single-file reader."""
+    if (
+        prior_content_by_relative_path is not None
+        and relative_posix in prior_content_by_relative_path
+    ):
+        return prior_content_by_relative_path[relative_posix]
+    return read_prior_committed_content(resolved_root, relative_posix)
+
+
+def _lookup_staged_content(
+    resolved_root: Path,
+    relative_posix: str,
+    staged_content_by_relative_path: StagedContentByRelativePath | None,
+) -> str | None:
+    """Return staged content from the map, falling back to the single-file reader."""
+    if (
+        staged_content_by_relative_path is not None
+        and relative_posix in staged_content_by_relative_path
+    ):
+        return staged_content_by_relative_path[relative_posix]
+    return read_staged_content(resolved_root, relative_posix)
+
+
 def _file_content_for_validation(
     resolved_path: Path,
     resolved_root: Path,
     relative_posix: str,
     should_read_staged_content: bool,
+    staged_content_by_relative_path: StagedContentByRelativePath | None = None,
 ) -> str | None:
     """Return the content the gate validates for one file, or None if unreadable."""
     if should_read_staged_content:
-        return read_staged_content(resolved_root, relative_posix)
+        return _lookup_staged_content(
+            resolved_root, relative_posix, staged_content_by_relative_path
+        )
     try:
         return resolved_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -96,17 +172,25 @@ def _scoped_violations_for_file(
     repository_root: Path,
     all_added_lines_for_file: set[int] | None,
     should_read_staged_content: bool = False,
+    prior_content_by_relative_path: PriorContentByRelativePath | None = None,
+    staged_content_by_relative_path: StagedContentByRelativePath | None = None,
 ) -> tuple[list[str], list[str]] | None:
     """Validate one resolved file and partition its violations by diff scope."""
     resolved_root = repository_root.resolve()
-    relative_posix = str(resolved_path.relative_to(resolved_root)).replace("\\", "/")
+    relative_posix = _relative_posix_for(resolved_path, resolved_root)
     content = _file_content_for_validation(
-        resolved_path, resolved_root, relative_posix, should_read_staged_content
+        resolved_path,
+        resolved_root,
+        relative_posix,
+        should_read_staged_content,
+        staged_content_by_relative_path,
     )
     if content is None:
         sys.stderr.write(f"code_rules_gate: skip unreadable {resolved_path}\n")
         return None
-    prior_content = read_prior_committed_content(resolved_root, relative_posix)
+    prior_content = _lookup_prior_content(
+        resolved_root, relative_posix, prior_content_by_relative_path
+    )
     issues = validate_content(
         content,
         relative_posix,
@@ -135,6 +219,8 @@ def _partition_over_eligible_paths(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool,
+    prior_content_by_relative_path: PriorContentByRelativePath | None = None,
+    staged_content_by_relative_path: StagedContentByRelativePath | None = None,
 ) -> PartitionedViolations:
     """Validate each already-resolved eligible file and partition the results."""
     blocking_by_file: dict[Path, list[str]] = {}
@@ -147,6 +233,8 @@ def _partition_over_eligible_paths(
             repository_root,
             _added_lines_for(all_added_lines_by_path, each_resolved),
             should_read_staged_content,
+            prior_content_by_relative_path,
+            staged_content_by_relative_path,
         )
         if scoped_violations is None:
             skipped_unreadable_count += 1
@@ -170,12 +258,17 @@ def _collect_partitioned_violations(
     all_eligible_paths = _eligible_resolved_paths(
         all_file_paths, repository_root, should_read_staged_content
     )
+    prior_content_by_relative_path, staged_content_by_relative_path = _prefetch_blob_maps(
+        all_eligible_paths, repository_root, should_read_staged_content
+    )
     return _partition_over_eligible_paths(
         validate_content,
         all_eligible_paths,
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
+        prior_content_by_relative_path,
+        staged_content_by_relative_path,
     )
 
 
@@ -271,12 +364,17 @@ def _validate_and_count(
     all_eligible_paths = _eligible_resolved_paths(
         all_file_paths, repository_root, should_read_staged_content
     )
+    prior_content_by_relative_path, staged_content_by_relative_path = _prefetch_blob_maps(
+        all_eligible_paths, repository_root, should_read_staged_content
+    )
     blocking_by_file, advisory_by_file, skipped_count = _partition_over_eligible_paths(
         validate_content,
         all_eligible_paths,
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
+        prior_content_by_relative_path,
+        staged_content_by_relative_path,
     )
     _report_inspected_count(len(all_eligible_paths) - skipped_count)
     return blocking_by_file, advisory_by_file, skipped_count
