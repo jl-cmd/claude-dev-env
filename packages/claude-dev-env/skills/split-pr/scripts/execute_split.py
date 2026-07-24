@@ -175,7 +175,7 @@ def execute_plan(
     is_dry_run: bool,
     should_create_prs: bool,
     should_push: bool,
-    should_supersede: bool | None = None,
+    should_supersede: bool,
 ) -> JsonObject:
     """Run the split (or dry-run) against repo_root.
 
@@ -185,8 +185,8 @@ def execute_plan(
         is_dry_run: When True, only describe steps.
         should_create_prs: When True, open draft PRs after push.
         should_push: When True, push branches to origin.
-        should_supersede: When True, close the source PR after a full multi-slice
-            draft stack lands. When None, defaults to ``should_create_prs``.
+        should_supersede: When True, close source_pr_number after a full
+            multi-slice draft stack lands.
 
     Returns:
         Result payload with created slice metadata.
@@ -206,15 +206,12 @@ def execute_plan(
         }
     if is_working_tree_dirty(repo_root):
         raise RuntimeError(ERROR_DIRTY_TREE)
-    is_supersede_enabled = (
-        should_create_prs if should_supersede is None else should_supersede
-    )
     return _execute_slices(
         plan_payload=plan_payload,
         repo_root=repo_root,
         should_create_prs=should_create_prs,
         should_push=should_push,
-        should_supersede=is_supersede_enabled,
+        should_supersede=should_supersede,
     )
 
 
@@ -642,15 +639,18 @@ def main() -> int:
         if PLAN_KEY_TITLE not in plan_payload and PLAN_KEY_PR_NUMBER not in plan_payload:
             raise ValueError(ERROR_EXECUTE_FAILED % "plan missing pr identity")
         repo_root = resolve_repo_root(Path(parsed_arguments.repo_path).resolve())
+        is_create_prs = parsed_arguments.create_prs and not parsed_arguments.dry_run
+        if parsed_arguments.supersede_source is None:
+            is_supersede = is_create_prs
+        else:
+            is_supersede = bool(parsed_arguments.supersede_source)
         execution_payload = execute_plan(
             plan_payload=plan_payload,
             repo_root=repo_root,
             is_dry_run=parsed_arguments.dry_run,
-            should_create_prs=(
-                parsed_arguments.create_prs and not parsed_arguments.dry_run
-            ),
+            should_create_prs=is_create_prs,
             should_push=parsed_arguments.push and not parsed_arguments.dry_run,
-            should_supersede=parsed_arguments.supersede_source,
+            should_supersede=is_supersede,
         )
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(execution_payload, indent=indent))

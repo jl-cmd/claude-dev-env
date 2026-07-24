@@ -75,8 +75,8 @@ MINIMUM_SLICES_FOR_SUPERSEDE = 2
 PR_URL_NUMBER_MARKER = "/pull/"
 SUPERSEDE_HEADING = "## Superseded by stacked split"
 SUPERSEDE_INTRO = (
-    "This PR was file-split into a stacked draft chain. Review and merge the "
-    "stack; this source PR is closed as superseded."
+    "This pull request was file-split into a stacked draft chain. Review and "
+    "merge the stack; this monolith is closed as superseded."
 )
 SUPERSEDE_MERGE_ORDER_LABEL = "**Merge order:**"
 SUPERSEDE_MERGE_ORDER_SEPARATOR = " → "

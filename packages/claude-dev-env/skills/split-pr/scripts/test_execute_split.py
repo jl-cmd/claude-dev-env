@@ -123,6 +123,7 @@ def test_execute_plan_dry_run() -> None:
         is_dry_run=True,
         should_create_prs=False,
         should_push=False,
+        should_supersede=False,
     )
     assert execution_payload[PAYLOAD_KEY_DRY_RUN] is True
     assert len(execution_payload[PAYLOAD_KEY_CREATED]) == 2
@@ -136,6 +137,7 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
         is_dry_run=False,
         should_create_prs=False,
         should_push=False,
+        should_supersede=False,
     )
     assert execution_payload[PAYLOAD_KEY_DRY_RUN] is False
     assert len(execution_payload[PAYLOAD_KEY_CREATED]) == 2
@@ -168,6 +170,7 @@ def test_execute_plan_partial_failure_includes_created(tmp_path: Path) -> None:
             is_dry_run=False,
             should_create_prs=False,
             should_push=False,
+            should_supersede=False,
         )
     payload = json.loads(str(raised.value))
     assert payload["partial"] is True

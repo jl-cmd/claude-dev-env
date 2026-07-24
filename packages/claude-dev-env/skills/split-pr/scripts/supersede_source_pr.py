@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comment on and close the source PR after a full stacked split lands.
+"""Comment on and close source_pr_number after a full stacked split lands.
 
 ::
 
@@ -89,7 +89,7 @@ def build_supersede_comment_body(
     all_child_pr_numbers: list[int],
     all_child_pr_urls: list[str],
 ) -> str:
-    """Build the supersede comment markdown for the source PR.
+    """Build the supersede comment markdown for source_pr_number.
 
     Args:
         all_child_pr_numbers: Ordered child PR numbers matching the stack.
@@ -163,10 +163,10 @@ def supersede_source_pr(
     repo: str | None = None,
     repo_root: Path | None = None,
 ) -> JsonObject:
-    """Comment merge order on the source PR and close it as superseded.
+    """Comment merge order on source_pr_number and close it as superseded.
 
     Args:
-        source_pr_number: Source PR that was split.
+        source_pr_number: Open pull request that was file-split.
         all_child_pr_urls: Ordered draft PR URLs for every planned slice.
         planned_slice_count: Slice count from the verified plan.
         should_create_prs: True when this execute opened draft PRs.
