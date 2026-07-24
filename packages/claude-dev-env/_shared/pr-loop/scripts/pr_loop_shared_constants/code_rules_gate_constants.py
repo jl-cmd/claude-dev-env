@@ -2,6 +2,63 @@
 
 import re
 
+STAGED_ATTESTATION_SCHEMA_VERSION: int = 1
+STAGED_ATTESTATION_FILENAME: str = "code-rules-staged-attestation.json"
+STAGED_ATTESTATION_TEMPORARY_PREFIX: str = ".code-rules-staged-attestation-"
+STAGED_ATTESTATION_ENCODING: str = "utf-8"
+STAGED_ATTESTATION_GIT_TIMEOUT_SECONDS: int = 30
+STAGED_ATTESTATION_SCHEMA_VERSION_KEY: str = "schema_version"
+STAGED_ATTESTATION_WORKTREE_KEY: str = "worktree"
+STAGED_ATTESTATION_HEAD_OID_KEY: str = "head_oid"
+STAGED_ATTESTATION_INDEX_TREE_OID_KEY: str = "index_tree_oid"
+ALL_GIT_INDEX_TREE_OID_COMMAND: tuple[str, ...] = ("write-tree",)
+ALL_GIT_TOP_LEVEL_AND_PRIVATE_DIRECTORY_COMMAND: tuple[str, ...] = (
+    "rev-parse",
+    "--show-toplevel",
+    "--git-dir",
+)
+ALL_GIT_HEAD_OID_COMMAND: tuple[str, ...] = ("rev-parse", "--verify", "HEAD")
+ALL_GIT_SYMBOLIC_HEAD_COMMAND: tuple[str, ...] = (
+    "symbolic-ref",
+    "--quiet",
+    "HEAD",
+)
+UNBORN_HEAD_OID: str = "UNBORN_HEAD"
+EXPECTED_TOP_LEVEL_AND_PRIVATE_DIRECTORY_LINE_COUNT: int = 2
+ALL_GIT_TOP_LEVEL_COMMAND: tuple[str, ...] = ("git", "rev-parse", "--show-toplevel")
+ALL_GIT_HEAD_COMMAND: tuple[str, ...] = ("git", "rev-parse", "HEAD")
+EMPTY_GIT_TREE_OID: str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+ALL_GIT_EMPTY_TREE_COMMIT_COMMAND: tuple[str, ...] = (
+    "git",
+    "commit-tree",
+    EMPTY_GIT_TREE_OID,
+    "-m",
+    "code-rules staged-test snapshot",
+)
+ALL_GIT_WRITE_TREE_COMMAND: tuple[str, ...] = ("git", "write-tree")
+ALL_GIT_WORKTREE_ADD_COMMAND: tuple[str, ...] = (
+    "git",
+    "worktree",
+    "add",
+    "--detach",
+    "--no-checkout",
+)
+ALL_GIT_READ_TREE_COMMAND: tuple[str, ...] = ("git", "read-tree")
+ALL_GIT_CHECKOUT_INDEX_COMMAND: tuple[str, ...] = (
+    "git",
+    "checkout-index",
+    "--all",
+    "--force",
+    "--ignore-skip-worktree-bits",
+)
+ALL_GIT_WORKTREE_REMOVE_COMMAND: tuple[str, ...] = (
+    "git",
+    "worktree",
+    "remove",
+    "--force",
+)
+ALL_GIT_WORKTREE_PRUNE_COMMAND: tuple[str, ...] = ("git", "worktree", "prune")
+
 MAX_VIOLATIONS_PER_CHECK: int = 3
 
 GATE_ERROR_EXIT_CODE: int = 2
@@ -92,12 +149,20 @@ ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
     "pytest",
     "-q",
 )
+ALL_STAGED_PYTEST_ARGUMENTS: tuple[str, ...] = ("-q",)
 
 CODE_RULES_GATE_PYTHON_ENV_VAR: str = "CODE_RULES_GATE_PYTHON"
 
 CODE_RULES_GATE_PYTHONPATH_ENV_VAR: str = "CODE_RULES_GATE_PYTHONPATH"
 
 PYTHONPATH_ENV_VAR: str = "PYTHONPATH"
+STAGED_TEST_ORIGINAL_ROOT_ENV_VAR: str = "CODE_RULES_STAGED_TEST_ORIGINAL_ROOT"
+STAGED_TEST_SNAPSHOT_ROOT_ENV_VAR: str = "CODE_RULES_STAGED_TEST_SNAPSHOT_ROOT"
+STAGED_TEST_PROVENANCE_FAILURE_EXIT_CODE: int = 4
+STAGED_TEST_PROVENANCE_FAILURE_MESSAGE: str = (
+    "code_rules_gate: staged pytest imported project code from the live worktree: {path}"
+)
+ALL_EDITABLE_MAPPING_ATTRIBUTE_NAMES: tuple[str, ...] = ("MAPPING", "mapping")
 
 ALL_VENV_DIRECTORY_NAMES: tuple[str, ...] = (".venv", "venv")
 
