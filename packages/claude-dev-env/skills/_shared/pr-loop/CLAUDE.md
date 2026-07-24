@@ -1,33 +1,29 @@
 # pr-loop
 
-Shared infrastructure for the PR audit-fix loop used by `bugteam`,
-`pr-converge`, and `autoconverge`. Provides the XML prompt template, Python
-runtime scripts, the portable converge driver protocol, and named constants
-those skills invoke during each loop tick.
+Runtime documents and scripts shared by every PR-loop skill. Changes here affect ugteam, pr-converge, indbugs, ixbugs, qbug, and utoconverge simultaneously — treat this as a breaking-change surface.
+
+## Key documents
+
+| File | Purpose |
+|---|---|
+| udit-contract.md | Canonical finding schema (Shape A / Shape B) and loop contract; defines the JSON shapes every audit skill must emit |
+| udit-reply-template.md | Canonical reply skeleton Claude posts to each unresolved review thread; single source of truth for reply structure |
+| post-audit-thread-contract.md | Single source of truth for the post_audit_thread.py invocation string, exit-code table, and per-caller policy |
+| ix-protocol.md | Ordered sequence a fix lens follows: read, capture SHA, TDD, apply, validate, self-audit, commit, push, reply + resolve |
+| gh-payloads.md | How to build GitHub review and reply payloads via MCP tools; describes the one-review-per-loop pattern |
+| state-schema.md | Fields each PR-loop workflow tracks across iterations; documents common fields and per-skill extensions |
+| code-rules-gate.md | Reference for the CODE_RULES pre-commit gate check; describes what the gate blocks and when it runs |
+| precatch-rubric.md | Shared pre-catch lane checklist that autoconverge lenses and pr-converge CODE_REVIEW read on demand |
+| worker-spawn.md | Worker-spawn tier protocol and Claude-only slash-step host routing |
+| portable-driver.md | Continuous in-session pacer when Workflow / ScheduleWakeup are absent |
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
-| `prompts/` | XML agent prompt templates. |
-| `scripts/` | Python scripts for loop state management, prompt building, outcome recording, path resolution, pacer selection, and preflight checks. |
+| prompts/ | XML agent prompt templates |
+| scripts/ | Python scripts for gates, permissions, loop state, prompt building, outcomes, path resolution, pacer selection, and preflight |
 
-## Key files
+## Breaking-change rule
 
-| File | Role |
-|---|---|
-| `portable-driver.md` | Continuous in-session pacer when Workflow / ScheduleWakeup are absent. |
-| `prompts/pr-consistency-audit.xml` | Structured prompt artifact for the cross-file consistency audit agent. |
-| `scripts/select_converge_pacer.py` | Maps entry skill + host tool flags to `workflow`, `schedule_wakeup`, or `portable`. |
-| `scripts/build_audit_prompt.py` | Assembles the audit agent prompt from loop state and the constants module. |
-| `scripts/build_fix_prompt.py` | Assembles the fix agent prompt from loop state and findings. |
-| `scripts/init_loop_state.py` | Initializes the per-PR loop state JSON file. |
-| `scripts/write_audit_outcomes.py` | Writes the per-loop audit outcome XML into the workspace. |
-| `scripts/write_fix_outcomes.py` | Writes the per-loop fix outcome XML into the workspace. |
-| `scripts/preflight_worktree.py` | Verifies the working directory is a healthy worktree for the target PR's repo. |
-| `scripts/teardown_worktrees.py` | Removes loop worktrees on clean exit. |
-| `scripts/write_handoff.py` | Writes durable resume-handoff files under `~/.claude/runtime/pr-loop/<run-name>/` at each converge checkpoint. |
-| `scripts/_path_resolver.py` | Resolves workspace and worktree paths from PR metadata. |
-| `scripts/_cli_utils.py` | Shared CLI argument parsing helpers. |
-| `scripts/_xml_utils.py` | XML serialization helpers. |
-| `scripts/skills_pr_loop_constants/` | Named constants package imported by the scripts above. |
+Any shape change in udit-contract.md or udit-reply-template.md requires updating every consuming skill in the same commit.
