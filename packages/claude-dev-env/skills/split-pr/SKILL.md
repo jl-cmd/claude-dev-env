@@ -116,7 +116,7 @@ Report the `supersede` object from execute JSON (`commented`, `closed`, `child_p
 
 ### Phase 6 — Split further (mandatory)
 
-After Phase 5, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft without further user prompts until primary/secondary stop or depth cap.
+After Phase 5, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft without further user prompts until every leaf **fits a small review** (or is `oversized_atomic` / depth-capped).
 
 ## Constraints
 
