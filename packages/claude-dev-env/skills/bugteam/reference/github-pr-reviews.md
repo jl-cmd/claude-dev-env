@@ -29,6 +29,12 @@ before this call so the review attaches to the commit the audit actually scoped.
   "no findings"; empty findings list (`[]`); zero inline comments.
 - **DIRTY** — `REQUEST_CHANGES`; one inline anchored comment per finding (each
   becomes its own resolvable thread).
+- **Self-PR downgrade** — when the author reviews their own PR and no alternate
+  reviewer account is configured, GitHub rejects a self-approval, so the event
+  downgrades to `COMMENT`. CLEAN posts a `COMMENT` in place of `APPROVE`; DIRTY
+  posts a `COMMENT` and keeps every inline comment. The review body ends with an
+  appended transport disclosure, and stdout carries a second line that marks the
+  downgrade.
 
 ## Findings JSON (Shape A `Fix:` split)
 
@@ -55,8 +61,9 @@ output so the audit pass still completes.
 
 FIX does not reply until harvest completes. After a successful post:
 
-1. Read the parent review URL from stdout; extract the numeric review id from
-   the `#pullrequestreview-<id>` suffix.
+1. Read the parent review URL from the first stdout line; extract the numeric
+   review id from the `#pullrequestreview-<id>` suffix. A second stdout line
+   marks a self-PR downgrade to `COMMENT` and carries no review id.
 2. Fetch child comments via
    `pull_request_read(method="get_review_comments", ...)` filtered to that
    review id.

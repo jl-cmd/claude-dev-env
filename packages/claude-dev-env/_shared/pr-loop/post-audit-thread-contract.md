@@ -2,10 +2,23 @@
 
 Single source of truth for how every PR-loop caller runs
 [`scripts/post_audit_thread.py`](scripts/post_audit_thread.py) to post one
-audit review per pass. The script posts an `APPROVE` review on `CLEAN` (an
-empty findings list, zero inline comments) and a `REQUEST_CHANGES` review on
-`DIRTY` (one inline anchored comment per finding). It reads its body skeleton
+audit review per pass. It reads its body skeleton
 from [`audit-reply-template.md`](audit-reply-template.md) at runtime.
+
+## Event mapping
+
+| State | Review event | Inline comments |
+|---|---|---|
+| `CLEAN` | `APPROVE` | none (empty findings list) |
+| `DIRTY` | `REQUEST_CHANGES` | one inline anchored comment per finding |
+| Self-PR, no alternate reviewer account | `COMMENT` | CLEAN posts none; DIRTY keeps one per finding |
+
+When the author reviews their own PR and no alternate reviewer account is
+configured, GitHub rejects a self-approval, so the event downgrades to
+`COMMENT`: CLEAN's `APPROVE` and DIRTY's `REQUEST_CHANGES` both become
+`COMMENT`, and the review body ends with an appended transport disclosure. A
+self-PR with an alternate reviewer account posts the `APPROVE` or
+`REQUEST_CHANGES` review with no downgrade.
 
 ## Invocation
 
@@ -31,9 +44,15 @@ plus three retries). It then exits:
 
 | Exit | Meaning |
 |---|---|
-| `0` | Review posted. The new review's `html_url` is on stdout. |
+| `0` | Review posted. Line 1 of stdout is the new review's `html_url`; on a self-PR downgrade a second line marks the `COMMENT` downgrade. |
 | `1` | User input error: bad arguments, malformed findings JSON, or a missing template. |
 | `2` | Retry exhaustion: every try failed. |
+
+## Stdout
+
+On exit `0`, the first stdout line is always the posted review's `html_url`. A
+self-PR downgrade to `COMMENT` prints a second line: a plain marker naming the
+downgrade. A non-downgrade post is one line; a downgrade post is two.
 
 ## Per-caller policy
 

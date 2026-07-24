@@ -20,7 +20,7 @@ Author-keyed logic accounts for the split: a self-PR check keys on the login tha
 
 ## Self-PR review rules
 
-- On a PR the MCP login authored, post `COMMENT` reviews. GitHub blocks `APPROVE` and `REQUEST_CHANGES` on one's own PR.
+- On a PR the MCP login authored, post `COMMENT` reviews. GitHub blocks `APPROVE` and `REQUEST_CHANGES` on one's own PR. A `COMMENT` that downgrades from an audit APPROVE or REQUEST_CHANGES carries an appended transport disclosure at the end of its body.
 - On a PR another account authored, a review of any type from the MCP login works — including the APPROVE that a CLEAN bugteam audit posts.
 - Leave `BUGTEAM_REVIEWER_ACCOUNT` unset. The account-swap path (`gh auth switch`, the swap helpers) has no cloud form.
 

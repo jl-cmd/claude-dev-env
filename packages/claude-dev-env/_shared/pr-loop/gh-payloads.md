@@ -24,7 +24,9 @@ The review body skeleton lives in
 markers. `post_audit_thread.py` reads that skeleton at runtime and substitutes
 its placeholders (`<Skill>`, `<state_label>`, `<heading>`, severity counts,
 collapsed `<details>` block). Callers pass the skill name, state, commit SHA,
-and findings JSON; the body shape is owned by the template.
+and findings JSON; the body shape is owned by the template, and on a self-PR
+downgrade to a `COMMENT` review the script appends a one-sentence transport
+disclosure after that body.
 
 ## Reply to a finding
 
