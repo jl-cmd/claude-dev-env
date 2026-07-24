@@ -10,6 +10,12 @@ download URL a post can safely link. The timestamped name keeps each upload a
 distinct asset. An upload never overwrites an earlier one. A same-name collision
 fails loudly instead of replacing the bytes an existing URL already serves.
 
+A release asset is served as ``application/octet-stream``, so a viewable page
+(HTML or SVG) uploaded here downloads rather than renders in the browser. For a
+page meant to be viewed inline, a render host (gist or GitHub Pages) is needed —
+see ``rules/durable-post-artifacts.md``. This helper does not build that render
+path; it only uploads and prints the durable download URL.
+
 Usage::
 
     python3 gh_artifact_upload.py <file-path> <owner/repo>
@@ -28,6 +34,7 @@ import tempfile
 from pathlib import Path
 
 from dev_env_scripts_constants.gh_artifact_upload_constants import (
+    ALL_RENDERABLE_ASSET_EXTENSIONS,
     ARTIFACTS_RELEASE_NOTES,
     ARTIFACTS_RELEASE_TAG,
     ARTIFACTS_RELEASE_TITLE,
@@ -37,6 +44,7 @@ from dev_env_scripts_constants.gh_artifact_upload_constants import (
     ASSET_URL_JSON_KEY,
     GH_BINARY_NAME,
     NOTES_FILE_SUFFIX,
+    OCTET_STREAM_DOWNLOAD_WARNING,
     RELEASE_ASSETS_JSON_KEY,
     UTF8_ENCODING,
 )
@@ -127,6 +135,27 @@ def timestamped_asset_name(file_path: str) -> str:
     return ASSET_NAME_TEMPLATE.format(
         timestamp=current_timestamp, basename=Path(file_path).name
     )
+
+
+def is_renderable_artifact(file_path: str) -> bool:
+    """Return whether the path's extension is a browser-viewable page type.
+
+    ::
+
+        page.html -> True   (release URL downloads; does not render)
+        img.png   -> False
+
+    The check is pure and extension-based: only ``Path(file_path).suffix`` is
+    read, lowercased, and compared to ``ALL_RENDERABLE_ASSET_EXTENSIONS``. File
+    contents are never inspected.
+
+    Args:
+        file_path: Path whose suffix is checked.
+
+    Returns:
+        True when the lowercased suffix is in ``ALL_RENDERABLE_ASSET_EXTENSIONS``.
+    """
+    return Path(file_path).suffix.lower() in ALL_RENDERABLE_ASSET_EXTENSIONS
 
 
 def _uploaded_asset_download_url(repository: str) -> str:
@@ -248,6 +277,8 @@ def main() -> int:
     except ArtifactUploadError as upload_error:
         print(f"gh-artifact-upload failed: {upload_error}", file=sys.stderr)
         return 1
+    if is_renderable_artifact(parsed_arguments.file_path):
+        print(OCTET_STREAM_DOWNLOAD_WARNING, file=sys.stderr)
     print(asset_url)
     return 0
 

@@ -41,3 +41,18 @@ NOTES_FILE_SUFFIX: str = ".md"
 
 UTF8_ENCODING: str = "utf-8"
 """Text encoding for subprocess output and temp files."""
+
+ALL_RENDERABLE_ASSET_EXTENSIONS: frozenset[str] = frozenset({".html", ".htm", ".svg"})
+"""Browser-viewable page types that download (not render) from a release URL.
+
+GitHub serves release assets as ``application/octet-stream``, so these
+extensions open as downloads rather than inline pages when linked from a
+``.../releases/download/...`` URL.
+"""
+
+OCTET_STREAM_DOWNLOAD_WARNING: str = (
+    "Warning: this page is served as application/octet-stream from the release "
+    "URL, so the link downloads instead of rendering. For an inline-viewable "
+    "page, use a render host (see rules/durable-post-artifacts.md)."
+)
+"""Stderr message printed when a renderable page is uploaded successfully."""
