@@ -94,7 +94,23 @@ MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH: int = 3
 VERSION_INTERNAL_PERIOD_LOOKBEHIND_CHARACTER_COUNT: int = 2
 
 # After a title abbreviation, these openers mean a real new sentence / ask.
+# Keep this set free of common given names (Will, May, Can) used after Mr./Dr.
 ALL_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
+    {
+        "which",
+        "what",
+        "how",
+        "should",
+        "where",
+        "when",
+        "why",
+        "who",
+        "i",
+    }
+)
+
+# Broader openers for non-name contexts (soft abbrevs, digit lists after colon).
+ALL_BROAD_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
     {
         "which",
         "what",
@@ -120,6 +136,8 @@ ALL_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
         "i",
     }
 )
+
+FOLLOWING_LIST_ITEM_PATTERN: re.Pattern[str] = re.compile(r"\b\d+\.\s+[A-Z]")
 
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"

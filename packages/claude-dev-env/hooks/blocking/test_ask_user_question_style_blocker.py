@@ -302,6 +302,39 @@ def test_quoted_sentence_end_counts_as_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_status_equals_question_mark_is_inline_query() -> None:
+    question_text = "Check status=? before the retry. Which policy should we use?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_mister_will_name_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "Mr. Will approved the change. Tests failed. Which path should we take?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
+def test_eg_before_lowercase_which_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "Prefer TLS e.g. which is common on public routes. Mesh stays plain. "
+        "Which client should we pin?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
+def test_colon_list_item_starting_with_should_does_not_inflate_count() -> None:
+    question_text = (
+        "Findings so far: 1. Should we retry the hook. 2. Tests also failed. "
+        "Which fix should land first?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "

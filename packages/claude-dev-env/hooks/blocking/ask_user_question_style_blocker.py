@@ -21,6 +21,7 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
+    ALL_BROAD_QUESTION_SENTENCE_OPENERS,
     ALL_FINDING_GUIDANCE_BY_CODE,
     ALL_QUESTION_SENTENCE_OPENERS,
     ALL_SOFT_PERIOD_ABBREVIATIONS,
@@ -38,6 +39,7 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     FINDING_PROCESS_NARRATION,
     FINDING_STACKED_HYPHEN_COMPOUND,
     FINDING_TOO_MANY_SENTENCES,
+    FOLLOWING_LIST_ITEM_PATTERN,
     HOOK_EVENT_NAME,
     INLINE_CODE_SPAN_PATTERN,
     MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH,
@@ -73,6 +75,10 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
     if question_mark_index + 1 >= len(text):
         return False
     next_character = text[question_mark_index + 1]
+    previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
+    # status=? / flag=? with no following alnum still is a query marker.
+    if previous_character in "=&":
+        return True
     if next_character in "=&_":
         return True
     if not next_character.isalnum():
@@ -85,7 +91,6 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
     # Real query strings carry assignment/join operators in the first token.
     if "=" in first_token or "&" in first_token:
         return True
-    previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
     # path?x without a value is rare; glued prose is the common fail-open case.
     if previous_character.isalpha() or previous_character.isdigit():
         return False
@@ -174,13 +179,18 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
         and segment_before_number[-lookbehind_count].isdigit()
     ):
         return False
-    # Colon labels ("Final score: 12. Which") are facts; list items ("Findings: 1. The")
-    # continue with a non-question capital word.
+    # Colon labels ("Final score: 12. Which") are facts; list items continue
+    # with a capital word or another numbered item later.
     if segment_before_number[-1] == ":":
         next_word = _next_alpha_word(text, terminator_index + 1)
-        if not next_word or next_word.lower() in ALL_QUESTION_SENTENCE_OPENERS:
+        if not next_word or not next_word[0].isupper():
             return False
-        return next_word[0].isupper()
+        rest_after_marker = text[terminator_index + 1 :]
+        if FOLLOWING_LIST_ITEM_PATTERN.search(rest_after_marker):
+            return True
+        if next_word.lower() in ALL_BROAD_QUESTION_SENTENCE_OPENERS:
+            return False
+        return True
     return True
 
 
@@ -204,7 +214,12 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
             and text[character_before_token_index] == "."
         )
         if is_multipart_tail:
-            return next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
+            # "U.S. Which" ends; "e.g. which is common" stays mid-phrase.
+            return not (
+                next_word
+                and next_word[0].isupper()
+                and next_word.lower() in ALL_QUESTION_SENTENCE_OPENERS
+            )
         # Lettered list markers: "A. The gate failed..." at BOL or after end/colon.
         segment_before_letter = text[: terminator_index - len(token)].rstrip()
         if (
