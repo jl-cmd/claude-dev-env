@@ -366,10 +366,10 @@ def _section_of(settings: dict[str, object], section_key: str) -> dict[str, obje
     return section
 
 
-def test_remove_values_from_list_removes_matching_strings() -> None:
+def test_remove_matching_entries_removes_matching_strings() -> None:
     revoke_module = _load_revoke_module()
     target_list: list[object] = ["keep", "drop", 7, "drop"]
-    removed_count = revoke_module.remove_values_from_list(target_list, {"drop"})
+    removed_count = revoke_module.remove_matching_entries(target_list, {"drop"})
     assert removed_count == 2
     assert target_list == ["keep", 7]
 

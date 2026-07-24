@@ -9,7 +9,6 @@ Covers:
 
 import importlib.util
 import inspect
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +16,16 @@ from types import ModuleType
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+
+scripts_directory = str(Path(__file__).parent.parent.resolve())
+if scripts_directory not in sys.path:
+    sys.path.insert(0, scripts_directory)
+
+from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
+    PYPROJECT_TOML_FILENAME,
+    PYTEST_INI_FILENAME,
+    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
+)
 
 
 def _load_preflight_module() -> ModuleType:
@@ -30,11 +39,6 @@ def _load_preflight_module() -> ModuleType:
 
 
 preflight = _load_preflight_module()
-
-from pr_loop_shared_constants.preflight_constants import (  # noqa: E402
-    PYTEST_INI_FILENAME,
-    PYTEST_NO_TESTS_COLLECTED_EXIT_CODE,
-)
 
 
 def _make_completed_process(
@@ -376,8 +380,8 @@ def test_should_not_return_nonexistent_test_file(tmp_path: Path) -> None:
     """
     repo_root = tmp_path
     deleted_test_path = Path("test_deleted_module.py")
-    result = preflight._find_related_test_files(deleted_test_path, repo_root)
-    assert result == []
+    related_test_files = preflight._find_related_test_files(deleted_test_path, repo_root)
+    assert related_test_files == []
 
 
 def test_should_not_return_test_files_for_non_python_file(tmp_path: Path) -> None:
@@ -385,8 +389,8 @@ def test_should_not_return_test_files_for_non_python_file(tmp_path: Path) -> Non
     repo_root = tmp_path
     non_python_path = Path("readme.txt")
     (repo_root / non_python_path).touch()
-    result = preflight._find_related_test_files(non_python_path, repo_root)
-    assert result == []
+    related_test_files = preflight._find_related_test_files(non_python_path, repo_root)
+    assert related_test_files == []
 
 
 def test_should_find_test_file_in_adjacent_tests_directory(tmp_path: Path) -> None:
@@ -400,8 +404,8 @@ def test_should_find_test_file_in_adjacent_tests_directory(tmp_path: Path) -> No
     adjacent_tests.mkdir(parents=True)
     expected_test = adjacent_tests / "test_module.py"
     expected_test.touch()
-    result = preflight._find_related_test_files(source_path, repo_root)
-    assert expected_test in result
+    related_test_files = preflight._find_related_test_files(source_path, repo_root)
+    assert expected_test in related_test_files
 
 
 def test_should_find_test_file_in_top_level_tests_directory(tmp_path: Path) -> None:
@@ -415,8 +419,8 @@ def test_should_find_test_file_in_top_level_tests_directory(tmp_path: Path) -> N
     top_tests.mkdir(parents=True)
     expected_test = top_tests / "test_module.py"
     expected_test.touch()
-    result = preflight._find_related_test_files(source_path, repo_root)
-    assert expected_test in result
+    related_test_files = preflight._find_related_test_files(source_path, repo_root)
+    assert expected_test in related_test_files
 
 
 def test_main_should_warn_when_scope_changed_without_base_ref(
@@ -444,9 +448,9 @@ def test_has_discoverable_tests_should_not_re_raise_on_git_failure(
     """has_discoverable_tests must return None instead of re-raising on git failure."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=subprocess.CalledProcessError(128, ["git"])):
-        result = preflight.has_discoverable_tests(tmp_path)
+        discovery_state = preflight.has_discoverable_tests(tmp_path)
     captured = capsys.readouterr()
-    assert result is None, (
+    assert discovery_state is None, (
         "Should return None instead of propagating the exception"
     )
     assert "bugteam_preflight:" in captured.err
@@ -522,9 +526,7 @@ def test_should_default_to_all_scope_when_no_base_ref_no_scope(
     )
 
 
-def test_explicit_scope_all_with_base_ref_should_not_call_get_changed_files(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_explicit_scope_all_with_base_ref_should_not_call_get_changed_files() -> None:
     """Explicit --scope all with --base-ref must not auto-convert to 'changed'.
 
     Before the fix, ``argparse`` defaulted ``--scope`` to ``PYTEST_SCOPE_ALL``
@@ -575,7 +577,7 @@ def test_run_pytest_should_use_positional_separator_before_test_paths() -> None:
         mock_run.return_value = _make_completed_process("", returncode=0)
         preflight.run_pytest(
             Path("/fake/repository"),
-            verbose=False,
+            is_verbose_enabled=False,
             all_test_paths=[Path("test_copilot_finding.py")],
         )
     called_command = mock_run.call_args[0][0]
@@ -594,8 +596,8 @@ def test_has_discoverable_tests_returns_true_when_no_git_marker(
     """has_discoverable_tests must return True without running git when the root
     has no .git marker (e.g., repo root found via pytest.ini)."""
     (tmp_path / PYTEST_INI_FILENAME).touch()
-    result = preflight.has_discoverable_tests(tmp_path)
-    assert result is True
+    discovery_state = preflight.has_discoverable_tests(tmp_path)
+    assert discovery_state is True
 
 
 # ---- Copilot finding 2: base_ref command injection ----
@@ -606,8 +608,8 @@ def test_get_changed_files_returns_none_when_base_ref_starts_with_hyphen(
 ) -> None:
     """get_changed_files must return None and print a warning when base_ref
     starts with '-', preventing option injection into git diff."""
-    result = preflight.get_changed_files(Path("/fake"), "-oMalicious")
-    assert result is None
+    changed_files = preflight.get_changed_files(Path("/fake"), "-oMalicious")
+    assert changed_files is None
     captured = capsys.readouterr()
     assert "base_ref" in captured.err
     assert "hyphen" in captured.err
@@ -616,9 +618,7 @@ def test_get_changed_files_returns_none_when_base_ref_starts_with_hyphen(
 # ---- Copilot finding 3: duplicate git failures when discovery_result is None ----
 
 
-def test_main_skips_changed_scope_when_discovery_result_is_none(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_main_skips_changed_scope_when_discovery_result_is_none() -> None:
     """When has_discoverable_tests returns None (git unavailable), main must
     not call get_changed_files even when --base-ref is provided."""
     with (
@@ -735,3 +735,54 @@ def test_main_should_halt_when_env_var_contains_uppercase_or_whitespace_bugteam_
     monkeypatch.delenv("BUGTEAM_PREFLIGHT_SKIP", raising=False)
     exit_code = preflight.main(["--no-pytest"])
     assert exit_code == preflight.EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+def test_has_pytest_configuration_true_when_pytest_ini_present(tmp_path: Path) -> None:
+    """has_pytest_configuration returns True when pytest.ini exists in the root."""
+    (tmp_path / PYTEST_INI_FILENAME).touch()
+    assert preflight.has_pytest_configuration(tmp_path) is True
+
+
+def test_has_pytest_configuration_true_when_pyproject_declares_pytest(
+    tmp_path: Path,
+) -> None:
+    """has_pytest_configuration returns True when pyproject.toml declares a pytest table."""
+    (tmp_path / PYPROJECT_TOML_FILENAME).write_text(
+        "[tool.pytest.ini_options]\n", encoding="utf-8"
+    )
+    assert preflight.has_pytest_configuration(tmp_path) is True
+
+
+def test_has_pytest_configuration_false_when_no_config_present(tmp_path: Path) -> None:
+    """has_pytest_configuration returns False when neither config source exists."""
+    assert preflight.has_pytest_configuration(tmp_path) is False
+
+
+def test_discover_related_tests_maps_changed_source_to_its_test(tmp_path: Path) -> None:
+    """discover_related_tests returns the test file paired with a changed source file."""
+    source_path = Path("pkg/widget.py")
+    (tmp_path / source_path).parent.mkdir(parents=True)
+    (tmp_path / source_path).touch()
+    expected_test = tmp_path / "pkg" / "test_widget.py"
+    expected_test.touch()
+    related_test_files = preflight.discover_related_tests([source_path], tmp_path)
+    assert related_test_files == [expected_test]
+
+
+def test_discover_related_tests_returns_empty_for_unmatched_changes(
+    tmp_path: Path,
+) -> None:
+    """discover_related_tests returns an empty list when no changed file has a test."""
+    source_path = Path("pkg/orphan.py")
+    (tmp_path / source_path).parent.mkdir(parents=True)
+    (tmp_path / source_path).touch()
+    related_test_files = preflight.discover_related_tests([source_path], tmp_path)
+    assert related_test_files == []
+
+
+def test_run_pre_commit_returns_subprocess_exit_code(tmp_path: Path) -> None:
+    """run_pre_commit returns the exit code of the pre-commit subprocess it launches."""
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed_process("", returncode=3)
+        exit_code = preflight.run_pre_commit(tmp_path)
+    assert exit_code == 3
+    called_command = mock_run.call_args[0][0]
+    assert "pre-commit" in called_command
