@@ -23,6 +23,7 @@ from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E4
 
 _EXPECTED_BASH_ORDER = (
     "blocking/es_exe_path_rewriter.py",
+    "blocking/unscoped_search_blocker.py",
     "blocking/destructive_command_blocker.py",
     "blocking/gh_body_arg_blocker.py",
     "blocking/nas_ssh_binary_enforcer.py",
@@ -46,6 +47,7 @@ _EXPECTED_BASH_ORDER = (
 )
 
 _POWERSHELL_APPLICABLE = (
+    "blocking/unscoped_search_blocker.py",
     "blocking/pii_prevention_blocker.py",
     "blocking/verified_commit_gate.py",
     "blocking/verdict_directory_write_blocker.py",
@@ -69,8 +71,8 @@ def test_every_hook_applies_to_the_bash_tool() -> None:
         assert BASH_TOOL_NAME in each_entry.applicable_tool_names
 
 
-def test_powershell_applicable_hooks_include_pii_and_verified_commit_pair() -> None:
-    """PowerShell runs the PII gate plus the verified-commit pair."""
+def test_powershell_applicable_hooks_match_shared_tool_roster() -> None:
+    """PowerShell runs every hosted hook registered for both shell tools."""
     powershell_hooks = tuple(
         each_entry.script_relative_path
         for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
