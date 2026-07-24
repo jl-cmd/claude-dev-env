@@ -98,6 +98,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_payload_scan.py` | library | Write/Edit and durable post-body PII evaluation reused by `pii_prevention_blocker.py` |
 | `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
+| `ask_user_question_style_blocker.py` | PreToolUse (AskUserQuestion) | Missing context before the question, missing option descriptions, or plain-brief style breaks |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
 | `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |
