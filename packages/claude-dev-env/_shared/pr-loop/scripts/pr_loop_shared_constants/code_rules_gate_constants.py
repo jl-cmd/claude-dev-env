@@ -78,6 +78,47 @@ ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX: tuple[str, ...] = (
     "-z",
 )
 
+ALL_GIT_DIFF_UNIFIED_ZERO_NO_RENAMES_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "diff",
+    "--unified=0",
+    "--no-renames",
+)
+
+ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_NO_RENAMES_COMMAND: tuple[str, ...] = (
+    "git",
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "diff",
+    "--cached",
+    "--unified=0",
+    "--no-renames",
+)
+
+DIFF_GIT_HEADER_PREFIX: str = "diff --git "
+
+GIT_DIFF_SOURCE_PATH_PREFIX: str = "a/"
+
+GIT_DIFF_DESTINATION_PATH_PREFIX: str = "b/"
+
+GIT_DIFF_PATH_ARGUMENT_SEPARATOR: str = "--"
+
+GIT_QUOTED_PATH_DELIMITER: str = '"'
+
+GIT_C_STYLE_ESCAPE_BACKSLASH: str = "\\"
+
+GIT_C_STYLE_ESCAPE_ENCODING: str = "unicode_escape"
+
+GIT_C_STYLE_LATIN1_ENCODING: str = "latin-1"
+
+GIT_PATH_UTF8_ENCODING: str = "utf-8"
+
 ALL_GIT_LS_FILES_UNTRACKED_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
     "git",
     "ls-files",
