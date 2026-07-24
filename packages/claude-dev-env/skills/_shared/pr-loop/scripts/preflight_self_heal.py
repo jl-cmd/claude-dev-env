@@ -1,11 +1,16 @@
-"""Self-heal helper for stale local-scope ``core.hooksPath`` overrides.
+"""Clear a stale local ``core.hooksPath`` that git seeds into a fresh worktree.
 
-Git seeds ``core.hooksPath = <repo>/.git/hooks`` into every new worktree's
-local config. That repo-local entry shadows the correct global setting and
-breaks downstream hook-dependent skills. The helper here is called from both
-:mod:`bugteam_preflight` (skill-local) and :mod:`preflight` (shared) so the
-shadowing entry is cleared the first time preflight runs against a fresh
-worktree, without any caller-visible failure.
+::
+
+    fresh worktree local config:  core.hooksPath = <repo>/.git/hooks
+                                                    ^ shadows the global setting
+    global config:                core.hooksPath = <path>/.claude/hooks
+    after self-heal:              local entry gone, global setting takes effect
+
+Git writes the local entry into every new worktree, and it hides the global
+hook path that downstream skills rely on. The shared ``preflight`` entry point
+calls this helper on its first tick, so the shadow clears with no failure the
+caller ever sees.
 """
 
 from __future__ import annotations
@@ -93,21 +98,20 @@ def silently_clear_stale_local_hooks_path_override(
     repository_root: Path | None,
     expected_hooks_path_suffix: str,
 ) -> None:
-    """Remove every stale, non-canonical local-scope core.hooksPath override.
+    """Drop a worktree's stale local ``core.hooksPath`` when the global is canonical.
 
-    The unset runs only when BOTH conditions hold: at least one local-scope
-    entry is non-canonical, AND a canonical global setting is already
-    configured. When the global is unset or non-canonical, the helper stands
-    down so the downstream ``core.hooksPath is '<path>'`` diagnostic stays
-    informative and the auto-remediation script can repair the global from a
-    known starting point.
+    ::
 
-    Silent on every git outcome — read errors, write errors, and process
-    launch errors are all suppressed so an unrelated git failure cannot block
-    preflight. The caller's subsequent ``--get`` verification step surfaces
-    the final config state through the normal failure path, so a real
-    misconfiguration is still reported with the canonical
-    ``core.hooksPath is '<path>'`` diagnostic.
+        local  core.hooksPath = <repo>/.git/hooks     (stale, wrong suffix)
+        global core.hooksPath = <path>/.claude/hooks   (canonical)
+        result: local entry unset, the global setting wins
+
+        global also stale?  leave the local entry so the diagnostic still fires
+
+    The unset runs only when a local entry is stale AND the global is already
+    canonical. Every git error is swallowed, so an unrelated git failure never
+    blocks preflight. The caller's later ``--get`` check still surfaces a real
+    misconfiguration.
 
     Args:
         repository_root: Repository root to operate on; a None argument is a
