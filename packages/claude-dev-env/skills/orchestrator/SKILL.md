@@ -249,6 +249,10 @@ Routing rules:
   the warm agent holds the relevant context.
 - `clean-coder` owns code edits. `code-verifier` owns verification. The
   same workflow agent never grades work it wrote.
+- Stage the completed repair and run `code_rules_gate.py --staged` before
+  spawning `code-verifier`. The staged attestation must match the current
+  worktree, HEAD, and index tree. PR proof names skipped checks, blockers,
+  and remaining TODOs.
 - PR-description workflows include the actual changed-file list in the
   prompt and verify the final body against that file list before posting
   or returning it.

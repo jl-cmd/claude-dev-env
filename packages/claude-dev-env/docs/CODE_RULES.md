@@ -20,6 +20,10 @@ Scaffolding and placeholder code carry a `TODO:` comment naming the permanent im
 - **Encapsulation enables cleaner naming** — `isMaxLevel(level)` > `level >= MAXIMUM_LEVEL`.
 - **Construction logic lives in the model** — path/URL building, formatting, and transformations belong on the model or service that owns the data; a string pattern built at two or more call sites moves to a method there.
 
+## STAGED CODE_RULES GATE
+
+Run `code_rules_gate.py --staged` after staging a repair and before spawning `code-verifier`. The gate validates staged code, runs staged tests from an isolated index materialization, and stores an atomic attestation bound to the worktree, HEAD, and index tree. A code-verifier spawn requires that current attestation. PR proof names skipped checks, blockers, and remaining TODOs.
+
 ---
 
 ## ⚡ HOOK-ENFORCED RULES
