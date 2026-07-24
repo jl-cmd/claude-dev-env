@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARKERS
 from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY_NAMES
 from validators.config.directory_exemption_constants import (
@@ -125,6 +127,34 @@ def test_absolute_system_temp_pytest_shaped_path_stages_flat_basename(
 ) -> None:
     pytest_shaped_target = (
         tmp_path / "test_edit_introducing_new_viol0" / "legacy_module.py"
+    )
+    staging_root = tmp_path / "staging_root"
+    staging_root.mkdir()
+    staged_path = _temporary_path_preserving_directory_signal(
+        staging_root, str(pytest_shaped_target)
+    )
+    assert staged_path == staging_root / "legacy_module.py"
+
+
+def test_runner_temp_pytest_shaped_path_stages_flat_basename_when_gettempdir_differs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GHA basetemp lives under RUNNER_TEMP while gettempdir is often /tmp."""
+    runner_temp_root = tmp_path / "runner_temp"
+    os_gettemp = tmp_path / "os_gettemp"
+    runner_temp_root.mkdir()
+    os_gettemp.mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp_root))
+    monkeypatch.setattr(
+        "validators.run_all_validators.tempfile.gettempdir",
+        lambda: str(os_gettemp),
+    )
+    pytest_shaped_target = (
+        runner_temp_root
+        / "pytest-basetemp-pkg"
+        / "test_edit_introducing_new_viol0"
+        / "legacy_module.py"
     )
     staging_root = tmp_path / "staging_root"
     staging_root.mkdir()

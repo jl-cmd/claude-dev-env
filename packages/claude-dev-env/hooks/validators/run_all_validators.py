@@ -22,6 +22,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
+    ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
 )
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
@@ -792,16 +793,43 @@ def _escapes_temporary_root(path_part: str) -> bool:
     return part_as_path.is_absolute() or bool(part_as_path.anchor)
 
 
+def _all_system_temporary_roots() -> tuple[Path, ...]:
+    """Return resolved roots that count as system temporary directories.
+
+    ::
+
+        gettempdir() plus TEMP / TMP / TMPDIR / RUNNER_TEMP when set.
+
+    GitHub Actions puts pytest basetemp under ``RUNNER_TEMP``
+    (``/home/runner/work/_temp``) while ``tempfile.gettempdir()`` is ``/tmp``.
+    Both must count so pytest-shaped ``test_*`` parents disable substring
+    exemption matching during staging.
+    """
+    all_candidate_roots: list[str] = [tempfile.gettempdir()]
+    for each_environment_name in ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES:
+        environment_value = os.environ.get(each_environment_name)
+        if environment_value:
+            all_candidate_roots.append(environment_value)
+    all_resolved_roots: list[Path] = []
+    for each_candidate in all_candidate_roots:
+        try:
+            all_resolved_roots.append(Path(each_candidate).resolve())
+        except OSError:
+            continue
+    return tuple(all_resolved_roots)
+
+
 def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
-    """Return True when *file_path* is absolute and resolves under the OS temp root.
+    """Return True when *file_path* is absolute and resolves under an OS temp root.
 
     ::
 
         ok:   "C:/Users/.../Temp/pytest-of-x/test_foo0/a.py" -> True
+        ok:   "/home/runner/work/_temp/pytest-basetemp/.../a.py" when RUNNER_TEMP
         flag: "packages/demo/test_helpers/worker.py"         -> False (relative)
         flag: "C:/repo/pkg/test_helpers/worker.py"           -> False (project)
 
-    Absolute paths under the system temporary directory often carry pytest
+    Absolute paths under system temporary directories often carry pytest
     ``tmp_path`` segments named ``test_*``. Those segments must not be treated
     as project exemption signals, or a production file staged from a pytest
     path would inherit a false test-file exemption.
@@ -810,17 +838,21 @@ def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
         file_path: Destination path the write or edit targets.
 
     Returns:
-        True when *file_path* is absolute and lives under ``tempfile.gettempdir()``.
+        True when *file_path* is absolute and lives under ``tempfile.gettempdir()``
+        or a known temporary-root environment variable (``TEMP``, ``TMP``,
+        ``TMPDIR``, ``RUNNER_TEMP``).
     """
     destination_path = Path(file_path)
     if not destination_path.is_absolute():
         return False
     try:
         resolved_destination = destination_path.resolve()
-        temporary_root = Path(tempfile.gettempdir()).resolve()
     except OSError:
         return False
-    return resolved_destination.is_relative_to(temporary_root)
+    return any(
+        resolved_destination.is_relative_to(each_temporary_root)
+        for each_temporary_root in _all_system_temporary_roots()
+    )
 
 
 def _directory_segment_signals_exemption(

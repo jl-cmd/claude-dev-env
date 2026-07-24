@@ -27,6 +27,15 @@ from ..exempt_paths import (
 POSIX_DIRECTORY_SEPARATOR = "/"
 WINDOWS_DIRECTORY_SEPARATOR = "\\"
 
+ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
+    {
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "RUNNER_TEMP",
+    }
+)
+
 ALL_AUTHORITATIVE_DIRECTORY_PATH_PATTERN_SETS: tuple[Iterable[str], ...] = (
     TEST_PATH_PATTERNS,
     WORKFLOW_REGISTRY_PATTERNS,
