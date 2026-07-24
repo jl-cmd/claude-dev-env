@@ -68,11 +68,18 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
 
         inline: path?x=1   status=?   [code=?]
         ask:    Which path?
+        ask:    Pick one?The gate failed. Which fix?
     """
     if question_mark_index + 1 >= len(text):
         return False
     next_character = text[question_mark_index + 1]
-    return next_character.isalnum() or next_character in "=&_"
+    if not (next_character.isalnum() or next_character in "=&_"):
+        return False
+    previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
+    # Glued prose ("one?The") is an ask, not a query string.
+    if previous_character.islower() and next_character.isupper():
+        return False
+    return True
 
 
 def _first_top_level_question_mark_index(text: str) -> int:
@@ -147,7 +154,8 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
     segment_before_number = text[: terminator_index - len(token)].rstrip()
     if segment_before_number == "":
         return True
-    if segment_before_number[-1] not in ".!?":
+    # After a sentence end or a colon-led list ("Findings: 1. ...").
+    if segment_before_number[-1] not in ".!?:":
         return False
     # Version tails: "3.12." — the period before this digit token is digit-adjacent.
     lookbehind_count = VERSION_INTERNAL_PERIOD_LOOKBEHIND_CHARACTER_COUNT
