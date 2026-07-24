@@ -94,6 +94,32 @@ def test_run_ruff_check_applies_config_resolved_from_config_source_path(
     assert "B011" in with_source.output
 
 
+def test_run_ruff_check_grades_a_staged_copy_holding_non_ascii_text(
+    tmp_path: Path,
+) -> None:
+    """A staged copy carrying non-ASCII text reaches ruff intact.
+
+    The staged shape pipes the copy's text to ruff on stdin, and ruff reads
+    stdin as UTF-8. Encoding that pipe with the host locale codec instead
+    hands ruff a byte it rejects, so every Python file holding a non-ASCII
+    character fails the gate on a host whose locale codec is not UTF-8.
+    """
+    ruff_repo = tmp_path / "ruff_repo"
+    ruff_repo.mkdir()
+    (ruff_repo / "pyproject.toml").write_text(
+        "[tool.ruff.lint]\nselect = ['B']\n", encoding="utf-8"
+    )
+    original_target = ruff_repo / "dashes.py"
+    staged_copy = tmp_path / "detached" / "dashes.py"
+    staged_copy.parent.mkdir(parents=True)
+    staged_copy.write_text('DASH_NOTE = "an em dash — here"\n', encoding="utf-8")
+
+    result = run_ruff_check([staged_copy], config_source_path=original_target)
+
+    assert "valid UTF-8" not in result.output
+    assert result.passed is True
+
+
 def test_run_ruff_check_emits_location_prefixed_lines(tmp_path: Path) -> None:
     """Each reported violation carries a ``path:line:col:`` prefix on its own line.
 

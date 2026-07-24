@@ -186,6 +186,7 @@ def _staged_ruff_result(
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         input=staged_content,
         cwd=str(resolved_pyproject.parent),
         env=_ruff_subprocess_environment(),
