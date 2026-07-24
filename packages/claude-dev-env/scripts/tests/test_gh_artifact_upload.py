@@ -15,6 +15,9 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import gh_artifact_upload as mod
+from dev_env_scripts_constants.gh_artifact_upload_constants import (
+    OCTET_STREAM_DOWNLOAD_WARNING,
+)
 
 _DEFAULT_READBACK_ASSET = {
     "name": "20260707_140233_contact_sheet.png",
@@ -32,7 +35,9 @@ def _make_gh_stub(
     all_readback_assets: list[dict[str, str]] | None = None,
 ) -> object:
     readback_assets = (
-        [_DEFAULT_READBACK_ASSET] if all_readback_assets is None else all_readback_assets
+        [_DEFAULT_READBACK_ASSET]
+        if all_readback_assets is None
+        else all_readback_assets
     )
 
     def fake_run(
@@ -203,3 +208,77 @@ def test_upload_artifact_missing_file_raises(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(subprocess, "run", _make_gh_stub([], view_return_code=0))
     with pytest.raises(mod.ArtifactUploadError):
         mod.upload_artifact("does_not_exist_9f3a.png", "owner/repo")
+
+
+@pytest.mark.parametrize(
+    ("file_path", "is_expected_renderable"),
+    [
+        ("page.html", True),
+        ("p.htm", True),
+        ("d.svg", True),
+        ("img.png", False),
+        ("a.zip", False),
+        ("x", False),
+    ],
+)
+def test_is_renderable_artifact_is_extension_based(
+    file_path: str, is_expected_renderable: bool
+) -> None:
+    assert mod.is_renderable_artifact(file_path) is is_expected_renderable
+
+
+def test_main_html_upload_warns_on_stderr_and_prints_url_on_stdout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_file = tmp_path / "page.html"
+    source_file.write_text("<html></html>", encoding="utf-8")
+    html_asset = {
+        "name": "20260707_140233_page.html",
+        "url": (
+            "https://github.com/owner/repo/releases/download/artifacts/"
+            "20260707_140233_page.html"
+        ),
+        "createdAt": "2026-07-07T14:02:33Z",
+    }
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        _make_gh_stub([], view_return_code=0, all_readback_assets=[html_asset]),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["gh_artifact_upload.py", str(source_file), "owner/repo"],
+    )
+
+    exit_code = mod.main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.strip() == html_asset["url"]
+    assert captured.out.count("\n") == 1
+    assert OCTET_STREAM_DOWNLOAD_WARNING in captured.err
+
+
+def test_main_png_upload_prints_url_without_octet_stream_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_file = tmp_path / "img.png"
+    source_file.write_bytes(b"binary")
+    monkeypatch.setattr(subprocess, "run", _make_gh_stub([], view_return_code=0))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["gh_artifact_upload.py", str(source_file), "owner/repo"],
+    )
+
+    exit_code = mod.main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.strip() == _DEFAULT_READBACK_ASSET["url"]
+    assert OCTET_STREAM_DOWNLOAD_WARNING not in captured.err
