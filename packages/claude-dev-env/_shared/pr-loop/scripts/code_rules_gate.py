@@ -296,8 +296,9 @@ def _run_diff_mode(
     """Validate the merge-base diff joined with the untracked files.
 
     Zero candidates means nothing was inspected (bad wiring looks the same),
-    so that run refuses loudly. A set emptied only by the ``--only-under``
-    scope flows through ``run_gate`` over zero files and exits clean.
+    so that run refuses loudly. A set emptied by the ``--only-under`` scope or
+    left with no code files after the code-path filter flows through
+    ``run_gate`` over zero files and exits clean.
     """
     all_candidate_paths = _deduplicate_paths(
         paths_from_git_diff(repository_root, arguments.base)
