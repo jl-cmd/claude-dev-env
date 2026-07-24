@@ -308,6 +308,7 @@ def _run_diff_mode(
     file_paths = filter_paths_under_prefixes(
         all_candidate_paths, repository_root, arguments.only_under
     )
+    file_paths = [each_path for each_path in file_paths if is_code_path(each_path)]
     scoped_added_lines = (
         added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
     )

@@ -74,6 +74,7 @@ def initialize_git_repository(repository_root: Path) -> None:
     run_git_in_repository(repository_root, "config", "user.email", "test@example.com")
     run_git_in_repository(repository_root, "config", "user.name", "Test")
     run_git_in_repository(repository_root, "config", "commit.gpgsign", "false")
+    run_git_in_repository(repository_root, "config", "core.autocrlf", "false")
     disabled_hooks_directory = repository_root / "disabled-git-hooks"
     disabled_hooks_directory.mkdir()
     run_git_in_repository(
@@ -88,7 +89,7 @@ def commit_all_files(repository_root: Path, commit_message: str) -> None:
 
 def write_file(file_path: Path, content: str) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding="utf-8")
+    file_path.write_text(content, encoding="utf-8", newline="\n")
 
 
 def stage_file(repository_root: Path, relative_path: str) -> None:
@@ -2799,3 +2800,101 @@ def test_run_pytest_for_group_treats_no_tests_collected_as_a_pass_per_batch(
         "a batch that collects no tests is not a failure; only a real pytest "
         "failure exit code may block the commit"
     )
+
+
+_PNG_SIGNATURE_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + b"\x00" * 16
+_SKIPPING_UNREADABLE_MARKER = "skipping unreadable file"
+
+
+def _write_png(file_path: Path) -> None:
+    """Write a minimal PNG-signature binary file at *file_path*."""
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_bytes(_PNG_SIGNATURE_BYTES)
+
+
+def _clean_module_source() -> str:
+    """Return Python source the enforcer accepts as a clean new module."""
+    return '"""Clean module for binary-flood gate tests."""\n\n\ndef greet() -> str:\n    return "hello"\n'
+
+
+def test_diff_mode_tracked_new_png_does_not_flood_stderr(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A newly committed PNG must not emit a UTF-8 skip line on the push surface."""
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    _write_png(temporary_git_repository / "assets" / "icon.png")
+    commit_all_files(temporary_git_repository, "add icon png")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD~1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert _SKIPPING_UNREADABLE_MARKER not in captured.err
+    assert "icon.png" not in captured.err
+
+
+def test_diff_mode_untracked_png_does_not_flood_stderr(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An untracked PNG joins the combined surface and must not flood stderr."""
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    _write_png(temporary_git_repository / "untracked_icon.png")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert _SKIPPING_UNREADABLE_MARKER not in captured.err
+    assert "untracked_icon.png" not in captured.err
+
+
+def test_diff_mode_image_only_surface_exits_zero_not_empty_file_set(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Git reports image files, yet zero code files means a clean pass (not EMPTY_FILE_SET)."""
+    write_file(temporary_git_repository / "seed.txt", "seed\n")
+    commit_all_files(temporary_git_repository, "seed")
+    _write_png(temporary_git_repository / "only_image.png")
+    commit_all_files(temporary_git_repository, "image only")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD~1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert exit_code != gate_module.EMPTY_FILE_SET_EXIT_CODE
+    assert _SKIPPING_UNREADABLE_MARKER not in captured.err
+    assert gate_module.EMPTY_FILE_SET_MESSAGE not in captured.err
+    assert "inspected 0 file(s)" in captured.err
+
+
+def test_diff_mode_mixed_py_and_png_validates_py_silently_skips_png(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A mixed surface line-maps and validates the .py; the PNG is skipped with no flood."""
+    write_file(temporary_git_repository / "anchor.py", "anchor = 1\n")
+    commit_all_files(temporary_git_repository, "baseline")
+    write_file(temporary_git_repository / "fresh_module.py", _clean_module_source())
+    _write_png(temporary_git_repository / "mixed_icon.png")
+    commit_all_files(temporary_git_repository, "add py and png")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD~1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert _SKIPPING_UNREADABLE_MARKER not in captured.err
+    assert "inspected 1 file(s)" in captured.err
+    assert "mixed_icon.png" not in captured.err
