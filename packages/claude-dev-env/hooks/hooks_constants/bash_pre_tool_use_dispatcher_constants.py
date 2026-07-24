@@ -54,6 +54,9 @@ class BashHostedHookEntry:
 
 ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/es_exe_path_rewriter.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry(
+        "blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    ),
     BashHostedHookEntry("blocking/destructive_command_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/nas_ssh_binary_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
