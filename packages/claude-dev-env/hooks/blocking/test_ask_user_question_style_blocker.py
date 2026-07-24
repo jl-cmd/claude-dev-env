@@ -49,6 +49,10 @@ evaluate = hook_module.evaluate
 find_style_findings = hook_module.find_style_findings
 question_has_leading_context = hook_module.question_has_leading_context
 
+CLEAN_QUESTION_TEXT = (
+    "The gate blocks bare rm on worktrees. How should temp cleanup run?"
+)
+
 
 def _payload(question: str, all_options: list[dict[str, str]] | None = None) -> dict:
     if all_options is None:
@@ -91,9 +95,8 @@ def test_bare_question_without_context_is_flagged() -> None:
 
 
 def test_fact_then_question_passes_context_check() -> None:
-    question_text = "The gate blocks bare rm on worktrees. How should temp cleanup run?"
-    assert question_has_leading_context(question_text) is True
-    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert question_has_leading_context(CLEAN_QUESTION_TEXT) is True
+    findings = find_style_findings(_payload(CLEAN_QUESTION_TEXT)["tool_input"])
     assert FINDING_MISSING_CONTEXT not in findings
 
 
@@ -162,8 +165,7 @@ def test_too_many_question_sentences_is_flagged() -> None:
 
 
 def test_clean_question_has_no_findings() -> None:
-    question_text = "The gate blocks bare rm on worktrees. How should temp cleanup run?"
-    findings = find_style_findings(_payload(question_text)["tool_input"])
+    findings = find_style_findings(_payload(CLEAN_QUESTION_TEXT)["tool_input"])
     assert findings == []
 
 
@@ -175,9 +177,7 @@ def test_evaluate_denies_bare_question() -> None:
 
 
 def test_evaluate_allows_clean_question() -> None:
-    deny_reason = evaluate(
-        _payload("The gate blocks bare rm on worktrees. How should temp cleanup run?")
-    )
+    deny_reason = evaluate(_payload(CLEAN_QUESTION_TEXT))
     assert deny_reason is None
 
 
@@ -190,9 +190,7 @@ def test_main_denies_and_emits_payload() -> None:
 
 
 def test_main_allows_clean_payload_silently() -> None:
-    output_text = _run_main(
-        _payload("The gate blocks bare rm on worktrees. How should temp cleanup run?")
-    )
+    output_text = _run_main(_payload(CLEAN_QUESTION_TEXT))
     assert output_text == ""
 
 

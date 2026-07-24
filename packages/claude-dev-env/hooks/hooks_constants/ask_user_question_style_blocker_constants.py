@@ -27,25 +27,25 @@ CONTEXT_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
     + r",}(?:[.!]|:\s|[—–]\s).+\?"
 )
 
-# Process-narration openers banned by plain-brief rule 1.
-ALL_PROCESS_NARRATION_OPENER_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(each_pattern, re.IGNORECASE)
-    for each_pattern in (
-        r"^I\s+looked\s+at\b",
-        r"^First,\s+I\b",
-        r"^I\s+found\b",
-        r"^After\s+reviewing\b",
-        r"^I\s+checked\b",
-        r"^Looking\s+at\b",
-        r"^Having\s+reviewed\b",
-        r"^I\s+investigated\b",
-        r"^I\s+examined\b",
-        r"^Upon\s+reviewing\b",
-        r"^I\s+noticed\b",
-        r"^When\s+I\s+looked\b",
-        r"^I\s+reviewed\b",
-        r"^After\s+looking\b",
-    )
+# Process-narration openers banned by plain-brief rule 1 (one scan per prose blob).
+PROCESS_NARRATION_OPENER_PATTERN: re.Pattern[str] = re.compile(
+    r"^(?:"
+    r"I\s+looked\s+at|"
+    r"First,\s+I|"
+    r"I\s+found|"
+    r"After\s+reviewing|"
+    r"I\s+checked|"
+    r"Looking\s+at|"
+    r"Having\s+reviewed|"
+    r"I\s+investigated|"
+    r"I\s+examined|"
+    r"Upon\s+reviewing|"
+    r"I\s+noticed|"
+    r"When\s+I\s+looked|"
+    r"I\s+reviewed|"
+    r"After\s+looking"
+    r")\b",
+    re.IGNORECASE,
 )
 
 ARROW_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"→|->")
@@ -57,7 +57,6 @@ STACKED_HYPHEN_COMPOUND_PATTERN: re.Pattern[str] = re.compile(
 )
 
 SENTENCE_SPLIT_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+")
-WORD_SPLIT_PATTERN: re.Pattern[str] = re.compile(r"\s+")
 
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"

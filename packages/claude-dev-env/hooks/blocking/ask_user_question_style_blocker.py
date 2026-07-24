@@ -22,7 +22,6 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
     ALL_FINDING_GUIDANCE_BY_CODE,
-    ALL_PROCESS_NARRATION_OPENER_PATTERNS,
     ARROW_TOKEN_PATTERN,
     CALLING_HOOK_NAME,
     CONTEXT_SEPARATOR_PATTERN,
@@ -42,11 +41,11 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     MAXIMUM_WORDS_PER_SENTENCE,
     MINIMUM_ARROW_TOKENS_FOR_CHAIN,
     NEWLINE_JOIN_SEPARATOR,
+    PROCESS_NARRATION_OPENER_PATTERN,
     SENTENCE_SPLIT_PATTERN,
     STACKED_HYPHEN_COMPOUND_PATTERN,
     TOOL_NAME,
     USER_FACING_NOTICE,
-    WORD_SPLIT_PATTERN,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
@@ -78,6 +77,11 @@ def question_has_leading_context(question_text: str) -> bool:
     return CONTEXT_SEPARATOR_PATTERN.search(stripped_text) is not None
 
 
+def _record_finding(all_findings: list[str], finding_code: str) -> None:
+    if finding_code not in all_findings:
+        all_findings.append(finding_code)
+
+
 def _split_sentences(prose_text: str) -> list[str]:
     stripped_text = prose_text.strip()
     if not stripped_text:
@@ -90,27 +94,7 @@ def _split_sentences(prose_text: str) -> list[str]:
 
 
 def _word_count(sentence_text: str) -> int:
-    all_words = [
-        each_word for each_word in WORD_SPLIT_PATTERN.split(sentence_text.strip()) if each_word
-    ]
-    return len(all_words)
-
-
-def _opens_with_process_narration(prose_text: str) -> bool:
-    stripped_text = prose_text.strip()
-    return any(
-        each_pattern.search(stripped_text) is not None
-        for each_pattern in ALL_PROCESS_NARRATION_OPENER_PATTERNS
-    )
-
-
-def _has_arrow_chain(prose_text: str) -> bool:
-    all_arrows = ARROW_TOKEN_PATTERN.findall(prose_text)
-    return len(all_arrows) >= MINIMUM_ARROW_TOKENS_FOR_CHAIN
-
-
-def _has_stacked_hyphen_compound(prose_text: str) -> bool:
-    return STACKED_HYPHEN_COMPOUND_PATTERN.search(prose_text) is not None
+    return len(sentence_text.split())
 
 
 def _collect_length_findings(
@@ -120,25 +104,21 @@ def _collect_length_findings(
 ) -> None:
     all_sentences = _split_sentences(prose_text)
     if len(all_sentences) > maximum_sentence_count:
-        if FINDING_TOO_MANY_SENTENCES not in all_findings:
-            all_findings.append(FINDING_TOO_MANY_SENTENCES)
+        _record_finding(all_findings, FINDING_TOO_MANY_SENTENCES)
     for each_sentence in all_sentences:
         if _word_count(each_sentence) > MAXIMUM_WORDS_PER_SENTENCE:
-            if FINDING_LONG_SENTENCE not in all_findings:
-                all_findings.append(FINDING_LONG_SENTENCE)
+            _record_finding(all_findings, FINDING_LONG_SENTENCE)
             break
 
 
 def _collect_plain_brief_findings(prose_text: str, all_findings: list[str]) -> None:
-    if _opens_with_process_narration(prose_text):
-        if FINDING_PROCESS_NARRATION not in all_findings:
-            all_findings.append(FINDING_PROCESS_NARRATION)
-    if _has_arrow_chain(prose_text):
-        if FINDING_ARROW_CHAIN not in all_findings:
-            all_findings.append(FINDING_ARROW_CHAIN)
-    if _has_stacked_hyphen_compound(prose_text):
-        if FINDING_STACKED_HYPHEN_COMPOUND not in all_findings:
-            all_findings.append(FINDING_STACKED_HYPHEN_COMPOUND)
+    stripped_text = prose_text.strip()
+    if PROCESS_NARRATION_OPENER_PATTERN.search(stripped_text) is not None:
+        _record_finding(all_findings, FINDING_PROCESS_NARRATION)
+    if len(ARROW_TOKEN_PATTERN.findall(prose_text)) >= MINIMUM_ARROW_TOKENS_FOR_CHAIN:
+        _record_finding(all_findings, FINDING_ARROW_CHAIN)
+    if STACKED_HYPHEN_COMPOUND_PATTERN.search(prose_text) is not None:
+        _record_finding(all_findings, FINDING_STACKED_HYPHEN_COMPOUND)
 
 
 def find_style_findings(tool_input: dict) -> list[str]:
@@ -163,8 +143,7 @@ def find_style_findings(tool_input: dict) -> list[str]:
             question_text = ""
 
         if not question_has_leading_context(question_text):
-            if FINDING_MISSING_CONTEXT not in all_findings:
-                all_findings.append(FINDING_MISSING_CONTEXT)
+            _record_finding(all_findings, FINDING_MISSING_CONTEXT)
 
         if question_text.strip():
             _collect_plain_brief_findings(question_text, all_findings)
@@ -182,8 +161,7 @@ def find_style_findings(tool_input: dict) -> list[str]:
                 continue
             option_description = each_option.get("description", "")
             if not isinstance(option_description, str) or not option_description.strip():
-                if FINDING_MISSING_OPTION_DESCRIPTION not in all_findings:
-                    all_findings.append(FINDING_MISSING_OPTION_DESCRIPTION)
+                _record_finding(all_findings, FINDING_MISSING_OPTION_DESCRIPTION)
                 continue
             _collect_plain_brief_findings(option_description, all_findings)
             _collect_length_findings(
@@ -209,13 +187,13 @@ def build_block_reason(all_findings: list[str]) -> str:
         for each_code in all_findings
         if each_code in ALL_FINDING_GUIDANCE_BY_CODE
     ]
-    guidance_block = NEWLINE_JOIN_SEPARATOR.join(all_guidance_lines)
-    return (
-        f"{CORRECTIVE_MESSAGE_HEADER}{NEWLINE_JOIN_SEPARATOR}"
-        f"{NEWLINE_JOIN_SEPARATOR}"
-        f"{guidance_block}{NEWLINE_JOIN_SEPARATOR}"
-        f"{NEWLINE_JOIN_SEPARATOR}"
-        f"{CORRECTIVE_MESSAGE_FOOTER}"
+    blank_line = NEWLINE_JOIN_SEPARATOR + NEWLINE_JOIN_SEPARATOR
+    return blank_line.join(
+        [
+            CORRECTIVE_MESSAGE_HEADER,
+            NEWLINE_JOIN_SEPARATOR.join(all_guidance_lines),
+            CORRECTIVE_MESSAGE_FOOTER,
+        ]
     )
 
 
