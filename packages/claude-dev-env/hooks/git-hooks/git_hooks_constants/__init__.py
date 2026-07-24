@@ -22,6 +22,7 @@ GATE_PATH_OVERRIDE_ENV_VAR: str = "CODE_RULES_GATE_PATH"
 CLAUDE_HOME_ENV_VAR: str = "CLAUDE_HOME"
 CLAUDE_HOME_DEFAULT_SUBDIRECTORY: str = ".claude"
 GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
+    "skills",
     "_shared",
     "pr-loop",
     "scripts",
