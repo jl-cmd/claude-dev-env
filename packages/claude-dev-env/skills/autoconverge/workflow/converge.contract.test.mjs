@@ -685,18 +685,74 @@ test('the reuse lens runs under the Reuse phase', () => {
   assert.match(reusePrompt, /phase: 'Reuse'/);
 });
 
-test('the pre-commit gate step is a shared constant that dry-runs the CODE_RULES commit gate', () => {
+test('the pre-commit gate step stages and preserves the gate-attested index for verification', () => {
   assert.match(convergeSource, /const PRE_COMMIT_GATE_STEP =/);
   const stepStart = convergeSource.indexOf('const PRE_COMMIT_GATE_STEP =');
   const stepEnd = convergeSource.indexOf('\n\n', stepStart);
   const stepBody = convergeSource.slice(stepStart, stepEnd);
   assert.match(stepBody, /code_rules_gate\.py/);
   assert.match(stepBody, /--staged/);
+  assert.match(stepBody, /leave every gate-passing change staged/i);
+  assert.doesNotMatch(
+    stepBody,
+    /git restore --staged \./,
+    'expected the staged index to remain available for the verifier and verified-commit gate',
+  );
   assert.match(
     stepBody,
     /do NOT commit/i,
     'expected the gate step to forbid committing — it is a dry committability check',
   );
+});
+
+test('each verifier inspects the full staged and unstaged change surface from HEAD', () => {
+  const verifierBody = functionSource('runVerifierTask');
+  const allVerifierDiffCommands = verifierBody.match(/git diff HEAD/g) ?? [];
+  assert.equal(
+    allVerifierDiffCommands.length,
+    3,
+    'expected fix, repair, and hardening verifiers to inspect staged and unstaged changes together',
+  );
+});
+
+test('repair verification also inspects committed rebase resolutions against origin/main', () => {
+  const verifierBody = functionSource('runVerifierTask');
+  const fixVerifierStart = verifierBody.indexOf("task === 'fix-verify'");
+  const repairVerifierStart = verifierBody.indexOf("task === 'repair-verify'");
+  const hardeningVerifierStart = verifierBody.indexOf('\n  return convergeReadOnlyAgent(', repairVerifierStart);
+  const fixVerifier = verifierBody.slice(fixVerifierStart, repairVerifierStart);
+  const repairVerifier = verifierBody.slice(repairVerifierStart, hardeningVerifierStart);
+  const hardeningVerifier = verifierBody.slice(hardeningVerifierStart);
+
+  assert.match(repairVerifier, /git diff HEAD/);
+  assert.match(repairVerifier, /git diff origin\/main\.\.\.HEAD/);
+  assert.doesNotMatch(fixVerifier, /git diff origin\/main\.\.\.HEAD/);
+  assert.doesNotMatch(hardeningVerifier, /git diff origin\/main\.\.\.HEAD/);
+});
+
+test('a finding verdict unstages only for recovery, then re-attests before re-verification', () => {
+  const recoveryStepStart = convergeSource.indexOf('const VERIFIER_FINDING_UNSTAGE_STEP =');
+  assert.notEqual(recoveryStepStart, -1, 'expected an explicit verifier-finding recovery step');
+  const recoveryStepEnd = convergeSource.indexOf('\n\n', recoveryStepStart);
+  const recoveryStep = convergeSource.slice(recoveryStepStart, recoveryStepEnd);
+  assert.match(recoveryStep, /git restore --staged \./);
+
+  for (const helperName of ['runFixerTask', 'runCodeEditorTask']) {
+    const helperBody = functionSource(helperName);
+    const verifierRecoveryIndex = helperBody.indexOf('VERIFY-RECOVERY fixer');
+    const unstageStepIndex = helperBody.indexOf('VERIFIER_FINDING_UNSTAGE_STEP', verifierRecoveryIndex);
+    const reattestationIndex = helperBody.indexOf('PRE_COMMIT_GATE_STEP', verifierRecoveryIndex);
+    assert.ok(verifierRecoveryIndex >= 0, `expected ${helperName} to define verifier-finding recovery`);
+    assert.ok(
+      verifierRecoveryIndex < unstageStepIndex && unstageStepIndex < reattestationIndex,
+      `expected ${helperName} to unstage after a finding verdict and re-attest before re-verification`,
+    );
+  }
+
+  const recoveryBody = functionSource('verifyWithRecovery');
+  const recoverEditIndex = recoveryBody.indexOf('runRecoverEdit(');
+  const reverifyIndex = recoveryBody.lastIndexOf('runVerify(');
+  assert.ok(recoverEditIndex < reverifyIndex, 'expected repair before the verifier binds the refreshed staged index');
 });
 
 const editStepTaskDispatchers = ['runCodeEditorTask', 'runFixerTask'];

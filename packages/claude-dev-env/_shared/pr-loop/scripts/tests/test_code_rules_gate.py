@@ -13,7 +13,6 @@ import os
 import subprocess
 import sys
 import unittest.mock
-from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -2022,14 +2021,12 @@ def test_staged_pytest_runs_at_or_above_minimum_python(
     assert exit_code != 0
 
 
-def test_main_staged_skips_pytest_but_runs_code_rules_below_minimum_python(
+def test_main_staged_rule_failure_returns_before_pytest_version_guard(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The version guard skips only the staged pytest step. A staged code-rules
-    violation still blocks the commit, so the two checks stay independent.
-    """
+    """A staged rule failure returns before the staged pytest version guard."""
     write_file(temporary_git_repository / "module.py", "first_count = 1\n")
     commit_all_files(temporary_git_repository, "initial")
     write_file(
@@ -2052,8 +2049,8 @@ def test_main_staged_skips_pytest_but_runs_code_rules_below_minimum_python(
 
     captured = capsys.readouterr()
     assert exit_code == 1
-    assert "skipping the staged pytest step" in captured.err
     assert "result" in captured.err
+    assert "skipping the staged pytest step" not in captured.err
 
 
 def test_hunk_header_pattern_captures_new_start_and_count() -> None:
@@ -2280,7 +2277,7 @@ def test_read_staged_content_returns_staged_blob(
         temporary_git_repository, "staged.py"
     )
 
-    assert staged_content == "staged_value = 1\n"
+    assert staged_content == f"staged_value = 1{os.linesep}"
 
 
 def test_read_staged_content_returns_none_for_unstaged_path(
@@ -2440,11 +2437,14 @@ def _build_shadowing_skill(
 ) -> Path:
     skill_directory = repository_root / skill_name
     write_file(skill_directory / "pytest.ini", "[pytest]\n")
+    stage_file(repository_root, f"{skill_name}/pytest.ini")
     write_file(skill_directory / "scripts" / "__init__.py", "")
+    stage_file(repository_root, f"{skill_name}/scripts/__init__.py")
     write_file(
         skill_directory / "scripts" / f"{module_name}.py",
         f"{module_name}_marker = 1\n",
     )
+    stage_file(repository_root, f"{skill_name}/scripts/{module_name}.py")
     test_relative_path = f"{skill_name}/test_{module_name}.py"
     write_file(
         repository_root / test_relative_path,
@@ -2574,12 +2574,14 @@ def test_run_staged_test_files_fails_when_one_group_fails(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     write_file(temporary_git_repository / "passing_skill" / "pytest.ini", "[pytest]\n")
+    stage_file(temporary_git_repository, "passing_skill/pytest.ini")
     write_file(
         temporary_git_repository / "passing_skill" / "test_pass.py",
         "def test_pass() -> None:\n    assert True\n",
     )
     stage_file(temporary_git_repository, "passing_skill/test_pass.py")
     write_file(temporary_git_repository / "failing_skill" / "pytest.ini", "[pytest]\n")
+    stage_file(temporary_git_repository, "failing_skill/pytest.ini")
     write_file(
         temporary_git_repository / "failing_skill" / "test_fail.py",
         "def test_fail() -> None:\n    assert False\n",
@@ -2684,7 +2686,7 @@ def _staged_test_paths_under(group_root: Path, path_count: int) -> list[Path]:
 
 
 def _path_arguments_of(all_pytest_command: list[str]) -> list[str]:
-    fixed_prefix_length = len(gate_module.ALL_PYTEST_MODULE_INVOCATION) + 1
+    fixed_prefix_length = len(gate_module.ALL_STAGED_PYTEST_ARGUMENTS) + 2
     return all_pytest_command[fixed_prefix_length:]
 
 
