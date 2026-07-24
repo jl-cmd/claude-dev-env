@@ -201,6 +201,22 @@ The calling session:
 Build workers stop at stage-ready edits and a written report. They do not run
 `git commit`, `git push`, or `gh`.
 
+## Per-artifact fan-out
+
+Use when many like artifacts each need the same skill run over their own evidence
+(proven on the release-notes fleet: one build worker per artifact, 21/21 ok).
+
+1. Lead pre-fetches each artifact's evidence into a part file.
+2. One `build` worker per artifact receives that evidence injected into its brief.
+3. Worker builds exactly one output for that artifact inline (never `gh`).
+4. Lead collects, verifies, and publishes.
+
+Emit the batch spec with `scripts/build_per_artifact_batch.py` (one worker per
+artifact) instead of hand-writing it. The per-artifact brief template lives in
+[`reference/worker-briefs.md`](reference/worker-briefs.md). Canonical
+per-artifact skill a worker runs: `release-notes-html` (model-invocable per
+PR #403).
+
 ## Composition
 
 | Script | Role |
@@ -208,6 +224,7 @@ Build workers stop at stage-ready edits and a written report. They do not run
 | `grok_worker_preflight.py` | Soft gate (#96): binary, auth, install, optional ping |
 | `spawn_grok_batch.py` | Batch launch, stagger, report collect |
 | `grok_headless_runner.py` | One-worker runner (called by the batch launcher) |
+| `build_per_artifact_batch.py` | Emits a one-worker-per-artifact batch-spec JSON |
 
 Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handoff.
 
@@ -217,8 +234,9 @@ Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handof
 |---|---|
 | `SKILL.md` | Trigger, gotchas, process, batch shape, composition |
 | `CLAUDE.md` | Package map for this skill folder |
-| `reference/worker-briefs.md` | Readonly brief, build brief, report contract templates |
+| `reference/worker-briefs.md` | Readonly brief, build brief, per-artifact brief, report contract templates |
 | `reference/flag-profiles.md` | Readonly vs build flags, shared flags, socket and stagger rules |
+| `scripts/build_per_artifact_batch.py` | Deterministic per-artifact batch-spec emitter (under package `scripts/`) |
 
 ## Folder map
 

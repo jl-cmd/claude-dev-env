@@ -18,11 +18,12 @@ push, and GitHub post.
 | File | Role |
 |---|---|
 | `SKILL.md` | Entry protocol: when to use, gotchas, preflight → batch spec → launch → collect → verify. |
-| `reference/worker-briefs.md` | Readonly investigation brief, build brief (edits and tests only), report contract. |
+| `reference/worker-briefs.md` | Readonly investigation brief, build brief, per-artifact fan-out brief, report contract. |
 | `reference/flag-profiles.md` | Readonly vs build flag sets, shared flags, leader-socket and stagger rules, `--agent` note. |
 
 ## Entry point
 
 No skill-local scripts. Runtime lives in `$HOME/.claude/scripts/`
-(`grok_worker_preflight.py`, `spawn_grok_batch.py`, `grok_headless_runner.py`)
-after install. Constants live in `scripts/dev_env_scripts_constants/`.
+(`grok_worker_preflight.py`, `spawn_grok_batch.py`, `grok_headless_runner.py`,
+`build_per_artifact_batch.py`) after install. Constants live in
+`scripts/dev_env_scripts_constants/`.
