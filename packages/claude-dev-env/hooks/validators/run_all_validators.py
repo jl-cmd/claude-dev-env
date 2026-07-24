@@ -19,6 +19,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from .config.directory_exemption_constants import (
+    ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
+)
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
@@ -422,7 +425,9 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
     )
 
 
-def run_ruff_checks(files: List[Path]) -> ValidatorResult:
+def run_ruff_checks(
+    files: List[Path], config_source_path: Optional[Path] = None
+) -> ValidatorResult:
     """Run ruff for fast Python linting."""
     if not check_ruff_available():
         return ValidatorResult(
@@ -432,7 +437,7 @@ def run_ruff_checks(files: List[Path]) -> ValidatorResult:
             output="Ruff not installed - skipping",
         )
 
-    result = run_ruff_check(files)
+    result = run_ruff_check(files, config_source_path)
 
     return ValidatorResult(
         name="Ruff",
@@ -442,7 +447,9 @@ def run_ruff_checks(files: List[Path]) -> ValidatorResult:
     )
 
 
-def run_mypy_checks(files: List[Path]) -> ValidatorResult:
+def run_mypy_checks(
+    files: List[Path], config_source_path: Optional[Path] = None
+) -> ValidatorResult:
     """Run mypy for static type checking."""
     if not check_mypy_available():
         return ValidatorResult(
@@ -452,7 +459,7 @@ def run_mypy_checks(files: List[Path]) -> ValidatorResult:
             output="Mypy not installed - skipping",
         )
 
-    result = run_mypy_check(files)
+    result = run_mypy_check(files, config_source_path)
 
     return ValidatorResult(
         name="Mypy",
@@ -736,7 +743,9 @@ def reconstruct_proposed_content(
     return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
 
 
-def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
+def run_file_scoped_validators(
+    all_files: List[Path], config_source_path: Optional[Path] = None
+) -> List[ValidatorResult]:
     """Run every validator scoped to individual files against *all_files*.
 
     Excludes the branch-scoped File Structure and Git validators, which grade
@@ -745,6 +754,7 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
     Args:
         all_files: The files under validation — a single reconstructed file in
             gate mode.
+        config_source_path: Original path ruff and mypy resolve their config from.
 
     Returns:
         One ValidatorResult per file-scoped validator, in run order.
@@ -753,8 +763,8 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
         run_python_style_checks(all_files),
         run_test_safety_checks(all_files),
         run_react_checks(all_files),
-        run_ruff_checks(all_files),
-        run_mypy_checks(all_files),
+        run_ruff_checks(all_files, config_source_path),
+        run_mypy_checks(all_files, config_source_path),
         run_abbreviation_checks(all_files),
         run_pr_reference_checks(all_files),
         run_magic_value_checks(all_files),
@@ -767,27 +777,115 @@ def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
     ]
 
 
+def _escapes_temporary_root(path_part: str) -> bool:
+    """Return True when a path part would climb out of or re-anchor the temp root.
+
+    ::
+
+        ok:   "scripts"  -> False (stays inside)
+        flag: ".."       -> True  (climbs a level)
+        flag: "/etc"     -> True  (absolute, re-anchors the join)
+
+    A ``..`` component escapes upward and an absolute or anchored component
+    re-roots the join away from the temporary directory. Both are dropped so a
+    staged file cannot land outside the ephemeral root.
+
+    Args:
+        path_part: A single path component drawn from the destination path.
+
+    Returns:
+        True when the component must be dropped to keep staging contained.
+    """
+    if path_part == os.pardir:
+        return True
+    part_as_path = Path(path_part)
+    return part_as_path.is_absolute() or bool(part_as_path.anchor)
+
+
+def _temporary_path_preserving_directory_signal(
+    temporary_directory: Path, file_path: str
+) -> Path:
+    """Build a temp path that keeps exemption directory tails and the basename.
+
+    Directory-based exemptions (for example ``/scripts/`` CLI markers and
+    ``/tests/`` test-path patterns) match substrings of the file path. Staging
+    under a flat temp basename drops those segments. Mirroring only the
+    exemption-relevant directory tail (plus basename) restores that signal
+    without copying absolute system prefixes such as pytest ``tmp_path`` parents
+    that contain ``test_`` and would falsely trip test-file exemptions.
+
+    Args:
+        temporary_directory: Root of the ephemeral staging tree.
+        file_path: Real destination path the write or edit targets.
+
+    Returns:
+        Path under *temporary_directory* ending in the exemption directory tail
+        (when present) and the real basename.
+    """
+    destination_path = Path(file_path)
+    path_parts = destination_path.parts
+    if destination_path.anchor:
+        path_parts = path_parts[1:]
+    if not path_parts:
+        path_parts = (destination_path.name,)
+
+    all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
+    start_index = len(path_parts) - 1
+    for each_index, each_part in enumerate(path_parts[:-1]):
+        if each_part.lower() not in all_directory_exemption_segment_names:
+            continue
+        start_index = each_index
+        break
+
+    selected_parts = path_parts[start_index:]
+    contained_parts = tuple(
+        each_part for each_part in selected_parts if not _escapes_temporary_root(each_part)
+    )
+    if not contained_parts:
+        contained_parts = (destination_path.name,)
+    temporary_file = temporary_directory.joinpath(*contained_parts)
+    if not temporary_file.resolve().is_relative_to(temporary_directory.resolve()):
+        temporary_file = temporary_directory / destination_path.name
+    temporary_file.parent.mkdir(parents=True, exist_ok=True)
+    return temporary_file
+
+
 def validate_proposed_file(
-    file_path: str, proposed_content: str
+    file_path: str,
+    proposed_content: str,
+    config_source_path: Optional[Path] = None,
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Writes the content to a temporary file that carries the target's basename so
-    suffix-based and test-name-based validator filtering matches the real path,
-    then runs the file-scoped validators against it.
+    Writes the content to a temporary file that preserves the exemption-relevant
+    directory tail and basename so directory-based exemptions, suffix-based
+    filtering, and test-name-based filtering match the real path, then runs the
+    file-scoped validators against it. Ruff and mypy resolve their config by
+    walking up from the config source path, so the staged copy is graded under
+    the project config the real path sits in rather than the temp directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
         proposed_content: The reconstructed post-edit content of that file.
+        config_source_path: Path ruff and mypy resolve their config from;
+            defaults to *file_path* when the caller passes nothing.
 
     Returns:
         One ValidatorResult per file-scoped validator.
     """
-    base_name = Path(file_path).name
     with tempfile.TemporaryDirectory() as temporary_directory:
-        temporary_file = Path(temporary_directory) / base_name
+        temporary_file = _temporary_path_preserving_directory_signal(
+            Path(temporary_directory), file_path
+        )
         temporary_file.write_text(proposed_content, encoding="utf-8")
-        return run_file_scoped_validators([temporary_file])
+        resolved_config_source_path = (
+            config_source_path
+            if config_source_path is not None
+            else Path(file_path)
+        )
+        return run_file_scoped_validators(
+            [temporary_file], config_source_path=resolved_config_source_path
+        )
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:
