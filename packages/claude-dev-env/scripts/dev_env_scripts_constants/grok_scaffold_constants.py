@@ -18,12 +18,12 @@ from __future__ import annotations
 REPORT_CONTRACT_TEMPLATE: str = """# Report contract
 
 End your turn with exactly these sections, in this order. Use plain markdown.
-No tool calls after the report.
+Make the report your last action.
 
 ## Changed files
 
 - List every path you wrote or edited, one per line.
-- Write `none` when the role is read-only or no edit landed.
+- Write `none` for a read-only role or an unchanged tree.
 
 ## Red-green evidence
 
@@ -43,7 +43,7 @@ For each acceptance line from the brief:
 
 - Commands run (full command lines)
 - Exit codes
-- Short pass/fail summary (paste key lines; do not dump huge logs)
+- Short pass/fail summary (paste the key lines and keep logs short)
 
 ## Open questions
 
@@ -55,14 +55,14 @@ For each acceptance line from the brief:
 
 READONLY_BRIEF_TEMPLATE: str = """# Role: read-only investigation
 
-You investigate only. You do not write files, edit files, or run shell commands.
+You investigate only. You read the code and report what you find.
 
 ## Scope
 
 - Working directory: [absolute path]
 - Paths or symbols in scope: [list]
 - Question to answer: [one clear question]
-- Out of scope: [list]
+- Boundary paths (report facts here as open questions): [list]
 
 ## Method
 
@@ -71,11 +71,12 @@ You investigate only. You do not write files, edit files, or run shell commands.
 3. Prefer measured facts (names, signatures, call sites) over guesses.
 4. When a fact is unproven, label it `unverified`.
 
-## Hard stops
+## Boundaries
 
-- No Write, Edit, or Bash.
-- No commits, pushes, or `gh`.
-- No expanding scope past the listed paths without noting it as an open question.
+- Work with read-only tools: read files and report.
+- Leave every git and GitHub step to the lead session.
+- Stay within the listed paths; record any fact you need outside them as an
+  open question.
 
 ## Done when
 
@@ -86,15 +87,15 @@ gap that blocks an answer.
 
 BUILD_BRIEF_TEMPLATE: str = """# Role: build worker
 
-You edit code and run tests for one closed task. You never commit, push, or call
-`gh`. The lead session stages, verifies, commits, pushes, and posts.
+You edit code and run tests for one closed task. Hand every result back to the
+lead session, which stages, verifies, commits, pushes, and posts.
 
 ## Scope
 
 - Working directory: [absolute path]
 - Task: [one sentence]
 - Files you may touch: [list]
-- Files you must not touch: [list]
+- Files to leave as-is: [list]
 - Acceptance lines (each must map to evidence in the report):
   1. [line]
   2. [line]
@@ -106,14 +107,15 @@ You edit code and run tests for one closed task. You never commit, push, or call
    behavior).
 3. Make the smallest edit that satisfies the acceptance lines.
 4. Run the named test commands and capture pass/fail output.
-5. Stop with a stage-ready tree and a full report. Do not commit.
+5. Stop with a stage-ready tree and a full report; the lead session commits.
 
-## Hard stops
+## Boundaries
 
-- Never `git commit`, `git push`, or `gh`.
-- Never force-push, rewrite shared history, or change git config.
-- Never expand into files outside the allow list without an open question.
-- Never mark acceptance done without command output or a `file:line` proof.
+- Leave every git and `gh` step to the lead session.
+- Keep git history and config as you found them.
+- Stay within the allow-listed files; record any file you need outside the list
+  as an open question.
+- Back every acceptance mark with command output or a `file:line` proof.
 
 ## Done when
 
@@ -126,8 +128,8 @@ TASK_BODY_TEMPLATE: str = """# Task
 
 Replace this file with the task-specific scope for this worker: the closed
 scope, the exact absolute paths, and the acceptance lines. Keep it
-self-contained. A headless worker sees only its assembled prompt parts, so
-conversation-relative phrases mean nothing here.
+self-contained. A headless worker reads the prompt parts it is given, so write
+every part to stand on its own.
 """
 """Placeholder task body the caller overwrites with per-worker scope."""
 

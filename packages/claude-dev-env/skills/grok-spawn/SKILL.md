@@ -20,22 +20,36 @@ Use for a grok worker fleet, a headless grok batch, or `/grok-spawn`. Good fits:
 - Fan-out read-only research across several paths or files.
 - Parallel bite-sized build work where each worker owns one closed scope.
 
-Skip this skill when the work needs live `SendMessage` coordination between
-agents or Claude-only tools (Agent tool, warm session-advisor, Claude MCP
-surfaces). For a single interactive Grok Build handoff paste, use `/grokify`.
-
 **Refusal:** with no concrete worker tasks, reply `What should the grok workers
 do? List each role in one line.` and stop.
 
+## Worker environment
+
+A spawned grok worker loads the full user-level Claude config from `~/.claude/`
+and runs with the same environment a Claude session has: hooks, skills, agents,
+rules, and MCP surfaces all apply. The worker invokes skills, spawns its own
+subagents and messages them the way a Claude session does, and reaches every
+Claude surface the config installs. The **Workflow** tool stays with the
+spawning Claude session.
+
+The spawning Claude session owns the advisor. Its advisor reviews each worker's
+returned report; when the advisor flags an issue, the session re-runs the worker
+headlessly with the corrections folded into the brief. Grok does the work,
+Claude's advisor reviews it, and Claude re-runs grok with the fixes.
+
+Describe a grok worker to a user by what it holds: the full installed Claude
+config — skills, agents, hooks, rules, MCP — running fan-out work under Claude's
+review.
+
 ## Constraints
 
-- Workers never commit, push, or call `gh`. This session stages, verifies,
-  commits, pushes, and posts to GitHub.
-- Grok has no `SendMessage` and no Claude Agent tool.
-- Preflight is a soft gate: a fallthrough reason means skip the fleet and use
-  the next tier, not a hard failure.
-- Every brief stands alone. A headless worker sees only its assembled prompt
-  parts, so conversation-relative phrases ("as above") mean nothing.
+- The spawning Claude session owns every git and GitHub step: it stages,
+  verifies, commits, pushes, and posts. Each worker hands back stage-ready edits
+  and a written report.
+- Preflight is a soft gate: a fallthrough reason routes the run to the next tier.
+- Every brief stands alone. A headless worker reads the prompt parts it is
+  given, so write each brief to carry its full context in plain, self-contained
+  text.
 
 ## Process
 
@@ -121,6 +135,3 @@ yourself. Build workers stop at stage-ready edits and a written report.
 | `grok_batch_scaffold.py` | Writes the part files and the wired batch-spec skeleton |
 | `spawn_grok_batch.py` | Batch launch, stagger, report collect |
 | `grok_headless_runner.py` | One-worker runner called by the launcher |
-
-Sibling skill: `/grokify` for a single paste-ready interactive Grok Build
-handoff.

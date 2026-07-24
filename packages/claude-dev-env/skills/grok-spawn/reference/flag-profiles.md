@@ -9,19 +9,16 @@ from it; the exact flag tokens live in
 - `readonly` — the launcher passes `--disallowed-tools Write,Edit,Bash`, so the
   worker reads only. Set `is_repo_only: true` to also pass `--disable-web-search`
   for a repo-only scan. Use for investigation, file:line mapping, and plan input.
-- `build` — full tool surface, no tool-restriction flags. Use for edits and
-  tests inside a closed file allow list. This session owns git and `gh`.
+- `build` — full tool surface. Use for edits and tests inside a closed file
+  allow list. This session owns git and `gh`.
 
 ## Named agent charters
 
-When a worker's `agent_name` is a non-null string, the runner passes
-`--agent <name>` and grok loads that charter from the user-level Claude config
-home (`~/.claude/agents/`, plus the installed `skills/`, `rules/`, `hooks/`).
-
-Preflight role `bugteam` requires `code-quality-agent.md` and `clean-coder.md`
-under `~/.claude/agents/` and the `claude-dev-env` install manifest. Install or
-reinstall `claude-dev-env` before a fleet that relies on those agents. Pass
-`agent_name: null` (or omit it) for a worker that runs without a charter.
+When a worker's `agent_name` names a charter, the runner passes `--agent <name>`
+and grok loads that charter from the user-level Claude config home
+(`~/.claude/agents/`, plus the installed `skills/`, `rules/`, `hooks/`). Name a
+charter to bind that agent; leave `agent_name` as `null` (or omit it) to run the
+worker on the base installed config.
 
 ## Profile cheat sheet
 
