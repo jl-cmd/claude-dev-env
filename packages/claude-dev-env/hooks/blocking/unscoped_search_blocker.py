@@ -39,6 +39,7 @@ from hooks_constants.unscoped_search_blocker_constants import (  # noqa: E402
     ALL_FIND_PROGRAM_BASENAMES,
     ALL_GET_CHILD_ITEM_PATH_FLAGS,
     ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES,
+    ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES,
     ALL_GET_CHILD_ITEM_RECURSE_FLAGS,
     ALL_SUPPORTED_TOOL_NAMES,
     ALL_UNSCOPED_HOME_LITERALS,
@@ -143,6 +144,16 @@ def _segment_has_unscoped_find(all_segment_tokens: list[str]) -> bool:
     )
 
 
+def _token_is_recurse_flag(token: str) -> bool:
+    lowered_token = token.lower()
+    if lowered_token in ALL_GET_CHILD_ITEM_RECURSE_FLAGS:
+        return True
+    return any(
+        lowered_token.startswith(each_prefix)
+        for each_prefix in ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES
+    )
+
+
 def _collect_get_child_item_path_tokens(all_argument_tokens: list[str]) -> list[str]:
     all_path_tokens: list[str] = []
     token_index = 0
@@ -154,7 +165,7 @@ def _collect_get_child_item_path_tokens(all_argument_tokens: list[str]) -> list[
                 all_path_tokens.append(all_argument_tokens[token_index + 1])
                 token_index += PATH_FLAG_AND_VALUE_TOKEN_STRIDE
                 continue
-        if each_token.startswith("-"):
+        if _token_is_recurse_flag(each_token) or each_token.startswith("-"):
             token_index += 1
             continue
         all_path_tokens.append(each_token)
@@ -172,8 +183,7 @@ def _segment_has_unscoped_recursive_listing(all_segment_tokens: list[str]) -> bo
         all_segment_tokens, leading_program
     )
     has_recurse_flag = any(
-        each_token.lower() in ALL_GET_CHILD_ITEM_RECURSE_FLAGS
-        for each_token in all_argument_tokens
+        _token_is_recurse_flag(each_token) for each_token in all_argument_tokens
     )
     if not has_recurse_flag:
         return False

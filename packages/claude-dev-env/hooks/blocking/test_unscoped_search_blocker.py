@@ -131,6 +131,9 @@ def test_scoped_or_non_find_commands_are_allowed(command: str) -> None:
         "gci -Recurse /",
         "dir -Recurse C:\\",
         "Get-ChildItem -LiteralPath $HOME -Recurse",
+        "Get-ChildItem -Recurse:$true C:\\",
+        "Get-ChildItem -Path C:\\ -Recurse:$true",
+        "dir /s C:\\",
     ],
 )
 def test_recursive_get_child_item_on_root_is_denied(command: str) -> None:

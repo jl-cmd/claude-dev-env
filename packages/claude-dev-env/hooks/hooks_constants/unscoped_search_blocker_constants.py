@@ -23,6 +23,7 @@ __all__ = [
     "PATH_FLAG_AND_VALUE_TOKEN_STRIDE",
     "ALL_FIND_EXPRESSION_INTRODUCER_TOKENS",
     "ALL_GET_CHILD_ITEM_RECURSE_FLAGS",
+    "ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES",
     "ALL_GET_CHILD_ITEM_PATH_FLAGS",
     "ALL_UNSCOPED_HOME_LITERALS",
     "GIT_BASH_DRIVE_ROOT_PATTERN",
@@ -55,7 +56,11 @@ PATH_FLAG_AND_VALUE_TOKEN_STRIDE = 2
 ALL_FIND_EXPRESSION_INTRODUCER_TOKENS: frozenset[str] = frozenset({"!", "(", ")"})
 
 ALL_GET_CHILD_ITEM_RECURSE_FLAGS: frozenset[str] = frozenset(
-    {"-recurse", "-r", "-rec"}
+    {"-recurse", "-r", "-rec", "/s"}
+)
+ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES: tuple[str, ...] = (
+    "-recurse:",
+    "-r:",
 )
 ALL_GET_CHILD_ITEM_PATH_FLAGS: frozenset[str] = frozenset(
     {"-path", "-literalpath", "-lp"}
