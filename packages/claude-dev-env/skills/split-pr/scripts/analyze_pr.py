@@ -18,7 +18,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from categorize_files import annotate_files, build_slices_from_files
+from categorize_files import (
+    annotate_files,
+    build_slices_from_files,
+    slice_fits_review_budget,
+)
 from split_pr_scripts_constants.config.analyze_constants import (
     BODY_EXCERPT_MAX_LENGTH,
     BRANCH_NAME_SEPARATOR,
@@ -61,6 +65,7 @@ from split_pr_scripts_constants.config.analyze_constants import (
     TEST_HEAD_SHA,
     WARNING_BELOW_THRESHOLD,
     WARNING_OTHER_LAYER_NONEMPTY,
+    WARNING_OVERSIZED_ATOMIC_SLICE,
     WARNING_SINGLE_LAYER,
 )
 from split_pr_scripts_constants.config.categorize_constants import LAYER_OTHER
@@ -85,6 +90,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     SLICE_KEY_BASE,
     SLICE_KEY_BRANCH,
     SLICE_KEY_INDEX,
+    SLICE_KEY_OVERSIZED_ATOMIC,
 )
 
 JsonObject = dict[str, object]
@@ -136,10 +142,24 @@ def build_plan_from_pr_payload(
         title_prefix=title_prefix,
     )
     _assign_stack_branches(all_slices, pr_number=pr_number, base_ref=base_ref)
-    all_warnings = _collect_warnings(all_annotated)
+    all_warnings = _collect_warnings(all_annotated, all_slices)
     file_count = len(all_annotated)
+    total_changed_lines = sum(
+        int(each.get(FILE_KEY_ADDITIONS, 0) or 0)
+        + int(each.get(FILE_KEY_DELETIONS, 0) or 0)
+        for each in all_annotated
+    )
     threshold_note: str | None = None
-    if file_count < MINIMUM_SPLIT_FILE_COUNT:
+    if slice_fits_review_budget(
+        file_count=file_count,
+        changed_lines=total_changed_lines,
+    ):
+        threshold_note = (
+            "parent already fits review budget "
+            f"(files={file_count}, changed_lines={total_changed_lines}); "
+            "split is optional"
+        )
+    elif file_count < MINIMUM_SPLIT_FILE_COUNT:
         threshold_note = ERROR_BELOW_SPLIT_THRESHOLD % (
             file_count,
             MINIMUM_SPLIT_FILE_COUNT,
@@ -204,7 +224,10 @@ def _assign_stack_branches(
         previous_base = branch_name
 
 
-def _collect_warnings(all_annotated: list[JsonObject]) -> list[str]:
+def _collect_warnings(
+    all_annotated: list[JsonObject],
+    all_slices: list[JsonObject],
+) -> list[str]:
     all_warnings: list[str] = []
     file_count = len(all_annotated)
     if file_count < MINIMUM_SPLIT_FILE_COUNT:
@@ -214,6 +237,8 @@ def _collect_warnings(all_annotated: list[JsonObject]) -> list[str]:
         all_warnings.append(WARNING_SINGLE_LAYER)
     if any(str(each.get(FILE_KEY_LAYER)) == LAYER_OTHER for each in all_annotated):
         all_warnings.append(WARNING_OTHER_LAYER_NONEMPTY)
+    if any(bool(each.get(SLICE_KEY_OVERSIZED_ATOMIC)) for each in all_slices):
+        all_warnings.append(WARNING_OVERSIZED_ATOMIC_SLICE)
     return all_warnings
 
 
