@@ -95,6 +95,76 @@ listed with command output), and the report lists every changed file.
 
 ---
 
+## Per-artifact fan-out
+
+Use when many like artifacts each need the **same skill** run over **that
+artifact's own evidence** — for example one HTML page per release-notes unit.
+The lead pre-fetches evidence per artifact, injects it into a brief, launches one
+`build` worker per artifact, then collects, verifies, and publishes. Workers
+never call `gh`; the lead owns publish.
+
+`scripts/build_per_artifact_batch.py` emits the batch-spec JSON that lists one
+worker per artifact. Each worker's `prompt_parts` is `[this brief, that
+artifact's evidence part]` (absolute paths).
+
+### Per-artifact build brief
+
+Use with `tool_profile: "build"`. Scope names **one** artifact. Paste that
+artifact's pre-fetched facts under `## Evidence (injected)`.
+
+```markdown
+# Role: per-artifact build worker
+
+You edit code and run tests for exactly one artifact. You never commit, push, or
+call `gh`. The lead session stages, verifies, commits, pushes, and posts.
+
+## Scope
+
+- Working directory: [absolute path]
+- Artifact: [one name or id]
+- Skill to run: [e.g. release-notes-html]
+- Output to produce: [exactly one <output> for this artifact, inline]
+- Files you may touch: [list]
+- Files you must not touch: [list]
+- Acceptance lines (each must map to evidence in the report):
+  1. [line]
+  2. [line]
+
+## Evidence (injected)
+
+[Lead pastes this artifact's pre-fetched facts here — measurements, paths,
+quotes, hashes, dimensions. Do not re-fetch from the network or GitHub.]
+
+## Task
+
+Build exactly one <output> for this artifact from the evidence above. Write the
+result inline (stage-ready files under the allow list). Do not open a PR, call
+`gh`, or touch other artifacts.
+
+## Method
+
+1. Read the evidence and any in-scope files named there.
+2. Run the named skill or produce the named output for this artifact only.
+3. Capture pass/fail of any checks the skill or acceptance lines require.
+4. Stop with a stage-ready tree and a full report. Do not commit.
+
+## Hard stops
+
+- Never `git commit`, `git push`, or `gh`.
+- Never force-push, rewrite shared history, or change git config.
+- Never expand into files outside the allow list without an open question.
+- Never mark acceptance done without command output or a file:line proof.
+- Never build outputs for other artifacts in this fleet.
+
+## Done when
+
+Every acceptance line has evidence, the single output for this artifact is
+stage-ready (or failures are listed with command output), and the report lists
+every changed file.
+```
+
+---
+
 ## Report contract
 
 Append this part (or paste its sections into the task body) for every worker —
