@@ -22,6 +22,7 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
     ALL_FINDING_GUIDANCE_BY_CODE,
+    ALL_QUESTION_SENTENCE_OPENERS,
     ALL_SOFT_PERIOD_ABBREVIATIONS,
     ALL_TITLE_PERIOD_ABBREVIATIONS,
     ARROW_TOKEN_PATTERN,
@@ -38,6 +39,8 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     FINDING_STACKED_HYPHEN_COMPOUND,
     FINDING_TOO_MANY_SENTENCES,
     HOOK_EVENT_NAME,
+    INLINE_CODE_SPAN_PATTERN,
+    MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH,
     MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION,
     MAXIMUM_SENTENCES_PER_QUESTION,
     MAXIMUM_WORDS_PER_SENTENCE,
@@ -109,6 +112,17 @@ def _token_before_index(text: str, terminator_index: int) -> str:
     return token_match.group(1)
 
 
+def _next_alpha_word(text: str, start_index: int) -> str:
+    rest_after = text[start_index:].lstrip()
+    next_word = ""
+    for each_character in rest_after:
+        if each_character.isalpha():
+            next_word += each_character
+            continue
+        break
+    return next_word
+
+
 def _following_sentence_start_character(text: str, start_index: int) -> str:
     """Return the character that would start the next sentence after a terminator."""
     index = start_index
@@ -139,23 +153,28 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     # A fact that ends on a number ("found 12. Which") still is.
     if _is_numbered_list_marker(text, terminator_index, token):
         return True
+    next_word = _next_alpha_word(text, terminator_index + 1)
     # Single-letter chain tokens ("U." / "e." in U.S. / e.g.) are not ends.
-    # A lone option letter that ends a fact ("option A. Which") is a real end.
+    # "option A. Which" and "A. I should" are real ends (next word is not a
+    # single non-I letter).
     if len(token) == 1 and token.isalpha():
         following_start = _following_sentence_start_character(text, terminator_index + 1)
         if following_start == "" or following_start.islower():
             return True
-        rest_after_period = text[terminator_index + 1 :].lstrip()
-        next_word = ""
-        for each_character in rest_after_period:
-            if each_character.isalpha():
-                next_word += each_character
-                continue
-            break
-        return len(next_word) == 1
+        if len(next_word) == 1 and next_word.upper() != "I":
+            return True
+        return False
+    # Multi-letter head of a multi-part abbrev (``Ph.D.``).
+    if (
+        token.isalpha()
+        and len(token) <= MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH
+        and len(next_word) == 1
+    ):
+        return True
     lowered_token = token.lower()
     if lowered_token in ALL_TITLE_PERIOD_ABBREVIATIONS:
-        return True
+        # "Jr. Which" is a real end; "Dr. Smith" stays mid-name.
+        return next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
     if lowered_token in ALL_SOFT_PERIOD_ABBREVIATIONS:
         following = _following_sentence_start_character(text, terminator_index + 1)
         # "etc. How" is a real end; "etc. more" stays mid-phrase.
@@ -294,13 +313,19 @@ def _collect_length_findings(
             break
 
 
+def _strip_inline_code_spans(prose_text: str) -> str:
+    return INLINE_CODE_SPAN_PATTERN.sub("", prose_text)
+
+
 def _collect_plain_brief_findings(prose_text: str, all_findings: list[str]) -> None:
-    stripped_text = prose_text.strip()
+    # Exact identifiers in backticks stay out of structure scans.
+    structure_text = _strip_inline_code_spans(prose_text)
+    stripped_text = structure_text.strip()
     if PROCESS_NARRATION_OPENER_PATTERN.search(stripped_text) is not None:
         _record_finding(all_findings, FINDING_PROCESS_NARRATION)
-    if len(ARROW_TOKEN_PATTERN.findall(prose_text)) >= MINIMUM_ARROW_TOKENS_FOR_CHAIN:
+    if len(ARROW_TOKEN_PATTERN.findall(structure_text)) >= MINIMUM_ARROW_TOKENS_FOR_CHAIN:
         _record_finding(all_findings, FINDING_ARROW_CHAIN)
-    if STACKED_HYPHEN_COMPOUND_PATTERN.search(prose_text) is not None:
+    if STACKED_HYPHEN_COMPOUND_PATTERN.search(structure_text) is not None:
         _record_finding(all_findings, FINDING_STACKED_HYPHEN_COMPOUND)
 
 

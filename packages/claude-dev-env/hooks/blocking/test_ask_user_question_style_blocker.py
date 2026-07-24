@@ -196,6 +196,34 @@ def test_option_letter_ending_fact_counts_as_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_option_letter_before_pronoun_i_counts_as_context() -> None:
+    question_text = "Picked option A. I should switch runtimes?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_title_abbreviation_before_which_counts_as_context() -> None:
+    question_text = "The assignee is John Jr. Which path should we take?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_phd_abbreviation_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "Ph.D. hiring stalled. Budget is open. Which lab should we fund?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_MISSING_CONTEXT not in findings
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
+def test_arrows_inside_backticks_are_not_flagged() -> None:
+    question_text = (
+        "The pipeline is `setup -> check -> publish`. Which stage failed?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_ARROW_CHAIN not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(

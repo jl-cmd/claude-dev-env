@@ -88,6 +88,38 @@ STACKED_HYPHEN_COMPOUND_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z]+-[A-Za-z]+(?:\s+[A-Za-z]+-[A-Za-z]+){2,}\b"
 )
 
+INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
+
+# Longest multi-letter head for multi-part abbrevs such as Ph.D.
+MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH: int = 3
+
+# After a title abbreviation, these openers mean a real new sentence / ask.
+ALL_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
+    {
+        "which",
+        "what",
+        "how",
+        "should",
+        "can",
+        "could",
+        "would",
+        "will",
+        "do",
+        "does",
+        "did",
+        "is",
+        "are",
+        "was",
+        "were",
+        "who",
+        "when",
+        "where",
+        "why",
+        "may",
+        "might",
+    }
+)
+
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"
 FINDING_PROCESS_NARRATION: str = "process_narration_opener"
