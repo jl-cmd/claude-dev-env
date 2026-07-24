@@ -20,17 +20,15 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
 from pathlib import Path
 
+from gh_body_comment import run_gh_pr_comment, write_markdown_body_file
 from split_pr_scripts_constants.config.execute_constants import (
     ERROR_SUPERSEDE_CLOSE_FAILED,
     ERROR_SUPERSEDE_COMMENT_FAILED,
     ERROR_SUPERSEDE_VIEW_FAILED,
-    GH_BODY_FILE,
     GH_CLOSE,
     GH_COMMAND,
-    GH_COMMENT,
     GH_COMMENT_BODY_FIELD,
     GH_COMMENTS_FIELD,
     GH_JSON,
@@ -59,7 +57,6 @@ from split_pr_scripts_constants.config.execute_constants import (
     SUPERSEDE_SKIP_DISABLED,
     SUPERSEDE_SKIP_NO_CHILD_URLS,
     SUPERSEDE_SKIP_PARTIAL,
-    MARKDOWN_BODY_SUFFIX,
     NEWLINE,
 )
 
@@ -220,12 +217,13 @@ def supersede_source_pr(
         all_child_pr_numbers=all_child_pr_numbers,
         all_child_pr_urls=all_child_pr_urls,
     )
-    body_path = _write_body_file(comment_body)
-    _run_gh_comment(
-        source_pr_number=source_pr_number,
+    body_path = write_markdown_body_file(comment_body)
+    run_gh_pr_comment(
+        pr_number=source_pr_number,
         body_path=body_path,
         repo=repo,
         working_directory=working_directory,
+        error_template=ERROR_SUPERSEDE_COMMENT_FAILED,
     )
     _run_gh_close(
         source_pr_number=source_pr_number,
@@ -294,47 +292,6 @@ def _is_already_superseded(
         if SUPERSEDE_HEADING in body_text:
             return True
     return False
-
-
-def _write_body_file(comment_body: str) -> str:
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        suffix=MARKDOWN_BODY_SUFFIX,
-        delete=False,
-    ) as body_file:
-        body_file.write(comment_body)
-        return body_file.name
-
-
-def _run_gh_comment(
-    source_pr_number: int,
-    body_path: str,
-    repo: str | None,
-    working_directory: str | None,
-) -> None:
-    all_command = [
-        GH_COMMAND,
-        GH_PR,
-        GH_COMMENT,
-        str(source_pr_number),
-        GH_BODY_FILE,
-        body_path,
-    ]
-    if repo:
-        all_command.extend([GH_REPO_FLAG, repo])
-    completed = subprocess.run(
-        all_command,
-        cwd=working_directory,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise RuntimeError(
-            ERROR_SUPERSEDE_COMMENT_FAILED % (source_pr_number, detail)
-        )
 
 
 def _run_gh_close(

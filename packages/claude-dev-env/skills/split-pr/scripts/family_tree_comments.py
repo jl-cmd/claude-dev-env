@@ -18,10 +18,9 @@ order and linked list; the current PR is marked ``this PR``. Uses
 
 from __future__ import annotations
 
-import subprocess
-import tempfile
 from pathlib import Path
 
+from gh_body_comment import run_gh_pr_comment, write_markdown_body_file
 from split_pr_scripts_constants.config.execute_constants import (
     ERROR_FAMILY_TREE_COMMENT_FAILED,
     FAMILY_TREE_HEADING,
@@ -34,12 +33,6 @@ from split_pr_scripts_constants.config.execute_constants import (
     FAMILY_TREE_SKIP_NO_CHILD_URLS,
     FAMILY_TREE_SKIP_PARTIAL,
     FAMILY_TREE_SOURCE_LABEL,
-    GH_BODY_FILE,
-    GH_COMMAND,
-    GH_COMMENT,
-    GH_PR,
-    GH_REPO_FLAG,
-    MARKDOWN_BODY_SUFFIX,
     NEWLINE,
     PAYLOAD_KEY_CHILD_PR_NUMBERS,
     PAYLOAD_KEY_COMMENTED,
@@ -185,12 +178,13 @@ def post_family_tree_comments(
             all_child_pr_urls=all_child_pr_urls,
             this_pr_number=each_number,
         )
-        body_path = _write_body_file(comment_body)
-        _run_gh_comment(
+        body_path = write_markdown_body_file(comment_body)
+        run_gh_pr_comment(
             pr_number=each_number,
             body_path=body_path,
             repo=repo,
             working_directory=working_directory,
+            error_template=ERROR_FAMILY_TREE_COMMENT_FAILED,
         )
         all_commented.append(each_number)
 
@@ -200,42 +194,3 @@ def post_family_tree_comments(
         PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_pr_numbers,
         PAYLOAD_KEY_SKIPPED: False,
     }
-
-
-def _write_body_file(comment_body: str) -> str:
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        suffix=MARKDOWN_BODY_SUFFIX,
-        delete=False,
-    ) as body_file:
-        body_file.write(comment_body)
-        return body_file.name
-
-
-def _run_gh_comment(
-    pr_number: int,
-    body_path: str,
-    repo: str | None,
-    working_directory: str | None,
-) -> None:
-    all_command = [
-        GH_COMMAND,
-        GH_PR,
-        GH_COMMENT,
-        str(pr_number),
-        GH_BODY_FILE,
-        body_path,
-    ]
-    if repo:
-        all_command.extend([GH_REPO_FLAG, repo])
-    completed = subprocess.run(
-        all_command,
-        cwd=working_directory,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise RuntimeError(ERROR_FAMILY_TREE_COMMENT_FAILED % (pr_number, detail))

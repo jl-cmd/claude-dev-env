@@ -153,6 +153,7 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 | `scripts/verify_plan.py` | **Execute** — coverage gate |
 | `scripts/execute_split.py` | **Execute** — branches / draft PRs / family tree / supersede |
 | `scripts/family_tree_comments.py` | **Execute** — full linked tree comment on each child PR |
+| `scripts/gh_body_comment.py` | Shared ``gh pr comment --body-file`` helpers |
 | `scripts/supersede_source_pr.py` | **Execute** — comment + close source after full stack |
 | `scripts/split_pr_scripts_constants/` | Named constants |
 | `scripts/test_*.py` | Paired tests |
