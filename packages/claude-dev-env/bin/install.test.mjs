@@ -194,6 +194,18 @@ test('CONTENT_DIRECTORIES includes audit-rubrics so installer copies category ru
 });
 
 
+test('CONTENT_DIRECTORIES includes output-styles so installer copies plain-brief and other styles to ~/.claude/output-styles/', () => {
+    assert.ok(
+        CONTENT_DIRECTORIES.includes('output-styles'),
+        'output-styles must be in CONTENT_DIRECTORIES so plain-brief.md lands under $HOME/.claude/output-styles/',
+    );
+    assert.ok(
+        CORE_INCLUDE_DIRECTORIES.includes('output-styles'),
+        'output-styles must ship with --only core so AskUserQuestion plain-brief style is available',
+    );
+});
+
+
 test('collectPackageSourceConflicts surfaces both-added and deleted-by-them entries', () => {
     const repositoryRoot = createTemporaryGitRepository();
     try {

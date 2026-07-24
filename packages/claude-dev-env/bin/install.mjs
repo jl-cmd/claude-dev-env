@@ -18,14 +18,14 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics', 'output-styles'];
 
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
 const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 
 export const CORE_INCLUDE_DIRECTORIES = [
-    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts', 'output-styles',
 ];
 
 export const CORE_SKILLS = [
