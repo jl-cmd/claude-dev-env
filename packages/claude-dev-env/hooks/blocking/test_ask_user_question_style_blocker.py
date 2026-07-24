@@ -365,6 +365,21 @@ def test_letter_digit_dotted_suffix_does_not_inflate_sentence_count() -> None:
     assert FINDING_MISSING_CONTEXT not in findings
 
 
+def test_url_query_question_mark_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "Open https://example.com/path?X=1 For the API check. Mesh is plain. "
+        "Which client should we use?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
+def test_colon_inside_backticks_does_not_supply_context() -> None:
+    question_text = "Use the `label: description` form?"
+    assert question_has_leading_context(question_text) is False
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "

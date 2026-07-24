@@ -278,6 +278,8 @@ def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
     terminator = text[terminator_index]
     if terminator not in ".!?":
         return False
+    if terminator == "?" and _is_inline_query_question_mark(text, terminator_index):
+        return False
     if _is_abbreviation_terminator(text, terminator_index):
         return False
     # Version tokens: digit.digit (no sentence end between version parts).
@@ -307,6 +309,8 @@ def _iter_statement_separator_ends(prefix: str) -> list[int]:
     """Return end indices of statement separators inside prefix (after closers/spaces)."""
     all_ends: list[int] = []
     for each_match in CLAUSE_SEPARATOR_PATTERN.finditer(prefix):
+        if _is_inside_inline_code(prefix, each_match.start()):
+            continue
         all_ends.append(each_match.end())
     for each_index, each_character in enumerate(prefix):
         if each_character not in ".!?":
