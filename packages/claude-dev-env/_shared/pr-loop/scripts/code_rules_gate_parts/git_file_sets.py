@@ -162,12 +162,18 @@ def paths_from_git_staged(repository_root: Path) -> list[Path]:
     return _null_separated_paths(raw_stdout, repository_root, "staged")
 
 
-def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path]:
+def paths_from_git_diff(
+    repository_root: Path,
+    base_reference: str,
+    resolved_merge_base: str | None = None,
+) -> list[Path]:
     """Return absolute paths for every file changed since *base_reference*.
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
         base_reference: The git reference to merge-base against.
+        resolved_merge_base: Pre-resolved merge-base SHA; when omitted, the
+            merge base of HEAD and *base_reference* is resolved here.
 
     Returns:
         Absolute paths changed since the merge-base of HEAD and *base_reference*.
@@ -175,7 +181,11 @@ def paths_from_git_diff(repository_root: Path, base_reference: str) -> list[Path
     Raises:
         SystemExit: When the diff name-only command returns non-zero.
     """
-    merge_base = resolve_merge_base(repository_root, base_reference)
+    merge_base = (
+        resolved_merge_base
+        if resolved_merge_base is not None
+        else resolve_merge_base(repository_root, base_reference)
+    )
     diff_command = [
         *ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX,
         f"{merge_base}..HEAD",

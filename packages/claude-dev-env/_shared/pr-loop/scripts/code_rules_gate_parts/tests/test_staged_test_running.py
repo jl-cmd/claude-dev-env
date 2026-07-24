@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 from code_rules_gate_parts import git_file_sets, staged_test_running
 
@@ -114,3 +115,42 @@ def test_run_staged_test_files_fails_when_real_test_fails_alongside_confests(
     )
 
     assert staged_test_running.run_staged_test_files(repository_root) != 0
+
+
+def test_staged_test_file_paths_uses_precomputed_list_without_git_call(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    precomputed_test = repository_root / "test_precomputed.py"
+    precomputed_test.write_text("def test_ok() -> None:\n    assert True\n", encoding="utf-8")
+    precomputed_non_test = repository_root / "module.py"
+    precomputed_non_test.write_text("value = 1\n", encoding="utf-8")
+
+    with patch.object(
+        staged_test_running, "paths_from_git_staged", side_effect=AssertionError("git called")
+    ) as mock_paths_from_git_staged:
+        all_test_paths = staged_test_running._staged_test_file_paths(
+            repository_root,
+            all_staged_paths=[precomputed_test, precomputed_non_test],
+        )
+
+    assert all_test_paths == [precomputed_test]
+    mock_paths_from_git_staged.assert_not_called()
+
+
+def test_run_staged_test_files_threads_precomputed_staged_paths(tmp_path: Path) -> None:
+    repository_root = _repository_with_root_pytest_config(tmp_path)
+    precomputed_test = repository_root / "test_precomputed.py"
+    precomputed_test.write_text("def test_ok() -> None:\n    assert True\n", encoding="utf-8")
+
+    with patch.object(
+        staged_test_running, "paths_from_git_staged", side_effect=AssertionError("git called")
+    ) as mock_paths_from_git_staged:
+        exit_code = staged_test_running.run_staged_test_files(
+            repository_root,
+            all_staged_paths=[precomputed_test],
+        )
+
+    assert exit_code == 0
+    mock_paths_from_git_staged.assert_not_called()

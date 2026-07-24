@@ -205,11 +205,16 @@ def added_lines_by_file_staged(
     return added_by_path
 
 
-def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
+def _staged_pytest_exit_code_for_current_python(
+    repository_root: Path,
+    all_staged_paths: list[Path] | None = None,
+) -> int:
     """Run the staged test files, or skip them on a Python below the minimum.
 
     Args:
         repository_root: The repository root whose staged test files run.
+        all_staged_paths: Precomputed staged paths shared with the staged gate
+            file set; when omitted, the staged index is read inside the test run.
 
     Returns:
         0 when the running Python is below the staged-test minimum, otherwise the
@@ -226,7 +231,7 @@ def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
             f"minimum {minimum_version}; skipping the staged pytest step.\n"
         )
         return 0
-    return run_staged_test_files(repository_root)
+    return run_staged_test_files(repository_root, all_staged_paths=all_staged_paths)
 
 
 def _deduplicate_paths(all_paths: list[Path]) -> list[Path]:
@@ -270,9 +275,12 @@ def _run_staged_mode(
 ) -> int:
     """Validate the staged changes, run staged tests, and sweep terminology."""
     _report_terminology_findings(staged_terminology_findings(repository_root))
-    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    all_staged_paths = paths_from_git_staged(repository_root)
+    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(
+        repository_root, all_staged_paths=all_staged_paths
+    )
     staged_file_paths = filter_paths_under_prefixes(
-        paths_from_git_staged(repository_root), repository_root, arguments.only_under
+        all_staged_paths, repository_root, arguments.only_under
     )
     if not staged_file_paths:
         sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
@@ -299,8 +307,13 @@ def _run_diff_mode(
     so that run refuses loudly. A set emptied only by the ``--only-under``
     scope flows through ``run_gate`` over zero files and exits clean.
     """
+    resolved_merge_base = resolve_merge_base(repository_root, arguments.base)
     all_candidate_paths = _deduplicate_paths(
-        paths_from_git_diff(repository_root, arguments.base)
+        paths_from_git_diff(
+            repository_root,
+            arguments.base,
+            resolved_merge_base=resolved_merge_base,
+        )
         + paths_from_git_untracked(repository_root)
     )
     if not all_candidate_paths:
@@ -309,7 +322,14 @@ def _run_diff_mode(
         all_candidate_paths, repository_root, arguments.only_under
     )
     scoped_added_lines = (
-        added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
+        added_lines_by_file(
+            repository_root,
+            arguments.base,
+            file_paths,
+            resolved_merge_base=resolved_merge_base,
+        )
+        if file_paths
+        else {}
     )
     return run_gate(
         validate_content,

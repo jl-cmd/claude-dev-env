@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 from code_rules_gate_parts import git_file_sets
 
@@ -109,6 +110,36 @@ def test_paths_from_git_diff_is_empty_when_head_matches_base(tmp_path: Path) -> 
     changed_paths = git_file_sets.paths_from_git_diff(repository_root, "HEAD")
 
     assert changed_paths == []
+
+
+def test_paths_from_git_diff_uses_pre_resolved_merge_base_without_resolve_call(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _init_repository(repository_root)
+    head_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(repository_root),
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_file_sets.repository_environment(),
+    ).stdout.strip()
+
+    with patch.object(
+        git_file_sets,
+        "resolve_merge_base",
+        side_effect=AssertionError("merge-base resolved again"),
+    ) as mock_resolve_merge_base:
+        changed_paths = git_file_sets.paths_from_git_diff(
+            repository_root,
+            "HEAD",
+            resolved_merge_base=head_sha,
+        )
+
+    assert changed_paths == []
+    mock_resolve_merge_base.assert_not_called()
 
 
 def test_is_staged_file_newly_added_true_for_new_staged_file(tmp_path: Path) -> None:
