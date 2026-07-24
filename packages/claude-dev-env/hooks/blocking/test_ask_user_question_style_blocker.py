@@ -111,6 +111,11 @@ def test_glued_bare_question_before_fact_does_not_count_as_context() -> None:
     assert question_has_leading_context(question_text) is False
 
 
+def test_uppercase_glued_bare_question_before_fact_does_not_count() -> None:
+    question_text = "OK?The gate failed. Which fix?"
+    assert question_has_leading_context(question_text) is False
+
+
 def test_version_token_dot_is_not_context_separator() -> None:
     question_text = "Should we use Python 3.12 for the hook runtime now?"
     assert question_has_leading_context(question_text) is False
@@ -170,6 +175,21 @@ def test_numbered_list_markers_do_not_inflate_sentence_count() -> None:
 def test_colon_led_numbered_list_does_not_inflate_sentence_count() -> None:
     question_text = (
         "Findings so far: 1. The gate failed on ruff. 2. Tests also failed. "
+        "Which fix should land first?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_MISSING_CONTEXT not in findings
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
+def test_colon_label_with_score_counts_as_context() -> None:
+    question_text = "Final score: 12. Which fix should land first?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_lettered_list_markers_do_not_inflate_sentence_count() -> None:
+    question_text = (
+        "A. The gate failed on ruff. B. Tests also failed. "
         "Which fix should land first?"
     )
     findings = find_style_findings(_payload(question_text)["tool_input"])

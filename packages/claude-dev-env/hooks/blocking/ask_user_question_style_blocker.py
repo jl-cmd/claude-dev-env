@@ -76,8 +76,8 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
     if not (next_character.isalnum() or next_character in "=&_"):
         return False
     previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
-    # Glued prose ("one?The") is an ask, not a query string.
-    if previous_character.islower() and next_character.isupper():
+    # Glued prose ("one?The" / "OK?The") is an ask, not a query string.
+    if previous_character.isalpha() and next_character.isupper():
         return False
     return True
 
@@ -154,7 +154,6 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
     segment_before_number = text[: terminator_index - len(token)].rstrip()
     if segment_before_number == "":
         return True
-    # After a sentence end or a colon-led list ("Findings: 1. ...").
     if segment_before_number[-1] not in ".!?:":
         return False
     # Version tails: "3.12." — the period before this digit token is digit-adjacent.
@@ -165,6 +164,13 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
         and segment_before_number[-lookbehind_count].isdigit()
     ):
         return False
+    # Colon labels ("Final score: 12. Which") are facts; list items ("Findings: 1. The")
+    # continue with a non-question capital word.
+    if segment_before_number[-1] == ":":
+        next_word = _next_alpha_word(text, terminator_index + 1)
+        if not next_word or next_word.lower() in ALL_QUESTION_SENTENCE_OPENERS:
+            return False
+        return next_word[0].isupper()
     return True
 
 
@@ -189,6 +195,16 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
         )
         if is_multipart_tail:
             return next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
+        # Lettered list markers: "A. The gate failed..." at BOL or after end/colon.
+        segment_before_letter = text[: terminator_index - len(token)].rstrip()
+        if (
+            token.isupper()
+            and (segment_before_letter == "" or segment_before_letter[-1] in ".!?:")
+            and next_word
+            and next_word[0].isupper()
+            and next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
+        ):
+            return True
         following_start = _following_sentence_start_character(text, terminator_index + 1)
         if following_start == "" or following_start.islower():
             return True
