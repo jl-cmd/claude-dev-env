@@ -21,9 +21,10 @@ MAXIMUM_SENTENCES_PER_QUESTION: int = 3
 MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION: int = 2
 
 # Sentence/clause separator inside the prefix before the first "?".
-# Requires whitespace after "." / "!" so version tokens like "3.12" do not count.
+# Period/exclamation must follow a lowercase letter or digit so "U.S." / "3.12"
+# do not count as statement ends.
 CONTEXT_PREFIX_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
-    r"(?<!\d)[.!]\s+|:\s+|[—–]\s+"
+    r"(?<=[a-z0-9])[.!]\s+|:\s+|[—–]\s+"
 )
 
 # Process-narration openers banned by plain-brief rule 1 (one scan per prose blob).

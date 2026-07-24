@@ -111,6 +111,13 @@ def test_version_token_dot_is_not_context_separator() -> None:
     assert question_has_leading_context(question_text) is False
 
 
+def test_abbreviation_in_lead_fact_still_allows_context() -> None:
+    question_text = (
+        "The U.S. gate blocks bare rm on worktrees. How should temp cleanup run?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(
