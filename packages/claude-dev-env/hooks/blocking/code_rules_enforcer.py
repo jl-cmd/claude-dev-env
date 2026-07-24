@@ -200,11 +200,19 @@ from code_rules_unused_imports import (  # noqa: E402
     check_unused_module_level_imports,
 )
 
+from gate_skip_token.records import (  # noqa: E402
+    consume_skip_token,
+    content_sha256,
+    has_valid_skip_token,
+    should_downgrade_to_ask,
+)
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CODE_EXTENSIONS,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
     DENY_REASON_ISSUE_PREVIEW_COUNT,
+    FINDING_IDENTITY_DIGIT_RUN_PATTERN,
+    ISSUE_LIST_JOIN_SEPARATOR,
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
 )
@@ -981,6 +989,25 @@ def _deny_reason_for_issues(
     return deny_reason + _precheck_hint()
 
 
+def _ask_reason_for_issues(all_blocking_issues: list[str]) -> str:
+    """Compose the ask reason naming the pre-existing findings a human must approve.
+
+    Args:
+        all_blocking_issues: The pre-existing blocking findings carried past.
+
+    Returns:
+        The ``permissionDecisionReason`` text for the escalation prompt.
+    """
+    issue_list = ISSUE_LIST_JOIN_SEPARATOR.join(
+        all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT]
+    )
+    return (
+        f"ESCALATED: [CODE_RULES] {len(all_blocking_issues)} pre-existing "
+        "violation(s) carried past on user approval; a human must approve this "
+        f"write: {issue_list}"
+    )
+
+
 def _write_deny_payload(deny_reason: str, deny_stream: TextIO) -> None:
     """Write a PreToolUse deny payload carrying the given reason.
 
@@ -1004,6 +1031,122 @@ def _write_deny_payload(deny_reason: str, deny_stream: TextIO) -> None:
     deny_stream.flush()
 
 
+def _emit_ask_payload(ask_reason: str, ask_stream: TextIO) -> None:
+    """Write a PreToolUse ask payload escalating the block to a human prompt.
+
+    ::
+
+        deny  -> a real deadlock, only pre-existing findings, a valid token
+        ask   -> the human click on this prompt is what grants the write
+
+    Args:
+        ask_reason: The composed ``permissionDecisionReason`` naming the
+            pre-existing findings a human must approve.
+        ask_stream: The stream the JSON ask payload is written to.
+    """
+    ask_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": ask_reason,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="code_rules_enforcer.py",
+        hook_event="PreToolUse",
+        block_reason=ask_reason,
+    )
+    ask_stream.write(json.dumps(ask_payload) + "\n")
+    ask_stream.flush()
+
+
+def _finding_identity(issue: str) -> str:
+    """Return the finding text with its line number stripped so a shifted line matches.
+
+    ::
+
+        "Line 12: Magic value 42 - extract"  ->  "Line : Magic value 42 - extract"
+        "Line 40: Magic value 42 - extract"  ->  "Line : Magic value 42 - extract"
+
+    The proposed content and the on-disk content number the same finding on
+    different lines, so an identity that keeps the line number would treat one
+    finding as two. Only the number after ``Line`` is dropped. A value inside
+    the message, such as a magic number, stays, so two findings that differ
+    only by value keep distinct identities.
+
+    Args:
+        issue: One blocking-issue string from ``validate_content``.
+
+    Returns:
+        The issue text with the line number after ``Line`` removed.
+    """
+    return FINDING_IDENTITY_DIGIT_RUN_PATTERN.sub("", issue)
+
+
+def _current_disk_finding_identities(file_path: str) -> set[str]:
+    """Return the line-agnostic identity of each blocking finding on disk now.
+
+    Args:
+        file_path: The write target whose current on-disk content is scanned.
+
+    Returns:
+        The identity of each blocking finding a whole-file scan of the current
+        on-disk content reports; an empty set when the file is absent.
+    """
+    on_disk_content = _read_existing_file_content(file_path)
+    if on_disk_content is None:
+        return set()
+    current_issues = validate_content(on_disk_content, file_path)
+    return {_finding_identity(each_issue) for each_issue in current_issues}
+
+
+def _proposed_is_subset_of_current(
+    all_blocking_issues: list[str], file_path: str
+) -> bool:
+    """Return whether every proposed finding already exists in the on-disk file.
+
+    Args:
+        all_blocking_issues: The blocking findings the proposed write carries.
+        file_path: The write target whose current on-disk findings are compared.
+
+    Returns:
+        True when each proposed finding's identity is present on disk, so the
+        write introduces no finding the file does not already carry.
+    """
+    current_identities = _current_disk_finding_identities(file_path)
+    return all(
+        _finding_identity(each_issue) in current_identities
+        for each_issue in all_blocking_issues
+    )
+
+
+def _may_downgrade_to_ask(
+    all_blocking_issues: list[str],
+    file_path: str,
+    proposed_full_content: str,
+    permission_mode: str,
+    session_id: str,
+) -> bool:
+    """Return whether the block may escalate to a human permission prompt.
+
+    Args:
+        all_blocking_issues: The blocking findings the proposed write carries.
+        file_path: The write target.
+        proposed_full_content: The whole post-edit body the token hash binds to.
+        permission_mode: The PreToolUse permission mode of the retry write.
+        session_id: The session the skip token belongs to.
+
+    Returns:
+        True only under the default mode, only when the proposed findings are a
+        subset of the on-disk findings, and only when a valid token backs the retry.
+    """
+    has_token = has_valid_skip_token(
+        session_id, file_path, content_sha256(proposed_full_content)
+    )
+    is_subset_of_current = _proposed_is_subset_of_current(all_blocking_issues, file_path)
+    return should_downgrade_to_ask(permission_mode, is_subset_of_current, has_token)
+
+
 def _report_blocking_violations(
     content: str,
     tool_name: str,
@@ -1011,9 +1154,16 @@ def _report_blocking_violations(
     old_content: str,
     full_file_content_after_edit: str | None,
     prior_full_file_content: str,
+    permission_mode: str,
+    session_id: str,
     deny_stream: TextIO,
 ) -> None:
-    """Run the verdict and write a deny payload when blocking violations fire.
+    """Run the verdict, then either escalate to a human prompt or write a deny.
+
+    When blocking findings fire and a valid skip token backs a default-mode
+    retry whose findings are a subset of the on-disk findings, the block
+    escalates to a permission ``ask`` and the token is consumed once. Otherwise
+    it writes a deny as usual.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -1023,7 +1173,9 @@ def _report_blocking_violations(
         full_file_content_after_edit: The reconstructed post-edit file body,
             or None when the payload is not an Edit.
         prior_full_file_content: The on-disk content before the edit.
-        deny_stream: The stream the JSON deny payload is written to.
+        permission_mode: The PreToolUse permission mode of the write.
+        session_id: The session a skip token belongs to.
+        deny_stream: The stream the JSON deny or ask payload is written to.
     """
     all_blocking_issues = validate_content(
         content,
@@ -1033,6 +1185,17 @@ def _report_blocking_violations(
         prior_full_file_content,
     )
     if not all_blocking_issues:
+        return
+    proposed_full_content = (
+        full_file_content_after_edit
+        if full_file_content_after_edit is not None
+        else content
+    )
+    if _may_downgrade_to_ask(
+        all_blocking_issues, file_path, proposed_full_content, permission_mode, session_id
+    ):
+        consume_skip_token(session_id, file_path, content_sha256(proposed_full_content))
+        _emit_ask_payload(_ask_reason_for_issues(all_blocking_issues), deny_stream)
         return
     _write_deny_payload(
         _deny_reason_for_issues(
@@ -1104,6 +1267,8 @@ def main(all_arguments: list[str]) -> None:
     tool_name = pretooluse_payload.get("tool_name", "")
     tool_input = pretooluse_payload.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
+    permission_mode = pretooluse_payload.get("permission_mode", "")
+    session_id = pretooluse_payload.get("session_id", "")
 
     if is_under_session_scratchpad(file_path, pretooluse_payload):
         sys.exit(0)
@@ -1145,6 +1310,8 @@ def main(all_arguments: list[str]) -> None:
         old_content,
         full_file_content_after_edit,
         prior_full_file_content,
+        permission_mode,
+        session_id,
         sys.stdout,
     )
     sys.exit(0)

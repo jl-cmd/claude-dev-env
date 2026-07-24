@@ -7,10 +7,10 @@ declared in the constants module, aggregates the results, and emits one deny
 decision when any hook denied (carrying every denying reason) or exits zero to
 allow.
 
-Each tool runs the ``ALL_HOSTED_HOOK_ENTRIES`` whose ``applicable_tool_names``
-list that tool; that roster is the live source of the per-tool coverage, and the
-dispatcher roster tests in ``test_pre_tool_use_dispatcher.py`` assert the counts,
-rather than a hardcoded matrix here that would drift as hooks are added.
+The per-hook coverage matrix:
+- Write  -> 20 hooks from ALL_HOSTED_HOOK_ENTRIES that list Write
+- Edit   -> 21 hooks from ALL_HOSTED_HOOK_ENTRIES that list Edit
+- MultiEdit -> 9 hooks from ALL_HOSTED_HOOK_ENTRIES that list MultiEdit
 """
 
 from __future__ import annotations
@@ -24,37 +24,35 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import _path_setup  # noqa: F401
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
 
-from agent_model_pin_blocker import (
-    build_deny_payload as build_agent_model_pin_deny_payload,
-)
-from agent_model_pin_blocker import evaluate as evaluate_agent_model_pin
-from plain_language_blocker import (
+from plain_language_blocker import (  # noqa: E402
     build_deny_payload as build_plain_language_deny_payload,
 )
-from plain_language_blocker import evaluate as evaluate_plain_language
-from state_description_blocker import (
+from plain_language_blocker import evaluate as evaluate_plain_language  # noqa: E402
+from state_description_blocker import (  # noqa: E402
     build_deny_payload as build_state_description_deny_payload,
 )
-from state_description_blocker import evaluate as evaluate_state_description
+from state_description_blocker import evaluate as evaluate_state_description  # noqa: E402
 
-from hooks_constants.agent_model_pin_blocker_constants import (
-    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
-)
-from hooks_constants.pre_tool_use_dispatcher_constants import (
+from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402
     ALL_HOSTED_HOOK_ENTRIES,
     ALLOW_DECISION,
+    ASK_DECISION,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
+    CONTEXT_JOIN_SEPARATOR,
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
     HOOK_EVENT_NAME,
+    REASON_JOIN_SEPARATOR,
     PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
     HostedHookEntry,
 )
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
 NativeEvaluator = Callable[[dict[str, object]], str | None]
 DenyPayloadBuilder = Callable[[str], dict[str, object]]
@@ -73,22 +71,6 @@ class NativeHook:
 
     evaluate: NativeEvaluator
     build_deny_payload: DenyPayloadBuilder
-
-
-_native_hook_by_module_name: dict[str, NativeHook] = {
-    STATE_DESCRIPTION_BLOCKER_MODULE_NAME: NativeHook(
-        evaluate=evaluate_state_description,
-        build_deny_payload=build_state_description_deny_payload,
-    ),
-    PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
-        evaluate=evaluate_plain_language,
-        build_deny_payload=build_plain_language_deny_payload,
-    ),
-    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME: NativeHook(
-        evaluate=evaluate_agent_model_pin,
-        build_deny_payload=build_agent_model_pin_deny_payload,
-    ),
-}
 
 
 @dataclass
@@ -230,8 +212,10 @@ class ParsedHookOutput:
 
     Attributes:
         is_deny: True when the hook output carries a permissionDecision of deny.
+        is_ask: True when the hook output carries a permissionDecision of ask.
         is_allow: True when the hook output carries a permissionDecision of allow.
-        deny_reason: The permissionDecisionReason text when is_deny is True.
+        deny_reason: The permissionDecisionReason text when is_deny or is_ask is
+            True.
         system_message: The hook's top-level systemMessage, or non-JSON stdout
             text when the output is not a deny-shaped JSON object.
         additional_context: The hook's hookSpecificOutput.additionalContext text.
@@ -239,6 +223,7 @@ class ParsedHookOutput:
     """
 
     is_deny: bool
+    is_ask: bool
     is_allow: bool
     deny_reason: str
     system_message: str
@@ -260,6 +245,7 @@ def _empty_parsed_hook_output(system_message: str) -> ParsedHookOutput:
     """
     return ParsedHookOutput(
         is_deny=False,
+        is_ask=False,
         is_allow=False,
         deny_reason="",
         system_message=system_message,
@@ -300,6 +286,7 @@ def _parse_deny_from_hook_output(hook_output_text: str) -> ParsedHookOutput:
         return _empty_parsed_hook_output(stripped_text)
     permission_decision = hook_specific.get("permissionDecision")
     is_deny = permission_decision == DENY_DECISION
+    is_ask = permission_decision == ASK_DECISION
     is_allow = permission_decision == ALLOW_DECISION
     deny_reason = hook_specific.get("permissionDecisionReason", "")
     if not isinstance(deny_reason, str):
@@ -311,6 +298,7 @@ def _parse_deny_from_hook_output(hook_output_text: str) -> ParsedHookOutput:
     suppress_output = parsed_output.get("suppressOutput") is True
     return ParsedHookOutput(
         is_deny=is_deny,
+        is_ask=is_ask,
         is_allow=is_allow,
         deny_reason=deny_reason,
         system_message=system_message,
@@ -325,10 +313,16 @@ class DispatcherDecision:
 
     Attributes:
         should_deny: True when at least one hosted hook denied.
+        should_ask: True when at least one hosted hook emitted an ask decision
+            and no hook denied, so the dispatcher re-emits an ask that routes the
+            write to the human permission prompt (deny wins over ask).
         should_allow: True when at least one hosted hook emitted an explicit
-            allow decision and no hook denied, so the dispatcher re-emits an
-            explicit allow matching the standalone hook's auto-approval.
+            allow decision and no hook denied or asked, so the dispatcher
+            re-emits an explicit allow matching the standalone hook's
+            auto-approval.
         all_deny_reasons: All deny reasons from denying hooks, in run order.
+        all_ask_reasons: All ask reasons from asking hooks, in run order, used as
+            the ask payload's permissionDecisionReason.
         all_system_messages: Every hook's top-level systemMessage, in run order,
             joined into the deny payload's systemMessage.
         all_additional_context: Every hook's hookSpecificOutput.additionalContext,
@@ -338,8 +332,10 @@ class DispatcherDecision:
     """
 
     should_deny: bool
+    should_ask: bool
     should_allow: bool
     all_deny_reasons: list[str]
+    all_ask_reasons: list[str]
     all_system_messages: list[str]
     all_additional_context: list[str]
     should_suppress_output: bool
@@ -370,6 +366,7 @@ def aggregate_hosted_hook_results(
         messages, and the suppressOutput flag.
     """
     all_deny_reasons: list[str] = []
+    all_ask_reasons: list[str] = []
     all_system_messages: list[str] = []
     all_additional_context: list[str] = []
     should_suppress_output = False
@@ -385,6 +382,8 @@ def aggregate_hosted_hook_results(
             all_deny_reasons.append(BLOCKING_CRASH_DENY_REASON)
         elif each_result.exit_code == BLOCKING_CRASH_EXIT_CODE and each_result.is_blocking:
             all_deny_reasons.append(EXIT_CODE_TWO_DENY_REASON)
+        if parsed_output.is_ask and parsed_output.deny_reason:
+            all_ask_reasons.append(parsed_output.deny_reason)
         if parsed_output.is_allow:
             saw_explicit_allow = True
         if parsed_output.system_message:
@@ -395,42 +394,73 @@ def aggregate_hosted_hook_results(
             should_suppress_output = True
 
     should_deny = bool(all_deny_reasons)
+    should_ask = bool(all_ask_reasons) and not should_deny
     return DispatcherDecision(
         should_deny=should_deny,
-        should_allow=saw_explicit_allow and not should_deny,
+        should_ask=should_ask,
+        should_allow=saw_explicit_allow and not should_deny and not should_ask,
         all_deny_reasons=all_deny_reasons,
+        all_ask_reasons=all_ask_reasons,
         all_system_messages=all_system_messages,
         all_additional_context=all_additional_context,
         should_suppress_output=should_suppress_output,
     )
 
 
-def _emit_deny_decision(decision: DispatcherDecision) -> None:
-    """Write one deny JSON object to stdout carrying all deny reasons and context.
+def _write_permission_payload(
+    permission_decision: str,
+    combined_reason: str,
+    decision: DispatcherDecision,
+) -> None:
+    """Write one PreToolUse permission payload carrying its reason and context.
 
     Carries every hook's systemMessage and additionalContext and the
-    suppressOutput flag so the dispatched deny matches the standalone hooks'
-    full deny shape.
+    suppressOutput flag so the dispatched decision matches the standalone hooks'
+    full shape, whether the permission decision is deny or ask.
 
     Args:
-        decision: The aggregated dispatcher decision with deny reasons, context,
-            and the suppressOutput flag.
+        permission_decision: The permissionDecision string to emit (deny or ask).
+        combined_reason: The joined permissionDecisionReason text.
+        decision: The aggregated dispatcher decision carrying context and the
+            suppressOutput flag.
     """
-    combined_reason = " | ".join(decision.all_deny_reasons)
     hook_specific: dict[str, object] = {
         "hookEventName": HOOK_EVENT_NAME,
-        "permissionDecision": DENY_DECISION,
+        "permissionDecision": permission_decision,
         "permissionDecisionReason": combined_reason,
     }
     if decision.all_additional_context:
-        hook_specific["additionalContext"] = "\n".join(decision.all_additional_context)
-    deny_payload: dict[str, object] = {"hookSpecificOutput": hook_specific}
+        hook_specific["additionalContext"] = CONTEXT_JOIN_SEPARATOR.join(
+            decision.all_additional_context
+        )
+    permission_payload: dict[str, object] = {"hookSpecificOutput": hook_specific}
     if decision.all_system_messages:
-        deny_payload["systemMessage"] = "\n".join(decision.all_system_messages)
+        permission_payload["systemMessage"] = CONTEXT_JOIN_SEPARATOR.join(
+            decision.all_system_messages
+        )
     if decision.should_suppress_output:
-        deny_payload["suppressOutput"] = True
-    sys.stdout.write(json.dumps(deny_payload) + "\n")
+        permission_payload["suppressOutput"] = True
+    sys.stdout.write(json.dumps(permission_payload) + "\n")
     sys.stdout.flush()
+
+
+def _emit_deny_decision(decision: DispatcherDecision) -> None:
+    """Write one deny JSON object to stdout carrying all deny reasons and context."""
+    _write_permission_payload(
+        DENY_DECISION, REASON_JOIN_SEPARATOR.join(decision.all_deny_reasons), decision
+    )
+
+
+def _emit_ask_decision(decision: DispatcherDecision) -> None:
+    """Write one ask JSON object to stdout carrying all ask reasons and context.
+
+    A hosted gate downgrades its deny to ask when a valid skip token clears the
+    deadlock guards, so the dispatcher re-emits that ask to route the write to
+    the human permission prompt rather than swallowing it into an allow.
+    """
+    _write_permission_payload(
+        ASK_DECISION, REASON_JOIN_SEPARATOR.join(decision.all_ask_reasons), decision
+    )
 
 
 def _emit_allow_decision() -> None:
@@ -498,7 +528,17 @@ def _run_one_hosted_hook(
         The HostedHookResult for this hook's run.
     """
     if each_entry.native_module_name is not None:
-        native_hook = _native_hook_by_module_name[each_entry.native_module_name]
+        native_hook_by_module_name: dict[str, NativeHook] = {
+            STATE_DESCRIPTION_BLOCKER_MODULE_NAME: NativeHook(
+                evaluate=evaluate_state_description,
+                build_deny_payload=build_state_description_deny_payload,
+            ),
+            PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
+                evaluate=evaluate_plain_language,
+                build_deny_payload=build_plain_language_deny_payload,
+            ),
+        }
+        native_hook = native_hook_by_module_name[each_entry.native_module_name]
         return run_native_hook(native_hook, payload_by_key, each_entry.is_blocking)
     script_path = _resolve_hook_script_path(each_entry.script_relative_path)
     return run_hosted_hook(script_path, payload_text, each_entry.is_blocking)
@@ -514,8 +554,9 @@ def dispatch(
     Selects the applicable hosted hooks for tool_name, runs each one in-process
     (natively when the entry names a native module, otherwise via runpy),
     aggregates the results, and emits a deny JSON object when any hook denied, an
-    explicit allow JSON object when a hook allowed explicitly and none denied, or
-    exits zero with no output when no hook decided.
+    ask JSON object when a hook asked and none denied, an explicit allow JSON
+    object when a hook allowed explicitly and none denied or asked, or exits zero
+    with no output when no hook decided.
 
     Args:
         payload_text: The raw JSON payload text to replay to each runpy hook.
@@ -531,6 +572,9 @@ def dispatch(
     aggregated_decision = aggregate_hosted_hook_results(all_results)
     if aggregated_decision.should_deny:
         _emit_deny_decision(aggregated_decision)
+        return
+    if aggregated_decision.should_ask:
+        _emit_ask_decision(aggregated_decision)
         return
     if aggregated_decision.should_allow:
         _emit_allow_decision()

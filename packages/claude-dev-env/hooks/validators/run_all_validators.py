@@ -19,9 +19,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .config.directory_exemption_constants import (
-    ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
-)
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
@@ -36,8 +33,17 @@ package_name = VALIDATORS_DIR.name
 _hooks_directory_on_path = str(hooks_dir.resolve())
 if _hooks_directory_on_path not in sys.path:
     sys.path.insert(0, _hooks_directory_on_path)
+_blocking_directory_on_path = str((hooks_dir / "blocking").resolve())
+if _blocking_directory_on_path not in sys.path:
+    sys.path.insert(0, _blocking_directory_on_path)
 
 from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
+from gate_skip_token.records import (  # noqa: E402
+    consume_skip_token,
+    content_sha256,
+    has_valid_skip_token,
+    should_downgrade_to_ask,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
     apply_edits,
@@ -416,9 +422,7 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
     )
 
 
-def run_ruff_checks(
-    files: List[Path], config_source_path: Optional[Path] = None
-) -> ValidatorResult:
+def run_ruff_checks(files: List[Path]) -> ValidatorResult:
     """Run ruff for fast Python linting."""
     if not check_ruff_available():
         return ValidatorResult(
@@ -428,7 +432,7 @@ def run_ruff_checks(
             output="Ruff not installed - skipping",
         )
 
-    result = run_ruff_check(files, config_source_path)
+    result = run_ruff_check(files)
 
     return ValidatorResult(
         name="Ruff",
@@ -438,9 +442,7 @@ def run_ruff_checks(
     )
 
 
-def run_mypy_checks(
-    files: List[Path], config_source_path: Optional[Path] = None
-) -> ValidatorResult:
+def run_mypy_checks(files: List[Path]) -> ValidatorResult:
     """Run mypy for static type checking."""
     if not check_mypy_available():
         return ValidatorResult(
@@ -450,7 +452,7 @@ def run_mypy_checks(
             output="Mypy not installed - skipping",
         )
 
-    result = run_mypy_check(files, config_source_path)
+    result = run_mypy_check(files)
 
     return ValidatorResult(
         name="Mypy",
@@ -734,16 +736,15 @@ def reconstruct_proposed_content(
     return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
 
 
-def run_file_scoped_validators(
-    all_files: List[Path], config_source_path: Optional[Path] = None
-) -> List[ValidatorResult]:
-    """Run every file-scoped validator against *all_files*.
+def run_file_scoped_validators(all_files: List[Path]) -> List[ValidatorResult]:
+    """Run every validator scoped to individual files against *all_files*.
 
-    Excludes the branch-scoped File Structure and Git validators.
+    Excludes the branch-scoped File Structure and Git validators, which grade
+    the whole project rather than a single proposed file.
 
     Args:
-        all_files: The files under validation — one reconstructed file in gate mode.
-        config_source_path: Original path ruff and mypy resolve their config from.
+        all_files: The files under validation — a single reconstructed file in
+            gate mode.
 
     Returns:
         One ValidatorResult per file-scoped validator, in run order.
@@ -752,8 +753,8 @@ def run_file_scoped_validators(
         run_python_style_checks(all_files),
         run_test_safety_checks(all_files),
         run_react_checks(all_files),
-        run_ruff_checks(all_files, config_source_path),
-        run_mypy_checks(all_files, config_source_path),
+        run_ruff_checks(all_files),
+        run_mypy_checks(all_files),
         run_abbreviation_checks(all_files),
         run_pr_reference_checks(all_files),
         run_magic_value_checks(all_files),
@@ -766,115 +767,27 @@ def run_file_scoped_validators(
     ]
 
 
-def _escapes_temporary_root(path_part: str) -> bool:
-    """Return True when a path part would climb out of or re-anchor the temp root.
-
-    ::
-
-        ok:   "scripts"  -> False (stays inside)
-        flag: ".."       -> True  (climbs a level)
-        flag: "/etc"     -> True  (absolute, re-anchors the join)
-
-    A ``..`` component escapes upward and an absolute or anchored component
-    re-roots the join away from the temporary directory. Both are dropped so a
-    staged file cannot land outside the ephemeral root.
-
-    Args:
-        path_part: A single path component drawn from the destination path.
-
-    Returns:
-        True when the component must be dropped to keep staging contained.
-    """
-    if path_part == os.pardir:
-        return True
-    part_as_path = Path(path_part)
-    return part_as_path.is_absolute() or bool(part_as_path.anchor)
-
-
-def _temporary_path_preserving_directory_signal(
-    temporary_directory: Path, file_path: str
-) -> Path:
-    """Build a temp path that keeps exemption directory tails and the basename.
-
-    Directory-based exemptions (for example ``/scripts/`` CLI markers and
-    ``/tests/`` test-path patterns) match substrings of the file path. Staging
-    under a flat temp basename drops those segments. Mirroring only the
-    exemption-relevant directory tail (plus basename) restores that signal
-    without copying absolute system prefixes such as pytest ``tmp_path`` parents
-    that contain ``test_`` and would falsely trip test-file exemptions.
-
-    Args:
-        temporary_directory: Root of the ephemeral staging tree.
-        file_path: Real destination path the write or edit targets.
-
-    Returns:
-        Path under *temporary_directory* ending in the exemption directory tail
-        (when present) and the real basename.
-    """
-    destination_path = Path(file_path)
-    path_parts = destination_path.parts
-    if destination_path.anchor:
-        path_parts = path_parts[1:]
-    if not path_parts:
-        path_parts = (destination_path.name,)
-
-    all_directory_exemption_segment_names = ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES
-    start_index = len(path_parts) - 1
-    for each_index, each_part in enumerate(path_parts[:-1]):
-        if each_part.lower() not in all_directory_exemption_segment_names:
-            continue
-        start_index = each_index
-        break
-
-    selected_parts = path_parts[start_index:]
-    contained_parts = tuple(
-        each_part for each_part in selected_parts if not _escapes_temporary_root(each_part)
-    )
-    if not contained_parts:
-        contained_parts = (destination_path.name,)
-    temporary_file = temporary_directory.joinpath(*contained_parts)
-    if not temporary_file.resolve().is_relative_to(temporary_directory.resolve()):
-        temporary_file = temporary_directory / destination_path.name
-    temporary_file.parent.mkdir(parents=True, exist_ok=True)
-    return temporary_file
-
-
 def validate_proposed_file(
-    file_path: str,
-    proposed_content: str,
-    config_source_path: Optional[Path] = None,
+    file_path: str, proposed_content: str
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
-    Writes the content to a temporary file that preserves the exemption-relevant
-    directory tail and basename so directory-based exemptions, suffix-based
-    filtering, and test-name-based filtering match the real path, then runs the
-    file-scoped validators against it. Ruff and mypy resolve their config by
-    walking up from the config source path, so the staged copy is graded under
-    the project config the real path sits in rather than the temp directory's.
+    Writes the content to a temporary file that carries the target's basename so
+    suffix-based and test-name-based validator filtering matches the real path,
+    then runs the file-scoped validators against it.
 
     Args:
         file_path: The destination path the write or edit targets.
         proposed_content: The reconstructed post-edit content of that file.
-        config_source_path: Path ruff and mypy resolve their config from;
-            defaults to *file_path* when the caller passes nothing.
 
     Returns:
         One ValidatorResult per file-scoped validator.
     """
+    base_name = Path(file_path).name
     with tempfile.TemporaryDirectory() as temporary_directory:
-        temporary_file = _temporary_path_preserving_directory_signal(
-            Path(temporary_directory), file_path
-        )
+        temporary_file = Path(temporary_directory) / base_name
         temporary_file.write_text(proposed_content, encoding="utf-8")
-        resolved_config_source_path = (
-            config_source_path
-            if config_source_path is not None
-            else Path(file_path)
-        )
-        return run_file_scoped_validators(
-            [temporary_file], config_source_path=resolved_config_source_path
-        )
+        return run_file_scoped_validators([temporary_file])
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:
@@ -923,6 +836,34 @@ def _emit_pre_tool_use_deny(deny_reason: str) -> None:
         block_reason=deny_reason,
     )
     sys.stdout.write(json.dumps(deny_payload) + "\n")
+    sys.stdout.flush()
+
+
+def _emit_pre_tool_use_ask(ask_reason: str) -> None:
+    """Write one PreToolUse ask JSON payload escalating the block to a human prompt.
+
+    ::
+
+        deny  -> a new violation, or no valid token: the block stands
+        ask   -> only pre-existing findings under a valid token: a human grants
+
+    Args:
+        ask_reason: The ``permissionDecisionReason`` naming the pre-existing
+            findings a human must approve.
+    """
+    ask_payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": ask_reason,
+        }
+    }
+    log_hook_block(
+        calling_hook_name="run_all_validators.py",
+        hook_event="PreToolUse",
+        block_reason=ask_reason,
+    )
+    sys.stdout.write(json.dumps(ask_payload) + "\n")
     sys.stdout.flush()
 
 
@@ -1334,12 +1275,22 @@ def _emit_pre_existing_warning(all_preexisting_results: List[ValidatorResult]) -
     sys.stderr.flush()
 
 
-def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
+def _decide_pre_tool_use(
+    file_path: str, proposed_content: str, permission_mode: str, session_id: str
+) -> None:
     """Deny only violations absent from the baseline; warn on the ones that persist.
+
+    A new violation never downgrades: the escalation guard treats "proposed
+    findings are a subset of the on-disk findings" as "there are no new
+    results", which is false whenever a new result exists. So a valid token
+    escalates to a human ``ask`` only when every proposed failure is
+    pre-existing, and a new violation always denies.
 
     Args:
         file_path: The write's target path.
         proposed_content: The reconstructed post-edit content of that file.
+        permission_mode: The PreToolUse permission mode of the write.
+        session_id: The session a skip token belongs to.
     """
     all_proposed_failed = _failed_results(
         validate_proposed_file(file_path, proposed_content)
@@ -1352,8 +1303,16 @@ def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
     )
     if all_preexisting_results:
         _emit_pre_existing_warning(all_preexisting_results)
-    if all_new_results:
-        _emit_pre_tool_use_deny(_proposed_content_deny_reason(all_new_results))
+    if not all_new_results:
+        return
+    proposed_content_hash = content_sha256(proposed_content)
+    has_token = has_valid_skip_token(session_id, file_path, proposed_content_hash)
+    deny_reason = _proposed_content_deny_reason(all_new_results)
+    if should_downgrade_to_ask(permission_mode, not all_new_results, has_token):
+        consume_skip_token(session_id, file_path, proposed_content_hash)
+        _emit_pre_tool_use_ask(deny_reason)
+        return
+    _emit_pre_tool_use_deny(deny_reason)
 
 
 def _evaluate_pre_tool_use_payload() -> None:
@@ -1383,7 +1342,9 @@ def _evaluate_pre_tool_use_payload() -> None:
     proposed_content = reconstruct_proposed_content(tool_name, tool_input)
     if not proposed_content:
         return
-    _decide_pre_tool_use(file_path, proposed_content)
+    permission_mode = pre_tool_use_payload.get("permission_mode", "")
+    session_id = pre_tool_use_payload.get("session_id", "")
+    _decide_pre_tool_use(file_path, proposed_content, permission_mode, session_id)
 
 
 def run_pre_tool_use_gate() -> int:

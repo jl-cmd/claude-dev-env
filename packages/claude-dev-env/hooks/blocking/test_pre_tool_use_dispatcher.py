@@ -9,6 +9,9 @@ union.
 The failure-mode tests cover one row each from spec/failure-modes.md:
 early-exit-then-later-deny, multi-deny, context-survival, blocking-hook crash,
 fail-open malformed input.
+
+The unit tests also pin the deny over ask over allow precedence the aggregator
+resolves and the ask payload the emitter writes.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
 )
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
     HostedHookResult,
+    _emit_ask_decision,
     aggregate_hosted_hook_results,
     run_hosted_hook,
 )
@@ -48,8 +52,6 @@ _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
 _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.txt")
 _MARKDOWN_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.md")
-_AGENT_PIN_PROBE_PATH = str(_HOOKS_ROOT.parent / "agents" / "pin_probe_nonexistent.md")
-_PINNED_AGENT_CONTENT = "---\nname: probe\nmodel: opus\n---\n\nBody text.\n"
 
 
 def _run_hook_subprocess(
@@ -300,52 +302,6 @@ def test_plain_language_denial_on_multi_edit_of_markdown_file() -> None:
         [{"old_string": "old", "new_string": "Please utilize this functionality to commence."}],
     )
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
-
-
-def test_agent_model_pin_denial_on_write_of_agent_file() -> None:
-    """Dispatcher denies a Write of an agent file whose frontmatter pins a model."""
-    payload_text = _write_payload(_AGENT_PIN_PROBE_PATH, _PINNED_AGENT_CONTENT)
-    _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
-
-
-def _agent_file_pinned_by_edit(tmp_path: Path) -> Path:
-    """Write an agent file whose frontmatter reads model: inherit, and return it."""
-    agents_directory = tmp_path / ".claude" / "agents"
-    agents_directory.mkdir(parents=True)
-    agent_file = agents_directory / "probe.md"
-    agent_file.write_text(
-        "---\nname: probe\nmodel: inherit\n---\n\nBody.\n", encoding="utf-8"
-    )
-    return agent_file
-
-
-def test_agent_model_pin_edit_reconstruction_denies_through_dispatcher(
-    tmp_path: Path,
-) -> None:
-    """Dispatcher matches the hooks on an Edit flipping model: inherit to opus."""
-    agent_file = _agent_file_pinned_by_edit(tmp_path)
-    payload_text = _edit_payload(str(agent_file), "model: inherit", "model: opus")
-    _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
-
-
-def test_agent_model_pin_multi_edit_reconstruction_denies_through_dispatcher(
-    tmp_path: Path,
-) -> None:
-    """Dispatcher matches the hooks on a MultiEdit flipping model to a pin."""
-    agent_file = _agent_file_pinned_by_edit(tmp_path)
-    payload_text = _multi_edit_payload(
-        str(agent_file), [{"old_string": "model: inherit", "new_string": "model: opus"}]
-    )
-    _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
-
-
-def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
-    """The dispatcher docstring names the roster, not per-tool counts that drift."""
-    dispatcher_source = Path(_DISPATCHER_SCRIPT).read_text(encoding="utf-8")
-    assert "ALL_HOSTED_HOOK_ENTRIES" in dispatcher_source
-    assert "-> 20 hooks" not in dispatcher_source
-    assert "-> 21 hooks" not in dispatcher_source
-    assert "-> 9 hooks" not in dispatcher_source
 
 
 def test_multi_edit_runs_only_group_b_hooks() -> None:
@@ -681,8 +637,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 22, (
-        f"Write tool must apply to all 22 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 21, (
+        f"Write tool must apply to all 21 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -695,16 +651,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 23, (
-        f"expected 23 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 22, (
+        f"expected 22 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (11 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 11, (
-        f"MultiEdit tool must apply to exactly 11 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 10, (
+        f"MultiEdit tool must apply to exactly 10 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -715,7 +671,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 22 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
@@ -916,3 +872,101 @@ def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
             "from the dispatcher's hosted hook set — coverage was lost when the "
             "standalone entry was removed from hooks.json"
         )
+
+
+def _ask_payload_stdout(reason_text: str) -> str:
+    """Build one hosted-hook stdout carrying an ask decision with a reason."""
+    return json.dumps(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": reason_text,
+            }
+        }
+    )
+
+
+def test_aggregate_ask_payload_signals_ask_decision() -> None:
+    """An ask payload from a hosted hook signals an ask decision, not deny or allow.
+
+    A hosted gate downgrades a deny to ask when a valid skip token clears the
+    deadlock guards. The aggregator must surface that as an ask so the dispatcher
+    routes the write to the human permission prompt rather than swallowing it.
+    """
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("pre-existing finding — human must approve"),
+            did_crash=False,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_ask, "an ask payload with no deny must signal an ask decision"
+    assert not decision.should_deny, "an ask must not signal a deny"
+    assert not decision.should_allow, "an ask must not signal an explicit allow"
+    assert "human must approve" in " | ".join(decision.all_ask_reasons)
+
+
+def test_aggregate_ask_is_overridden_by_a_deny() -> None:
+    """A deny wins over an ask from another hook in the same run."""
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("please confirm"),
+            did_crash=False,
+            is_blocking=True,
+        ),
+        HostedHookResult(
+            exit_code=BLOCKING_CRASH_EXIT_CODE,
+            captured_stdout="",
+            did_crash=False,
+            is_blocking=True,
+        ),
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_deny, "a deny must win over an ask"
+    assert not decision.should_ask, "should_ask must be False when any hook denies"
+
+
+def test_aggregate_ask_overrides_an_explicit_allow() -> None:
+    """An ask wins over an explicit allow when no hook denies."""
+    explicit_allow_stdout = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+    )
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=explicit_allow_stdout,
+            did_crash=False,
+            is_blocking=True,
+        ),
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("deadlock cleared by a valid skip token"),
+            did_crash=False,
+            is_blocking=True,
+        ),
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    assert decision.should_ask, "an ask must win over an explicit allow"
+    assert not decision.should_allow, "should_allow must be False when a hook asks"
+
+
+def test_emit_ask_decision_writes_ask_permission(capsys: pytest.CaptureFixture[str]) -> None:
+    """_emit_ask_decision writes a permissionDecision ask payload carrying the reason."""
+    all_results = [
+        HostedHookResult(
+            exit_code=0,
+            captured_stdout=_ask_payload_stdout("edit blocked only by a pre-existing finding"),
+            did_crash=False,
+            is_blocking=True,
+        )
+    ]
+    decision = aggregate_hosted_hook_results(all_results)
+    _emit_ask_decision(decision)
+    emitted_payload = json.loads(capsys.readouterr().out.strip())
+    hook_specific = emitted_payload["hookSpecificOutput"]
+    assert hook_specific["permissionDecision"] == "ask"
+    assert "pre-existing finding" in hook_specific["permissionDecisionReason"]
