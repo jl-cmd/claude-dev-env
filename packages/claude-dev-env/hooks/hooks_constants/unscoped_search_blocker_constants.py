@@ -1,0 +1,98 @@
+"""Constants for the unscoped-search PreToolUse Bash/PowerShell blocker.
+
+Holds tool names, program basenames, find/Get-ChildItem option sets, unscoped
+root patterns, stride constants for option/value token pairs, and the deny
+message for a whole-drive or home-root tree walk.
+"""
+
+from __future__ import annotations
+
+import re
+
+__all__ = [
+    "BASH_TOOL_NAME",
+    "POWERSHELL_TOOL_NAME",
+    "ALL_SUPPORTED_TOOL_NAMES",
+    "ALL_FIND_PROGRAM_BASENAMES",
+    "ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES",
+    "ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE",
+    "ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE",
+    "FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX",
+    "MINIMUM_FIND_OPTIMIZATION_OPTION_LENGTH",
+    "FIND_GLOBAL_OPTION_VALUE_TOKEN_STRIDE",
+    "PATH_FLAG_AND_VALUE_TOKEN_STRIDE",
+    "ALL_FIND_EXPRESSION_INTRODUCER_TOKENS",
+    "ALL_GET_CHILD_ITEM_RECURSE_FLAGS",
+    "ALL_GET_CHILD_ITEM_PATH_FLAGS",
+    "ALL_UNSCOPED_HOME_LITERALS",
+    "GIT_BASH_DRIVE_ROOT_PATTERN",
+    "WINDOWS_DRIVE_ROOT_PATTERN",
+    "HOOK_EVENT_NAME",
+    "DENY_DECISION",
+    "CALLING_HOOK_NAME",
+    "CORRECTIVE_MESSAGE",
+]
+
+BASH_TOOL_NAME = "Bash"
+POWERSHELL_TOOL_NAME = "PowerShell"
+ALL_SUPPORTED_TOOL_NAMES: frozenset[str] = frozenset(
+    {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}
+)
+
+ALL_FIND_PROGRAM_BASENAMES: frozenset[str] = frozenset({"find", "find.exe"})
+ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES: frozenset[str] = frozenset(
+    {"get-childitem", "gci", "dir", "ls"}
+)
+
+ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE: frozenset[str] = frozenset(
+    {"-H", "-L", "-P"}
+)
+ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE: frozenset[str] = frozenset({"-D"})
+FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX = "-O"
+MINIMUM_FIND_OPTIMIZATION_OPTION_LENGTH = 2
+FIND_GLOBAL_OPTION_VALUE_TOKEN_STRIDE = 2
+PATH_FLAG_AND_VALUE_TOKEN_STRIDE = 2
+ALL_FIND_EXPRESSION_INTRODUCER_TOKENS: frozenset[str] = frozenset({"!", "(", ")"})
+
+ALL_GET_CHILD_ITEM_RECURSE_FLAGS: frozenset[str] = frozenset(
+    {"-recurse", "-r", "-rec"}
+)
+ALL_GET_CHILD_ITEM_PATH_FLAGS: frozenset[str] = frozenset(
+    {"-path", "-literalpath", "-lp"}
+)
+
+ALL_UNSCOPED_HOME_LITERALS: frozenset[str] = frozenset(
+    {
+        "~",
+        "~/",
+        "$HOME",
+        "$HOME/",
+        "${HOME}",
+        "${HOME}/",
+        "%USERPROFILE%",
+        "%USERPROFILE%\\",
+        "%USERPROFILE%/",
+        "$env:USERPROFILE",
+        "$env:USERPROFILE\\",
+        "$env:USERPROFILE/",
+        "$env:HOME",
+        "$env:HOME\\",
+        "$env:HOME/",
+    }
+)
+
+GIT_BASH_DRIVE_ROOT_PATTERN = re.compile(r"^/[a-zA-Z]/?$")
+WINDOWS_DRIVE_ROOT_PATTERN = re.compile(r"^[a-zA-Z]:[\\/]*$")
+
+HOOK_EVENT_NAME = "PreToolUse"
+DENY_DECISION = "deny"
+CALLING_HOOK_NAME = "unscoped_search_blocker.py"
+
+CORRECTIVE_MESSAGE = (
+    "Unscoped filesystem search blocked. Never start find/Get-ChildItem at `/`, "
+    "a drive root (`/c`, `C:\\`), or bare home (`~`, `$HOME`). Scope the walk to a "
+    "project or worktree path (for example `find . -name '*.py'` or "
+    "`find packages/claude-dev-env -iname code_rules_gate.py`). On Windows prefer "
+    "es.exe with a path scope, or the Grep/Glob tools. Batch shell work; avoid "
+    "parallel full-tree searches that contend for the shell and lock the host."
+)
