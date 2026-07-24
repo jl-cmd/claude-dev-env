@@ -247,14 +247,17 @@ def resolve_merge_base(repo_root: str) -> str | None:
 def untracked_file_paths(repo_root: str) -> list[str] | None:
     """List untracked, non-ignored files outside tooling-state directories.
 
-    Paths under the transient tooling-state subtrees (the Claude and Cursor
-    scratch subdirectories named in ``ALL_TOOLING_STATE_PREFIXES`` —
-    verification verdicts, worktree copies, daemon and team session state)
-    are skipped: they hold session state and stale worktree copies, never
-    the branch's work, and in real checkouts they run to thousands of
-    files. Production hook, agent, and skill files tracked elsewhere under
-    ``.claude/`` are kept, so a new untracked one still binds to the
-    verdict surface.
+    Paths under the transient tooling-state subtrees named in
+    ``ALL_TOOLING_STATE_PREFIXES`` are skipped: the Claude and Cursor
+    scratch subdirectories carrying verification verdicts, worktree copies,
+    daemon state, team state, and session state, plus the top-level plugin
+    runtime data directory a plugin rewrites while it works. These hold session state
+    and stale worktree copies, never the branch's work, and in real
+    checkouts they run to thousands of files. A verdict binds to surface
+    content, so runtime state left in the surface moves the hash under a
+    freshly minted verdict and denies the next push. Production hook,
+    agent, and skill files tracked elsewhere under ``.claude/`` are kept,
+    so a new untracked one still binds to the verdict surface.
 
     Args:
         repo_root: The repository top-level directory.
