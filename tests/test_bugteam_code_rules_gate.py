@@ -93,6 +93,27 @@ def copy_hooks_constants_into(repository_root: Path) -> None:
         )
 
 
+def copy_gate_skip_token_into(repository_root: Path) -> None:
+    source_package = (
+        REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "blocking" / "gate_skip_token"
+    )
+    destination_package = (
+        repository_root
+        / "packages"
+        / "claude-dev-env"
+        / "hooks"
+        / "blocking"
+        / "gate_skip_token"
+    )
+    for each_source_file in sorted(source_package.rglob("*.py")):
+        relative_path = each_source_file.relative_to(source_package)
+        destination_file = destination_package / relative_path
+        destination_file.parent.mkdir(parents=True, exist_ok=True)
+        destination_file.write_text(
+            each_source_file.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+
 def copy_gate_script_into(repository_root: Path) -> Path:
     destination_scripts = (
         repository_root / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
@@ -165,6 +186,7 @@ def set_up_fixture_repo(tmp_path: Path) -> Path:
     copy_enforcer_into(repository_root)
     copy_hooks_config_into(repository_root)
     copy_hooks_constants_into(repository_root)
+    copy_gate_skip_token_into(repository_root)
     return repository_root
 
 
