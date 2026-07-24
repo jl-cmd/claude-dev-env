@@ -88,8 +88,9 @@ def is_unscoped_search_root(path_token: str) -> bool:
     return False
 
 
-def _tokens_after_leading_program(all_segment_tokens: list[str]) -> list[str]:
-    leading_program = effective_leading_program(all_segment_tokens)
+def _tokens_after_leading_program(
+    all_segment_tokens: list[str], leading_program: str | None
+) -> list[str]:
     if leading_program is None:
         return []
     leading_index = all_segment_tokens.index(leading_program)
@@ -135,15 +136,11 @@ def _segment_has_unscoped_find(all_segment_tokens: list[str]) -> bool:
     if token_basename(leading_program) not in ALL_FIND_PROGRAM_BASENAMES:
         return False
     all_starting_points = _collect_find_starting_points(
-        _tokens_after_leading_program(all_segment_tokens)
+        _tokens_after_leading_program(all_segment_tokens, leading_program)
     )
     return any(
         is_unscoped_search_root(each_start) for each_start in all_starting_points
     )
-
-
-def _token_is_recurse_flag(token: str) -> bool:
-    return token.lower() in ALL_GET_CHILD_ITEM_RECURSE_FLAGS
 
 
 def _collect_get_child_item_path_tokens(all_argument_tokens: list[str]) -> list[str]:
@@ -171,9 +168,12 @@ def _segment_has_unscoped_recursive_listing(all_segment_tokens: list[str]) -> bo
         return False
     if token_basename(leading_program) not in ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES:
         return False
-    all_argument_tokens = _tokens_after_leading_program(all_segment_tokens)
+    all_argument_tokens = _tokens_after_leading_program(
+        all_segment_tokens, leading_program
+    )
     has_recurse_flag = any(
-        _token_is_recurse_flag(each_token) for each_token in all_argument_tokens
+        each_token.lower() in ALL_GET_CHILD_ITEM_RECURSE_FLAGS
+        for each_token in all_argument_tokens
     )
     if not has_recurse_flag:
         return False
