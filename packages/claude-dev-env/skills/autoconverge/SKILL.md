@@ -25,6 +25,25 @@ converge product to ready (or a named blocker).
 `pr-converge` selects `schedule_wakeup` or `portable` the same way. Both
 entry skills share the helper scripts and the convergence gate.
 
+## Grok mode (the `grok` arg)
+
+When the skill argument begins with the token `grok` (optionally followed by
+`:`), grok mode is on: strip that leading token, a following `:`, and
+surrounding whitespace, then parse the rest as the scope argument. Otherwise
+grok mode is off.
+
+Grok mode has three effects:
+
+- `pacer=portable` is forced and the `converge.mjs` Workflow path is skipped.
+  The pacer script decides this from `--grok-mode`; the Workflow `agent()`
+  primitive spawns Claude subagents only, so grok mode drives the portable loop.
+- Loop edit, audit, and fix workers route through `resolve_worker_spawn.py`
+  (grok-first, Claude fallback), per the worker routing in
+  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+- Code-review and the code-verifier verdict stay on Claude.
+
+Resume command carries the token: `/autoconverge grok: <PR URL>`.
+
 ## Run scope: one PR or several
 
 Decide the scope from how many PRs the user named, then follow that path:
@@ -50,8 +69,11 @@ Scan the tool list for `Workflow` and `ScheduleWakeup`, then select the pacer:
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   --skill autoconverge \
   --has-workflow <0|1> \
-  --has-schedule-wakeup <0|1>
+  --has-schedule-wakeup <0|1> \
+  --grok-mode <0|1>
 ```
+
+Pass `--grok-mode 1` under grok mode; the script then returns `portable`.
 
 - `pacer=workflow` — continue with Pre-flight and **Run the workflow** below.
 - `pacer=portable` — continue with Pre-flight (portable worktree rules when
@@ -161,18 +183,13 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false, homeDirectory: "<HOME>" }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false }
 })
 ```
 
 `scriptPath` is the absolute path to `workflow/converge.mjs` inside this skill's
 own directory (on this install,
-`<home>/.claude/skills/autoconverge/workflow/converge.mjs`). `homeDirectory` is
-the absolute path to the directory that holds `.claude` (resolve it once from
-`$HOME`, or `$env:USERPROFILE` on Windows, with forward slashes). The workflow
-runs in a sandbox with no access to environment variables, so the run reads the
-home directory from this arg to build the path to the codex-review scripts the
-Codex gate calls; leave it out and the Codex gate cannot find those scripts. Set
+`<home>/.claude/skills/autoconverge/workflow/converge.mjs`). Set
 `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
 own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
@@ -194,7 +211,7 @@ Write it again when the result lands, so the handoff carries the final run id an
 names the teardown phase the fresh session picks up from.
 
 The workflow returns
-`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, codexNote, cleanAuditNote, reuseNote, deferredPrs }`,
+`{ converged, rounds, finalSha, blocker, standardsNote, copilotNote, cleanAuditNote, reuseNote, deferredPrs }`,
 plus a `userReview` field on a `blocker: "user-review"` return. `cleanAuditNote` is
 non-null when the environment refused the CLEAN bugteam review post and the run
 recorded the bypass — see
@@ -364,7 +381,6 @@ ready again — then run the checkpoints.
    Blocker: <blocker>        # only when blocked
    Standards: <standardsNote> # only when a round deferred code-standard findings
    Copilot: <copilotNote>     # only when Copilot was down or out of quota
-   Codex: <codexNote>         # only when the Codex gate was bypassed (codex_down or opt-out)
    Clean-audit: <cleanAuditNote> # only when the CLEAN bugteam post was bypassed
    Reuse: <reuseNote>         # only when the reuse pass identified an improvement
    ```
