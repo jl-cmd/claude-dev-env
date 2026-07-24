@@ -17,6 +17,7 @@ except ModuleNotFoundError:
     from pyproject_config_discovery import find_pyproject_configuring_tool
 
 try:
+    from hooks_constants.blocking_check_limits import RUFF_STDIN_ENCODING
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
     from hooks_constants.ruff_integration_constants import (
@@ -27,6 +28,7 @@ try:
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
+    from hooks_constants.blocking_check_limits import RUFF_STDIN_ENCODING
     from hooks_constants.mypy_integration_constants import PYTHON_SOURCE_SUFFIX
     from hooks_constants.pyproject_config_discovery_constants import RUFF_TOOL_TABLE_NAME
     from hooks_constants.ruff_integration_constants import (
@@ -186,7 +188,7 @@ def _staged_ruff_result(
         check=False,
         capture_output=True,
         text=True,
-        encoding="utf-8",
+        encoding=RUFF_STDIN_ENCODING,
         input=staged_content,
         cwd=str(resolved_pyproject.parent),
         env=_ruff_subprocess_environment(),

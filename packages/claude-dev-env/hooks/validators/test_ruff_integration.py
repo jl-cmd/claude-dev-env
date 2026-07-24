@@ -106,9 +106,7 @@ def test_run_ruff_check_grades_a_staged_copy_holding_non_ascii_text(
     """
     ruff_repo = tmp_path / "ruff_repo"
     ruff_repo.mkdir()
-    (ruff_repo / "pyproject.toml").write_text(
-        "[tool.ruff.lint]\nselect = ['B']\n", encoding="utf-8"
-    )
+    (ruff_repo / "pyproject.toml").write_text("[tool.ruff]\n", encoding="utf-8")
     original_target = ruff_repo / "dashes.py"
     staged_copy = tmp_path / "detached" / "dashes.py"
     staged_copy.parent.mkdir(parents=True)
