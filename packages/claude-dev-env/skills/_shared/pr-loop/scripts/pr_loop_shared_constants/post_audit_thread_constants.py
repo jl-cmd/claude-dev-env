@@ -1,12 +1,14 @@
-"""Constants for post_audit_thread.py.
+"""Named constants and path helpers for ``post_audit_thread.py``.
 
-Centralizes every literal the script and its tests need so the script body
-contains no magic values beyond the integer literals exempt from
-``check_magic_values`` (``0``, ``1``, ``-1``). Constants live here per
-CODE_RULES.md §4 (Config Locations) and §3 (Reuse Constants).
+::
 
-All scalar constants stay narrowly typed so the consuming script and tests
-can rely on ``int`` / ``str`` / ``tuple`` semantics without runtime checks.
+    REVIEWS_API_PATH_TEMPLATE.format(owner="o", repo="r", pr_number=7)
+    ->  "/repos/o/r/pulls/7/reviews"
+
+Every literal the script and its tests need lives here, so the script body
+carries no magic values beyond ``0``, ``1``, and ``-1``. The
+``script_directory`` and ``template_path`` helpers resolve the reply
+template location at runtime.
 """
 
 from __future__ import annotations
@@ -149,6 +151,7 @@ DETAILS_BLOCK_BULLET_TEMPLATE: str = (
     "- **[{severity}]** `{path}:{line}` — {description}"
 )
 DETAILS_BLOCK_FOOTER: str = "\n</details>"
+DETAILS_BLOCK_LINE_SEPARATOR: str = "\n"
 
 INLINE_COMMENT_BODY_TEMPLATE: str = (
     "**[{severity}] {skill_display} audit finding**\n\n"

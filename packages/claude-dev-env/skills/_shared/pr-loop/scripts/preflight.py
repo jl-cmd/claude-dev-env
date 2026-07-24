@@ -49,20 +49,17 @@ from reviews_disabled import (
 
 
 def verify_git_hooks_path(repository_root: Path | None = None) -> int:
-    """Check that core.hooksPath resolves to the claude-dev-env git-hooks directory.
+    """Check that git's core.hooksPath points at the claude-dev-env hooks.
 
-    Silently clears any stale, non-canonical local-scope core.hooksPath
-    override before querying the effective config, so a worktree-seeded local
-    entry cannot shadow a correctly configured global setting. When
-    *repository_root* is provided, queries the effective config for that
-    repository (``git -C <root> config --get``). When a canonical global
-    ``core.hooksPath`` is already configured, the preceding self-heal step
-    clears non-canonical local-scope entries, so repo-level overrides such
-    as Husky or lefthook at local scope are silently removed in favor of
-    the canonical global; when the global is unset or non-canonical, the
-    self-heal stands down and the ``--get`` query still surfaces those
-    overrides through the failure path. Falls back to the current working
-    directory's effective config when *repository_root* is None.
+    ::
+
+        core.hooksPath -> ~/.claude/hooks/git-hooks   ok:   returns 0
+        core.hooksPath -> /repo/.husky                flag: returns 1, prints fix
+        core.hooksPath -> (unset)                     flag: returns 1, prints fix
+
+    First clears any stale local-scope override so a worktree-seeded entry
+    cannot shadow a good global setting. Then reads the effective config for
+    *repository_root*, falling back to the current directory when it is None.
 
     Args:
         repository_root: Optional repository root to check. When None, uses
@@ -231,26 +228,26 @@ def _pytest_exit_code_no_tests_collected() -> int:
 
 def run_pytest(
     repository_root: Path,
-    verbose: bool,
+    is_verbose_enabled: bool,
     all_test_paths: list[Path] | None = None,
 ) -> int:
     """Run pytest in the repository root and return the exit code.
 
-    Passes ``--ff`` (failed-first) and ``-q`` unless *verbose* is True. When
-    *all_test_paths* is provided, restricts the run to those paths via the
-    ``--`` positional separator so pytest does not misinterpret leading
+    Passes ``--ff`` (failed-first) and ``-q`` unless *is_verbose_enabled* is
+    True. When *all_test_paths* is provided, restricts the run to those paths
+    via the ``--`` positional separator so pytest does not misinterpret leading
     hyphens as options. Treats the "no tests collected" exit code as a pass.
 
     Args:
         repository_root: The repository root for running pytest.
-        verbose: When True, omit ``-q`` so individual test names show.
+        is_verbose_enabled: When True, omit ``-q`` so individual test names show.
         all_test_paths: Optional list of test paths to restrict the run.
 
     Returns:
         The pytest exit code, or 0 when no tests were collected.
     """
     command = [sys.executable, "-m", "pytest", PYTEST_FAILED_FIRST_FLAG]
-    if not verbose:
+    if not is_verbose_enabled:
         command.append("-q")
     if all_test_paths is not None:
         command.append("--")
@@ -459,6 +456,147 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
     return parser.parse_args(all_arguments)
 
 
+def _is_preflight_skipped_via_env() -> bool:
+    """Report whether the skip env var asks to bypass preflight, logging when set."""
+    skip_env_var_name = BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME
+    skip_enabled_token = BUGTEAM_PREFLIGHT_SKIP_ENABLED_VALUE
+    if os.environ.get(skip_env_var_name, "").strip() != skip_enabled_token:
+        return False
+    print(
+        f"bugteam_preflight: skipped ({skip_env_var_name}={skip_enabled_token}).",
+        file=sys.stderr,
+    )
+    return True
+
+
+def _is_bugteam_disabled_via_reviews_env() -> bool:
+    """Report whether CLAUDE_REVIEWS_DISABLED lists the bugteam token, logging when set."""
+    if not is_bugteam_disabled_via_env():
+        return False
+    print(
+        f"bugteam_preflight: halted "
+        f"({CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME} contains "
+        f"'{CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN}').",
+        file=sys.stderr,
+    )
+    return True
+
+
+def _resolve_repository_root(arguments: argparse.Namespace) -> Path:
+    """Resolve the repository root from --repo-root or by discovery from cwd."""
+    if arguments.repo_root is not None:
+        return arguments.repo_root.resolve()
+    return find_repository_root(Path.cwd())
+
+
+def _resolve_effective_scope(
+    arguments: argparse.Namespace, discovery_state: bool | None
+) -> str:
+    """Resolve the pytest selection scope, warning when 'changed' lacks a base ref."""
+    if discovery_state is None:
+        return PYTEST_SCOPE_ALL
+    effective_scope = arguments.scope
+    if effective_scope is None:
+        effective_scope = (
+            PYTEST_SCOPE_CHANGED if arguments.base_ref is not None else PYTEST_SCOPE_ALL
+        )
+    if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is None:
+        print(
+            "bugteam_preflight: --scope changed requires --base-ref; "
+            "falling back to full suite.",
+            file=sys.stderr,
+        )
+        return PYTEST_SCOPE_ALL
+    return effective_scope
+
+
+def _run_changed_scope_pytest(
+    arguments: argparse.Namespace, repository_root: Path
+) -> int:
+    """Run only the tests related to files changed since --base-ref.
+
+    Falls back to the full suite when the diff cannot be computed or maps to no
+    related tests.
+    """
+    all_changed_files = get_changed_files(repository_root, arguments.base_ref)
+    if all_changed_files is None:
+        return run_pytest(repository_root, arguments.verbose)
+    all_related_tests = discover_related_tests(all_changed_files, repository_root)
+    if not all_related_tests:
+        print(
+            "bugteam_preflight: no related tests found; running full suite.",
+            file=sys.stderr,
+        )
+        return run_pytest(repository_root, arguments.verbose)
+    print(
+        f"bugteam_preflight: running {len(all_related_tests)} test(s) "
+        f"related to changed files (scope=changed).",
+        file=sys.stderr,
+    )
+    return run_pytest(repository_root, arguments.verbose, all_related_tests)
+
+
+def _run_pytest_for_scope(
+    arguments: argparse.Namespace,
+    repository_root: Path,
+    discovery_state: bool | None,
+) -> int:
+    """Run pytest for the resolved scope: the changed subset or the full suite."""
+    effective_scope = _resolve_effective_scope(arguments, discovery_state)
+    if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is not None:
+        return _run_changed_scope_pytest(arguments, repository_root)
+    return run_pytest(repository_root, arguments.verbose)
+
+
+def _run_pytest_stage(arguments: argparse.Namespace, repository_root: Path) -> int:
+    """Run the pytest checks unless disabled, unconfigured, or without tests.
+
+    Returns 0 when pytest is skipped (``--no-pytest``, no configuration, or no
+    discoverable tests); otherwise returns the scoped pytest exit code.
+    """
+    if arguments.no_pytest:
+        return 0
+    if not has_pytest_configuration(repository_root):
+        print(
+            "bugteam_preflight: no pytest configuration found; skipping pytest.",
+            file=sys.stderr,
+        )
+        return 0
+    discovery_state = has_discoverable_tests(repository_root)
+    if discovery_state is None:
+        print(
+            "bugteam_preflight: test discovery failed; running full suite anyway.",
+            file=sys.stderr,
+        )
+    elif not discovery_state:
+        print(
+            "bugteam_preflight: pytest configured but no tests found; skipping pytest.",
+            file=sys.stderr,
+        )
+        return 0
+    return _run_pytest_for_scope(arguments, repository_root, discovery_state)
+
+
+def _run_pre_commit_stage(arguments: argparse.Namespace, repository_root: Path) -> int:
+    """Run pre-commit when requested and its config file exists, else return 0."""
+    config_path = repository_root / PRE_COMMIT_CONFIG_YAML_FILENAME
+    if arguments.pre_commit and config_path.is_file():
+        return run_pre_commit(repository_root)
+    return 0
+
+
+def _run_configured_checks(arguments: argparse.Namespace) -> int:
+    """Run hooks-path, pytest, and pre-commit checks, stopping at the first failure."""
+    repository_root = _resolve_repository_root(arguments)
+    hooks_path_exit_code = verify_git_hooks_path(repository_root)
+    if hooks_path_exit_code != 0:
+        return hooks_path_exit_code
+    pytest_exit_code = _run_pytest_stage(arguments, repository_root)
+    if pytest_exit_code != 0:
+        return pytest_exit_code
+    return _run_pre_commit_stage(arguments, repository_root)
+
+
 def main(all_arguments: list[str]) -> int:
     """Run the preflight checks (git-hooks path, pytest, optional pre-commit).
 
@@ -471,100 +609,11 @@ def main(all_arguments: list[str]) -> int:
         ``CLAUDE_REVIEWS_DISABLED`` lists the ``bugteam`` token.
     """
     arguments = parse_arguments(all_arguments)
-    skip_env_var_name = BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME
-    skip_enabled_value = BUGTEAM_PREFLIGHT_SKIP_ENABLED_VALUE
-    if os.environ.get(skip_env_var_name, "").strip() == skip_enabled_value:
-        print(
-            f"bugteam_preflight: skipped ({skip_env_var_name}={skip_enabled_value}).",
-            file=sys.stderr,
-        )
+    if _is_preflight_skipped_via_env():
         return 0
-    reviews_disabled_env_var_name = CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME
-    reviews_disabled_bugteam_token = CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
-    disabled_via_env_exit_code = EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
-    if is_bugteam_disabled_via_env():
-        print(
-            f"bugteam_preflight: halted "
-            f"({reviews_disabled_env_var_name} contains "
-            f"'{reviews_disabled_bugteam_token}').",
-            file=sys.stderr,
-        )
-        return disabled_via_env_exit_code
-    start = Path.cwd()
-    repository_root = (
-        arguments.repo_root.resolve()
-        if arguments.repo_root is not None
-        else find_repository_root(start)
-    )
-    hooks_path_exit_code = verify_git_hooks_path(repository_root)
-    if hooks_path_exit_code != 0:
-        return hooks_path_exit_code
-    discovery_result: bool | None = True
-    if not arguments.no_pytest and has_pytest_configuration(repository_root):
-        discovery_result = has_discoverable_tests(repository_root)
-        if discovery_result is None:
-            print(
-                "bugteam_preflight: test discovery failed; running full suite anyway.",
-                file=sys.stderr,
-            )
-        elif not discovery_result:
-            print(
-                "bugteam_preflight: pytest configured but no tests found; skipping pytest.",
-                file=sys.stderr,
-            )
-        if discovery_result is not False:
-            effective_scope = arguments.scope
-            if discovery_result is None:
-                effective_scope = PYTEST_SCOPE_ALL
-            if effective_scope is None:
-                effective_scope = (
-                    PYTEST_SCOPE_CHANGED
-                    if arguments.base_ref is not None
-                    else PYTEST_SCOPE_ALL
-                )
-            if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is None:
-                print(
-                    "bugteam_preflight: --scope changed requires --base-ref; "
-                    "falling back to full suite.",
-                    file=sys.stderr,
-                )
-                effective_scope = PYTEST_SCOPE_ALL
-            if effective_scope == PYTEST_SCOPE_CHANGED and arguments.base_ref is not None:
-                all_changed = get_changed_files(repository_root, arguments.base_ref)
-                if all_changed is None:
-                    exit_code = run_pytest(repository_root, arguments.verbose)
-                else:
-                    all_related = discover_related_tests(all_changed, repository_root)
-                    if all_related:
-                        print(
-                            f"bugteam_preflight: running {len(all_related)} test(s) "
-                            f"related to changed files (scope=changed).",
-                            file=sys.stderr,
-                        )
-                        exit_code = run_pytest(
-                            repository_root, arguments.verbose, all_related
-                        )
-                    else:
-                        print(
-                            "bugteam_preflight: no related tests found; "
-                            "running full suite.",
-                            file=sys.stderr,
-                        )
-                        exit_code = run_pytest(repository_root, arguments.verbose)
-            else:
-                exit_code = run_pytest(repository_root, arguments.verbose)
-            if exit_code != 0:
-                return exit_code
-    elif not arguments.no_pytest and discovery_result is not False:
-        print(
-            "bugteam_preflight: no pytest configuration found; skipping pytest.",
-            file=sys.stderr,
-        )
-    if arguments.pre_commit and (repository_root / PRE_COMMIT_CONFIG_YAML_FILENAME).is_file():
-        exit_code = run_pre_commit(repository_root)
-        if exit_code != 0:
-            return exit_code
-    return 0
+    if _is_bugteam_disabled_via_reviews_env():
+        return EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
+    return _run_configured_checks(arguments)
 
 
 if __name__ == "__main__":

@@ -1,27 +1,15 @@
-"""Unified reviewer-availability pre-check for GitHub Copilot and Cursor Bugbot.
+"""Answer whether a named reviewer may be spawned right now, for Copilot or Bugbot.
 
-Run this before either reviewer step spawns. It answers one question: is the
-named reviewer available to run right now. It reuses two existing checks
-instead of re-implementing their rules. The ``CLAUDE_REVIEWS_DISABLED``
-opt-out gate lives in ``reviews_disabled.py``. The Copilot premium-interaction
-quota pre-check lives in ``copilot_quota.py``.
+::
 
-Copilot counts as down in two cases: it is opted out via
-``CLAUDE_REVIEWS_DISABLED``, or its quota pre-check returns anything other
-than quota available (out of quota, the quota API or account down, or no
-account configured).
+    reviewer_availability.py --reviewer copilot
+    ok:   copilot opted in, has quota   -> exit available, line to stdout
+    flag: copilot out of quota          -> exit down, line to stderr
 
-Bugbot carries no quota or availability API. It is off by default and counts
-as down whenever it is disabled for the run: the default unless
-``CLAUDE_REVIEWS_ENABLED`` lists ``bugbot``, and always when
-``CLAUDE_REVIEWS_DISABLED`` lists it. A genuine runtime outage shows up later
-as a poll timeout, not here.
-
-The exit code tells the caller what to do. Exit 0 means the reviewer is
-available and may be spawned. The documented down code (3) means skip it. Any
-other non-zero exit is a broken check — an interpreter crash or a usage
-error — not a down report, so a gating caller fails open on it. Every path
-prints one line: available lines go to stdout, down lines go to stderr.
+Copilot is down when it is opted out, or when its quota pre-check returns
+anything but quota-available. Bugbot has no availability API, so it is down
+whenever the run disables it. A gating caller fails open on any exit code but
+available or down.
 """
 
 from __future__ import annotations

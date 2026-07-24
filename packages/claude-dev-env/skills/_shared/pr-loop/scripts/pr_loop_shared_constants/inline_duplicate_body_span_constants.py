@@ -1,13 +1,18 @@
-"""Pattern and capture-group constants for the same-file inline-duplicate span.
+"""Regex and capture-group indices for the same-file inline-duplicate message.
 
-The same-file inline-duplicate enforcer message names two functions that share a
-body — the helper and the enclosing function carrying the inline copy — and the
-live Write/Edit hook scopes the violation by the UNION of both spans. So the
-message carries both spans, and ``code_rules_gate.inline_duplicate_body_span_lines``
-parses them to reconstruct that union when the commit/push gate scopes a deferred
-violation by added line. These constants describe the message suffix the enforcer
-emits: ``(inline duplicate body spans: helper at line H spanning P lines,
-enclosing at line E spanning Q lines)``.
+::
+
+    suffix = "(inline duplicate body spans: helper at line 42 "
+             "spanning 3 lines, enclosing at line 88 spanning 3 lines)"
+    match = INLINE_DUPLICATE_BODY_VIOLATION_PATTERN.search(suffix)
+    match.group(helper line index)     reads "42"  helper starts here
+    match.group(helper span index)     reads "3"   helper runs this many lines
+    match.group(enclosing line index)  reads "88"  enclosing copy starts here
+    match.group(enclosing span index)  reads "3"   enclosing runs this many lines
+
+The enforcer emits this suffix when a helper and its enclosing function share a
+body. ``code_rules_gate`` parses the four fields to rebuild the union span the
+commit/push gate scopes a deferred violation by.
 """
 
 import re
