@@ -676,7 +676,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 22 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
