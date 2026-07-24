@@ -22,7 +22,8 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
     ALL_FINDING_GUIDANCE_BY_CODE,
-    ALL_PERIOD_ABBREVIATIONS,
+    ALL_SOFT_PERIOD_ABBREVIATIONS,
+    ALL_TITLE_PERIOD_ABBREVIATIONS,
     ARROW_TOKEN_PATTERN,
     CALLING_HOOK_NAME,
     CLAUSE_SEPARATOR_PATTERN,
@@ -64,25 +65,36 @@ def _token_before_index(text: str, terminator_index: int) -> str:
     return token_match.group(1)
 
 
+def _following_sentence_start_character(text: str, start_index: int) -> str:
+    """Return the character that would start the next sentence after a terminator."""
+    index = start_index
+    while index < len(text) and (text[index].isspace() or text[index] in ")]}\"'"):
+        index += 1
+    if index >= len(text):
+        return ""
+    return text[index]
+
+
 def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     if text[terminator_index] != ".":
         return False
     token = _token_before_index(text, terminator_index)
     if not token:
         return False
-    if token.lower() in ALL_PERIOD_ABBREVIATIONS:
+    # Numbered markers: "1. The gate" is not a sentence end at "1.".
+    if token.isdigit():
         return True
     # Single-letter tokens ("U." / "e." in U.S. / e.g.) are not sentence ends.
-    return len(token) == 1 and token.isalpha()
-
-
-def _next_non_space_character(text: str, start_index: int) -> str:
-    index = start_index
-    while index < len(text) and text[index].isspace():
-        index += 1
-    if index >= len(text):
-        return ""
-    return text[index]
+    if len(token) == 1 and token.isalpha():
+        return True
+    lowered_token = token.lower()
+    if lowered_token in ALL_TITLE_PERIOD_ABBREVIATIONS:
+        return True
+    if lowered_token in ALL_SOFT_PERIOD_ABBREVIATIONS:
+        following = _following_sentence_start_character(text, terminator_index + 1)
+        # "etc. How" is a real end; "etc. more" stays mid-phrase.
+        return not (following == "" or following.isupper() or following in "\"'(")
+    return False
 
 
 def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
@@ -103,10 +115,10 @@ def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
         and text[terminator_index + 1].isdigit()
     ):
         return False
-    following = _next_non_space_character(text, terminator_index + 1)
+    following = _following_sentence_start_character(text, terminator_index + 1)
     if following == "":
         return True
-    return following.isupper() or following in "\"'"
+    return following.isupper() or following in "\"'("
 
 
 def _iter_statement_separator_ends(prefix: str) -> list[int]:

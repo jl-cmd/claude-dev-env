@@ -29,8 +29,8 @@ TERMINATOR_WITH_SPACE_PATTERN: re.Pattern[str] = re.compile(r"[.!?]\s+")
 # Last token immediately before a terminator (word or acronym).
 TOKEN_BEFORE_TERMINATOR_PATTERN: re.Pattern[str] = re.compile(r"([A-Za-z0-9]+)\s*\Z")
 
-# Title/common abbreviations that end with "." and are not sentence ends.
-ALL_PERIOD_ABBREVIATIONS: frozenset[str] = frozenset(
+# Always suppress these title forms (``Dr. Smith``) as sentence ends.
+ALL_TITLE_PERIOD_ABBREVIATIONS: frozenset[str] = frozenset(
     {
         "dr",
         "mr",
@@ -38,6 +38,13 @@ ALL_PERIOD_ABBREVIATIONS: frozenset[str] = frozenset(
         "ms",
         "jr",
         "sr",
+    }
+)
+
+# Suppress only when the next non-space is not a sentence start (``etc. more``).
+# When the next token is capital (``etc. How``), treat the period as a real end.
+ALL_SOFT_PERIOD_ABBREVIATIONS: frozenset[str] = frozenset(
+    {
         "vs",
         "etc",
         "eg",

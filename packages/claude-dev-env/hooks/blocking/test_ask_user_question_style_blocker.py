@@ -140,6 +140,28 @@ def test_doctor_title_does_not_inflate_sentence_count() -> None:
     assert FINDING_TOO_MANY_SENTENCES not in findings
 
 
+def test_etc_ending_fact_still_counts_as_context() -> None:
+    question_text = "We need cleanup, backups, etc. How should temp cleanup run?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_parenthetical_sentence_still_counts_as_context() -> None:
+    question_text = (
+        "The gate failed. (See the logs.) Which path should we take?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
+def test_numbered_list_markers_do_not_inflate_sentence_count() -> None:
+    question_text = (
+        "1. The gate failed on ruff. 2. Tests also failed. "
+        "Which fix should land first?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_MISSING_CONTEXT not in findings
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(
