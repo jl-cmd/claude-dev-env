@@ -61,7 +61,8 @@ export const CORE_SKILLS = [
     'anthropic-plan', 'everything-search',
     'privacy-hygiene',
     'issue-tracker',
-    'recall', 'remember', 'task-build',
+    'recall', 'remember', 'task-build', 'plan-to-pr',
+    'e-simplify', 'review-tier', 'review-router',
 ];
 
 export function collectPackageSourceConflicts(packageDirectory) {
