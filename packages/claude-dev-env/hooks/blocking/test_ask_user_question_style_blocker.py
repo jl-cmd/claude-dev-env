@@ -162,6 +162,27 @@ def test_numbered_list_markers_do_not_inflate_sentence_count() -> None:
     assert FINDING_TOO_MANY_SENTENCES not in findings
 
 
+def test_fact_ending_on_number_still_counts_as_context() -> None:
+    question_text = "The suite found 12. Which fix should land first?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_place_abbreviation_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "St. Louis is down. Chicago is up. Which path should we take?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_MISSING_CONTEXT not in findings
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
+def test_question_mark_inside_parentheses_is_not_the_ask() -> None:
+    question_text = (
+        "The job exited non-zero (status=?). Which retry policy should we use?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(

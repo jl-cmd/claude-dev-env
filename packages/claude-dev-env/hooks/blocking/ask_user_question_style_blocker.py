@@ -57,6 +57,20 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 )
 
 
+def _first_top_level_question_mark_index(text: str) -> int:
+    """Return the first ``?`` not nested in parentheses, or -1 when none."""
+    parenthesis_depth = 0
+    for each_index, each_character in enumerate(text):
+        if each_character == "(":
+            parenthesis_depth += 1
+        elif each_character == ")":
+            if parenthesis_depth > 0:
+                parenthesis_depth -= 1
+        elif each_character == "?" and parenthesis_depth == 0:
+            return each_index
+    return -1
+
+
 def _token_before_index(text: str, terminator_index: int) -> str:
     prefix = text[:terminator_index]
     token_match = TOKEN_BEFORE_TERMINATOR_PATTERN.search(prefix)
@@ -75,6 +89,16 @@ def _following_sentence_start_character(text: str, start_index: int) -> str:
     return text[index]
 
 
+def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bool:
+    """Return whether ``token.`` is a list marker (``1. The gate``), not ``found 12.``."""
+    if not token.isdigit():
+        return False
+    segment_before_number = text[: terminator_index - len(token)].rstrip()
+    if segment_before_number == "":
+        return True
+    return segment_before_number[-1] in ".!?"
+
+
 def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     if text[terminator_index] != ".":
         return False
@@ -82,7 +106,8 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     if not token:
         return False
     # Numbered markers: "1. The gate" is not a sentence end at "1.".
-    if token.isdigit():
+    # A fact that ends on a number ("found 12. Which") still is.
+    if _is_numbered_list_marker(text, terminator_index, token):
         return True
     # Single-letter tokens ("U." / "e." in U.S. / e.g.) are not sentence ends.
     if len(token) == 1 and token.isalpha():
@@ -159,7 +184,7 @@ def question_has_leading_context(question_text: str) -> bool:
     stripped_text = question_text.strip()
     if not stripped_text:
         return False
-    first_question_mark_index = stripped_text.find("?")
+    first_question_mark_index = _first_top_level_question_mark_index(stripped_text)
     if first_question_mark_index < 0:
         return False
     prefix_before_question = stripped_text[:first_question_mark_index]
