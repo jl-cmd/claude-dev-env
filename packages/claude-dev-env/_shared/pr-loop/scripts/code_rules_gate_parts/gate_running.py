@@ -7,7 +7,9 @@ names how many files it inspected.
 """
 
 import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import TypeVar
 
 from pr_loop_shared_constants.code_rules_gate_constants import INSPECTED_COUNT_MESSAGE
 from pr_loop_shared_constants.terminology_sweep_constants import (
@@ -32,6 +34,7 @@ from code_rules_gate_parts.wrapper_plumb_check import (
 PartitionedViolations = tuple[dict[Path, list[str]], dict[Path, list[str]], int]
 PriorContentByRelativePath = dict[str, str]
 StagedContentByRelativePath = dict[str, str | None]
+MappedContentT = TypeVar("MappedContentT")
 
 
 def _path_is_eligible_for_validation(
@@ -55,7 +58,7 @@ def _path_is_eligible_for_validation(
         return False
     if should_read_staged_content:
         resolved_root = repository_root.resolve()
-        relative_posix = str(resolved_path.relative_to(resolved_root)).replace("\\", "/")
+        relative_posix = _relative_posix_for(resolved_path, resolved_root)
         return staged_blob_exists(resolved_root, relative_posix)
     return resolved_path.is_file()
 
@@ -120,32 +123,19 @@ def _prefetch_blob_maps(
     return prior_content_by_relative_path, staged_content_by_relative_path
 
 
-def _lookup_prior_content(
+def _lookup_mapped_or_read(
     resolved_root: Path,
     relative_posix: str,
-    prior_content_by_relative_path: PriorContentByRelativePath | None,
-) -> str:
-    """Return HEAD content from the map, falling back to the single-file reader."""
+    content_by_relative_path: Mapping[str, MappedContentT] | None,
+    read_single: Callable[[Path, str], MappedContentT],
+) -> MappedContentT:
+    """Return map content when present; otherwise call the single-file reader."""
     if (
-        prior_content_by_relative_path is not None
-        and relative_posix in prior_content_by_relative_path
+        content_by_relative_path is not None
+        and relative_posix in content_by_relative_path
     ):
-        return prior_content_by_relative_path[relative_posix]
-    return read_prior_committed_content(resolved_root, relative_posix)
-
-
-def _lookup_staged_content(
-    resolved_root: Path,
-    relative_posix: str,
-    staged_content_by_relative_path: StagedContentByRelativePath | None,
-) -> str | None:
-    """Return staged content from the map, falling back to the single-file reader."""
-    if (
-        staged_content_by_relative_path is not None
-        and relative_posix in staged_content_by_relative_path
-    ):
-        return staged_content_by_relative_path[relative_posix]
-    return read_staged_content(resolved_root, relative_posix)
+        return content_by_relative_path[relative_posix]
+    return read_single(resolved_root, relative_posix)
 
 
 def _file_content_for_validation(
@@ -157,8 +147,11 @@ def _file_content_for_validation(
 ) -> str | None:
     """Return the content the gate validates for one file, or None if unreadable."""
     if should_read_staged_content:
-        return _lookup_staged_content(
-            resolved_root, relative_posix, staged_content_by_relative_path
+        return _lookup_mapped_or_read(
+            resolved_root,
+            relative_posix,
+            staged_content_by_relative_path,
+            read_staged_content,
         )
     try:
         return resolved_path.read_text(encoding="utf-8")
@@ -188,8 +181,11 @@ def _scoped_violations_for_file(
     if content is None:
         sys.stderr.write(f"code_rules_gate: skip unreadable {resolved_path}\n")
         return None
-    prior_content = _lookup_prior_content(
-        resolved_root, relative_posix, prior_content_by_relative_path
+    prior_content = _lookup_mapped_or_read(
+        resolved_root,
+        relative_posix,
+        prior_content_by_relative_path,
+        read_prior_committed_content,
     )
     issues = validate_content(
         content,
@@ -247,21 +243,21 @@ def _partition_over_eligible_paths(
     return blocking_by_file, advisory_by_file, skipped_unreadable_count
 
 
-def _collect_partitioned_violations(
+def _eligible_paths_and_partitions(
     validate_content: ValidateContentCallable,
     all_file_paths: list[Path],
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
-    should_read_staged_content: bool = False,
-) -> PartitionedViolations:
-    """Validate every eligible file and partition results, counting read skips."""
+    should_read_staged_content: bool,
+) -> tuple[list[Path], PartitionedViolations]:
+    """Resolve eligible paths, prefetch blobs, and partition validation results."""
     all_eligible_paths = _eligible_resolved_paths(
         all_file_paths, repository_root, should_read_staged_content
     )
     prior_content_by_relative_path, staged_content_by_relative_path = _prefetch_blob_maps(
         all_eligible_paths, repository_root, should_read_staged_content
     )
-    return _partition_over_eligible_paths(
+    partitions = _partition_over_eligible_paths(
         validate_content,
         all_eligible_paths,
         repository_root,
@@ -270,6 +266,24 @@ def _collect_partitioned_violations(
         prior_content_by_relative_path,
         staged_content_by_relative_path,
     )
+    return all_eligible_paths, partitions
+
+
+def _collect_partitioned_violations(
+    validate_content: ValidateContentCallable,
+    all_file_paths: list[Path],
+    repository_root: Path,
+    all_added_lines_by_path: dict[Path, set[int]] | None,
+    should_read_staged_content: bool = False,
+) -> PartitionedViolations:
+    """Validate every eligible file and partition results, counting read skips."""
+    return _eligible_paths_and_partitions(
+        validate_content,
+        all_file_paths,
+        repository_root,
+        all_added_lines_by_path,
+        should_read_staged_content,
+    )[1]
 
 
 def _blocking_header(blocking_count: int, is_whole_file_scope: bool) -> str:
@@ -361,23 +375,16 @@ def _validate_and_count(
     should_read_staged_content: bool,
 ) -> PartitionedViolations:
     """Validate the eligible files, report the inspected count, return partitions."""
-    all_eligible_paths = _eligible_resolved_paths(
-        all_file_paths, repository_root, should_read_staged_content
-    )
-    prior_content_by_relative_path, staged_content_by_relative_path = _prefetch_blob_maps(
-        all_eligible_paths, repository_root, should_read_staged_content
-    )
-    blocking_by_file, advisory_by_file, skipped_count = _partition_over_eligible_paths(
+    all_eligible_paths, partitions = _eligible_paths_and_partitions(
         validate_content,
-        all_eligible_paths,
+        all_file_paths,
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
-        prior_content_by_relative_path,
-        staged_content_by_relative_path,
     )
-    _report_inspected_count(len(all_eligible_paths) - skipped_count)
-    return blocking_by_file, advisory_by_file, skipped_count
+    skipped_unreadable_count = partitions[2]
+    _report_inspected_count(len(all_eligible_paths) - skipped_unreadable_count)
+    return partitions
 
 
 def run_gate(

@@ -10,8 +10,9 @@ the single-file readers as the fallback for paths the map omits.
 """
 
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TypeVar
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
     ALL_GIT_CAT_FILE_BATCH_COMMAND,
@@ -28,6 +29,8 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     UNIVERSAL_NEWLINE_LF,
 )
 from terminology_sweep import repository_environment
+
+BatchContentT = TypeVar("BatchContentT")
 
 
 def _decode_head_blob_text(raw_blob: bytes) -> str:
@@ -46,6 +49,14 @@ def _decode_head_blob_text(raw_blob: bytes) -> str:
     )
 
 
+def _decode_staged_blob_text(raw_blob: bytes) -> str | None:
+    """Decode a staged blob with strict UTF-8, or None when the bytes are invalid."""
+    try:
+        return raw_blob.decode(encoding=GIT_BLOB_UTF8_ENCODING)
+    except UnicodeDecodeError:
+        return None
+
+
 def read_prior_committed_content(repository_root: Path, relative_path_posix: str) -> str:
     """Return the HEAD-committed content for *relative_path_posix*.
 
@@ -62,8 +73,8 @@ def read_prior_committed_content(repository_root: Path, relative_path_posix: str
         cwd=str(repository_root),
         capture_output=True,
         text=True,
-        encoding="utf-8",
-        errors="replace",
+        encoding=GIT_BLOB_UTF8_ENCODING,
+        errors=GIT_BLOB_UTF8_REPLACE_ERRORS,
         check=False,
         env=repository_environment(),
     )
@@ -92,10 +103,7 @@ def read_staged_content(repository_root: Path, relative_path_posix: str) -> str 
     )
     if completed.returncode != 0:
         return None
-    try:
-        return completed.stdout.decode(encoding="utf-8")
-    except UnicodeDecodeError:
-        return None
+    return _decode_staged_blob_text(completed.stdout)
 
 
 def staged_blob_exists(repository_root: Path, relative_path_posix: str) -> bool:
@@ -142,7 +150,7 @@ def _run_git_cat_file_batch(
         BATCH_STDIN_LINE_SEPARATOR.join(all_request_lines) + BATCH_STDIN_LINE_SEPARATOR
     ).encode(GIT_BLOB_UTF8_ENCODING)
     completed = subprocess.run(
-        list(ALL_GIT_CAT_FILE_BATCH_COMMAND),
+        ALL_GIT_CAT_FILE_BATCH_COMMAND,
         cwd=str(repository_root),
         input=stdin_payload,
         capture_output=True,
@@ -212,6 +220,28 @@ def _raw_blob_bytes_for_requests(
     return all_raw_blobs
 
 
+def _batch_content_map(
+    repository_root: Path,
+    all_relative_path_posix: Sequence[str],
+    request_prefix: str,
+    decode_present_blob: Callable[[bytes], BatchContentT],
+    missing_content: BatchContentT,
+) -> dict[str, BatchContentT]:
+    """Build a path-to-content map from one ``git cat-file --batch`` call."""
+    all_batchable_paths = _batchable_relative_paths(all_relative_path_posix)
+    all_request_lines = [
+        f"{request_prefix}{each_path}" for each_path in all_batchable_paths
+    ]
+    all_raw_blobs = _raw_blob_bytes_for_requests(repository_root, all_request_lines)
+    content_by_relative_path: dict[str, BatchContentT] = {}
+    for each_path, each_raw_blob in zip(all_batchable_paths, all_raw_blobs, strict=True):
+        if each_raw_blob is None:
+            content_by_relative_path[each_path] = missing_content
+            continue
+        content_by_relative_path[each_path] = decode_present_blob(each_raw_blob)
+    return content_by_relative_path
+
+
 def read_prior_committed_contents_batch(
     repository_root: Path,
     all_relative_path_posix: Sequence[str],
@@ -233,18 +263,13 @@ def read_prior_committed_contents_batch(
         Paths with an embedded newline are omitted so the single-file reader
         remains the fallback.
     """
-    all_batchable_paths = _batchable_relative_paths(all_relative_path_posix)
-    all_request_lines = [
-        f"{HEAD_BLOB_REQUEST_PREFIX}{each_path}" for each_path in all_batchable_paths
-    ]
-    all_raw_blobs = _raw_blob_bytes_for_requests(repository_root, all_request_lines)
-    content_by_relative_path: dict[str, str] = {}
-    for each_path, each_raw_blob in zip(all_batchable_paths, all_raw_blobs, strict=True):
-        if each_raw_blob is None:
-            content_by_relative_path[each_path] = ""
-            continue
-        content_by_relative_path[each_path] = _decode_head_blob_text(each_raw_blob)
-    return content_by_relative_path
+    return _batch_content_map(
+        repository_root,
+        all_relative_path_posix,
+        HEAD_BLOB_REQUEST_PREFIX,
+        _decode_head_blob_text,
+        "",
+    )
 
 
 def read_staged_contents_batch(
@@ -269,20 +294,10 @@ def read_staged_contents_batch(
         missing or not valid UTF-8. Paths with an embedded newline are omitted
         so the single-file reader remains the fallback.
     """
-    all_batchable_paths = _batchable_relative_paths(all_relative_path_posix)
-    all_request_lines = [
-        f"{STAGED_BLOB_REQUEST_PREFIX}{each_path}" for each_path in all_batchable_paths
-    ]
-    all_raw_blobs = _raw_blob_bytes_for_requests(repository_root, all_request_lines)
-    content_by_relative_path: dict[str, str | None] = {}
-    for each_path, each_raw_blob in zip(all_batchable_paths, all_raw_blobs, strict=True):
-        if each_raw_blob is None:
-            content_by_relative_path[each_path] = None
-            continue
-        try:
-            content_by_relative_path[each_path] = each_raw_blob.decode(
-                encoding=GIT_BLOB_UTF8_ENCODING
-            )
-        except UnicodeDecodeError:
-            content_by_relative_path[each_path] = None
-    return content_by_relative_path
+    return _batch_content_map(
+        repository_root,
+        all_relative_path_posix,
+        STAGED_BLOB_REQUEST_PREFIX,
+        _decode_staged_blob_text,
+        None,
+    )
