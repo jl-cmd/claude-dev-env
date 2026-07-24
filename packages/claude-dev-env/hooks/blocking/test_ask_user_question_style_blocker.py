@@ -282,6 +282,26 @@ def test_bare_ask_glued_to_digit_does_not_count_as_context() -> None:
     assert question_has_leading_context(question_text) is False
 
 
+def test_bare_ask_glued_to_lowercase_does_not_count_as_context() -> None:
+    question_text = (
+        "Which path?see the bare-rm gate. How should temp cleanup run?"
+    )
+    assert question_has_leading_context(question_text) is False
+
+
+def test_uppercase_query_key_in_url_still_allows_context() -> None:
+    question_text = (
+        "Open https://example.com/path?X=1 for the API check. "
+        "Which client should we use?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
+def test_quoted_sentence_end_counts_as_context() -> None:
+    question_text = 'The deploy is "done." Which path should we take?'
+    assert question_has_leading_context(question_text) is True
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "

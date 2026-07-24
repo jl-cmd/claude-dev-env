@@ -49,7 +49,6 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     NEWLINE_JOIN_SEPARATOR,
     PROCESS_NARRATION_OPENER_PATTERN,
     STACKED_HYPHEN_COMPOUND_PATTERN,
-    TERMINATOR_WITH_SPACE_PATTERN,
     TOKEN_BEFORE_TERMINATOR_PATTERN,
     TOOL_NAME,
     USER_FACING_NOTICE,
@@ -66,9 +65,10 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
 
     ::
 
-        inline: path?x=1   status=?   [code=?]
+        inline: path?x=1   path?X=1   status=?
         ask:    Which path?
         ask:    Pick one?The gate failed. Which fix?
+        ask:    Which path?see the gate. How proceed?
     """
     if question_mark_index + 1 >= len(text):
         return False
@@ -77,14 +77,18 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
         return True
     if not next_character.isalnum():
         return False
+    first_token = (
+        text[question_mark_index + 1 :].split()[0]
+        if text[question_mark_index + 1 :].split()
+        else ""
+    )
+    # Real query strings carry assignment/join operators in the first token.
+    if "=" in first_token or "&" in first_token:
+        return True
     previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
-    # Glued prose ("one?The" / "OK?The") is an ask, not a query string.
-    if previous_character.isalpha() and next_character.isupper():
+    # path?x without a value is rare; glued prose is the common fail-open case.
+    if previous_character.isalpha() or previous_character.isdigit():
         return False
-    # "Retry now?3 attempts" is an ask; "path?1=2" stays a query.
-    if next_character.isdigit():
-        first_token = text[question_mark_index + 1 :].split()[0] if text[question_mark_index + 1 :].split() else ""
-        return "=" in first_token or "&" in first_token
     return True
 
 
@@ -264,15 +268,21 @@ def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
 
 
 def _iter_statement_separator_ends(prefix: str) -> list[int]:
-    """Return end indices of statement separators inside prefix (after whitespace)."""
+    """Return end indices of statement separators inside prefix (after closers/spaces)."""
     all_ends: list[int] = []
     for each_match in CLAUSE_SEPARATOR_PATTERN.finditer(prefix):
         all_ends.append(each_match.end())
-    for each_match in TERMINATOR_WITH_SPACE_PATTERN.finditer(prefix):
-        terminator_index = each_match.start()
-        if not _is_sentence_boundary(prefix, terminator_index):
+    for each_index, each_character in enumerate(prefix):
+        if each_character not in ".!?":
             continue
-        all_ends.append(each_match.end())
+        if not _is_sentence_boundary(prefix, each_index):
+            continue
+        cursor = each_index + 1
+        while cursor < len(prefix) and prefix[cursor] in "\"')]}":
+            cursor += 1
+        while cursor < len(prefix) and prefix[cursor].isspace():
+            cursor += 1
+        all_ends.append(cursor)
     all_ends.sort()
     return all_ends
 

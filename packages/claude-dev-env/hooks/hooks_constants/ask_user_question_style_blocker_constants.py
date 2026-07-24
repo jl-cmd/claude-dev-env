@@ -23,9 +23,6 @@ MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION: int = 2
 # Colon / em-dash clause separators (always statement boundaries).
 CLAUSE_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(r":\s+|[—–]\s+")
 
-# Period / exclamation / question followed by whitespace (candidate sentence end).
-TERMINATOR_WITH_SPACE_PATTERN: re.Pattern[str] = re.compile(r"[.!?]\s+")
-
 # Last token immediately before a terminator (word or acronym).
 TOKEN_BEFORE_TERMINATOR_PATTERN: re.Pattern[str] = re.compile(r"([A-Za-z0-9]+)\s*\Z")
 
