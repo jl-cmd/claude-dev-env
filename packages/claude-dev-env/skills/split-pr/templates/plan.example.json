@@ -1,0 +1,48 @@
+{
+  "pr_number": 123,
+  "title": "Notification system",
+  "base_ref": "main",
+  "head_ref": "feature/notifications",
+  "head_sha": "abc123",
+  "source_branch": "feature/notifications",
+  "feature_slug": "notification-system",
+  "file_count": 3,
+  "all_files": [
+    {"path": "prisma/schema.prisma", "layer": "database", "status": "modified", "additions": 10, "deletions": 0},
+    {"path": "src/api/notify.ts", "layer": "backend", "status": "modified", "additions": 20, "deletions": 0},
+    {"path": "src/components/Bell.tsx", "layer": "frontend", "status": "modified", "additions": 30, "deletions": 0}
+  ],
+  "proposed_slices": [
+    {
+      "index": 1,
+      "slug": "database",
+      "layer": "database",
+      "title": "feat: notification-system database foundation",
+      "story": "Establish the data foundation",
+      "files": ["prisma/schema.prisma"],
+      "branch": "split/123/01-database",
+      "base": "main"
+    },
+    {
+      "index": 2,
+      "slug": "backend",
+      "layer": "backend",
+      "title": "feat: notification-system backend services",
+      "story": "Implement backend services and API",
+      "files": ["src/api/notify.ts"],
+      "branch": "split/123/02-backend",
+      "base": "split/123/01-database"
+    },
+    {
+      "index": 3,
+      "slug": "frontend",
+      "layer": "frontend",
+      "title": "feat: notification-system frontend components",
+      "story": "Add UI components and client surfaces",
+      "files": ["src/components/Bell.tsx"],
+      "branch": "split/123/03-frontend",
+      "base": "split/123/02-backend"
+    }
+  ],
+  "warnings": []
+}
