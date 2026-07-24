@@ -494,3 +494,4 @@ def test_rerun_preflight_propagates_nonzero_exit_code(
     exit_code = fix_hookspath.rerun_preflight(repository_path, None)
 
     assert exit_code == preflight_failure_exit_code
+
