@@ -35,14 +35,20 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
         r"(^|/)(api|services?|server|backend|controllers?|middleware|handlers?)(/|$)",
         LAYER_BACKEND,
     ),
-    (
-        r"(^|/)(components?|hooks?|pages?|views?|ui|frontend|styles?|contexts?|screens?)(/|$)",
-        LAYER_FRONTEND,
-    ),
     (r"(^|/)(__tests?__|tests?|spec)(/|$)", LAYER_TESTS),
     (r"(^|/)test_[^/]+\.py$", LAYER_TESTS),
     (r"\.(test|spec)\.[a-z0-9]+$", LAYER_TESTS),
     (r"(^|/)_test\.py$", LAYER_TESTS),
+    (
+        r"(^|/)hooks/(blocking|validators|advisory|lifecycle|session|workflow|diagnostic)(/|$)",
+        LAYER_BACKEND,
+    ),
+    (r"(^|/)skills/.+/scripts(/|$)", LAYER_BACKEND),
+    (r"(^|/)_shared/.+/scripts(/|$)", LAYER_BACKEND),
+    (
+        r"(^|/)(components?|pages?|views?|ui|frontend|styles?|contexts?|screens?)(/|$)",
+        LAYER_FRONTEND,
+    ),
     (r"(^|/)\.github(/|$)", LAYER_CONFIG),
     (
         r"(^|/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|"
