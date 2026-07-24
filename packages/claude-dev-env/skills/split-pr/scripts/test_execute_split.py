@@ -22,6 +22,10 @@ from execute_split import (  # noqa: E402
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
+    PAYLOAD_KEY_SKIPPED,
+    PAYLOAD_KEY_SKIP_REASON,
+    PAYLOAD_KEY_SUPERSEDE,
+    SUPERSEDE_SKIP_DISABLED,
 )
 from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
     FILE_KEY_PATH,
@@ -135,6 +139,10 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
     )
     assert execution_payload[PAYLOAD_KEY_DRY_RUN] is False
     assert len(execution_payload[PAYLOAD_KEY_CREATED]) == 2
+    supersede_payload = execution_payload[PAYLOAD_KEY_SUPERSEDE]
+    assert isinstance(supersede_payload, dict)
+    assert supersede_payload[PAYLOAD_KEY_SKIPPED] is True
+    assert supersede_payload[PAYLOAD_KEY_SKIP_REASON] == SUPERSEDE_SKIP_DISABLED
 
     run_git(["checkout", "split/99/01-database"], repo)
     assert (repo / "prisma" / "schema.prisma").is_file()

@@ -9,4 +9,5 @@ Register each item on the host task tool at skill start. Mark complete with evid
 5. Print decision brief in chat (re-buckets, slice table, merge order) before any approval control.
 6. Propose via `AskUserQuestion` (approve / local-only / abort).
 7. On approve: dry-run optional, then `execute_split.py` with push+draft PRs (or local-only if requested).
-8. Report merge order, branch names, PR URLs; leave source branch unchanged.
+8. After successful push+create with a draft URL for each entry in `planned_slice_count` (multi-slice only): supersede the source PR — comment merge order + child URLs via `--body-file`, then `gh pr close`. Skip when atomic, partial, local-only, or already superseded. Leave the source branch on the remote.
+9. Report merge order, branch names, PR URLs, and supersede outcome (`closed` / `skipped`); leave source branch unchanged.

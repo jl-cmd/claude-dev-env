@@ -69,7 +69,14 @@ from split_pr_scripts_constants.config.execute_constants import (
     PAYLOAD_KEY_FAILED_SLICE,
     PAYLOAD_KEY_PARTIAL,
     PAYLOAD_KEY_PR_URLS,
+    PAYLOAD_KEY_CHILD_PR_NUMBERS,
+    PAYLOAD_KEY_CLOSED,
+    PAYLOAD_KEY_COMMENTED,
+    PAYLOAD_KEY_SKIPPED,
+    PAYLOAD_KEY_SUPERSEDE,
+    PAYLOAD_KEY_SUPERSEDE_ERROR,
 )
+from supersede_source_pr import extract_pr_number_from_url, supersede_source_pr
 from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_PATH_REQUIRED,
     PLAN_KEY_BASE_REF,
@@ -168,6 +175,7 @@ def execute_plan(
     is_dry_run: bool,
     should_create_prs: bool,
     should_push: bool,
+    should_supersede: bool | None = None,
 ) -> JsonObject:
     """Run the split (or dry-run) against repo_root.
 
@@ -177,6 +185,8 @@ def execute_plan(
         is_dry_run: When True, only describe steps.
         should_create_prs: When True, open draft PRs after push.
         should_push: When True, push branches to origin.
+        should_supersede: When True, close the source PR after a full multi-slice
+            draft stack lands. When None, defaults to ``should_create_prs``.
 
     Returns:
         Result payload with created slice metadata.
@@ -196,11 +206,15 @@ def execute_plan(
         }
     if is_working_tree_dirty(repo_root):
         raise RuntimeError(ERROR_DIRTY_TREE)
+    is_supersede_enabled = (
+        should_create_prs if should_supersede is None else should_supersede
+    )
     return _execute_slices(
         plan_payload=plan_payload,
         repo_root=repo_root,
         should_create_prs=should_create_prs,
         should_push=should_push,
+        should_supersede=is_supersede_enabled,
     )
 
 
@@ -209,11 +223,18 @@ def _execute_slices(
     repo_root: Path,
     should_create_prs: bool,
     should_push: bool,
+    should_supersede: bool,
 ) -> JsonObject:
     source_branch = str(plan_payload[PLAN_KEY_SOURCE_BRANCH])
     base_ref = str(plan_payload[PLAN_KEY_BASE_REF])
     pr_number = int(plan_payload[PLAN_KEY_PR_NUMBER])
     repo = plan_payload.get(PLAN_KEY_REPO)
+    repo_slug = repo if isinstance(repo, str) else None
+    all_planned_slices = [
+        each_slice
+        for each_slice in plan_payload[PLAN_KEY_PROPOSED_SLICES]
+        if isinstance(each_slice, dict)
+    ]
     if should_push or _remote_exists(repo_root, GIT_ORIGIN):
         _run_git(
             [GIT_FETCH, GIT_ORIGIN, base_ref, source_branch],
@@ -224,41 +245,129 @@ def _execute_slices(
     all_pr_urls: list[str] = []
     starting_branch = _current_branch(repo_root)
     try:
-        for each_slice in plan_payload[PLAN_KEY_PROPOSED_SLICES]:
-            if not isinstance(each_slice, dict):
-                continue
-            try:
-                created = _execute_one_slice(
-                    slice_record=each_slice,
-                    repo_root=repo_root,
-                    source_branch=source_branch,
-                    pr_number=pr_number,
-                    should_push=should_push,
-                    should_create_prs=should_create_prs,
-                    repo=repo if isinstance(repo, str) else None,
-                )
-            except RuntimeError as slice_error:
-                partial_payload: JsonObject = {
-                    PAYLOAD_KEY_DRY_RUN: False,
-                    PAYLOAD_KEY_CREATED: all_created,
-                    PAYLOAD_KEY_PR_URLS: all_pr_urls,
-                    PAYLOAD_KEY_ERROR: str(slice_error),
-                    PAYLOAD_KEY_FAILED_SLICE: each_slice.get(SLICE_KEY_BRANCH),
-                    PAYLOAD_KEY_PARTIAL: True,
-                }
-                raise RuntimeError(json.dumps(partial_payload)) from slice_error
-            all_created.append(created)
-            pr_url = created.get("pr_url")
-            if pr_url:
-                all_pr_urls.append(str(pr_url))
+        _create_all_slices(
+            all_planned_slices=all_planned_slices,
+            repo_root=repo_root,
+            source_branch=source_branch,
+            pr_number=pr_number,
+            should_push=should_push,
+            should_create_prs=should_create_prs,
+            repo_slug=repo_slug,
+            all_created=all_created,
+            all_pr_urls=all_pr_urls,
+        )
     finally:
         _run_git([GIT_CHECKOUT, starting_branch], repo_root, is_check=False)
-    return {
+    return _build_success_payload(
+        all_created=all_created,
+        all_pr_urls=all_pr_urls,
+        pr_number=pr_number,
+        planned_slice_count=len(all_planned_slices),
+        should_create_prs=should_create_prs,
+        should_supersede=should_supersede,
+        repo_slug=repo_slug,
+        repo_root=repo_root,
+    )
+
+
+def _create_all_slices(
+    all_planned_slices: list[JsonObject],
+    repo_root: Path,
+    source_branch: str,
+    pr_number: int,
+    should_push: bool,
+    should_create_prs: bool,
+    repo_slug: str | None,
+    all_created: list[JsonObject],
+    all_pr_urls: list[str],
+) -> None:
+    for each_slice in all_planned_slices:
+        try:
+            created = _execute_one_slice(
+                slice_record=each_slice,
+                repo_root=repo_root,
+                source_branch=source_branch,
+                pr_number=pr_number,
+                should_push=should_push,
+                should_create_prs=should_create_prs,
+                repo=repo_slug,
+            )
+        except RuntimeError as slice_error:
+            partial_payload: JsonObject = {
+                PAYLOAD_KEY_DRY_RUN: False,
+                PAYLOAD_KEY_CREATED: all_created,
+                PAYLOAD_KEY_PR_URLS: all_pr_urls,
+                PAYLOAD_KEY_ERROR: str(slice_error),
+                PAYLOAD_KEY_FAILED_SLICE: each_slice.get(SLICE_KEY_BRANCH),
+                PAYLOAD_KEY_PARTIAL: True,
+            }
+            raise RuntimeError(json.dumps(partial_payload)) from slice_error
+        all_created.append(created)
+        pr_url = created.get("pr_url")
+        if pr_url:
+            all_pr_urls.append(str(pr_url))
+
+
+def _build_success_payload(
+    all_created: list[JsonObject],
+    all_pr_urls: list[str],
+    pr_number: int,
+    planned_slice_count: int,
+    should_create_prs: bool,
+    should_supersede: bool,
+    repo_slug: str | None,
+    repo_root: Path,
+) -> JsonObject:
+    execution_payload: JsonObject = {
         PAYLOAD_KEY_DRY_RUN: False,
         PAYLOAD_KEY_CREATED: all_created,
         PAYLOAD_KEY_PR_URLS: all_pr_urls,
         PAYLOAD_KEY_PARTIAL: False,
     }
+    execution_payload[PAYLOAD_KEY_SUPERSEDE] = _run_supersede_safely(
+        pr_number=pr_number,
+        all_pr_urls=all_pr_urls,
+        planned_slice_count=planned_slice_count,
+        should_create_prs=should_create_prs,
+        should_supersede=should_supersede,
+        repo_slug=repo_slug,
+        repo_root=repo_root,
+    )
+    return execution_payload
+
+
+def _run_supersede_safely(
+    pr_number: int,
+    all_pr_urls: list[str],
+    planned_slice_count: int,
+    should_create_prs: bool,
+    should_supersede: bool,
+    repo_slug: str | None,
+    repo_root: Path,
+) -> JsonObject:
+    try:
+        return supersede_source_pr(
+            source_pr_number=pr_number,
+            all_child_pr_urls=all_pr_urls,
+            planned_slice_count=planned_slice_count,
+            should_create_prs=should_create_prs,
+            should_supersede=should_supersede,
+            repo=repo_slug,
+            repo_root=repo_root,
+        )
+    except RuntimeError as supersede_error:
+        all_child_numbers = [
+            each_number
+            for each_url in all_pr_urls
+            if (each_number := extract_pr_number_from_url(each_url)) is not None
+        ]
+        return {
+            PAYLOAD_KEY_COMMENTED: False,
+            PAYLOAD_KEY_CLOSED: False,
+            PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_numbers,
+            PAYLOAD_KEY_SKIPPED: False,
+            PAYLOAD_KEY_SUPERSEDE_ERROR: str(supersede_error),
+        }
 
 
 def _execute_one_slice(
@@ -533,12 +642,21 @@ def main() -> int:
         if PLAN_KEY_TITLE not in plan_payload and PLAN_KEY_PR_NUMBER not in plan_payload:
             raise ValueError(ERROR_EXECUTE_FAILED % "plan missing pr identity")
         repo_root = resolve_repo_root(Path(parsed_arguments.repo_path).resolve())
+        should_create_prs = (
+            parsed_arguments.create_prs and not parsed_arguments.dry_run
+        )
+        should_supersede: bool | None
+        if parsed_arguments.supersede_source is None:
+            should_supersede = None
+        else:
+            should_supersede = bool(parsed_arguments.supersede_source)
         execution_payload = execute_plan(
             plan_payload=plan_payload,
             repo_root=repo_root,
             is_dry_run=parsed_arguments.dry_run,
-            should_create_prs=parsed_arguments.create_prs and not parsed_arguments.dry_run,
+            should_create_prs=should_create_prs,
             should_push=parsed_arguments.push and not parsed_arguments.dry_run,
+            should_supersede=should_supersede,
         )
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(execution_payload, indent=indent))
@@ -579,6 +697,15 @@ def _parse_arguments() -> argparse.Namespace:
         "--create-prs",
         action="store_true",
         help="Open draft stacked PRs after push",
+    )
+    parser.add_argument(
+        "--supersede-source",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Comment on and close source_pr_number after a full multi-slice draft "
+            "stack lands (default: on when --create-prs)"
+        ),
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     return parser.parse_args()

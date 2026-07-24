@@ -17,7 +17,7 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 
 - **Do not chat the split step-by-step.** Run analyze → verify → one proposal → execute. The article’s interactive script-writing flow is replaced by this skill’s scripts.
 - **Coverage before execute.** Every source file must land in exactly one slice. Run `verify_plan.py`; never open PRs with missing or duplicate paths.
-- **Source branch stays intact.** Execution creates new `split/<pr>/…` branches via `git checkout <source> -- <files>`. Never rewrite or force-push the original head.
+- **Source branch stays intact.** Execution creates new `split/<pr>/…` branches via `git checkout <source> -- <files>`. Never rewrite or force-push the original head. After a full multi-slice draft stack lands, the skill comments and **closes the source PR** as superseded; the source branch remains on the remote for fallback checkout.
 - **Stacked bases, not all-off-main.** Slice 2’s base is slice 1’s branch (and so on). Opening every PR against `main` loses the dependency story.
 - **Clean tree required for real execute.** Dirty worktree → stop. Prefer a dedicated worktree if the session cwd is dirty; do not silently stash.
 - **Shared files (lockfiles, package.json).** Heuristics put them in `config`. If a later slice needs them earlier, move those paths in the plan **before** approval — do not invent second copies of the same path.
@@ -91,16 +91,28 @@ Path rules: [reference/path-layers.md](reference/path-layers.md).
 4. **Execute (real, local branches only):**  
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --pretty`
 5. **Execute (push + draft PRs) — default after Approve recommended:**  
-   `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --push --create-prs --pretty`
-6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes.
+   `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --push --create-prs --pretty`  
+   Supersede of the source PR is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
+6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open.
 7. **Verification honesty:** this skill does not run the repo’s full test suite on each slice. Each draft PR body must state that gap (the script’s short body does). Do not claim per-slice CI green unless you ran checks yourself.
 8. **Do not** run `gh pr ready` on split PRs from this skill.
 
-PR body template: [templates/pr-body.md](templates/pr-body.md).
+PR body template: [templates/pr-body.md](templates/pr-body.md).  
+Supersede comment template: [templates/supersede-source-body.md](templates/supersede-source-body.md).
 
 ### Phase 5 — Report
 
-State: source PR number, slice branches, draft PR URLs (if any), merge order (`1 → 2 → …`), and that the original branch is unchanged.
+State: source PR number, slice branches, draft PR URLs (if any), merge order (`#A → #B → …`), that the original **branch** is unchanged, and the supersede outcome:
+
+| Execute result | Source PR |
+|---|---|
+| Multi-slice success with a draft URL for every planned slice | Comment (merge order + child URLs via `--body-file`) then **close** as superseded |
+| Atomic (`atomic_single_slice`) | Stays open — source remains the delivery unit |
+| Local-only (`--push` / `--create-prs` off) | Unchanged |
+| Partial stack (missing child URL) or execute failure with zero child URLs | Stays open; report partial |
+| Already closed with a supersede comment | Skip re-close (idempotent) |
+
+Report the `supersede` object from execute JSON (`commented`, `closed`, `child_pr_numbers`, or `skipped` + `skip_reason`). A supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
 
 ## Constraints
 
@@ -108,7 +120,7 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`1
 - Approval before any non-dry-run execute.
 - Draft stacked PRs; dependency bases preserved.
 - Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion`.
-- No force-push. No ready. No delete of the source branch.
+- No force-push. No ready. No delete of the source branch (source PR may close as superseded; branch stays).
 
 ## Sub-skills
 
@@ -127,16 +139,18 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`1
 | `reference/path-layers.md` | Layer catalog and heuristic notes |
 | `reference/proposal-format.md` | AskUserQuestion proposal shape |
 | `templates/pr-body.md` | Draft PR body skeleton |
+| `templates/supersede-source-body.md` | Source-PR supersede comment skeleton |
 | `templates/plan.example.json` | Example plan shape |
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
 | `scripts/categorize_files.py` | Library — path → layer, slice builder |
 | `scripts/verify_plan.py` | **Execute** — coverage gate |
-| `scripts/execute_split.py` | **Execute** — branches / optional draft PRs |
+| `scripts/execute_split.py` | **Execute** — branches / optional draft PRs / supersede |
+| `scripts/supersede_source_pr.py` | **Execute** — comment + close source after full stack |
 | `scripts/split_pr_scripts_constants/` | Named constants |
 | `scripts/test_*.py` | Paired tests |
 
 ## Folder map
 
 - `reference/` — on-demand principles, layers, proposal, task seeds
-- `templates/` — PR body and example plan
-- `scripts/` — analyze, verify, execute + tests + constants
+- `templates/` — PR body, supersede body, example plan
+- `scripts/` — analyze, verify, execute, supersede + tests + constants
