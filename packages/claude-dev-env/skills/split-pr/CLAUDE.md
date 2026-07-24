@@ -7,7 +7,7 @@ Autonomous file-based split of one large GitHub PR into a stacked draft chain.
 | Path | Role |
 |---|---|
 | `SKILL.md` | Hub workflow |
-| `reference/` | Principles, layers, proposal format, task seeds |
+| `reference/` | Principles, layers, proposal format, task seeds, split-further loop |
 | `templates/` | PR body and example plan |
 | `scripts/analyze_pr.py` | Build plan JSON from `gh pr view` |
 | `scripts/categorize_files.py` | Path-layer heuristics and slice builder |

@@ -10,3 +10,4 @@ Register each item on the host task tool at skill start. Mark complete with evid
 6. Propose via `AskUserQuestion` (approve / local-only / abort).
 7. On approve: dry-run optional, then `execute_split.py` with push+draft PRs (or local-only if requested).
 8. Report merge order, branch names, PR URLs; leave source branch unchanged.
+9. Run split-further loop ([split-further-loop.md](split-further-loop.md)): BFS re-split each draft without AskUserQuestion until stop reasons drain the queue.

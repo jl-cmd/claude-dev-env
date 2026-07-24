@@ -102,12 +102,16 @@ PR body template: [templates/pr-body.md](templates/pr-body.md).
 
 State: source PR number, slice branches, draft PR URLs (if any), merge order (`1 → 2 → …`), and that the original branch is unchanged.
 
+### Phase 6 — Split further (mandatory)
+
+After Phase 5, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft without further user prompts until primary/secondary stop or depth cap.
+
 ## Constraints
 
 - One capability: **excise a stacked file-based split from one PR**.
-- Approval before any non-dry-run execute.
+- Pass 0 needs approval before any non-dry-run execute; recursive passes inherit that approval.
 - Draft stacked PRs; dependency bases preserved.
-- Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion`.
+- Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion` (Pass 0 only).
 - No force-push. No ready. No delete of the source branch.
 
 ## Sub-skills
@@ -126,6 +130,7 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`1
 | `reference/splitting-principles.md` | Empathic file-based chain rules |
 | `reference/path-layers.md` | Layer catalog and heuristic notes |
 | `reference/proposal-format.md` | AskUserQuestion proposal shape |
+| `reference/split-further-loop.md` | Recursive re-split until no further cut |
 | `templates/pr-body.md` | Draft PR body skeleton |
 | `templates/plan.example.json` | Example plan shape |
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
@@ -137,6 +142,6 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`1
 
 ## Folder map
 
-- `reference/` — on-demand principles, layers, proposal, task seeds
+- `reference/` — on-demand principles, layers, proposal, task seeds, split-further loop
 - `templates/` — PR body and example plan
 - `scripts/` — analyze, verify, execute + tests + constants
