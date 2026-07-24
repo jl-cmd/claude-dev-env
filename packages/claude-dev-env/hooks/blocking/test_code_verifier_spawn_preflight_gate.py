@@ -578,8 +578,8 @@ def test_hook_imports_real_config_when_parent_holds_shadowing_config(
         staged_package_directory / "hooks",
     )
     shutil.copytree(
-        real_package_directory / "_shared",
-        staged_package_directory / "_shared",
+        real_package_directory / "skills" / "_shared",
+        staged_package_directory / "skills" / "_shared",
     )
 
     shadowing_config_directory = staged_package_directory / "hooks" / "config"
@@ -643,7 +643,7 @@ def stage_package_and_feature_repo(tmp_path: Path) -> tuple[Path, Path]:
     staged_package_directory = tmp_path / "claude-dev-env"
     shutil.copytree(real_hooks_directory, staged_package_directory / "hooks")
     shutil.copytree(
-        real_package_directory / "_shared", staged_package_directory / "_shared"
+        real_package_directory / "skills" / "_shared", staged_package_directory / "skills" / "_shared"
     )
     enforcer_path = staged_package_directory / "hooks" / "blocking" / "code_rules_enforcer.py"
     repository_root = tmp_path / "repo"

@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
+    ALL_GIT_DIFF_CACHED_NAME_STATUS_RENAME_COMMAND,
     EXPECTED_NON_RENAME_COLUMN_COUNT,
     EXPECTED_RENAME_COLUMN_COUNT,
     GIT_NAME_STATUS_RENAMED_PREFIX,
@@ -162,6 +163,36 @@ def renamed_file_source_map_since(repository_root: Path, merge_base: str) -> dic
     return _rename_pairs_from_tokens(all_tokens)
 
 
+def renamed_file_source_map_staged(repository_root: Path) -> dict[str, str]:
+    """Return staged rename destinations mapped to their source paths.
+
+    ::
+
+        git mv a.py b.py  ->  {"b.py": "a.py"}
+        path-scoped A alone is not enough; the tree-wide -M map is required
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+
+    Returns:
+        A mapping from staged rename-destination POSIX path to rename-source path.
+
+    Raises:
+        SystemExit: When ``git diff --cached --name-status`` returns non-zero.
+    """
+    raw_stdout = _git_bytes_or_exit(
+        repository_root,
+        list(ALL_GIT_DIFF_CACHED_NAME_STATUS_RENAME_COMMAND),
+        "code_rules_gate: git diff --cached --name-status -M -z failed",
+    )
+    all_tokens = [
+        each_token.decode("utf-8", errors="replace")
+        for each_token in raw_stdout.split(b"\x00")
+        if each_token
+    ]
+    return _rename_pairs_from_tokens(all_tokens)
+
+
 def added_lines_for_renamed_file(
     repository_root: Path,
     merge_base: str,
@@ -187,6 +218,42 @@ def added_lines_for_renamed_file(
     )
     if completed.returncode != 0:
         sys.stderr.write(f"code_rules_gate: rename diff failed: {completed.stderr.strip()}\n")
+        return set()
+    if not completed.stdout.strip():
+        return set()
+    return parse_added_line_numbers(completed.stdout)
+
+
+def added_lines_for_staged_renamed_file(
+    repository_root: Path,
+    source_posix: str,
+    destination_posix: str,
+) -> set[int]:
+    """Return added line numbers for a staged rename via blob comparison.
+
+    Compares the HEAD blob at the rename source with the staged blob at the
+    destination so a pure move contributes no added lines, and a move-plus-edit
+    contributes only the edited lines.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        source_posix: Rename-source POSIX path still present at HEAD.
+        destination_posix: Rename-destination POSIX path in the staged index.
+
+    Returns:
+        The line numbers added on the staged side; empty on a pure rename or
+        when the blob comparison fails.
+    """
+    source_reference = f"HEAD:{source_posix}"
+    destination_reference = f":{destination_posix}"
+    completed = _run_git_text_capture(
+        repository_root,
+        ["git", "diff", "--unified=0", source_reference, destination_reference],
+    )
+    if completed.returncode != 0:
+        sys.stderr.write(
+            f"code_rules_gate: staged rename diff failed: {completed.stderr.strip()}\n"
+        )
         return set()
     if not completed.stdout.strip():
         return set()

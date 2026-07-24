@@ -11,6 +11,7 @@ SCRIPT = (
     REPO_ROOT
     / "packages"
     / "claude-dev-env"
+    / "skills"
     / "_shared"
     / "pr-loop"
     / "scripts"

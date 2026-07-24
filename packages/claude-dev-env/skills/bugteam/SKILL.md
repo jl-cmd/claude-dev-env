@@ -63,7 +63,7 @@ First match wins; respond with the quoted line exactly and stop:
 Every internal audit pass (CLEAN or DIRTY) ends with one posted GitHub PR
 review; the mandate applies whether bugteam runs inside `/pr-converge` or
 standalone. Run the shared posting helper
-[`_shared/pr-loop/scripts/post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py)
+[`_shared/pr-loop/scripts/post_audit_thread.py`](../_shared/pr-loop/scripts/post_audit_thread.py)
 with `--skill bugteam`: map findings to the review-comment JSON (the
 `failure_mode` split at the literal `Fix:` heading), partition anchored from
 unanchored comments, honor the self-PR reviewer toggle
@@ -78,7 +78,7 @@ Bugteam-only obligations:
   [reference/team-setup.md](reference/team-setup.md) § Loop state block) so
   the matching FIX action owns the reply-and-resolve unit.
 - Exit-code policy: the bugteam row in
-  [`../../_shared/pr-loop/post-audit-thread-contract.md`](../../_shared/pr-loop/post-audit-thread-contract.md)
+  [`../_shared/pr-loop/post-audit-thread-contract.md`](../_shared/pr-loop/post-audit-thread-contract.md)
   § Per-caller policy.
 
 ## Progress checklist
@@ -108,13 +108,13 @@ end-to-end mental model before starting Step 0.
 | `--bugbot-retrigger` flag behavior | [reference/team-setup.md](reference/team-setup.md) |
 | AUDIT action and code-rules pre-audit gate, pre-cycle walk, cycle decision tree | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
 | FIX action and verify-push semantics | [reference/audit-and-teammates.md](reference/audit-and-teammates.md) |
-| Posting the end-of-pass audit review (APPROVE on CLEAN, REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting), which runs [`_shared/pr-loop/scripts/post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py) |
-| Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
+| Posting the end-of-pass audit review (APPROVE on CLEAN, REQUEST_CHANGES with inline anchored comments on DIRTY) | [§ Audit posting](#audit-posting), which runs [`_shared/pr-loop/scripts/post_audit_thread.py`](../_shared/pr-loop/scripts/post_audit_thread.py) |
+| Posting per-finding fix replies via GitHub MCP `add_reply_to_pull_request_comment` (rendered with the unified template at [`_shared/pr-loop/audit-reply-template.md`](../_shared/pr-loop/audit-reply-template.md)) | [reference/github-pr-reviews.md](reference/github-pr-reviews.md) |
 | Teardown, PR description rewrite composed by the lead, permission revoke, final report | [../pr-loop-lifecycle/reference/teardown-publish-permissions.md](../pr-loop-lifecycle/reference/teardown-publish-permissions.md) |
 | Spawn-prompt XML, A–Q category bindings, outcome XML schemas | [PROMPTS.md](PROMPTS.md) |
 | Per-category audit content (sub-buckets, decision criteria, ready-to-send Variant C templates) | `$HOME/.claude/audit-rubrics/{category_rubrics,prompts}/` |
 | Invariants and design rationale | [CONSTRAINTS.md](CONSTRAINTS.md), [reference/design-rationale.md](reference/design-rationale.md) |
-| Audit-contract finding shape (Shape A / B), Haiku secondary, post-fix self-audit | [../../_shared/pr-loop/audit-contract.md](../../_shared/pr-loop/audit-contract.md) |
+| Audit-contract finding shape (Shape A / B), Haiku secondary, post-fix self-audit | [../_shared/pr-loop/audit-contract.md](../_shared/pr-loop/audit-contract.md) |
 | Exit-scenario examples (converged, cap-reached, stuck, refusal, mixed-outcome) | [EXAMPLES.md](EXAMPLES.md) |
 | Doc URLs and verbatim quotes | [sources.md](sources.md) |
 | Historical Copilot gap analysis (superseded) | [reference/copilot-gap-analysis.md](reference/copilot-gap-analysis.md) |

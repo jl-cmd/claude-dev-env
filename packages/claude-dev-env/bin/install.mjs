@@ -18,17 +18,18 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', 'audit-rubrics'];
 
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
 const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 
 export const CORE_INCLUDE_DIRECTORIES = [
-    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', 'scripts',
 ];
 
 export const CORE_SKILLS = [
+    '_shared',
     'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
     'grok-spawn',
     'anthropic-plan', 'everything-search',
@@ -708,6 +709,33 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
 }
 
 /**
+ * Move a legacy top-level ~/.claude/_shared tree into the prune backup root.
+ *
+ * Shared assets now install under ~/.claude/skills/_shared/. An older install
+ * may still leave files at ~/.claude/_shared/; rename that directory into the
+ * same timestamped backup used for retired skills so the stale root path does
+ * not shadow the skills tree.
+ */
+function pruneLegacyRootSharedDirectory() {
+    const legacySharedDirectory = join(CLAUDE_HOME, '_shared');
+    if (!existsSync(legacySharedDirectory)) return;
+    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupRoot = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, runTimestamp);
+    try {
+        mkdirSync(backupRoot, { recursive: true });
+        const backupDestination = join(backupRoot, '_shared-root-legacy');
+        renameSync(legacySharedDirectory, backupDestination);
+        console.log(
+            `  Moved legacy ~/.claude/_shared -> ${relative(CLAUDE_HOME, backupDestination)}`,
+        );
+    } catch (renameError) {
+        console.warn(
+            `  Warning: could not move legacy ~/.claude/_shared (${renameError.message}); leave it in place`,
+        );
+    }
+}
+
+/**
  * Move one retired skill directory into the run's backup root, leaving it in
  * place when the move fails.
  *
@@ -940,6 +968,7 @@ function install(selectedGroups, options = {}) {
         }
         manifestSkillNames = [...installedSkillNames].sort();
     }
+    pruneLegacyRootSharedDirectory();
     writeManifest(allInstalledFiles, manifestSkillNames);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {

@@ -240,7 +240,7 @@ post a fresh PR in a fresh branch based on origin main to the user.
   gate (e)) excludes `isOutdated == true` bot threads from the fail count —
   only non-outdated unresolved bot threads fail the gate. The agent-side
   unresolved-thread sweep in the shared fix protocol
-  ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
+  ([`../_shared/pr-loop/fix-protocol.md`](../_shared/pr-loop/fix-protocol.md)
   step 12; skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
   still verifies outdated unresolved threads against HEAD before resolve when
   the protocol requires it (the original concern can still apply when the fix
@@ -279,7 +279,7 @@ tick starts fresh from that step.
 **Hard gate: do not advance from any step while ANY unresolved review
 thread exists on the PR.** Sweep semantics and per-thread handling live in
 the shared fix protocol
-([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
+([`../_shared/pr-loop/fix-protocol.md`](../_shared/pr-loop/fix-protocol.md)
 step 12; skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md)).
 
 **Full-PR-diff rule: every CODE-REVIEW round (Step 5) and every BUGTEAM
@@ -327,7 +327,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **disabled / down** → `bugbot_down = true` → Step 7
       - [ ] **dirty on `current_head`** → apply shared fix protocol
-            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
+            ([`../_shared/pr-loop/fix-protocol.md`](../_shared/pr-loop/fix-protocol.md);
             skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
             → push → reset push-invalidated markers → `phase = CODE_REVIEW` → Step 5
       - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
@@ -405,7 +405,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **clean** → `copilot_clean_at = current_head` → Step 7 (re-validate (b), (c), (e), (f))
       - [ ] **dirty** → apply shared fix protocol
-            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
+            ([`../_shared/pr-loop/fix-protocol.md`](../_shared/pr-loop/fix-protocol.md);
             skill deltas in [`reference/fix-protocol.md`](reference/fix-protocol.md))
             → push → reset markers → `phase = CODE_REVIEW` → Step 5
       - [ ] **no review yet** → increment `copilot_wait_count` → ≥ 3 hard-blocks;
@@ -448,7 +448,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 | `bugteam` | Full-diff bug audit in Step 6 (Skill invocation mandatory) |
 | `pr-loop-cloud-transport` | When `gh` is unavailable or unauthenticated |
 | [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md) | Continuous in-session pacer when `ScheduleWakeup` is absent |
-| [`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) | Shared 13-step fix sequence (TDD, commit, push, reply, resolve) |
+| [`../_shared/pr-loop/fix-protocol.md`](../_shared/pr-loop/fix-protocol.md) | Shared 13-step fix sequence (TDD, commit, push, reply, resolve) |
 | [`reference/fix-protocol.md`](reference/fix-protocol.md) | pr-converge deltas on the shared fix protocol |
 
 ## Package file index

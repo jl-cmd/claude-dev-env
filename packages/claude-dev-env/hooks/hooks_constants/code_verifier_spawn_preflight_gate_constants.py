@@ -61,4 +61,4 @@ ENGINE_LOAD_FAILURE_SECTION: str = (
     "succeeds, then re-spawn code-verifier."
 )
 
-GATE_SCRIPTS_RELATIVE_PATH: Path = Path("_shared") / "pr-loop" / "scripts"
+GATE_SCRIPTS_RELATIVE_PATH: Path = Path("skills") / "_shared" / "pr-loop" / "scripts"

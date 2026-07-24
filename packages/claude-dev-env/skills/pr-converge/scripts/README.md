@@ -84,7 +84,7 @@ Fetch via MCP:
     pull_request_read(method="get_review_comments", pullNumber=NUMBER, owner=OWNER, repo=REPO)
       → filter threads where `is_resolved == false`
 
-Sweep semantics and per-thread handling live in the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`../reference/fix-protocol.md`](../reference/fix-protocol.md)).
+Sweep semantics and per-thread handling live in the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`../reference/fix-protocol.md`](../reference/fix-protocol.md)).
 
 ### Request Copilot review: `gh api` REST endpoint
 

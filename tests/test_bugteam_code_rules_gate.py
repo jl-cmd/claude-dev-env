@@ -6,7 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHARED_PR_LOOP_SCRIPTS = (
-    REPO_ROOT / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
+    REPO_ROOT / "packages" / "claude-dev-env" / "skills" / "_shared" / "pr-loop" / "scripts"
 )
 GATE_SCRIPT = SHARED_PR_LOOP_SCRIPTS / "code_rules_gate.py"
 SRC_RELATIVE_PATH = "packages/claude-dev-env/skills/bugteam/example_module.py"
@@ -95,7 +95,7 @@ def copy_hooks_constants_into(repository_root: Path) -> None:
 
 def copy_gate_script_into(repository_root: Path) -> Path:
     destination_scripts = (
-        repository_root / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
+        repository_root / "packages" / "claude-dev-env" / "skills" / "_shared" / "pr-loop" / "scripts"
     )
     destination_scripts.mkdir(parents=True, exist_ok=True)
     destination_gate = destination_scripts / "code_rules_gate.py"
@@ -140,6 +140,7 @@ def invoke_gate(
         repository_root
         / "packages"
         / "claude-dev-env"
+        / "skills"
         / "_shared"
         / "pr-loop"
         / "scripts"

@@ -28,5 +28,5 @@ surface for the test suite.
 ## Running tests
 
 ```bash
-python -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/code_rules_gate_parts/tests/
+python -m pytest packages/claude-dev-env/skills/_shared/pr-loop/scripts/code_rules_gate_parts/tests/
 ```

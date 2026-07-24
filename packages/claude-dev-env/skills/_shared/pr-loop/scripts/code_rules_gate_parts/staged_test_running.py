@@ -19,6 +19,7 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
     ALL_PYTEST_CONFIG_FILE_SECTIONS,
     ALL_PYTEST_MODULE_INVOCATION,
+    ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS,
     ALL_VENV_DIRECTORY_NAMES,
     ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
     CODE_RULES_GATE_PYTHON_ENV_VAR,
@@ -284,6 +285,7 @@ def _pytest_fixed_command(repository_root: Path) -> list[str]:
     return [
         _resolve_gate_python_executable(repository_root),
         *ALL_PYTEST_MODULE_INVOCATION,
+        *ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS,
     ]
 
 

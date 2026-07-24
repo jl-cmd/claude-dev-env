@@ -48,7 +48,7 @@ Notes:
 
 ### The install pipeline
 
-`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/`, `hooks/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
+`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/` (including `skills/_shared/`), `hooks/`, `system-prompts/`, `scripts/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
 
 ### Hooks
 
@@ -58,7 +58,7 @@ The largest blocking hook is `blocking/code_rules_enforcer.py`; its `validate_co
 
 ### Constants packages
 
-CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designated config modules — and the hooks hold themselves to that rule. So every hook area has a companion constants package (`hooks/hooks_constants/`, `_shared/pr-loop/scripts/pr_loop_shared_constants/`, each skill's `*_constants/`, and so on). `packages/claude-dev-env/pyproject.toml` maps each logical package name to its nested directory. When you add a constant for a hook or skill script, it belongs in that area's constants package, not inline.
+CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designated config modules — and the hooks hold themselves to that rule. So every hook area has a companion constants package (`hooks/hooks_constants/`, `skills/_shared/pr-loop/scripts/pr_loop_shared_constants/`, each skill's `*_constants/`, and so on). `packages/claude-dev-env/pyproject.toml` maps each logical package name to its nested directory. When you add a constant for a hook or skill script, it belongs in that area's constants package, not inline.
 
 ### AI review rules (`AGENTS.md`)
 

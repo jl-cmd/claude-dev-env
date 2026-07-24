@@ -292,7 +292,7 @@ def _issue_is_blocking(each_issue: str, all_added_line_numbers: set[int]) -> boo
         return any(each_line in all_added_line_numbers for each_line in span_range)
     violation_line = extract_violation_line_number(each_issue)
     if violation_line is None:
-        return True
+        return bool(all_added_line_numbers)
     return violation_line in all_added_line_numbers
 
 

@@ -55,7 +55,7 @@ the auto-remediation only applies to the `core.hooksPath` failure mode.
 Before spawning any subagents, grant the session write access to the project's `.claude/**` tree:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is a Claude Code host-managed token, pre-substituted by the runtime before any shell sees it. Unlike `${TMPDIR}` and similar shell parameter expansions, it does not depend on the shell’s expansion semantics, so it behaves the same on Unix and Windows shells.

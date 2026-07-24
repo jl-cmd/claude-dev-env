@@ -34,7 +34,7 @@ packages = [
 [tool.setuptools.package-dir]
 hooks_constants = "hooks/hooks_constants"
 git_hooks_constants = "hooks/git-hooks/git_hooks_constants"
-pr_loop_shared_constants = "_shared/pr-loop/scripts/pr_loop_shared_constants"
+pr_loop_shared_constants = "skills/_shared/pr-loop/scripts/pr_loop_shared_constants"
 skills_pr_loop_constants = "skills/_shared/pr-loop/scripts/skills_pr_loop_constants"
 pr_converge_skill_constants = "skills/pr-converge/pr_converge_skill_constants"
 pr_converge_scripts_constants = "skills/pr-converge/scripts/pr_converge_scripts_constants"
@@ -44,5 +44,5 @@ prototype_scripts_constants = "skills/prototype/scripts/prototype_scripts_consta
 copilot_finding_triage_constants = "skills/copilot-finding-triage/scripts/copilot_finding_triage_constants"
 codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
-advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
+advisor_scripts_constants = "skills/_shared/advisor/scripts/config/advisor_scripts_constants"
 fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"

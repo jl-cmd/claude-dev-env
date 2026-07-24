@@ -1,7 +1,7 @@
 """Link-integrity check for the skills tree and shared protocol docs.
 
-Walks every markdown file under ``skills/``, ``_shared/pr-loop/``, and
-``_shared/advisor/`` and resolves each relative markdown link target against
+Walks every markdown file under ``skills/`` (including ``skills/_shared/``)
+and resolves each relative markdown link target against
 the linking file's directory. A link whose target file or directory does not
 exist on disk is reported with its source file and line number, and the test
 fails.
@@ -14,8 +14,8 @@ from pathlib import Path
 
 
 SKILLS_ROOT = Path(__file__).parent
-SHARED_PR_LOOP_ROOT = SKILLS_ROOT.parent / "_shared" / "pr-loop"
-SHARED_ADVISOR_ROOT = SKILLS_ROOT.parent / "_shared" / "advisor"
+SHARED_PR_LOOP_ROOT = SKILLS_ROOT / "_shared" / "pr-loop"
+SHARED_ADVISOR_ROOT = SKILLS_ROOT / "_shared" / "advisor"
 
 MARKDOWN_LINK_PATTERN = re.compile(r"\]\(([^)\s]+)\)")
 FENCE_MARKER = "```"
@@ -39,10 +39,7 @@ def _iter_markdown_files() -> list[Path]:
         All ``.md`` files under the skills tree, the shared pr-loop tree, and
         the shared advisor tree.
     """
-    all_markdown_files = sorted(SKILLS_ROOT.rglob("*.md"))
-    all_markdown_files.extend(sorted(SHARED_PR_LOOP_ROOT.rglob("*.md")))
-    all_markdown_files.extend(sorted(SHARED_ADVISOR_ROOT.rglob("*.md")))
-    return all_markdown_files
+    return sorted(SKILLS_ROOT.rglob("*.md"))
 
 
 def _is_checkable_target(link_target: str) -> bool:

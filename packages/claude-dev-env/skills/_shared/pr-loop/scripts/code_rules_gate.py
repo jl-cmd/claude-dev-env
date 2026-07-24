@@ -39,6 +39,7 @@ try:
     from pr_loop_shared_constants.code_rules_gate_constants import (
         ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         ALL_PYTEST_MODULE_INVOCATION,
+        ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS,
         ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         EMPTY_FILE_SET_EXIT_CODE,
         EMPTY_FILE_SET_MESSAGE,
@@ -151,6 +152,7 @@ parse_arguments = gate_arguments.parse_arguments
 __all__ = [
     "ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
     "ALL_PYTEST_MODULE_INVOCATION",
+    "ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS",
     "ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
     "MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS",
     "MINIMUM_STAGED_PYTEST_PYTHON_MAJOR",
@@ -161,17 +163,32 @@ __all__ = [
 ]
 
 
-def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str) -> set[int]:
+def added_lines_for_staged_file(
+    repository_root: Path,
+    relative_path_posix: str,
+    all_rename_sources: dict[str, str] | None = None,
+) -> set[int]:
     """Return added line numbers within the staged diff for one file.
+
+    When *relative_path_posix* is a staged rename destination, compare the HEAD
+    source blob to the staged destination blob so a pure move adds no lines.
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
         relative_path_posix: Repository-relative POSIX path to inspect.
+        all_rename_sources: Optional staged rename destination-to-source map.
 
     Returns:
         Line numbers added in the staged diff, or the whole staged blob when
-        the file is newly added.
+        the file is newly added and not a rename destination.
     """
+    rename_sources = all_rename_sources if all_rename_sources is not None else {}
+    if relative_path_posix in rename_sources:
+        return added_line_maps.added_lines_for_staged_renamed_file(
+            repository_root,
+            rename_sources[relative_path_posix],
+            relative_path_posix,
+        )
     diff_text = staged_unified_diff_text(repository_root, relative_path_posix)
     if diff_text.strip():
         return parse_added_line_numbers(diff_text)
@@ -187,6 +204,9 @@ def added_lines_by_file_staged(
 ) -> dict[Path, set[int]]:
     """Build a per-file map of staged-added line numbers.
 
+    Honors staged renames detected tree-wide (``git diff --cached -M``) so a
+    pure move does not treat every destination line as newly introduced.
+
     Args:
         repository_root: Repository root for diff invocations.
         all_file_paths: File paths whose staged-added lines are collected.
@@ -195,13 +215,18 @@ def added_lines_by_file_staged(
         Mapping from resolved file path to its staged-added line numbers.
     """
     resolved_root = repository_root.resolve()
+    all_rename_sources = added_line_maps.renamed_file_source_map_staged(resolved_root)
     added_by_path: dict[Path, set[int]] = {}
     for each_path in all_file_paths:
         resolved = added_line_maps._resolved_under_root(each_path, resolved_root)
         if resolved is None:
             continue
         relative_posix = str(resolved.relative_to(resolved_root)).replace("\\", "/")
-        added_by_path[resolved] = added_lines_for_staged_file(resolved_root, relative_posix)
+        added_by_path[resolved] = added_lines_for_staged_file(
+            resolved_root,
+            relative_posix,
+            all_rename_sources,
+        )
     return added_by_path
 
 
