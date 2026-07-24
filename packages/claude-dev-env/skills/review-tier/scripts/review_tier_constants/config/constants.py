@@ -1,6 +1,6 @@
 """Constants for review_tier_constants."""
 
-DEFAULT_BRANCH_FALLBACK = "main"
+ALL_DEFAULT_BRANCH_FALLBACKS = ("main", "master")
 GIT_HEAD_REF = "HEAD"
 REMOTE_HEAD_REF = "refs/remotes/origin/HEAD"
 MAX_AXIS_VALUE = 2

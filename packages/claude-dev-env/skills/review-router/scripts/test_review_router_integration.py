@@ -33,7 +33,7 @@ def _run_with_plugin_data(plugin_data: Path | None, *arguments: str) -> subproce
 def _repository(tmp_path: Path) -> Path:
     repository = tmp_path / "repository"
     repository.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repository, check=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=repository, check=True)
     (repository / "README.md").write_text("test", encoding="utf-8")
