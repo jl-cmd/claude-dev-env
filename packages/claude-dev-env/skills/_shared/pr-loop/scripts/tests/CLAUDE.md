@@ -40,5 +40,5 @@ copilot_internal/user` response driving `test_copilot_quota.py`.
 ## Running
 
 ```bash
-python -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/tests/
+python -m pytest packages/claude-dev-env/skills/_shared/pr-loop/scripts/tests/
 ```

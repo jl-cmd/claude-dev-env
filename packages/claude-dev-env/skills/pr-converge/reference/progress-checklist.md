@@ -16,7 +16,7 @@ tick starts fresh from that step.
 **Hard gate: do not advance from any step while ANY unresolved review
 thread exists on the PR.** Sweep semantics and per-thread handling live in
 the shared fix protocol
-([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)
+([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
 step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)).
 
 **Full-PR-diff rule: every CODE-REVIEW round (Step 5) and every BUGTEAM
@@ -64,7 +64,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **disabled / down** → `bugbot_down = true` → Step 7
       - [ ] **dirty on `current_head`** → apply shared fix protocol
-            ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md);
+            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
             skill deltas in [`fix-protocol.md`](fix-protocol.md))
             → push → reset push-invalidated markers → `phase = CODE_REVIEW` → Step 5
       - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
@@ -142,7 +142,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 
       - [ ] **clean** → `copilot_clean_at = current_head` → Step 7 (re-validate (b), (c), (e), (f))
       - [ ] **dirty** → apply shared fix protocol
-            ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md);
+            ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md);
             skill deltas in [`fix-protocol.md`](fix-protocol.md))
             → push → reset markers → `phase = CODE_REVIEW` → Step 5
       - [ ] **no review yet** → increment `copilot_wait_count` → ≥ 3 hard-blocks;

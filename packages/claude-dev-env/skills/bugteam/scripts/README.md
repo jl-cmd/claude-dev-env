@@ -50,7 +50,7 @@ Skill-path thin entry; re-exports `main` from package-shared `_shared/pr-loop/sc
 **Not the pre-audit gate of record.** The live pre-audit gate is the package-shared script:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
 ```
 
 See `reference/audit-and-teammates.md`. Keep this wrap for callers that still invoke the skill-local path.

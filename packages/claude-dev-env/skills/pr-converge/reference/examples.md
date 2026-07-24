@@ -83,7 +83,7 @@ in order:
     Next tick: re-run gate (a) fetch → Copilot `APPROVED` at `current_head`
     → set `copilot_clean_at = current_head`, record evidence: "Copilot
     APPROVED at <SHA>", re-validate gates (b) and (c).
-  Gate (e): the shared fix protocol unresolved-thread sweep ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)) → zero across PR → record evidence.
+  Gate (e): the shared fix protocol unresolved-thread sweep ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)) → zero across PR → record evidence.
   Gate (f): all six gates pass → `update_pull_request(pullNumber=NUMBER,
     owner=OWNER, repo=REPO, draft=false)`.
 Reports "PR #N converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>,

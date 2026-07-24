@@ -111,7 +111,7 @@ pending, or when the tool is `CronCreate`.
    `set --status active` preserves `rearm_pending` when already active,
    but still do not run step 5.)
 2. **Bind the shared advisor before any executor.** Follow
-   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+   [`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
    orchestrator consumer set — this session plus every tier in the
    routing table (its Model floor section) — walk the ladder top-down,
@@ -242,7 +242,7 @@ Routing rules:
   only; a host where no resolver is available fails closed the same
   way — the coding spawn stops and the orchestrator reports it.
 - Host detection follows
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+  [`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md)
   (Host profiles section, `detect_host_profile`) — the sole detection
   system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
@@ -340,4 +340,4 @@ no open work remains, run `set --status done` before any re-arm attempt.
 - `SKILL.md` — orchestration process and routing.
 - `scripts/` — deterministic status_gate.
 - Advisor policy:
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+  [`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md).

@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
-$prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
+$prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'skills' '_shared' 'pr-loop' 'scripts')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0

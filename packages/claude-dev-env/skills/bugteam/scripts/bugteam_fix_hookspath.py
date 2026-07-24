@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 _shared_pr_loop_scripts_directory = (
-    Path(__file__).resolve().parents[3] / "_shared" / "pr-loop" / "scripts"
+    Path(__file__).resolve().parents[2] / "_shared" / "pr-loop" / "scripts"
 )
 if str(_shared_pr_loop_scripts_directory) not in sys.path:
     sys.path.insert(0, str(_shared_pr_loop_scripts_directory))

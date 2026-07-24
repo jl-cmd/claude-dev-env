@@ -93,6 +93,20 @@ ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
     "-q",
 )
 
+ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS: tuple[str, ...] = (
+    "-k",
+    "not LivePostAuditThreadTests",
+)
+
+ALL_GIT_DIFF_CACHED_NAME_STATUS_RENAME_COMMAND: tuple[str, ...] = (
+    "git",
+    "diff",
+    "--cached",
+    "--name-status",
+    "-M",
+    "-z",
+)
+
 CODE_RULES_GATE_PYTHON_ENV_VAR: str = "CODE_RULES_GATE_PYTHON"
 
 CODE_RULES_GATE_PYTHONPATH_ENV_VAR: str = "CODE_RULES_GATE_PYTHONPATH"

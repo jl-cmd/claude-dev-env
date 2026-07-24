@@ -11,9 +11,8 @@ from pathlib import Path
 _scripts_directory = Path(__file__).resolve().parent
 _skill_directory = _scripts_directory.parent
 _skills_directory = _skill_directory.parent
-_claude_dev_env_directory = _skills_directory.parent
 _shared_pr_loop_scripts_directory = (
-    _claude_dev_env_directory / "_shared" / "pr-loop" / "scripts"
+    _skills_directory / "_shared" / "pr-loop" / "scripts"
 )
 _codex_review_scripts_directory = _skills_directory / "codex-review" / "scripts"
 

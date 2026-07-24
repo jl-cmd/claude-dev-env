@@ -18,8 +18,8 @@ The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude
 
 Two paths matter:
 
-- **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
-- **Skills.** Skill directories under `skills/` copy to `~/.claude/skills/<name>/`, with one filter described below.
+- **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
+- **Skills.** Skill directories under `skills/` copy to `~/.claude/skills/<name>/`, with one filter described below. Shared runtime assets live at `skills/_shared/` and install to `~/.claude/skills/_shared/` (never pruned as a retired skill; listed in `CORE_SKILLS` so `--only core` ships them).
 
 ## Full install versus scoped install
 

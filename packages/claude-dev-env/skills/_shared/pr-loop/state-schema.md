@@ -31,7 +31,7 @@ Adds nothing beyond common. Single subagent loops internally and returns a final
 
 ### pr-converge
 
-Normative field list, phase enum, dual persistence, and reset semantics: [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md). File-backed multi-PR `status` enum: [`../../skills/pr-converge/reference/multi-pr-orchestration.md`](../../skills/pr-converge/reference/multi-pr-orchestration.md).
+Normative field list, phase enum, dual persistence, and reset semantics: [`../../pr-converge/reference/state-schema.md`](../../pr-converge/reference/state-schema.md). File-backed multi-PR `status` enum: [`../../pr-converge/reference/multi-pr-orchestration.md`](../../pr-converge/reference/multi-pr-orchestration.md).
 
 ### monitor-many
 
@@ -52,11 +52,11 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 
 - bugteam: cleared on each new `/bugteam` invocation
 - qbug: cleared on each new `/qbug` invocation
-- pr-converge: see [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md)
+- pr-converge: see [`../../pr-converge/reference/state-schema.md`](../../pr-converge/reference/state-schema.md)
 - monitor-many: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
 
 ## Convergence checks
 
 - bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: see [`../../skills/pr-converge/reference/convergence-gates.md`](../../skills/pr-converge/reference/convergence-gates.md)
+- pr-converge: see [`../../pr-converge/reference/convergence-gates.md`](../../pr-converge/reference/convergence-gates.md)
 - monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`

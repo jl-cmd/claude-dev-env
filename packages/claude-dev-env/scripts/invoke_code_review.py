@@ -41,7 +41,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 _advisor_scripts_path = str(
-    Path(__file__).resolve().parent.parent / "_shared" / "advisor" / "scripts"
+    Path(__file__).resolve().parent.parent / "skills" / "_shared" / "advisor" / "scripts"
 )
 if _advisor_scripts_path not in sys.path:
     sys.path.insert(0, _advisor_scripts_path)

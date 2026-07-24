@@ -116,3 +116,48 @@ def test_added_lines_for_renamed_file_reports_only_new_lines(tmp_path: Path) -> 
     )
 
     assert added == {3}
+
+
+def test_renamed_file_source_map_staged_maps_destination_to_source(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _base_repository(repository_root)
+    _run(repository_root, "mv", "base.py", "moved.py")
+
+    rename_map = added_line_maps.renamed_file_source_map_staged(repository_root)
+
+    assert rename_map == {"moved.py": "base.py"}
+
+
+def test_added_lines_for_staged_renamed_file_is_empty_on_pure_move(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _base_repository(repository_root)
+    _run(repository_root, "mv", "base.py", "moved.py")
+
+    added = added_line_maps.added_lines_for_staged_renamed_file(
+        repository_root, "base.py", "moved.py"
+    )
+
+    assert added == set()
+
+
+def test_added_lines_for_staged_renamed_file_reports_only_new_lines(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _base_repository(repository_root)
+    _run(repository_root, "mv", "base.py", "moved.py")
+    (repository_root / "moved.py").write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
+    _run(repository_root, "add", "--", "moved.py")
+
+    added = added_line_maps.added_lines_for_staged_renamed_file(
+        repository_root, "base.py", "moved.py"
+    )
+
+    assert added == {3}

@@ -4,12 +4,12 @@ Pre-audit validator run before each AUDIT (and pre-commit when applicable). Wrap
 
 ## Script location
 
-Canonical: `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py` after install.
+Canonical: `~/.claude/skills/_shared/pr-loop/scripts/code_rules_gate.py` after install.
 
 Workflows reference it via:
-- all skills (bugteam, qbug, pr-converge, monitor-many): `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
+- all skills (bugteam, qbug, pr-converge, monitor-many): `${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/code_rules_gate.py`
 
-Cross-skill path traversal works because every skill installs as a flat top-level dir under `~/.claude/skills/` and `_shared/` lives alongside `skills/` under `~/.claude/`.
+Cross-skill path traversal works because every skill installs as a flat top-level dir under `~/.claude/skills/` and `_shared/` lives beside them at `~/.claude/skills/_shared/`.
 
 ## Invocation
 

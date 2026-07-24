@@ -2,7 +2,7 @@
 
 Single home for the worker-spawn dispatcher contract and for Claude-only
 slash-step host routing. Skills that need a role-bound headless worker call
-[`scripts/resolve_worker_spawn.py`](../../scripts/resolve_worker_spawn.py)
+[`scripts/resolve_worker_spawn.py`](../../../scripts/resolve_worker_spawn.py)
 (or import `resolve_worker_spawn`) and read this page for the tier walk, inputs,
 JSON result shape, host rules, and setup. Skills that run a Claude-only slash
 step (for example `/code-review`) read the code-review host-routing section.

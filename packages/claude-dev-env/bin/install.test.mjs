@@ -149,18 +149,22 @@ test('collectPackageSourceConflicts returns empty when directory is not inside a
 });
 
 
-test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ to ~/.claude/_shared/', () => {
+test('skills tree ships _shared so installer copies skills/_shared/pr-loop/ to ~/.claude/skills/_shared/', () => {
     assert.ok(
-        CONTENT_DIRECTORIES.includes('_shared'),
-        '_shared must be in CONTENT_DIRECTORIES so the installer copies _shared/pr-loop/ alongside skills/',
+        !CONTENT_DIRECTORIES.includes('_shared'),
+        '_shared must not be a top-level CONTENT_DIRECTORIES entry; it ships under skills/',
+    );
+    assert.ok(
+        CORE_SKILLS.includes('_shared'),
+        '_shared must be in CORE_SKILLS so --only core copies skills/_shared/',
     );
 });
 
 
-test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
+test('core ships skills/_shared via CORE_SKILLS and scripts via includeDirectories for advisor protocol and CLI fallback', () => {
     assert.ok(
-        CORE_INCLUDE_DIRECTORIES.includes('_shared'),
-        '_shared must ship with --only core so advisor-protocol.md lands for team-advisor/orchestrator',
+        CORE_SKILLS.includes('_shared'),
+        '_shared must ship under skills with --only core so advisor-protocol.md lands for team-advisor/orchestrator',
     );
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),

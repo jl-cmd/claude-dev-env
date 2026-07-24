@@ -21,4 +21,4 @@ EXIT_CODE_OUT_OF_QUOTA: int = 1
 EXIT_CODE_QUOTA_API_DOWN: int = 2
 EXIT_CODE_NO_ACCOUNT_CONFIGURED: int = 3
 
-COPILOT_QUOTA_DEFAULT_ENV_FILE_PATH: Path = Path(__file__).resolve().parents[4] / ".env"
+COPILOT_QUOTA_DEFAULT_ENV_FILE_PATH: Path = Path(__file__).resolve().parents[5] / ".env"

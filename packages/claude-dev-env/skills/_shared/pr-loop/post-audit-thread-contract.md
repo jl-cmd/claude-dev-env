@@ -47,5 +47,5 @@ The same exit codes carry different weight per caller:
   review lens already cleared the HEAD, so the CLEAN post is a record-keeping
   artifact. The run records a bypass note, sets the convergence check's
   `--bugteam-post-blocked` flag, and proceeds to the terminal Bugbot gate. Full
-  policy: [`../../skills/autoconverge/reference/stop-conditions.md`](../../skills/autoconverge/reference/stop-conditions.md)
+  policy: [`../../autoconverge/reference/stop-conditions.md`](../../autoconverge/reference/stop-conditions.md)
   § "Clean-audit post bypassed".

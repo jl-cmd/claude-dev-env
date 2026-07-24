@@ -115,7 +115,7 @@ def test_resolve_claude_dev_env_root_walks_up_to_find_enforcer(tmp_path: Path) -
     enforcer_path = fake_root / "hooks" / "blocking" / "code_rules_enforcer.py"
     enforcer_path.parent.mkdir(parents=True)
     enforcer_path.write_text("# fake enforcer\n", encoding="utf-8")
-    deep_script = fake_root / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
+    deep_script = fake_root / "skills" / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     deep_script.parent.mkdir(parents=True)
     deep_script.write_text("# stub\n", encoding="utf-8")
 
@@ -143,7 +143,7 @@ def test_resolve_claude_dev_env_root_supports_legacy_skills_layout(
 def test_resolve_claude_dev_env_root_raises_when_enforcer_missing(
     tmp_path: Path,
 ) -> None:
-    deep_script = tmp_path / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
+    deep_script = tmp_path / "skills" / "_shared" / "pr-loop" / "scripts" / "code_rules_gate.py"
     deep_script.parent.mkdir(parents=True)
     deep_script.write_text("# stub\n", encoding="utf-8")
 
@@ -2280,7 +2280,8 @@ def test_read_staged_content_returns_staged_blob(
         temporary_git_repository, "staged.py"
     )
 
-    assert staged_content == "staged_value = 1\n"
+    assert staged_content is not None
+    assert staged_content.replace("\r\n", "\n") == "staged_value = 1\n"
 
 
 def test_read_staged_content_returns_none_for_unstaged_path(
@@ -2684,7 +2685,11 @@ def _staged_test_paths_under(group_root: Path, path_count: int) -> list[Path]:
 
 
 def _path_arguments_of(all_pytest_command: list[str]) -> list[str]:
-    fixed_prefix_length = len(gate_module.ALL_PYTEST_MODULE_INVOCATION) + 1
+    fixed_prefix_length = (
+        1
+        + len(gate_module.ALL_PYTEST_MODULE_INVOCATION)
+        + len(gate_module.ALL_STAGED_PYTEST_LIVE_SUITE_EXCLUSION_ARGUMENTS)
+    )
     return all_pytest_command[fixed_prefix_length:]
 
 

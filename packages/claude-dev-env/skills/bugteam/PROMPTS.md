@@ -119,7 +119,7 @@ cd into `<worktree_path>` before any git or file operation.
      teammate does NOT author the inline-comment body directly:
      `post_audit_thread.py` renders every body from
      `INLINE_COMMENT_BODY_TEMPLATE` (defined in
-     [`_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py`](../../_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py))
+     [`_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py`](../_shared/pr-loop/scripts/pr_loop_shared_constants/post_audit_thread_constants.py))
      — the template prepends `**[<severity>] <Skill> audit finding**`
      and renders the suggested-fix block, so a teammate who hand-formats
      a title or footer wastes the work.
@@ -149,7 +149,7 @@ cd into `<worktree_path>` before any git or file operation.
      list.
 
      ```
-     python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
+     python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/post_audit_thread.py" \
        --skill bugteam \
        --owner <O> \
        --repo <R> \
@@ -161,7 +161,7 @@ cd into `<worktree_path>` before any git or file operation.
 
      The event handling, retry backoff, and exit-code table are the
      shared contract in
-     [`../../_shared/pr-loop/post-audit-thread-contract.md`](../../_shared/pr-loop/post-audit-thread-contract.md).
+     [`../_shared/pr-loop/post-audit-thread-contract.md`](../_shared/pr-loop/post-audit-thread-contract.md).
      For bugteam, an exit `2` (retry exhaustion) is a hard blocker: halt
      and exit `error: post_audit_thread retry exhausted` without retrying
      and without falling back to a flat issue comment.
@@ -293,7 +293,7 @@ cd into `<worktree_path>` before any git or file operation.
      `add_reply_to_pull_request_comment(commentId=<finding_comment_id>,
      body=<reply_body>, owner=<O>, repo=<R>, pullNumber=<N>)`. The
      reply body uses the unified template at
-     [`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md).
+     [`../_shared/pr-loop/audit-reply-template.md`](../_shared/pr-loop/audit-reply-template.md).
      Skeleton (identical across all paths):
 
      ```

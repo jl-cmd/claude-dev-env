@@ -20,7 +20,7 @@ _SCRIPTS_DIRECTORY = Path(__file__).absolute().parent
 def test_path_setup_registers_skill_and_shared_directories() -> None:
     skill_directory = _SCRIPTS_DIRECTORY.parent
     shared_directory = (
-        _SCRIPTS_DIRECTORY.parent.parent.parent / "_shared" / "pr-loop" / "scripts"
+        _SCRIPTS_DIRECTORY.parent.parent / "_shared" / "pr-loop" / "scripts"
     )
     codex_scripts_directory = (
         _SCRIPTS_DIRECTORY.parent.parent / "codex-review" / "scripts"
