@@ -138,6 +138,7 @@ ALL_BROAD_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
 )
 
 FOLLOWING_LIST_ITEM_PATTERN: re.Pattern[str] = re.compile(r"\b\d+\.\s+[A-Z]")
+FOLLOWING_LETTERED_LIST_ITEM_PATTERN: re.Pattern[str] = re.compile(r"\b[A-Z]\.\s+[A-Z]")
 
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"

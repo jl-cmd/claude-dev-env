@@ -380,6 +380,32 @@ def test_colon_inside_backticks_does_not_supply_context() -> None:
     assert question_has_leading_context(question_text) is False
 
 
+def test_parenthetical_option_description_stays_within_sentence_cap() -> None:
+    findings = find_style_findings(
+        _payload(
+            CLEAN_QUESTION_TEXT,
+            all_options=[
+                {
+                    "label": "Yes",
+                    "description": "Apply the change now. (Keeps main green.)",
+                },
+                {"label": "No", "description": "Leave the current path alone."},
+            ],
+        )["tool_input"]
+    )
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
+def test_lettered_list_with_should_items_does_not_inflate_count() -> None:
+    question_text = (
+        "A. Should we retry the hook. B. Tests also failed. "
+        "Which fix should land first?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "

@@ -39,6 +39,7 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     FINDING_PROCESS_NARRATION,
     FINDING_STACKED_HYPHEN_COMPOUND,
     FINDING_TOO_MANY_SENTENCES,
+    FOLLOWING_LETTERED_LIST_ITEM_PATTERN,
     FOLLOWING_LIST_ITEM_PATTERN,
     HOOK_EVENT_NAME,
     INLINE_CODE_SPAN_PATTERN,
@@ -226,16 +227,19 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
                 and next_word[0].isupper()
                 and next_word.lower() in ALL_QUESTION_SENTENCE_OPENERS
             )
-        # Lettered list markers: "A. The gate failed..." at BOL or after end/colon.
+        # Lettered list markers: "A. The gate..." / "A. Should … B. …" at BOL or after end.
         segment_before_letter = text[: terminator_index - len(token)].rstrip()
         if (
             token.isupper()
             and (segment_before_letter == "" or segment_before_letter[-1] in ".!?:")
             and next_word
             and next_word[0].isupper()
-            and next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
         ):
-            return True
+            rest_after_letter = text[terminator_index + 1 :]
+            if next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS:
+                return True
+            if FOLLOWING_LETTERED_LIST_ITEM_PATTERN.search(rest_after_letter):
+                return True
         following_start = _following_sentence_start_character(text, terminator_index + 1)
         if following_start == "" or following_start.islower():
             return True
@@ -384,6 +388,13 @@ def _split_sentences(prose_text: str) -> list[str]:
     while index < len(stripped_text):
         if stripped_text[index] in ".!?" and _is_sentence_boundary(stripped_text, index):
             following_start = index + 1
+            closer_characters = "\"')]} "
+            while (
+                following_start < len(stripped_text)
+                and stripped_text[following_start] in closer_characters
+                and not stripped_text[following_start].isspace()
+            ):
+                following_start += 1
             while (
                 following_start < len(stripped_text)
                 and stripped_text[following_start].isspace()
@@ -397,7 +408,8 @@ def _split_sentences(prose_text: str) -> list[str]:
             continue
         index += 1
     trailing = stripped_text[sentence_start:].strip()
-    if trailing:
+    closer_only = set("\"')]} ")
+    if trailing and not all(each_character in closer_only for each_character in trailing):
         all_sentences.append(trailing)
     return all_sentences
 
