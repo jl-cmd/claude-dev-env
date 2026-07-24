@@ -1,21 +1,17 @@
-"""Post an audit review (APPROVE / REQUEST_CHANGES) to a draft PR.
+"""Post an audit review to a draft PR through the GitHub reviews API.
 
-Consumed by ``/bugteam``, ``/findbugs``, and ``/qbug`` at the end of every
-audit invocation. Posts to ``/repos/{owner}/{repo}/pulls/{N}/reviews`` with
-``commit_id=<SHA>``, a formatted body, and inline ``comments[]`` derived
-from a findings JSON file. CLEAN state ``→`` APPROVE with empty
-``comments[]``; DIRTY state ``→`` REQUEST_CHANGES with one inline comment
-per finding so each becomes its own resolvable thread.
+::
 
-The body skeleton is read at runtime from ``audit-reply-template.md`` (the
-canonical reference doc shipped in Phase 1) so the template stays the
-single source of truth for the review-body shape.
+    CLEAN  ->  APPROVE, empty comments[]
+    DIRTY  ->  REQUEST_CHANGES, one inline comment per finding
+    exit 0 ->  review posted, html_url printed to stdout
+    exit 1 ->  bad CLI arguments or malformed findings JSON
+    exit 2 ->  four non-2xx responses in a row (hard blocker)
 
-Exit codes per spec:
-- ``0`` on success (POSTs the new review's ``html_url`` to stdout)
-- ``1`` on user error (bad CLI arguments, malformed findings JSON)
-- ``2`` on retry exhaustion (four non-2xx responses — one initial attempt
-  plus three retries) — hard blocker
+The ``/bugteam``, ``/findbugs``, and ``/qbug`` skills run this at the close
+of an audit pass. Each finding lands as its own resolvable inline thread on
+the PR. The body skeleton is read at runtime from ``audit-reply-template.md``
+so that markdown doc stays the single source of truth for the body shape.
 """
 
 from __future__ import annotations
@@ -61,6 +57,7 @@ from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     DETAILS_BLOCK_BULLET_TEMPLATE,
     DETAILS_BLOCK_FOOTER,
     DETAILS_BLOCK_HEADER,
+    DETAILS_BLOCK_LINE_SEPARATOR,
     ERROR_RESPONSE_PREVIEW_CHARS,
     EXIT_CODE_RETRY_EXHAUSTED,
     EXIT_CODE_USER_ERROR,
@@ -167,12 +164,12 @@ class PostedReview:
     """Result of a successful POST to the reviews endpoint.
 
     ``html_url`` is the field emitted to stdout per spec line 177;
-    ``raw_response_text`` and ``status_code`` are retained for tests and
+    ``raw_review_body`` and ``status_code`` are retained for tests and
     logging.
     """
 
     html_url: str
-    raw_response_text: str
+    raw_review_body: str
     status_code: int
 
 
@@ -256,36 +253,122 @@ def parse_command_line_arguments(all_arguments: list[str]) -> argparse.Namespace
 def _require_string_field(
     all_finding_fields: dict[str, object], field_name: str
 ) -> str:
-    field_value = all_finding_fields.get(field_name)
-    if not isinstance(field_value, str):
+    field_content = all_finding_fields.get(field_name)
+    if not isinstance(field_content, str):
         raise UserInputError(
             f"finding field {field_name!r} must be a string; "
-            f"got {type(field_value).__name__}"
+            f"got {type(field_content).__name__}"
         )
-    return field_value
+    return field_content
 
 
 def _require_nonempty_string_field(
     all_finding_fields: dict[str, object], field_name: str
 ) -> str:
-    field_value = _require_string_field(all_finding_fields, field_name)
-    if not field_value:
+    field_text = _require_string_field(all_finding_fields, field_name)
+    if not field_text:
         raise UserInputError(
             f"finding field {field_name!r} must be a non-empty string; got ''"
         )
-    return field_value
+    return field_text
 
 
 def _require_int_field(
     all_finding_fields: dict[str, object], field_name: str
 ) -> int:
-    field_value = all_finding_fields.get(field_name)
-    if isinstance(field_value, bool) or not isinstance(field_value, int):
+    field_number = all_finding_fields.get(field_name)
+    if isinstance(field_number, bool) or not isinstance(field_number, int):
         raise UserInputError(
             f"finding field {field_name!r} must be an int; "
-            f"got {type(field_value).__name__}"
+            f"got {type(field_number).__name__}"
         )
-    return field_value
+    return field_number
+
+
+def _read_findings_json_text(findings_json_path: Path) -> str:
+    if not findings_json_path.is_file():
+        raise UserInputError(
+            f"findings-json path not found or not a file: {findings_json_path}"
+        )
+    return findings_json_path.read_text(encoding="utf-8")
+
+
+def _parse_findings_json_root(findings_text: str) -> list[object]:
+    try:
+        findings_json_root: object = json.loads(findings_text)
+    except json.JSONDecodeError as decode_error:
+        raise UserInputError(
+            f"findings-json file is not parseable as JSON: {decode_error}"
+        ) from decode_error
+    if not isinstance(findings_json_root, list):
+        raise UserInputError(
+            f"findings JSON root must be a list; got {type(findings_json_root).__name__}"
+        )
+    return findings_json_root
+
+
+def _require_finding_entry_fields(each_entry: object) -> dict[str, object]:
+    if not isinstance(each_entry, dict):
+        raise UserInputError(
+            "every findings JSON entry must be an object; got "
+            f"{type(each_entry).__name__}"
+        )
+    all_entry_fields: dict[str, object] = each_entry
+    for each_required_field in ALL_REQUIRED_FINDING_FIELDS:
+        if each_required_field not in all_entry_fields:
+            raise UserInputError(
+                f"finding entry missing required field: {each_required_field!r}"
+            )
+    return all_entry_fields
+
+
+def _validated_severity_tag(all_entry_fields: dict[str, object]) -> str:
+    severity_tag = _require_string_field(all_entry_fields, JSON_FIELD_SEVERITY)
+    if severity_tag not in ALL_SUPPORTED_SEVERITY_TAGS:
+        raise UserInputError(
+            f"finding severity {severity_tag!r} not in supported set "
+            f"{list(ALL_SUPPORTED_SEVERITY_TAGS)!r}"
+        )
+    return severity_tag
+
+
+def _validated_comment_side(all_entry_fields: dict[str, object]) -> str:
+    comment_side = _require_string_field(all_entry_fields, JSON_FIELD_SIDE)
+    if comment_side not in ALL_SUPPORTED_INLINE_COMMENT_SIDES:
+        raise UserInputError(
+            f"finding side {comment_side!r} not in supported set "
+            f"{list(ALL_SUPPORTED_INLINE_COMMENT_SIDES)!r}"
+        )
+    return comment_side
+
+
+def _validated_finding_line(
+    all_entry_fields: dict[str, object], finding_path: str
+) -> int:
+    finding_line = _require_int_field(all_entry_fields, JSON_FIELD_LINE)
+    if finding_line < 1:
+        raise UserInputError(
+            f"finding field {JSON_FIELD_LINE!r} must be >= 1 (GitHub "
+            f"reviews API rejects line=0); got {finding_line} for path "
+            f"{finding_path!r}"
+        )
+    return finding_line
+
+
+def _finding_from_entry(each_entry: object) -> AuditFinding:
+    all_entry_fields = _require_finding_entry_fields(each_entry)
+    severity_tag = _validated_severity_tag(all_entry_fields)
+    comment_side = _validated_comment_side(all_entry_fields)
+    finding_path = _require_nonempty_string_field(all_entry_fields, JSON_FIELD_PATH)
+    finding_line = _validated_finding_line(all_entry_fields, finding_path)
+    return AuditFinding(
+        path=finding_path,
+        line=finding_line,
+        side=comment_side,
+        severity=severity_tag,
+        description=_require_string_field(all_entry_fields, JSON_FIELD_DESCRIPTION),
+        fix_summary=_require_string_field(all_entry_fields, JSON_FIELD_FIX_SUMMARY),
+    )
 
 
 def parse_findings_json_file(findings_json_path: Path) -> list[AuditFinding]:
@@ -306,79 +389,24 @@ def parse_findings_json_file(findings_json_path: Path) -> list[AuditFinding]:
             empty, or line value below ``1`` (the GitHub reviews API
             rejects ``line=0`` as unprocessable).
     """
-    if not findings_json_path.is_file():
-        raise UserInputError(
-            f"findings-json path not found or not a file: {findings_json_path}"
-        )
-    findings_text = findings_json_path.read_text(encoding="utf-8")
-    try:
-        parsed_value: object = json.loads(findings_text)
-    except json.JSONDecodeError as decode_error:
-        raise UserInputError(
-            f"findings-json file is not parseable as JSON: {decode_error}"
-        ) from decode_error
-    if not isinstance(parsed_value, list):
-        raise UserInputError(
-            f"findings JSON root must be a list; got {type(parsed_value).__name__}"
-        )
-    parsed_findings: list[AuditFinding] = []
-    for each_entry in parsed_value:
-        if not isinstance(each_entry, dict):
-            raise UserInputError(
-                "every findings JSON entry must be an object; got "
-                f"{type(each_entry).__name__}"
-            )
-        all_entry_fields: dict[str, object] = each_entry
-        for each_required_field in ALL_REQUIRED_FINDING_FIELDS:
-            if each_required_field not in all_entry_fields:
-                raise UserInputError(
-                    f"finding entry missing required field: {each_required_field!r}"
-                )
-        severity_value = _require_string_field(all_entry_fields, JSON_FIELD_SEVERITY)
-        if severity_value not in ALL_SUPPORTED_SEVERITY_TAGS:
-            raise UserInputError(
-                f"finding severity {severity_value!r} not in supported set "
-                f"{list(ALL_SUPPORTED_SEVERITY_TAGS)!r}"
-            )
-        side_value = _require_string_field(all_entry_fields, JSON_FIELD_SIDE)
-        if side_value not in ALL_SUPPORTED_INLINE_COMMENT_SIDES:
-            raise UserInputError(
-                f"finding side {side_value!r} not in supported set "
-                f"{list(ALL_SUPPORTED_INLINE_COMMENT_SIDES)!r}"
-            )
-        path_value = _require_nonempty_string_field(all_entry_fields, JSON_FIELD_PATH)
-        line_value = _require_int_field(all_entry_fields, JSON_FIELD_LINE)
-        if line_value < 1:
-            raise UserInputError(
-                f"finding field {JSON_FIELD_LINE!r} must be >= 1 (GitHub "
-                f"reviews API rejects line=0); got {line_value} for path "
-                f"{path_value!r}"
-            )
-        parsed_findings.append(
-            AuditFinding(
-                path=path_value,
-                line=line_value,
-                side=side_value,
-                severity=severity_value,
-                description=_require_string_field(all_entry_fields, JSON_FIELD_DESCRIPTION),
-                fix_summary=_require_string_field(all_entry_fields, JSON_FIELD_FIX_SUMMARY),
-            )
-        )
-    return parsed_findings
+    findings_text = _read_findings_json_text(findings_json_path)
+    all_raw_entries = _parse_findings_json_root(findings_text)
+    return [_finding_from_entry(each_entry) for each_entry in all_raw_entries]
 
 
 def extract_audit_body_skeleton(template_markdown_text: str) -> str:
-    """Pull the audit review body skeleton out of the Phase 1 template markdown.
+    """Pull the audit review body skeleton out of the template markdown.
 
-    Locates the explicit HTML comment markers
-    ``AUDIT_BODY_SKELETON_OPEN_MARKER`` and
-    ``AUDIT_BODY_SKELETON_CLOSE_MARKER`` in the template, then captures
-    the fenced block (delimited by the token in ``TEMPLATE_FENCE_TOKEN``)
-    sitting between them. The captured text contains the placeholders the
-    rest of this script substitutes. Anchoring on explicit markers — not on
-    heading text or "the next fence after a heading" — keeps the contract
-    stable across template edits that rename headings, insert new fences,
-    or change fence syntax.
+    ::
+
+        <!-- audit-body-skeleton:start -->
+        ``` ...skeleton text with <placeholders>... ```
+        <!-- audit-body-skeleton:end -->
+                    ^ returns the fenced text between the two markers
+
+    The markers bound the region and the fence delimits the skeleton inside
+    it. Anchoring on the explicit markers keeps the contract stable when the
+    template renames a heading or adds a new fence.
 
     Args:
         template_markdown_text: Full text of ``audit-reply-template.md``.
@@ -508,7 +536,10 @@ def build_details_block(all_findings: list[AuditFinding]) -> str:
         for each_finding in all_findings
     ]
     return (
-        DETAILS_BLOCK_HEADER + "\n" + "\n".join(rendered_bullets) + DETAILS_BLOCK_FOOTER
+        DETAILS_BLOCK_HEADER
+        + DETAILS_BLOCK_LINE_SEPARATOR
+        + DETAILS_BLOCK_LINE_SEPARATOR.join(rendered_bullets)
+        + DETAILS_BLOCK_FOOTER
     )
 
 
@@ -664,9 +695,9 @@ def resolve_github_token() -> str:
         UserInputError: every source above failed or returned empty.
     """
     for each_env_var_name in ALL_GH_TOKEN_ENV_VAR_NAMES:
-        env_token_value = os.environ.get(each_env_var_name, "").strip()
-        if env_token_value:
-            return env_token_value
+        env_token = os.environ.get(each_env_var_name, "").strip()
+        if env_token:
+            return env_token
     try:
         completion = subprocess.run(
             list(ALL_GH_AUTH_TOKEN_COMMAND_PARTS),
@@ -726,23 +757,23 @@ def query_active_gh_user_login() -> str:
             f"{completion.stderr.strip()}"
         )
     try:
-        parsed_value: object = json.loads(completion.stdout)
+        gh_user_json: object = json.loads(completion.stdout)
     except json.JSONDecodeError as decode_error:
         raise UserInputError(
             f"`gh api /user` response not parseable as JSON: {decode_error}"
         ) from decode_error
-    if not isinstance(parsed_value, dict):
+    if not isinstance(gh_user_json, dict):
         raise UserInputError(
             f"`gh api /user` response root must be an object; "
-            f"got {type(parsed_value).__name__}"
+            f"got {type(gh_user_json).__name__}"
         )
-    typed_response: dict[str, object] = parsed_value
-    login_value = typed_response.get(GH_USER_LOGIN_FIELD)
-    if not isinstance(login_value, str) or not login_value:
+    gh_user_object: dict[str, object] = gh_user_json
+    active_login = gh_user_object.get(GH_USER_LOGIN_FIELD)
+    if not isinstance(active_login, str) or not active_login:
         raise UserInputError(
             f"`gh api /user` response missing string {GH_USER_LOGIN_FIELD!r}"
         )
-    return login_value
+    return active_login
 
 
 def query_pull_request_author_login(owner: str, repo: str, pr_number: int) -> str:
@@ -786,30 +817,30 @@ def query_pull_request_author_login(owner: str, repo: str, pr_number: int) -> st
             f"{completion.returncode}): {completion.stderr.strip()}"
         )
     try:
-        parsed_value: object = json.loads(completion.stdout)
+        pull_request_json: object = json.loads(completion.stdout)
     except json.JSONDecodeError as decode_error:
         raise UserInputError(
             f"`gh api {pull_request_api_path}` response not parseable as "
             f"JSON: {decode_error}"
         ) from decode_error
-    if not isinstance(parsed_value, dict):
+    if not isinstance(pull_request_json, dict):
         raise UserInputError(
             f"`gh api {pull_request_api_path}` response root must be an "
-            f"object; got {type(parsed_value).__name__}"
+            f"object; got {type(pull_request_json).__name__}"
         )
-    typed_response: dict[str, object] = parsed_value
-    user_field = typed_response.get(GH_PR_USER_FIELD)
+    pull_request_object: dict[str, object] = pull_request_json
+    user_field = pull_request_object.get(GH_PR_USER_FIELD)
     if not isinstance(user_field, dict):
         raise UserInputError(
             f"PR response missing object {GH_PR_USER_FIELD!r}"
         )
     typed_user: dict[str, object] = user_field
-    login_value = typed_user.get(GH_USER_LOGIN_FIELD)
-    if not isinstance(login_value, str) or not login_value:
+    author_login = typed_user.get(GH_USER_LOGIN_FIELD)
+    if not isinstance(author_login, str) or not author_login:
         raise UserInputError(
             f"PR author missing string {GH_USER_LOGIN_FIELD!r} field"
         )
-    return login_value
+    return author_login
 
 
 def list_authenticated_gh_account_logins() -> list[str]:
@@ -840,9 +871,9 @@ def list_authenticated_gh_account_logins() -> list[str]:
             "`gh` CLI not installed or not on PATH; cannot list "
             "authenticated github.com accounts"
         ) from missing_gh_error
-    output_text = (completion.stdout or "") + (completion.stderr or "")
+    auth_status_text = (completion.stdout or "") + (completion.stderr or "")
     parsed_logins: list[str] = []
-    for each_line in output_text.splitlines():
+    for each_line in auth_status_text.splitlines():
         marker_index = each_line.find(GH_AUTH_STATUS_ACCOUNT_LINE_MARKER)
         if marker_index < 0:
             continue
@@ -898,26 +929,26 @@ def fetch_gh_token_for_account(account_login: str) -> str:
 
 
 def resolve_reviewer_token(owner: str, repo: str, pr_number: int) -> str:
-    """Return the GitHub token to use for the reviews POST, auto-toggling on self-PR.
+    """Return the reviews-POST token, using an alternate account on a self-PR.
 
-    Precedence rules, evaluated in order:
+    ::
 
-    - ``GH_TOKEN`` / ``GITHUB_TOKEN`` env var set → returned unchanged; no
-      toggle attempt.
-    - Active gh account differs ``vs.`` PR author → return the active
-      account's token via :func:`resolve_github_token` (no toggle).
-    - Active gh account matches PR author (self-PR) → if the env var
-      ``BUGTEAM_REVIEWER_ACCOUNT`` names an authenticated alternate, use
-      that account's token; else fall back to the first alternate
-      authenticated account ``gh auth status`` reports. Token is fetched
-      via :func:`fetch_gh_token_for_account`. The active account is not
-      mutated; only the token sent on the reviews request changes.
+        GH_TOKEN / GITHUB_TOKEN set   ->  that token, no switch
+        active account != PR author   ->  active account token
+        active account == PR author   ->  an alternate account token
+        self-PR, no alternate         ->  UserInputError
+
+    GitHub rejects APPROVE and REQUEST_CHANGES on a self-authored PR with
+    HTTP 422, so a self-PR uses an alternate authenticated account instead.
+    The ``BUGTEAM_REVIEWER_ACCOUNT`` env var pins which alternate to use.
+    Without it, the first alternate ``gh auth status`` reports wins. The
+    active account never changes, only the token sent on the request.
 
     Args:
         owner: Repository owner slug.
         repo: Repository name slug.
-        pr_number: Pull request number whose author dictates whether a
-            toggle is needed.
+        pr_number: Pull request number whose author dictates whether an
+            alternate account is needed.
 
     Returns:
         Bearer-token string suitable for the reviews POST.
@@ -927,9 +958,9 @@ def resolve_reviewer_token(owner: str, repo: str, pr_number: int) -> str:
             authenticated, or any underlying gh query fails.
     """
     for each_env_var_name in ALL_GH_TOKEN_ENV_VAR_NAMES:
-        env_token_value = os.environ.get(each_env_var_name, "").strip()
-        if env_token_value:
-            return env_token_value
+        env_token = os.environ.get(each_env_var_name, "").strip()
+        if env_token:
+            return env_token
     active_account_login = query_active_gh_user_login()
     pr_author_login = query_pull_request_author_login(owner, repo, pr_number)
     if active_account_login.lower() != pr_author_login.lower():
@@ -1038,9 +1069,9 @@ def execute_review_post_attempt(
     try:
         with urllib.request.urlopen(
             request_object, timeout=HTTP_REQUEST_TIMEOUT_SECONDS
-        ) as response_object:
-            response_body = response_object.read().decode("utf-8", errors="replace")
-            return response_object.status, response_body
+        ) as http_reply:
+            reply_body_text = http_reply.read().decode("utf-8", errors="replace")
+            return http_reply.status, reply_body_text
     except urllib.error.HTTPError as http_error:
         error_body_text = http_error.read().decode("utf-8", errors="replace")
         return http_error.code, error_body_text
@@ -1074,18 +1105,18 @@ def post_review_with_retries(
             whose body could not be parsed for ``html_url``.
     """
     last_status_code: int = 0
-    last_response_text: str = ""
+    last_reply_text: str = ""
     total_attempts = MAX_RETRY_ATTEMPTS + 1
     for each_attempt_index in range(total_attempts):
         try:
-            status_code, response_text = execute_review_post_attempt(
+            status_code, reply_text = execute_review_post_attempt(
                 endpoint_url, token, all_request_fields
             )
         except urllib.error.URLError as transport_error:
             status_code = 0
-            response_text = f"transport-level URLError: {transport_error.reason!r}"
+            reply_text = f"transport-level URLError: {transport_error.reason!r}"
         last_status_code = status_code
-        last_response_text = response_text
+        last_reply_text = reply_text
         is_success = (
             HTTP_STATUS_SUCCESS_RANGE_LOW
             <= status_code
@@ -1093,16 +1124,16 @@ def post_review_with_retries(
         )
         if is_success:
             try:
-                html_url_value = extract_html_url_field(response_text)
+                review_html_url = extract_html_url_field(reply_text)
             except RuntimeError as malformed_body_error:
                 raise RetryExhaustedError(
                     f"reviews POST returned {status_code} but the response body "
                     f"was unusable: {malformed_body_error}; "
-                    f"body={response_text[:ERROR_RESPONSE_PREVIEW_CHARS]!r}"
+                    f"body={reply_text[:ERROR_RESPONSE_PREVIEW_CHARS]!r}"
                 ) from malformed_body_error
             return PostedReview(
-                html_url=html_url_value,
-                raw_response_text=response_text,
+                html_url=review_html_url,
+                raw_review_body=reply_text,
                 status_code=status_code,
             )
         is_last_attempt = each_attempt_index == MAX_RETRY_ATTEMPTS
@@ -1112,15 +1143,15 @@ def post_review_with_retries(
     raise RetryExhaustedError(
         f"reviews POST failed after {total_attempts} attempts; "
         f"last status={last_status_code}; "
-        f"last body={last_response_text[:ERROR_RESPONSE_PREVIEW_CHARS]!r}"
+        f"last body={last_reply_text[:ERROR_RESPONSE_PREVIEW_CHARS]!r}"
     )
 
 
-def extract_html_url_field(response_text: str) -> str:
+def extract_html_url_field(reply_body_text: str) -> str:
     """Pull the ``html_url`` field out of a successful reviews POST response.
 
     Args:
-        response_text: Decoded response body.
+        reply_body_text: Decoded response body.
 
     Returns:
         Value of the ``html_url`` field.
@@ -1130,22 +1161,22 @@ def extract_html_url_field(response_text: str) -> str:
             ``html_url`` is missing or not a string.
     """
     try:
-        parsed_value: object = json.loads(response_text)
+        review_reply_json: object = json.loads(reply_body_text)
     except json.JSONDecodeError as decode_error:
         raise RuntimeError(
             f"review response is not parseable as JSON: {decode_error}"
         ) from decode_error
-    if not isinstance(parsed_value, dict):
+    if not isinstance(review_reply_json, dict):
         raise RuntimeError(
-            f"review response root is not an object; got {type(parsed_value).__name__}"
+            f"review response root is not an object; got {type(review_reply_json).__name__}"
         )
-    typed_response: dict[str, object] = parsed_value
-    html_url_value = typed_response.get(REVIEW_RESPONSE_FIELD_HTML_URL)
-    if not isinstance(html_url_value, str):
+    review_reply_object: dict[str, object] = review_reply_json
+    review_html_url = review_reply_object.get(REVIEW_RESPONSE_FIELD_HTML_URL)
+    if not isinstance(review_html_url, str):
         raise RuntimeError(
             f"review response missing string {REVIEW_RESPONSE_FIELD_HTML_URL!r}"
         )
-    return html_url_value
+    return review_html_url
 
 
 def post_audit_review(parsed_arguments: argparse.Namespace) -> PostedReview:
