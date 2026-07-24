@@ -161,17 +161,29 @@ __all__ = [
 ]
 
 
-def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str) -> set[int]:
+def added_lines_for_staged_file(
+    repository_root: Path,
+    relative_path_posix: str,
+    all_combined_added_lines: dict[str, set[int]] | None = None,
+) -> set[int]:
     """Return added line numbers within the staged diff for one file.
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
         relative_path_posix: Repository-relative POSIX path to inspect.
+        all_combined_added_lines: Optional precomputed map from one combined
+            ``git diff --cached --unified=0 --no-renames``; when the path is
+            present the map value is returned and no per-file diff runs.
 
     Returns:
         Line numbers added in the staged diff, or the whole staged blob when
-        the file is newly added.
+        the file is newly added and the combined map omits it.
     """
+    if (
+        all_combined_added_lines is not None
+        and relative_path_posix in all_combined_added_lines
+    ):
+        return all_combined_added_lines[relative_path_posix]
     diff_text = staged_unified_diff_text(repository_root, relative_path_posix)
     if diff_text.strip():
         return parse_added_line_numbers(diff_text)
@@ -182,10 +194,28 @@ def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str)
     return set()
 
 
+def _staged_added_lines_for_resolved_path(
+    resolved_root: Path,
+    relative_posix: str,
+    all_combined_added_lines: dict[str, set[int]],
+) -> set[int]:
+    """Resolve staged added lines via the combined map threaded into the helper."""
+    return added_lines_for_staged_file(
+        resolved_root,
+        relative_posix,
+        all_combined_added_lines=all_combined_added_lines,
+    )
+
+
 def added_lines_by_file_staged(
     repository_root: Path, all_file_paths: list[Path]
 ) -> dict[Path, set[int]]:
     """Build a per-file map of staged-added line numbers.
+
+    Code paths are pathspec-filtered into one combined cached diff. Non-code
+    paths get an empty set without a git call. A path absent from the combined
+    map falls back to the per-file staged helper (including the newly-added
+    whole-blob case).
 
     Args:
         repository_root: Repository root for diff invocations.
@@ -196,12 +226,27 @@ def added_lines_by_file_staged(
     """
     resolved_root = repository_root.resolve()
     added_by_path: dict[Path, set[int]] = {}
+    all_code_relative_paths: list[str] = []
+    all_resolved_code_paths: list[tuple[Path, str]] = []
     for each_path in all_file_paths:
         resolved = added_line_maps._resolved_under_root(each_path, resolved_root)
         if resolved is None:
             continue
         relative_posix = str(resolved.relative_to(resolved_root)).replace("\\", "/")
-        added_by_path[resolved] = added_lines_for_staged_file(resolved_root, relative_posix)
+        if not is_code_path(resolved):
+            added_by_path[resolved] = set()
+            continue
+        all_code_relative_paths.append(relative_posix)
+        all_resolved_code_paths.append((resolved, relative_posix))
+    all_combined_added_lines = added_line_maps.combined_added_line_map_staged(
+        resolved_root, all_code_relative_paths
+    )
+    for each_resolved, each_relative_posix in all_resolved_code_paths:
+        added_by_path[each_resolved] = _staged_added_lines_for_resolved_path(
+            resolved_root,
+            each_relative_posix,
+            all_combined_added_lines,
+        )
     return added_by_path
 
 
