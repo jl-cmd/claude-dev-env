@@ -2799,3 +2799,77 @@ def test_run_pytest_for_group_treats_no_tests_collected_as_a_pass_per_batch(
         "a batch that collects no tests is not a failure; only a real pytest "
         "failure exit code may block the commit"
     )
+
+def test_run_staged_mode_calls_paths_from_git_staged_once(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Staged mode must read the staged index once and reuse the path list."""
+    write_file(temporary_git_repository / "plain.py", "value = 1\n")
+    stage_file(temporary_git_repository, "plain.py")
+    call_count = {"paths_from_git_staged": 0}
+    real_paths_from_git_staged = gate_module.paths_from_git_staged
+
+    def counting_paths_from_git_staged(repository_root: Path) -> list[Path]:
+        call_count["paths_from_git_staged"] += 1
+        return real_paths_from_git_staged(repository_root)
+
+    monkeypatch.setattr(gate_module, "paths_from_git_staged", counting_paths_from_git_staged)
+    monkeypatch.setattr(
+        gate_module.staged_test_running,
+        "paths_from_git_staged",
+        counting_paths_from_git_staged,
+    )
+    monkeypatch.setattr(gate_module, "staged_terminology_findings", lambda _root: [])
+    monkeypatch.setattr(gate_module, "_report_terminology_findings", lambda _findings: None)
+    monkeypatch.setattr(
+        gate_module,
+        "run_gate",
+        lambda *args, **kwargs: 0,
+    )
+    arguments = gate_module.parse_arguments(["--staged"])
+
+    exit_code = gate_module._run_staged_mode(lambda *_a, **_k: [], arguments, temporary_git_repository)
+
+    assert exit_code == 0
+    assert call_count["paths_from_git_staged"] == 1
+
+
+def test_run_diff_mode_resolves_merge_base_once(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Diff mode must resolve the merge base once and reuse that SHA."""
+    write_file(temporary_git_repository / "seed.py", "value = 1\n")
+    commit_all_files(temporary_git_repository, "seed")
+    write_file(temporary_git_repository / "changed.py", "value = 2\n")
+    commit_all_files(temporary_git_repository, "change")
+    call_count = {"resolve_merge_base": 0}
+    real_resolve_merge_base = gate_module.resolve_merge_base
+
+    def counting_resolve_merge_base(repository_root: Path, base_reference: str) -> str:
+        call_count["resolve_merge_base"] += 1
+        return real_resolve_merge_base(repository_root, base_reference)
+
+    monkeypatch.setattr(gate_module, "resolve_merge_base", counting_resolve_merge_base)
+    monkeypatch.setattr(
+        gate_module.git_file_sets,
+        "resolve_merge_base",
+        counting_resolve_merge_base,
+    )
+    monkeypatch.setattr(
+        gate_module.added_line_maps,
+        "resolve_merge_base",
+        counting_resolve_merge_base,
+    )
+    monkeypatch.setattr(
+        gate_module,
+        "run_gate",
+        lambda *args, **kwargs: 0,
+    )
+    arguments = gate_module.parse_arguments(["--base", "HEAD~1"])
+
+    exit_code = gate_module._run_diff_mode(lambda *_a, **_k: [], arguments, temporary_git_repository)
+
+    assert exit_code == 0
+    assert call_count["resolve_merge_base"] == 1
