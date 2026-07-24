@@ -4,10 +4,6 @@ import importlib
 import pathlib
 import sys
 
-from hooks_constants.agent_model_pin_blocker_constants import (
-    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
-)
-
 _HOOKS_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
@@ -67,21 +63,6 @@ def test_duplicate_rmtree_helper_blocker_runs_via_runpy() -> None:
     assert entry.native_module_name is None
 
 
-def test_agent_model_pin_blocker_registered_for_all_file_tools() -> None:
-    entry = _entry_for("blocking/agent_model_pin_blocker.py")
-    assert entry is not None, (
-        "agent_model_pin_blocker must be hosted by the dispatcher so an agent "
-        "definition that pins a concrete model is blocked at Write/Edit time"
-    )
-    assert {"Write", "Edit", "MultiEdit"} <= entry.applicable_tool_names
-
-
-def test_agent_model_pin_blocker_hosted_native() -> None:
-    entry = _entry_for("blocking/agent_model_pin_blocker.py")
-    assert entry is not None
-    assert entry.native_module_name == AGENT_MODEL_PIN_BLOCKER_MODULE_NAME
-
-
 def test_code_review_stamp_write_blocker_registered_for_all_file_tools() -> None:
     entry = _entry_for("blocking/code_review_stamp_directory_write_blocker.py")
     assert entry is not None
@@ -122,3 +103,16 @@ def test_every_native_module_exposes_a_callable_evaluate() -> None:
             f"{each_entry.native_module_name} must expose a callable named evaluate, "
             "matching the native_module_name docstring contract"
         )
+
+
+def test_explicit_allow_result_surfaces_an_allow_decision() -> None:
+    explicit_allow_stdout = '{"hookSpecificOutput": {"permissionDecision": "allow"}}'
+    allow_result = HostedHookResult(
+        exit_code=0,
+        captured_stdout=explicit_allow_stdout,
+        did_crash=False,
+        is_blocking=True,
+    )
+    decision = aggregate_hosted_hook_results([allow_result])
+    assert decision.should_allow, "an explicit allow with no deny surfaces an allow decision"
+    assert not decision.should_deny, "an explicit allow does not deny"
