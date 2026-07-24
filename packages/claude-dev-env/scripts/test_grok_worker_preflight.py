@@ -1,7 +1,7 @@
 """Behavioral tests for the grok worker preflight soft gate.
 
 The soft gate reports usable off the install manifest alone; the fleet role
-label does not gate usability.
+label rides along as metadata.
 """
 
 from __future__ import annotations
