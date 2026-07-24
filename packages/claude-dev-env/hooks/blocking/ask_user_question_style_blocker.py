@@ -53,6 +53,7 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     TOKEN_BEFORE_TERMINATOR_PATTERN,
     TOOL_NAME,
     USER_FACING_NOTICE,
+    VERSION_INTERNAL_PERIOD_LOOKBEHIND_CHARACTER_COUNT,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
@@ -75,11 +76,17 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
 
 
 def _first_top_level_question_mark_index(text: str) -> int:
-    """Return the first outer ask ``?``, skipping nests and inline query marks."""
+    """Return the first outer ask ``?``, skipping nests, code spans, and query marks."""
     parenthesis_depth = 0
     bracket_depth = 0
     brace_depth = 0
+    is_inside_inline_code = False
     for each_index, each_character in enumerate(text):
+        if each_character == "`":
+            is_inside_inline_code = not is_inside_inline_code
+            continue
+        if is_inside_inline_code:
+            continue
         if each_character == "(":
             parenthesis_depth += 1
         elif each_character == ")":
@@ -134,13 +141,23 @@ def _following_sentence_start_character(text: str, start_index: int) -> str:
 
 
 def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bool:
-    """Return whether ``token.`` is a list marker (``1. The gate``), not ``found 12.``."""
+    """Return whether ``token.`` is a list marker (``1. The gate``), not ``3.12.`` / ``found 12.``."""
     if not token.isdigit():
         return False
     segment_before_number = text[: terminator_index - len(token)].rstrip()
     if segment_before_number == "":
         return True
-    return segment_before_number[-1] in ".!?"
+    if segment_before_number[-1] not in ".!?":
+        return False
+    # Version tails: "3.12." — the period before this digit token is digit-adjacent.
+    lookbehind_count = VERSION_INTERNAL_PERIOD_LOOKBEHIND_CHARACTER_COUNT
+    if (
+        segment_before_number[-1] == "."
+        and len(segment_before_number) >= lookbehind_count
+        and segment_before_number[-lookbehind_count].isdigit()
+    ):
+        return False
+    return True
 
 
 def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:

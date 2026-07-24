@@ -224,6 +224,16 @@ def test_arrows_inside_backticks_are_not_flagged() -> None:
     assert FINDING_MISSING_CONTEXT not in findings
 
 
+def test_version_number_ending_fact_counts_as_context() -> None:
+    question_text = "Use Python 3.12. Which runtime should we pin?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_question_mark_inside_backticks_is_not_the_ask() -> None:
+    question_text = "Probe returns `ok?`. Which retry policy should we use?"
+    assert question_has_leading_context(question_text) is True
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(

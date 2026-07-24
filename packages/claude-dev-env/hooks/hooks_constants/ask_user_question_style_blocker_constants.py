@@ -93,6 +93,9 @@ INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
 # Longest multi-letter head for multi-part abbrevs such as Ph.D.
 MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH: int = 3
 
+# Characters needed before a digit token to detect a version-internal period.
+VERSION_INTERNAL_PERIOD_LOOKBEHIND_CHARACTER_COUNT: int = 2
+
 # After a title abbreviation, these openers mean a real new sentence / ask.
 ALL_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
     {
