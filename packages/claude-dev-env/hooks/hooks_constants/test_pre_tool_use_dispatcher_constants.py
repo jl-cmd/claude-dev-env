@@ -82,10 +82,8 @@ def test_agent_model_pin_blocker_hosted_native() -> None:
     assert entry.native_module_name == AGENT_MODEL_PIN_BLOCKER_MODULE_NAME
 
 
-def test_code_review_stamp_write_blocker_registered_for_all_file_tools() -> None:
-    entry = _entry_for("blocking/code_review_stamp_directory_write_blocker.py")
-    assert entry is not None
-    assert {"Write", "Edit", "MultiEdit"} <= entry.applicable_tool_names
+def test_claude_only_stamp_write_blocker_is_not_registered() -> None:
+    assert _entry_for("blocking/code_review_stamp_directory_write_blocker.py") is None
 
 
 def test_windows_rmtree_blocker_still_registered() -> None:
