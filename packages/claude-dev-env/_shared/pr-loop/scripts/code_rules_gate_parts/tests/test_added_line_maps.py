@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 from code_rules_gate_parts import added_line_maps, git_file_sets
 
@@ -99,6 +100,34 @@ def test_added_lines_by_file_marks_new_file_whole(tmp_path: Path) -> None:
     added_by_path = added_line_maps.added_lines_by_file(repository_root, base_sha, [fresh])
 
     assert added_by_path[fresh.resolve()] == {1, 2}
+
+
+def test_added_lines_by_file_uses_pre_resolved_merge_base_without_resolve_call(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _base_repository(repository_root)
+    base_sha = _head_sha(repository_root)
+    fresh = repository_root / "fresh.py"
+    fresh.write_text("x = 1\ny = 2\n", encoding="utf-8")
+    _run(repository_root, "add", "-A")
+    _run(repository_root, "commit", "-m", "add fresh")
+
+    with patch.object(
+        added_line_maps,
+        "resolve_merge_base",
+        side_effect=AssertionError("merge-base resolved again"),
+    ) as mock_resolve_merge_base:
+        added_by_path = added_line_maps.added_lines_by_file(
+            repository_root,
+            base_sha,
+            [fresh],
+            resolved_merge_base=base_sha,
+        )
+
+    assert added_by_path[fresh.resolve()] == {1, 2}
+    mock_resolve_merge_base.assert_not_called()
 
 
 def test_added_lines_for_renamed_file_reports_only_new_lines(tmp_path: Path) -> None:

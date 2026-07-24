@@ -242,6 +242,7 @@ def added_lines_by_file(
     repository_root: Path,
     base_reference: str,
     all_file_paths: list[Path],
+    resolved_merge_base: str | None = None,
 ) -> dict[Path, set[int]]:
     """Build a per-file map of added line numbers across the branch.
 
@@ -249,12 +250,18 @@ def added_lines_by_file(
         repository_root: Repository root for diff invocations.
         base_reference: The git reference to merge-base against.
         all_file_paths: File paths whose added lines are collected.
+        resolved_merge_base: Pre-resolved merge-base SHA; when omitted, the
+            merge base of HEAD and *base_reference* is resolved here.
 
     Returns:
         A mapping from resolved file path to its added line numbers, with
         renames resolved against the original source path.
     """
-    merge_base = resolve_merge_base(repository_root, base_reference)
+    merge_base = (
+        resolved_merge_base
+        if resolved_merge_base is not None
+        else resolve_merge_base(repository_root, base_reference)
+    )
     resolved_root = repository_root.resolve()
     all_rename_sources = renamed_file_source_map_since(resolved_root, merge_base)
     added_by_path: dict[Path, set[int]] = {}
