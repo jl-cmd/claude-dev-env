@@ -264,9 +264,16 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     return False
 
 
+def _is_inside_inline_code(text: str, index: int) -> bool:
+    """Return whether index sits inside an odd number of backticks before it."""
+    return text[:index].count("`") % 2 == 1
+
+
 def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
     """Return whether terminator_index is a real sentence end inside text."""
     if terminator_index < 0 or terminator_index >= len(text):
+        return False
+    if _is_inside_inline_code(text, terminator_index):
         return False
     terminator = text[terminator_index]
     if terminator not in ".!?":
@@ -282,10 +289,18 @@ def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
         and text[terminator_index + 1].isdigit()
     ):
         return False
+    # Dotted suffixes like file.1 are not sentence ends (need space before digits).
+    immediate_next = (
+        text[terminator_index + 1] if terminator_index + 1 < len(text) else ""
+    )
+    if immediate_next.isdigit():
+        return False
     following = _following_sentence_start_character(text, terminator_index + 1)
     if following == "":
         return True
-    return following.isupper() or following.isdigit() or following in "\"'("
+    if following.isdigit():
+        return True
+    return following.isupper() or following in "\"'("
 
 
 def _iter_statement_separator_ends(prefix: str) -> list[int]:

@@ -342,6 +342,29 @@ def test_number_after_soft_abbrev_counts_as_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_periods_inside_backticks_do_not_supply_context() -> None:
+    question_text = "Use format `First. Middle. Last`?"
+    assert question_has_leading_context(question_text) is False
+
+
+def test_periods_inside_backticks_do_not_inflate_sentence_count() -> None:
+    question_text = (
+        "The form expects `First. Middle. Last` labels. Which field is wrong?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
+def test_letter_digit_dotted_suffix_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "See file.1 and file.2 in the dump. Which cleanup should run?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "
