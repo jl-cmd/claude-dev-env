@@ -54,6 +54,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `privacy-hygiene` — full-repo personal-data and secret sweep plus remediation guide
 - `update` — updates the dev-env package
 - `fresh-branch` — creates a clean branch off main
+- `split-pr` — autonomously splits one large PR into a stacked file-based draft chain after AskUserQuestion approval
 - `rebase` — rebases onto main
 - `usage-pause` — waits out the 5-hour usage window in ScheduleWakeup stages that keep agent contexts warm; probes the OAuth usage endpoint or takes a manual reset override
 - `skill-builder` — complete skill-building lifecycle
