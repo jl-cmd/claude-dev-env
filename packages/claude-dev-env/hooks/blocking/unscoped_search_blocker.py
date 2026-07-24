@@ -13,6 +13,9 @@ detector; the deny message still steers agents to batch shell work.
     find . -iname code_rules_gate.py          ok:   cwd scope
     Get-ChildItem -Path C:\\ -Recurse         flag: recursive drive root
     Get-ChildItem -Path .\\src -Recurse       ok:   project scope
+    ls -r /                                   ok:   reverse sort, not recurse
+    ls -R /                                   flag: recursive root listing
+    bash -c 'find / -name x'                  flag: string-exec unwrap
 """
 
 from __future__ import annotations
@@ -37,21 +40,26 @@ from hooks_constants.unscoped_search_blocker_constants import (  # noqa: E402
     ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE,
     ALL_FIND_GLOBAL_OPTION_FLAGS_WITHOUT_VALUE,
     ALL_FIND_PROGRAM_BASENAMES,
-    ALL_GET_CHILD_ITEM_PATH_FLAGS,
-    ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES,
-    ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES,
-    ALL_GET_CHILD_ITEM_RECURSE_FLAGS,
+    ALL_LISTING_PROGRAM_BASENAMES,
+    ALL_POWERSHELL_PATH_FLAG_PREFIXES,
+    ALL_POWERSHELL_PATH_FLAGS,
+    ALL_POWERSHELL_RECURSE_FLAG_PREFIXES,
+    ALL_POWERSHELL_RECURSE_FLAGS,
+    ALL_STRING_EXEC_COMMAND_FLAGS,
+    ALL_STRING_EXECUTING_SHELL_BASENAMES,
     ALL_SUPPORTED_TOOL_NAMES,
-    ALL_UNSCOPED_HOME_LITERALS,
+    ALL_TRUTHY_RECURSE_COLON_VALUES,
+    ALL_UNIX_LS_PROGRAM_BASENAMES,
+    ALL_UNIX_LS_RECURSE_FLAGS,
+    ALL_UNSCOPED_HOME_LITERALS_CASEFOLD,
     CALLING_HOOK_NAME,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
-    FIND_GLOBAL_OPTION_VALUE_TOKEN_STRIDE,
     FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX,
+    FLAG_AND_VALUE_TOKEN_STRIDE,
     GIT_BASH_DRIVE_ROOT_PATTERN,
     HOOK_EVENT_NAME,
-    MINIMUM_FIND_OPTIMIZATION_OPTION_LENGTH,
-    PATH_FLAG_AND_VALUE_TOKEN_STRIDE,
+    POSIX_ROOT_ALIAS_PATTERN,
     WINDOWS_DRIVE_ROOT_PATTERN,
 )
 
@@ -62,6 +70,7 @@ def is_unscoped_search_root(path_token: str) -> bool:
     ::
 
         /          flag
+        /.         flag  (posix root alias)
         /c/        flag  (Git Bash drive root)
         C:\\        flag
         ~          flag
@@ -77,14 +86,19 @@ def is_unscoped_search_root(path_token: str) -> bool:
     stripped_path = path_token.strip().strip("\"'")
     if not stripped_path:
         return False
-    if stripped_path in ALL_UNSCOPED_HOME_LITERALS:
+    if stripped_path.casefold() in ALL_UNSCOPED_HOME_LITERALS_CASEFOLD:
         return True
     forward_slash_path = stripped_path.replace("\\", "/")
-    if forward_slash_path == "/":
+    if POSIX_ROOT_ALIAS_PATTERN.fullmatch(forward_slash_path):
         return True
     if GIT_BASH_DRIVE_ROOT_PATTERN.fullmatch(forward_slash_path):
         return True
     if WINDOWS_DRIVE_ROOT_PATTERN.fullmatch(stripped_path):
+        return True
+    windows_drive_alias = stripped_path.rstrip(".\\/")
+    if WINDOWS_DRIVE_ROOT_PATTERN.fullmatch(windows_drive_alias + "\\"):
+        return True
+    if WINDOWS_DRIVE_ROOT_PATTERN.fullmatch(windows_drive_alias):
         return True
     return False
 
@@ -101,9 +115,7 @@ def _tokens_after_leading_program(
 def _is_find_expression_token(token: str) -> bool:
     if token in ALL_FIND_EXPRESSION_INTRODUCER_TOKENS:
         return True
-    if token.startswith("-") and not WINDOWS_DRIVE_ROOT_PATTERN.fullmatch(token):
-        return True
-    return False
+    return token.startswith("-")
 
 
 def _collect_find_starting_points(all_argument_tokens: list[str]) -> list[str]:
@@ -115,12 +127,18 @@ def _collect_find_starting_points(all_argument_tokens: list[str]) -> list[str]:
             token_index += 1
             continue
         if each_token in ALL_FIND_GLOBAL_OPTION_FLAGS_TAKING_A_VALUE:
-            token_index += FIND_GLOBAL_OPTION_VALUE_TOKEN_STRIDE
+            if token_index + 1 >= len(all_argument_tokens):
+                token_index += 1
+                continue
+            next_token = all_argument_tokens[token_index + 1]
+            if is_unscoped_search_root(next_token) or _is_find_expression_token(
+                next_token
+            ):
+                token_index += 1
+                continue
+            token_index += FLAG_AND_VALUE_TOKEN_STRIDE
             continue
-        if (
-            each_token.startswith(FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX)
-            and len(each_token) >= MINIMUM_FIND_OPTIMIZATION_OPTION_LENGTH
-        ):
+        if each_token.startswith(FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX):
             token_index += 1
             continue
         if _is_find_expression_token(each_token):
@@ -144,14 +162,25 @@ def _segment_has_unscoped_find(all_segment_tokens: list[str]) -> bool:
     )
 
 
-def _token_is_recurse_flag(token: str) -> bool:
+def _token_is_recurse_flag(token: str, program_basename: str) -> bool:
+    if program_basename in ALL_UNIX_LS_PROGRAM_BASENAMES:
+        return token in ALL_UNIX_LS_RECURSE_FLAGS
     lowered_token = token.lower()
-    if lowered_token in ALL_GET_CHILD_ITEM_RECURSE_FLAGS:
+    if lowered_token in ALL_POWERSHELL_RECURSE_FLAGS:
         return True
-    return any(
-        lowered_token.startswith(each_prefix)
-        for each_prefix in ALL_GET_CHILD_ITEM_RECURSE_FLAG_PREFIXES
-    )
+    for each_prefix in ALL_POWERSHELL_RECURSE_FLAG_PREFIXES:
+        if lowered_token.startswith(each_prefix):
+            colon_value = lowered_token[len(each_prefix) :]
+            return colon_value in ALL_TRUTHY_RECURSE_COLON_VALUES
+    return False
+
+
+def _path_value_from_path_flag_token(token: str) -> str | None:
+    lowered_token = token.lower()
+    for each_prefix in ALL_POWERSHELL_PATH_FLAG_PREFIXES:
+        if lowered_token.startswith(each_prefix):
+            return token[len(each_prefix) :]
+    return None
 
 
 def _collect_get_child_item_path_tokens(all_argument_tokens: list[str]) -> list[str]:
@@ -160,12 +189,18 @@ def _collect_get_child_item_path_tokens(all_argument_tokens: list[str]) -> list[
     while token_index < len(all_argument_tokens):
         each_token = all_argument_tokens[token_index]
         lowered_token = each_token.lower()
-        if lowered_token in ALL_GET_CHILD_ITEM_PATH_FLAGS:
+        path_from_glued_flag = _path_value_from_path_flag_token(each_token)
+        if path_from_glued_flag is not None:
+            if path_from_glued_flag:
+                all_path_tokens.append(path_from_glued_flag)
+            token_index += 1
+            continue
+        if lowered_token in ALL_POWERSHELL_PATH_FLAGS:
             if token_index + 1 < len(all_argument_tokens):
                 all_path_tokens.append(all_argument_tokens[token_index + 1])
-                token_index += PATH_FLAG_AND_VALUE_TOKEN_STRIDE
+                token_index += FLAG_AND_VALUE_TOKEN_STRIDE
                 continue
-        if _token_is_recurse_flag(each_token) or each_token.startswith("-"):
+        if lowered_token == "/s" or each_token.startswith("-"):
             token_index += 1
             continue
         all_path_tokens.append(each_token)
@@ -177,13 +212,15 @@ def _segment_has_unscoped_recursive_listing(all_segment_tokens: list[str]) -> bo
     leading_program = effective_leading_program(all_segment_tokens)
     if leading_program is None:
         return False
-    if token_basename(leading_program) not in ALL_GET_CHILD_ITEM_PROGRAM_BASENAMES:
+    program_basename = token_basename(leading_program)
+    if program_basename not in ALL_LISTING_PROGRAM_BASENAMES:
         return False
     all_argument_tokens = _tokens_after_leading_program(
         all_segment_tokens, leading_program
     )
     has_recurse_flag = any(
-        _token_is_recurse_flag(each_token) for each_token in all_argument_tokens
+        _token_is_recurse_flag(each_token, program_basename)
+        for each_token in all_argument_tokens
     )
     if not has_recurse_flag:
         return False
@@ -193,6 +230,26 @@ def _segment_has_unscoped_recursive_listing(all_segment_tokens: list[str]) -> bo
     return any(
         is_unscoped_search_root(each_path) for each_path in all_path_tokens
     )
+
+
+def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
+    leading_program = effective_leading_program(all_segment_tokens)
+    if leading_program is None:
+        return None
+    if token_basename(leading_program) not in ALL_STRING_EXECUTING_SHELL_BASENAMES:
+        return None
+    all_argument_tokens = _tokens_after_leading_program(
+        all_segment_tokens, leading_program
+    )
+    token_index = 0
+    while token_index < len(all_argument_tokens):
+        each_token = all_argument_tokens[token_index]
+        if each_token.lower() in ALL_STRING_EXEC_COMMAND_FLAGS:
+            if token_index + 1 < len(all_argument_tokens):
+                return all_argument_tokens[token_index + 1]
+            return None
+        token_index += 1
+    return None
 
 
 def _all_command_tokenizations(command: str) -> list[list[str]]:
@@ -222,12 +279,17 @@ def find_unscoped_search_violation(command: str) -> str | None:
         find packages -iname x.py              ok
         Get-ChildItem -Path C:\\ -Recurse       flag
         Get-ChildItem -Path .\\src -Recurse     ok
+        bash -c 'find / -name x'               flag
+        ls -r /                                ok
+        ls -R /                                flag
 
     Tokenizes the command under POSIX and non-POSIX shlex modes, splits on shell
     control operators, and evaluates each simple-command segment. A ``find``
-    segment with an unscoped starting point denies. A recursive
-    ``Get-ChildItem``/``gci``/``dir``/``ls`` segment with an unscoped path
-    denies. Returns None when neither tokenization yields tokens.
+    segment with an unscoped starting point denies. A recursive listing segment
+    (PowerShell ``Get-ChildItem``/``gci``/``dir`` or Unix ``ls -R``) with an
+    unscoped path denies. A ``bash -c`` / ``pwsh -Command`` wrapper re-runs the
+    check on its string argument. Returns None when neither tokenization yields
+    tokens.
 
     Args:
         command: The raw Bash or PowerShell command string from the tool input.
@@ -242,6 +304,11 @@ def find_unscoped_search_violation(command: str) -> str | None:
                 return CORRECTIVE_MESSAGE
             if _segment_has_unscoped_recursive_listing(each_segment):
                 return CORRECTIVE_MESSAGE
+            inner_command = _string_exec_inner_command(each_segment)
+            if inner_command is not None:
+                nested_denial = find_unscoped_search_violation(inner_command)
+                if nested_denial is not None:
+                    return nested_denial
     return None
 
 

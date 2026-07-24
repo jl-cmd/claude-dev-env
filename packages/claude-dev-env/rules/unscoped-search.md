@@ -29,7 +29,7 @@ The `unscoped_search_blocker` PreToolUse hook (Bash/PowerShell, hosted by `bash_
 
 ## Preferred tools
 
-On Windows, prefer `es.exe` with a path scope (see `es-exe-file-search.md`), or the harness Grep/Glob tools. Prefer Read over shell when the path is already known.
+On Windows, prefer `es.exe` with a path scope (see the `everything-search` skill), or the harness Grep/Glob tools. Prefer Read over shell when the path is already known.
 
 ## Shell batching
 

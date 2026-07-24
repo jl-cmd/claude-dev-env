@@ -71,8 +71,8 @@ def test_every_hook_applies_to_the_bash_tool() -> None:
         assert BASH_TOOL_NAME in each_entry.applicable_tool_names
 
 
-def test_powershell_applicable_hooks_include_pii_and_verified_commit_pair() -> None:
-    """PowerShell runs the PII gate plus the verified-commit pair."""
+def test_powershell_applicable_hooks_match_shared_tool_roster() -> None:
+    """PowerShell runs every hosted hook registered for both shell tools."""
     powershell_hooks = tuple(
         each_entry.script_relative_path
         for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES

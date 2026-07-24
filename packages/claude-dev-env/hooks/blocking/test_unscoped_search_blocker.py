@@ -68,15 +68,15 @@ def test_is_unscoped_search_root_flags_roots_and_bare_home(path_token: str) -> N
         ".",
         "./src",
         "packages/claude-dev-env",
-        "/c/Users/jon/project",
-        r"C:\Users\jon\project",
+        "/c/Users/alice/project",
+        r"C:\Users\alice\project",
         "C:/dev/repo",
         "~/Projects/app",
         "$HOME/code",
         "${HOME}/work",
         r"%USERPROFILE%\dev",
         "/tmp/scratch",
-        "C:/Users/jon",
+        "C:/Users/alice",
     ],
 )
 def test_is_unscoped_search_root_allows_scoped_paths(path_token: str) -> None:
@@ -107,16 +107,18 @@ def test_find_unscoped_search_violation_denies_unscoped_root(command: str) -> No
     [
         "find . -iname code_rules_gate.py",
         "find packages/claude-dev-env -name '*.py'",
-        "find /c/Users/jon/repo -iname SKILL.md",
-        r"find C:\Users\jon\repo -name foo",
+        "find /c/Users/alice/repo -iname SKILL.md",
+        r"find C:\Users\alice\repo -name foo",
         "find ~/Projects/app -type f",
         "find $HOME/code -name x",
         "echo find / -name x",
         "git log --find-renames",
         "ls /",
+        "ls -r /",
         "cat /etc/hosts",
         "es.exe code_rules_gate.py",
         "rg 'shell contention' packages",
+        "Get-ChildItem -Recurse:$false -Path C:\\",
     ],
 )
 def test_scoped_or_non_find_commands_are_allowed(command: str) -> None:
@@ -133,7 +135,14 @@ def test_scoped_or_non_find_commands_are_allowed(command: str) -> None:
         "Get-ChildItem -LiteralPath $HOME -Recurse",
         "Get-ChildItem -Recurse:$true C:\\",
         "Get-ChildItem -Path C:\\ -Recurse:$true",
+        "Get-ChildItem -Path:C:\\ -Recurse",
         "dir /s C:\\",
+        "ls -R /",
+        "ls --recursive /",
+        'bash -c "find / -name x"',
+        "find -D /",
+        "find /. -name x",
+        "find ~\\ -name README.md",
     ],
 )
 def test_recursive_get_child_item_on_root_is_denied(command: str) -> None:
@@ -143,7 +152,7 @@ def test_recursive_get_child_item_on_root_is_denied(command: str) -> None:
 @pytest.mark.parametrize(
     "command",
     [
-        r"Get-ChildItem -Path C:\Users\jon\repo -Recurse",
+        r"Get-ChildItem -Path C:\Users\alice\repo -Recurse",
         "Get-ChildItem . -Recurse",
         "gci packages -Recurse",
         "Get-ChildItem C:\\",
