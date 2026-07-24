@@ -197,6 +197,6 @@ def template_path() -> Path:
     Returns:
         Path object pointing to ``_shared/pr-loop/audit-reply-template.md``
         relative to this constants module. Callers read this file at runtime
-        so the markdown doc remains the single source of truth for the body skeleton.
+        so the markdown doc remains the source of truth for the body skeleton.
     """
     return script_directory().parent / AUDIT_REPLY_TEMPLATE_FILENAME
