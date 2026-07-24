@@ -182,13 +182,22 @@ def _staged_ruff_command(resolved_pyproject: Path, stdin_filename: str) -> list[
 def _staged_ruff_result(
     resolved_pyproject: Path, stdin_filename: str, staged_content: str
 ) -> RuffResult:
-    """Pipe *staged_content* to ruff from the config directory and wrap the result."""
+    """Pipe *staged_content* to ruff from the config directory and wrap the result.
+
+    ``encoding`` pins the stdin encode to UTF-8, which ruff requires, regardless
+    of the host locale codec. ``errors="replace"`` keeps the stdout/stderr decode
+    tolerant: a stray non-UTF-8 byte in ruff's output becomes the replacement
+    character rather than raising, which under strict decoding drops the whole
+    stream on Windows and raises out of ``subprocess.run`` on POSIX. ``replace``
+    is chosen over ``surrogateescape`` so the decoded text never plants a lone
+    surrogate that would raise at a later strict re-encode.
+    """
     result = subprocess.run(
         _staged_ruff_command(resolved_pyproject, stdin_filename),
         check=False,
         capture_output=True,
-        text=True,
         encoding=RUFF_STDIN_ENCODING,
+        errors="replace",
         input=staged_content,
         cwd=str(resolved_pyproject.parent),
         env=_ruff_subprocess_environment(),
