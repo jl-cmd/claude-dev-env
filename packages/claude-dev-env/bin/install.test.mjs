@@ -10,10 +10,9 @@ import {
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
-    CORE_SKILLS,
-    INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
+    RETIRED_CLAUDE_REVIEW_HOOK_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
     isWindowsStorePythonStub,
     interpreterCommandFromPath,
@@ -165,23 +164,6 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),
         'scripts must ship with --only core so claude_chain_runner.py is available for advisor CLI fallback',
-    );
-});
-
-
-test('CORE_SKILLS ships issue-tracker so the core group installs the skill the SessionStart injector needs', () => {
-    assert.ok(
-        CORE_SKILLS.includes('issue-tracker'),
-        'issue-tracker must be in CORE_SKILLS so --only core ships it alongside the SessionStart hooks',
-    );
-    assert.ok(
-        INSTALL_GROUPS.core.skills.includes('issue-tracker'),
-        'the resolved core group must ship issue-tracker',
-    );
-    assert.equal(
-        INSTALL_GROUPS.core.skills,
-        CORE_SKILLS,
-        'the core group skills array must read CORE_SKILLS so the two never drift',
     );
 });
 
@@ -517,6 +499,47 @@ test('mergeHooksIntoSettings prunes a prior py -3 managed hook when reinstalling
 });
 
 
+test('mergeHooksIntoSettings prunes retired Claude review hooks while preserving user hooks', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [
+                {
+                    matcher: 'Bash|PowerShell',
+                    hooks: [
+                        {
+                            command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verified_commit_gate.py',
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+    const userHookCommand = 'python C:/Users/x/.config/my-hook.py';
+    const settings = {
+        hooks: {
+            PreToolUse: [
+                {
+                    matcher: 'Bash|PowerShell',
+                    hooks: [
+                        { command: 'python C:/Users/x/.claude/hooks/blocking/code_review_push_gate.py' },
+                        { command: 'python C:/Users/x/.claude/hooks/blocking/code_review_pr_create_gate.py' },
+                        { command: 'python C:/Users/x/.claude/hooks/blocking/code_review_stamp_directory_write_blocker.py' },
+                        { command: userHookCommand },
+                    ],
+                },
+            ],
+        },
+    };
+
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', 'py -3');
+
+    const allCommands = settings.hooks.PreToolUse.flatMap(group => group.hooks.map(hook => hook.command));
+    assert.equal(allCommands.some(command => command.includes('code_review_')), false);
+    assert.ok(allCommands.includes(userHookCommand));
+    assert.ok(allCommands.some(command => command.includes('verified_commit_gate.py')));
+});
+
+
 test('invokedAsEntryPoint is true when the module url matches the invoked script path', () => {
     const scriptPath = process.platform === 'win32' ? 'C:\\pkg\\bin\\install.mjs' : '/pkg/bin/install.mjs';
     assert.equal(invokedAsEntryPoint(pathToFileURL(scriptPath).href, scriptPath), true);
@@ -594,6 +617,14 @@ test('managedHookScriptRelativePaths collects every installed hook script path a
     assert.ok(relativePaths.has('blocking/hedging_language_blocker.py'));
     for (const foldedPath of FOLDED_HOOK_RELATIVE_PATHS) {
         assert.ok(relativePaths.has(foldedPath), `folded hook ${foldedPath} must always be in the managed set`);
+    }
+});
+
+
+test('managedHookScriptRelativePaths includes retired Claude review hooks for upgrade cleanup', () => {
+    const relativePaths = managedHookScriptRelativePaths(SAMPLE_HOOKS_CONFIG);
+    for (const retiredPath of RETIRED_CLAUDE_REVIEW_HOOK_RELATIVE_PATHS) {
+        assert.ok(relativePaths.has(retiredPath), `retired hook ${retiredPath} must remain prunable`);
     }
 });
 
