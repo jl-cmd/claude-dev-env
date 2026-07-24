@@ -114,12 +114,16 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`#
 
 Report the `supersede` object from execute JSON (`commented`, `closed`, `child_pr_numbers`, or `skipped` + `skip_reason`). A supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
 
+### Phase 6 — Split further (mandatory)
+
+After Phase 5, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft without further user prompts until primary/secondary stop or depth cap.
+
 ## Constraints
 
 - One capability: **excise a stacked file-based split from one PR**.
-- Approval before any non-dry-run execute.
+- Pass 0 needs approval before any non-dry-run execute; recursive passes inherit that approval.
 - Draft stacked PRs; dependency bases preserved.
-- Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion`.
+- Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion` (Pass 0 only).
 - No force-push. No ready. No delete of the source branch (source PR may close as superseded; branch stays).
 
 ## Sub-skills
@@ -138,6 +142,7 @@ Report the `supersede` object from execute JSON (`commented`, `closed`, `child_p
 | `reference/splitting-principles.md` | Empathic file-based chain rules |
 | `reference/path-layers.md` | Layer catalog and heuristic notes |
 | `reference/proposal-format.md` | AskUserQuestion proposal shape |
+| `reference/split-further-loop.md` | Recursive re-split until no further cut |
 | `templates/pr-body.md` | Draft PR body skeleton |
 | `templates/supersede-source-body.md` | Source-PR supersede comment skeleton |
 | `templates/plan.example.json` | Example plan shape |
@@ -151,6 +156,6 @@ Report the `supersede` object from execute JSON (`commented`, `closed`, `child_p
 
 ## Folder map
 
-- `reference/` — on-demand principles, layers, proposal, task seeds
+- `reference/` — on-demand principles, layers, proposal, task seeds, split-further loop
 - `templates/` — PR body, supersede body, example plan
 - `scripts/` — analyze, verify, execute, supersede + tests + constants
