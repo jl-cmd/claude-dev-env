@@ -10,11 +10,10 @@ CODE_RULES violation on a line added in the working tree since the merge base
 the spawn with a reason addressed to the spawning agent that names the
 conflicting files and the violating file:line, so that agent fixes them and
 re-spawns. A CODE_RULES engine import/load failure is fail-closed (deny with a
-named load-failure section). Environmental problems — a non-repo cwd, an
-absent base ref, a git failure, an unreadable file alone, or a timeout — fail
-OPEN because the authoritative fail-closed CODE_RULES enforcement already runs
-at Write time and at commit time. The hook never network-fetches and never
-mutates the index or working tree.
+named load-failure section). Every in-repository verifier spawn also requires
+a current staged attestation and a resolvable base reference. A non-repository
+cwd remains outside this gate. The hook never network-fetches and never mutates
+the index or working tree.
 """
 
 from __future__ import annotations
@@ -51,6 +50,7 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     ALL_NAME_ONLY_WORKTREE_DIFF_FLAGS,
     ALL_UNIFIED_ZERO_DIFF_FLAGS,
     ALL_UNMERGED_PATHS_DIFF_FLAGS,
+    BASE_RESOLUTION_FAILURE_SECTION,
     CODE_RULES_SECTION_HEADER,
     CODE_VERIFIER_SUBAGENT_TYPE,
     DENY_REASON_LEAD,
@@ -60,6 +60,7 @@ from hooks_constants.code_verifier_spawn_preflight_gate_constants import (  # no
     MERGE_TREE_CLEAN_EXIT_CODE,
     MERGE_TREE_CONFLICT_EXIT_CODE,
     MERGE_TREE_TIMEOUT_SECONDS,
+    STAGED_ATTESTATION_SECTION,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
@@ -76,6 +77,7 @@ from code_rules_gate import (  # noqa: E402
     parse_added_line_numbers,
     whole_file_line_set,
 )
+from code_rules_gate_parts.staged_attestation import has_current_staged_attestation  # noqa: E402
 
 
 def _should_run(payload_by_field: dict[str, object]) -> bool:
@@ -97,28 +99,21 @@ def _should_run(payload_by_field: dict[str, object]) -> bool:
     return tool_input.get("subagent_type", "") == CODE_VERIFIER_SUBAGENT_TYPE
 
 
-def _resolve_repo_root_and_base(working_directory: str | None) -> tuple[str, str, str] | None:
-    """Resolve the repo root, merge-base sha, and chosen base ref.
+def _resolve_base_for_repo(repo_root: str) -> tuple[str, str] | None:
+    """Resolve the merge-base sha and chosen base ref for one repository.
 
     Args:
-        working_directory: The spawn's working directory from the payload, or
-            None when the payload carries no ``cwd``.
+        repo_root: The already-resolved repository top-level directory.
 
     Returns:
-        A ``(repo_root, merge_base_sha, base_ref)`` triple, or None when the
-        directory is not a work tree or no base ref resolves on disk — the
-        caller fails OPEN on None.
+        A ``(merge_base_sha, base_ref)`` pair, or None when no base ref resolves.
     """
-    start_directory = working_directory if working_directory else str(Path.cwd())
-    repo_root = resolve_repo_root(start_directory)
-    if repo_root is None:
-        return None
     merge_base_sha = resolve_merge_base(repo_root)
     if merge_base_sha is None:
         return None
     for each_reference in candidate_base_references(repo_root):
         if run_git(repo_root, "merge-base", "HEAD", each_reference) is not None:
-            return repo_root, merge_base_sha, each_reference
+            return merge_base_sha, each_reference
     return None
 
 
@@ -386,7 +381,11 @@ def _run_gate_capturing_stderr(
 
 
 def _build_deny_reason(
-    all_conflicting_files: list[str] | None, base_ref: str, code_rules_report: str | None
+    all_conflicting_files: list[str] | None,
+    base_ref: str,
+    code_rules_report: str | None,
+    staged_attestation_report: str | None,
+    base_resolution_report: str | None,
 ) -> str | None:
     """Assemble the spawner-addressed deny reason from the two check results.
 
@@ -396,6 +395,10 @@ def _build_deny_reason(
         base_ref: The base ref named in the conflict section header.
         code_rules_report: A full CODE_RULES deny section (violations or engine
             load failure), or None when that check found nothing or failed open.
+        staged_attestation_report: The staged-attestation denial section, or
+            None when its worktree, HEAD, and index binding is current.
+        base_resolution_report: The base-reference failure section, or None
+            when the merge base and a local base reference resolve.
 
     Returns:
         The full deny reason when either check fired, or None when neither
@@ -408,6 +411,10 @@ def _build_deny_reason(
         reason_sections.append(f"{conflict_header}\n{conflict_lines}")
     if code_rules_report:
         reason_sections.append(code_rules_report.strip())
+    if staged_attestation_report:
+        reason_sections.append(staged_attestation_report)
+    if base_resolution_report:
+        reason_sections.append(base_resolution_report)
     if not reason_sections:
         return None
     return DENY_REASON_LEAD + "\n\n" + "\n\n".join(reason_sections)
@@ -449,19 +456,37 @@ def _preflight_deny_reason(payload_by_field: dict[str, object]) -> str | None:
         fail open.
     """
     working_directory = payload_by_field.get("cwd")
-    resolution = _resolve_repo_root_and_base(
-        working_directory if isinstance(working_directory, str) else None
-    )
-    if resolution is None:
+    start_directory = working_directory if isinstance(working_directory, str) else None
+    repository_root = resolve_repo_root(start_directory or str(Path.cwd()))
+    if repository_root is None:
         return None
-    repo_root, merge_base_sha, base_ref = resolution
+    staged_attestation_report = None
+    if not has_current_staged_attestation(Path(repository_root)):
+        staged_attestation_report = STAGED_ATTESTATION_SECTION
+    resolution = _resolve_base_for_repo(repository_root)
+    if resolution is None:
+        return _build_deny_reason(
+            None,
+            "",
+            None,
+            staged_attestation_report,
+            BASE_RESOLUTION_FAILURE_SECTION,
+        )
+    merge_base_sha, base_ref = resolution
+    repo_root = repository_root
     conflicting_files = _conflicting_files(repo_root, base_ref)
     surface = _working_tree_added_lines_by_path(repo_root, merge_base_sha)
     code_rules_report = None
     if surface is not None:
         file_paths, added_lines_by_path = surface
         code_rules_report = _code_rules_report(repo_root, file_paths, added_lines_by_path)
-    return _build_deny_reason(conflicting_files, base_ref, code_rules_report)
+    return _build_deny_reason(
+        conflicting_files,
+        base_ref,
+        code_rules_report,
+        staged_attestation_report,
+        None,
+    )
 
 
 def main() -> None:
