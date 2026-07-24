@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""PreToolUse hook: AskUserQuestion must lead with context in plain-brief style.
+
+Each question field states a short fact first, then asks. Question and option
+prose follow plain-brief wording: outcome first, short active sentences, no
+process narration, no arrow chains, no stacked-hyphen jargon stacks.
+Option descriptions are required so the user knows what each choice does.
+
+See ``output-styles/plain-brief.md`` and the ask-user-question-required rule.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import TextIO
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
+    ALL_FINDING_GUIDANCE_BY_CODE,
+    ALL_PROCESS_NARRATION_OPENER_PATTERNS,
+    ARROW_TOKEN_PATTERN,
+    CALLING_HOOK_NAME,
+    CONTEXT_SEPARATOR_PATTERN,
+    CORRECTIVE_MESSAGE_FOOTER,
+    CORRECTIVE_MESSAGE_HEADER,
+    DENY_DECISION,
+    FINDING_ARROW_CHAIN,
+    FINDING_LONG_SENTENCE,
+    FINDING_MISSING_CONTEXT,
+    FINDING_MISSING_OPTION_DESCRIPTION,
+    FINDING_PROCESS_NARRATION,
+    FINDING_STACKED_HYPHEN_COMPOUND,
+    FINDING_TOO_MANY_SENTENCES,
+    HOOK_EVENT_NAME,
+    MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION,
+    MAXIMUM_SENTENCES_PER_QUESTION,
+    MAXIMUM_WORDS_PER_SENTENCE,
+    MINIMUM_ARROW_TOKENS_FOR_CHAIN,
+    NEWLINE_JOIN_SEPARATOR,
+    SENTENCE_SPLIT_PATTERN,
+    STACKED_HYPHEN_COMPOUND_PATTERN,
+    TOOL_NAME,
+    USER_FACING_NOTICE,
+    WORD_SPLIT_PATTERN,
+)
+from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
+
+
+def question_has_leading_context(question_text: str) -> bool:
+    """Return whether the question text puts a fact before the ask.
+
+    ::
+
+        ok:   The gate blocks bare rm. How should temp cleanup run?
+        flag: How should temp cleanup run?
+
+    A bare question leaves the user without stakes or findings. A short fact
+    sentence (or a clause before a colon/em-dash) supplies that context first.
+
+    Args:
+        question_text: The AskUserQuestion ``question`` field.
+
+    Returns:
+        True when a statement separator appears before the first ``?`` with
+        enough leading substance; False for bare questions.
+    """
+    stripped_text = question_text.strip()
+    if not stripped_text:
+        return False
+    return CONTEXT_SEPARATOR_PATTERN.search(stripped_text) is not None
+
+
+def _split_sentences(prose_text: str) -> list[str]:
+    stripped_text = prose_text.strip()
+    if not stripped_text:
+        return []
+    return [
+        each_sentence.strip()
+        for each_sentence in SENTENCE_SPLIT_PATTERN.split(stripped_text)
+        if each_sentence.strip()
+    ]
+
+
+def _word_count(sentence_text: str) -> int:
+    all_words = [
+        each_word for each_word in WORD_SPLIT_PATTERN.split(sentence_text.strip()) if each_word
+    ]
+    return len(all_words)
+
+
+def _opens_with_process_narration(prose_text: str) -> bool:
+    stripped_text = prose_text.strip()
+    return any(
+        each_pattern.search(stripped_text) is not None
+        for each_pattern in ALL_PROCESS_NARRATION_OPENER_PATTERNS
+    )
+
+
+def _has_arrow_chain(prose_text: str) -> bool:
+    all_arrows = ARROW_TOKEN_PATTERN.findall(prose_text)
+    return len(all_arrows) >= MINIMUM_ARROW_TOKENS_FOR_CHAIN
+
+
+def _has_stacked_hyphen_compound(prose_text: str) -> bool:
+    return STACKED_HYPHEN_COMPOUND_PATTERN.search(prose_text) is not None
+
+
+def _collect_length_findings(
+    prose_text: str,
+    maximum_sentence_count: int,
+    all_findings: list[str],
+) -> None:
+    all_sentences = _split_sentences(prose_text)
+    if len(all_sentences) > maximum_sentence_count:
+        if FINDING_TOO_MANY_SENTENCES not in all_findings:
+            all_findings.append(FINDING_TOO_MANY_SENTENCES)
+    for each_sentence in all_sentences:
+        if _word_count(each_sentence) > MAXIMUM_WORDS_PER_SENTENCE:
+            if FINDING_LONG_SENTENCE not in all_findings:
+                all_findings.append(FINDING_LONG_SENTENCE)
+            break
+
+
+def _collect_plain_brief_findings(prose_text: str, all_findings: list[str]) -> None:
+    if _opens_with_process_narration(prose_text):
+        if FINDING_PROCESS_NARRATION not in all_findings:
+            all_findings.append(FINDING_PROCESS_NARRATION)
+    if _has_arrow_chain(prose_text):
+        if FINDING_ARROW_CHAIN not in all_findings:
+            all_findings.append(FINDING_ARROW_CHAIN)
+    if _has_stacked_hyphen_compound(prose_text):
+        if FINDING_STACKED_HYPHEN_COMPOUND not in all_findings:
+            all_findings.append(FINDING_STACKED_HYPHEN_COMPOUND)
+
+
+def find_style_findings(tool_input: dict) -> list[str]:
+    """Return ordered finding codes for AskUserQuestion tool input.
+
+    Args:
+        tool_input: The AskUserQuestion tool_input payload.
+
+    Returns:
+        Distinct finding codes in first-seen order; empty when the call is clean.
+    """
+    all_questions = tool_input.get("questions", [])
+    if not isinstance(all_questions, list):
+        return []
+
+    all_findings: list[str] = []
+    for each_question in all_questions:
+        if not isinstance(each_question, dict):
+            continue
+        question_text = each_question.get("question", "")
+        if not isinstance(question_text, str):
+            question_text = ""
+
+        if not question_has_leading_context(question_text):
+            if FINDING_MISSING_CONTEXT not in all_findings:
+                all_findings.append(FINDING_MISSING_CONTEXT)
+
+        if question_text.strip():
+            _collect_plain_brief_findings(question_text, all_findings)
+            _collect_length_findings(
+                question_text,
+                MAXIMUM_SENTENCES_PER_QUESTION,
+                all_findings,
+            )
+
+        all_options = each_question.get("options", [])
+        if not isinstance(all_options, list):
+            continue
+        for each_option in all_options:
+            if not isinstance(each_option, dict):
+                continue
+            option_description = each_option.get("description", "")
+            if not isinstance(option_description, str) or not option_description.strip():
+                if FINDING_MISSING_OPTION_DESCRIPTION not in all_findings:
+                    all_findings.append(FINDING_MISSING_OPTION_DESCRIPTION)
+                continue
+            _collect_plain_brief_findings(option_description, all_findings)
+            _collect_length_findings(
+                option_description,
+                MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION,
+                all_findings,
+            )
+
+    return all_findings
+
+
+def build_block_reason(all_findings: list[str]) -> str:
+    """Return the deny reason naming each finding and its rewrite guidance.
+
+    Args:
+        all_findings: Ordered finding codes from ``find_style_findings``.
+
+    Returns:
+        The permissionDecisionReason text for the denial.
+    """
+    all_guidance_lines = [
+        f"- {ALL_FINDING_GUIDANCE_BY_CODE[each_code]}"
+        for each_code in all_findings
+        if each_code in ALL_FINDING_GUIDANCE_BY_CODE
+    ]
+    guidance_block = NEWLINE_JOIN_SEPARATOR.join(all_guidance_lines)
+    return (
+        f"{CORRECTIVE_MESSAGE_HEADER}{NEWLINE_JOIN_SEPARATOR}"
+        f"{NEWLINE_JOIN_SEPARATOR}"
+        f"{guidance_block}{NEWLINE_JOIN_SEPARATOR}"
+        f"{NEWLINE_JOIN_SEPARATOR}"
+        f"{CORRECTIVE_MESSAGE_FOOTER}"
+    )
+
+
+def build_deny_payload(deny_reason: str) -> dict[str, object]:
+    """Build the full deny payload for a deny-reason string.
+
+    Args:
+        deny_reason: The permissionDecisionReason text.
+
+    Returns:
+        The deny payload dictionary the hook serializes to stdout.
+    """
+    log_hook_block(
+        calling_hook_name=CALLING_HOOK_NAME,
+        hook_event=HOOK_EVENT_NAME,
+        block_reason=deny_reason,
+        tool_name=TOOL_NAME,
+    )
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": HOOK_EVENT_NAME,
+            "permissionDecision": DENY_DECISION,
+            "permissionDecisionReason": deny_reason,
+        },
+        "systemMessage": USER_FACING_NOTICE,
+        "suppressOutput": True,
+    }
+
+
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Decide whether an AskUserQuestion payload fails style checks.
+
+    Args:
+        payload_by_key: The PreToolUse payload with tool_name and tool_input.
+
+    Returns:
+        The permissionDecisionReason text when denied, or None when allowed.
+    """
+    raw_tool_name = payload_by_key.get("tool_name", "")
+    raw_tool_input = payload_by_key.get("tool_input", {})
+    if raw_tool_name != TOOL_NAME or not isinstance(raw_tool_input, dict):
+        return None
+
+    all_findings = find_style_findings(raw_tool_input)
+    if not all_findings:
+        return None
+    return build_block_reason(all_findings)
+
+
+def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
+    output_stream.write(json.dumps(build_deny_payload(deny_reason)))
+    output_stream.flush()
+
+
+def main() -> None:
+    input_data = read_hook_input_dictionary_from_stdin()
+    if input_data is None:
+        sys.exit(0)
+
+    deny_reason = evaluate(input_data)
+    if deny_reason is None:
+        sys.exit(0)
+
+    _emit_deny(deny_reason, sys.stdout)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
