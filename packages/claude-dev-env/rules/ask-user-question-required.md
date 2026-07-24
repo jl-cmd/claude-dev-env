@@ -22,6 +22,7 @@ Write every question and option description in the `plain-brief` style (`output-
 - Everyday words; unpack jargon on first use.
 - No arrow chains and no stacked-hyphen jargon stacks.
 - Keep the question field to three sentences or fewer; keep each option description to two or fewer.
+- Keep each sentence at 28 words or fewer.
 
 The `plain_language_blocker` PreToolUse hook blocks heavy words. The `ask_user_question_style_blocker` PreToolUse hook blocks missing context, missing option descriptions, and plain-brief style breaks.
 

@@ -20,11 +20,36 @@ MAXIMUM_WORDS_PER_SENTENCE: int = 28
 MAXIMUM_SENTENCES_PER_QUESTION: int = 3
 MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION: int = 2
 
-# Sentence/clause separator inside the prefix before the first "?".
-# Period/exclamation must follow a lowercase letter or digit so "U.S." / "3.12"
-# do not count as statement ends.
-CONTEXT_PREFIX_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
-    r"(?<=[a-z0-9])[.!]\s+|:\s+|[—–]\s+"
+# Colon / em-dash clause separators (always statement boundaries).
+CLAUSE_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(r":\s+|[—–]\s+")
+
+# Period / exclamation / question followed by whitespace (candidate sentence end).
+TERMINATOR_WITH_SPACE_PATTERN: re.Pattern[str] = re.compile(r"[.!?]\s+")
+
+# Last token immediately before a terminator (word or acronym).
+TOKEN_BEFORE_TERMINATOR_PATTERN: re.Pattern[str] = re.compile(r"([A-Za-z0-9]+)\s*\Z")
+
+# Title/common abbreviations that end with "." and are not sentence ends.
+ALL_PERIOD_ABBREVIATIONS: frozenset[str] = frozenset(
+    {
+        "dr",
+        "mr",
+        "mrs",
+        "ms",
+        "jr",
+        "sr",
+        "vs",
+        "etc",
+        "eg",
+        "ie",
+        "st",
+        "ave",
+        "inc",
+        "ltd",
+        "dept",
+        "est",
+        "approx",
+    }
 )
 
 # Process-narration openers banned by plain-brief rule 1 (one scan per prose blob).
@@ -55,9 +80,6 @@ MINIMUM_ARROW_TOKENS_FOR_CHAIN: int = 2
 STACKED_HYPHEN_COMPOUND_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z]+-[A-Za-z]+(?:\s+[A-Za-z]+-[A-Za-z]+){2,}\b"
 )
-
-# Split only when a terminator is followed by a capital letter (skips "U.S. gate").
-SENTENCE_SPLIT_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'])")
 
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"

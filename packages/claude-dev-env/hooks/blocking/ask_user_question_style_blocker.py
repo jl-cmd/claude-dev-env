@@ -22,9 +22,10 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa: E402
     ALL_FINDING_GUIDANCE_BY_CODE,
+    ALL_PERIOD_ABBREVIATIONS,
     ARROW_TOKEN_PATTERN,
     CALLING_HOOK_NAME,
-    CONTEXT_PREFIX_SEPARATOR_PATTERN,
+    CLAUSE_SEPARATOR_PATTERN,
     CORRECTIVE_MESSAGE_FOOTER,
     CORRECTIVE_MESSAGE_HEADER,
     DENY_DECISION,
@@ -43,8 +44,9 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT,
     NEWLINE_JOIN_SEPARATOR,
     PROCESS_NARRATION_OPENER_PATTERN,
-    SENTENCE_SPLIT_PATTERN,
     STACKED_HYPHEN_COMPOUND_PATTERN,
+    TERMINATOR_WITH_SPACE_PATTERN,
+    TOKEN_BEFORE_TERMINATOR_PATTERN,
     TOOL_NAME,
     USER_FACING_NOTICE,
 )
@@ -54,18 +56,86 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 )
 
 
+def _token_before_index(text: str, terminator_index: int) -> str:
+    prefix = text[:terminator_index]
+    token_match = TOKEN_BEFORE_TERMINATOR_PATTERN.search(prefix)
+    if token_match is None:
+        return ""
+    return token_match.group(1)
+
+
+def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
+    if text[terminator_index] != ".":
+        return False
+    token = _token_before_index(text, terminator_index)
+    if not token:
+        return False
+    if token.lower() in ALL_PERIOD_ABBREVIATIONS:
+        return True
+    # Single-letter tokens ("U." / "e." in U.S. / e.g.) are not sentence ends.
+    return len(token) == 1 and token.isalpha()
+
+
+def _next_non_space_character(text: str, start_index: int) -> str:
+    index = start_index
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if index >= len(text):
+        return ""
+    return text[index]
+
+
+def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
+    """Return whether terminator_index is a real sentence end inside text."""
+    if terminator_index < 0 or terminator_index >= len(text):
+        return False
+    terminator = text[terminator_index]
+    if terminator not in ".!?":
+        return False
+    if _is_abbreviation_terminator(text, terminator_index):
+        return False
+    # Version tokens: digit.digit (no sentence end between version parts).
+    if (
+        terminator == "."
+        and terminator_index > 0
+        and text[terminator_index - 1].isdigit()
+        and terminator_index + 1 < len(text)
+        and text[terminator_index + 1].isdigit()
+    ):
+        return False
+    following = _next_non_space_character(text, terminator_index + 1)
+    if following == "":
+        return True
+    return following.isupper() or following in "\"'"
+
+
+def _iter_statement_separator_ends(prefix: str) -> list[int]:
+    """Return end indices of statement separators inside prefix (after whitespace)."""
+    all_ends: list[int] = []
+    for each_match in CLAUSE_SEPARATOR_PATTERN.finditer(prefix):
+        all_ends.append(each_match.end())
+    for each_match in TERMINATOR_WITH_SPACE_PATTERN.finditer(prefix):
+        terminator_index = each_match.start()
+        if not _is_sentence_boundary(prefix, terminator_index):
+            continue
+        all_ends.append(each_match.end())
+    all_ends.sort()
+    return all_ends
+
+
 def question_has_leading_context(question_text: str) -> bool:
     """Return whether the question text puts a fact before the first ask.
 
     ::
 
         ok:   The gate blocks bare rm. How should temp cleanup run?
+        ok:   The endpoint must use HTTPS. Which cert path should we take?
         flag: How should temp cleanup run?
         flag: Pick one? The gate failed. Which fix?
 
-    Only the prefix before the first ``?`` counts. A version token like
-    ``3.12`` is not a statement end. A later fact after a bare lead question
-    does not rescue the call.
+    Only the prefix before the first ``?`` counts. Abbreviations (``Dr.``,
+    ``U.S.``, ``e.g.``) and version dots (``3.12``) are not statement ends.
+    A later fact after a bare lead question does not rescue the call.
 
     Args:
         question_text: The AskUserQuestion ``question`` field.
@@ -81,11 +151,18 @@ def question_has_leading_context(question_text: str) -> bool:
     if first_question_mark_index < 0:
         return False
     prefix_before_question = stripped_text[:first_question_mark_index]
-    separator_match = CONTEXT_PREFIX_SEPARATOR_PATTERN.search(prefix_before_question)
-    if separator_match is None:
-        return False
-    lead_fact = prefix_before_question[: separator_match.start()].strip()
-    return len(lead_fact) >= MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT
+    for each_separator_end in _iter_statement_separator_ends(prefix_before_question):
+        # Lead is text before the terminator character, not before trailing spaces.
+        # Recover terminator by scanning back from separator end.
+        cursor = each_separator_end - 1
+        while cursor >= 0 and prefix_before_question[cursor].isspace():
+            cursor -= 1
+        if cursor < 0:
+            continue
+        lead_fact = prefix_before_question[:cursor].strip()
+        if len(lead_fact) >= MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT:
+            return True
+    return False
 
 
 def _record_finding(all_findings: list[str], finding_code: str) -> None:
@@ -97,11 +174,28 @@ def _split_sentences(prose_text: str) -> list[str]:
     stripped_text = prose_text.strip()
     if not stripped_text:
         return []
-    return [
-        each_sentence.strip()
-        for each_sentence in SENTENCE_SPLIT_PATTERN.split(stripped_text)
-        if each_sentence.strip()
-    ]
+    all_sentences: list[str] = []
+    sentence_start = 0
+    index = 0
+    while index < len(stripped_text):
+        if stripped_text[index] in ".!?" and _is_sentence_boundary(stripped_text, index):
+            following_start = index + 1
+            while (
+                following_start < len(stripped_text)
+                and stripped_text[following_start].isspace()
+            ):
+                following_start += 1
+            sentence = stripped_text[sentence_start:following_start].strip()
+            if sentence:
+                all_sentences.append(sentence)
+            sentence_start = following_start
+            index = following_start
+            continue
+        index += 1
+    trailing = stripped_text[sentence_start:].strip()
+    if trailing:
+        all_sentences.append(trailing)
+    return all_sentences
 
 
 def _word_count(sentence_text: str) -> int:

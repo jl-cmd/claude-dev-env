@@ -118,6 +118,28 @@ def test_abbreviation_in_lead_fact_still_allows_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_uppercase_acronym_sentence_end_counts_as_context() -> None:
+    question_text = "The endpoint must use HTTPS. Which cert path should we take?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_eg_abbreviation_does_not_steal_context() -> None:
+    question_text = (
+        "See e.g. the bare-rm gate docs. How should temp cleanup run?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
+def test_doctor_title_does_not_inflate_sentence_count() -> None:
+    question_text = (
+        "Dr. Smith blocked the write. Mr. Lee wants a defer. "
+        "Which path should we take?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_MISSING_CONTEXT not in findings
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(
@@ -145,6 +167,22 @@ def test_process_narration_in_option_description_is_flagged() -> None:
         )["tool_input"]
     )
     assert FINDING_PROCESS_NARRATION in findings
+
+
+def test_too_many_option_description_sentences_is_flagged() -> None:
+    findings = find_style_findings(
+        _payload(
+            CLEAN_QUESTION_TEXT,
+            all_options=[
+                {
+                    "label": "Yes",
+                    "description": "Apply the change now. Ship today. Notify the team after.",
+                },
+                {"label": "No", "description": "Leave the current path alone."},
+            ],
+        )["tool_input"]
+    )
+    assert FINDING_TOO_MANY_SENTENCES in findings
 
 
 def test_process_narration_opener_is_flagged() -> None:
