@@ -86,6 +86,34 @@ ALL_GIT_LS_FILES_UNTRACKED_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
     "-z",
 )
 
+ALL_GIT_CAT_FILE_BATCH_COMMAND: tuple[str, ...] = (
+    "git",
+    "cat-file",
+    "--batch",
+)
+
+GIT_CAT_FILE_MISSING_SUFFIX: bytes = b" missing"
+
+HEAD_BLOB_REQUEST_PREFIX: str = "HEAD:"
+
+STAGED_BLOB_REQUEST_PREFIX: str = ":"
+
+GIT_BLOB_UTF8_ENCODING: str = "utf-8"
+
+GIT_BLOB_UTF8_REPLACE_ERRORS: str = "replace"
+
+BATCH_STDIN_LINE_SEPARATOR: str = "\n"
+
+BATCH_STDIN_CARRIAGE_RETURN: str = "\r"
+
+UNIVERSAL_NEWLINE_CRLF: str = "\r\n"
+
+UNIVERSAL_NEWLINE_CR: str = "\r"
+
+UNIVERSAL_NEWLINE_LF: str = "\n"
+
+GIT_CAT_FILE_HEADER_MINIMUM_PART_COUNT: int = 3
+
 
 ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (
     "-m",
