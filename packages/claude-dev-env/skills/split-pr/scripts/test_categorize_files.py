@@ -64,6 +64,35 @@ def test_assign_layer_unknown_is_other() -> None:
     assert assign_layer("random/binary.dat") == LAYER_OTHER
 
 
+def test_assign_layer_hooks_blocking_is_backend() -> None:
+    assert (
+        assign_layer(
+            "packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py"
+        )
+        == LAYER_BACKEND
+    )
+
+
+def test_assign_layer_shared_scripts_is_backend() -> None:
+    assert (
+        assign_layer(
+            "packages/claude-dev-env/_shared/pr-loop/scripts/"
+            "code_rules_gate_parts/staged_test_regression.py"
+        )
+        == LAYER_BACKEND
+    )
+
+
+def test_assign_layer_nested_tests_still_tests() -> None:
+    assert (
+        assign_layer(
+            "packages/claude-dev-env/_shared/pr-loop/scripts/"
+            "code_rules_gate_parts/tests/test_staged_test_regression.py"
+        )
+        == LAYER_TESTS
+    )
+
+
 def test_annotate_files_sets_layer() -> None:
     all_annotated = annotate_files([{FILE_KEY_PATH: "src/api/x.ts"}])
     assert all_annotated[0][FILE_KEY_LAYER] == LAYER_BACKEND
