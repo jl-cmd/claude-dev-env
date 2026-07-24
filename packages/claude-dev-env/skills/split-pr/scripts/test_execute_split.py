@@ -20,8 +20,10 @@ from execute_split import (  # noqa: E402
     resolve_repo_root,
 )
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
+    FAMILY_TREE_SKIP_CREATE_PRS_OFF,
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
+    PAYLOAD_KEY_FAMILY_TREE,
     PAYLOAD_KEY_SKIPPED,
     PAYLOAD_KEY_SKIP_REASON,
     PAYLOAD_KEY_SUPERSEDE,
@@ -145,6 +147,12 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
     assert isinstance(supersede_payload, dict)
     assert supersede_payload[PAYLOAD_KEY_SKIPPED] is True
     assert supersede_payload[PAYLOAD_KEY_SKIP_REASON] == SUPERSEDE_SKIP_DISABLED
+    family_tree_payload = execution_payload[PAYLOAD_KEY_FAMILY_TREE]
+    assert isinstance(family_tree_payload, dict)
+    assert family_tree_payload[PAYLOAD_KEY_SKIPPED] is True
+    assert (
+        family_tree_payload[PAYLOAD_KEY_SKIP_REASON] == FAMILY_TREE_SKIP_CREATE_PRS_OFF
+    )
 
     run_git(["checkout", "split/99/01-database"], repo)
     assert (repo / "prisma" / "schema.prisma").is_file()

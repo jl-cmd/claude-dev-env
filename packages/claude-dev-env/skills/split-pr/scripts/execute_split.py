@@ -72,11 +72,18 @@ from split_pr_scripts_constants.config.execute_constants import (
     PAYLOAD_KEY_CHILD_PR_NUMBERS,
     PAYLOAD_KEY_CLOSED,
     PAYLOAD_KEY_COMMENTED,
+    PAYLOAD_KEY_COMMENTED_PR_NUMBERS,
+    PAYLOAD_KEY_FAMILY_TREE,
+    PAYLOAD_KEY_FAMILY_TREE_ERROR,
     PAYLOAD_KEY_SKIPPED,
     PAYLOAD_KEY_SUPERSEDE,
     PAYLOAD_KEY_SUPERSEDE_ERROR,
 )
-from supersede_source_pr import extract_pr_number_from_url, supersede_source_pr
+from family_tree_comments import post_family_tree_comments
+from supersede_source_pr import (
+    collect_pr_numbers_from_urls,
+    supersede_source_pr,
+)
 from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_PATH_REQUIRED,
     PLAN_KEY_BASE_REF,
@@ -321,6 +328,14 @@ def _build_success_payload(
         PAYLOAD_KEY_PR_URLS: all_pr_urls,
         PAYLOAD_KEY_PARTIAL: False,
     }
+    execution_payload[PAYLOAD_KEY_FAMILY_TREE] = _run_family_tree_safely(
+        pr_number=pr_number,
+        all_pr_urls=all_pr_urls,
+        planned_slice_count=planned_slice_count,
+        should_create_prs=should_create_prs,
+        repo_slug=repo_slug,
+        repo_root=repo_root,
+    )
     execution_payload[PAYLOAD_KEY_SUPERSEDE] = _run_supersede_safely(
         pr_number=pr_number,
         all_pr_urls=all_pr_urls,
@@ -331,6 +346,33 @@ def _build_success_payload(
         repo_root=repo_root,
     )
     return execution_payload
+
+
+def _run_family_tree_safely(
+    pr_number: int,
+    all_pr_urls: list[str],
+    planned_slice_count: int,
+    should_create_prs: bool,
+    repo_slug: str | None,
+    repo_root: Path,
+) -> JsonObject:
+    try:
+        return post_family_tree_comments(
+            source_pr_number=pr_number,
+            all_child_pr_urls=all_pr_urls,
+            planned_slice_count=planned_slice_count,
+            should_create_prs=should_create_prs,
+            repo=repo_slug,
+            repo_root=repo_root,
+        )
+    except RuntimeError as family_tree_error:
+        return {
+            PAYLOAD_KEY_COMMENTED: False,
+            PAYLOAD_KEY_COMMENTED_PR_NUMBERS: [],
+            PAYLOAD_KEY_CHILD_PR_NUMBERS: collect_pr_numbers_from_urls(all_pr_urls),
+            PAYLOAD_KEY_SKIPPED: False,
+            PAYLOAD_KEY_FAMILY_TREE_ERROR: str(family_tree_error),
+        }
 
 
 def _run_supersede_safely(
@@ -353,15 +395,10 @@ def _run_supersede_safely(
             repo_root=repo_root,
         )
     except RuntimeError as supersede_error:
-        all_child_numbers = [
-            each_number
-            for each_url in all_pr_urls
-            if (each_number := extract_pr_number_from_url(each_url)) is not None
-        ]
         return {
             PAYLOAD_KEY_COMMENTED: False,
             PAYLOAD_KEY_CLOSED: False,
-            PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_numbers,
+            PAYLOAD_KEY_CHILD_PR_NUMBERS: collect_pr_numbers_from_urls(all_pr_urls),
             PAYLOAD_KEY_SKIPPED: False,
             PAYLOAD_KEY_SUPERSEDE_ERROR: str(supersede_error),
         }

@@ -34,6 +34,7 @@ from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
 )
 from supersede_source_pr import (  # noqa: E402
     build_supersede_comment_body,
+    collect_pr_numbers_from_urls,
     extract_pr_number_from_url,
     resolve_supersede_skip_reason,
     supersede_source_pr,
@@ -49,6 +50,13 @@ def test_extract_pr_number_from_url_reads_pull_segment() -> None:
     assert extract_pr_number_from_url(CHILD_PR_URL_ONE) == 10
     assert extract_pr_number_from_url("https://github.com/o/r/pull/42/files") == 42
     assert extract_pr_number_from_url("not-a-url") is None
+
+
+def test_collect_pr_numbers_from_urls_keeps_order() -> None:
+    all_numbers = collect_pr_numbers_from_urls(
+        [CHILD_PR_URL_ONE, "not-a-url", CHILD_PR_URL_TWO]
+    )
+    assert all_numbers == [10, 11]
 
 
 def test_build_supersede_comment_body_lists_merge_order_and_urls() -> None:

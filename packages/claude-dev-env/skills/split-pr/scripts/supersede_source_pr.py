@@ -85,6 +85,23 @@ def extract_pr_number_from_url(pr_url: str) -> int | None:
     return int(number_token)
 
 
+def collect_pr_numbers_from_urls(all_child_pr_urls: list[str]) -> list[int]:
+    """Return PR numbers parsed from ordered GitHub pull URLs.
+
+    Args:
+        all_child_pr_urls: PR URLs that may contain ``/pull/<n>``.
+
+    Returns:
+        Ordered list of integer PR numbers found in the URLs.
+    """
+    all_numbers: list[int] = []
+    for each_url in all_child_pr_urls:
+        pr_number = extract_pr_number_from_url(each_url)
+        if pr_number is not None:
+            all_numbers.append(pr_number)
+    return all_numbers
+
+
 def build_supersede_comment_body(
     all_child_pr_numbers: list[int],
     all_child_pr_urls: list[str],
@@ -187,7 +204,7 @@ def supersede_source_pr(
         should_create_prs=should_create_prs,
         should_supersede=should_supersede,
     )
-    all_child_pr_numbers = _collect_child_pr_numbers(all_child_pr_urls)
+    all_child_pr_numbers = collect_pr_numbers_from_urls(all_child_pr_urls)
     if skip_reason is not None:
         return _skipped_payload(all_child_pr_numbers, skip_reason)
 
@@ -221,15 +238,6 @@ def supersede_source_pr(
         PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_pr_numbers,
         PAYLOAD_KEY_SKIPPED: False,
     }
-
-
-def _collect_child_pr_numbers(all_child_pr_urls: list[str]) -> list[int]:
-    all_numbers: list[int] = []
-    for each_url in all_child_pr_urls:
-        pr_number = extract_pr_number_from_url(each_url)
-        if pr_number is not None:
-            all_numbers.append(pr_number)
-    return all_numbers
 
 
 def _skipped_payload(
