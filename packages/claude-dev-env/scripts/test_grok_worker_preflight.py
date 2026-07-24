@@ -1,4 +1,8 @@
-"""Behavioral tests for the grok worker preflight soft gate."""
+"""Behavioral tests for the grok worker preflight soft gate.
+
+The soft gate reports usable off the install manifest alone; the fleet role
+label does not gate usability.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +19,6 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import grok_worker_preflight as preflight  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
-    AGENTS_SUBDIRECTORY,
-    ALL_AGENT_FILENAMES_BY_ROLE,
     ALL_AUTH_FAILURE_SIGNATURES,
     ALL_USAGE_EXHAUSTION_SIGNATURES,
     AUTH_LEADER_SOCKET_FILENAME,
@@ -77,15 +79,9 @@ class _Recorder:
         return self.all_completions.pop(0)
 
 
-def _write_install_layout(claude_home: Path, *, role: str = ROLE_BUGTEAM) -> None:
+def _write_install_layout(claude_home: Path) -> None:
     claude_home.mkdir(parents=True, exist_ok=True)
     (claude_home / MANIFEST_FILENAME).write_text("{}", encoding=UTF8_ENCODING)
-    agents_directory = claude_home / AGENTS_SUBDIRECTORY
-    agents_directory.mkdir(parents=True, exist_ok=True)
-    for each_filename in ALL_AGENT_FILENAMES_BY_ROLE[role]:
-        (agents_directory / each_filename).write_text(
-            f"# {each_filename}\n", encoding=UTF8_ENCODING
-        )
 
 
 def _install_ok_static_seams(
@@ -180,17 +176,13 @@ def test_config_missing_manifest_falls_through(
     )
 
 
-def test_config_missing_role_agent_falls_through(
+def test_manifest_present_without_agent_files_is_usable(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A present manifest alone keeps tier 1 usable."""
     claude_home = tmp_path / "claude"
     claude_home.mkdir()
     (claude_home / MANIFEST_FILENAME).write_text("{}", encoding=UTF8_ENCODING)
-    agents_directory = claude_home / AGENTS_SUBDIRECTORY
-    agents_directory.mkdir()
-    (agents_directory / "code-quality-agent.md").write_text(
-        "# present\n", encoding=UTF8_ENCODING
-    )
     run_state_directory = tmp_path / "run"
     run_state_directory.mkdir()
     recorder = _Recorder(
@@ -210,10 +202,8 @@ def test_config_missing_role_agent_falls_through(
     )
 
     captured = capsys.readouterr()
-    assert exit_code == EXIT_FALLTHROUGH
-    assert captured.out.strip() == STDOUT_FALLTHROUGH_TEMPLATE.format(
-        reason=REASON_CLAUDE_DEV_ENV_CONFIG_MISSING
-    )
+    assert exit_code == EXIT_USABLE
+    assert captured.out.strip() == STDOUT_OK_LINE
 
 
 def test_ok_path_without_ping(
