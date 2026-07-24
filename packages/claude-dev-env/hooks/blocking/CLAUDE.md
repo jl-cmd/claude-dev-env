@@ -100,7 +100,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
-| `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |
+| `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, `gh pr create`/`edit` bodies whose own prose hand-types a pytest pass/fail count, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
