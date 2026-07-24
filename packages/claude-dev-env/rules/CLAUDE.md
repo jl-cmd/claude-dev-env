@@ -53,6 +53,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `shell-invocation-policy.md` | All Windows shell commands use `pwsh`; `Audit-ShellPolicy.ps1` reports the non-`pwsh` forms in the `settings.json` permission rules and `Migrate-ShellPolicy.ps1` rewrites them to `pwsh`, both run on demand, not as a live gate |
 | `tdd.md` | Test-driven development: red → green → refactor, no production code before a failing test |
 | `testing.md` | Test quality and infrastructure standards |
+| `unscoped-search.md` | Filesystem searches must start at a scoped project path; whole-drive and bare-home walks are blocked by `unscoped_search_blocker` |
 | `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |
 | `verified-commit-gate-skip.md` | The `# verify-skip` marker on a blocked commit/push is allowed only when the branch surface is the same code a code-verifier already passed clean; any real change since that verdict runs a fresh verification |
 | `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking; recalled facts expire until re-checked this session |
