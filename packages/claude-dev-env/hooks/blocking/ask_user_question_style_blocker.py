@@ -57,16 +57,46 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 )
 
 
+def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
+    """Return whether ``?`` is a URL/query/status marker, not the user ask.
+
+    ::
+
+        inline: path?x=1   status=?   [code=?]
+        ask:    Which path?
+    """
+    if question_mark_index + 1 >= len(text):
+        return False
+    next_character = text[question_mark_index + 1]
+    return next_character.isalnum() or next_character in "=&_"
+
+
 def _first_top_level_question_mark_index(text: str) -> int:
-    """Return the first ``?`` not nested in parentheses, or -1 when none."""
+    """Return the first outer ask ``?``, skipping nests and inline query marks."""
     parenthesis_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
     for each_index, each_character in enumerate(text):
         if each_character == "(":
             parenthesis_depth += 1
         elif each_character == ")":
             if parenthesis_depth > 0:
                 parenthesis_depth -= 1
-        elif each_character == "?" and parenthesis_depth == 0:
+        elif each_character == "[":
+            bracket_depth += 1
+        elif each_character == "]":
+            if bracket_depth > 0:
+                bracket_depth -= 1
+        elif each_character == "{":
+            brace_depth += 1
+        elif each_character == "}":
+            if brace_depth > 0:
+                brace_depth -= 1
+        elif each_character == "?":
+            if parenthesis_depth or bracket_depth or brace_depth:
+                continue
+            if _is_inline_query_question_mark(text, each_index):
+                continue
             return each_index
     return -1
 
@@ -109,9 +139,20 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     # A fact that ends on a number ("found 12. Which") still is.
     if _is_numbered_list_marker(text, terminator_index, token):
         return True
-    # Single-letter tokens ("U." / "e." in U.S. / e.g.) are not sentence ends.
+    # Single-letter chain tokens ("U." / "e." in U.S. / e.g.) are not ends.
+    # A lone option letter that ends a fact ("option A. Which") is a real end.
     if len(token) == 1 and token.isalpha():
-        return True
+        following_start = _following_sentence_start_character(text, terminator_index + 1)
+        if following_start == "" or following_start.islower():
+            return True
+        rest_after_period = text[terminator_index + 1 :].lstrip()
+        next_word = ""
+        for each_character in rest_after_period:
+            if each_character.isalpha():
+                next_word += each_character
+                continue
+            break
+        return len(next_word) == 1
     lowered_token = token.lower()
     if lowered_token in ALL_TITLE_PERIOD_ABBREVIATIONS:
         return True

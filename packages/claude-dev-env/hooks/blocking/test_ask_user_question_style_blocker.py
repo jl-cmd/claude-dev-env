@@ -183,6 +183,19 @@ def test_question_mark_inside_parentheses_is_not_the_ask() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_url_query_question_mark_is_not_the_ask() -> None:
+    question_text = (
+        "Open https://example.com/path?x=1 for the API check. "
+        "Which client should we use?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
+def test_option_letter_ending_fact_counts_as_context() -> None:
+    question_text = "The safer pick is option A. Which change should land first?"
+    assert question_has_leading_context(question_text) is True
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(
