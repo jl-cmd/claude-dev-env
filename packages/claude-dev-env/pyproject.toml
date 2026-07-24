@@ -10,7 +10,6 @@ requires-python = ">=3.11"
 [project.optional-dependencies]
 dev = [
     "pytest-xdist>=3.0",
-    "PyYAML>=6.0",
 ]
 
 [tool.setuptools]
@@ -29,6 +28,7 @@ packages = [
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
     "fresh_branch_scripts_constants",
+    "build_goal_constants",
 ]
 
 [tool.setuptools.package-dir]
@@ -46,3 +46,4 @@ codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scrip
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
 fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"
+build_goal_constants = "skills/build-goal/build_goal_constants"
