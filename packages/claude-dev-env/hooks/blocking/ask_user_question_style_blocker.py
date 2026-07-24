@@ -73,12 +73,18 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
     if question_mark_index + 1 >= len(text):
         return False
     next_character = text[question_mark_index + 1]
-    if not (next_character.isalnum() or next_character in "=&_"):
+    if next_character in "=&_":
+        return True
+    if not next_character.isalnum():
         return False
     previous_character = text[question_mark_index - 1] if question_mark_index > 0 else ""
     # Glued prose ("one?The" / "OK?The") is an ask, not a query string.
     if previous_character.isalpha() and next_character.isupper():
         return False
+    # "Retry now?3 attempts" is an ask; "path?1=2" stays a query.
+    if next_character.isdigit():
+        first_token = text[question_mark_index + 1 :].split()[0] if text[question_mark_index + 1 :].split() else ""
+        return "=" in first_token or "&" in first_token
     return True
 
 

@@ -265,6 +265,23 @@ def test_us_abbreviation_ending_fact_counts_as_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_title_abbreviation_before_pronoun_i_counts_as_context() -> None:
+    question_text = "The assignee is John Jr. I should reassign the task?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_us_abbreviation_before_pronoun_i_counts_as_context() -> None:
+    question_text = "We ship only in the U.S. I should add a region?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_bare_ask_glued_to_digit_does_not_count_as_context() -> None:
+    question_text = (
+        "Retry now?3 attempts already failed. Which backoff should we use?"
+    )
+    assert question_has_leading_context(question_text) is False
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "

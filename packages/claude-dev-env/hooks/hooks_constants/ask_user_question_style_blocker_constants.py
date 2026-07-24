@@ -120,6 +120,7 @@ ALL_QUESTION_SENTENCE_OPENERS: frozenset[str] = frozenset(
         "why",
         "may",
         "might",
+        "i",
     }
 )
 
