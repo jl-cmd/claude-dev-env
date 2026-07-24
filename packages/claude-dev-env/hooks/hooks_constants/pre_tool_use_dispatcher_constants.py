@@ -15,8 +15,11 @@ from hooks_constants.agent_model_pin_blocker_constants import (
 
 __all__ = [
     "DENY_DECISION",
+    "ASK_DECISION",
     "ALLOW_DECISION",
     "HOOK_EVENT_NAME",
+    "REASON_JOIN_SEPARATOR",
+    "CONTEXT_JOIN_SEPARATOR",
     "BLOCKING_CRASH_EXIT_CODE",
     "EXIT_CODE_TWO_DENY_REASON",
     "BLOCKING_CRASH_DENY_REASON",
@@ -32,8 +35,11 @@ __all__ = [
 ]
 
 DENY_DECISION = "deny"
+ASK_DECISION = "ask"
 ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
+REASON_JOIN_SEPARATOR = " | "
+CONTEXT_JOIN_SEPARATOR = "\n"
 BLOCKING_CRASH_EXIT_CODE = 2
 EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"
 BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"

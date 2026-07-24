@@ -33,6 +33,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
 | `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
+| `gate_question_default_gate_constants.py` | Tool name, payload keys, the tight gate-question trigger patterns, the refactor-to-pass label pattern and recommended marker, and the deny text for the gate-question default-order gate |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |

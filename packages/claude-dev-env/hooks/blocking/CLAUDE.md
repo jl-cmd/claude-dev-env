@@ -13,6 +13,7 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 | `claude_md_orphan_file_blocker_parts/` | Concern modules the `claude_md_orphan_file_blocker.py` entry hook wires together: reference extraction, subtree scan, scan plan, decision, and constants |
 | `package_inventory_stale_blocker_parts/` | Concern modules the `package_inventory_stale_blocker.py` entry hook wires together: inventory detection, decision, and constants |
 | `inventory_intent_records/` | The shared per-session pending-intent store both inventory blockers read to break the file/row add-order deadlock |
+| `gate_skip_token/` | The per-session skip-token store both gate surfaces read to escalate a deny to a human permission prompt on a refactor deadlock |
 | `pii_prevention_blocker_parts/` | Concern modules the `pii_prevention_blocker.py` entry hook wires together: per-repository scan exemption, the per-repository allowlist of exact values a commit may carry, and resolving the repository a commit command targets (with `config/` for the resolution deny-message constants) |
 | `tests/` | pytest suite for `pii_prevention_blocker.py` repository resolution and the `pii_prevention_blocker_parts` modules |
 
@@ -85,6 +86,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `duplicate_rmtree_helper_blocker.py` | PreToolUse (Write/Edit) | A local re-definition of the Windows-safe rmtree helper trio (`_strip_read_only_and_retry`, `_force_remove_tree` / `force_rmtree`) in place of importing a shared helper |
 | `env_var_table_code_drift_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A markdown env-var summary table row attributing an environment variable to a code file whose source never references that variable name |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
+| `gate_question_default_gate.py` | PreToolUse (AskUserQuestion) | An AskUserQuestion about a gate-blocked edit whose first choice is not the recommended "Refactor to pass the gate" |
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
 | `gh_pr_author_restore.py` | PostToolUse | Restores PR author after a tool call |

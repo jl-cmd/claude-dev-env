@@ -122,3 +122,16 @@ def test_every_native_module_exposes_a_callable_evaluate() -> None:
             f"{each_entry.native_module_name} must expose a callable named evaluate, "
             "matching the native_module_name docstring contract"
         )
+
+
+def test_explicit_allow_result_surfaces_an_allow_decision() -> None:
+    explicit_allow_stdout = '{"hookSpecificOutput": {"permissionDecision": "allow"}}'
+    allow_result = HostedHookResult(
+        exit_code=0,
+        captured_stdout=explicit_allow_stdout,
+        did_crash=False,
+        is_blocking=True,
+    )
+    decision = aggregate_hosted_hook_results([allow_result])
+    assert decision.should_allow, "an explicit allow with no deny surfaces an allow decision"
+    assert not decision.should_deny, "an explicit allow does not deny"
