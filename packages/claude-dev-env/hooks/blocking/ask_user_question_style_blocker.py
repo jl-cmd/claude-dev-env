@@ -85,7 +85,7 @@ def _is_inline_query_question_mark(text: str, question_mark_index: int) -> bool:
     if not next_character.isalnum():
         return False
     first_token = (
-        text[question_mark_index + 1 :].split()[0]
+        text[question_mark_index + 1 :].split(maxsplit=1)[0]
         if text[question_mark_index + 1 :].split()
         else ""
     )
