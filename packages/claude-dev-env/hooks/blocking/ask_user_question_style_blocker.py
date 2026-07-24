@@ -166,9 +166,16 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
     """Return whether ``token.`` is a list marker (``1. The gate``), not ``3.12.`` / ``found 12.``."""
     if not token.isdigit():
         return False
+    next_word = _next_alpha_word(text, terminator_index + 1)
+    rest_after_marker = text[terminator_index + 1 :]
+    # "47. Which" is a fact end; "1. Should … 2. …" stays a list.
+    if next_word.lower() in ALL_BROAD_QUESTION_SENTENCE_OPENERS:
+        if FOLLOWING_LIST_ITEM_PATTERN.search(rest_after_marker):
+            return True
+        return False
     segment_before_number = text[: terminator_index - len(token)].rstrip()
     if segment_before_number == "":
-        return True
+        return bool(next_word and next_word[0].isupper())
     if segment_before_number[-1] not in ".!?:":
         return False
     # Version tails: "3.12." — the period before this digit token is digit-adjacent.
@@ -182,7 +189,6 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
     # Colon labels ("Final score: 12. Which") are facts; list items continue
     # with a capital word or another numbered item later.
     if segment_before_number[-1] == ":":
-        next_word = _next_alpha_word(text, terminator_index + 1)
         if not next_word or not next_word[0].isupper():
             return False
         rest_after_marker = text[terminator_index + 1 :]
@@ -191,7 +197,7 @@ def _is_numbered_list_marker(text: str, terminator_index: int, token: str) -> bo
         if next_word.lower() in ALL_BROAD_QUESTION_SENTENCE_OPENERS:
             return False
         return True
-    return True
+    return bool(next_word and next_word[0].isupper())
 
 
 def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:

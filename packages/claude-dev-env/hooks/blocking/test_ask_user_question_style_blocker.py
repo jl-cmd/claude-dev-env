@@ -335,6 +335,13 @@ def test_colon_list_item_starting_with_should_does_not_inflate_count() -> None:
     assert FINDING_MISSING_CONTEXT not in findings
 
 
+def test_number_after_soft_abbrev_counts_as_context() -> None:
+    question_text = (
+        "Failure count is approx. 47. Which retry policy should we use?"
+    )
+    assert question_has_leading_context(question_text) is True
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "
