@@ -186,11 +186,14 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
         if len(next_word) == 1 and next_word.upper() != "I":
             return True
         return False
-    # Multi-letter head of a multi-part abbrev (``Ph.D.``).
+    # Multi-letter head of a multi-part abbrev (``Ph.D.``) — capital head +
+    # single capital letter only (not ``ran. I``).
     if (
         token.isalpha()
+        and token[0].isupper()
         and len(token) <= MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH
         and len(next_word) == 1
+        and next_word.isupper()
     ):
         return True
     lowered_token = token.lower()

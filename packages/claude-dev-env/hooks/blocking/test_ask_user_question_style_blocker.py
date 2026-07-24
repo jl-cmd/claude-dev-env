@@ -215,6 +215,11 @@ def test_phd_abbreviation_does_not_inflate_sentence_count() -> None:
     assert FINDING_TOO_MANY_SENTENCES not in findings
 
 
+def test_short_word_before_pronoun_i_still_counts_as_context() -> None:
+    question_text = "All tests ran. I should merge the branch now?"
+    assert question_has_leading_context(question_text) is True
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "
