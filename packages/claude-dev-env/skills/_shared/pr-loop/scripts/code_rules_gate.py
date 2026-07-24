@@ -199,8 +199,19 @@ def added_lines_for_staged_file(
     return set()
 
 
+def _resolved_staged_rename_sources(
+    resolved_root: Path, all_rename_sources: dict[str, str] | None
+) -> dict[str, str]:
+    """Return the given staged rename map, or compute it tree-wide when absent."""
+    if all_rename_sources is not None:
+        return all_rename_sources
+    return added_line_maps.renamed_file_source_map_staged(resolved_root)
+
+
 def added_lines_by_file_staged(
-    repository_root: Path, all_file_paths: list[Path]
+    repository_root: Path,
+    all_file_paths: list[Path],
+    all_rename_sources: dict[str, str] | None = None,
 ) -> dict[Path, set[int]]:
     """Build a per-file map of staged-added line numbers.
 
@@ -210,12 +221,13 @@ def added_lines_by_file_staged(
     Args:
         repository_root: Repository root for diff invocations.
         all_file_paths: File paths whose staged-added lines are collected.
+        all_rename_sources: Optional staged rename destination-to-source map.
 
     Returns:
         Mapping from resolved file path to its staged-added line numbers.
     """
     resolved_root = repository_root.resolve()
-    all_rename_sources = added_line_maps.renamed_file_source_map_staged(resolved_root)
+    rename_sources = _resolved_staged_rename_sources(resolved_root, all_rename_sources)
     added_by_path: dict[Path, set[int]] = {}
     for each_path in all_file_paths:
         resolved = added_line_maps._resolved_under_root(each_path, resolved_root)
@@ -223,9 +235,7 @@ def added_lines_by_file_staged(
             continue
         relative_posix = str(resolved.relative_to(resolved_root)).replace("\\", "/")
         added_by_path[resolved] = added_lines_for_staged_file(
-            resolved_root,
-            relative_posix,
-            all_rename_sources,
+            resolved_root, relative_posix, rename_sources
         )
     return added_by_path
 
@@ -302,7 +312,12 @@ def _run_staged_mode(
     if not staged_file_paths:
         sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
         return staged_test_exit_code
-    staged_added_lines = added_lines_by_file_staged(repository_root, staged_file_paths)
+    all_staged_rename_sources = added_line_maps.renamed_file_source_map_staged(
+        repository_root.resolve()
+    )
+    staged_added_lines = added_lines_by_file_staged(
+        repository_root, staged_file_paths, all_staged_rename_sources
+    )
     gate_exit_code = run_gate(
         validate_content,
         staged_file_paths,

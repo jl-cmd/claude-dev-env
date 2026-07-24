@@ -1,21 +1,21 @@
-"""Copilot premium-interaction quota pre-check.
+"""Decide whether a GitHub account has Copilot premium-interaction quota to run.
 
-Run this before any Copilot review step spawns. It reads a configured GitHub
-account's remaining premium-interaction quota and decides whether Copilot has
-quota to run. An account already out of quota skips the Copilot step instead of
-wasting a whole review cycle on it.
+::
 
-Account resolution order: the ``--account`` flag, then the
-``COPILOT_QUOTA_ACCOUNT`` environment variable, then that same key parsed from a
-git-ignored ``.env`` file. The account's ``gh`` token is resolved with
-``gh auth token -u <account>`` and the quota is read from
-``gh api copilot_internal/user``. The config file names the account only and
-stores no secret.
+    $ python copilot_quota.py --account octocat
+    gh auth token -u octocat      -> a token
+    gh api copilot_internal/user  -> premium_interactions 40/300 (13%) left
+    stdout: copilot-quota: octocat — premium interactions 40/300 remaining (13%)
+    exit 0  (run Copilot)
 
-The exit code tells the caller what to do. Exit 0 means run Copilot. A non-zero
-exit means skip it: the account is out of quota (scenario A), the quota API or
-account access is down (scenario B), or no account is configured (scenario C).
-Every path prints one line: the run line to stdout, each skip line to stderr.
+    ok:   quota left, overage off  -> exit 0 on stdout, run Copilot
+    flag: none left, overage off   -> non-zero exit on stderr, skip (scenario A)
+
+Run this before a Copilot review step spawns so an out-of-quota account skips
+the step and saves a review cycle. The account comes from the ``--account``
+flag, then the ``COPILOT_QUOTA_ACCOUNT`` environment variable, then that key in
+a git-ignored ``.env`` file. A non-zero exit skips Copilot: out of quota (A),
+quota API or account access down (B), or no account configured (C).
 """
 
 from __future__ import annotations

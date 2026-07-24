@@ -18,7 +18,7 @@ if str(_shared_pr_loop_scripts_directory) not in sys.path:
 from fix_hookspath import (  # noqa: E402
     find_repository_root,  # noqa: F401
     is_canonical_hooks_path,  # noqa: F401
-    list_local_core_hooks_path_values,  # noqa: F401
+    list_local_core_hooks_path_entries,  # noqa: F401
     main,
     normalize_hooks_path,  # noqa: F401
     read_global_core_hooks_path,  # noqa: F401

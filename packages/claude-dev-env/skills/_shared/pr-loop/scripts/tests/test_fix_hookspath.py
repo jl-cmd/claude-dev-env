@@ -284,7 +284,7 @@ def test_resolve_canonical_hooks_directory_uses_home_env_overrides(
     assert resolved == fake_home / ".claude" / "hooks" / "git-hooks"
 
 
-def test_list_local_core_hooks_path_values_raises_on_unexpected_git_failure(
+def test_list_local_core_hooks_path_entries_raises_on_unexpected_git_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -300,12 +300,12 @@ def test_list_local_core_hooks_path_values_raises_on_unexpected_git_failure(
     )
 
     with pytest.raises(RuntimeError, match="not a git repository"):
-        fix_hookspath.list_local_core_hooks_path_values(
+        fix_hookspath.list_local_core_hooks_path_entries(
             tmp_path / "any-repo",
             None,
         )
 
-def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
+def test_list_local_core_hooks_path_entries_quiet_when_stderr_empty(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -319,7 +319,7 @@ def test_list_local_core_hooks_path_values_quiet_when_stderr_empty(
         fix_hookspath.subprocess, "run", lambda *_args, **_kwargs: unset_completed_process
     )
 
-    returned_values = fix_hookspath.list_local_core_hooks_path_values(
+    returned_values = fix_hookspath.list_local_core_hooks_path_entries(
         tmp_path / "any-repo", None
     )
 

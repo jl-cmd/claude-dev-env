@@ -225,23 +225,23 @@ def _print_revoke_summary(
     )
 
 
-def remove_values_from_list(
-    all_target_list: list[object], all_values_to_remove: set[str]
+def remove_matching_entries(
+    all_target_list: list[object], all_entries_to_remove: set[str]
 ) -> int:
-    """Remove matching values from a list in place.
+    """Remove matching string entries from a list in place.
 
     Args:
-        all_target_list: The list to remove values from.
-        all_values_to_remove: Set of string values to remove.
+        all_target_list: The list to remove entries from.
+        all_entries_to_remove: Set of string entries to remove.
 
     Returns:
-        Number of values removed.
+        Number of entries removed.
     """
     original_length = len(all_target_list)
     all_target_list[:] = [
-        each_value
-        for each_value in all_target_list
-        if not (isinstance(each_value, str) and each_value in all_values_to_remove)
+        each_entry
+        for each_entry in all_target_list
+        if not (isinstance(each_entry, str) and each_entry in all_entries_to_remove)
     ]
     return original_length - len(all_target_list)
 
@@ -264,7 +264,7 @@ def remove_rules_from_allow_list(
     existing_allow_list = permissions_section.get(CLAUDE_SETTINGS_ALLOW_KEY)
     if not isinstance(existing_allow_list, list):
         return 0
-    return remove_values_from_list(existing_allow_list, set(all_rules_to_remove))
+    return remove_matching_entries(existing_allow_list, set(all_rules_to_remove))
 
 
 def remove_rules_from_deny_list(
@@ -285,7 +285,7 @@ def remove_rules_from_deny_list(
     existing_deny_list = permissions_section.get(CLAUDE_SETTINGS_DENY_KEY)
     if not isinstance(existing_deny_list, list):
         return 0
-    return remove_values_from_list(existing_deny_list, set(all_rules_to_remove))
+    return remove_matching_entries(existing_deny_list, set(all_rules_to_remove))
 
 
 def remove_directory_from_additional_directories(
@@ -308,7 +308,7 @@ def remove_directory_from_additional_directories(
     )
     if not isinstance(existing_directories, list):
         return 0
-    return remove_values_from_list(existing_directories, {directory_path})
+    return remove_matching_entries(existing_directories, {directory_path})
 
 
 def remove_trust_entries_for_project(
