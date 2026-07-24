@@ -27,6 +27,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
+| `gate-refactor-default.md` | When a gate blocks an edit, refactor the code to pass it; the `gate_question_default_gate` hook wants the "Refactor to pass the gate" choice first and recommended, and the `gate_skip_token` store escalates a real deadlock to a permission prompt only on user approval |
 | `gh-body-file.md` | Use `--body-file` with a temp file for all `gh` commands carrying markdown body content |
 | `gh-paginate.md` | Use `--paginate --slurp` piped to external `jq` for paginated GitHub API list endpoints |
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images |
