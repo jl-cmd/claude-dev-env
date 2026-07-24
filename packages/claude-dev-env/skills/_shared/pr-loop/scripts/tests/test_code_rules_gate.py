@@ -13,7 +13,6 @@ import os
 import subprocess
 import sys
 import unittest.mock
-from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -273,6 +272,37 @@ def test_staged_added_lines_by_file_maps_every_staged_code_file(
     resolved_repository_root = temporary_git_repository.resolve()
     assert added_lines_map[resolved_repository_root / "already_committed.py"] == {2}
     assert added_lines_map[resolved_repository_root / "added_file.py"] == {1}
+
+
+def test_staged_added_lines_honors_explicit_rename_sources(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(
+        temporary_git_repository / "origin_module.py",
+        "kept_one = 1\nkept_two = 2\n",
+    )
+    commit_all_files(temporary_git_repository, "baseline")
+    run_git_in_repository(
+        temporary_git_repository, "mv", "origin_module.py", "renamed_module.py"
+    )
+    write_file(
+        temporary_git_repository / "renamed_module.py",
+        "kept_one = 1\nkept_two = 2\nadded_three = 3\n",
+    )
+    stage_file(temporary_git_repository, "renamed_module.py")
+    renamed_path = temporary_git_repository.resolve() / "renamed_module.py"
+    rename_aware_map = gate_module.added_lines_by_file_staged(
+        temporary_git_repository,
+        [renamed_path],
+        all_rename_sources={"renamed_module.py": "origin_module.py"},
+    )
+    fresh_add_map = gate_module.added_lines_by_file_staged(
+        temporary_git_repository,
+        [renamed_path],
+        all_rename_sources={},
+    )
+    assert rename_aware_map[renamed_path] == {3}
+    assert fresh_add_map[renamed_path] == {1, 2, 3}
 
 
 def test_main_staged_mode_blocks_when_staged_lines_introduce_violations(
@@ -773,7 +803,7 @@ def test_duplicate_body_span_range_covers_the_definition_through_last_body_line(
     assert span == range(definition_line, last_body_line + 1)
 
 
-def test_split_violations_blocks_duplicate_body_when_span_intersects_added_lines(
+def test_split_violations_by_scope_blocks_duplicate_body_when_span_intersects_added_lines(
     tmp_path: Path,
 ) -> None:
     """A duplicate-body issue whose copied-function span overlaps the diff's added
@@ -789,7 +819,7 @@ def test_split_violations_blocks_duplicate_body_when_span_intersects_added_lines
     assert advisory == []
 
 
-def test_split_violations_advises_duplicate_body_when_span_misses_added_lines(
+def test_split_violations_by_scope_advises_duplicate_body_when_span_misses_added_lines(
     tmp_path: Path,
 ) -> None:
     """A duplicate-body issue for an untouched pre-existing copy — whose span does
@@ -1509,7 +1539,7 @@ def test_main_blocks_when_function_body_grows_past_threshold_with_def_line_untou
     assert exit_code == 1
 
 
-def test_split_violations_blocks_function_length_when_span_intersects_added_lines() -> None:
+def test_split_violations_by_scope_blocks_function_length_when_span_intersects_added_lines() -> None:
     """A function-length issue whose declared span overlaps the diff's added
     lines is blocking — the body grew, which is exactly Finding B's intent."""
     validate_content = gate_module.load_validate_content()
@@ -1531,7 +1561,7 @@ def test_split_violations_blocks_function_length_when_span_intersects_added_line
     assert advisory == []
 
 
-def test_split_violations_advises_function_length_when_span_misses_added_lines() -> None:
+def test_split_violations_by_scope_advises_function_length_when_span_misses_added_lines() -> None:
     """A function-length issue for an untouched pre-existing function — whose
     declared span does not overlap any added line — is advisory, not blocking.
     This prevents the over-block regression where every pre-existing >=60-line
@@ -1566,7 +1596,7 @@ def _isolation_issues_for_home_probe_test() -> list[str]:
     return [each_issue for each_issue in issues if "probes" in each_issue]
 
 
-def test_split_violations_blocks_isolation_when_function_span_intersects_added_lines() -> None:
+def test_split_violations_by_scope_blocks_isolation_when_function_span_intersects_added_lines() -> None:
     """An isolation issue whose enclosing test-function span overlaps the diff's
     added lines is blocking — a signature-line change that un-isolates an
     unchanged-body probe must block, matching the enforcer's terminal path."""
@@ -1581,7 +1611,7 @@ def test_split_violations_blocks_isolation_when_function_span_intersects_added_l
     assert advisory == []
 
 
-def test_split_violations_advises_isolation_when_function_span_misses_added_lines() -> None:
+def test_split_violations_by_scope_advises_isolation_when_function_span_misses_added_lines() -> None:
     """An isolation issue for an untouched pre-existing probe — whose enclosing
     test-function span does not overlap any added line — is advisory, not
     blocking, mirroring the function-length scope contract."""
@@ -1784,7 +1814,7 @@ def _banned_noun_parameter_issues() -> list[str]:
     return [each_issue for each_issue in issues if "banned noun" in each_issue]
 
 
-def test_split_violations_blocks_banned_noun_when_binding_line_is_added() -> None:
+def test_split_violations_by_scope_blocks_banned_noun_when_binding_line_is_added() -> None:
     """A banned-noun binding is blocking when its own binding line is among the
     added lines. The gate reconstructs the one-line binding span through the
     same shared extractor registry it uses for function-length and isolation,
@@ -1800,7 +1830,7 @@ def test_split_violations_blocks_banned_noun_when_binding_line_is_added() -> Non
     assert advisory == []
 
 
-def test_split_violations_advises_banned_noun_when_binding_line_untouched() -> None:
+def test_split_violations_by_scope_advises_banned_noun_when_binding_line_untouched() -> None:
     """A banned-noun binding whose own line is not among the added lines is
     advisory — editing an unrelated body line does not pull a pre-existing
     binding into scope, mirroring the companion exact-match identifier check."""

@@ -42,9 +42,10 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     ALL_GH_AUTH_TOKEN_COMMAND_PARTS,
     ALL_RETRY_BACKOFF_SECONDS,
+    ALL_SUPPORTED_SEVERITY_TAGS,
+    AUDIT_BODY_SKELETON_CLOSE_MARKER,
+    AUDIT_BODY_SKELETON_OPEN_MARKER,
     BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME,
-    GH_TOKEN_ENV_VAR_NAME,
-    GITHUB_TOKEN_ENV_VAR_NAME,
     CLI_FLAG_COMMIT,
     CLI_FLAG_FINDINGS_JSON,
     CLI_FLAG_OWNER,
@@ -53,6 +54,14 @@ from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     CLI_FLAG_SKILL,
     CLI_FLAG_STATE,
     EXIT_CODE_RETRY_EXHAUSTED,
+    GH_TOKEN_ENV_VAR_NAME,
+    GITHUB_REVIEW_EVENT_APPROVE,
+    GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+    GITHUB_TOKEN_ENV_VAR_NAME,
+    INLINE_COMMENT_FIELD_BODY,
+    INLINE_COMMENT_FIELD_LINE,
+    INLINE_COMMENT_FIELD_PATH,
+    INLINE_COMMENT_FIELD_SIDE,
     INLINE_COMMENT_SIDE_RIGHT,
     JSON_FIELD_DESCRIPTION,
     JSON_FIELD_FIX_SUMMARY,
@@ -61,23 +70,57 @@ from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     JSON_FIELD_SEVERITY,
     JSON_FIELD_SIDE,
     MAX_RETRY_ATTEMPTS,
+    PLACEHOLDER_DETAILS_BLOCK,
+    PLACEHOLDER_FINDINGS_COUNT,
+    PLACEHOLDER_HEADING,
+    PLACEHOLDER_P0_COUNT,
+    PLACEHOLDER_P1_COUNT,
+    PLACEHOLDER_P2_COUNT,
+    PLACEHOLDER_SKILL,
+    PLACEHOLDER_STATE_LABEL,
+    PLACEHOLDER_SUMMARY_PARAGRAPH,
+    REVIEW_REQUEST_FIELD_BODY,
+    REVIEW_REQUEST_FIELD_COMMENTS,
+    REVIEW_REQUEST_FIELD_COMMIT_ID,
+    REVIEW_REQUEST_FIELD_EVENT,
     SEVERITY_TAG_P0,
     SEVERITY_TAG_P1,
     SEVERITY_TAG_P2,
+    SHORT_SHA_LENGTH,
     SINGLE_REVIEW_API_PATH_TEMPLATE,
     SINGLE_REVIEW_COMMENTS_API_PATH_TEMPLATE,
     SKILL_BUGTEAM,
     STATE_CLEAN,
     STATE_DIRTY,
+    TEMPLATE_FENCE_TOKEN,
 )
+import post_audit_thread  # noqa: E402
 from post_audit_thread import (  # noqa: E402
+    AuditFinding,
     UserInputError,
+    build_details_block,
+    build_inline_comments_payload,
+    build_review_request_payload,
     build_reviews_endpoint_url,
+    execute_review_post_attempt,
+    extract_audit_body_skeleton,
+    extract_html_url_field,
     fetch_gh_token_for_account,
+    fill_audit_body_skeleton,
     list_authenticated_gh_account_logins,
+    load_audit_body_skeleton,
+    parse_command_line_arguments,
+    parse_findings_json_file,
+    post_audit_review,
+    post_review_with_retries,
     query_active_gh_user_login,
     query_pull_request_author_login,
+    resolve_github_token,
     resolve_reviewer_token,
+    review_event_for_state,
+    severity_counts_by_tag,
+    short_commit_sha,
+    skill_display_name,
 )
 
 LIVE_TEST_OWNER = "JonEcho"
@@ -1109,6 +1152,303 @@ class LivePostAuditThreadTests(unittest.TestCase):
             )
         finally:
             self._restore_auth_env_vars(previous_env_state)
+
+
+class PostAuditThreadUnitTests(unittest.TestCase):
+    """Offline unit tests for post_audit_thread.py functions.
+
+    Each test calls a real production function with deterministic inputs.
+    The HTTP-touching functions run against the in-process localhost stub
+    server; the token resolver runs through an environment-variable
+    short-circuit. None of these tests contact api.github.com.
+    """
+
+    def _write_findings_file(self, findings_payload: list[dict[str, Any]]) -> Path:
+        findings_path = write_findings_json(findings_payload)
+        self.addCleanup(findings_path.unlink, missing_ok=True)
+        return findings_path
+
+    def _sample_finding(self, severity: str, line_number: int) -> AuditFinding:
+        return AuditFinding(
+            path="src/example.py",
+            line=line_number,
+            side=INLINE_COMMENT_SIDE_RIGHT,
+            severity=severity,
+            description=f"Example {severity} finding.",
+            fix_summary=f"Fix the {severity} issue.",
+        )
+
+    def test_parse_command_line_arguments_populates_every_field(self) -> None:
+        parsed_arguments = parse_command_line_arguments(
+            [
+                CLI_FLAG_SKILL, SKILL_BUGTEAM,
+                CLI_FLAG_OWNER, "acme",
+                CLI_FLAG_REPO, "widgets",
+                CLI_FLAG_PR_NUMBER, "42",
+                CLI_FLAG_COMMIT, "abcdef1234567890",
+                CLI_FLAG_STATE, STATE_CLEAN,
+                CLI_FLAG_FINDINGS_JSON, "/tmp/findings.json",
+            ]
+        )
+        self.assertEqual(parsed_arguments.skill, SKILL_BUGTEAM)
+        self.assertEqual(parsed_arguments.owner, "acme")
+        self.assertEqual(parsed_arguments.repo, "widgets")
+        self.assertEqual(parsed_arguments.pr_number, 42)
+        self.assertEqual(parsed_arguments.commit, "abcdef1234567890")
+        self.assertEqual(parsed_arguments.state, STATE_CLEAN)
+        self.assertEqual(parsed_arguments.findings_json, Path("/tmp/findings.json"))
+
+    def test_parse_command_line_arguments_rejects_unknown_state(self) -> None:
+        with self.assertRaises(UserInputError):
+            parse_command_line_arguments(
+                [
+                    CLI_FLAG_SKILL, SKILL_BUGTEAM,
+                    CLI_FLAG_OWNER, "acme",
+                    CLI_FLAG_REPO, "widgets",
+                    CLI_FLAG_PR_NUMBER, "42",
+                    CLI_FLAG_COMMIT, "abcdef1",
+                    CLI_FLAG_STATE, "SIDEWAYS",
+                    CLI_FLAG_FINDINGS_JSON, "/tmp/findings.json",
+                ]
+            )
+
+    def test_parse_findings_json_file_returns_typed_findings(self) -> None:
+        findings_path = self._write_findings_file(
+            [
+                {
+                    JSON_FIELD_PATH: "src/a.py",
+                    JSON_FIELD_LINE: 12,
+                    JSON_FIELD_SIDE: INLINE_COMMENT_SIDE_RIGHT,
+                    JSON_FIELD_SEVERITY: SEVERITY_TAG_P0,
+                    JSON_FIELD_DESCRIPTION: "Null dereference.",
+                    JSON_FIELD_FIX_SUMMARY: "Add a guard.",
+                }
+            ]
+        )
+        parsed_findings = parse_findings_json_file(findings_path)
+        self.assertEqual(len(parsed_findings), 1)
+        self.assertEqual(parsed_findings[0].path, "src/a.py")
+        self.assertEqual(parsed_findings[0].line, 12)
+        self.assertEqual(parsed_findings[0].severity, SEVERITY_TAG_P0)
+        self.assertEqual(parsed_findings[0].fix_summary, "Add a guard.")
+
+    def test_parse_findings_json_file_empty_array_returns_empty_list(self) -> None:
+        findings_path = self._write_findings_file([])
+        self.assertEqual(parse_findings_json_file(findings_path), [])
+
+    def test_parse_findings_json_file_rejects_line_below_one(self) -> None:
+        findings_path = self._write_findings_file(
+            [
+                {
+                    JSON_FIELD_PATH: "src/a.py",
+                    JSON_FIELD_LINE: 0,
+                    JSON_FIELD_SIDE: INLINE_COMMENT_SIDE_RIGHT,
+                    JSON_FIELD_SEVERITY: SEVERITY_TAG_P0,
+                    JSON_FIELD_DESCRIPTION: "Bad line number.",
+                    JSON_FIELD_FIX_SUMMARY: "Use a one-based line.",
+                }
+            ]
+        )
+        with self.assertRaises(UserInputError):
+            parse_findings_json_file(findings_path)
+
+    def test_extract_audit_body_skeleton_returns_text_between_markers(self) -> None:
+        skeleton_body = "**<Skill> audit completed** —— <state_label>"
+        template_markdown = (
+            "intro line\n"
+            + AUDIT_BODY_SKELETON_OPEN_MARKER + "\n"
+            + TEMPLATE_FENCE_TOKEN + "\n"
+            + skeleton_body + "\n"
+            + TEMPLATE_FENCE_TOKEN + "\n"
+            + AUDIT_BODY_SKELETON_CLOSE_MARKER + "\n"
+            "outro line\n"
+        )
+        self.assertEqual(
+            extract_audit_body_skeleton(template_markdown), skeleton_body
+        )
+
+    def test_load_audit_body_skeleton_reads_shipped_template(self) -> None:
+        skeleton_text = load_audit_body_skeleton()
+        self.assertIn(PLACEHOLDER_SKILL, skeleton_text)
+        self.assertIn(PLACEHOLDER_HEADING, skeleton_text)
+
+    def test_short_commit_sha_truncates_to_configured_length(self) -> None:
+        full_sha = "abcdef1234567890"
+        self.assertEqual(short_commit_sha(full_sha), full_sha[:SHORT_SHA_LENGTH])
+        self.assertEqual(len(short_commit_sha(full_sha)), SHORT_SHA_LENGTH)
+
+    def test_skill_display_name_title_cases_identifier(self) -> None:
+        self.assertEqual(skill_display_name(SKILL_BUGTEAM), "Bugteam")
+        self.assertEqual(skill_display_name("findbugs"), "Findbugs")
+
+    def test_severity_counts_by_tag_tallies_and_zero_fills(self) -> None:
+        all_findings = [
+            self._sample_finding(SEVERITY_TAG_P0, 1),
+            self._sample_finding(SEVERITY_TAG_P0, 2),
+            self._sample_finding(SEVERITY_TAG_P1, 3),
+        ]
+        counts_by_tag = severity_counts_by_tag(all_findings)
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P0], 2)
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P1], 1)
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P2], 0)
+        self.assertEqual(set(counts_by_tag), set(ALL_SUPPORTED_SEVERITY_TAGS))
+
+    def test_build_details_block_empty_findings_returns_empty_string(self) -> None:
+        self.assertEqual(build_details_block([]), "")
+
+    def test_build_details_block_renders_one_bullet_per_finding(self) -> None:
+        all_findings = [
+            self._sample_finding(SEVERITY_TAG_P0, 10),
+            self._sample_finding(SEVERITY_TAG_P1, 20),
+        ]
+        details_block = build_details_block(all_findings)
+        self.assertIn("<details>", details_block)
+        self.assertIn("</details>", details_block)
+        self.assertIn("src/example.py:10", details_block)
+        self.assertIn("src/example.py:20", details_block)
+        self.assertEqual(details_block.count("- **["), len(all_findings))
+
+    def test_fill_audit_body_skeleton_substitutes_placeholders(self) -> None:
+        skeleton_text = (
+            f"{PLACEHOLDER_SKILL} {PLACEHOLDER_STATE_LABEL} {PLACEHOLDER_HEADING} "
+            f"{PLACEHOLDER_SUMMARY_PARAGRAPH} findings={PLACEHOLDER_FINDINGS_COUNT} "
+            f"{PLACEHOLDER_P0_COUNT}/{PLACEHOLDER_P1_COUNT}/{PLACEHOLDER_P2_COUNT} "
+            f"{PLACEHOLDER_DETAILS_BLOCK}"
+        )
+        filled_body = fill_audit_body_skeleton(
+            skeleton_text=skeleton_text,
+            skill_argument=SKILL_BUGTEAM,
+            state_argument=STATE_DIRTY,
+            commit_sha="abcdef1234567890",
+            all_findings=[self._sample_finding(SEVERITY_TAG_P0, 5)],
+        )
+        self.assertIn("Bugteam", filled_body)
+        self.assertNotIn(PLACEHOLDER_SKILL, filled_body)
+        self.assertNotIn(PLACEHOLDER_FINDINGS_COUNT, filled_body)
+        self.assertIn("findings=1", filled_body)
+
+    def test_build_inline_comments_payload_shapes_each_comment(self) -> None:
+        all_findings = [self._sample_finding(SEVERITY_TAG_P0, 7)]
+        inline_comments = build_inline_comments_payload(SKILL_BUGTEAM, all_findings)
+        self.assertEqual(len(inline_comments), 1)
+        self.assertEqual(inline_comments[0][INLINE_COMMENT_FIELD_PATH], "src/example.py")
+        self.assertEqual(inline_comments[0][INLINE_COMMENT_FIELD_LINE], 7)
+        self.assertEqual(
+            inline_comments[0][INLINE_COMMENT_FIELD_SIDE], INLINE_COMMENT_SIDE_RIGHT
+        )
+        self.assertIn("Bugteam", str(inline_comments[0][INLINE_COMMENT_FIELD_BODY]))
+
+    def test_review_event_for_state_maps_clean_and_dirty(self) -> None:
+        self.assertEqual(
+            review_event_for_state(STATE_CLEAN), GITHUB_REVIEW_EVENT_APPROVE
+        )
+        self.assertEqual(
+            review_event_for_state(STATE_DIRTY), GITHUB_REVIEW_EVENT_REQUEST_CHANGES
+        )
+
+    def test_review_event_for_state_rejects_unknown_state(self) -> None:
+        with self.assertRaises(UserInputError):
+            review_event_for_state("SIDEWAYS")
+
+    def test_build_review_request_payload_assembles_fields(self) -> None:
+        inline_comments = build_inline_comments_payload(
+            SKILL_BUGTEAM, [self._sample_finding(SEVERITY_TAG_P0, 3)]
+        )
+        request_payload = build_review_request_payload(
+            state_argument=STATE_DIRTY,
+            commit_sha="deadbeefcafe",
+            review_body_text="review body text",
+            all_inline_comments=inline_comments,
+        )
+        self.assertEqual(request_payload[REVIEW_REQUEST_FIELD_COMMIT_ID], "deadbeefcafe")
+        self.assertEqual(request_payload[REVIEW_REQUEST_FIELD_BODY], "review body text")
+        self.assertEqual(
+            request_payload[REVIEW_REQUEST_FIELD_EVENT],
+            GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+        )
+        self.assertEqual(
+            request_payload[REVIEW_REQUEST_FIELD_COMMENTS], inline_comments
+        )
+
+    def test_resolve_github_token_prefers_environment_variable(self) -> None:
+        sentinel_token = "sentinel-token-from-environment"
+        previous_token = os.environ.get(GH_TOKEN_ENV_VAR_NAME)
+        os.environ[GH_TOKEN_ENV_VAR_NAME] = sentinel_token
+        try:
+            self.assertEqual(resolve_github_token(), sentinel_token)
+        finally:
+            if previous_token is None:
+                os.environ.pop(GH_TOKEN_ENV_VAR_NAME, None)
+            else:
+                os.environ[GH_TOKEN_ENV_VAR_NAME] = previous_token
+
+    def test_execute_review_post_attempt_returns_status_and_body(self) -> None:
+        stub_server, stub_thread = spawn_stub_reviews_server(failure_count=0)
+        try:
+            endpoint_url = stub_reviews_server_base_url(stub_server) + "/reviews"
+            status_code, reply_body = execute_review_post_attempt(
+                endpoint_url, "unused-token", {"event": "APPROVE"}
+            )
+        finally:
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+        self.assertEqual(status_code, STUB_HTTP_STATUS_OK)
+        self.assertIn("html_url", reply_body)
+
+    def test_post_review_with_retries_returns_posted_review_on_success(self) -> None:
+        stub_server, stub_thread = spawn_stub_reviews_server(failure_count=0)
+        try:
+            endpoint_url = stub_reviews_server_base_url(stub_server) + "/reviews"
+            posted_review = post_review_with_retries(
+                endpoint_url, "unused-token", {"event": "APPROVE"}
+            )
+        finally:
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+        self.assertEqual(posted_review.status_code, STUB_HTTP_STATUS_OK)
+        self.assertTrue(posted_review.html_url.startswith("https://github.com/"))
+        self.assertEqual(stub_server.request_count, 1)
+
+    def test_extract_html_url_field_reads_html_url(self) -> None:
+        review_reply = json.dumps(
+            {"html_url": "https://github.com/o/r/pull/1#pullrequestreview-9"}
+        )
+        self.assertEqual(
+            extract_html_url_field(review_reply),
+            "https://github.com/o/r/pull/1#pullrequestreview-9",
+        )
+
+    def test_extract_html_url_field_rejects_missing_field(self) -> None:
+        with self.assertRaises(RuntimeError):
+            extract_html_url_field(json.dumps({"unrelated": "x"}))
+
+    def test_post_audit_review_clean_state_posts_and_returns_html_url(self) -> None:
+        stub_server, stub_thread = spawn_stub_reviews_server(failure_count=0)
+        findings_path = self._write_findings_file([])
+        previous_base_url = post_audit_thread.GITHUB_API_BASE_URL
+        previous_token = os.environ.get(GH_TOKEN_ENV_VAR_NAME)
+        os.environ[GH_TOKEN_ENV_VAR_NAME] = "unused-token-for-clean-post"
+        post_audit_thread.GITHUB_API_BASE_URL = stub_reviews_server_base_url(stub_server)
+        try:
+            parsed_arguments = parse_command_line_arguments(
+                [
+                    CLI_FLAG_SKILL, SKILL_BUGTEAM,
+                    CLI_FLAG_OWNER, LIVE_TEST_OWNER,
+                    CLI_FLAG_REPO, LIVE_TEST_REPO,
+                    CLI_FLAG_PR_NUMBER, "1",
+                    CLI_FLAG_COMMIT, "abcdef1234567890",
+                    CLI_FLAG_STATE, STATE_CLEAN,
+                    CLI_FLAG_FINDINGS_JSON, str(findings_path),
+                ]
+            )
+            posted_review = post_audit_review(parsed_arguments)
+        finally:
+            post_audit_thread.GITHUB_API_BASE_URL = previous_base_url
+            if previous_token is None:
+                os.environ.pop(GH_TOKEN_ENV_VAR_NAME, None)
+            else:
+                os.environ[GH_TOKEN_ENV_VAR_NAME] = previous_token
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+        self.assertTrue(posted_review.html_url.startswith("https://github.com/"))
+        self.assertGreaterEqual(stub_server.request_count, 1)
 
 
 if __name__ == "__main__":
