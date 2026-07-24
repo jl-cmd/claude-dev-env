@@ -14,6 +14,11 @@ from categorize_files import (  # noqa: E402
     assign_layer,
     build_slices_from_files,
     normalize_path,
+    slice_fits_review_budget,
+)
+from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
+    MAXIMUM_SLICE_CHANGED_LINES,
+    MAXIMUM_SLICE_FILE_COUNT,
 )
 from split_pr_scripts_constants.config.categorize_constants import (  # noqa: E402
     LAYER_BACKEND,
@@ -23,10 +28,15 @@ from split_pr_scripts_constants.config.categorize_constants import (  # noqa: E4
     LAYER_TESTS,
 )
 from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
+    FILE_KEY_ADDITIONS,
+    FILE_KEY_DELETIONS,
     FILE_KEY_LAYER,
     FILE_KEY_PATH,
+    SLICE_KEY_CHANGED_LINES,
     SLICE_KEY_FILES,
+    SLICE_KEY_FITS_REVIEW,
     SLICE_KEY_LAYER,
+    SLICE_KEY_OVERSIZED_ATOMIC,
 )
 
 
@@ -78,3 +88,72 @@ def test_build_slices_from_files_orders_layers_and_skips_empty() -> None:
         LAYER_FRONTEND,
     ]
     assert all_slices[0][SLICE_KEY_FILES] == ["prisma/schema.prisma"]
+
+
+def test_slice_fits_review_budget_enforces_both_axes() -> None:
+    assert slice_fits_review_budget(file_count=3, changed_lines=120) is True
+    assert (
+        slice_fits_review_budget(
+            file_count=MAXIMUM_SLICE_FILE_COUNT + 1,
+            changed_lines=10,
+        )
+        is False
+    )
+    assert (
+        slice_fits_review_budget(
+            file_count=2,
+            changed_lines=MAXIMUM_SLICE_CHANGED_LINES + 1,
+        )
+        is False
+    )
+
+
+def test_build_slices_packs_oversized_layer_by_directory() -> None:
+    all_files = annotate_files(
+        [
+            {
+                FILE_KEY_PATH: "pkg/a/one.py",
+                FILE_KEY_ADDITIONS: 200,
+                FILE_KEY_DELETIONS: 0,
+            },
+            {
+                FILE_KEY_PATH: "pkg/a/two.py",
+                FILE_KEY_ADDITIONS: 200,
+                FILE_KEY_DELETIONS: 0,
+            },
+            {
+                FILE_KEY_PATH: "pkg/b/three.py",
+                FILE_KEY_ADDITIONS: 50,
+                FILE_KEY_DELETIONS: 0,
+            },
+        ]
+    )
+    all_slices = build_slices_from_files(
+        all_files,
+        feature_slug="demo",
+        title_prefix="feat",
+    )
+    assert len(all_slices) >= 2
+    assert all(each[SLICE_KEY_LAYER] == LAYER_OTHER for each in all_slices)
+    assert all(each[SLICE_KEY_FITS_REVIEW] is True for each in all_slices)
+    assert sum(each[SLICE_KEY_CHANGED_LINES] for each in all_slices) == 450
+
+
+def test_single_file_over_budget_is_oversized_atomic() -> None:
+    all_files = annotate_files(
+        [
+            {
+                FILE_KEY_PATH: "pkg/huge.py",
+                FILE_KEY_ADDITIONS: MAXIMUM_SLICE_CHANGED_LINES + 50,
+                FILE_KEY_DELETIONS: 0,
+            }
+        ]
+    )
+    all_slices = build_slices_from_files(
+        all_files,
+        feature_slug="demo",
+        title_prefix="feat",
+    )
+    assert len(all_slices) == 1
+    assert all_slices[0][SLICE_KEY_OVERSIZED_ATOMIC] is True
+    assert all_slices[0][SLICE_KEY_FITS_REVIEW] is False
