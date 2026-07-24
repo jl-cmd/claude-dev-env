@@ -6,7 +6,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 | File | Purpose |
 |---|---|
-| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, prunes retired skills on a full install, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
+| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `audit-rubrics`), merges hooks into `settings.json`, installs skills (including `skills/_shared/`), prunes retired skills and a legacy top-level `~/.claude/_shared` on install, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
 | `ever-shipped-skills.mjs` | Static `EVER_SHIPPED_SKILL_NAMES` set of every top-level skill directory name the package has shipped; the installer subtracts the current skill set from it to prune retired skills left under `~/.claude/skills` |
 | `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |

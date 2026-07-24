@@ -1,11 +1,14 @@
 # _shared
 
-Support code shared across multiple skills. Each subdirectory targets a specific cross-skill concern.
+Cross-cutting runtime assets shared by multiple skills. Clusters live under this directory (PR-loop skills, advisor protocol, and others). Files install into ~/.claude/skills/_shared/ via the skills tree in in/install.mjs.
 
-## Subdirectories
+## Contents
 
-| Directory | Role |
+| Entry | Description |
 |---|---|
-| `pr-loop/` | Prompt templates and Python helper scripts used by both `bugteam` and `pr-converge` for their audit-fix loop. |
+| pr-loop/ | Docs, scripts, constants, prompts, and the portable driver for the PR-loop workflow suite |
+| dvisor/ | Warm-advisor spawn-and-consult protocol for 	eam-advisor and orchestrator |
 
-Files here are not skills themselves and have no `SKILL.md`. They install alongside each consuming skill via the install pipeline in `packages/claude-dev-env/bin/install.mjs`.
+## Install path
+
+in/install.mjs copies this tree as part of skills/_shared/ to ~/.claude/skills/_shared/. Skills reference files here by relative path from their own skill root (for example ../_shared/pr-loop/audit-contract.md).

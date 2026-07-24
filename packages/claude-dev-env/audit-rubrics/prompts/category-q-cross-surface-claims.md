@@ -25,7 +25,7 @@ ID prefix: `find`.
 
 **Q1. Term sweep**
 - Pull out every identifier, API field, and config key the diff introduces or reads. For each, sweep all changed prose surfaces for a near-miss variant — a hyphen or a space in place of an underscore, a singular where the code is plural (or the reverse), a shared prefix with a divergent tail.
-- Run `packages/claude-dev-env/_shared/pr-loop/scripts/terminology_sweep.py` for mechanical recall. It reads a unified diff on stdin or via `--diff-file`, prints one `file:line` finding per near-miss, exits 1 when findings exist and 0 when clean. Feed it the PR diff, then adjudicate each finding: a near-miss can be an intentional distinct term, so cite the code definition and the prose line and judge whether they name the same thing.
+- Run `packages/claude-dev-env/skills/_shared/pr-loop/scripts/terminology_sweep.py` for mechanical recall. It reads a unified diff on stdin or via `--diff-file`, prints one `file:line` finding per near-miss, exits 1 when findings exist and 0 when clean. Feed it the PR diff, then adjudicate each finding: a near-miss can be an intentional distinct term, so cite the code definition and the prose line and judge whether they name the same thing.
 - Adversarial probes when the sweep is clean: (a) check camelCase versus snake_case spellings of the same field across code and docs; (b) check singular/plural drift on collection field names; (c) check a shared-prefix family (`retry_budget`, `retry_count`, `retry_limit`) for a doc that names the wrong member.
 
 **Q2. PR-description claim verification**
