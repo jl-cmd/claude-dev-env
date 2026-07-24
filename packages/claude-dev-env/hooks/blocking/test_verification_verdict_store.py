@@ -297,6 +297,24 @@ def test_untracked_tooling_state_path_stays_out_of_the_surface(
     assert untracked_file_paths(str(work_dir)) == []
 
 
+@pytest.mark.parametrize(
+    "lookalike_relative_path",
+    [
+        ".claude-plugin-database/settings.py",
+        "src/.claude-plugin-data/nested_module.py",
+    ],
+)
+def test_untracked_prefix_lookalike_stays_in_the_surface(
+    tmp_path: pathlib.Path, lookalike_relative_path: str
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    lookalike_file = work_dir / lookalike_relative_path
+    lookalike_file.parent.mkdir(parents=True)
+    lookalike_file.write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    kept_paths = untracked_file_paths(str(work_dir))
+    assert kept_paths == [lookalike_relative_path.replace("\\", "/")]
+
+
 def _git_output(work_dir: pathlib.Path, *git_arguments: str) -> str:
     completed_process = subprocess.run(
         ["git", "-C", str(work_dir), *git_arguments],

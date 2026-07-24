@@ -250,8 +250,8 @@ def untracked_file_paths(repo_root: str) -> list[str] | None:
     Paths under the transient tooling-state subtrees named in
     ``ALL_TOOLING_STATE_PREFIXES`` are skipped: the Claude and Cursor
     scratch subdirectories carrying verification verdicts, worktree copies,
-    daemon and team session state, plus the top-level plugin runtime data
-    directory a plugin rewrites while it works. These hold session state
+    daemon state, team state, and session state, plus the top-level plugin
+    runtime data directory a plugin rewrites while it works. These hold session state
     and stale worktree copies, never the branch's work, and in real
     checkouts they run to thousands of files. A verdict binds to surface
     content, so runtime state left in the surface moves the hash under a
