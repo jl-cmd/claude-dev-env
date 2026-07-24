@@ -27,6 +27,8 @@ surface for the test suite.
 
 ## Running tests
 
+From this directory (`code_rules_gate_parts/`):
+
 ```bash
-python -m pytest packages/claude-dev-env/skills/_shared/pr-loop/scripts/code_rules_gate_parts/tests/
+python -m pytest tests/
 ```
