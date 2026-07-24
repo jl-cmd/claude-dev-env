@@ -1,11 +1,13 @@
-"""Shared helpers for grant_project_claude_permissions and revoke_project_claude_permissions.
+"""Edit ~/.claude/settings.json safely for the grant and revoke scripts.
 
-Writes to ~/.claude/settings.json are atomic and permission-preserving: the
-target file's existing POSIX mode is captured, a sibling temp file is
-created via os.open with O_CREAT | O_EXCL and the preserved mode, content
-is written, then os.replace swaps it into place. Output is serialized with
-sort_keys=True for a stable on-disk layout; the first run on a hand-ordered
-settings file produces a one-time re-sort diff, subsequent writes are stable.
+::
+
+    save_settings(settings_path, {"permissions": {"allow": ["Edit(/repo/.claude/**)"]}})
+        # -> writes a sibling temp file, then os.replace swaps it into place
+        # -> the live settings file is never seen half-written
+
+Each write preserves the target file's existing permission bits and sorts keys
+for a stable on-disk layout.
 """
 
 import json
@@ -134,8 +136,8 @@ def all_project_path_aliases_for_reap(
     ::
 
         all_project_path_aliases_for_reap("/repo")  # ok: ("/repo",)
-        all_project_path_aliases_for_reap("/home/u", home_directory_path="/home/u")
-            # ok: ("/home/u", "$HOME")
+        all_project_path_aliases_for_reap(cwd, home_directory_path=cwd)
+            # ok: (cwd, "$HOME") when cwd equals the home directory
 
     Always includes the absolute POSIX project path. When that path is the
     user home directory, also includes ``$HOME`` so grant shapes like
@@ -150,10 +152,10 @@ def all_project_path_aliases_for_reap(
     """
     normalized_project_path = project_path.replace("\\", "/").rstrip("/")
     resolved_home_directory_path = (
-        home_directory_path
-        if home_directory_path is not None
-        else str(Path.home())
-    ).replace("\\", "/").rstrip("/")
+        (home_directory_path if home_directory_path is not None else str(Path.home()))
+        .replace("\\", "/")
+        .rstrip("/")
+    )
     all_path_aliases: list[str] = [normalized_project_path]
     if normalized_project_path.lower() == resolved_home_directory_path.lower():
         all_path_aliases.append(HOME_PROJECT_PATH_ALIAS)
@@ -238,15 +240,19 @@ def _is_project_path_token_at_word_boundary(
 def is_trust_entry_for_project(
     candidate_entry: object, project_path: str, prefix: str
 ) -> bool:
-    """Detect whether an autoMode.environment entry is a trust entry for the project.
+    """Detect whether an autoMode.environment entry trusts this project's .claude dir.
 
-    The predicate matches any string entry whose prefix matches the trust-entry
-    marker and that contains the project's .claude/** path token anchored on a
-    non-path boundary (the start of the body after the prefix, a whitespace
-    character, or a quote character). The boundary anchor prevents
-    cross-project false positives where the current project's path is a path
-    suffix of an unrelated entry's path. The exact wording after the prefix is
-    allowed to vary between template revisions.
+    ::
+
+        prefix = "TRUST "
+        is_trust_entry_for_project("TRUST /repo/.claude/**", "/repo", prefix)
+            # ok:   True   (prefix matches, path token on a word boundary)
+        is_trust_entry_for_project("TRUST /other/repo/.claude/**", "/repo", prefix)
+            # flag: False  (the /repo token sits mid-path, not on a boundary)
+
+    A match needs the prefix and the project's ``.claude/**`` token anchored on a
+    boundary (string start, whitespace, or a quote), so one project's path never
+    matches inside another project's path. Wording after the prefix may vary.
 
     Args:
         candidate_entry: The autoMode.environment list value to inspect.
@@ -261,7 +267,7 @@ def is_trust_entry_for_project(
     if not candidate_entry.startswith(prefix):
         return False
     project_path_token = f"{project_path}/.claude/**"
-    body_after_prefix = candidate_entry[len(prefix):]
+    body_after_prefix = candidate_entry[len(prefix) :]
     token_position = body_after_prefix.find(project_path_token)
     while token_position != -1:
         if _is_project_path_token_at_word_boundary(body_after_prefix, token_position):
@@ -286,9 +292,7 @@ def remove_matching_entries_from_list(
     """
     original_length = len(all_target_list)
     all_target_list[:] = [
-        each_value
-        for each_value in all_target_list
-        if not match_predicate(each_value)
+        each_entry for each_entry in all_target_list if not match_predicate(each_entry)
     ]
     return original_length - len(all_target_list)
 
@@ -359,12 +363,12 @@ def get_mode_to_preserve(settings_path: Path) -> int:
     """
     default_settings_file_mode: int = 0o600
     try:
-        stat_result = os.stat(settings_path)
+        settings_file_status = os.stat(settings_path)
     except FileNotFoundError:
         return default_settings_file_mode
     except OSError as stat_error:
         exit_with_error(f"Failed to stat {settings_path}: {stat_error}")
-    return stat.S_IMODE(stat_result.st_mode)
+    return stat.S_IMODE(settings_file_status.st_mode)
 
 
 def write_atomically_with_mode(
@@ -451,19 +455,19 @@ def save_settings(settings_path: Path, all_settings: dict[str, object]) -> None:
                 )
 
 
-def append_if_missing(all_target_list: list[object], new_value: str) -> bool:
+def append_if_missing(all_target_list: list[object], entry_to_add: str) -> bool:
     """Add a value to a list when it is not already present.
 
     Args:
         all_target_list: The list to potentially append to.
-        new_value: The string value to add when missing.
+        entry_to_add: The string value to add when missing.
 
     Returns:
         True when the value was appended, False when it already existed.
     """
-    if new_value in all_target_list:
+    if entry_to_add in all_target_list:
         return False
-    all_target_list.append(new_value)
+    all_target_list.append(entry_to_add)
     return True
 
 
