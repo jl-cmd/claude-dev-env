@@ -512,11 +512,11 @@ def _create_draft_pr(
 ) -> str:
     body = (
         f"## Summary\n\n{story}\n\n"
-        f"## Split source\n\nExcised from PR #{pr_number} via `/split-pr`.\n\n"
+        f"## Split source\n\nExcised from pull request #{pr_number} via `/split-pr`.\n\n"
         f"## Dependencies\n\nBase branch: `{base_name}`. Merge earlier slices first.\n\n"
         "## Testing\n\n"
-        "File-partitioned from the source PR. Full project CI on this slice alone "
-        "is not claimed by `/split-pr` unless verified separately.\n"
+        "File-partitioned from the parent pull request. Project-wide CI on this "
+        "slice alone is not claimed by `/split-pr` unless verified separately.\n"
     )
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -642,21 +642,15 @@ def main() -> int:
         if PLAN_KEY_TITLE not in plan_payload and PLAN_KEY_PR_NUMBER not in plan_payload:
             raise ValueError(ERROR_EXECUTE_FAILED % "plan missing pr identity")
         repo_root = resolve_repo_root(Path(parsed_arguments.repo_path).resolve())
-        should_create_prs = (
-            parsed_arguments.create_prs and not parsed_arguments.dry_run
-        )
-        should_supersede: bool | None
-        if parsed_arguments.supersede_source is None:
-            should_supersede = None
-        else:
-            should_supersede = bool(parsed_arguments.supersede_source)
         execution_payload = execute_plan(
             plan_payload=plan_payload,
             repo_root=repo_root,
             is_dry_run=parsed_arguments.dry_run,
-            should_create_prs=should_create_prs,
+            should_create_prs=(
+                parsed_arguments.create_prs and not parsed_arguments.dry_run
+            ),
             should_push=parsed_arguments.push and not parsed_arguments.dry_run,
-            should_supersede=should_supersede,
+            should_supersede=parsed_arguments.supersede_source,
         )
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(execution_payload, indent=indent))
