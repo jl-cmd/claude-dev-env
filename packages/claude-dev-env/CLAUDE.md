@@ -10,6 +10,7 @@ Use direct affirmative framing that states the desired action clearly and positi
 
 Write concise, ADHD-friendly responses.
 
+- Always say what is, rather than what is not.
 - Lead with the outcome.
 - Use short, active sentences with one idea each.
 - Put meaning before mechanism.
