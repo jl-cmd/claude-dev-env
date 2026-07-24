@@ -252,3 +252,7 @@ ALL_TEST_FILE_NAME_INFIX_MARKERS: tuple[str, ...] = ("_test.", ".test.", ".spec.
 PROSE_WINDOW_WORD_SEPARATOR: str = " "
 
 IDENTIFIER_TOKEN_SEPARATOR: str = "_"
+
+PLURAL_ES_SUFFIX_LENGTH: int = 2
+
+PLURAL_IES_SUFFIX_LENGTH: int = 3

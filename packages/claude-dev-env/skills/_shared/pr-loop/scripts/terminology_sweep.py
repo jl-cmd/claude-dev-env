@@ -62,6 +62,8 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
+    PLURAL_ES_SUFFIX_LENGTH,
+    PLURAL_IES_SUFFIX_LENGTH,
     PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
     SNAKE_CASE_IDENTIFIER_PATTERN,
@@ -411,9 +413,9 @@ def _word_is_identifier_vocabulary(
         return True
     if prose_word.endswith("s") and prose_word[:-1] in all_identifier_tokens:
         return True
-    if prose_word.endswith("es") and prose_word[:-2] in all_identifier_tokens:
+    if prose_word.endswith("es") and prose_word[:-PLURAL_ES_SUFFIX_LENGTH] in all_identifier_tokens:
         return True
-    if prose_word.endswith("ies") and prose_word[:-3] + "y" in all_identifier_tokens:
+    if prose_word.endswith("ies") and prose_word[:-PLURAL_IES_SUFFIX_LENGTH] + "y" in all_identifier_tokens:
         return True
     return False
 
@@ -652,7 +654,10 @@ def _base_tree_names(
     return frozenset(all_present_names)
 
 
-def staged_terminology_findings(repository_root: Path) -> list[str]:
+def staged_terminology_findings(
+    repository_root: Path,
+    all_preexisting_identifier_tuples: frozenset[IdentifierTuple] = frozenset(),
+) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
@@ -661,6 +666,9 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
 
     Args:
         repository_root: The repository root the staged diff is read from.
+        all_preexisting_identifier_tuples: Extra token tuples to treat as
+            already named, added to the base-tree set the sweep skips. Empty
+            by default, which sweeps exactly the base-tree result.
 
     Returns:
         One finding string per near-miss term on a staged added prose line, or
@@ -684,7 +692,10 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         _identifier_token_tuple(each_name)
         for each_name in _base_tree_names(repository_root, all_added_names)
     )
-    return sweep_diff(diff_process.stdout, preexisting_tuples)
+    return sweep_diff(
+        diff_process.stdout,
+        preexisting_tuples | all_preexisting_identifier_tuples,
+    )
 
 
 def _read_diff_text(diff_file_path: str | None) -> str:
@@ -713,17 +724,26 @@ def _parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
     return parser.parse_args(all_arguments)
 
 
-def main(all_arguments: list[str]) -> int:
+def main(
+    all_arguments: list[str],
+    all_preexisting_identifier_tuples: frozenset[IdentifierTuple] = frozenset(),
+) -> int:
     """Run the sweep and return the process exit code.
 
     Args:
         all_arguments: The argument vector following the script name.
+        all_preexisting_identifier_tuples: Token tuples to treat as already
+            named, so no prose is flagged against them. Empty by default, which
+            sweeps every multi-word identifier the diff introduces.
 
     Returns:
         The value 1 when any near-miss finding exists, and 0 when none remain.
     """
     arguments = _parse_arguments(all_arguments)
-    all_findings = sweep_diff(_read_diff_text(arguments.diff_file))
+    all_findings = sweep_diff(
+        _read_diff_text(arguments.diff_file),
+        all_preexisting_identifier_tuples,
+    )
     for each_finding in all_findings:
         print(each_finding)
     return 1 if all_findings else 0
