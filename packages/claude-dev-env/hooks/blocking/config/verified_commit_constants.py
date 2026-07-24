@@ -106,6 +106,7 @@ ALL_TOOLING_STATE_PREFIXES = (
     ".claude/teams/",
     ".claude/sessions/",
     ".cursor/worktrees/",
+    ".claude-plugin-data/",
 )
 GATED_GIT_SUBCOMMANDS = frozenset({"commit", "push"})
 ALL_GIT_BINARY_NAMES = frozenset({"git", "git.exe"})
