@@ -171,10 +171,15 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
     if _is_numbered_list_marker(text, terminator_index, token):
         return True
     next_word = _next_alpha_word(text, terminator_index + 1)
-    # Single-letter chain tokens ("U." / "e." in U.S. / e.g.) are not ends.
-    # "option A. Which" and "A. I should" are real ends (next word is not a
-    # single non-I letter).
+    # Single-letter tokens in multi-part abbrevs ("U.S." / "e.g." / "Ph.D.") are
+    # not ends. A lone option letter ("option A. Which") still is.
     if len(token) == 1 and token.isalpha():
+        character_before_token_index = terminator_index - len(token) - 1
+        if (
+            character_before_token_index >= 0
+            and text[character_before_token_index] == "."
+        ):
+            return True
         following_start = _following_sentence_start_character(text, terminator_index + 1)
         if following_start == "" or following_start.islower():
             return True

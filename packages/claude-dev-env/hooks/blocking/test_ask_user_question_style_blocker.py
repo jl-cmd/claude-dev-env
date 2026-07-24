@@ -215,6 +215,16 @@ def test_phd_abbreviation_does_not_inflate_sentence_count() -> None:
     assert FINDING_TOO_MANY_SENTENCES not in findings
 
 
+def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
+    question_text = (
+        "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "
+        "Which client should we pin?"
+    )
+    findings = find_style_findings(_payload(question_text)["tool_input"])
+    assert FINDING_TOO_MANY_SENTENCES not in findings
+    assert FINDING_MISSING_CONTEXT not in findings
+
+
 def test_arrows_inside_backticks_are_not_flagged() -> None:
     question_text = (
         "The pipeline is `setup -> check -> publish`. Which stage failed?"
