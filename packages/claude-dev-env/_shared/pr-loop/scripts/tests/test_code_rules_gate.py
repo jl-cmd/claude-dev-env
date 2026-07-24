@@ -88,7 +88,7 @@ def commit_all_files(repository_root: Path, commit_message: str) -> None:
 
 def write_file(file_path: Path, content: str) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding="utf-8")
+    file_path.write_text(content, encoding="utf-8", newline="")
 
 
 def stage_file(repository_root: Path, relative_path: str) -> None:
