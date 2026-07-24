@@ -146,3 +146,63 @@ STAGED_TEST_GROUP_FAILURE_MESSAGE: str = (
 MINIMUM_STAGED_PYTEST_PYTHON_MAJOR: int = 3
 
 MINIMUM_STAGED_PYTEST_PYTHON_MINOR: int = 12
+
+JUNIT_XML_FLAG_PREFIX: str = "--junitxml="
+
+JUNIT_XML_TESTCASE_TAG: str = "testcase"
+
+JUNIT_XML_FAILURE_TAG: str = "failure"
+
+JUNIT_XML_ERROR_TAG: str = "error"
+
+JUNIT_XML_CLASSNAME_ATTRIBUTE: str = "classname"
+
+JUNIT_XML_NAME_ATTRIBUTE: str = "name"
+
+JUNIT_XML_MISSING_ATTRIBUTE_FALLBACK: str = ""
+
+REGRESSION_JUNIT_TEMP_DIRECTORY_PREFIX: str = "code_rules_gate_junit_"
+
+REGRESSION_STAGED_JUNIT_SUBDIRECTORY_NAME: str = "staged"
+
+REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME: str = "baseline"
+
+REGRESSION_GIT_STASH_MESSAGE: str = "code_rules_gate: regression-baseline snapshot"
+
+ALL_GIT_HEAD_EXISTS_ARGS: tuple[str, ...] = ("rev-parse", "--verify", "HEAD")
+
+ALL_GIT_STASH_PUSH_ARGS: tuple[str, ...] = (
+    "stash",
+    "push",
+    "--quiet",
+    "--message",
+    REGRESSION_GIT_STASH_MESSAGE,
+)
+
+ALL_GIT_STASH_POP_ARGS: tuple[str, ...] = ("stash", "pop", "--quiet", "--index")
+
+REGRESSION_NO_BASELINE_MESSAGE: str = (
+    "code_rules_gate: no prior commit to compare against (first commit on this branch); "
+    "every staged test failure blocks."
+)
+
+REGRESSION_STASH_FAILED_MESSAGE: str = (
+    "code_rules_gate: could not snapshot the pre-staged baseline (git stash push failed); "
+    "falling back to blocking on every staged test failure."
+)
+
+REGRESSION_STASH_POP_FAILED_MESSAGE: str = (
+    "code_rules_gate: git stash pop failed after the baseline check — your staged changes "
+    "are sitting in the stash, not lost. Run 'git stash list' then 'git stash pop' to "
+    "restore them by hand."
+)
+
+REGRESSION_PRE_EXISTING_FAILURE_BYPASSED_MESSAGE: str = (
+    "code_rules_gate: staged test group rooted at {group_root} has {count} failure(s) "
+    "already present before this change (not caused by it); not blocking."
+)
+
+REGRESSION_GROUP_FAILURE_MESSAGE: str = (
+    "code_rules_gate: staged test group rooted at {group_root} has {count} failure(s) "
+    "this change introduces; commit blocked."
+)

@@ -1,6 +1,5 @@
-"""Run the staged Python test files, grouped by their owning pytest config.
+"""Run one staged test group, grouped by its owning pytest config, in pytest batches.
 
-The commit gate runs each staged test file so a broken test blocks the commit.
 Files are grouped by the nearest ancestor holding a pytest config, and each
 group runs in its own pytest session with the working directory at that root, so
 two packages exposing a same-named top-level package never shadow each other.
@@ -8,6 +7,11 @@ two packages exposing a same-named top-level package never shadow each other.
 ``conftest.py`` paths are never passed as pytest collection targets: pytest loads
 them automatically when nearby tests run, and collecting multiple bare confests
 in one session collides on the shared module basename.
+
+``staged_test_regression`` is the commit gate's entry point: it discovers the
+staged test files, groups them by owning pytest-config root, and calls back
+into this module's group-running primitives to run each group (optionally
+with a JUnit XML report per batch, for its staged-vs-baseline comparison).
 """
 
 import os
@@ -24,12 +28,11 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     CODE_RULES_GATE_PYTHON_ENV_VAR,
     CODE_RULES_GATE_PYTHONPATH_ENV_VAR,
     COMMAND_LINE_ARGUMENT_SEPARATOR_LENGTH,
+    JUNIT_XML_FLAG_PREFIX,
     MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
     PYTHON_FILE_EXTENSION,
     PYTHONPATH_ENV_VAR,
     STAGED_PYTEST_TIMEOUT_SECONDS,
-    STAGED_TEST_FAILURE_HEADER,
-    STAGED_TEST_GROUP_FAILURE_MESSAGE,
     TEST_CONFTEST_FILENAME,
 )
 from pr_loop_shared_constants.preflight_constants import (
@@ -256,19 +259,27 @@ def _batched_pytest_arguments(
     return all_batches
 
 
-def _pytest_batch_exit_code(all_batch_command: list[str], group_root: Path) -> int:
+def _pytest_batch_exit_code(
+    all_batch_command: list[str], group_root: Path, junit_xml_path: Path | None = None
+) -> int:
     """Run one pytest invocation and normalize its exit code.
 
     Args:
         all_batch_command: The full argv for this pytest invocation.
         group_root: The owning test root used as the working directory.
+        junit_xml_path: When given, the batch also writes a JUnit XML report
+            here (via ``--junitxml``), for a caller that needs the per-test
+            pass/fail identities alongside the exit code.
 
     Returns:
         0 when the batch passes or collects no tests; pytest's exit code
         otherwise.
     """
+    full_command = list(all_batch_command)
+    if junit_xml_path is not None:
+        full_command.append(f"{JUNIT_XML_FLAG_PREFIX}{junit_xml_path}")
     pytest_process = subprocess.run(
-        all_batch_command,
+        full_command,
         cwd=str(group_root),
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
@@ -288,19 +299,43 @@ def _pytest_fixed_command(repository_root: Path) -> list[str]:
 
 
 def _first_failing_batch_exit_code(
-    all_fixed_command: list[str], all_batches: list[list[str]], group_root: Path
+    all_fixed_command: list[str],
+    all_batches: list[list[str]],
+    group_root: Path,
+    junit_xml_dir: Path | None = None,
 ) -> int:
-    """Run each batch and return the first non-zero pytest exit code, or zero."""
+    """Run each batch and return the first non-zero pytest exit code, or zero.
+
+    Args:
+        all_fixed_command: The interpreter-and-pytest prefix shared by every batch.
+        all_batches: The command-line-length-safe argument batches to run in order.
+        group_root: The owning test root used as the working directory.
+        junit_xml_dir: When given, each batch also writes its own JUnit XML report
+            here (one file per batch index), for a caller that needs per-test
+            pass/fail identities alongside the exit code.
+
+    Returns:
+        0 when every batch passes or collects no tests; the first non-zero batch
+        exit code otherwise.
+    """
     first_failing_exit_code = 0
-    for each_batch in all_batches:
-        batch_exit_code = _pytest_batch_exit_code([*all_fixed_command, *each_batch], group_root)
+    for batch_index, each_batch in enumerate(all_batches):
+        junit_xml_path = (
+            junit_xml_dir / f"batch_{batch_index}.xml" if junit_xml_dir is not None else None
+        )
+        batch_exit_code = _pytest_batch_exit_code(
+            [*all_fixed_command, *each_batch], group_root, junit_xml_path=junit_xml_path
+        )
         if batch_exit_code != 0 and first_failing_exit_code == 0:
             first_failing_exit_code = batch_exit_code
     return first_failing_exit_code
 
 
 def _run_pytest_for_group(
-    group_root: Path, all_group_test_paths: list[Path], repository_root: Path
+    group_root: Path,
+    all_group_test_paths: list[Path],
+    repository_root: Path,
+    junit_xml_dir: Path | None = None,
 ) -> int:
     """Run pytest over one group's test files, split into budget-safe batches.
 
@@ -308,6 +343,9 @@ def _run_pytest_for_group(
         group_root: The owning test root used as the pytest working directory.
         all_group_test_paths: The staged test files that share *group_root*.
         repository_root: The repository root used to resolve a project venv.
+        junit_xml_dir: When given, a JUnit XML report is written per batch under
+            this directory, for a caller that needs per-test pass/fail identities
+            (the regression gate) alongside the exit code.
 
     Returns:
         0 when every batch passes or collects nothing; the first failing batch's
@@ -321,49 +359,6 @@ def _run_pytest_for_group(
         [_relative_pytest_argument(each_path, group_root) for each_path in all_group_test_paths],
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS - fixed_command_length,
     )
-    return _first_failing_batch_exit_code(all_fixed_command, all_batches, group_root)
-
-
-def _run_grouped_staged_tests(
-    all_tests_by_root: dict[Path, list[Path]], repository_root: Path
-) -> int:
-    """Run each staged test group and return the first failing exit code, or zero."""
-    first_failing_exit_code = 0
-    for each_group_root in sorted(all_tests_by_root):
-        group_exit_code = _run_pytest_for_group(
-            each_group_root, all_tests_by_root[each_group_root], repository_root
-        )
-        if group_exit_code == 0:
-            continue
-        sys.stderr.write(
-            STAGED_TEST_GROUP_FAILURE_MESSAGE.format(group_root=each_group_root) + "\n"
-        )
-        if first_failing_exit_code == 0:
-            first_failing_exit_code = group_exit_code
-    return first_failing_exit_code
-
-
-def run_staged_test_files(repository_root: Path) -> int:
-    """Run pytest over the staged test files and return the gate exit code.
-
-    ``conftest.py`` files are excluded from collection targets. Pytest still
-    loads them automatically when a nearby staged test runs under the same
-    owning root.
-
-    Args:
-        repository_root: The repository root the staged test files belong to.
-
-    Returns:
-        0 when no collectable test file is staged, when every group collects no
-        tests, or when every group passes. The first failing group's exit code
-        otherwise.
-    """
-    all_test_paths = _staged_test_file_paths(repository_root)
-    all_pytest_targets = _pytest_target_paths(all_test_paths)
-    if not all_pytest_targets:
-        return 0
-    all_tests_by_root = _group_staged_tests_by_root(all_pytest_targets, repository_root)
-    first_failing_exit_code = _run_grouped_staged_tests(all_tests_by_root, repository_root)
-    if first_failing_exit_code != 0:
-        sys.stderr.write(STAGED_TEST_FAILURE_HEADER + "\n")
-    return first_failing_exit_code
+    return _first_failing_batch_exit_code(
+        all_fixed_command, all_batches, group_root, junit_xml_dir=junit_xml_dir
+    )
