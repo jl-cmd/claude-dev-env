@@ -4,8 +4,6 @@ description: Build a polished self-contained HTML product launch and release-not
 when_to_use: Invoke for requests such as "build release notes for the work you've done," "create release notes HTML," "make a product launch page," "document this completed feature," or "turn our work into a polished release page."
 disable-model-invocation: false
 user-invocable: true
-model: inherit
-effort: high
 ---
 
 Build a polished, self-contained HTML product launch and release-notes page for the work completed in this session.
