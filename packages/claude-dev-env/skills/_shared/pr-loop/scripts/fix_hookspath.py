@@ -33,30 +33,17 @@ def resolve_canonical_hooks_directory(
     """
     if all_environment_overrides is not None:
         for each_env_var_name in ALL_HOME_ENV_VAR_NAMES:
-            home_value = all_environment_overrides.get(each_env_var_name)
-            if home_value:
-                return Path(home_value).joinpath(*ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS)
+            home_directory_path = all_environment_overrides.get(each_env_var_name)
+            if home_directory_path:
+                return Path(home_directory_path).joinpath(*ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS)
     return Path.home().joinpath(*ALL_CANONICAL_HOOKS_DIRECTORY_COMPONENTS)
 
 
-def list_local_core_hooks_path_values(
+def _run_local_hooks_path_query(
     repository_root: Path,
     all_environment_overrides: dict[str, str] | None,
-) -> list[str]:
-    """Return all repo-local ``core.hooksPath`` values configured on the repo.
-
-    Args:
-        repository_root: Repository root used as the ``git -C`` target.
-        all_environment_overrides: Optional environment variable mapping
-            forwarded to ``subprocess.run``.
-
-    Returns:
-        Non-empty stripped values from ``git config --local --get-all``, or
-        an empty list when no values are configured.
-
-    Raises:
-        RuntimeError: When git exits non-zero with a non-empty stderr diagnostic.
-    """
+) -> subprocess.CompletedProcess[str]:
+    """Run the git command that lists local ``core.hooksPath`` entries."""
     git_command = [
         "git",
         "-C",
@@ -66,7 +53,7 @@ def list_local_core_hooks_path_values(
         "--get-all",
         "core.hooksPath",
     ]
-    completed_process = subprocess.run(
+    return subprocess.run(
         git_command,
         capture_output=True,
         text=True,
@@ -75,9 +62,28 @@ def list_local_core_hooks_path_values(
         check=False,
         env=all_environment_overrides,
     )
+
+
+def list_local_core_hooks_path_entries(
+    repository_root: Path,
+    all_environment_overrides: dict[str, str] | None,
+) -> list[str]:
+    """Return all repo-local ``core.hooksPath`` entries configured on the repo.
+
+    Args:
+        repository_root: Repository root used as the ``git -C`` target.
+        all_environment_overrides: Env mapping forwarded to ``subprocess.run``.
+
+    Returns:
+        Stripped, non-empty local ``core.hooksPath`` entries (empty when none).
+
+    Raises:
+        RuntimeError: When git exits non-zero with a non-empty stderr diagnostic.
+    """
+    completed_process = _run_local_hooks_path_query(
+        repository_root, all_environment_overrides)
     if completed_process.returncode != 0:
-        diagnostic_stderr = completed_process.stderr.strip()
-        if diagnostic_stderr:
+        if diagnostic_stderr := completed_process.stderr.strip():
             raise RuntimeError(
                 f"git read of local core.hooksPath on {repository_root} "
                 f"exited {completed_process.returncode}: {diagnostic_stderr}"
@@ -161,20 +167,20 @@ def unset_local_core_hooks_path(
 
 
 def set_global_core_hooks_path(
-    target_value: str,
+    target_hooks_path: str,
     all_environment_overrides: dict[str, str] | None,
 ) -> int:
     """Write the global-scope ``core.hooksPath`` value into git config.
 
     Args:
-        target_value: Path value to install at global scope.
+        target_hooks_path: Path value to install at global scope.
         all_environment_overrides: Optional environment variable mapping
             forwarded to ``subprocess.run``.
 
     Returns:
         The ``git config --global`` exit code (zero on success).
     """
-    git_command = ["git", "config", "--global", "core.hooksPath", target_value]
+    git_command = ["git", "config", "--global", "core.hooksPath", target_hooks_path]
     completed_process = subprocess.run(
         git_command,
         capture_output=True,
@@ -185,14 +191,14 @@ def set_global_core_hooks_path(
     return completed_process.returncode
 
 
-def normalize_hooks_path(raw_value: str) -> str:
-    return raw_value.replace("\\", "/").rstrip("/")
+def normalize_hooks_path(raw_hooks_path: str) -> str:
+    return raw_hooks_path.replace("\\", "/").rstrip("/")
 
 
-def is_canonical_hooks_path(raw_value: str) -> bool:
-    if not raw_value:
+def is_canonical_hooks_path(raw_hooks_path: str) -> bool:
+    if not raw_hooks_path:
         return False
-    return normalize_hooks_path(raw_value).endswith(HOOKS_PATH_SUFFIX)
+    return normalize_hooks_path(raw_hooks_path).endswith(HOOKS_PATH_SUFFIX)
 
 
 def find_repository_root(start: Path) -> Path:
@@ -337,13 +343,13 @@ def _repair_hooks_path_then_rerun_preflight(
     Raises:
         RuntimeError: When a git read exits non-zero with non-empty stderr.
     """
-    local_hooks_path_values = list_local_core_hooks_path_values(
+    local_hooks_path_entries = list_local_core_hooks_path_entries(
         repository_root,
         all_environment_overrides,
     )
     has_non_canonical_local_override = any(
-        not is_canonical_hooks_path(each_value)
-        for each_value in local_hooks_path_values
+        not is_canonical_hooks_path(each_hooks_path_entry)
+        for each_hooks_path_entry in local_hooks_path_entries
     )
     if has_non_canonical_local_override:
         unset_local_returncode = unset_local_core_hooks_path(
@@ -361,22 +367,22 @@ def _repair_hooks_path_then_rerun_preflight(
             f"{repository_root}",
             file=sys.stderr,
         )
-    current_global_value = read_global_core_hooks_path(all_environment_overrides)
-    if not is_canonical_hooks_path(current_global_value):
-        canonical_target_value = str(canonical_hooks_directory).replace("\\", "/")
+    current_global_hooks_path = read_global_core_hooks_path(all_environment_overrides)
+    if not is_canonical_hooks_path(current_global_hooks_path):
+        canonical_target_hooks_path = str(canonical_hooks_directory).replace("\\", "/")
         global_set_exit_code = set_global_core_hooks_path(
-            canonical_target_value,
+            canonical_target_hooks_path,
             all_environment_overrides,
         )
         if global_set_exit_code != 0:
             print(
                 "fix_hookspath: failed to set global core.hooksPath to "
-                f"{canonical_target_value} (git exit {global_set_exit_code}).",
+                f"{canonical_target_hooks_path} (git exit {global_set_exit_code}).",
                 file=sys.stderr,
             )
             return 1
         print(
-            f"fix_hookspath: set global core.hooksPath to {canonical_target_value}",
+            f"fix_hookspath: set global core.hooksPath to {canonical_target_hooks_path}",
             file=sys.stderr,
         )
     return rerun_preflight(repository_root, all_environment_overrides)
