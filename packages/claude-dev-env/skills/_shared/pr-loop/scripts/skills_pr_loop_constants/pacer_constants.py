@@ -20,11 +20,15 @@ PACER_PORTABLE: str = "portable"
 CLI_SKILL_FLAG: str = "--skill"
 CLI_HAS_WORKFLOW_FLAG: str = "--has-workflow"
 CLI_HAS_SCHEDULE_WAKEUP_FLAG: str = "--has-schedule-wakeup"
+CLI_GROK_MODE_FLAG: str = "--grok-mode"
+
+GROK_MODE_FLAG_DEFAULT: str = "0"
 
 RESULT_KEY_PACER: str = "pacer"
 RESULT_KEY_ENTRY_SKILL: str = "entry_skill"
 RESULT_KEY_HAS_WORKFLOW: str = "has_workflow"
 RESULT_KEY_HAS_SCHEDULE_WAKEUP: str = "has_schedule_wakeup"
+RESULT_KEY_GROK_MODE: str = "grok_mode"
 
 ALL_TRUTHY_FLAG_TOKENS: frozenset[str] = frozenset(
     {"1", "true", "yes", "on", "y", "t"}
