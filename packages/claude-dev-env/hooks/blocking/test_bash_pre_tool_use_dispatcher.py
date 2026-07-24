@@ -219,6 +219,7 @@ def test_powershell_selects_the_three_shared_hooks() -> None:
         for each_entry in select_applicable_entries(POWERSHELL_TOOL_NAME)
     ]
     assert powershell_paths == [
+        "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
         "blocking/verified_commit_gate.py",
         "blocking/verdict_directory_write_blocker.py",
