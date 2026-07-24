@@ -1,14 +1,13 @@
 """Configuration constants for the code_verifier_spawn_preflight_gate hook.
 
 The gate denies an ``Agent`` or ``Task`` spawn whose ``subagent_type`` is
-``code-verifier`` when the branch carries a merge conflict against its base
-ref, a CODE_RULES violation on a line added in the working tree since the merge
-base (committed on the branch or uncommitted), or a CODE_RULES engine
-import/load failure. It runs those pre-flight checks before the expensive
-verification spawn and addresses its deny reason to the spawning agent so that
-agent fixes the named issues and re-spawns. Environmental git failures stay
-fail-open; engine import/load failure is fail-closed. Every literal the hook
-body reads lives here; ``AGENT_TOOL_NAME`` comes from
+``code-verifier`` when a staged CODE_RULES attestation is absent, malformed, or
+stale for the worktree, HEAD, or index tree. It also denies merge conflicts,
+CODE_RULES violations on working-tree-added lines, and a CODE_RULES engine
+import/load failure. It runs those checks before the expensive verification
+spawn and addresses its deny reason to the spawning agent so that agent fixes
+the named issues and re-spawns. Every literal the hook body reads lives here;
+``AGENT_TOOL_NAME`` comes from
 ``pr_converge_bugteam_enforcer_constants`` and joins ``TASK_TOOL_NAME`` in
 ``ALL_CODE_VERIFIER_SPAWN_TOOL_NAMES`` so both spawn tool names share one source.
 """
@@ -54,6 +53,16 @@ DENY_REASON_LEAD: str = (
 )
 MERGE_CONFLICT_SECTION_HEADER: str = "Merge conflicts vs {base_ref}:"
 CODE_RULES_SECTION_HEADER: str = "CODE_RULES violations on changed lines:"
+STAGED_ATTESTATION_SECTION: str = (
+    "Staged CODE_RULES attestation is missing, malformed, or stale. Run "
+    "code_rules_gate.py --staged and repair every reported check before "
+    "re-spawning code-verifier."
+)
+BASE_RESOLUTION_FAILURE_SECTION: str = (
+    "Base reference could not be resolved:\n"
+    "  The code-verifier spawn requires a local merge base. Configure or fetch "
+    "the base reference, then re-spawn code-verifier."
+)
 ENGINE_LOAD_FAILURE_SECTION: str = (
     "CODE_RULES engine failed to load:\n"
     "  The CODE_RULES validate_content engine could not be imported or loaded "
