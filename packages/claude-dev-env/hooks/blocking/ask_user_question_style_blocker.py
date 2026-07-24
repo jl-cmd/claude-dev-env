@@ -172,14 +172,15 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
         return True
     next_word = _next_alpha_word(text, terminator_index + 1)
     # Single-letter tokens in multi-part abbrevs ("U.S." / "e.g." / "Ph.D.") are
-    # not ends. A lone option letter ("option A. Which") still is.
+    # not ends unless a real ask/sentence opener follows ("U.S. Which").
     if len(token) == 1 and token.isalpha():
         character_before_token_index = terminator_index - len(token) - 1
-        if (
+        is_multipart_tail = (
             character_before_token_index >= 0
             and text[character_before_token_index] == "."
-        ):
-            return True
+        )
+        if is_multipart_tail:
+            return next_word.lower() not in ALL_QUESTION_SENTENCE_OPENERS
         following_start = _following_sentence_start_character(text, terminator_index + 1)
         if following_start == "" or following_start.islower():
             return True
@@ -187,13 +188,14 @@ def _is_abbreviation_terminator(text: str, terminator_index: int) -> bool:
             return True
         return False
     # Multi-letter head of a multi-part abbrev (``Ph.D.``) — capital head +
-    # single capital letter only (not ``ran. I``).
+    # single capital letter that is not the pronoun I.
     if (
         token.isalpha()
         and token[0].isupper()
         and len(token) <= MAXIMUM_MULTI_PART_ABBREVIATION_HEAD_LENGTH
         and len(next_word) == 1
         and next_word.isupper()
+        and next_word.upper() != "I"
     ):
         return True
     lowered_token = token.lower()
@@ -228,7 +230,7 @@ def _is_sentence_boundary(text: str, terminator_index: int) -> bool:
     following = _following_sentence_start_character(text, terminator_index + 1)
     if following == "":
         return True
-    return following.isupper() or following in "\"'("
+    return following.isupper() or following.isdigit() or following in "\"'("
 
 
 def _iter_statement_separator_ends(prefix: str) -> list[int]:

@@ -220,6 +220,16 @@ def test_short_word_before_pronoun_i_still_counts_as_context() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_capital_status_before_pronoun_i_counts_as_context() -> None:
+    question_text = "The gate is OK. I should ship the fix now?"
+    assert question_has_leading_context(question_text) is True
+
+
+def test_us_abbreviation_ending_fact_counts_as_context() -> None:
+    question_text = "We ship only in the U.S. Which region should we add?"
+    assert question_has_leading_context(question_text) is True
+
+
 def test_multipart_abbrev_before_capital_word_does_not_inflate_count() -> None:
     question_text = (
         "Prefer TLS e.g. HTTPS for public routes. Mesh stays plain. "
