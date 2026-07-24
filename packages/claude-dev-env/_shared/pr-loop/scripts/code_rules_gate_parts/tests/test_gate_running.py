@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from code_rules_gate_parts import gate_running
+from code_rules_gate_parts import gate_running, git_blob_readers
 
 
 def _clean_validate(_content: str, _path: str, _prior: str = "", **_kwargs: object) -> list[str]:
@@ -97,3 +97,96 @@ def test_print_violation_section_groups_by_relative_path(
     captured = capsys.readouterr()
     assert "HEADER" in captured.err
     assert "Line 1: issue" in captured.err
+
+
+def test_run_gate_prefetches_prior_content_with_one_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One run_gate call issues a single HEAD batch for every eligible file."""
+    first_module = tmp_path / "first_module.py"
+    second_module = tmp_path / "second_module.py"
+    first_module.write_text("first_count = 1\n", encoding="utf-8")
+    second_module.write_text("second_count = 2\n", encoding="utf-8")
+
+    batch_call_count = [0]
+    single_file_call_count = [0]
+    real_batch = git_blob_readers.read_prior_committed_contents_batch
+    real_single = git_blob_readers.read_prior_committed_content
+
+    def counting_batch(
+        repository_root: Path, all_relative_path_posix: list[str]
+    ) -> dict[str, str]:
+        batch_call_count[0] += 1
+        return real_batch(repository_root, all_relative_path_posix)
+
+    def counting_single(repository_root: Path, relative_path_posix: str) -> str:
+        single_file_call_count[0] += 1
+        return real_single(repository_root, relative_path_posix)
+
+    monkeypatch.setattr(
+        gate_running, "read_prior_committed_contents_batch", counting_batch
+    )
+    monkeypatch.setattr(gate_running, "read_prior_committed_content", counting_single)
+
+    gate_running.run_gate(
+        _clean_validate,
+        [first_module, second_module],
+        tmp_path,
+        all_added_lines_by_path=None,
+    )
+
+    assert batch_call_count[0] == 1
+    assert single_file_call_count[0] == 0
+
+
+def test_run_gate_prefetches_staged_content_batch_in_staged_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Staged mode issues one staged batch in addition to the HEAD batch."""
+    module_path = tmp_path / "staged_module.py"
+    module_path.write_text("value = 1\n", encoding="utf-8")
+
+    staged_batch_call_count = [0]
+    staged_single_call_count = [0]
+
+    def counting_staged_batch(
+        repository_root: Path, all_relative_path_posix: list[str]
+    ) -> dict[str, str | None]:
+        staged_batch_call_count[0] += 1
+        return {each_path: "value = 1\n" for each_path in all_relative_path_posix}
+
+    def counting_staged_single(
+        repository_root: Path, relative_path_posix: str
+    ) -> str | None:
+        staged_single_call_count[0] += 1
+        return "value = 1\n"
+
+    def always_staged(
+        repository_root: Path, relative_path_posix: str
+    ) -> bool:
+        return True
+
+    monkeypatch.setattr(
+        gate_running, "read_staged_contents_batch", counting_staged_batch
+    )
+    monkeypatch.setattr(gate_running, "read_staged_content", counting_staged_single)
+    monkeypatch.setattr(gate_running, "staged_blob_exists", always_staged)
+    monkeypatch.setattr(
+        gate_running,
+        "read_prior_committed_contents_batch",
+        lambda repository_root, all_relative_path_posix: {
+            each_path: "" for each_path in all_relative_path_posix
+        },
+    )
+
+    exit_code = gate_running.run_gate(
+        _clean_validate,
+        [module_path],
+        tmp_path,
+        all_added_lines_by_path=None,
+        should_read_staged_content=True,
+    )
+
+    assert exit_code == 0
+    assert staged_batch_call_count[0] == 1
+    assert staged_single_call_count[0] == 0
