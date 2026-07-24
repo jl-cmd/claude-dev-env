@@ -16,9 +16,13 @@ import json
 import sys
 from pathlib import Path
 
+from categorize_files import slice_fits_review_budget
 from split_pr_scripts_constants.config.analyze_constants import (
+    ERROR_SLICE_EXCEEDS_REVIEW_BUDGET,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
+    MAXIMUM_SLICE_CHANGED_LINES,
+    MAXIMUM_SLICE_FILE_COUNT,
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.plan_constants import (
@@ -27,13 +31,18 @@ from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_INVALID_JSON,
     ERROR_PLAN_MISSING_KEY,
     ERROR_PLAN_UNREADABLE,
+    FILE_KEY_ADDITIONS,
+    FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
     JSON_INDENT_SPACES,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_PROPOSED_SLICES,
     PLAN_ROOT_MUST_BE_OBJECT,
+    SLICE_KEY_CHANGED_LINES,
     SLICE_KEY_FILES,
+    SLICE_KEY_FILE_COUNT,
     SLICE_KEY_INDEX,
+    SLICE_KEY_OVERSIZED_ATOMIC,
     SLICE_KEY_SLUG,
     VERIFY_KEY_COVERED_COUNT,
     VERIFY_KEY_DUPLICATE_FILES,
@@ -41,6 +50,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     VERIFY_KEY_ERRORS,
     VERIFY_KEY_IS_VALID,
     VERIFY_KEY_MISSING_FILES,
+    VERIFY_KEY_OVERSIZED_SLICES,
     VERIFY_KEY_SLICE_COUNT,
     VERIFY_KEY_SOURCE_COUNT,
     VERIFY_KEY_UNKNOWN_FILES,
@@ -99,12 +109,16 @@ def verify_plan(plan_payload: JsonObject) -> JsonObject:
         return _invalid_payload([ERROR_NO_SLICES])
 
     all_source_paths = _source_paths(all_source_records)
+    churn_by_path = _churn_by_path(all_source_records)
     all_covered_paths, all_empty_slices, all_errors = _collect_slice_paths(all_slices)
+    all_oversized = _oversized_slice_errors(all_slices, churn_by_path)
+    all_errors.extend(all_oversized)
     return _coverage_report(
         all_source_paths=all_source_paths,
         all_covered_paths=all_covered_paths,
         all_empty_slices=all_empty_slices,
         all_errors=all_errors,
+        all_oversized_slices=all_oversized,
         slice_count=len(all_slices),
     )
 
@@ -129,6 +143,21 @@ def _source_paths(all_source_records: list[object]) -> set[str]:
     return all_paths
 
 
+def _churn_by_path(all_source_records: list[object]) -> dict[str, int]:
+    churn_by_path: dict[str, int] = {}
+    for each_record in all_source_records:
+        if not isinstance(each_record, dict):
+            continue
+        file_path = each_record.get(FILE_KEY_PATH)
+        if not file_path:
+            continue
+        path = str(file_path).replace("\\", "/")
+        additions = int(each_record.get(FILE_KEY_ADDITIONS, 0) or 0)
+        deletions = int(each_record.get(FILE_KEY_DELETIONS, 0) or 0)
+        churn_by_path[path] = max(0, additions) + max(0, deletions)
+    return churn_by_path
+
+
 def _collect_slice_paths(
     all_slices: list[object],
 ) -> tuple[list[str], list[str], list[str]]:
@@ -151,11 +180,55 @@ def _collect_slice_paths(
     return all_covered_paths, all_empty_slices, all_errors
 
 
+def _oversized_slice_errors(
+    all_slices: list[object],
+    churn_by_path: dict[str, int],
+) -> list[str]:
+    all_oversized: list[str] = []
+    for each_slice in all_slices:
+        if not isinstance(each_slice, dict):
+            continue
+        all_slice_files = each_slice.get(SLICE_KEY_FILES, [])
+        if not isinstance(all_slice_files, list) or not all_slice_files:
+            continue
+        all_paths = [str(each).replace("\\", "/") for each in all_slice_files]
+        file_count = int(each_slice.get(SLICE_KEY_FILE_COUNT, len(all_paths)) or 0)
+        if file_count <= 0:
+            file_count = len(all_paths)
+        changed_lines = each_slice.get(SLICE_KEY_CHANGED_LINES)
+        if changed_lines is None:
+            changed_lines = sum(churn_by_path.get(each_path, 0) for each_path in all_paths)
+        changed_lines = int(changed_lines or 0)
+        is_oversized_atomic = bool(each_slice.get(SLICE_KEY_OVERSIZED_ATOMIC)) or (
+            len(all_paths) == 1 and changed_lines > MAXIMUM_SLICE_CHANGED_LINES
+        )
+        if is_oversized_atomic:
+            continue
+        if slice_fits_review_budget(
+            file_count=file_count,
+            changed_lines=changed_lines,
+        ):
+            continue
+        slug = str(each_slice.get(SLICE_KEY_SLUG, each_slice.get(SLICE_KEY_INDEX, "?")))
+        all_oversized.append(
+            ERROR_SLICE_EXCEEDS_REVIEW_BUDGET
+            % (
+                slug,
+                file_count,
+                MAXIMUM_SLICE_FILE_COUNT,
+                changed_lines,
+                MAXIMUM_SLICE_CHANGED_LINES,
+            )
+        )
+    return all_oversized
+
+
 def _coverage_report(
     all_source_paths: set[str],
     all_covered_paths: list[str],
     all_empty_slices: list[str],
     all_errors: list[str],
+    all_oversized_slices: list[str],
     slice_count: int,
 ) -> JsonObject:
     covered_set = set(all_covered_paths)
@@ -182,6 +255,7 @@ def _coverage_report(
         VERIFY_KEY_DUPLICATE_FILES: all_duplicates,
         VERIFY_KEY_UNKNOWN_FILES: all_unknown,
         VERIFY_KEY_EMPTY_SLICES: all_empty_slices,
+        VERIFY_KEY_OVERSIZED_SLICES: all_oversized_slices,
         VERIFY_KEY_SLICE_COUNT: slice_count,
         VERIFY_KEY_COVERED_COUNT: len(covered_set),
         VERIFY_KEY_SOURCE_COUNT: len(all_source_paths),
@@ -196,6 +270,7 @@ def _invalid_payload(all_errors: list[str]) -> JsonObject:
         VERIFY_KEY_DUPLICATE_FILES: [],
         VERIFY_KEY_UNKNOWN_FILES: [],
         VERIFY_KEY_EMPTY_SLICES: [],
+        VERIFY_KEY_OVERSIZED_SLICES: [],
         VERIFY_KEY_SLICE_COUNT: 0,
         VERIFY_KEY_COVERED_COUNT: 0,
         VERIFY_KEY_SOURCE_COUNT: 0,

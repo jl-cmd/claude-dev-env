@@ -15,6 +15,8 @@ BRANCH_NAME_SEPARATOR = "/"
 SLUG_REPLACEMENT = "-"
 MAXIMUM_FEATURE_SLUG_LENGTH = 40
 MINIMUM_SPLIT_FILE_COUNT = 8
+MAXIMUM_SLICE_CHANGED_LINES = 400
+MAXIMUM_SLICE_FILE_COUNT = 10
 DEFAULT_TITLE_PREFIX = "feat"
 SLICE_INDEX_ZERO_PAD = 2
 
@@ -50,6 +52,11 @@ ERROR_BELOW_SPLIT_THRESHOLD = (
 WARNING_BELOW_THRESHOLD = "file_count_below_default_threshold"
 WARNING_SINGLE_LAYER = "all_files_map_to_one_layer"
 WARNING_OTHER_LAYER_NONEMPTY = "uncategorized_other_layer_has_files"
+WARNING_OVERSIZED_ATOMIC_SLICE = "oversized_atomic_slice"
+
+ERROR_SLICE_EXCEEDS_REVIEW_BUDGET = (
+    "slice %s exceeds review budget (files=%s/%s, changed_lines=%s/%s)"
+)
 
 PLAN_BODY_EXCERPT_KEY = "body_excerpt"
 PLAN_URL_KEY = "url"
