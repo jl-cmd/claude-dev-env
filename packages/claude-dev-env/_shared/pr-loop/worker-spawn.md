@@ -29,6 +29,13 @@ absent / `is_claude_tier_enabled=False`), a grok fallthrough records tier 2 with
 reason `claude_agent_required`, leaves `tier_used` null, and returns. The
 calling skill must then run the Agent tool in-process.
 
+This clarifier scopes the tier-2 boundary to the Python dispatcher. A grok
+worker spawned through the `grok-spawn` skill loads the full `~/.claude/`
+environment: it invokes skills and spawns its own subagents. The spawning Claude
+session's advisor reviews the worker's report and re-runs the worker with
+corrections. The dispatcher helper is a plain subprocess, so it hands back to
+the calling skill, which runs the harness Agent tool in-process.
+
 On a **ThirdParty** host, or when the claude tier is enabled on a Claude host,
 the dispatcher continues to tier 3.
 

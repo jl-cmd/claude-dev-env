@@ -10,9 +10,8 @@ Checks run in order and stop at the first failure:
 2. Auth material is present: ``grok models`` exits 0 with decoded text streams.
    The probe uses its own ``--leader-socket`` path so it never contends with
    running workers.
-3. ``claude-dev-env`` is installed for the requested role: the install manifest
-   exists in the user Claude config directory, and every agent definition file
-   that role needs is present under ``agents/``.
+3. ``claude-dev-env`` is installed: the install manifest exists in the user
+   Claude config directory.
 
 Opt-in ``--ping`` runs one cached live single-turn call with a run-scoped TTL.
 The cache file lives under the caller-supplied run state directory. Auth failure
@@ -53,8 +52,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dev_env_scripts_constants.grok_worker_constants import (
-    AGENTS_SUBDIRECTORY,
-    ALL_AGENT_FILENAMES_BY_ROLE,
     ALL_AUTH_FAILURE_SIGNATURES,
     ALL_USAGE_EXHAUSTION_SIGNATURES,
     AUTH_LEADER_SOCKET_FILENAME,
@@ -114,10 +111,6 @@ def claude_config_home() -> Path:
 
 def _install_manifest_path() -> Path:
     return claude_config_home() / MANIFEST_FILENAME
-
-
-def _agents_directory() -> Path:
-    return claude_config_home() / AGENTS_SUBDIRECTORY
 
 
 def _ping_cache_path(run_state_directory: Path) -> Path:
@@ -213,17 +206,8 @@ def _is_grok_binary_resolvable() -> bool:
     return preflight_which(GROK_BINARY_NAME) is not None
 
 
-def _is_claude_dev_env_config_present(role: str) -> bool:
-    if not _install_manifest_path().is_file():
-        return False
-    all_agent_filenames = ALL_AGENT_FILENAMES_BY_ROLE.get(role)
-    if all_agent_filenames is None:
-        return False
-    agents_root = _agents_directory()
-    return all(
-        (agents_root / each_filename).is_file()
-        for each_filename in all_agent_filenames
-    )
+def _is_claude_dev_env_installed() -> bool:
+    return _install_manifest_path().is_file()
 
 
 def _build_models_invocation(leader_socket_path: Path) -> list[str]:
@@ -324,8 +308,10 @@ def run_preflight(
 ) -> PreflightOutcome:
     """Evaluate whether tier 1 (grok headless) is usable.
 
+    Callers pass ``role`` and the batch spec carries it, so the label rides
+    along with the fleet; the soft gate reaches the same verdict for every role.
+
     Args:
-        role: Role whose agent definition set must be installed.
         should_ping: When True, run the opt-in cached live single-turn ping.
         run_state_directory: Run-scoped directory for leader sockets and cache.
             Best-effort mkdir when missing; callers need not create it first.
@@ -343,7 +329,7 @@ def run_preflight(
     auth_outcome = _probe_grok_auth(run_state_directory)
     if not auth_outcome.is_usable:
         return auth_outcome
-    if not _is_claude_dev_env_config_present(role):
+    if not _is_claude_dev_env_installed():
         return _fallthrough(REASON_CLAUDE_DEV_ENV_CONFIG_MISSING)
     if should_ping:
         return _probe_grok_ping(run_state_directory)
@@ -365,7 +351,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         CLI_ROLE_FLAG,
         default=DEFAULT_ROLE,
-        help="Role whose agent definition files must be present.",
+        help="The fleet role label, recorded for callers.",
     )
     parser.add_argument(
         CLI_PING_FLAG,

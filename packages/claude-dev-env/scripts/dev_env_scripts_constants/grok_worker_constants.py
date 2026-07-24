@@ -59,11 +59,8 @@ CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 MANIFEST_FILENAME: str = ".claude-dev-env-manifest.json"
 """Install manifest written by ``claude-dev-env`` into the user Claude home."""
 
-AGENTS_SUBDIRECTORY: str = "agents"
-"""Subdirectory of the user Claude home that holds agent definition files."""
-
 ROLE_BUGTEAM: str = "bugteam"
-"""Role name whose agent definition set the preflight validates by default."""
+"""Role name that maps to the code-quality-agent and clean-coder charter set."""
 
 ROLE_CLEAN_CODER: str = "clean-coder"
 """Role name that maps to the clean-coder agent for FIX and standards-fix."""
@@ -75,7 +72,7 @@ ALL_AGENT_FILENAMES_BY_ROLE: dict[str, tuple[str, ...]] = {
     ROLE_BUGTEAM: ("code-quality-agent.md", "clean-coder.md"),
     ROLE_CLEAN_CODER: ("clean-coder.md",),
 }
-"""Agent definition filenames required under ``agents/`` for each known role."""
+"""Agent charter filenames per known role; the first entry is the primary agent."""
 
 REASON_GROK_BINARY_MISSING: str = "grok_binary_missing"
 """Fallthrough reason when the grok binary is not resolvable on PATH."""
@@ -88,7 +85,7 @@ and one whose streams do not decode.
 """
 
 REASON_CLAUDE_DEV_ENV_CONFIG_MISSING: str = "claude_dev_env_config_missing"
-"""Fallthrough reason when the install manifest or role agents are absent."""
+"""Fallthrough reason when the ``claude-dev-env`` install manifest is absent."""
 
 REASON_GROK_USAGE_EXHAUSTED: str = "grok_usage_exhausted"
 """Fallthrough reason when a live ping fails with a usage-exhaustion signature."""
@@ -106,7 +103,7 @@ EXIT_FALLTHROUGH: int = 1
 """Process exit code when the soft gate falls through (callers continue the chain)."""
 
 CLI_ROLE_FLAG: str = "--role"
-"""CLI flag naming the role whose agent definition set must be present."""
+"""CLI flag naming the fleet role recorded for callers."""
 
 CLI_PING_FLAG: str = "--ping"
 """CLI flag that enables the opt-in cached live single-turn ping."""
