@@ -33,15 +33,18 @@ try:
         git_blob_readers,
         git_file_sets,
         staged_test_running,
+        staged_attestation,
         violation_scoping,
         wrapper_plumb_check,
     )
     from pr_loop_shared_constants.code_rules_gate_constants import (
         ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         ALL_PYTEST_MODULE_INVOCATION,
+        ALL_STAGED_PYTEST_ARGUMENTS,
         ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         EMPTY_FILE_SET_EXIT_CODE,
         EMPTY_FILE_SET_MESSAGE,
+        GATE_ERROR_EXIT_CODE,
         INSPECTED_COUNT_MESSAGE,
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
         MINIMUM_STAGED_PYTEST_PYTHON_MAJOR,
@@ -137,7 +140,7 @@ def _report_partitioned_violations(
     )
 
 run_staged_test_files = staged_test_running.run_staged_test_files
-_staged_test_file_paths = staged_test_running._staged_test_file_paths
+_staged_test_relative_paths = staged_test_running._staged_test_relative_paths
 _resolve_owning_test_root = staged_test_running._resolve_owning_test_root
 _group_staged_tests_by_root = staged_test_running._group_staged_tests_by_root
 _batched_pytest_arguments = staged_test_running._batched_pytest_arguments
@@ -151,6 +154,7 @@ parse_arguments = gate_arguments.parse_arguments
 __all__ = [
     "ALL_POSIX_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
     "ALL_PYTEST_MODULE_INVOCATION",
+    "ALL_STAGED_PYTEST_ARGUMENTS",
     "ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS",
     "MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS",
     "MINIMUM_STAGED_PYTEST_PYTHON_MAJOR",
@@ -268,24 +272,46 @@ def _run_staged_mode(
     arguments: argparse.Namespace,
     repository_root: Path,
 ) -> int:
-    """Validate the staged changes, run staged tests, and sweep terminology."""
+    """Validate staged code before staged tests and canonical proof minting."""
+    is_full_staged_scope = not arguments.only_under
+    attestation_before = None
+    if is_full_staged_scope:
+        if not staged_attestation.clear_staged_attestation(repository_root):
+            sys.stderr.write("code_rules_gate: unable to clear staged attestation.\n")
+            return GATE_ERROR_EXIT_CODE
+        attestation_before = staged_attestation.snapshot_staged_attestation(repository_root)
+        if attestation_before is None:
+            sys.stderr.write("code_rules_gate: unable to snapshot the staged index.\n")
+            return GATE_ERROR_EXIT_CODE
     _report_terminology_findings(staged_terminology_findings(repository_root))
-    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
     staged_file_paths = filter_paths_under_prefixes(
         paths_from_git_staged(repository_root), repository_root, arguments.only_under
     )
     if not staged_file_paths:
         sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
+        gate_exit_code = 0
+    else:
+        staged_added_lines = added_lines_by_file_staged(repository_root, staged_file_paths)
+        gate_exit_code = run_gate(
+            validate_content,
+            staged_file_paths,
+            repository_root,
+            all_added_lines_by_path=staged_added_lines,
+            should_read_staged_content=True,
+        )
+    if gate_exit_code != 0:
+        return gate_exit_code
+    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    if staged_test_exit_code != 0:
         return staged_test_exit_code
-    staged_added_lines = added_lines_by_file_staged(repository_root, staged_file_paths)
-    gate_exit_code = run_gate(
-        validate_content,
-        staged_file_paths,
-        repository_root,
-        all_added_lines_by_path=staged_added_lines,
-        should_read_staged_content=True,
-    )
-    return gate_exit_code or staged_test_exit_code
+    if not is_full_staged_scope:
+        return 0
+    if attestation_before is None or not staged_attestation.mint_staged_attestation(
+        repository_root, attestation_before
+    ):
+        sys.stderr.write("code_rules_gate: unable to mint staged attestation.\n")
+        return GATE_ERROR_EXIT_CODE
+    return 0
 
 
 def _run_diff_mode(
