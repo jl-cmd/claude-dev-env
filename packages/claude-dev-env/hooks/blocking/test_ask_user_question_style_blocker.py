@@ -84,10 +84,6 @@ def _run_main(payload: dict) -> str:
             return mock_stdout.getvalue()
 
 
-def test_canonical_hook_script_exists() -> None:
-    assert HOOK_SCRIPT_PATH.is_file()
-
-
 def test_bare_question_without_context_is_flagged() -> None:
     assert question_has_leading_context("Which path should we take?") is False
     findings = find_style_findings(_payload("Which path should we take?")["tool_input"])
@@ -105,6 +101,16 @@ def test_colon_separated_context_passes() -> None:
     assert question_has_leading_context(question_text) is True
 
 
+def test_context_after_first_question_mark_does_not_count() -> None:
+    question_text = "Pick one? The gate blocks bare rm. Which cleanup should run?"
+    assert question_has_leading_context(question_text) is False
+
+
+def test_version_token_dot_is_not_context_separator() -> None:
+    question_text = "Should we use Python 3.12 for the hook runtime now?"
+    assert question_has_leading_context(question_text) is False
+
+
 def test_missing_option_description_is_flagged() -> None:
     findings = find_style_findings(
         _payload(
@@ -116,6 +122,22 @@ def test_missing_option_description_is_flagged() -> None:
         )["tool_input"]
     )
     assert FINDING_MISSING_OPTION_DESCRIPTION in findings
+
+
+def test_process_narration_in_option_description_is_flagged() -> None:
+    findings = find_style_findings(
+        _payload(
+            CLEAN_QUESTION_TEXT,
+            all_options=[
+                {
+                    "label": "Yes",
+                    "description": "I looked at the logs and would switch now.",
+                },
+                {"label": "No", "description": "Leave the current path alone."},
+            ],
+        )["tool_input"]
+    )
+    assert FINDING_PROCESS_NARRATION in findings
 
 
 def test_process_narration_opener_is_flagged() -> None:

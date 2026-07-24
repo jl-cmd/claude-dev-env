@@ -20,11 +20,10 @@ MAXIMUM_WORDS_PER_SENTENCE: int = 28
 MAXIMUM_SENTENCES_PER_QUESTION: int = 3
 MAXIMUM_SENTENCES_PER_OPTION_DESCRIPTION: int = 2
 
-# A statement terminator (period/exclamation) or a clause separator before "?".
-CONTEXT_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
-    r"(?s).{"
-    + str(MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT)
-    + r",}(?:[.!]|:\s|[—–]\s).+\?"
+# Sentence/clause separator inside the prefix before the first "?".
+# Requires whitespace after "." / "!" so version tokens like "3.12" do not count.
+CONTEXT_PREFIX_SEPARATOR_PATTERN: re.Pattern[str] = re.compile(
+    r"(?<!\d)[.!]\s+|:\s+|[—–]\s+"
 )
 
 # Process-narration openers banned by plain-brief rule 1 (one scan per prose blob).
@@ -56,7 +55,8 @@ STACKED_HYPHEN_COMPOUND_PATTERN: re.Pattern[str] = re.compile(
     r"\b[A-Za-z]+-[A-Za-z]+(?:\s+[A-Za-z]+-[A-Za-z]+){2,}\b"
 )
 
-SENTENCE_SPLIT_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+")
+# Split only when a terminator is followed by a capital letter (skips "U.S. gate").
+SENTENCE_SPLIT_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'])")
 
 FINDING_MISSING_CONTEXT: str = "missing_context_before_question"
 FINDING_MISSING_OPTION_DESCRIPTION: str = "missing_option_description"

@@ -24,7 +24,7 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     ALL_FINDING_GUIDANCE_BY_CODE,
     ARROW_TOKEN_PATTERN,
     CALLING_HOOK_NAME,
-    CONTEXT_SEPARATOR_PATTERN,
+    CONTEXT_PREFIX_SEPARATOR_PATTERN,
     CORRECTIVE_MESSAGE_FOOTER,
     CORRECTIVE_MESSAGE_HEADER,
     DENY_DECISION,
@@ -40,6 +40,7 @@ from hooks_constants.ask_user_question_style_blocker_constants import (  # noqa:
     MAXIMUM_SENTENCES_PER_QUESTION,
     MAXIMUM_WORDS_PER_SENTENCE,
     MINIMUM_ARROW_TOKENS_FOR_CHAIN,
+    MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT,
     NEWLINE_JOIN_SEPARATOR,
     PROCESS_NARRATION_OPENER_PATTERN,
     SENTENCE_SPLIT_PATTERN,
@@ -54,27 +55,37 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
 
 
 def question_has_leading_context(question_text: str) -> bool:
-    """Return whether the question text puts a fact before the ask.
+    """Return whether the question text puts a fact before the first ask.
 
     ::
 
         ok:   The gate blocks bare rm. How should temp cleanup run?
         flag: How should temp cleanup run?
+        flag: Pick one? The gate failed. Which fix?
 
-    A bare question leaves the user without stakes or findings. A short fact
-    sentence (or a clause before a colon/em-dash) supplies that context first.
+    Only the prefix before the first ``?`` counts. A version token like
+    ``3.12`` is not a statement end. A later fact after a bare lead question
+    does not rescue the call.
 
     Args:
         question_text: The AskUserQuestion ``question`` field.
 
     Returns:
-        True when a statement separator appears before the first ``?`` with
-        enough leading substance; False for bare questions.
+        True when the prefix before the first ``?`` holds a statement
+        separator and enough leading substance; False otherwise.
     """
     stripped_text = question_text.strip()
     if not stripped_text:
         return False
-    return CONTEXT_SEPARATOR_PATTERN.search(stripped_text) is not None
+    first_question_mark_index = stripped_text.find("?")
+    if first_question_mark_index < 0:
+        return False
+    prefix_before_question = stripped_text[:first_question_mark_index]
+    separator_match = CONTEXT_PREFIX_SEPARATOR_PATTERN.search(prefix_before_question)
+    if separator_match is None:
+        return False
+    lead_fact = prefix_before_question[: separator_match.start()].strip()
+    return len(lead_fact) >= MINIMUM_CONTEXT_PREFIX_CHARACTER_COUNT
 
 
 def _record_finding(all_findings: list[str], finding_code: str) -> None:

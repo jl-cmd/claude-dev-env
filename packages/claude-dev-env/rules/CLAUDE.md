@@ -13,7 +13,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 |---|---|
 | `agent-spawn-protocol.md` | Protocol for spawning subagents: context sufficiency check, prompt generation via `/prompt-generator`, then spawn |
 | `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
-| `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
+| `ask-user-question-required.md` | Route user questions through `AskUserQuestion`; lead with context; write plain-brief option prose |
 | `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
 | `claude-md-orphan-file.md` | Every backticked bare filename in a per-directory `CLAUDE.md` table's first column names a file in that directory's subtree |
 | `cleanup-command-forms.md` | Never use bash `rm` to clean up; use the PowerShell `Remove-Item` and `git worktree remove --force` forms the `destructive_command_blocker` hook never prompts on, and carry the rule into every subagent prompt |

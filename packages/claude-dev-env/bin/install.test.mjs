@@ -203,6 +203,13 @@ test('CONTENT_DIRECTORIES includes output-styles so installer copies plain-brief
         CORE_INCLUDE_DIRECTORIES.includes('output-styles'),
         'output-styles must ship with --only core so AskUserQuestion plain-brief style is available',
     );
+    const packageManifest = JSON.parse(
+        readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(
+        packageManifest.files.includes('output-styles/'),
+        'package.json files must list output-styles/ so npm publish ships plain-brief.md',
+    );
 });
 
 
