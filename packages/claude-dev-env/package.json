@@ -21,6 +21,7 @@
         "scripts/",
         "_shared/",
         "audit-rubrics/",
+        "output-styles/",
         "CLAUDE.md"
     ],
     "keywords": [
