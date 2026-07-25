@@ -19,6 +19,27 @@ MAXIMUM_SLICE_CHANGED_LINES = 400
 MAXIMUM_SLICE_FILE_COUNT = 10
 DEFAULT_TITLE_PREFIX = "feat"
 SLICE_INDEX_ZERO_PAD = 2
+ALL_CONVENTIONAL_COMMIT_TYPES = (
+    "feat",
+    "fix",
+    "docs",
+    "chore",
+    "refactor",
+    "test",
+    "ci",
+    "build",
+    "perf",
+    "style",
+    "revert",
+)
+CONVENTIONAL_COMMIT_TYPE_ALTERNATION = "|".join(ALL_CONVENTIONAL_COMMIT_TYPES)
+CONVENTIONAL_COMMIT_PREFIX_PATTERN = (
+    rf"^(?:{CONVENTIONAL_COMMIT_TYPE_ALTERNATION})"
+    r"(?:\([^)]*\))?:\s*"
+)
+CONVENTIONAL_TYPE_SLUG_PREFIX_PATTERN = (
+    rf"^(?:{CONVENTIONAL_COMMIT_TYPE_ALTERNATION})-+"
+)
 
 GH_COMMAND = "gh"
 GH_PR_VIEW = "pr"

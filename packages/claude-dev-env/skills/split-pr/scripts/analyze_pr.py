@@ -27,6 +27,8 @@ from split_pr_scripts_constants.config.analyze_constants import (
     BODY_EXCERPT_MAX_LENGTH,
     BRANCH_NAME_SEPARATOR,
     BRANCH_PREFIX,
+    CONVENTIONAL_COMMIT_PREFIX_PATTERN,
+    CONVENTIONAL_TYPE_SLUG_PREFIX_PATTERN,
     DEFAULT_BASE_REF_NAME,
     DEFAULT_TITLE_PREFIX,
     ERROR_BELOW_SPLIT_THRESHOLD,
@@ -99,18 +101,55 @@ JsonObject = dict[str, object]
 def slugify_feature(title: str, pr_number: int) -> str:
     """Build a short branch-safe feature slug from a PR title.
 
+    Strips conventional-commit type prefixes (``feat:``, ``feat(scope):``) so
+    child slice titles do not stack ``feat: feat-…``. Truncates on a hyphen
+    boundary when the slug exceeds the length cap.
+
+    ::
+
+        slugify_feature("feat: Hello World!!", 9)  # ok: "hello-world"
+        slugify_feature("feat: long parent title …", 1)  # ok: no "feat-" prefix
+
     Args:
         title: PR title text.
         pr_number: PR number used as fallback.
 
     Returns:
-        Lowercase hyphenated slug.
+        Lowercase hyphenated slug without a stacked type prefix.
     """
-    lowered = title.lower()
+    description = re.sub(
+        CONVENTIONAL_COMMIT_PREFIX_PATTERN,
+        "",
+        title.strip(),
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    lowered = description.lower()
     cleaned = re.sub(r"[^a-z0-9]+", SLUG_REPLACEMENT, lowered).strip(SLUG_REPLACEMENT)
+    while True:
+        stripped = re.sub(
+            CONVENTIONAL_TYPE_SLUG_PREFIX_PATTERN,
+            "",
+            cleaned,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip(SLUG_REPLACEMENT)
+        if stripped == cleaned:
+            break
+        cleaned = stripped
     if not cleaned:
         cleaned = f"pr-{pr_number}"
-    return cleaned[:MAXIMUM_FEATURE_SLUG_LENGTH].strip(SLUG_REPLACEMENT)
+    return _truncate_slug_on_hyphen(cleaned)
+
+
+def _truncate_slug_on_hyphen(cleaned_slug: str) -> str:
+    if len(cleaned_slug) <= MAXIMUM_FEATURE_SLUG_LENGTH:
+        return cleaned_slug
+    truncated = cleaned_slug[:MAXIMUM_FEATURE_SLUG_LENGTH].rstrip(SLUG_REPLACEMENT)
+    last_hyphen_index = truncated.rfind(SLUG_REPLACEMENT)
+    if last_hyphen_index > 0:
+        return truncated[:last_hyphen_index]
+    return truncated
 
 
 def build_plan_from_pr_payload(

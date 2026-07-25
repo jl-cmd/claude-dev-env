@@ -31,7 +31,56 @@ from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
 
 
 def test_slugify_feature_strips_noise() -> None:
-    assert slugify_feature("feat: Hello World!!", 9) == "feat-hello-world"
+    assert slugify_feature("feat: Hello World!!", 9) == "hello-world"
+
+
+def test_slugify_feature_strips_scope_prefix() -> None:
+    assert (
+        slugify_feature("feat(split-pr): post family-tree comments", 663)
+        == "post-family-tree-comments"
+    )
+
+
+def test_slugify_feature_does_not_stack_truncated_parent_titles() -> None:
+    parent_title = "feat: shared gh body helpers + supersede refactor"
+    first_slug = slugify_feature(parent_title, 664)
+    assert not first_slug.startswith("feat-")
+    assert "feat" not in first_slug.split("-")[:1]
+    stacked_parent_title = f"feat: {first_slug} backend services part 1"
+    recursive_slug = slugify_feature(stacked_parent_title, 1)
+    assert not recursive_slug.startswith("feat-")
+    assert "feat-feat" not in recursive_slug
+    assert len(recursive_slug) <= 40
+
+
+def test_slugify_feature_truncates_on_hyphen_boundary() -> None:
+    long_title = (
+        "feat: shared gh body helpers plus supersede refactor and more words"
+    )
+    slug = slugify_feature(long_title, 1)
+    assert len(slug) <= 40
+    assert not slug.endswith("-")
+    assert " " not in slug
+
+
+def test_build_plan_from_pr_payload_skips_stacked_feat_prefix() -> None:
+    payload = {
+        GH_FIELD_NUMBER: 664,
+        GH_FIELD_TITLE: "feat: shared gh body helpers + supersede refactor",
+        GH_FIELD_BASE_REF: "main",
+        GH_FIELD_HEAD_REF: "split/663/01-backend-helpers",
+        GH_FIELD_HEAD_OID: "abc123",
+        GH_FIELD_FILES: [
+            {GH_FILE_PATH: "src/api/a.ts", "additions": 20, "deletions": 0},
+            {GH_FILE_PATH: "tests/test_a.py", "additions": 10, "deletions": 0},
+        ],
+    }
+    plan = build_plan_from_pr_payload(payload, repo="acme/app", title_prefix="feat")
+    for each_slice in plan[PLAN_KEY_PROPOSED_SLICES]:
+        title = str(each_slice["title"])
+        assert title.startswith("feat: ")
+        assert not title.startswith("feat: feat-")
+        assert "feat-feat" not in title
 
 
 def test_build_plan_from_pr_payload_chains_bases() -> None:
