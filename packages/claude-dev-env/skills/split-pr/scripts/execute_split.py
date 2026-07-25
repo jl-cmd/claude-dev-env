@@ -75,11 +75,16 @@ from split_pr_scripts_constants.config.execute_constants import (
     PAYLOAD_KEY_COMMENTED_PR_NUMBERS,
     PAYLOAD_KEY_FAMILY_TREE,
     PAYLOAD_KEY_FAMILY_TREE_ERROR,
+    PAYLOAD_KEY_LABELED,
+    PAYLOAD_KEY_LABELED_PR_NUMBERS,
     PAYLOAD_KEY_SKIPPED,
+    PAYLOAD_KEY_STACK_LABELS,
+    PAYLOAD_KEY_STACK_LABELS_ERROR,
     PAYLOAD_KEY_SUPERSEDE,
     PAYLOAD_KEY_SUPERSEDE_ERROR,
 )
 from family_tree_comments import post_family_tree_comments
+from stack_labels import apply_stack_labels
 from supersede_source_pr import (
     collect_pr_numbers_from_urls,
     supersede_source_pr,
@@ -336,6 +341,14 @@ def _build_success_payload(
         repo_slug=repo_slug,
         repo_root=repo_root,
     )
+    execution_payload[PAYLOAD_KEY_STACK_LABELS] = _run_stack_labels_safely(
+        pr_number=pr_number,
+        all_pr_urls=all_pr_urls,
+        planned_slice_count=planned_slice_count,
+        should_create_prs=should_create_prs,
+        repo_slug=repo_slug,
+        repo_root=repo_root,
+    )
     execution_payload[PAYLOAD_KEY_SUPERSEDE] = _run_supersede_safely(
         pr_number=pr_number,
         all_pr_urls=all_pr_urls,
@@ -372,6 +385,33 @@ def _run_family_tree_safely(
             PAYLOAD_KEY_CHILD_PR_NUMBERS: collect_pr_numbers_from_urls(all_pr_urls),
             PAYLOAD_KEY_SKIPPED: False,
             PAYLOAD_KEY_FAMILY_TREE_ERROR: str(family_tree_error),
+        }
+
+
+def _run_stack_labels_safely(
+    pr_number: int,
+    all_pr_urls: list[str],
+    planned_slice_count: int,
+    should_create_prs: bool,
+    repo_slug: str | None,
+    repo_root: Path,
+) -> JsonObject:
+    try:
+        return apply_stack_labels(
+            source_pr_number=pr_number,
+            all_child_pr_urls=all_pr_urls,
+            planned_slice_count=planned_slice_count,
+            should_create_prs=should_create_prs,
+            repo=repo_slug,
+            repo_root=repo_root,
+        )
+    except RuntimeError as stack_labels_error:
+        return {
+            PAYLOAD_KEY_LABELED: False,
+            PAYLOAD_KEY_LABELED_PR_NUMBERS: [],
+            PAYLOAD_KEY_CHILD_PR_NUMBERS: collect_pr_numbers_from_urls(all_pr_urls),
+            PAYLOAD_KEY_SKIPPED: False,
+            PAYLOAD_KEY_STACK_LABELS_ERROR: str(stack_labels_error),
         }
 
 

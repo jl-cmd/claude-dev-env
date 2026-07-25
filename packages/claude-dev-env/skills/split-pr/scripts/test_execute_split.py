@@ -26,7 +26,9 @@ from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
     PAYLOAD_KEY_FAMILY_TREE,
     PAYLOAD_KEY_SKIPPED,
     PAYLOAD_KEY_SKIP_REASON,
+    PAYLOAD_KEY_STACK_LABELS,
     PAYLOAD_KEY_SUPERSEDE,
+    STACK_LABELS_SKIP_CREATE_PRS_OFF,
     SUPERSEDE_SKIP_DISABLED,
 )
 from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
@@ -152,6 +154,13 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
     assert family_tree_payload[PAYLOAD_KEY_SKIPPED] is True
     assert (
         family_tree_payload[PAYLOAD_KEY_SKIP_REASON] == FAMILY_TREE_SKIP_CREATE_PRS_OFF
+    )
+    stack_labels_payload = execution_payload[PAYLOAD_KEY_STACK_LABELS]
+    assert isinstance(stack_labels_payload, dict)
+    assert stack_labels_payload[PAYLOAD_KEY_SKIPPED] is True
+    assert (
+        stack_labels_payload[PAYLOAD_KEY_SKIP_REASON]
+        == STACK_LABELS_SKIP_CREATE_PRS_OFF
     )
 
     run_git(["checkout", "split/99/01-database"], repo)

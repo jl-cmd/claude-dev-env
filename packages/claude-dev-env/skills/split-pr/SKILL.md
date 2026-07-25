@@ -92,8 +92,8 @@ Path rules: [reference/path-layers.md](reference/path-layers.md).
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --pretty`
 5. **Execute (push + draft PRs) — default after Approve recommended:**  
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --push --create-prs --pretty`  
-   After every planned slice has a draft URL, the skill posts a **family-tree comment** on each child PR (full merge order + links; marks the current PR). Supersede of the source PR is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
-6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open and skip family-tree comments.
+   After every planned slice has a draft URL, the skill posts a **family-tree comment** on each child PR (full merge order + links; marks the current PR), applies discovery labels **`split-pr`** and **`split-stack:<sourcePr>`** on the source and every child, then supersedes the source. Supersede is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
+6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open and skip family-tree comments and stack labels.
 7. **Verification honesty:** this skill does not run the repo’s full test suite on each slice. Each draft PR body must state that gap (the script’s short body does). Do not claim per-slice CI green unless you ran checks yourself.
 8. **Do not** run `gh pr ready` on split PRs from this skill.
 
@@ -103,17 +103,19 @@ Supersede comment template: [templates/supersede-source-body.md](templates/super
 
 ### Phase 5 — Report
 
-State: source PR number, slice branches, draft PR URLs (if any), merge order (`#A → #B → …`), that the original **branch** is unchanged, family-tree comment outcome, and the supersede outcome:
+State: source PR number, slice branches, draft PR URLs (if any), merge order (`#A → #B → …`), that the original **branch** is unchanged, family-tree comment outcome, stack-label outcome, and the supersede outcome:
 
 | Execute result | Child PRs | Source PR |
 |---|---|---|
-| Multi-slice success with a draft URL for every planned slice | Family-tree comment on **each** child (`--body-file`: source, merge order, full linked list, “this PR”) | Comment then **close** as superseded |
-| Atomic (`atomic_single_slice`) | `family_tree_comments` may still post if create-prs produced a URL per planned slice | Stays open — source remains the delivery unit |
+| Multi-slice success with a draft URL for every planned slice | Family-tree comment on **each** child; labels `split-pr` + `split-stack:<N>` on source and each child | Labels applied; then comment and **close** as superseded |
+| Atomic (`atomic_single_slice`) | Family-tree and labels may still run when create-prs produced a URL per planned slice | Stays open — source remains the delivery unit |
 | Local-only (`--push` / `--create-prs` off) | Unchanged | Unchanged |
-| Partial stack (missing child URL) or execute failure with zero child URLs | Skip `family_tree_comments` | Stays open; report partial |
-| Already closed with a supersede comment | `family_tree_comments` still posts when child URLs are complete | Skip re-close (idempotent) |
+| Partial stack (missing child URL) or execute failure with zero child URLs | Skip family-tree and stack labels | Stays open; report partial |
+| Already closed with a supersede comment | Family-tree and labels still run when child URLs are complete | Skip re-close (idempotent) |
 
-Report `family_tree` and `supersede` from execute JSON. A family-tree or supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
+Report `family_tree`, `stack_labels`, and `supersede` from execute JSON. A family-tree, labels, or supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
+
+**Labels are discovery only.** Merge order and “this PR” stay on family-tree comments and stacked bases. Filter with `is:pr label:split-pr` or `label:split-stack:663`.
 
 ### Phase 6 — Split further (mandatory)
 
@@ -151,8 +153,9 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
 | `scripts/categorize_files.py` | Library — path → layer, slice builder |
 | `scripts/verify_plan.py` | **Execute** — coverage gate |
-| `scripts/execute_split.py` | **Execute** — branches / draft PRs / family tree / supersede |
+| `scripts/execute_split.py` | **Execute** — branches / draft PRs / family tree / stack labels / supersede |
 | `scripts/family_tree_comments.py` | **Execute** — full linked tree comment on each child PR |
+| `scripts/stack_labels.py` | **Execute** — apply `split-pr` + `split-stack:<source>` discovery labels |
 | `scripts/gh_body_comment.py` | Shared ``gh pr comment --body-file`` helpers |
 | `scripts/supersede_source_pr.py` | **Execute** — comment + close source after full stack |
 | `scripts/split_pr_scripts_constants/` | Named constants |
@@ -162,4 +165,4 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 
 - `reference/` — on-demand principles, layers, proposal, task seeds, split-further loop
 - `templates/` — PR body, family-tree body, supersede body, example plan
-- `scripts/` — analyze, verify, execute, family tree, supersede + tests + constants
+- `scripts/` — analyze, verify, execute, family tree, stack labels, supersede + tests + constants
