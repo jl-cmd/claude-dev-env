@@ -20,17 +20,15 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
 from pathlib import Path
 
+from gh_body_comment import run_gh_pr_comment, write_markdown_body_file
 from split_pr_scripts_constants.config.execute_constants import (
     ERROR_SUPERSEDE_CLOSE_FAILED,
     ERROR_SUPERSEDE_COMMENT_FAILED,
     ERROR_SUPERSEDE_VIEW_FAILED,
-    GH_BODY_FILE,
     GH_CLOSE,
     GH_COMMAND,
-    GH_COMMENT,
     GH_COMMENT_BODY_FIELD,
     GH_COMMENTS_FIELD,
     GH_JSON,
@@ -59,7 +57,6 @@ from split_pr_scripts_constants.config.execute_constants import (
     SUPERSEDE_SKIP_DISABLED,
     SUPERSEDE_SKIP_NO_CHILD_URLS,
     SUPERSEDE_SKIP_PARTIAL,
-    MARKDOWN_BODY_SUFFIX,
     NEWLINE,
 )
 
@@ -85,6 +82,38 @@ def extract_pr_number_from_url(pr_url: str) -> int | None:
     return int(number_token)
 
 
+def collect_pr_numbers_from_urls(all_child_pr_urls: list[str]) -> list[int]:
+    """Return PR numbers parsed from ordered GitHub pull URLs.
+
+    Args:
+        all_child_pr_urls: PR URLs that may contain ``/pull/<n>``.
+
+    Returns:
+        Ordered list of integer PR numbers found in the URLs.
+    """
+    all_numbers: list[int] = []
+    for each_url in all_child_pr_urls:
+        pr_number = extract_pr_number_from_url(each_url)
+        if pr_number is not None:
+            all_numbers.append(pr_number)
+    return all_numbers
+
+
+def format_merge_order(all_child_pr_numbers: list[int]) -> str:
+    """Return the ``#10 → #11`` merge-order line for a stack.
+
+    Args:
+        all_child_pr_numbers: Ordered child PR numbers for the stack.
+
+    Returns:
+        Single-line merge order using the shared separator and hash prefix.
+    """
+    return SUPERSEDE_MERGE_ORDER_SEPARATOR.join(
+        f"{SUPERSEDE_PR_HASH_PREFIX}{each_number}"
+        for each_number in all_child_pr_numbers
+    )
+
+
 def build_supersede_comment_body(
     all_child_pr_numbers: list[int],
     all_child_pr_urls: list[str],
@@ -98,10 +127,6 @@ def build_supersede_comment_body(
     Returns:
         Markdown body with heading, merge order, and numbered child links.
     """
-    merge_order = SUPERSEDE_MERGE_ORDER_SEPARATOR.join(
-        f"{SUPERSEDE_PR_HASH_PREFIX}{each_number}"
-        for each_number in all_child_pr_numbers
-    )
     all_list_lines = [
         SUPERSEDE_LIST_ITEM_TEMPLATE
         % (each_index, each_number, each_url)
@@ -116,7 +141,7 @@ def build_supersede_comment_body(
             "",
             SUPERSEDE_INTRO,
             "",
-            f"{SUPERSEDE_MERGE_ORDER_LABEL} {merge_order}",
+            f"{SUPERSEDE_MERGE_ORDER_LABEL} {format_merge_order(all_child_pr_numbers)}",
             "",
             *all_list_lines,
             "",
@@ -187,7 +212,7 @@ def supersede_source_pr(
         should_create_prs=should_create_prs,
         should_supersede=should_supersede,
     )
-    all_child_pr_numbers = _collect_child_pr_numbers(all_child_pr_urls)
+    all_child_pr_numbers = collect_pr_numbers_from_urls(all_child_pr_urls)
     if skip_reason is not None:
         return _skipped_payload(all_child_pr_numbers, skip_reason)
 
@@ -203,12 +228,13 @@ def supersede_source_pr(
         all_child_pr_numbers=all_child_pr_numbers,
         all_child_pr_urls=all_child_pr_urls,
     )
-    body_path = _write_body_file(comment_body)
-    _run_gh_comment(
-        source_pr_number=source_pr_number,
+    body_path = write_markdown_body_file(comment_body)
+    run_gh_pr_comment(
+        pr_number=source_pr_number,
         body_path=body_path,
         repo=repo,
         working_directory=working_directory,
+        error_template=ERROR_SUPERSEDE_COMMENT_FAILED,
     )
     _run_gh_close(
         source_pr_number=source_pr_number,
@@ -221,15 +247,6 @@ def supersede_source_pr(
         PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_pr_numbers,
         PAYLOAD_KEY_SKIPPED: False,
     }
-
-
-def _collect_child_pr_numbers(all_child_pr_urls: list[str]) -> list[int]:
-    all_numbers: list[int] = []
-    for each_url in all_child_pr_urls:
-        pr_number = extract_pr_number_from_url(each_url)
-        if pr_number is not None:
-            all_numbers.append(pr_number)
-    return all_numbers
 
 
 def _skipped_payload(
@@ -286,47 +303,6 @@ def _is_already_superseded(
         if SUPERSEDE_HEADING in body_text:
             return True
     return False
-
-
-def _write_body_file(comment_body: str) -> str:
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        suffix=MARKDOWN_BODY_SUFFIX,
-        delete=False,
-    ) as body_file:
-        body_file.write(comment_body)
-        return body_file.name
-
-
-def _run_gh_comment(
-    source_pr_number: int,
-    body_path: str,
-    repo: str | None,
-    working_directory: str | None,
-) -> None:
-    all_command = [
-        GH_COMMAND,
-        GH_PR,
-        GH_COMMENT,
-        str(source_pr_number),
-        GH_BODY_FILE,
-        body_path,
-    ]
-    if repo:
-        all_command.extend([GH_REPO_FLAG, repo])
-    completed = subprocess.run(
-        all_command,
-        cwd=working_directory,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise RuntimeError(
-            ERROR_SUPERSEDE_COMMENT_FAILED % (source_pr_number, detail)
-        )
 
 
 def _run_gh_close(

@@ -41,9 +41,6 @@ from split_pr_scripts_constants.config.plan_constants import (
 
 JsonObject = dict[str, object]
 
-_PART_SLUG_SEPARATOR = "-part"
-_PATH_SEPARATOR = "/"
-
 
 def normalize_path(path: str) -> str:
     """Return a POSIX-style path for rule matching.
@@ -225,7 +222,12 @@ def _build_one_slice(
 ) -> JsonObject:
     stem = ALL_LAYER_TITLE_STEM_BY_NAME.get(layer, layer)
     story = ALL_LAYER_STORY_BY_NAME.get(layer, ALL_LAYER_STORY_BY_NAME[DEFAULT_LAYER])
-    slug = layer if part_index is None else f"{layer}{_PART_SLUG_SEPARATOR}{part_index}"
+    part_slug_separator = "-part"
+    slug = (
+        layer
+        if part_index is None
+        else f"{layer}{part_slug_separator}{part_index}"
+    )
     title_stem = stem if part_index is None else f"{stem} part {part_index}"
     title = f"{title_prefix}: {feature_slug} {title_stem}".strip()
     changed_lines = _paths_changed_lines(all_paths, churn_by_path)
@@ -298,9 +300,10 @@ def _group_paths_by_directory(all_paths: list[str]) -> list[list[str]]:
 
 
 def _directory_key(path: str) -> str:
-    if _PATH_SEPARATOR not in path:
+    path_separator = "/"
+    if path_separator not in path:
         return path
-    return path.rsplit(_PATH_SEPARATOR, 1)[0]
+    return path.rsplit(path_separator, 1)[0]
 
 
 def _pack_files_individually(
@@ -319,22 +322,22 @@ def _pack_files_individually(
 
 def _append_group_to_bins(
     all_bins: list[list[str]],
-    group_paths: list[str],
+    all_group_paths: list[str],
     churn_by_path: dict[str, int],
 ) -> None:
-    group_lines = _paths_changed_lines(group_paths, churn_by_path)
+    group_lines = _paths_changed_lines(all_group_paths, churn_by_path)
     for each_bin in all_bins:
-        candidate_paths = each_bin + group_paths
+        candidate_paths = each_bin + all_group_paths
         if slice_fits_review_budget(
             file_count=len(candidate_paths),
             changed_lines=_paths_changed_lines(candidate_paths, churn_by_path),
         ):
-            each_bin.extend(group_paths)
+            each_bin.extend(all_group_paths)
             return
     if (
-        len(group_paths) == 1
+        len(all_group_paths) == 1
         and group_lines > MAXIMUM_SLICE_CHANGED_LINES
     ):
-        all_bins.append(list(group_paths))
+        all_bins.append(list(all_group_paths))
         return
-    all_bins.append(list(group_paths))
+    all_bins.append(list(all_group_paths))
