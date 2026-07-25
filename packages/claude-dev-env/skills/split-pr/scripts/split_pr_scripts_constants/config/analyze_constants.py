@@ -14,7 +14,6 @@ BRANCH_PREFIX = "split"
 BRANCH_NAME_SEPARATOR = "/"
 SLUG_REPLACEMENT = "-"
 MAXIMUM_FEATURE_SLUG_LENGTH = 40
-MINIMUM_SPLIT_FILE_COUNT = 8
 MAXIMUM_SLICE_CHANGED_LINES = 400
 MAXIMUM_SLICE_FILE_COUNT = 10
 DEFAULT_TITLE_PREFIX = "feat"
@@ -26,8 +25,15 @@ GH_VIEW = "view"
 GH_JSON_FLAG = "--json"
 GH_REPO_FLAG = "--repo"
 GH_PR_JSON_FIELDS = (
-    "number,title,baseRefName,headRefName,headRefOid,files,url,body"
+    "number,title,baseRefName,headRefName,headRefOid,changedFiles,url,body"
 )
+GH_API = "api"
+GH_PAGINATE_FLAG = "--paginate"
+GH_API_SLURP_FLAG = "--slurp"
+GH_PR_FILES_ENDPOINT_TEMPLATE = "repos/%s/pulls/%s/files"
+GH_PR_FILES_DEFAULT_OWNER_REPO = "{owner}/{repo}"
+GH_API_FILE_FILENAME = "filename"
+GH_API_FILE_STATUS = "status"
 
 GH_FIELD_NUMBER = "number"
 GH_FIELD_TITLE = "title"
@@ -35,6 +41,7 @@ GH_FIELD_BASE_REF = "baseRefName"
 GH_FIELD_HEAD_REF = "headRefName"
 GH_FIELD_HEAD_OID = "headRefOid"
 GH_FIELD_FILES = "files"
+GH_FIELD_CHANGED_FILES = "changedFiles"
 GH_FIELD_URL = "url"
 GH_FIELD_BODY = "body"
 GH_FILE_PATH = "path"
@@ -45,11 +52,20 @@ ERROR_PR_NUMBER_REQUIRED = "PR number is required and must be a positive integer
 ERROR_GH_FAILED = "gh pr view failed: %s"
 ERROR_GH_JSON_PARSE = "gh output is not valid JSON: %s"
 ERROR_CLI_ARGUMENTS = "invalid or missing command-line arguments"
-ERROR_BELOW_SPLIT_THRESHOLD = (
-    "PR has %s changed files (threshold %s); split is optional — continue only if the user insists"
+ERROR_GH_FILE_STATUS_FAILED = "gh api pull files failed: %s"
+ERROR_GH_FILE_STATUS_JSON = "gh api pull files output is not valid JSON: %s"
+ERROR_GH_FILE_COUNT_MISMATCH = (
+    "fetched %s changed files but the PR reports %s; refusing to split a "
+    "truncated file list"
+)
+PLAN_ROOT_MUST_BE_OBJECT = "root must be an object"
+PLAN_ROOT_MUST_BE_ARRAY = "root must be an array of pages"
+SPLIT_OPTIONAL_NOTE_TEMPLATE = (
+    "parent already fits review budget (files=%s/%s, changed_lines=%s/%s); "
+    "split is optional — continue only if the user insists"
 )
 
-WARNING_BELOW_THRESHOLD = "file_count_below_default_threshold"
+WARNING_SPLIT_OPTIONAL = "parent_fits_review_budget_split_optional"
 WARNING_SINGLE_LAYER = "all_files_map_to_one_layer"
 WARNING_OTHER_LAYER_NONEMPTY = "uncategorized_other_layer_has_files"
 WARNING_OVERSIZED_ATOMIC_SLICE = "oversized_atomic_slice"

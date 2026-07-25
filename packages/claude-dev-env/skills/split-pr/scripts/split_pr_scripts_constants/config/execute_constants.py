@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+FRESH_BRANCH_SCRIPTS_DIRECTORY = (
+    Path(__file__).resolve().parents[4] / "fresh-branch" / "scripts"
+)
+
 EXIT_CODE_SUCCESS = 0
 EXIT_CODE_FAILURE = 1
 
@@ -15,6 +21,8 @@ PAYLOAD_KEY_CLOSED = "closed"
 PAYLOAD_KEY_CHILD_PR_NUMBERS = "child_pr_numbers"
 PAYLOAD_KEY_SKIPPED = "skipped"
 PAYLOAD_KEY_SKIP_REASON = "skip_reason"
+PAYLOAD_KEY_SKIPPED_SLICES = "skipped_slices"
+PAYLOAD_KEY_RESTORE_ERROR = "restore_error"
 
 GIT_COMMAND = "git"
 GIT_FETCH = "fetch"
@@ -30,6 +38,18 @@ GIT_PORCELAIN = "--porcelain"
 GIT_SET_UPSTREAM = "-u"
 GIT_MESSAGE_FLAG = "-m"
 GIT_ORIGIN = "origin"
+GIT_REMOTE = "remote"
+GIT_SHOW_REF = "show-ref"
+GIT_VERIFY_FLAG = "--verify"
+GIT_QUIET_FLAG = "--quiet"
+GIT_LIST_FLAG = "--list"
+GIT_FORCE_FLAG = "--force"
+GIT_DELETE_BRANCH_FLAG = "-D"
+GIT_REMOVE = "rm"
+GIT_ABBREV_REF_FLAG = "--abbrev-ref"
+GIT_SYMBOLIC_REF = "symbolic-ref"
+GIT_SHORT_FLAG = "--short"
+GIT_HEAD_REF = "HEAD"
 
 GH_COMMAND = "gh"
 GH_PR = "pr"
@@ -59,9 +79,25 @@ ERROR_EMPTY_SLICE_AFTER_CHECKOUT = "no files staged for slice %s after checkout"
 ERROR_SUPERSEDE_COMMENT_FAILED = "gh pr comment failed for source #%s: %s"
 ERROR_SUPERSEDE_CLOSE_FAILED = "gh pr close failed for source #%s: %s"
 ERROR_SUPERSEDE_VIEW_FAILED = "gh pr view failed for source #%s: %s"
+ERROR_SUPERSEDE_VIEW_JSON = "gh pr view output is not valid JSON for source #%s: %s"
+ERROR_RESTORE_FAILED = "failed to restore the starting checkout (%s): %s"
+ERROR_NO_ORIGIN_REMOTE = "remote origin is required to push split branches"
+ERROR_SOURCE_HEAD_MOVED = (
+    "source branch %s now points at %s but the plan was computed at %s; "
+    "re-run analyze_pr and re-approve the plan"
+)
+ERROR_SOURCE_HEAD_UNREADABLE = "could not read the head commit of %s: %s"
+ERROR_SPLIT_OPTIONAL_REFUSED = (
+    "plan says the split is optional (%s); pass --allow-optional-split to "
+    "execute it anyway"
+)
+SKIP_REASON_EMPTY_SLICE = "no_change_against_base"
+ERROR_PLAN_MISSING_PR_IDENTITY = "plan missing pr identity (title and pr_number)"
+PRETTY_FLAG = "--pretty"
 
 JSON_INDENT_SPACES = 2
 NEWLINE = "\n"
+EMPTY_JSON_OBJECT_TEXT = "{}"
 GIT_REFS_REMOTES_PREFIX = "refs/remotes/"
 GIT_REFS_HEADS_PREFIX = "refs/heads/"
 MARKDOWN_BODY_SUFFIX = ".md"
@@ -75,12 +111,13 @@ PR_URL_NUMBER_MARKER = "/pull/"
 SUPERSEDE_HEADING = "## Superseded by stacked split"
 SUPERSEDE_INTRO = (
     "This PR was file-split into a stacked draft chain. Review and merge the "
-    "stack; this source PR is closed as superseded."
+    "stack in order; this source PR is superseded by the slices listed below."
 )
 SUPERSEDE_MERGE_ORDER_LABEL = "**Merge order:**"
 SUPERSEDE_MERGE_ORDER_SEPARATOR = " → "
 SUPERSEDE_PR_HASH_PREFIX = "#"
 SUPERSEDE_LIST_ITEM_TEMPLATE = "%s. #%s — %s"
+SUPERSEDE_UNKNOWN_PR_NUMBER = "?"
 SUPERSEDE_SKIP_ATOMIC = "atomic_single_slice"
 SUPERSEDE_SKIP_NO_CHILD_URLS = "no_child_pr_urls"
 SUPERSEDE_SKIP_PARTIAL = "partial_stack"
