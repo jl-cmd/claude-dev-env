@@ -1,0 +1,36 @@
+name: sync-labels
+
+# Applies .github/labels.yml to the repository's labels: a label named there
+# gets that colour and description. Runs on a push that touches the label file,
+# and on demand from the Actions tab.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/labels.yml
+      - .github/workflows/sync-labels.yml
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report the changes without applying them
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply the label file
+        uses: crazy-max/ghaction-github-labeler@v5
+        with:
+          yaml-file: .github/labels.yml
+          skip-delete: true
+          dry-run: ${{ inputs.dry_run || false }}

@@ -2,7 +2,8 @@ name: Feature Request
 description: Suggest a new rule, agent, skill, or other improvement
 title: "[Feature] "
 labels:
-  - enhancement
+  - "type: feature"
+  - "status: backlog"
 body:
   - type: textarea
     id: summary
