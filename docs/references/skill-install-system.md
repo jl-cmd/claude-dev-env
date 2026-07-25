@@ -45,7 +45,7 @@ The stale-file comparison reads the manifest, so it touches only files an instal
 
 Both prunes run behind the same two gates: a full install, and every dependency group resolved. An unresolved dependency contributes no skills, so a live skill it supplies would look retired and its files would look stale; holding both prunes keeps that content safe.
 
-One limit is worth knowing: a scoped `--only` install rewrites the manifest's file list to the scoped subset, so a full install that follows it reads a smaller record and moves aside less. That under-prunes safely — a stale file stays on disk, and a live file is never removed.
+A full install writes the manifest's file list wholesale from what it just installed, so the next diff reads as "the package stopped shipping this". A scoped `--only` install unions what it wrote onto the prior list, which holds every entry a later full install needs to spot a stale file.
 
 ## Dependency groups
 

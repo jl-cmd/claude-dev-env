@@ -30,7 +30,7 @@ The manifest diff limits the move to files the installer itself wrote. Runtime-g
 
 A missing or unreadable manifest, or one carrying no file list, holds the stale-file prune for that run: with no record of what an install wrote, the run has nothing to diff against.
 
-A scoped `--only` install rewrites the manifest's file list to the scoped subset, so a full install that follows it reads a smaller record and moves aside less. That under-prunes safely — it leaves a stale file on disk rather than removing a live one.
+A full install writes the manifest's file list wholesale from what it just installed, so the next diff reads as "the package stopped shipping this". A scoped `--only` install unions what it wrote onto the prior list, which holds every entry a later full install needs to spot a stale file. The prune itself bounds the list: a stale path leaves the record on the first full install that moves it aside.
 
 ## Prune gates
 
@@ -45,8 +45,8 @@ The retired-skill prune and the stale-file prune run behind the same two gates: 
 | `isWindowsStorePythonStub(path)` | Returns true when the path resolves to the non-spawnable WindowsApps stub |
 | `interpreterCommandFromPath(path)` | Formats an absolute interpreter path as a settings.json hook command prefix |
 | `collectPackageSourceConflicts(dir)` | Returns any unmerged git conflicts in the package source; installer aborts when any exist |
-| `pruneStaleInstalledFiles(priorFiles, currentFiles, destinationRoot, backupRoot, options)` | Moves each manifest-recorded file under the destination root that the run leaves unwritten into the run's backup root; returns `{ prunedCount, failedPaths }`. `options.caseInsensitive` drives path-key case folding, defaulting to this host's filesystem |
-| `comparisonKeyForPath(path, options)` | Builds the key two paths are compared through: resolved, forward-slashed, and lowercased when `options.caseInsensitive` holds — which defaults to true on Windows and macOS |
+| `pruneStaleInstalledFiles(priorFiles, currentFiles, destinationRoot, backupRoot, options)` | Moves each manifest-recorded file under the destination root that the run leaves unwritten into the run's backup root; returns `{ prunedCount, failedPaths }`. `options.isCaseInsensitive` drives path-key case folding, defaulting to this host's filesystem |
+| `comparisonKeyForPath(path, options)` | Builds the key two paths are compared through: resolved, forward-slashed, and lowercased when `options.isCaseInsensitive` holds — which defaults to true on Windows and macOS |
 
 ## Install groups
 

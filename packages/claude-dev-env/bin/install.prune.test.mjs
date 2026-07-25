@@ -312,6 +312,52 @@ test('a scoped --only install leaves a manifest-recorded stale skill file in pla
     }
 });
 
+test('a scoped --only install keeps prior manifest file entries it did not itself write', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+        const filesBeforeScopedInstall = readManifest(sandbox.manifestPath).files;
+
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+
+        const recordedFiles = new Set(readManifest(sandbox.manifestPath).files);
+        assert.equal(
+            recordedFiles.has(staleFilePath),
+            true,
+            'the entry a later full install needs to spot the stale file stays on the record',
+        );
+        const droppedEntries = filesBeforeScopedInstall
+            .filter(priorPath => !recordedFiles.has(priorPath));
+        assert.deepEqual(droppedEntries, [], 'a scoped install drops no prior entry');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a full install after a scoped one still moves the stale file the scoped run carried forward', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        assert.equal(existsSync(staleFilePath), false, 'the carried-forward entry reaches the next full diff');
+        assert.equal(
+            prunedBackupContains(
+                sandbox.claudeDirectory,
+                join(SHIPPED_SKILL_DIRECTORY, ...STALE_SKILL_FILE_RELATIVE_SEGMENTS),
+            ),
+            true,
+            'the stale file lands in the prune backup',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('one install run collects retired skill directories and stale files under a single timestamped backup root', () => {
     const sandbox = createSandbox();
     try {

@@ -1382,10 +1382,10 @@ test('pruneStaleInstalledFiles returns zero and moves nothing when the prior man
 
 test('comparisonKeyForPath folds letter case when the filesystem does', () => {
     const lowercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/readme.md', {
-        caseInsensitive: true,
+        isCaseInsensitive: true,
     });
     const uppercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/README.md', {
-        caseInsensitive: true,
+        isCaseInsensitive: true,
     });
 
     assert.equal(lowercaseKey, uppercaseKey, 'two spellings of one name share a key');
@@ -1394,10 +1394,10 @@ test('comparisonKeyForPath folds letter case when the filesystem does', () => {
 
 test('comparisonKeyForPath keeps letter case when the filesystem does', () => {
     const lowercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/readme.md', {
-        caseInsensitive: false,
+        isCaseInsensitive: false,
     });
     const uppercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/README.md', {
-        caseInsensitive: false,
+        isCaseInsensitive: false,
     });
 
     assert.notEqual(lowercaseKey, uppercaseKey, 'two spellings name two distinct files');
@@ -1417,7 +1417,7 @@ test('pruneStaleInstalledFiles keeps a case-only renamed readme when keys fold c
             [copiedReadmePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
-            { caseInsensitive: true },
+            { isCaseInsensitive: true },
         );
 
         assert.equal(pruneOutcome.prunedCount, 0, 'the recorded spelling names the file this run wrote');
