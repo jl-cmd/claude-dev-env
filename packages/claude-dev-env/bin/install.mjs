@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
 import { join, dirname, resolve, relative, basename, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
@@ -25,6 +25,8 @@ const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
+const MANIFEST_FILES_KEY = 'files';
+const MANIFEST_SKILLS_KEY = 'skills';
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -354,12 +356,17 @@ function isCaseInsensitiveFilesystem() {
  * existing on-disk name, so a case-sensitive key would read the installed name as
  * a file this run never wrote and move the freshly written content aside.
  *
+ * The `caseInsensitive` option carries that decision as a value, so a test names
+ * the branch it drives and both branches stay covered on a host of either kind.
+ *
  * @param {string} filesystemPath A path to build a comparison key for.
+ * @param {{caseInsensitive?: boolean}} options Whether keys fold letter case; defaults to this host's filesystem.
  * @returns {string} The comparison key.
  */
-function comparisonKeyForPath(filesystemPath) {
+export function comparisonKeyForPath(filesystemPath, options = {}) {
+    const { caseInsensitive = isCaseInsensitiveFilesystem() } = options;
     const normalizedPath = normalizePathForComparison(resolve(filesystemPath));
-    return isCaseInsensitiveFilesystem() ? normalizedPath.toLowerCase() : normalizedPath;
+    return caseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
 }
 
 /**
@@ -441,28 +448,45 @@ function removeEmptiedParentDirectories(startDirectory, destinationRoot) {
  * then reads a smaller prior set and moves fewer files aside, which leaves a stale
  * file in place rather than removing a live one.
  *
+ * A move that fails is reported through `failedPaths` so the caller records those
+ * paths in the fresh manifest. Keeping a failed path on the record holds it inside
+ * the next run's diff, which retries the move once the antivirus scanner or open
+ * editor that held the file lets go. Leaving it off the record would place the
+ * file outside every later diff and strand it inside a live skill.
+ *
  * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
  * @param {string[]} currentInstalledFiles Every file this run copied under the root.
  * @param {string} destinationRoot The managed root the diff is confined to.
  * @param {string} backupRoot The run's timestamped backup directory.
- * @returns {number} How many files were moved aside.
+ * @param {{caseInsensitive?: boolean}} options Whether path keys fold letter case; defaults to this host's filesystem.
+ * @returns {{prunedCount: number, failedPaths: string[]}} How many files moved, and the paths whose move failed.
  */
-export function pruneStaleInstalledFiles(priorInstalledFiles, currentInstalledFiles, destinationRoot, backupRoot) {
-    if (priorInstalledFiles === null) return 0;
-    const currentFileKeys = new Set(currentInstalledFiles.map(comparisonKeyForPath));
+export function pruneStaleInstalledFiles(
+    priorInstalledFiles, currentInstalledFiles, destinationRoot, backupRoot, options = {},
+) {
+    if (priorInstalledFiles === null) return { prunedCount: 0, failedPaths: [] };
+    const { caseInsensitive = isCaseInsensitiveFilesystem() } = options;
+    const keyOptions = { caseInsensitive };
+    const currentFileKeys = new Set(
+        currentInstalledFiles.map(currentFile => comparisonKeyForPath(currentFile, keyOptions)),
+    );
     const resolvedRoot = resolve(destinationRoot);
-    let movedCount = 0;
+    let prunedCount = 0;
+    const failedPaths = [];
     for (const priorFile of priorInstalledFiles) {
         const stalePath = resolve(priorFile);
         if (!isInsideDirectory(stalePath, resolvedRoot)) continue;
-        if (currentFileKeys.has(comparisonKeyForPath(stalePath))) continue;
+        if (currentFileKeys.has(comparisonKeyForPath(stalePath, keyOptions))) continue;
         if (!isMovableStaleFile(stalePath)) continue;
         const backupRelativePath = relative(resolvedRoot, stalePath);
-        if (!moveIntoRunBackup(stalePath, backupRoot, backupRelativePath, STALE_FILE_REASON_LABEL)) continue;
-        movedCount++;
+        if (!moveIntoRunBackup(stalePath, backupRoot, backupRelativePath, STALE_FILE_REASON_LABEL)) {
+            failedPaths.push(stalePath);
+            continue;
+        }
+        prunedCount++;
         removeEmptiedParentDirectories(dirname(stalePath), resolvedRoot);
     }
-    return movedCount;
+    return { prunedCount, failedPaths };
 }
 
 function copyTree(sourceBase, destBase) {
@@ -823,43 +847,54 @@ function writeManifest(installedFiles, skillNames) {
 }
 
 /**
- * Read the skill directory names the previous install recorded.
+ * Read one array-valued key the previous install recorded in the manifest.
  *
- * Returns null when no manifest exists or the manifest predates the skills key,
- * so a caller can treat "unknown prior skills" the same in both cases and lean
- * on the ever-shipped set to find retired skills.
+ * Returns null when the manifest is missing, unreadable, or holds no array at the
+ * key, so a caller treats every such case as "no prior record": the skills read
+ * leans on the ever-shipped set to find retired skills, and the files read holds
+ * the stale-file prune for that run rather than guessing at what a prior install
+ * wrote. A `--update` run purges the manifest before reinstalling, so both reads
+ * happen at the top of `install()` while the record is still on disk.
  *
- * @returns {string[]|null} The prior manifest's skill names, or null when absent.
+ * @param {string} manifestKey The manifest key to read (`files` or `skills`).
+ * @returns {string[]|null} The recorded array, or null when absent.
  */
-function readPriorManifestSkills() {
+function readPriorManifestArray(manifestKey) {
     if (!existsSync(MANIFEST_FILE)) return null;
     try {
         const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
-        return Array.isArray(priorManifest.skills) ? priorManifest.skills : null;
+        const recordedEntries = priorManifest[manifestKey];
+        return Array.isArray(recordedEntries) ? recordedEntries : null;
     } catch {
         return null;
     }
 }
 
 /**
- * Read the file paths the previous install recorded.
+ * Build the file list the fresh manifest records: everything this run installed
+ * plus every stale path whose move failed and that still sits on disk.
  *
- * Returns null when the manifest is missing, unreadable, or carries no files
- * array, so a caller treats every such case as "no prior record" and holds the
- * stale-file prune for that run rather than guessing at what a prior install
- * wrote. A `--update` run purges the manifest before reinstalling, so the read
- * happens at the top of `install()` while the record is still on disk.
+ * A failed move keeps the file inside a live skill, so the record carries it into
+ * the next run's diff for a retry. A path that vanished between the stat guard
+ * and the rename is dropped, which keeps a phantom out of every later manifest.
+ * Deduping on the prune's own comparison key keeps one spelling per file, so a
+ * path this run also copied lands once rather than inflating the record and the
+ * uninstall purge loop.
  *
- * @returns {string[]|null} The prior manifest's file paths, or null when absent.
+ * @param {string[]} installedFiles Every file this run wrote.
+ * @param {string[]} failedPrunePaths Stale paths whose move into the backup failed.
+ * @returns {string[]} The deduped file list to record.
  */
-function readPriorManifestFiles() {
-    if (!existsSync(MANIFEST_FILE)) return null;
-    try {
-        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
-        return Array.isArray(priorManifest.files) ? priorManifest.files : null;
-    } catch {
-        return null;
+function manifestFilesWithFailedPrunes(installedFiles, failedPrunePaths) {
+    const survivingFailedPaths = failedPrunePaths.filter(failedPath => existsSync(failedPath));
+    const pathByComparisonKey = new Map();
+    for (const recordedPath of [...installedFiles, ...survivingFailedPaths]) {
+        const comparisonKey = comparisonKeyForPath(recordedPath);
+        if (!pathByComparisonKey.has(comparisonKey)) {
+            pathByComparisonKey.set(comparisonKey, recordedPath);
+        }
     }
+    return [...pathByComparisonKey.values()];
 }
 
 /**
@@ -908,7 +943,8 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
 }
 
 function install(selectedGroups, options = {}) {
-    const priorManifestFiles = readPriorManifestFiles();
+    const priorManifestFiles = readPriorManifestArray(MANIFEST_FILES_KEY);
+    const priorManifestSkills = readPriorManifestArray(MANIFEST_SKILLS_KEY);
     const isUpdateRefresh = Boolean(options.isUpdateRefresh);
     if (isUpdateRefresh && !selectedGroups && existsSync(MANIFEST_FILE)) {
         console.log(
@@ -1110,8 +1146,8 @@ function install(selectedGroups, options = {}) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
     }
     const isFullInstall = !selectedGroups;
-    const priorManifestSkills = readPriorManifestSkills();
     let manifestSkillNames = priorManifestSkills;
+    let failedPrunePaths = [];
     if (isFullInstall) {
         if (UNRESOLVED_DEPENDENCY_NAMES.length > 0) {
             console.log(
@@ -1120,16 +1156,18 @@ function install(selectedGroups, options = {}) {
             );
         } else {
             pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
-            summary.skills.pruned = pruneStaleInstalledFiles(
+            const stalePruneOutcome = pruneStaleInstalledFiles(
                 priorManifestFiles,
                 skillPaths,
                 join(CLAUDE_HOME, 'skills'),
                 currentRunBackupRoot(),
             );
+            summary.skills.pruned = stalePruneOutcome.prunedCount;
+            failedPrunePaths = stalePruneOutcome.failedPaths;
         }
         manifestSkillNames = [...installedSkillNames].sort();
     }
-    writeManifest(allInstalledFiles, manifestSkillNames);
+    writeManifest(manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths), manifestSkillNames);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {

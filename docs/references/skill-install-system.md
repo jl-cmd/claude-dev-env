@@ -36,10 +36,10 @@ So a new skill that should ship as part of a named group (for example `core`) ne
 
 A full install moves two kinds of content out of `~/.claude/skills` into one timestamped backup directory per run, `~/.claude/.claude-dev-env-pruned/<timestamp>/`:
 
-- **A retired skill directory** — a whole skill directory that the package leaves out of the set it ships. The directory keeps its name inside the backup. `~/.claude/skills/_shared` is always kept in place.
+- **A retired skill directory** — a whole skill directory that the package leaves out of the set it ships, and that either the prior manifest's skills list or the ever-shipped set names. The directory keeps its name inside the backup. A directory the user created themselves, such as `~/.claude/skills/my-notes`, sits in neither of those sets and stays in place, as does `~/.claude/skills/_shared`.
 - **A stale file inside a live skill** — a file that the install manifest, `~/.claude/.claude-dev-env-manifest.json`, records under `~/.claude/skills` and that the run leaves unwritten. Each moved file mirrors its relative path inside the backup directory, and a directory the move empties is removed up to the skills directory.
 
-Both prunes move content rather than delete it, so anything caught by mistake is recoverable from the backup. A move that fails logs a warning and leaves the content in place.
+Both prunes move content rather than delete it, so anything caught by mistake is recoverable from the backup. A move that fails logs a warning and leaves the content in place; a stale file whose move fails stays on the fresh manifest record, so the next full install retries it.
 
 The stale-file comparison reads the manifest, so it touches only files an install wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS.
 

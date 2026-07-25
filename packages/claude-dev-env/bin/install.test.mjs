@@ -34,6 +34,7 @@ import {
     mergeHooksIntoSettings,
     pruneManagedHooksFromSettings,
     pruneStaleInstalledFiles,
+    comparisonKeyForPath,
 } from './install.mjs';
 import {
     expandHomeDirectoryTokens,
@@ -1313,14 +1314,15 @@ test('pruneStaleInstalledFiles moves a file the prior manifest recorded and this
         const keptFilePath = join(sandbox.skillsRoot, 'demo', 'SKILL.md');
         const staleFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'retired_module.py');
 
-        const movedCount = pruneStaleInstalledFiles(
+        const pruneOutcome = pruneStaleInstalledFiles(
             [keptFilePath, staleFilePath],
             [keptFilePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
         );
 
-        assert.equal(movedCount, 1, 'exactly the one no-longer-written file moves');
+        assert.equal(pruneOutcome.prunedCount, 1, 'exactly the one no-longer-written file moves');
+        assert.deepEqual(pruneOutcome.failedPaths, [], 'a move that succeeds reports no failed path');
         assert.equal(existsSync(staleFilePath), false, 'the stale file leaves the installed tree');
         assert.equal(
             existsSync(join(sandbox.backupRoot, 'demo', 'scripts', 'retired_module.py')),
@@ -1347,14 +1349,14 @@ test('pruneStaleInstalledFiles leaves a __pycache__ artifact the prior manifest 
         );
         const userFilePath = join(sandbox.skillsRoot, 'demo', 'notes.md');
 
-        const movedCount = pruneStaleInstalledFiles(
+        const pruneOutcome = pruneStaleInstalledFiles(
             [shippedFilePath],
             [shippedFilePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
         );
 
-        assert.equal(movedCount, 0, 'a file the installer never wrote is outside the diff');
+        assert.equal(pruneOutcome.prunedCount, 0, 'a file the installer never wrote is outside the diff');
         assert.equal(existsSync(runtimeArtifactPath), true, 'the compiled bytecode stays in place');
         assert.equal(existsSync(userFilePath), true, 'the user-authored file stays in place');
         assert.equal(existsSync(sandbox.backupRoot), false, 'an empty prune creates no backup root');
@@ -1367,9 +1369,10 @@ test('pruneStaleInstalledFiles leaves a __pycache__ artifact the prior manifest 
 test('pruneStaleInstalledFiles returns zero and moves nothing when the prior manifest record is unknown', () => {
     const sandbox = createStalePruneSandbox({ 'demo/SKILL.md': '# demo\n' });
     try {
-        const movedCount = pruneStaleInstalledFiles(null, [], sandbox.skillsRoot, sandbox.backupRoot);
+        const pruneOutcome = pruneStaleInstalledFiles(null, [], sandbox.skillsRoot, sandbox.backupRoot);
 
-        assert.equal(movedCount, 0, 'an unknown prior record holds the prune for that run');
+        assert.equal(pruneOutcome.prunedCount, 0, 'an unknown prior record holds the prune for that run');
+        assert.deepEqual(pruneOutcome.failedPaths, [], 'an unknown prior record reports no failed path');
         assert.equal(existsSync(join(sandbox.skillsRoot, 'demo', 'SKILL.md')), true);
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });
@@ -1377,7 +1380,56 @@ test('pruneStaleInstalledFiles returns zero and moves nothing when the prior man
 });
 
 
-test('pruneStaleInstalledFiles keeps the readme through a case-only rename', () => {
+test('comparisonKeyForPath folds letter case when the filesystem does', () => {
+    const lowercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/readme.md', {
+        caseInsensitive: true,
+    });
+    const uppercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/README.md', {
+        caseInsensitive: true,
+    });
+
+    assert.equal(lowercaseKey, uppercaseKey, 'two spellings of one name share a key');
+});
+
+
+test('comparisonKeyForPath keeps letter case when the filesystem does', () => {
+    const lowercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/readme.md', {
+        caseInsensitive: false,
+    });
+    const uppercaseKey = comparisonKeyForPath('/home/user/.claude/skills/demo/README.md', {
+        caseInsensitive: false,
+    });
+
+    assert.notEqual(lowercaseKey, uppercaseKey, 'two spellings name two distinct files');
+});
+
+
+test('pruneStaleInstalledFiles keeps a case-only renamed readme when keys fold case', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/README.md': '# demo readme\n',
+    });
+    try {
+        const priorReadmePath = join(sandbox.skillsRoot, 'demo', 'Readme.md');
+        const copiedReadmePath = join(sandbox.skillsRoot, 'demo', 'README.md');
+
+        const pruneOutcome = pruneStaleInstalledFiles(
+            [priorReadmePath],
+            [copiedReadmePath],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+            { caseInsensitive: true },
+        );
+
+        assert.equal(pruneOutcome.prunedCount, 0, 'the recorded spelling names the file this run wrote');
+        assert.equal(existsSync(copiedReadmePath), true, 'the freshly shipped readme stays in place');
+        assert.equal(existsSync(sandbox.backupRoot), false, 'nothing reaches the backup root');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('should preserve a case-only rename on a case-insensitive filesystem (host-dependent)', () => {
     const sandbox = createStalePruneSandbox({
         'demo/Readme.md': 'the readme an earlier install wrote\n',
     });
@@ -1426,7 +1478,12 @@ test('pruneStaleInstalledFiles leaves a file in place and warns when the move fa
             sandbox.backupRoot,
         ));
 
-        assert.equal(returnedValue, 0, 'a failed move counts as nothing moved');
+        assert.equal(returnedValue.prunedCount, 0, 'a failed move counts as nothing moved');
+        assert.deepEqual(
+            returnedValue.failedPaths,
+            [staleFilePath],
+            'the failed path is reported so the caller keeps it on the manifest record',
+        );
         assert.equal(existsSync(staleFilePath), true, 'the file stays in the installed tree');
         assert.equal(allWarnings.length, 1, 'the failed move is reported once');
         assert.match(allWarnings[0], /leaving in place/, 'the warning states the file was left in place');
@@ -1450,7 +1507,8 @@ test('pruneStaleInstalledFiles leaves a directory standing where a file was reco
             sandbox.backupRoot,
         ));
 
-        assert.equal(returnedValue, 0, 'a directory is never renamed into the backup');
+        assert.equal(returnedValue.prunedCount, 0, 'a directory is never renamed into the backup');
+        assert.deepEqual(returnedValue.failedPaths, [], 'a skipped directory is no failed move');
         assert.equal(existsSync(join(recordedFilePath, 'inner.py')), true, 'the directory keeps its contents');
         assert.equal(allWarnings.length, 1, 'the skipped path is reported once');
     } finally {
@@ -1471,7 +1529,8 @@ test('pruneStaleInstalledFiles skips a path the user already deleted without war
             sandbox.backupRoot,
         ));
 
-        assert.equal(returnedValue, 0, 'a path that no longer exists moves nothing');
+        assert.equal(returnedValue.prunedCount, 0, 'a path that no longer exists moves nothing');
+        assert.deepEqual(returnedValue.failedPaths, [], 'a path that vanished is no failed move');
         assert.deepEqual(allWarnings, [], 'an already-deleted path is skipped in silence');
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });
@@ -1489,14 +1548,14 @@ test('pruneStaleInstalledFiles removes emptied parents up to the destination roo
         const populatedParentStalePath = join(sandbox.skillsRoot, 'kept', 'scripts', 'retired_module.py');
         const solitaryStalePath = join(sandbox.skillsRoot, 'emptied', 'nested', 'only_module.py');
 
-        const movedCount = pruneStaleInstalledFiles(
+        const pruneOutcome = pruneStaleInstalledFiles(
             [populatedParentStalePath, solitaryStalePath],
             [join(sandbox.skillsRoot, 'kept', 'SKILL.md')],
             sandbox.skillsRoot,
             sandbox.backupRoot,
         );
 
-        assert.equal(movedCount, 2, 'both recorded files move');
+        assert.equal(pruneOutcome.prunedCount, 2, 'both recorded files move');
         assert.equal(
             existsSync(join(sandbox.skillsRoot, 'kept', 'scripts')),
             false,
@@ -1526,14 +1585,14 @@ test('pruneStaleInstalledFiles ignores a recorded path outside the destination r
         mkdirSync(dirname(outsideFilePath), { recursive: true });
         writeFileSync(outsideFilePath, 'a rule wired to another root\n');
 
-        const movedCount = pruneStaleInstalledFiles(
+        const pruneOutcome = pruneStaleInstalledFiles(
             [outsideFilePath],
             [],
             sandbox.skillsRoot,
             sandbox.backupRoot,
         );
 
-        assert.equal(movedCount, 0, 'only the wired root is pruned');
+        assert.equal(pruneOutcome.prunedCount, 0, 'only the wired root is pruned');
         assert.equal(existsSync(outsideFilePath), true, 'content under another root stays in place');
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });

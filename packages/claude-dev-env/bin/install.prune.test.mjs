@@ -262,6 +262,30 @@ test('a full reinstall moves a manifest-recorded skill file the package no longe
     }
 });
 
+test('a stale file whose move fails stays on the manifest record for the next run to retry', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+        writeFileSync(
+            join(sandbox.claudeDirectory, PRUNED_BACKUP_DIRECTORY_NAME),
+            'a file standing where the backup root belongs\n',
+        );
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        assert.equal(existsSync(staleFilePath), true, 'the failed move leaves the file in the skill');
+        const recordedFiles = readManifest(sandbox.manifestPath).files;
+        assert.equal(
+            recordedFiles.filter(recordedPath => recordedPath === staleFilePath).length,
+            1,
+            'the fresh manifest carries the failed path exactly once',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('a scoped --only install leaves a manifest-recorded stale skill file in place', () => {
     const sandbox = createSandbox();
     try {

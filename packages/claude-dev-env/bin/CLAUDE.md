@@ -11,7 +11,8 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 | `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
 | `install_mypy_ini.mjs` | Writes `~/.mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
-| `install.test.mjs` | Tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging |
+| `install.test.mjs` | Unit tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging, and the stale-file prune: the manifest diff, path-key case folding, emptied-parent cleanup, and the warn-and-keep paths |
+| `install.prune.test.mjs` | End-to-end prune tests that run the real installer against a sandbox `HOME` — retired-skill and stale-file moves into one timestamped backup, the manifest record a failed move keeps, the full-install and resolved-dependency gates |
 | `git_hooks_installer.test.mjs` | Tests for `git_hooks_installer.mjs` |
 | `install_mypy_ini.test.mjs` | Tests for `install_mypy_ini.mjs` |
 
@@ -25,7 +26,7 @@ Matching is by directory name alone, so a user-authored directory whose name col
 
 A full install also moves aside a file sitting inside a live skill directory that the run leaves unwritten. The installer reads the file list from `~/.claude/.claude-dev-env-manifest.json`, keeps the entries under `~/.claude/skills`, subtracts every skill file the run copied across all source roots, and moves what remains into the run's backup root, mirroring each file's path under the skills directory. Both prunes share that one backup root.
 
-The manifest diff limits the move to files the installer itself wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS, so a skill shipping `README.md` over an installed `Readme.md` keeps the bytes the run just wrote. A directory or a link standing where the manifest records a file is skipped with a warning, so the mover never renames a whole tree and never follows a link out of `~/.claude`. A directory emptied by a move is removed, walking up to the skills directory. A move that fails logs a warning and leaves the file in place, so a prune failure costs at most a stale file.
+The manifest diff limits the move to files the installer itself wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS, so a skill shipping `README.md` over an installed `Readme.md` keeps the bytes the run just wrote. A directory or a link standing where the manifest records a file is skipped with a warning, so the mover never renames a whole tree and never follows a link out of `~/.claude`. A directory emptied by a move is removed, walking up to the skills directory. A move that fails logs a warning and leaves the file in place, so a prune failure costs at most a stale file. The installer records each such path in the fresh manifest when the file is still on disk, so the file stays inside the next full install's diff and gets another attempt.
 
 A missing or unreadable manifest, or one carrying no file list, holds the stale-file prune for that run: with no record of what an install wrote, the run has nothing to diff against.
 
@@ -44,7 +45,8 @@ The retired-skill prune and the stale-file prune run behind the same two gates: 
 | `isWindowsStorePythonStub(path)` | Returns true when the path resolves to the non-spawnable WindowsApps stub |
 | `interpreterCommandFromPath(path)` | Formats an absolute interpreter path as a settings.json hook command prefix |
 | `collectPackageSourceConflicts(dir)` | Returns any unmerged git conflicts in the package source; installer aborts when any exist |
-| `pruneStaleInstalledFiles(priorFiles, currentFiles, destinationRoot, backupRoot)` | Moves each manifest-recorded file under the destination root that the run leaves unwritten into the run's backup root; returns how many moved |
+| `pruneStaleInstalledFiles(priorFiles, currentFiles, destinationRoot, backupRoot, options)` | Moves each manifest-recorded file under the destination root that the run leaves unwritten into the run's backup root; returns `{ prunedCount, failedPaths }`. `options.caseInsensitive` drives path-key case folding, defaulting to this host's filesystem |
+| `comparisonKeyForPath(path, options)` | Builds the key two paths are compared through: resolved, forward-slashed, and lowercased when `options.caseInsensitive` holds — which defaults to true on Windows and macOS |
 
 ## Install groups
 
