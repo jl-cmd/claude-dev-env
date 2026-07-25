@@ -43,9 +43,9 @@ Both prunes move content rather than delete it, so anything caught by mistake is
 
 The stale-file comparison reads the manifest, so it touches only files an install wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS.
 
-Both prunes run behind the same two gates: a full install, and every dependency group resolved. An unresolved dependency contributes no skills, so a live skill it supplies would look retired and its files would look stale; holding both prunes keeps that content safe.
+Both prunes run behind the same two gates: a full install, and every dependency group resolved. An unresolved dependency contributes no skills, so a live skill it supplies would look retired and its files would look stale; holding both prunes keeps that skill's files in place and keeps their manifest records, so a run with every dependency resolved can still prune them.
 
-A full install writes the manifest's file list wholesale from what it just installed, so the next diff reads as "the package stopped shipping this". A scoped `--only` install unions what it wrote onto the prior list, which holds every entry a later full install needs to spot a stale file.
+A run writes both manifest keys — the file list and the skill-name list — wholesale from what it just installed only when both prunes ran that run, so the next diff reads as "the package stopped shipping this". Every other run unions what it wrote onto the prior lists: a scoped `--only` install, and a full install holding its prunes behind an unresolved dependency group. The union holds every entry a later prune needs to spot a stale file or a retired skill, and keeps `--uninstall` able to name the whole tree.
 
 ## Dependency groups
 

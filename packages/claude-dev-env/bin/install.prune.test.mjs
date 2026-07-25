@@ -35,6 +35,8 @@ const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill and stale-file prune';
 const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
+const DEPENDENCY_SUPPLIED_SKILL_DIRECTORY = 'dependency-supplied-skill';
+const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 
 /**
  * Create a stub node_modules tree the installer can resolve the declared
@@ -609,6 +611,86 @@ test('a full reinstall with an unresolved dependency skips the prune and leaves 
                 `retired skill ${retiredSkill} should not be moved to backup when the prune is skipped`,
             );
         }
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a full install that holds the prune keeps prior manifest file entries it did not itself write', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+        const filesBeforeHeldPrune = readManifest(sandbox.manifestPath).files;
+
+        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
+
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            true,
+            'the unresolved-dependency install holds both prunes',
+        );
+        const recordedFiles = new Set(readManifest(sandbox.manifestPath).files);
+        assert.equal(
+            recordedFiles.has(staleFilePath),
+            true,
+            'the entry a later pruning install needs to spot the stale file stays on the record',
+        );
+        const droppedEntries = filesBeforeHeldPrune.filter(priorPath => !recordedFiles.has(priorPath));
+        assert.deepEqual(droppedEntries, [], 'a held prune drops no prior file entry');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a full install that holds the prune keeps prior manifest skill names it did not itself install', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        plantSkillDirectory(sandbox.skillsDirectory, DEPENDENCY_SUPPLIED_SKILL_DIRECTORY, true);
+        const manifest = readManifest(sandbox.manifestPath);
+        manifest.skills.push(DEPENDENCY_SUPPLIED_SKILL_DIRECTORY);
+        writeFileSync(sandbox.manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
+
+        assert.equal(
+            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            true,
+            'the unresolved-dependency install holds both prunes',
+        );
+        const recordedSkills = new Set(readManifest(sandbox.manifestPath).skills);
+        assert.equal(
+            recordedSkills.has(DEPENDENCY_SUPPLIED_SKILL_DIRECTORY),
+            true,
+            'the name a later pruning install needs to spot the retired skill stays on the record',
+        );
+        assert.equal(
+            recordedSkills.has(SHIPPED_SKILL_DIRECTORY),
+            true,
+            'the held run still records the skills it installed itself',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a scoped --only install records the skill names it installed', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+
+        const recordedSkills = new Set(readManifest(sandbox.manifestPath).skills);
+        assert.equal(
+            existsSync(join(sandbox.skillsDirectory, SCOPED_GROUP_SKILL_DIRECTORY)),
+            true,
+            'the scoped install writes the group skill',
+        );
+        assert.equal(
+            recordedSkills.has(SCOPED_GROUP_SKILL_DIRECTORY),
+            true,
+            'the skill the scoped run installed reaches the record uninstall reads',
+        );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }

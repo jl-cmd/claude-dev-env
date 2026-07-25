@@ -30,11 +30,11 @@ The manifest diff limits the move to files the installer itself wrote. Runtime-g
 
 A missing or unreadable manifest, or one carrying no file list, holds the stale-file prune for that run: with no record of what an install wrote, the run has nothing to diff against.
 
-A full install writes the manifest's file list wholesale from what it just installed, so the next diff reads as "the package stopped shipping this". A scoped `--only` install unions what it wrote onto the prior list, which holds every entry a later full install needs to spot a stale file. The prune itself bounds the list: a stale path leaves the record on the first full install that moves it aside.
+A run writes both manifest keys — the file list and the skill-name list — wholesale from what it just installed only when both prunes ran that run, so the next diff reads as "the package stopped shipping this". Every other run unions what it wrote onto the prior lists: a scoped `--only` install, and a full install holding its prunes behind an unresolved dependency group. The union keeps every entry a later prune needs to spot a stale file or a retired skill, and keeps `--uninstall` able to name the whole tree. The prune itself bounds the lists: a stale path leaves the record on the first full install that moves it aside.
 
 ## Prune gates
 
-The retired-skill prune and the stale-file prune run behind the same two gates: a full install, and every declared dependency group resolved. When any dependency group fails to resolve, both are skipped for the whole run with a logged notice naming the unresolved group. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired and its files would look stale; holding both prunes until every dependency resolves keeps that skill and its files from being backed up.
+The retired-skill prune and the stale-file prune run behind the same two gates: a full install, and every declared dependency group resolved. When any dependency group fails to resolve, both are skipped for the whole run with a logged notice naming the unresolved group. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired and its files would look stale; holding both prunes until every dependency resolves keeps that skill's files in place and keeps their manifest records, so a run with every dependency resolved can still prune them.
 
 ## Key exports from install.mjs
 

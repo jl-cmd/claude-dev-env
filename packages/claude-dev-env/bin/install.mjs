@@ -909,6 +909,21 @@ function unionOnComparisonKey(carriedOverPaths, currentRunPaths) {
 }
 
 /**
+ * Merge two skill-name lists into one, deduped by exact name.
+ *
+ * A skill name is a directory name the package ships, compared exactly the way
+ * `pruneRetiredSkills` compares it, so this union stays case-aware and applies
+ * none of the path normalization `unionOnComparisonKey` uses.
+ *
+ * @param {string[]} carriedOverSkillNames Skill names sourced from an earlier record.
+ * @param {string[]} currentRunSkillNames Skill names this run installed.
+ * @returns {string[]} The merged list, one entry per name.
+ */
+function unionOfSkillNames(carriedOverSkillNames, currentRunSkillNames) {
+    return [...new Set([...carriedOverSkillNames, ...currentRunSkillNames])];
+}
+
+/**
  * Build the file list a full install records: everything this run installed plus
  * every stale path whose move failed and that still sits on disk.
  *
@@ -970,6 +985,23 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     }
 }
 
+/**
+ * Copy the package into ~/.claude, merge hook groups into settings.json, and
+ * write the manifest record the uninstall purge and the next run's prune read.
+ *
+ * Two booleans steer the run and answer different questions. `isFullInstall`
+ * answers "should this run do work?" and gates the prunes. `didPruneRun` answers
+ * "may this run forget a record?" and gates both manifest keys: only a run that
+ * diffed the prior record may replace a key wholesale, because wholesale
+ * replacement is what makes the next diff mean "the package stopped shipping
+ * this". A scoped install and a full install holding its prunes behind an
+ * unresolved dependency group each merge their record with the prior one, so
+ * every path and skill name stays available to a later prune and to uninstall.
+ *
+ * @param {string[]|null} selectedGroups The `--only` group names, or null for a full install.
+ * @param {{isUpdateRefresh?: boolean}} [options] Run options; `isUpdateRefresh` purges before reinstalling.
+ * @returns {void}
+ */
 function install(selectedGroups, options = {}) {
     const { files: priorManifestFiles, skills: priorManifestSkills } = readPriorManifestArrays();
     const isUpdateRefresh = Boolean(options.isUpdateRefresh);
@@ -1173,28 +1205,29 @@ function install(selectedGroups, options = {}) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
     }
     const isFullInstall = !selectedGroups;
-    let manifestSkillNames = priorManifestSkills;
+    const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
-    if (isFullInstall) {
-        if (UNRESOLVED_DEPENDENCY_NAMES.length > 0) {
-            console.log(
-                `  Skipping retired-skill and stale-file prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
-                + 'A skill that migrated to a dependency package would look retired and its files would look stale, so both prunes are held until every dependency resolves.',
-            );
-        } else {
-            pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
-            const stalePruneOutcome = pruneStaleInstalledFiles(
-                priorManifestFiles,
-                skillPaths,
-                join(CLAUDE_HOME, 'skills'),
-                currentRunBackupRoot(),
-            );
-            summary.skills.pruned = stalePruneOutcome.prunedCount;
-            failedPrunePaths = stalePruneOutcome.failedPaths;
-        }
-        manifestSkillNames = [...installedSkillNames].sort();
+    if (isFullInstall && !didPruneRun) {
+        console.log(
+            `  Skipping retired-skill and stale-file prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
+            + 'A skill that migrated to a dependency package would look retired and its files would look stale, so both prunes are held until every dependency resolves.',
+        );
     }
-    const manifestFiles = isFullInstall
+    if (didPruneRun) {
+        pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+        const stalePruneOutcome = pruneStaleInstalledFiles(
+            priorManifestFiles,
+            skillPaths,
+            join(CLAUDE_HOME, 'skills'),
+            currentRunBackupRoot(),
+        );
+        summary.skills.pruned = stalePruneOutcome.prunedCount;
+        failedPrunePaths = stalePruneOutcome.failedPaths;
+    }
+    const manifestSkillNames = didPruneRun
+        ? [...installedSkillNames].sort()
+        : unionOfSkillNames(priorManifestSkills || [], [...installedSkillNames]).sort();
+    const manifestFiles = didPruneRun
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
     writeManifest(manifestFiles, manifestSkillNames);
