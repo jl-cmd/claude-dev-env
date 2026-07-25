@@ -64,10 +64,12 @@ from split_pr_scripts_constants.config.execute_constants import (
     GIT_STATUS,
     JSON_INDENT_SPACES,
     MARKDOWN_BODY_SUFFIX,
+    PAYLOAD_KEY_COLLECTION,
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
     PAYLOAD_KEY_FAILED_SLICE,
     PAYLOAD_KEY_PARTIAL,
+    PAYLOAD_KEY_PASSED,
     PAYLOAD_KEY_PR_URLS,
     PAYLOAD_KEY_CHILD_PR_NUMBERS,
     PAYLOAD_KEY_CLOSED,
@@ -88,6 +90,10 @@ from stack_labels import apply_stack_labels
 from supersede_source_pr import (
     collect_pr_numbers_from_urls,
     supersede_source_pr,
+)
+from validate_slice_collection import (
+    format_collection_failure_message,
+    validate_slice_collection,
 )
 from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_PATH_REQUIRED,
@@ -188,6 +194,7 @@ def execute_plan(
     should_create_prs: bool,
     should_push: bool,
     should_supersede: bool,
+    should_check_collection: bool,
 ) -> JsonObject:
     """Run the split (or dry-run) against repo_root.
 
@@ -199,12 +206,15 @@ def execute_plan(
         should_push: When True, push branches to origin.
         should_supersede: When True, close source_pr_number after a full
             multi-slice draft stack lands.
+        should_check_collection: When True, run pytest ``--collect-only`` on
+            cumulative stack test modules after each slice commit.
 
     Returns:
         Result payload with created slice metadata.
 
     Raises:
-        RuntimeError: On dirty tree, git, or gh failures (partial payload JSON).
+        RuntimeError: On dirty tree, git, collection, or gh failures
+            (partial payload JSON).
         ValueError: When the plan fails coverage verification.
     """
     report = verify_plan(plan_payload)
@@ -224,6 +234,7 @@ def execute_plan(
         should_create_prs=should_create_prs,
         should_push=should_push,
         should_supersede=should_supersede,
+        should_check_collection=should_check_collection,
     )
 
 
@@ -233,6 +244,7 @@ def _execute_slices(
     should_create_prs: bool,
     should_push: bool,
     should_supersede: bool,
+    should_check_collection: bool,
 ) -> JsonObject:
     source_branch = str(plan_payload[PLAN_KEY_SOURCE_BRANCH])
     base_ref = str(plan_payload[PLAN_KEY_BASE_REF])
@@ -261,6 +273,7 @@ def _execute_slices(
             pr_number=pr_number,
             should_push=should_push,
             should_create_prs=should_create_prs,
+            should_check_collection=should_check_collection,
             repo_slug=repo_slug,
             all_created=all_created,
             all_pr_urls=all_pr_urls,
@@ -286,10 +299,12 @@ def _create_all_slices(
     pr_number: int,
     should_push: bool,
     should_create_prs: bool,
+    should_check_collection: bool,
     repo_slug: str | None,
     all_created: list[JsonObject],
     all_pr_urls: list[str],
 ) -> None:
+    all_cumulative_paths: list[str] = []
     for each_slice in all_planned_slices:
         try:
             created = _execute_one_slice(
@@ -299,6 +314,8 @@ def _create_all_slices(
                 pr_number=pr_number,
                 should_push=should_push,
                 should_create_prs=should_create_prs,
+                should_check_collection=should_check_collection,
+                all_cumulative_paths=all_cumulative_paths,
                 repo=repo_slug,
             )
         except RuntimeError as slice_error:
@@ -451,6 +468,8 @@ def _execute_one_slice(
     pr_number: int,
     should_push: bool,
     should_create_prs: bool,
+    should_check_collection: bool,
+    all_cumulative_paths: list[str],
     repo: str | None,
 ) -> JsonObject:
     branch_name = str(slice_record[SLICE_KEY_BRANCH])
@@ -470,6 +489,17 @@ def _execute_one_slice(
     if not is_working_tree_dirty(repo_root):
         raise RuntimeError(ERROR_EMPTY_SLICE_AFTER_CHECKOUT % branch_name)
     _commit_slice(repo_root, title, story, pr_number, branch_name)
+    all_cumulative_paths.extend(all_files)
+    collection_report = validate_slice_collection(
+        repo_root=repo_root,
+        all_paths=list(all_cumulative_paths),
+        branch_name=branch_name,
+        is_enabled=should_check_collection,
+    )
+    if collection_report.get(PAYLOAD_KEY_PASSED) is not True:
+        raise RuntimeError(
+            format_collection_failure_message(branch_name, collection_report)
+        )
     pr_url = _maybe_push_and_open_pr(
         repo_root=repo_root,
         branch_name=branch_name,
@@ -488,6 +518,7 @@ def _execute_one_slice(
         "files": all_files,
         "title": title,
         "pr_url": pr_url,
+        PAYLOAD_KEY_COLLECTION: collection_report,
     }
 
 
@@ -589,8 +620,11 @@ def _create_draft_pr(
         f"## Split source\n\nExcised from pull request #{pr_number} via `/split-pr`.\n\n"
         f"## Dependencies\n\nBase branch: `{base_name}`. Merge earlier slices first.\n\n"
         "## Testing\n\n"
-        "File-partitioned from the parent pull request. Project-wide CI on this "
-        "slice alone is not claimed by `/split-pr` unless verified separately.\n"
+        "File-partitioned from the parent pull request. After each slice commit, "
+        "`/split-pr` runs `pytest --collect-only` on cumulative stack test modules "
+        "so a definition on the wrong side of the cut fails execute before push. "
+        "Full project test execution on this slice alone is not claimed unless "
+        "verified separately.\n"
     )
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -728,6 +762,7 @@ def main() -> int:
             should_create_prs=is_create_prs,
             should_push=parsed_arguments.push and not parsed_arguments.dry_run,
             should_supersede=is_supersede,
+            should_check_collection=not parsed_arguments.skip_collection_check,
         )
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(execution_payload, indent=indent))
@@ -776,6 +811,14 @@ def _parse_arguments() -> argparse.Namespace:
         help=(
             "Comment on and close source_pr_number after a full multi-slice draft "
             "stack lands (default: on when --create-prs)"
+        ),
+    )
+    parser.add_argument(
+        "--skip-collection-check",
+        action="store_true",
+        help=(
+            "Skip post-commit pytest --collect-only on cumulative stack test "
+            "modules (default: run the gate)"
         ),
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")

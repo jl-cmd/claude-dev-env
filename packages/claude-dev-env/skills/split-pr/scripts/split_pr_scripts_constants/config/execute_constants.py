@@ -78,9 +78,37 @@ ERROR_SUPERSEDE_VIEW_FAILED = "gh pr view failed for source #%s: %s"
 ERROR_FAMILY_TREE_COMMENT_FAILED = "gh pr comment failed for family tree on #%s: %s"
 ERROR_STACK_LABEL_ENSURE_FAILED = "gh label create failed for %s: %s"
 ERROR_STACK_LABEL_APPLY_FAILED = "gh pr edit --add-label failed for #%s: %s"
+ERROR_COLLECTION_FAILED = (
+    "pytest collection failed on slice %s after commit; definitions or imports "
+    "are on the wrong side of the cut. Re-bucket the plan so every test path "
+    "imports only symbols already present on its stack base. Detail:\n%s"
+)
 
 JSON_INDENT_SPACES = 2
 NEWLINE = "\n"
+PYTEST_MODULE = "pytest"
+PYTEST_COLLECT_ONLY_FLAG = "--collect-only"
+PYTEST_QUIET_FLAG = "-q"
+PYTEST_PATHSPEC = "--"
+PYTHON_MODULE_FLAG = "-m"
+COLLECTION_TIMEOUT_SECONDS = 120
+COLLECTION_SKIP_DISABLED = "collection_check_disabled"
+COLLECTION_SKIP_NO_TEST_PATHS = "no_collectable_test_paths"
+COLLECTION_SKIP_NO_ON_DISK_TESTS = "no_on_disk_test_paths"
+COLLECTION_SKIP_PYTEST_UNAVAILABLE = "pytest_unavailable"
+ALL_PYTEST_MISSING_MARKERS = (
+    "No module named pytest",
+    "No module named 'pytest'",
+)
+TEST_MODULE_PREFIX = "test_"
+TEST_MODULE_SUFFIX = "_test.py"
+PYTHON_FILE_SUFFIX = ".py"
+CONFTEST_BASENAME = "conftest.py"
+PAYLOAD_KEY_COLLECTION = "collection"
+PAYLOAD_KEY_CHECKED = "checked"
+PAYLOAD_KEY_PASSED = "passed"
+PAYLOAD_KEY_TEST_PATHS = "test_paths"
+PAYLOAD_KEY_COLLECTION_ERROR = "error"
 GIT_REFS_REMOTES_PREFIX = "refs/remotes/"
 GIT_REFS_HEADS_PREFIX = "refs/heads/"
 MARKDOWN_BODY_SUFFIX = ".md"
