@@ -161,6 +161,16 @@ CONFIG_MISSING_MESSAGE_TEMPLATE: str = (
 )
 """Guidance shown when the config file is absent."""
 
+FALLBACK_CHAIN_COMMAND: str = "claude"
+"""Binary name resolved on PATH when the user has no chain configuration file."""
+
+CONFIG_MISSING_NO_FALLBACK_MESSAGE_TEMPLATE: str = (
+    "Claude chain config not found at {config_path} and no '{fallback_command}' "
+    "binary is on PATH. Install the {fallback_command} CLI, or copy "
+    "{example_filename} to {config_path} and list your account binaries."
+)
+"""Guidance shown when the config file is absent and PATH resolves no binary."""
+
 CONFIG_UNREADABLE_MESSAGE_TEMPLATE: str = (
     "Cannot read claude chain config at {config_path}: {error}. "
     "See {example_filename} for the expected shape."

@@ -22,6 +22,8 @@ STAMP_KEY_EFFORT = "effort"
 STAMP_KEY_MANIFEST_SHA256 = "manifest_sha256"
 STAMP_KEY_RECORDED_AT_EPOCH = "recorded_at_epoch"
 CODE_REVIEW_BYPASS_MARKER = "# code-review-skip"
+GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE = "CLAUDE_CODE_REVIEW_SKIP"
+GIT_HOOK_SKIP_ENABLED_VALUE = "1"
 GATED_PUSH_SUBCOMMANDS = frozenset({"push"})
 ALL_GATED_SHELL_TOOL_NAMES = ("Bash", "PowerShell")
 ALL_WRITE_EDIT_TOOL_NAMES = ("Write", "Edit", "MultiEdit")
@@ -44,6 +46,20 @@ PUSH_GATE_CORRECTIVE_MESSAGE = (
     "re-land applies. Exempt automatically: docs/image files, pytest test "
     "files, and Python files whose docstring- and comment-stripped AST is "
     "unchanged."
+)
+PUSH_GATE_GIT_HOOK_CORRECTIVE_MESSAGE = (
+    "BLOCKED: [CODE_REVIEW_PUSH_GATE] This branch surface has no clean "
+    "code-review stamp at effort 'low' or higher. Run "
+    "`python invoke_code_review.py --record-stamp --cwd <dir> "
+    "--session-model <alias> low` (or a higher effort) so a clean review "
+    "mints the stamp before `git push`; any file change after minting "
+    "invalidates it. A git pre-push hook reads no shell command text, so the "
+    f"one-shot escape here is the environment variable: run "
+    f"`{GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE}={GIT_HOOK_SKIP_ENABLED_VALUE} "
+    "git push ...` for that single push, only when the verified-commit gate's "
+    "verify-skip rule for a same-surface re-land applies. Exempt "
+    "automatically: docs/image files, pytest test files, and Python files "
+    "whose docstring- and comment-stripped AST is unchanged."
 )
 PR_CREATE_GATE_CORRECTIVE_MESSAGE = (
     "BLOCKED: [CODE_REVIEW_PR_CREATE_GATE] This branch surface has no clean "

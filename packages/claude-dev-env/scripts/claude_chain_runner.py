@@ -16,6 +16,10 @@ OAuth probe), not from list position alone::
     {"chain": [{"command": "claude", "extra_args": []},
                {"command": "claude-ev", "extra_args": []}]}
 
+A machine with no such file serves the call with the ``claude`` binary PATH
+resolves. A remote container is the common case. A file that exists and fails
+to parse raises instead, so a typo stays visible.
+
 A usage-limited first try falls over to the next ranked binary::
 
     first try (highest remaining)  -> exit 1, "usage limit reached"  (falls over)
@@ -38,6 +42,7 @@ import argparse
 import importlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -82,11 +87,13 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CONFIG_INVALID_SHAPE_MESSAGE_TEMPLATE,
     CONFIG_MALFORMED_MESSAGE_TEMPLATE,
     CONFIG_MISSING_MESSAGE_TEMPLATE,
+    CONFIG_MISSING_NO_FALLBACK_MESSAGE_TEMPLATE,
     CONFIG_NOT_OBJECT_REASON,
     CONFIG_UNREADABLE_MESSAGE_TEMPLATE,
     CRLF_NEWLINE,
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
+    FALLBACK_CHAIN_COMMAND,
     LINE_FEED,
     NO_COMPLETED_PROCESS_RETURN_CODE,
     UTF8_ENCODING,
@@ -127,6 +134,33 @@ def _decoded_spooled_streams(
         _decode_captured_stream(stdout_file.read(), encoding, errors),
         _decode_captured_stream(stderr_file.read(), encoding, errors),
     )
+
+
+def _path_fallback_entries(config_path: Path) -> list[ChainEntry]:
+    """Return a one-binary chain built from the ``claude`` binary on PATH.
+
+    ::
+
+        claude on PATH  -> [ChainEntry(command=<resolved path>)]
+        nothing on PATH -> ChainConfigurationError naming both gaps
+
+    A remote container ships a working ``claude`` binary and no chain file, so
+    the binary PATH resolves serves the call on its own. ``config_path`` names
+    the file an absent configuration would occupy, quoted in the error.
+
+    Raises:
+        ChainConfigurationError: When PATH resolves no fallback binary.
+    """
+    resolved_binary = shutil.which(FALLBACK_CHAIN_COMMAND)
+    if resolved_binary is None:
+        raise ChainConfigurationError(
+            CONFIG_MISSING_NO_FALLBACK_MESSAGE_TEMPLATE.format(
+                config_path=config_path,
+                fallback_command=FALLBACK_CHAIN_COMMAND,
+                example_filename=EXAMPLE_CONFIG_FILENAME,
+            )
+        )
+    return [ChainEntry(command=resolved_binary, extra_args=())]
 
 
 def _attach_partial_timeout_streams(
@@ -406,6 +440,29 @@ def load_chain(config_path: Path) -> list[ChainEntry]:
     return _parse_chain_entries(parsed_config, config_path)
 
 
+def _chain_entries_for_run(config_path: Path) -> list[ChainEntry]:
+    """Return the binaries one call walks, in try order.
+
+    ::
+
+        config file present   -> its entries, ranked by weekly remaining
+        config file absent    -> the claude binary PATH resolves
+        config file malformed -> ChainConfigurationError
+
+    An absent file is a machine that never set a chain up, so the binary on
+    PATH serves the call. A file that exists and fails to parse stays an error
+    the caller sees.
+
+    Raises:
+        ChainConfigurationError: When the file exists and cannot be loaded, or
+            is absent with no fallback binary on PATH.
+    """
+    if not config_path.is_file():
+        return _path_fallback_entries(config_path)
+    all_entries = load_chain(config_path)
+    return _ranked_entries_or_config_order(all_entries, config_path)
+
+
 def _build_invocation(entry: ChainEntry, all_claude_arguments: list[str]) -> list[str]:
     return [entry.command, *all_claude_arguments, *entry.extra_args]
 
@@ -545,6 +602,8 @@ def run_claude(
             -> served_command=first try (no fallover)
         stdin_text set
             -> same text on every attempt's stdin
+        no chain config file
+            -> the claude binary PATH resolves serves the call alone
 
     Probes weekly remaining once, ranks highest first, then walks that order.
     Only a usage-limit failure falls over. Missing binaries are skipped and the
@@ -566,8 +625,7 @@ def run_claude(
         ChainConfigurationError: When the chain configuration cannot be loaded.
     """
     config_path = chain_config_path()
-    all_entries = load_chain(config_path)
-    all_ranked_entries = _ranked_entries_or_config_order(all_entries, config_path)
+    all_ranked_entries = _chain_entries_for_run(config_path)
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
     for each_entry in all_ranked_entries:

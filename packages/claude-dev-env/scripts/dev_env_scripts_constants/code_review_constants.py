@@ -80,6 +80,30 @@ PERMISSION_MODE_FLAG: str = "--permission-mode"
 PERMISSION_MODE_BYPASS: str = "bypassPermissions"
 """Permission-mode value that auto-approves tools for unattended chain runs."""
 
+ALL_PERMISSION_MODE_REJECTION_SIGNATURES: tuple[str, ...] = (
+    "--permission-mode",
+    "bypasspermissions",
+    "dangerously-skip-permissions",
+)
+"""Lowercase output fragments a host prints when it refuses the bypass mode.
+
+::
+
+    rc 1 + stderr "--permission-mode is not supported" -> retry without the pair
+    rc 1 + stderr "dangerously-skip-permissions ..."   -> retry without the pair
+    rc 1 + stderr "no commits to review"               -> keep the pair, report
+
+A non-zero chain run whose combined stdout and stderr carries one of these
+fragments means the host rejected the flag pair rather than the review itself.
+The invoker retries that spawn once with the pair removed.
+
+A host names the internal flag the mode maps to rather than the flag it was
+handed, so a fragment here need not appear in what the invoker sends. A
+container running as root answers the bypass mode with
+``--dangerously-skip-permissions cannot be used with root/sudo privileges for
+security reasons``, which carries neither the flag text nor the mode value.
+"""
+
 MODE_IN_SESSION: str = "in_session"
 """Result mode when the host is Claude and the session already runs opus."""
 

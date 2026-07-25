@@ -48,6 +48,24 @@ def test_record_stamp_flag_matches_sanctioned_minter_flag() -> None:
     )
 
 
+def test_rejection_signatures_are_lowercase_match_fragments() -> None:
+    assert review_constants.ALL_PERMISSION_MODE_REJECTION_SIGNATURES
+    for each_signature in review_constants.ALL_PERMISSION_MODE_REJECTION_SIGNATURES:
+        assert each_signature
+        assert each_signature == each_signature.lower()
+
+
+def test_rejection_signatures_cover_the_measured_root_container_wording() -> None:
+    measured_rejection_text = (
+        "--dangerously-skip-permissions cannot be used with root/sudo privileges "
+        "for security reasons"
+    ).lower()
+    assert any(
+        each_signature in measured_rejection_text
+        for each_signature in review_constants.ALL_PERMISSION_MODE_REJECTION_SIGNATURES
+    )
+
+
 def test_default_effort_is_a_known_token() -> None:
     assert (
         review_constants.DEFAULT_CODE_REVIEW_EFFORT
