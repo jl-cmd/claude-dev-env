@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
-import { join, dirname, resolve, relative, basename, isAbsolute } from 'node:path';
+import { join, dirname, resolve, relative, basename, isAbsolute, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,14 @@ import { installAllGitHooks } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
+import {
+    SKIPPED_SOURCE_ENTRY_NAMES,
+    SKIPPED_SOURCE_FILE_EXTENSIONS,
+    RUN_BACKUP_DIRECTORY_NAME_PATTERN,
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_HOOKS_DIRECTORY_NAME,
+    SETTINGS_FILE_NAME,
+} from './install-constants.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,6 +27,19 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json
 const packageRequire = createRequire(import.meta.url);
 
 export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+
+/**
+ * Every top-level directory under ~/.claude the installer writes into: the
+ * content directories plus the two it fills through their own copy loops. The
+ * uninstall purge walks this list to find the root a recorded file belongs to and
+ * to drop a managed directory the purge empties, and the full-install stale-file
+ * prune walks it to give each root its own diff.
+ */
+export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
+    ...CONTENT_DIRECTORIES,
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_HOOKS_DIRECTORY_NAME,
+];
 
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
 const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
@@ -274,11 +295,44 @@ function detectPython() {
     return null;
 }
 
-function collectFiles(directory) {
+/**
+ * Report whether a source entry belongs to a build artifact the installer leaves
+ * in the package source.
+ *
+ * @param {string} entryName One directory entry's name.
+ * @returns {boolean} True when the walk skips the entry and everything under it.
+ */
+function isSkippedSourceEntry(entryName) {
+    if (SKIPPED_SOURCE_ENTRY_NAMES.has(entryName)) return true;
+    return SKIPPED_SOURCE_FILE_EXTENSIONS.has(extname(entryName).toLowerCase());
+}
+
+/**
+ * List every file under a source directory, skipping the build artifacts a
+ * contributor's local tooling writes beside the source.
+ *
+ * Running the Python suites fills the package source with `__pycache__` trees and
+ * tool caches. `.npmignore` keeps them out of the published tarball, so an `npx`
+ * install never sees them; a local `node bin/install.mjs` reads the working tree
+ * directly, so the walk itself skips them. `SKIPPED_SOURCE_ENTRY_NAMES` and
+ * `SKIPPED_SOURCE_FILE_EXTENSIONS` name what drops out.
+ *
+ * The skip and the cleanup of artifacts an earlier install already copied are one
+ * code path. A `.pyc` under `~/.claude/skills` that a prior manifest records sits
+ * outside the set this walk returns, so the next full install reads it as stale
+ * and moves it into that run's backup root. A recorded artifact under another
+ * managed root leaves the manifest on the same run, so `--uninstall` stops
+ * naming it.
+ *
+ * @param {string} directory The absolute source directory to walk.
+ * @returns {string[]} Absolute paths of the files the installer copies.
+ */
+export function collectFiles(directory) {
     const collected = [];
     if (!existsSync(directory)) return collected;
     const entries = readdirSync(directory, { withFileTypes: true });
     for (const entry of entries) {
+        if (isSkippedSourceEntry(entry.name)) continue;
         const entryPath = join(directory, entry.name);
         if (entry.isDirectory()) {
             collected.push(...collectFiles(entryPath));
@@ -308,6 +362,68 @@ function currentRunBackupRoot() {
 }
 
 /**
+ * Remove every run backup directory under ~/.claude/.claude-dev-env-pruned
+ * except the one this run wrote.
+ *
+ * A pruning install leaves one timestamped recovery point, and a recovery point
+ * is worth keeping only while it describes content close to what sits on disk.
+ * Keeping the newest run holds the recovery the user reaches for and bounds a
+ * directory that otherwise grows with every install.
+ *
+ * Only a direct child whose name carries this installer's timestamp shape is
+ * removed, so anything else under the backup directory stays. The pruned-backup
+ * directory itself stays too, since it holds the current run. A removal that
+ * fails logs a warning and the sweep continues, so retention never ends an
+ * install.
+ *
+ * @param {string} keptRunBackupRoot Absolute path to this run's backup directory.
+ * @returns {number} How many superseded run backup directories were removed.
+ */
+function removeSupersededRunBackups(keptRunBackupRoot) {
+    const prunedBackupDirectory = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME);
+    const keptComparisonKey = comparisonKeyForPath(keptRunBackupRoot);
+    let allEntries;
+    try {
+        allEntries = readdirSync(prunedBackupDirectory, { withFileTypes: true });
+    } catch (readError) {
+        console.warn(`  Warning: could not read ${PRUNED_SKILLS_BACKUP_DIRECTORY_NAME} to retire older backups (${readError.message})`);
+        return 0;
+    }
+    let removedCount = 0;
+    for (const entry of allEntries) {
+        if (!entry.isDirectory()) continue;
+        if (!RUN_BACKUP_DIRECTORY_NAME_PATTERN.test(entry.name)) continue;
+        const runBackupPath = join(prunedBackupDirectory, entry.name);
+        if (comparisonKeyForPath(runBackupPath) === keptComparisonKey) continue;
+        try {
+            rmSync(runBackupPath, { recursive: true });
+            removedCount++;
+        } catch (removalError) {
+            console.warn(`  Warning: could not remove older prune backup ${relative(CLAUDE_HOME, runBackupPath)} (${removalError.message})`);
+        }
+    }
+    return removedCount;
+}
+
+/**
+ * Retire older run backups once this run has written its own.
+ *
+ * A run that moved nothing created no backup root, so its `~/.claude` holds only
+ * the recovery points earlier runs left; that run sweeps nothing and the user
+ * keeps every one of them.
+ *
+ * @returns {void}
+ */
+function retainNewestRunBackupOnly() {
+    const runBackupRoot = currentRunBackupRoot();
+    if (!existsSync(runBackupRoot)) return;
+    const removedCount = removeSupersededRunBackups(runBackupRoot);
+    if (removedCount > 0) {
+        console.log(`  Prune backups: ${removedCount} older run backup(s) removed, this run's kept`);
+    }
+}
+
+/**
  * Move one managed path into the run's backup root, leaving it in place when the
  * move fails.
  *
@@ -317,16 +433,26 @@ function currentRunBackupRoot() {
  * sit inside a managed directory stays recoverable, and a failed move costs at
  * most a cosmetic leftover.
  *
- * @param {string} sourcePath Absolute path under ~/.claude to move.
+ * A path resolving outside the managed home is left alone with a warning, so a
+ * malformed record is caught here rather than inside a rename.
+ *
+ * @param {string} sourcePath Absolute path under the managed home to move.
  * @param {string} backupRoot The run's timestamped backup directory.
  * @param {string} backupRelativePath Path to mirror the content at inside the backup root.
  * @param {string} reasonLabel Why the path is being moved (`retired` or `stale`).
+ * @param {string} managedHomeDirectory The managed home the source must sit under.
  * @returns {boolean} True when the move succeeded.
  */
-function moveIntoRunBackup(sourcePath, backupRoot, backupRelativePath, reasonLabel) {
+function moveIntoRunBackup(
+    sourcePath, backupRoot, backupRelativePath, reasonLabel, managedHomeDirectory,
+) {
+    if (!isManagedPath(sourcePath, managedHomeDirectory)) {
+        console.warn(`  Warning: leaving ${sourcePath} in place — the ${reasonLabel} path resolves outside ${managedHomeDirectory}`);
+        return false;
+    }
     const backupPath = join(backupRoot, backupRelativePath);
-    const displayPath = relative(CLAUDE_HOME, sourcePath);
-    const backupDisplayPath = join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), backupRelativePath);
+    const displayPath = relative(managedHomeDirectory, sourcePath);
+    const backupDisplayPath = relative(managedHomeDirectory, backupPath);
     try {
         mkdirSync(dirname(backupPath), { recursive: true });
         renameSync(sourcePath, backupPath);
@@ -379,6 +505,45 @@ export function comparisonKeyForPath(filesystemPath, options = {}) {
 function isInsideDirectory(candidatePath, directoryPath) {
     const relativePath = relative(directoryPath, candidatePath);
     return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
+
+/**
+ * Report whether an absolute path a record names resolves inside ~/.claude.
+ *
+ * The manifest and the prune both hand raw path strings to code that unlinks or
+ * renames them, and a record can arrive malformed — hand-edited, written by an
+ * installer running against a different home, or carrying a relative fragment
+ * that resolves elsewhere. This guard runs first so a path outside the managed
+ * home is skipped with a warning before any root-specific logic sees it. The
+ * stale-file prune keeps its own stricter containment test against the
+ * destination root it was handed.
+ *
+ * @param {string} candidatePath The absolute path a record names.
+ * @param {string} [managedHomeDirectory] The managed home to test against; defaults to ~/.claude.
+ * @returns {boolean} True when the path resolves under the managed home.
+ */
+function isManagedPath(candidatePath, managedHomeDirectory = CLAUDE_HOME) {
+    return isInsideDirectory(resolve(candidatePath), resolve(managedHomeDirectory));
+}
+
+/**
+ * Return the managed top-level directory an installed path sits under.
+ *
+ * The uninstall walk-up needs a stop root, and ~/.claude is the wrong one: a walk
+ * that reaches it would try to remove the user's home configuration directory.
+ * Naming the owning managed root keeps the walk inside the tree the installer
+ * wrote, and a path under no managed root gets no walk at all.
+ *
+ * @param {string} installedFilePath The absolute path a manifest record names.
+ * @returns {string|null} The absolute managed root, or null when the path sits under none.
+ */
+function owningManagedRoot(installedFilePath) {
+    const resolvedPath = resolve(installedFilePath);
+    for (const directoryName of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
+        const managedRoot = join(CLAUDE_HOME, directoryName);
+        if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
+    }
+    return null;
 }
 
 /**
@@ -461,13 +626,17 @@ function removeEmptiedParentDirectories(startDirectory, destinationRoot) {
  * @param {string[]} currentInstalledFiles Every file this run copied under the root.
  * @param {string} destinationRoot The managed root the diff is confined to.
  * @param {string} backupRoot The run's timestamped backup directory.
- * @param {{isCaseInsensitive?: boolean}} options Whether path keys fold letter case; defaults to this host's filesystem.
+ * @param {{isCaseInsensitive?: boolean, managedHomeDirectory?: string}} options `isCaseInsensitive`
+ *   sets whether path keys fold letter case, defaulting to this host's filesystem;
+ *   `managedHomeDirectory` sets the home the containment guard tests against,
+ *   defaulting to ~/.claude.
  * @returns {{prunedCount: number, failedPaths: string[]}} How many files moved, and the paths whose move failed.
  */
 export function pruneStaleInstalledFiles(
     priorInstalledFiles, currentInstalledFiles, destinationRoot, backupRoot, options = {},
 ) {
     if (priorInstalledFiles === null) return { prunedCount: 0, failedPaths: [] };
+    const { managedHomeDirectory = CLAUDE_HOME } = options;
     const currentFileKeys = new Set(
         currentInstalledFiles.map(currentFile => comparisonKeyForPath(currentFile, options)),
     );
@@ -480,7 +649,10 @@ export function pruneStaleInstalledFiles(
         if (currentFileKeys.has(comparisonKeyForPath(stalePath, options))) continue;
         if (!isMovableStaleFile(stalePath)) continue;
         const backupRelativePath = relative(resolvedRoot, stalePath);
-        if (!moveIntoRunBackup(stalePath, backupRoot, backupRelativePath, STALE_FILE_REASON_LABEL)) {
+        const didMove = moveIntoRunBackup(
+            stalePath, backupRoot, backupRelativePath, STALE_FILE_REASON_LABEL, managedHomeDirectory,
+        );
+        if (!didMove) {
             failedPaths.push(stalePath);
             continue;
         }
@@ -490,14 +662,116 @@ export function pruneStaleInstalledFiles(
     return { prunedCount, failedPaths };
 }
 
-function copyTree(sourceBase, destBase) {
+/**
+ * Return the existing directory entry a shipped file name would overwrite
+ * through a spelling that differs only in letter case.
+ *
+ * `copyFileSync` writes its bytes through whatever entry the filesystem resolves
+ * the destination to, so on a case-insensitive volume a package shipping
+ * `README.md` over an installed `Readme.md` fills the installed entry and leaves
+ * the earlier spelling standing. Naming that entry lets the copy rename it to the
+ * shipped spelling first. On a case-sensitive volume the two names are two files,
+ * so the answer is always null.
+ *
+ * The `isCaseInsensitive` option carries the platform decision as a value, so a
+ * test names the branch it drives and both branches stay covered on a host of
+ * either kind.
+ *
+ * @param {string} shippedFileName The file name the package ships.
+ * @param {string[]} existingEntryNames The names already in the destination directory.
+ * @param {{isCaseInsensitive?: boolean}} options Whether name comparison folds letter case; defaults to this host's filesystem.
+ * @returns {string|null} The existing entry name to rename, or null when none applies.
+ */
+export function caseOnlyRenameSourceName(shippedFileName, existingEntryNames, options = {}) {
+    const { isCaseInsensitive = isCaseInsensitiveFilesystem() } = options;
+    if (!isCaseInsensitive) return null;
+    if (existingEntryNames.includes(shippedFileName)) return null;
+    const foldedShippedName = shippedFileName.toLowerCase();
+    const caseOnlyMatchName = existingEntryNames.find(
+        existingName => existingName.toLowerCase() === foldedShippedName,
+    );
+    return caseOnlyMatchName === undefined ? null : caseOnlyMatchName;
+}
+
+/**
+ * List a directory's entry names, reading each directory once and serving every
+ * later request for it from the cache.
+ *
+ * A copy run asks about the destination directory of every file it writes, and a
+ * directory holds many of them, so one listing per directory keeps the case check
+ * off the per-file syscall path.
+ *
+ * @param {string} directoryPath The absolute directory to list.
+ * @param {Map<string, string[]>} entryNamesByDirectory The run's listing cache.
+ * @returns {string[]} The directory's entry names, empty when it cannot be read.
+ */
+function cachedDirectoryEntryNames(directoryPath, entryNamesByDirectory) {
+    const cachedEntryNames = entryNamesByDirectory.get(directoryPath);
+    if (cachedEntryNames !== undefined) return cachedEntryNames;
+    let allEntryNames;
+    try {
+        allEntryNames = readdirSync(directoryPath);
+    } catch {
+        allEntryNames = [];
+    }
+    entryNamesByDirectory.set(directoryPath, allEntryNames);
+    return allEntryNames;
+}
+
+/**
+ * Give the destination entry the shipped file's letter case before the bytes
+ * land.
+ *
+ * `renameSync` inside one directory is atomic, so a run interrupted between the
+ * rename and the copy leaves the file present under the shipped name holding the
+ * earlier content, which the next install overwrites. A rename that fails logs a
+ * warning and the copy carries on, so the content is always current even when the
+ * name stays as it was.
+ *
+ * @param {string} destinationFilePath The absolute path the package ships to.
+ * @param {Map<string, string[]>} entryNamesByDirectory The run's listing cache.
+ * @param {{isCaseInsensitive?: boolean}} options Whether name comparison folds letter case.
+ * @returns {void}
+ */
+function renameCaseOnlyMatchToShippedName(destinationFilePath, entryNamesByDirectory, options) {
+    const destinationDirectory = dirname(destinationFilePath);
+    const shippedFileName = basename(destinationFilePath);
+    const existingEntryNames = cachedDirectoryEntryNames(destinationDirectory, entryNamesByDirectory);
+    const caseOnlyMatchName = caseOnlyRenameSourceName(shippedFileName, existingEntryNames, options);
+    if (caseOnlyMatchName === null) return;
+    try {
+        renameSync(join(destinationDirectory, caseOnlyMatchName), destinationFilePath);
+    } catch (renameError) {
+        console.warn(`  Warning: leaving ${caseOnlyMatchName} under its installed name — the rename to ${shippedFileName} failed (${renameError.message})`);
+        return;
+    }
+    existingEntryNames[existingEntryNames.indexOf(caseOnlyMatchName)] = shippedFileName;
+}
+
+/**
+ * Copy every file under a source directory into a destination directory,
+ * reporting what the run created and what it updated.
+ *
+ * A destination entry whose name differs from the shipped name only in letter
+ * case is renamed to the shipped name before the copy, so the tree carries the
+ * spelling the package ships. The directory listing behind that decision is read
+ * once per destination directory and reused for every file the run copies there.
+ *
+ * @param {string} sourceBase The absolute source directory to copy from.
+ * @param {string} destBase The absolute destination directory to copy into.
+ * @param {{isCaseInsensitive?: boolean}} options Whether name comparison folds letter case; defaults to this host's filesystem.
+ * @returns {{created: number, updated: number, paths: string[]}} The counts and the destination paths written.
+ */
+export function copyTree(sourceBase, destBase, options = {}) {
     const files = collectFiles(sourceBase);
     const stats = { created: 0, updated: 0, paths: [] };
+    const entryNamesByDirectory = new Map();
     for (const sourceFile of files) {
         const relativePath = relative(sourceBase, sourceFile);
         const destFile = join(destBase, relativePath);
         mkdirSync(dirname(destFile), { recursive: true });
         const existed = existsSync(destFile);
+        renameCaseOnlyMatchToShippedName(destFile, entryNamesByDirectory, options);
         copyFileSync(sourceFile, destFile);
         stats.paths.push(destFile);
         if (existed) {
@@ -821,6 +1095,143 @@ export function pruneManagedHooksFromSettings(settings, managedHookRelativePaths
     if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
 }
 
+/**
+ * Build the hook script paths a prior install wrote under ~/.claude/hooks that
+ * this run leaves unwritten, each relative to that hooks root.
+ *
+ * The set comes from the manifest diff alone, so it names this installer's own
+ * retired scripts and nothing else: a script the run still writes stays out of it,
+ * and a path no install of ours ever recorded never enters it. That is what keeps
+ * a user-authored hook out of reach of the settings prune.
+ *
+ * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
+ * @param {string[]} currentInstalledFiles Every file this run copied.
+ * @param {string} hooksRoot The absolute installed hooks directory.
+ * @returns {Set<string>} Forward-slash relative script paths under the hooks root.
+ */
+export function retiredManagedHookRelativePaths(
+    priorInstalledFiles, currentInstalledFiles, hooksRoot,
+) {
+    const retiredRelativePaths = new Set();
+    if (priorInstalledFiles === null) return retiredRelativePaths;
+    const currentFileKeys = new Set(
+        currentInstalledFiles.map(currentFile => comparisonKeyForPath(currentFile)),
+    );
+    const resolvedHooksRoot = resolve(hooksRoot);
+    for (const priorFile of priorInstalledFiles) {
+        const priorPath = resolve(priorFile);
+        if (!isInsideDirectory(priorPath, resolvedHooksRoot)) continue;
+        if (currentFileKeys.has(comparisonKeyForPath(priorPath))) continue;
+        retiredRelativePaths.add(relative(resolvedHooksRoot, priorPath).replace(/\\/g, '/'));
+    }
+    return retiredRelativePaths;
+}
+
+/**
+ * Report whether a settings.json hook command runs one of the retired managed
+ * hook scripts.
+ *
+ * The anchored `/.claude/hooks/<relative>` tail is the same test the merge uses to
+ * tell this installer's entries from a user's, so a command whose path is a
+ * retired tail plus a suffix stays outside the set. The inline validators-runner
+ * shape sits outside this test on purpose: it names no script, so no manifest
+ * record can retire it, and the merge writes it fresh on every run.
+ *
+ * @param {string} commandString The hook command from settings.json.
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @returns {boolean} True when the command runs a retired managed script.
+ */
+export function commandReferencesRetiredHook(commandString, retiredHookRelativePaths) {
+    const normalizedCommand = commandString.replace(/\\/g, '/');
+    for (const relativePath of retiredHookRelativePaths) {
+        if (commandTailEndsAtManagedHook(normalizedCommand, relativePath)) return true;
+    }
+    return false;
+}
+
+/**
+ * Keep the matcher groups of one event, dropping each hook that runs a retired
+ * managed script and each group the drop leaves empty.
+ *
+ * A group carrying no hooks array is handed back untouched, so a shape this
+ * installer does not recognize survives the pass.
+ *
+ * @param {object[]} matcherGroups The event's matcher groups from settings.json.
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @returns {{keptGroups: object[], removedCount: number}} The surviving groups and how many hooks left.
+ */
+function retainedMatcherGroups(matcherGroups, retiredHookRelativePaths) {
+    const keptGroups = [];
+    let removedCount = 0;
+    for (const group of matcherGroups) {
+        if (!Array.isArray(group.hooks)) {
+            keptGroups.push(group);
+            continue;
+        }
+        const keptHooks = group.hooks.filter(
+            hook => !commandReferencesRetiredHook(hook.command, retiredHookRelativePaths),
+        );
+        removedCount += group.hooks.length - keptHooks.length;
+        if (keptHooks.length > 0) keptGroups.push({ ...group, hooks: keptHooks });
+    }
+    return { keptGroups, removedCount };
+}
+
+/**
+ * Strip every retired managed hook from a settings object in memory.
+ *
+ * The walk covers each event type the settings file holds rather than the ones the
+ * current hooks.json names, so an entry under an event type the package stopped
+ * shipping is reached too. An event type left with no groups is dropped.
+ *
+ * @param {object} settings The parsed settings.json object (mutated in place).
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @returns {number} How many hook entries were removed.
+ */
+function stripRetiredHookEntries(settings, retiredHookRelativePaths) {
+    let removedCount = 0;
+    for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
+        if (!Array.isArray(matcherGroups)) continue;
+        const eventOutcome = retainedMatcherGroups(matcherGroups, retiredHookRelativePaths);
+        removedCount += eventOutcome.removedCount;
+        if (eventOutcome.keptGroups.length === 0) {
+            delete settings.hooks[eventType];
+            continue;
+        }
+        settings.hooks[eventType] = eventOutcome.keptGroups;
+    }
+    return removedCount;
+}
+
+/**
+ * Remove every settings.json entry that runs a retired managed hook script,
+ * writing the file only when an entry left it.
+ *
+ * A run that retires no hook leaves settings.json byte-identical, so an install
+ * touches the user's settings for a reason a reader can name. A settings file the
+ * installer cannot parse is left alone with a warning.
+ *
+ * @param {string} settingsPath The absolute settings.json path.
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @returns {number} How many hook entries were removed.
+ */
+export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRelativePaths) {
+    if (retiredHookRelativePaths.size === 0) return 0;
+    if (!existsSync(settingsPath)) return 0;
+    let settings;
+    try {
+        settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    } catch (parseError) {
+        console.warn(`  Warning: leaving settings.json as it stands — the file holds JSON the installer cannot read (${parseError.message})`);
+        return 0;
+    }
+    if (!settings.hooks) return 0;
+    const removedCount = stripRetiredHookEntries(settings, retiredHookRelativePaths);
+    if (removedCount === 0) return 0;
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    return removedCount;
+}
+
 function mergeHooks(hooksSourceRoot, pythonCommand) {
     const hooksJsonPath = join(hooksSourceRoot, 'hooks', 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
@@ -955,9 +1366,11 @@ function manifestFilesWithFailedPrunes(installedFiles, failedPrunePaths) {
  * ~/.claude/skills/_shared, are left in place.
  *
  * Each pruned directory is renamed to
- * ~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/ — a backup root
- * outside ~/.claude/skills, so a moved directory is never re-discovered as a
- * skill — under one shared timestamp per run. A backup is never cleaned up, so a
+ * ~/.claude/.claude-dev-env-pruned/<timestamp>/skills/<skill-name>/ — a backup
+ * root outside ~/.claude/skills, so a moved directory is never re-discovered as a
+ * skill — under one shared timestamp per run. That mirrors the ~/.claude layout
+ * the per-root stale-file prune writes, so one recovery point reads as a copy of
+ * the tree it came from. A backup is never cleaned up, so a
  * user can recover a wrongly-matched directory. One directory whose rename fails
  * (for example a read-only file or a cross-device move) is logged and left in
  * place, never deleted, so a prune failure costs at most a cosmetic leftover.
@@ -966,7 +1379,7 @@ function manifestFilesWithFailedPrunes(installedFiles, failedPrunePaths) {
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
  */
 function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
-    const skillsDirectory = join(CLAUDE_HOME, 'skills');
+    const skillsDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME);
     if (!existsSync(skillsDirectory)) return;
     const retiredSkillNames = new Set(
         [...EVER_SHIPPED_SKILL_NAMES].filter(skillName => !installedSkillNames.has(skillName))
@@ -981,8 +1394,95 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
         if (installedSkillNames.has(skillName)) continue;
         const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
         if (!isPruneCandidate) continue;
-        moveIntoRunBackup(join(skillsDirectory, skillName), backupRoot, skillName, RETIRED_SKILL_REASON_LABEL);
+        moveIntoRunBackup(
+            join(skillsDirectory, skillName),
+            backupRoot,
+            join(MANAGED_SKILLS_DIRECTORY_NAME, skillName),
+            RETIRED_SKILL_REASON_LABEL,
+            CLAUDE_HOME,
+        );
     }
+}
+
+/**
+ * Move every file a prior install wrote under a managed root that this run leaves
+ * unwritten into the run's backup root, one call per root.
+ *
+ * `copyTree` adds and overwrites but never removes, so every managed root carries
+ * the same drift the skills root does. One call per root hands the containment
+ * guard and the emptied-parent walk the root that owns each file, and each root's
+ * content lands under `<backupRoot>/<root-name>/<relative>`, so the recovery point
+ * mirrors ~/.claude.
+ *
+ * Nothing moves unless a prior install recorded it. A user-authored file, a
+ * runtime artifact, and a recorded path under no managed root — ~/.claude/CLAUDE.md,
+ * settings.json, the manifest itself, and ~/.mypy.ini outside the home — all sit
+ * outside every root's diff and stay where they are. ~/.claude/_shared and
+ * ~/.claude/skills/_shared are distinct absolute paths, so the `_shared` root call
+ * and the skills root call each see their own files and neither sees the other's.
+ *
+ * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
+ * @param {string[]} currentInstalledFiles Every file this run copied.
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @returns {{prunedCount: number, failedPaths: string[], prunedCountByRootName: Object<string, number>}}
+ *   The summed count, every path whose move failed, and each root's own count.
+ */
+function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalledFiles, backupRoot) {
+    let prunedCount = 0;
+    const failedPaths = [];
+    const prunedCountByRootName = {};
+    for (const rootName of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
+        const rootOutcome = pruneStaleInstalledFiles(
+            priorInstalledFiles,
+            currentInstalledFiles,
+            join(CLAUDE_HOME, rootName),
+            join(backupRoot, rootName),
+        );
+        prunedCount += rootOutcome.prunedCount;
+        failedPaths.push(...rootOutcome.failedPaths);
+        prunedCountByRootName[rootName] = rootOutcome.prunedCount;
+    }
+    return { prunedCount, failedPaths, prunedCountByRootName };
+}
+
+/**
+ * Run every prune a full install performs, in the order that keeps ~/.claude
+ * consistent at each step.
+ *
+ * The settings entries of retired hooks go before the file move: a settings.json
+ * naming a hook script that has already left ~/.claude/hooks makes every session
+ * start invoke a missing script, so the reference leaves first and the script
+ * follows.
+ *
+ * @param {Set<string>} copiedSkillNames Skill directory names this run wrote.
+ * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
+ * @param {string[]|null} priorManifestFiles The prior manifest's file list, or null.
+ * @param {string[]} installedFiles Every file this run copied.
+ * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
+ *   The stale files moved across all roots, the skills root's share, and the failed paths.
+ */
+function runFullInstallPrunes(
+    copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
+) {
+    pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+    const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
+        join(CLAUDE_HOME, SETTINGS_FILE_NAME),
+        retiredManagedHookRelativePaths(
+            priorManifestFiles, installedFiles, join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
+        ),
+    );
+    if (removedHookEntryCount > 0) {
+        console.log(`  Hook entries: ${removedHookEntryCount} retired entry(s) removed from settings.json`);
+    }
+    const staleOutcome = pruneStaleFilesAcrossManagedRoots(
+        priorManifestFiles, installedFiles, currentRunBackupRoot(),
+    );
+    retainNewestRunBackupOnly();
+    return {
+        prunedCount: staleOutcome.prunedCount,
+        skillsPrunedCount: staleOutcome.prunedCountByRootName[MANAGED_SKILLS_DIRECTORY_NAME],
+        failedPaths: staleOutcome.failedPaths,
+    };
 }
 
 /**
@@ -1165,11 +1665,10 @@ function install(selectedGroups, options = {}) {
             hooksPathConfiguration: gitHookInstallationResult.hooksPathConfigurationResult,
         };
         const hooksPathConfigurationAction = gitHookInstallationResult.hooksPathConfigurationResult.action;
+        allInstalledFiles.push(...gitHookInstallationResult.createdShimPaths);
         if (hooksPathConfigurationAction === 'set') {
-            allInstalledFiles.push(...gitHookInstallationResult.createdShimPaths);
             console.log(`  Git hooks: configured core.hooksPath -> ${gitHookInstallationResult.gitHooksDirectory}`);
         } else if (hooksPathConfigurationAction === 'already-set') {
-            allInstalledFiles.push(...gitHookInstallationResult.createdShimPaths);
             console.log('  Git hooks: core.hooksPath already points to claude-dev-env, no change');
         } else {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
@@ -1207,6 +1706,7 @@ function install(selectedGroups, options = {}) {
     const isFullInstall = !selectedGroups;
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
+    let stalePrunedTotal = 0;
     if (isFullInstall && !didPruneRun) {
         console.log(
             `  Skipping retired-skill and stale-file prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
@@ -1214,15 +1714,12 @@ function install(selectedGroups, options = {}) {
         );
     }
     if (didPruneRun) {
-        pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
-        const stalePruneOutcome = pruneStaleInstalledFiles(
-            priorManifestFiles,
-            skillPaths,
-            join(CLAUDE_HOME, 'skills'),
-            currentRunBackupRoot(),
+        const prunes = runFullInstallPrunes(
+            copiedSkillNames, priorManifestSkills, priorManifestFiles, allInstalledFiles,
         );
-        summary.skills.pruned = stalePruneOutcome.prunedCount;
-        failedPrunePaths = stalePruneOutcome.failedPaths;
+        summary.skills.pruned = prunes.skillsPrunedCount;
+        stalePrunedTotal = prunes.prunedCount;
+        failedPrunePaths = prunes.failedPaths;
     }
     const manifestSkillNames = didPruneRun
         ? [...installedSkillNames].sort()
@@ -1242,6 +1739,9 @@ function install(selectedGroups, options = {}) {
         const { created, updated, pruned } = summary.skills;
         const staleClause = pruned > 0 ? `, ${pruned} stale moved aside` : '';
         console.log(`  skills: ${created + updated} files (${created} new, ${updated} updated${staleClause})`);
+    }
+    if (stalePrunedTotal > 0) {
+        console.log(`  stale files moved aside: ${stalePrunedTotal} across managed roots, kept under ${PRUNED_SKILLS_BACKUP_DIRECTORY_NAME}/${basename(currentRunBackupRoot())}`);
     }
     if (summary.hookFiles) {
         console.log(`  hooks: ${summary.hookFiles.created + summary.hookFiles.updated} files, ${summary.hookGroups} groups in settings.json`);
@@ -1318,6 +1818,23 @@ function removeRecordedFile(filePath) {
     return true;
 }
 
+/**
+ * Remove every file the manifest records, then drop the directories the removals
+ * emptied.
+ *
+ * A record naming a path outside ~/.claude is skipped with a warning and counted,
+ * so one malformed entry costs that entry alone: the purge removes every
+ * legitimate record, clears the manifest, and leaves the user with a whole
+ * uninstall rather than a half-removed install.
+ *
+ * Directory cleanup runs after the file loop so a directory holding two recorded
+ * files is judged once both are gone. Each walk stops at the managed root the
+ * purged file sits under, which keeps ~/.claude itself and every unmanaged
+ * sibling directory in place.
+ *
+ * @param {{requireManifest: boolean}} options `requireManifest` exits when no manifest exists.
+ * @returns {number|void} 0 when no manifest exists and none is required.
+ */
 function purgeManagedInstallation({ requireManifest }) {
     if (!existsSync(MANIFEST_FILE)) {
         if (requireManifest) {
@@ -1328,8 +1845,23 @@ function purgeManagedInstallation({ requireManifest }) {
     }
     const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
     let removed = 0;
+    let skippedUnmanagedCount = 0;
+    const managedRootByEmptiedDirectory = new Map();
     for (const filePath of manifest.files) {
+        if (!isManagedPath(filePath)) {
+            console.warn(`  Warning: skipping ${filePath} — the manifest record resolves outside ${CLAUDE_HOME}`);
+            skippedUnmanagedCount++;
+            continue;
+        }
         if (removeRecordedFile(filePath)) removed++;
+        const managedRoot = owningManagedRoot(filePath);
+        if (managedRoot) managedRootByEmptiedDirectory.set(dirname(resolve(filePath)), managedRoot);
+    }
+    for (const [emptiedDirectory, managedRoot] of managedRootByEmptiedDirectory) {
+        removeEmptiedParentDirectories(emptiedDirectory, managedRoot);
+    }
+    if (skippedUnmanagedCount > 0) {
+        console.warn(`  ${skippedUnmanagedCount} manifest record(s) skipped — each resolves outside ${CLAUDE_HOME}`);
     }
     const settingsPath = join(CLAUDE_HOME, 'settings.json');
     if (existsSync(settingsPath)) {
@@ -1345,7 +1877,7 @@ function purgeManagedInstallation({ requireManifest }) {
     }
     unsetGlobalGitHooksPathIfOurs();
     unlinkSync(MANIFEST_FILE);
-    for (const directory of [...CONTENT_DIRECTORIES, 'skills', 'hooks']) {
+    for (const directory of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
         const dirPath = join(CLAUDE_HOME, directory);
         try {
             if (existsSync(dirPath) && readdirSync(dirPath).length === 0) {

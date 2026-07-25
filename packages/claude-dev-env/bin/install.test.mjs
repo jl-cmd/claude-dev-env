@@ -35,6 +35,11 @@ import {
     pruneManagedHooksFromSettings,
     pruneStaleInstalledFiles,
     comparisonKeyForPath,
+    collectFiles,
+    copyTree,
+    caseOnlyRenameSourceName,
+    retiredManagedHookRelativePaths,
+    pruneRetiredHookEntriesFromSettings,
 } from './install.mjs';
 import {
     expandHomeDirectoryTokens,
@@ -1319,6 +1324,7 @@ test('pruneStaleInstalledFiles moves a file the prior manifest recorded and this
             [keptFilePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         );
 
         assert.equal(pruneOutcome.prunedCount, 1, 'exactly the one no-longer-written file moves');
@@ -1354,6 +1360,7 @@ test('pruneStaleInstalledFiles leaves a __pycache__ artifact the prior manifest 
             [shippedFilePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         );
 
         assert.equal(pruneOutcome.prunedCount, 0, 'a file the installer never wrote is outside the diff');
@@ -1417,7 +1424,7 @@ test('pruneStaleInstalledFiles keeps a case-only renamed readme when keys fold c
             [copiedReadmePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
-            { isCaseInsensitive: true },
+            { isCaseInsensitive: true, managedHomeDirectory: sandbox.root },
         );
 
         assert.equal(pruneOutcome.prunedCount, 0, 'the recorded spelling names the file this run wrote');
@@ -1446,6 +1453,7 @@ test('should preserve a case-only rename on a case-insensitive filesystem (host-
             [copiedReadmePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         );
 
         const survivingReadmeNames = readdirSync(join(sandbox.skillsRoot, 'demo'))
@@ -1476,6 +1484,7 @@ test('pruneStaleInstalledFiles leaves a file in place and warns when the move fa
             [],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         ));
 
         assert.equal(returnedValue.prunedCount, 0, 'a failed move counts as nothing moved');
@@ -1505,6 +1514,7 @@ test('pruneStaleInstalledFiles leaves a directory standing where a file was reco
             [],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         ));
 
         assert.equal(returnedValue.prunedCount, 0, 'a directory is never renamed into the backup');
@@ -1527,6 +1537,7 @@ test('pruneStaleInstalledFiles skips a path the user already deleted without war
             [],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         ));
 
         assert.equal(returnedValue.prunedCount, 0, 'a path that no longer exists moves nothing');
@@ -1553,6 +1564,7 @@ test('pruneStaleInstalledFiles removes emptied parents up to the destination roo
             [join(sandbox.skillsRoot, 'kept', 'SKILL.md')],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         );
 
         assert.equal(pruneOutcome.prunedCount, 2, 'both recorded files move');
@@ -1590,11 +1602,246 @@ test('pruneStaleInstalledFiles ignores a recorded path outside the destination r
             [],
             sandbox.skillsRoot,
             sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
         );
 
         assert.equal(pruneOutcome.prunedCount, 0, 'only the wired root is pruned');
         assert.equal(existsSync(outsideFilePath), true, 'content under another root stays in place');
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('collectFiles returns the source file and skips the build artifacts beside it', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-collect-files-'));
+    try {
+        const sourceFilePath = join(sourceRoot, 'scripts', 'helper.py');
+        mkdirSync(dirname(sourceFilePath), { recursive: true });
+        writeFileSync(sourceFilePath, 'the module the package ships\n');
+        const bytecodePath = join(sourceRoot, 'scripts', '__pycache__', 'helper.cpython-313.pyc');
+        mkdirSync(dirname(bytecodePath), { recursive: true });
+        writeFileSync(bytecodePath, 'compiled bytecode\n');
+
+        const collectedFiles = collectFiles(sourceRoot);
+
+        assert.deepEqual(
+            collectedFiles,
+            [sourceFilePath],
+            'the walk returns the source file alone',
+        );
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('collectFiles skips every named cache directory and loose bytecode file', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-collect-caches-'));
+    try {
+        const sourceFilePath = join(sourceRoot, 'SKILL.md');
+        writeFileSync(sourceFilePath, '# a shipped skill\n');
+        for (const cacheDirectoryName of ['.ruff_cache', '.pytest_cache', '.mypy_cache', 'node_modules']) {
+            const cachedFilePath = join(sourceRoot, cacheDirectoryName, 'entry.json');
+            mkdirSync(dirname(cachedFilePath), { recursive: true });
+            writeFileSync(cachedFilePath, '{}\n');
+        }
+        writeFileSync(join(sourceRoot, '.DS_Store'), 'finder metadata\n');
+        writeFileSync(join(sourceRoot, 'loose_module.pyc'), 'bytecode outside a cache\n');
+        writeFileSync(join(sourceRoot, 'loose_module.pyo'), 'optimized bytecode\n');
+
+        const collectedFiles = collectFiles(sourceRoot);
+
+        assert.deepEqual(collectedFiles, [sourceFilePath], 'only the shipped file survives the walk');
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+    }
+});
+
+
+const SHIPPED_README_NAME = 'README.md';
+const INSTALLED_README_NAME = 'Readme.md';
+const RETIRED_HOOK_RELATIVE_PATH = 'blocking/retired_gate.py';
+const SANDBOX_HOOKS_ROOT = join('/home', 'user', '.claude', 'hooks');
+
+
+test('caseOnlyRenameSourceName names the installed entry when the filesystem folds letter case', () => {
+    const caseOnlyMatchName = caseOnlyRenameSourceName(
+        SHIPPED_README_NAME,
+        [INSTALLED_README_NAME, 'SKILL.md'],
+        { isCaseInsensitive: true },
+    );
+
+    assert.equal(
+        caseOnlyMatchName,
+        INSTALLED_README_NAME,
+        'the entry the copy would fill through its installed spelling is named for the rename',
+    );
+});
+
+
+test('caseOnlyRenameSourceName renames nothing when the filesystem keeps letter case', () => {
+    const caseOnlyMatchName = caseOnlyRenameSourceName(
+        SHIPPED_README_NAME,
+        [INSTALLED_README_NAME],
+        { isCaseInsensitive: false },
+    );
+
+    assert.equal(caseOnlyMatchName, null, 'two spellings name two files, so the copy writes its own');
+});
+
+
+test('caseOnlyRenameSourceName renames nothing when the shipped spelling already sits on disk', () => {
+    const caseOnlyMatchName = caseOnlyRenameSourceName(
+        SHIPPED_README_NAME,
+        [SHIPPED_README_NAME, INSTALLED_README_NAME],
+        { isCaseInsensitive: true },
+    );
+
+    assert.equal(caseOnlyMatchName, null, 'the destination already carries the shipped spelling');
+});
+
+
+test('copyTree gives the destination entry the shipped letter case (host-dependent)', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-tree-case-'));
+    try {
+        const sourceDirectory = join(sandboxRoot, 'source');
+        const destinationDirectory = join(sandboxRoot, 'destination');
+        mkdirSync(sourceDirectory, { recursive: true });
+        mkdirSync(destinationDirectory, { recursive: true });
+        const shippedContents = '# the readme the package ships\n';
+        writeFileSync(join(sourceDirectory, SHIPPED_README_NAME), shippedContents);
+        writeFileSync(
+            join(destinationDirectory, INSTALLED_README_NAME),
+            'the readme an earlier install wrote\n',
+        );
+
+        copyTree(sourceDirectory, destinationDirectory);
+
+        const survivingReadmeNames = readdirSync(destinationDirectory)
+            .filter(entryName => README_BASENAME_PATTERN.test(entryName));
+        assert.ok(
+            survivingReadmeNames.includes(SHIPPED_README_NAME),
+            'the destination carries the spelling the package ships',
+        );
+        assert.equal(
+            readFileSync(join(destinationDirectory, SHIPPED_README_NAME), 'utf8'),
+            shippedContents,
+            'the entry under the shipped spelling holds the shipped bytes',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('retiredManagedHookRelativePaths names the hook scripts a prior install wrote and this run leaves out', () => {
+    const retiredScriptPath = join(SANDBOX_HOOKS_ROOT, 'blocking', 'retired_gate.py');
+    const liveScriptPath = join(SANDBOX_HOOKS_ROOT, 'blocking', 'live_gate.py');
+    const ruleFilePath = join('/home', 'user', '.claude', 'rules', 'a-rule.md');
+
+    const retiredRelativePaths = retiredManagedHookRelativePaths(
+        [retiredScriptPath, liveScriptPath, ruleFilePath],
+        [liveScriptPath],
+        SANDBOX_HOOKS_ROOT,
+    );
+
+    assert.deepEqual(
+        [...retiredRelativePaths],
+        [RETIRED_HOOK_RELATIVE_PATH],
+        'the diff names the retired script alone, leaving the live script and every other root out',
+    );
+});
+
+
+test('retiredManagedHookRelativePaths names nothing when no prior install recorded anything', () => {
+    const retiredRelativePaths = retiredManagedHookRelativePaths(null, [], SANDBOX_HOOKS_ROOT);
+
+    assert.equal(retiredRelativePaths.size, 0, 'with no record to diff, no entry counts as retired');
+});
+
+
+/**
+ * Write a settings.json fixture and return its path.
+ *
+ * @param {object} settings The settings object to serialize.
+ * @param {number} indentWidth The JSON indent width the fixture is written with.
+ * @returns {{settingsPath: string, sandboxRoot: string}} The fixture path and its sandbox root.
+ */
+function createSettingsFixture(settings, indentWidth) {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-retired-hook-settings-'));
+    const settingsPath = join(sandboxRoot, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify(settings, null, indentWidth) + '\n');
+    return { settingsPath, sandboxRoot };
+}
+
+
+test('pruneRetiredHookEntriesFromSettings removes the retired entry and keeps the user-authored one', () => {
+    const retiredCommand = `python3 "$HOME/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}"`;
+    const userCommand = 'python3 my_own_gate.py --user-authored';
+    const lookalikeCommand = `python3 "$HOME/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}.bak"`;
+    const { settingsPath, sandboxRoot } = createSettingsFixture({
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit',
+                hooks: [
+                    { type: 'command', command: retiredCommand },
+                    { type: 'command', command: userCommand },
+                    { type: 'command', command: lookalikeCommand },
+                ],
+            }],
+            PreCompact: [{
+                matcher: '*',
+                hooks: [{ type: 'command', command: retiredCommand }],
+            }],
+        },
+    }, 4);
+    try {
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.equal(removedCount, 2, 'both entries running the retired script are removed');
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        assert.deepEqual(
+            settings.hooks.PreToolUse[0].hooks.map(hook => hook.command),
+            [userCommand, lookalikeCommand],
+            'the user entry and the suffix-path entry stay exactly as written',
+        );
+        assert.equal(
+            Object.hasOwn(settings.hooks, 'PreCompact'),
+            false,
+            'an event type the current config leaves out is reached and, left empty, dropped',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical when it retires nothing', () => {
+    const { settingsPath, sandboxRoot } = createSettingsFixture({
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit',
+                hooks: [{ type: 'command', command: 'python3 my_own_gate.py --user-authored' }],
+            }],
+        },
+    }, 2);
+    try {
+        const bytesBefore = readFileSync(settingsPath, 'utf8');
+
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.equal(removedCount, 0, 'no entry runs a retired script');
+        assert.equal(
+            readFileSync(settingsPath, 'utf8'),
+            bytesBefore,
+            'the file keeps its own formatting, so a run that retires nothing writes nothing',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
     }
 });
