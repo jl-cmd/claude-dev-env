@@ -17,6 +17,7 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 
 - **Do not chat the split step-by-step.** Run analyze → verify → one proposal → execute. The article’s interactive script-writing flow is replaced by this skill’s scripts.
 - **Coverage before execute.** Every source file must land in exactly one slice. Run `verify_plan.py`; never open PRs with missing or duplicate paths.
+- **A slice prefix must be closed under cross-file references.** A file-based split cuts the symbol graph along file lines, so a slice can read a name whose only definition lands later. Collection cannot see it — the read sits inside a function body, so imports resolve and `--collect-only` passes green — and neither can a per-slice test run, because nothing calls the new code until a later slice wires it up. Pass `--repo-path` to `verify_plan.py` so the dependency check runs; without it the check is skipped and the report says so. A shared config module is the common violator, and it is subject to two opposing constraints: runtime wants it no later than its first reader, while a dead-constant gate wants it no earlier than a production module reading each new field. When both fire, the report names the smallest set of files that must ship in one slice — coalesce to that set. Do not "fix" it by moving the config module to slice 1; the gate then rejects the commit, after branches already exist.
 - **Source branch stays intact.** Execution creates new `split/<pr>/…` branches via `git checkout <source> -- <files>`. Never rewrite or force-push the original head. After a full multi-slice draft stack lands, the skill comments and **closes the source PR** as superseded; the source branch remains on the remote for fallback checkout.
 - **Stacked bases, not all-off-main.** Slice 2’s base is slice 1’s branch (and so on). Opening every PR against `main` loses the dependency story.
 - **Clean tree required for real execute.** Dirty worktree → stop. Prefer a dedicated worktree if the session cwd is dirty; do not silently stash.
@@ -66,8 +67,12 @@ Load [reference/splitting-principles.md](reference/splitting-principles.md) only
 2. Optionally re-bucket paths (edit the plan JSON). Do **not** drop files.
 3. Adjust titles/stories so each slice has one review focus.
 4. **Execute:**  
-   `python "${CLAUDE_SKILL_DIR}/scripts/verify_plan.py" --plan <plan.json> --pretty`  
-   Exit must be 0 (`is_valid: true`). If not, fix the plan and re-run.
+   `python "${CLAUDE_SKILL_DIR}/scripts/verify_plan.py" --plan <plan.json> --repo-path . --pretty`  
+   Exit must be 0 (`is_valid: true`). If not, fix the plan and re-run.  
+   `--repo-path` turns on the slice dependency check, which reads the source and
+   base branches and reports `dependencies` alongside coverage. Reorder on a
+   `forward_references` finding; coalesce to `coalesce_suggestion` on a
+   `contradictions` finding, where no ordering can satisfy both constraints.
 
 Path rules: [reference/path-layers.md](reference/path-layers.md).
 
@@ -153,7 +158,8 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 | `templates/plan.example.json` | Example plan shape |
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
 | `scripts/categorize_files.py` | Library — path → layer, slice builder |
-| `scripts/verify_plan.py` | **Execute** — coverage gate |
+| `scripts/verify_plan.py` | **Execute** — coverage gate, plus the dependency gate when `--repo-path` is given |
+| `scripts/verify_slice_dependencies.py` | **Execute** — plan-time forward-reference, dead-config, and contradiction check |
 | `scripts/execute_split.py` | **Execute** — branches / collection gate / draft PRs / family tree / stack labels / supersede |
 | `scripts/validate_slice_collection.py` | **Execute** — post-commit pytest `--collect-only` on cumulative stack tests |
 | `scripts/family_tree_comments.py` | **Execute** — full linked tree comment on each child PR |

@@ -17,6 +17,17 @@ import sys
 from pathlib import Path
 
 from categorize_files import slice_fits_review_budget
+from verify_slice_dependencies import (
+    read_source_files,
+    verify_slice_dependencies,
+)
+from split_pr_scripts_constants.config.dependency_constants import (
+    DEPENDENCY_SKIP_KEY,
+    DEPENDENCY_SKIP_REASON,
+    REPORT_KEY_ERRORS,
+    REPORT_KEY_IS_VALID,
+    VERIFY_KEY_DEPENDENCIES,
+)
 from split_pr_scripts_constants.config.analyze_constants import (
     ERROR_SLICE_EXCEEDS_REVIEW_BUDGET,
     EXIT_CODE_FAILURE,
@@ -36,7 +47,9 @@ from split_pr_scripts_constants.config.plan_constants import (
     FILE_KEY_PATH,
     JSON_INDENT_SPACES,
     PLAN_KEY_ALL_FILES,
+    PLAN_KEY_BASE_REF,
     PLAN_KEY_PROPOSED_SLICES,
+    PLAN_KEY_SOURCE_BRANCH,
     PLAN_ROOT_MUST_BE_OBJECT,
     SLICE_KEY_CHANGED_LINES,
     SLICE_KEY_FILES,
@@ -288,6 +301,7 @@ def main() -> int:
         parsed_arguments = _parse_arguments()
         plan_payload = load_plan(Path(parsed_arguments.plan))
         report = verify_plan(plan_payload)
+        _merge_dependency_report(report, plan_payload, parsed_arguments.repo_path)
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(report, indent=indent))
         if report[VERIFY_KEY_IS_VALID]:
@@ -298,9 +312,55 @@ def main() -> int:
         return EXIT_CODE_FAILURE
 
 
+def _merge_dependency_report(
+    report: dict,
+    plan_payload: dict,
+    repo_path: str | None,
+) -> None:
+    """Fold the slice dependency verdict into the coverage report.
+
+    Coverage and slice size say nothing about whether a slice prefix is closed
+    under cross-file references, so a plan can be valid here and still produce a
+    stack whose early slices are importable but raise at call time. Reading the
+    source branch needs a repository, so the check runs only when one is given.
+
+    Args:
+        report: The coverage report, mutated in place.
+        plan_payload: The loaded plan.
+        repo_path: Path inside the repository, or None to skip the check.
+    """
+    if not repo_path:
+        report[VERIFY_KEY_DEPENDENCIES] = {DEPENDENCY_SKIP_KEY: DEPENDENCY_SKIP_REASON}
+        return
+    all_slices = plan_payload.get(PLAN_KEY_PROPOSED_SLICES) or []
+    all_paths = [
+        str(each_path)
+        for each_slice in all_slices
+        for each_path in (each_slice.get(SLICE_KEY_FILES) or [])
+    ]
+    repo_root = Path(repo_path).resolve()
+    sources = read_source_files(
+        repo_root, str(plan_payload.get(PLAN_KEY_SOURCE_BRANCH)), all_paths
+    )
+    base_ref = plan_payload.get(PLAN_KEY_BASE_REF)
+    base_sources = read_source_files(repo_root, str(base_ref), all_paths) if base_ref else {}
+    dependency_report = verify_slice_dependencies(all_slices, sources, base_sources)
+    report[VERIFY_KEY_DEPENDENCIES] = dependency_report
+    if not dependency_report[REPORT_KEY_IS_VALID]:
+        report[VERIFY_KEY_IS_VALID] = False
+        report[VERIFY_KEY_ERRORS] = list(report.get(VERIFY_KEY_ERRORS) or []) + list(
+            dependency_report[REPORT_KEY_ERRORS]
+        )
+
+
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Verify split-pr plan coverage")
     parser.add_argument("--plan", required=True, help="Path to plan JSON")
+    parser.add_argument(
+        "--repo-path",
+        default=None,
+        help="Path inside the repository; enables the slice dependency check",
+    )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     return parser.parse_args()
 
