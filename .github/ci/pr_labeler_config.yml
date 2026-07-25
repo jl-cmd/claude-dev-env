@@ -1,0 +1,36 @@
+# Per-repo settings for pr_labeler.py. The derivation rules themselves (the
+# conventional-commit prefix map, the test-path patterns, the three-label area
+# cap) are shared code in pr_labeler.py; only what genuinely differs between
+# jl-cmd/claude-dev-env and a future downstream repo lives here.
+
+area_path_prefix_strip: "packages/claude-dev-env/"
+
+area_map:
+  - path_prefix: "hooks/"
+    label: "area: hooks"
+  - path_prefix: "skills/"
+    label: "area: skills"
+  - path_prefix: "agents/"
+    label: "area: agents"
+  - path_prefix: "commands/"
+    label: "area: commands"
+  - path_prefix: "rules/"
+    label: "area: rules"
+  - path_prefix: "bin/"
+    label: "area: installer"
+  - path_prefix: "scripts/"
+    label: "area: scripts"
+  - path_prefix: "_shared/"
+    label: "area: scripts"
+  - path_prefix: "docs/"
+    label: "area: docs"
+  - path_prefix: "audit-rubrics/"
+    label: "area: docs"
+  - path_prefix: ".github/"
+    label: "area: ci"
+
+size_thresholds:
+  xs_max: 20
+  s_max: 100
+  m_max: 500
+  l_max: 1000

@@ -1,0 +1,52 @@
+name: PR labeler
+
+# Applies the five label axes (type, size, status, area, stacked) to a pull
+# request on every event that can change what they should be: a title edit
+# changes type, a push changes size and area, and the draft/ready toggle is
+# the one event ci-tests.yml does not need but this workflow does — status:
+# is wrong the moment a draft is marked ready and nothing else re-runs.
+#
+# Never removes a label outside those five axes: pr_labeler.py bounds every
+# removal to a known per-axis label set, so P0-P3, epic, tech-debt, and any
+# other flag a human or another workflow set stays untouched.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+
+concurrency:
+  group: pr-labeler-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Apply label axes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install labeler dependencies
+        run: pip install PyYAML
+
+      - name: Apply the five label axes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/ci/pr_labeler.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --config .github/ci/pr_labeler_config.yml
