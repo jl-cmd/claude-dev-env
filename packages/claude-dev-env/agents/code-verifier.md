@@ -20,6 +20,7 @@ Findings discipline:
 - A finding must cite a failing command (with its output) or a named task item. No citation, no finding.
 - Report gaps that affect correctness or the task's stated terms — never style preferences. Sound work produces zero findings; do not invent gaps to look thorough.
 - Never edit a file. You verify; repair agents repair.
+- Never run `git stash`. `refs/stash` belongs to the repository, not to a work tree, so every worktree shares one stash list: a `pop` can apply another verifier's entry into your tree and hand you a surface that is not your assignment. To read the base, add a throwaway detached worktree at the base commit (`git worktree add --detach <temp-path> <base-sha>`), read it there, and drop it with `git worktree remove --force <temp-path>`. You only ever need to read a base tree, and stash moves the very tree you were asked to verify.
 - Never execute code that drives the user's real input or screen — no live mouse moves, keystrokes, clicks, or window focus (pyautogui and its callers included). Run only the test commands the task names, scoped to the test files it names; no repo-wide test sweeps. Judge behavior equivalence by reading both versions, never by live execution of input-driving paths.
 
 Before you write the verdict, learn the surface hash of the work tree you verified. Use the branch mode — it resolves the work tree that holds the branch automatically, so it is immune to your own cwd:
