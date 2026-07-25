@@ -366,6 +366,21 @@ class TestComputeLabelDiff:
         assert label_diff.labels_to_add == frozenset()
         assert label_diff.labels_to_remove == frozenset({"stacked"})
 
+    def should_leave_hand_applied_type_and_area_labels_alone_when_neither_derives(self) -> None:
+        snapshot = pr_labeler_derivation.PullRequestSnapshot(
+            title="Update xhigh.md",
+            is_draft=False,
+            base_branch_name="main",
+            changed_line_count=1 + 1,
+            changed_file_paths=("packages/claude-dev-env/package.json",),
+            current_labels=frozenset(
+                {"type: docs", "status: needs-review", "size: XS", "area: docs"}
+            ),
+        )
+        label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
+        assert label_diff.labels_to_add == frozenset()
+        assert label_diff.labels_to_remove == frozenset()
+
 
 class TestIdempotence:
     def should_produce_no_further_changes_after_applying_the_first_diff(self) -> None:
@@ -597,6 +612,11 @@ class TestBuildTypeLabelPlan:
     def should_desire_no_label_for_an_unparseable_title(self) -> None:
         assert pr_labeler_derivation.build_type_label_plan("Update xhigh.md").desired_labels == frozenset()
 
+    def should_leave_the_type_axis_untouched_for_an_unparseable_title(self) -> None:
+        type_plan = pr_labeler_derivation.build_type_label_plan("Update xhigh.md")
+        assert type_plan.desired_labels == frozenset()
+        assert type_plan.removable_labels == frozenset()
+
 
 class TestBuildSizeLabelPlan:
     def should_desire_the_derived_size_label(self) -> None:
@@ -614,6 +634,13 @@ class TestBuildAreaLabelPlan:
         area_plan = pr_labeler_derivation.build_area_label_plan(changed_paths, CLAUDE_DEV_ENV_CONFIG)
         assert area_plan.desired_labels == frozenset({"area: rules"})
         assert area_plan.removable_labels == pr_labeler_derivation.area_label_universe(CLAUDE_DEV_ENV_CONFIG)
+
+    def should_leave_the_area_axis_untouched_when_no_path_matches(self) -> None:
+        area_plan = pr_labeler_derivation.build_area_label_plan(
+            ["packages/claude-dev-env/package.json"], CLAUDE_DEV_ENV_CONFIG
+        )
+        assert area_plan.desired_labels == frozenset()
+        assert area_plan.removable_labels == frozenset()
 
 
 class TestBuildStackedLabelPlan:

@@ -238,9 +238,23 @@ def area_label_universe(config: LabelerConfig) -> frozenset[str]:
 
 
 def build_type_label_plan(pull_request_title: str) -> LabelPlan:
+    """Build the type axis's plan, left untouched when the title carries no derivable prefix.
+
+    An axis the labeler cannot derive is an axis it must not touch: a title
+    with no conventional-commit prefix is no signal at all, not a signal that
+    the type label should be absent, so a human-applied `type:` label survives.
+
+    Args:
+        pull_request_title: The pull request's title.
+
+    Returns:
+        A plan desiring the mapped `type:` label, or an empty, untouchable
+        plan when the title has no derivable prefix.
+    """
     maybe_type_label = derive_type_label(pull_request_title)
-    desired_labels = frozenset({maybe_type_label}) if maybe_type_label else frozenset()
-    return LabelPlan(desired_labels=desired_labels, removable_labels=ALL_TYPE_LABELS)
+    if maybe_type_label is None:
+        return LabelPlan(desired_labels=frozenset(), removable_labels=frozenset())
+    return LabelPlan(desired_labels=frozenset({maybe_type_label}), removable_labels=ALL_TYPE_LABELS)
 
 
 def build_size_label_plan(changed_line_count: int, size_thresholds: SizeThresholds) -> LabelPlan:
@@ -272,15 +286,22 @@ def build_status_label_plan(
 def build_area_label_plan(all_changed_file_paths: Sequence[str], config: LabelerConfig) -> LabelPlan:
     """Build the area axis's plan: the ranked area labels, capped at three.
 
+    An axis the labeler cannot derive is an axis it must not touch: a pull
+    request touching only unmapped paths is no signal at all, not a signal
+    that every area label should be absent, so hand-applied area labels survive.
+
     Args:
         all_changed_file_paths: Every path the pull request changed.
         config: The area map and path-prefix settings to match against.
 
     Returns:
         A plan desiring the ranked area labels and able to remove any label in
-        the repo's configured area vocabulary.
+        the repo's configured area vocabulary, or an empty, untouchable plan
+        when no changed path matches any configured area.
     """
     area_labels = derive_area_labels(all_changed_file_paths, config)
+    if not area_labels:
+        return LabelPlan(desired_labels=frozenset(), removable_labels=frozenset())
     return LabelPlan(
         desired_labels=frozenset(area_labels), removable_labels=area_label_universe(config)
     )
