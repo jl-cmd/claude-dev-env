@@ -49,7 +49,7 @@ GH_HEAD = "--head"
 GH_REPO_FLAG = "--repo"
 GH_JSON = "--json"
 
-DEFAULT_COMMIT_MESSAGE_TEMPLATE = "feat: %s\n\n%s\n\nSplit from PR #%s."
+DEFAULT_COMMIT_MESSAGE_TEMPLATE = "%s\n\n%s\n\nSplit from PR #%s."
 
 ERROR_DIRTY_TREE = "working tree is dirty; commit or stash before execute_split"
 ERROR_REPO_NOT_GIT = "path is not inside a git repository: %s"

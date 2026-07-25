@@ -163,6 +163,40 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
     assert (repo / "src" / "api" / "n.ts").is_file()
 
 
+def test_execute_plan_commit_subject_matches_slice_title(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    plan_payload = sample_plan()
+    first_slice = plan_payload[PLAN_KEY_PROPOSED_SLICES][0]
+    slice_title = str(first_slice[SLICE_KEY_TITLE])
+    slice_story = str(first_slice[SLICE_KEY_STORY])
+    execute_plan(
+        plan_payload=plan_payload,
+        repo_root=repo,
+        is_dry_run=False,
+        should_create_prs=False,
+        should_push=False,
+        should_supersede=False,
+    )
+    run_git(["checkout", "split/99/01-database"], repo)
+    commit_subject = subprocess.run(
+        ["git", "log", "-1", "--format=%s"],
+        cwd=str(repo),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    commit_body = subprocess.run(
+        ["git", "log", "-1", "--format=%b"],
+        cwd=str(repo),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert commit_subject == slice_title
+    assert slice_story in commit_body
+    assert "Split from PR #99." in commit_body
+
+
 def test_execute_plan_partial_failure_includes_created(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     plan_payload = sample_plan()
