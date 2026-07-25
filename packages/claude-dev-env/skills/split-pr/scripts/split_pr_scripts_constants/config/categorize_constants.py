@@ -26,6 +26,12 @@ ALL_LAYER_ORDER: tuple[str, ...] = (
 )
 
 ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
+    (r"(^|/)(__tests?__|tests?|specs?)(/|$)", LAYER_TESTS),
+    (r"(^|/)test_[^/]+\.py$", LAYER_TESTS),
+    (r"\.(test|spec)\.[a-z0-9]+$", LAYER_TESTS),
+    (r"[^/]*_test\.py$", LAYER_TESTS),
+    (r"(^|/)docs?(/|$)", LAYER_DOCS),
+    (r"\.(md|rst)$", LAYER_DOCS),
     (r"(^|/)(migrations?|prisma|alembic|flyway)(/|$)", LAYER_DATABASE),
     (r"(^|/)db(/|$)", LAYER_DATABASE),
     (r"\.sql$", LAYER_DATABASE),
@@ -35,10 +41,6 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
         r"(^|/)(api|services?|server|backend|controllers?|middleware|handlers?)(/|$)",
         LAYER_BACKEND,
     ),
-    (r"(^|/)(__tests?__|tests?|spec)(/|$)", LAYER_TESTS),
-    (r"(^|/)test_[^/]+\.py$", LAYER_TESTS),
-    (r"\.(test|spec)\.[a-z0-9]+$", LAYER_TESTS),
-    (r"(^|/)_test\.py$", LAYER_TESTS),
     (
         r"(^|/)hooks/(blocking|validators|advisory|lifecycle|session|workflow|diagnostic)(/|$)",
         LAYER_BACKEND,
@@ -56,8 +58,6 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
         r"requirements[^/]*\.txt|Pipfile|poetry\.lock|composer\.json)$",
         LAYER_CONFIG,
     ),
-    (r"(^|/)docs?(/|$)", LAYER_DOCS),
-    (r"\.(md|rst)$", LAYER_DOCS),
 )
 
 DEFAULT_LAYER = LAYER_OTHER
