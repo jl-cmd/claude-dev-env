@@ -13,7 +13,7 @@
 
 ## Framing
 
-`max effort → 10 one-angle hunters → per-candidate verify → verified sweep → every validated finding`
+`max effort → 10 one-angle hunters → grouped verify → verified sweep → every validated finding`
 
 You are reviewing for **recall** at maximum effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives — a
@@ -139,9 +139,21 @@ altitude, and conventions findings when you rank the output (see
 ## Phase 2 — Verify (1-vote, 3-state)
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
-the most concrete failure scenario. For each remaining candidate, run **one
-verifier** via the Agent tool: give it the diff, the relevant
-file(s), and the candidate, and have it return exactly one of:
+the most concrete failure scenario.
+
+**Group the survivors by file, then run one verifier per group** via the Agent
+tool. A file carrying more than 8 candidates splits into groups of 8 or fewer.
+Give each verifier the diff, the file(s) its group touches, and its group's
+candidates.
+
+**Each candidate gets its own verdict.** A verifier returns one verdict per
+candidate in its group, each resting on its own quoted line. A verdict on one
+candidate carries no weight on any other — a verifier may not use one REFUTED
+candidate to dismiss a sibling, and may not roll a group up into a single
+answer. Independence per candidate is what the grouping trades away if the
+prompt lets it, so state this requirement in every verifier prompt.
+
+Each verdict is exactly one of:
 
 - **CONFIRMED** — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
@@ -165,9 +177,10 @@ non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.
 
 Surface **every additional candidate**, each naming a defect not already on
-the list. Verify each sweep candidate with the same per-candidate verifier and
-states from Phase 2, then retain every candidate marked CONFIRMED or PLAUSIBLE.
-If nothing new, return an empty sweep — do not pad.
+the list. Verify the sweep candidates through the same grouped verifier and
+states as Phase 2 — grouped by file, one verdict per candidate — then retain
+every candidate marked CONFIRMED or PLAUSIBLE. If nothing new, return an empty
+sweep.
 
 ## When the Agent tool is unavailable
 
