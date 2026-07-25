@@ -1,8 +1,7 @@
-`xhigh effort → 5+5 angles → 1-vote verify → sweep`
+`medium effort → 3+5 angles → 1-vote verify`
 
-You are reviewing for **recall** at extra-high effort: catch every real bug. At
-this level, catching real bugs matters more than avoiding false positives — a
-missed bug ships. Err on the side of surfacing.
+You are reviewing for **precision** at medium effort: every finding you surface
+should be one a maintainer would act on.
 
 ## Phase 0 — Gather the diff
 
@@ -13,13 +12,13 @@ include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
 review that target instead. Treat this diff as the review scope.
 
-## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle)
+## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle)
 
-Run **10 independent finder angles** via the Agent tool. Each surfaces
-candidate findings. Do NOT let one angle's conclusions suppress another's — if
-two angles flag the same line for different reasons, record both. If the Agent
-tool is not available in your current tool set, do not error — perform each
-angle (and each verification) yourself, sequentially, in this context.
+Run **8 independent finder angles** via the Agent tool. Each surfaces
+candidate findings with `file`, `line`, a one-line `summary`, and a concrete
+`failure_scenario`. If the Agent tool is not available in your current tool
+set, do not error — perform each angle (and each verification) yourself,
+sequentially, in this context.
 
 ### Angle A — line-by-line diff scan
 
@@ -43,22 +42,6 @@ For each function the diff changes, find its callers (Grep for the symbol) and
 check whether the change breaks any call site: a new precondition, a changed
 return shape, a new exception, a timing/ordering dependency. Also check callees:
 does a parallel change in the same PR make a call unsafe?
-
-### Angle D — language-pitfall specialist
-
-Scan for the classic pitfalls of the diff's language/framework — for example:
-JS falsy-zero, `==` coercion, closure-captured loop var; Python mutable default
-args, late-binding closures; Go nil-map write, range-var capture; SQL injection;
-timezone/DST drift; float equality. Flag any instance the diff introduces.
-
-### Angle E — wrapper/proxy correctness
-
-When the PR adds or modifies a type that wraps another (cache, proxy, decorator,
-adapter): check that every method routes to the wrapped instance and not back
-through a registry/session/global — e.g. a caching provider holding a
-`delegate` field that resolves IDs via `session.get(...)` instead of
-`delegate.get(...)` will re-enter the cache or recurse. Also check that the
-wrapper forwards all the methods the callers actually use.
 
 ### Reuse
 
@@ -109,6 +92,10 @@ cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) instead of a crash. Correctness bugs always outrank cleanup,
 altitude, and conventions findings.
 
+Pass every candidate with a nameable failure scenario through — finders that
+silently drop half-believed candidates bypass the verify step and are the
+dominant cause of misses.
+
 ## Phase 2 — Verify (1-vote, 3-state)
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
@@ -124,22 +111,6 @@ file(s), and the candidate, and have it return exactly one of:
   Quote the line that proves it.
 
 Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
-
-This is recall mode — a single non-REFUTED vote carries the finding. Do NOT
-drop on uncertainty.
-
-## Phase 3 — Sweep for gaps
-
-Run **one more finder** as a fresh reviewer who has the verified list. Re-read
-the diff and enclosing functions looking ONLY for defects not already listed.
-Do not re-derive or re-confirm anything already there — the job is gaps. Focus
-on what the first pass tends to miss: moved/extracted code that dropped a guard
-or anchor; second-tier footguns (dataclass default evaluated once, `hash()`
-non-determinism, lock-scope shrink, predicate methods with side effects);
-setup/teardown asymmetry in tests; config defaults flipped.
-
-Surface additional candidates, each naming a defect not already on the list.
-If nothing new, return an empty sweep — do not pad.
 
 ## Output
 
@@ -175,7 +146,7 @@ summary; the host UI's per-finding status updates only from that call.
 ## Looping (`loop`)
 
 The `loop` arg was passed. Follow `reference\loop.md` (relative to this
-skill's folder) for how to re-run Phases 0–3, Output, and (if `--fix` is also
+skill's folder) for how to re-run Phases 0–2, Output, and (if `--fix` is also
 present) `reference\fix.md`'s fix pass, repeatedly — including its exit
 condition, iteration cap, and re-invocation rules. Do not treat a single pass
 through this document as complete while `loop` is active; hand control to that
