@@ -147,7 +147,7 @@ altitude, and conventions findings when you rank the output (see
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
 the most concrete failure scenario. Then run **one batched verifier subagent**
-over the whole merged candidate list — not one verifier per candidate. Give it
+over the whole merged candidate list. Give it
 the diff, the relevant file(s), and every candidate; it returns exactly one of
 these per candidate:
 
