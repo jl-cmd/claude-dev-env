@@ -2,8 +2,9 @@
 
 Given a production file, builds every path a matching test could live at: the
 flat sibling ``test_<stem>.py``, the package-mirroring candidates under an
-ancestor ``tests`` directory, and the split test family for ``code_rules_*``
-modules.
+ancestor ``tests`` directory, and the ``test_<stem>_*.py`` split test family
+that any module's own stem anchors. A ``code_rules_*`` module additionally
+draws on the shared ``code_rules_enforcer`` split family.
 """
 
 from pathlib import Path
@@ -13,6 +14,10 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     ALL_REPO_BOUNDARY_SENTINELS,
     PARENT_WALK_LIMIT,
     PYTHON_SOURCE_EXTENSION,
+    SPLIT_MODULE_STEM_PREFIX,
+    SPLIT_TEST_FAMILY_ANCHOR_STEM,
+    SPLIT_TEST_FAMILY_GLOB_SUFFIX,
+    TEST_FILE_NAME_PREFIX,
 )
 
 
@@ -29,11 +34,15 @@ def _repo_boundary_sentinels() -> frozenset[str]:
 
 
 def _split_module_stem_prefix() -> str:
-    return "code_rules_"
+    return SPLIT_MODULE_STEM_PREFIX
 
 
-def _split_test_family_glob() -> str:
-    return "test_code_rules_enforcer_*.py"
+def _split_test_family_anchor_stem() -> str:
+    return SPLIT_TEST_FAMILY_ANCHOR_STEM
+
+
+def _split_test_family_glob_for(stem: str) -> str:
+    return f"{TEST_FILE_NAME_PREFIX}{stem}{SPLIT_TEST_FAMILY_GLOB_SUFFIX}"
 
 
 def _javascript_test_extensions() -> frozenset[str]:
@@ -72,10 +81,36 @@ def _ancestor_tests_directories(start_directory: Path) -> list[tuple[Path, Path]
     return all_pairs
 
 
+def _split_family_globs(stem: str) -> list[str]:
+    """List the split-family globs a module's own stem earns it.
+
+    ::
+
+        invoke_code_review  -> test_invoke_code_review_*.py
+        code_rules_comments -> test_code_rules_comments_*.py
+                               test_code_rules_enforcer_*.py
+
+    Every glob stays anchored to a stem, so an unrelated neighbour's tests
+    never count. The anchor family is added only for the shared prefix.
+
+    Args:
+        stem: Stem of the production module under edit.
+
+    Returns:
+        Glob patterns to match against the module's own directory.
+    """
+    all_globs = [_split_test_family_glob_for(stem)]
+    anchor_glob = _split_test_family_glob_for(_split_test_family_anchor_stem())
+    if stem.startswith(_split_module_stem_prefix()) and anchor_glob not in all_globs:
+        all_globs.append(anchor_glob)
+    return all_globs
+
+
 def _split_family_candidates(directory: Path, stem: str) -> list[Path]:
-    if not stem.startswith(_split_module_stem_prefix()):
-        return []
-    return sorted(directory.glob(_split_test_family_glob()))
+    all_matches: list[Path] = []
+    for each_glob in _split_family_globs(stem):
+        all_matches.extend(sorted(directory.glob(each_glob)))
+    return list(dict.fromkeys(all_matches))
 
 
 def _flat_stem_candidates(directory: Path, stem: str) -> list[Path]:
@@ -122,8 +157,10 @@ def candidate_test_paths_for(production_path: Path) -> list[Path]:
         pkg/orders.py -> pkg/test_orders.py, pkg/orders_test.py,
                          pkg/tests/test_orders.py (and package mirrors)
 
-    ``code_rules_*`` Python modules also gain the split test family. Plain
-    stem-derived candidates always come first.
+    A Python module also gains the ``test_<stem>_*.py`` split family found
+    beside it, and a ``code_rules_*`` module gains the shared
+    ``code_rules_enforcer`` family too. Plain stem-derived candidates always
+    come first.
 
     Args:
         production_path: The production source file being written or edited.
