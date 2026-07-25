@@ -21,6 +21,11 @@ from split_pr_scripts_constants.config.categorize_constants import (
     ALL_LAYER_STORY_BY_NAME,
     ALL_LAYER_TITLE_STEM_BY_NAME,
     DEFAULT_LAYER,
+    PART_SLUG_SEPARATOR,
+    PATH_SEPARATOR,
+    WHOLE_PR_SLICE_SLUG,
+    WHOLE_PR_SLICE_STORY,
+    WHOLE_PR_SLICE_TITLE_STEM,
 )
 from split_pr_scripts_constants.config.plan_constants import (
     FILE_KEY_ADDITIONS,
@@ -40,9 +45,6 @@ from split_pr_scripts_constants.config.plan_constants import (
 )
 
 JsonObject = dict[str, object]
-
-_PART_SLUG_SEPARATOR = "-part"
-_PATH_SEPARATOR = "/"
 
 
 def normalize_path(path: str) -> str:
@@ -158,6 +160,59 @@ def build_slices_from_files(
     )
 
 
+def build_whole_pr_slice(
+    all_files: list[JsonObject],
+    feature_slug: str,
+    title_prefix: str,
+) -> list[JsonObject]:
+    """Return one slice holding every file, for a PR that already fits review.
+
+    ::
+
+        build_whole_pr_slice(all_files, "add-bell", "feat")
+        # ok: [{"index": 1, "slug": "whole-pr", "files": [...]}]
+
+    A PR inside the review budget needs no split, so the plan carries a single
+    slice. The emitted plan then matches the "split is optional" advice instead
+    of contradicting it with a multi-slice stack.
+
+    Args:
+        all_files: Annotated file records for the whole pull request.
+        feature_slug: Short slug for branch and title context.
+        title_prefix: Conventional-commit style prefix (e.g. ``feat``).
+
+    Returns:
+        A one-element slice list, or an empty list when no path is present.
+    """
+    churn_by_path = _churn_by_path(all_files)
+    all_paths = sorted(churn_by_path)
+    if not all_paths:
+        return []
+    changed_lines = _paths_changed_lines(all_paths, churn_by_path)
+    file_count = len(all_paths)
+    return [
+        {
+            SLICE_KEY_INDEX: 1,
+            SLICE_KEY_SLUG: WHOLE_PR_SLICE_SLUG,
+            SLICE_KEY_LAYER: DEFAULT_LAYER,
+            SLICE_KEY_TITLE: (
+                f"{title_prefix}: {feature_slug} {WHOLE_PR_SLICE_TITLE_STEM}".strip()
+            ),
+            SLICE_KEY_STORY: WHOLE_PR_SLICE_STORY,
+            SLICE_KEY_FILES: all_paths,
+            SLICE_KEY_CHANGED_LINES: changed_lines,
+            SLICE_KEY_FILE_COUNT: file_count,
+            SLICE_KEY_FITS_REVIEW: slice_fits_review_budget(
+                file_count=file_count,
+                changed_lines=changed_lines,
+            ),
+            SLICE_KEY_OVERSIZED_ATOMIC: (
+                file_count == 1 and changed_lines > MAXIMUM_SLICE_CHANGED_LINES
+            ),
+        }
+    ]
+
+
 def _churn_by_path(all_files: list[JsonObject]) -> dict[str, int]:
     churn_by_path: dict[str, int] = {}
     for each_file in all_files:
@@ -225,7 +280,7 @@ def _build_one_slice(
 ) -> JsonObject:
     stem = ALL_LAYER_TITLE_STEM_BY_NAME.get(layer, layer)
     story = ALL_LAYER_STORY_BY_NAME.get(layer, ALL_LAYER_STORY_BY_NAME[DEFAULT_LAYER])
-    slug = layer if part_index is None else f"{layer}{_PART_SLUG_SEPARATOR}{part_index}"
+    slug = layer if part_index is None else f"{layer}{PART_SLUG_SEPARATOR}{part_index}"
     title_stem = stem if part_index is None else f"{stem} part {part_index}"
     title = f"{title_prefix}: {feature_slug} {title_stem}".strip()
     changed_lines = _paths_changed_lines(all_paths, churn_by_path)
@@ -298,9 +353,9 @@ def _group_paths_by_directory(all_paths: list[str]) -> list[list[str]]:
 
 
 def _directory_key(path: str) -> str:
-    if _PATH_SEPARATOR not in path:
+    if PATH_SEPARATOR not in path:
         return path
-    return path.rsplit(_PATH_SEPARATOR, 1)[0]
+    return path.rsplit(PATH_SEPARATOR, 1)[0]
 
 
 def _pack_files_individually(
@@ -319,22 +374,22 @@ def _pack_files_individually(
 
 def _append_group_to_bins(
     all_bins: list[list[str]],
-    group_paths: list[str],
+    all_group_paths: list[str],
     churn_by_path: dict[str, int],
 ) -> None:
-    group_lines = _paths_changed_lines(group_paths, churn_by_path)
+    group_lines = _paths_changed_lines(all_group_paths, churn_by_path)
     for each_bin in all_bins:
-        candidate_paths = each_bin + group_paths
+        candidate_paths = each_bin + all_group_paths
         if slice_fits_review_budget(
             file_count=len(candidate_paths),
             changed_lines=_paths_changed_lines(candidate_paths, churn_by_path),
         ):
-            each_bin.extend(group_paths)
+            each_bin.extend(all_group_paths)
             return
     if (
-        len(group_paths) == 1
+        len(all_group_paths) == 1
         and group_lines > MAXIMUM_SLICE_CHANGED_LINES
     ):
-        all_bins.append(list(group_paths))
+        all_bins.append(list(all_group_paths))
         return
-    all_bins.append(list(group_paths))
+    all_bins.append(list(all_group_paths))

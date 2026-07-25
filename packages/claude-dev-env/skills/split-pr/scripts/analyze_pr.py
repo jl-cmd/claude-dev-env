@@ -21,6 +21,7 @@ from pathlib import Path
 from categorize_files import (
     annotate_files,
     build_slices_from_files,
+    build_whole_pr_slice,
     slice_fits_review_budget,
 )
 from split_pr_scripts_constants.config.analyze_constants import (
@@ -29,16 +30,23 @@ from split_pr_scripts_constants.config.analyze_constants import (
     BRANCH_PREFIX,
     DEFAULT_BASE_REF_NAME,
     DEFAULT_TITLE_PREFIX,
-    ERROR_BELOW_SPLIT_THRESHOLD,
     ERROR_CLI_ARGUMENTS,
     ERROR_GH_FAILED,
+    ERROR_GH_FILE_COUNT_MISMATCH,
+    ERROR_GH_FILE_STATUS_FAILED,
+    ERROR_GH_FILE_STATUS_JSON,
     ERROR_GH_JSON_PARSE,
     ERROR_PR_NUMBER_REQUIRED,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
+    GH_API,
+    GH_API_FILE_FILENAME,
+    GH_API_FILE_STATUS,
+    GH_API_SLURP_FLAG,
     GH_COMMAND,
     GH_FIELD_BASE_REF,
     GH_FIELD_BODY,
+    GH_FIELD_CHANGED_FILES,
     GH_FIELD_FILES,
     GH_FIELD_HEAD_OID,
     GH_FIELD_HEAD_REF,
@@ -49,24 +57,31 @@ from split_pr_scripts_constants.config.analyze_constants import (
     GH_FILE_DELETIONS,
     GH_FILE_PATH,
     GH_JSON_FLAG,
+    GH_PAGINATE_FLAG,
+    GH_PR_FILES_DEFAULT_OWNER_REPO,
+    GH_PR_FILES_ENDPOINT_TEMPLATE,
     GH_PR_JSON_FIELDS,
     GH_PR_VIEW,
     GH_REPO_FLAG,
     GH_VIEW,
     JSON_INDENT_SPACES,
     MAXIMUM_FEATURE_SLUG_LENGTH,
-    MINIMUM_SPLIT_FILE_COUNT,
+    MAXIMUM_SLICE_CHANGED_LINES,
+    MAXIMUM_SLICE_FILE_COUNT,
     PAYLOAD_KEY_ERROR,
     PLAN_BODY_EXCERPT_KEY,
+    PLAN_ROOT_MUST_BE_ARRAY,
+    PLAN_ROOT_MUST_BE_OBJECT,
     PLAN_THRESHOLD_NOTE_KEY,
     PLAN_URL_KEY,
     SLICE_INDEX_ZERO_PAD,
     SLUG_REPLACEMENT,
+    SPLIT_OPTIONAL_NOTE_TEMPLATE,
     TEST_HEAD_SHA,
-    WARNING_BELOW_THRESHOLD,
     WARNING_OTHER_LAYER_NONEMPTY,
     WARNING_OVERSIZED_ATOMIC_SLICE,
     WARNING_SINGLE_LAYER,
+    WARNING_SPLIT_OPTIONAL,
 )
 from split_pr_scripts_constants.config.categorize_constants import LAYER_OTHER
 from split_pr_scripts_constants.config.plan_constants import (
@@ -75,6 +90,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     FILE_KEY_LAYER,
     FILE_KEY_PATH,
     FILE_KEY_STATUS,
+    FILE_STATUS_MODIFIED,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_BASE_REF,
     PLAN_KEY_FEATURE_SLUG,
@@ -91,6 +107,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     SLICE_KEY_BRANCH,
     SLICE_KEY_INDEX,
     SLICE_KEY_OVERSIZED_ATOMIC,
+    SLICE_KEY_SLUG,
 )
 
 JsonObject = dict[str, object]
@@ -136,34 +153,31 @@ def build_plan_from_pr_payload(
     all_file_records = _file_records_from_gh(all_pr_fields.get(GH_FIELD_FILES))
     all_annotated = annotate_files(all_file_records)
     feature_slug = slugify_feature(title, pr_number)
-    all_slices = build_slices_from_files(
-        all_annotated,
+    file_count = len(all_annotated)
+    total_changed_lines = _total_changed_lines(all_annotated)
+    is_split_optional = slice_fits_review_budget(
+        file_count=file_count,
+        changed_lines=total_changed_lines,
+    )
+    all_slices = _build_slices_for_advice(
+        all_annotated=all_annotated,
+        is_split_optional=is_split_optional,
         feature_slug=feature_slug,
         title_prefix=title_prefix,
     )
     _assign_stack_branches(all_slices, pr_number=pr_number, base_ref=base_ref)
-    all_warnings = _collect_warnings(all_annotated, all_slices)
-    file_count = len(all_annotated)
-    total_changed_lines = sum(
-        int(each.get(FILE_KEY_ADDITIONS, 0) or 0)
-        + int(each.get(FILE_KEY_DELETIONS, 0) or 0)
-        for each in all_annotated
-    )
-    threshold_note: str | None = None
-    if slice_fits_review_budget(
-        file_count=file_count,
-        changed_lines=total_changed_lines,
-    ):
-        threshold_note = (
-            "parent already fits review budget "
-            f"(files={file_count}, changed_lines={total_changed_lines}); "
-            "split is optional"
-        )
-    elif file_count < MINIMUM_SPLIT_FILE_COUNT:
-        threshold_note = ERROR_BELOW_SPLIT_THRESHOLD % (
+    all_warnings = _collect_warnings(all_annotated, all_slices, is_split_optional)
+    threshold_note = (
+        SPLIT_OPTIONAL_NOTE_TEMPLATE
+        % (
             file_count,
-            MINIMUM_SPLIT_FILE_COUNT,
+            MAXIMUM_SLICE_FILE_COUNT,
+            total_changed_lines,
+            MAXIMUM_SLICE_CHANGED_LINES,
         )
+        if is_split_optional
+        else None
+    )
     body_text = str(all_pr_fields.get(GH_FIELD_BODY) or "")
     return {
         PLAN_KEY_PR_NUMBER: pr_number,
@@ -184,6 +198,33 @@ def build_plan_from_pr_payload(
     }
 
 
+def _total_changed_lines(all_annotated: list[JsonObject]) -> int:
+    return sum(
+        int(each.get(FILE_KEY_ADDITIONS, 0) or 0)
+        + int(each.get(FILE_KEY_DELETIONS, 0) or 0)
+        for each in all_annotated
+    )
+
+
+def _build_slices_for_advice(
+    all_annotated: list[JsonObject],
+    is_split_optional: bool,
+    feature_slug: str,
+    title_prefix: str,
+) -> list[JsonObject]:
+    if is_split_optional:
+        return build_whole_pr_slice(
+            all_annotated,
+            feature_slug=feature_slug,
+            title_prefix=title_prefix,
+        )
+    return build_slices_from_files(
+        all_annotated,
+        feature_slug=feature_slug,
+        title_prefix=title_prefix,
+    )
+
+
 def _file_records_from_gh(raw_files: object) -> list[JsonObject]:
     if not isinstance(raw_files, list):
         return []
@@ -191,13 +232,15 @@ def _file_records_from_gh(raw_files: object) -> list[JsonObject]:
     for each_file in raw_files:
         if not isinstance(each_file, dict):
             continue
-        path = each_file.get(GH_FILE_PATH)
+        path = each_file.get(GH_API_FILE_FILENAME) or each_file.get(GH_FILE_PATH)
         if not path:
             continue
         all_file_records.append(
             {
                 FILE_KEY_PATH: str(path),
-                FILE_KEY_STATUS: "modified",
+                FILE_KEY_STATUS: str(
+                    each_file.get(GH_API_FILE_STATUS) or FILE_STATUS_MODIFIED
+                ),
                 FILE_KEY_ADDITIONS: int(each_file.get(GH_FILE_ADDITIONS, 0) or 0),
                 FILE_KEY_DELETIONS: int(each_file.get(GH_FILE_DELETIONS, 0) or 0),
             }
@@ -213,7 +256,7 @@ def _assign_stack_branches(
     previous_base = base_ref
     for each_slice in all_slices:
         index = int(each_slice[SLICE_KEY_INDEX])
-        layer_slug = str(each_slice.get("slug", f"slice-{index}"))
+        layer_slug = str(each_slice[SLICE_KEY_SLUG])
         branch_name = (
             f"{BRANCH_PREFIX}{BRANCH_NAME_SEPARATOR}"
             f"{pr_number}{BRANCH_NAME_SEPARATOR}"
@@ -227,11 +270,12 @@ def _assign_stack_branches(
 def _collect_warnings(
     all_annotated: list[JsonObject],
     all_slices: list[JsonObject],
+    is_split_optional: bool,
 ) -> list[str]:
     all_warnings: list[str] = []
     file_count = len(all_annotated)
-    if file_count < MINIMUM_SPLIT_FILE_COUNT:
-        all_warnings.append(WARNING_BELOW_THRESHOLD)
+    if is_split_optional:
+        all_warnings.append(WARNING_SPLIT_OPTIONAL)
     all_layers = {str(each.get(FILE_KEY_LAYER)) for each in all_annotated}
     if len(all_layers) <= 1 and file_count > 0:
         all_warnings.append(WARNING_SINGLE_LAYER)
@@ -243,6 +287,13 @@ def _collect_warnings(
 
 
 def _fetch_pr_payload(pr_number: int, repo: str | None) -> JsonObject:
+    all_pr_fields = _fetch_pr_overview(pr_number, repo)
+    all_pr_fields[GH_FIELD_FILES] = fetch_all_pr_files(pr_number, repo)
+    assert_file_list_is_complete(all_pr_fields)
+    return all_pr_fields
+
+
+def _fetch_pr_overview(pr_number: int, repo: str | None) -> JsonObject:
     all_command = [
         GH_COMMAND,
         GH_PR_VIEW,
@@ -267,8 +318,101 @@ def _fetch_pr_payload(pr_number: int, repo: str | None) -> JsonObject:
     except json.JSONDecodeError as error:
         raise RuntimeError(ERROR_GH_JSON_PARSE % error) from error
     if not isinstance(parsed_object, dict):
-        raise RuntimeError(ERROR_GH_JSON_PARSE % "root must be an object")
+        raise RuntimeError(ERROR_GH_JSON_PARSE % PLAN_ROOT_MUST_BE_OBJECT)
     return parsed_object
+
+
+def fetch_all_pr_files(pr_number: int, repo: str | None) -> list[JsonObject]:
+    """Read every changed file of a PR through the paginated REST endpoint.
+
+    ::
+
+        fetch_all_pr_files(541843, "NixOS/nixpkgs")  # ok: 672 records, not 100
+
+    ``gh pr view --json files`` caps its array at 100 entries with no page
+    marker, so an oversized PR silently loses files. The REST pull-files
+    endpoint pages, and ``--paginate --slurp`` returns one JSON array per page
+    for this function to flatten in one read.
+
+    Args:
+        pr_number: Pull request number.
+        repo: Optional ``owner/name``; the gh repo placeholder when absent.
+
+    Returns:
+        Flattened file records carrying ``filename``, ``status``, ``additions``,
+        and ``deletions``.
+
+    Raises:
+        RuntimeError: When gh fails or emits output that is not JSON.
+    """
+    owner_repo = repo or GH_PR_FILES_DEFAULT_OWNER_REPO
+    all_command = [
+        GH_COMMAND,
+        GH_API,
+        GH_PR_FILES_ENDPOINT_TEMPLATE % (owner_repo, pr_number),
+        GH_PAGINATE_FLAG,
+        GH_API_SLURP_FLAG,
+    ]
+    completed = subprocess.run(
+        all_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(ERROR_GH_FILE_STATUS_FAILED % detail)
+    try:
+        parsed_pages: object = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(ERROR_GH_FILE_STATUS_JSON % error) from error
+    return _flatten_slurped_pages(parsed_pages)
+
+
+def _flatten_slurped_pages(parsed_pages: object) -> list[JsonObject]:
+    if not isinstance(parsed_pages, list):
+        raise RuntimeError(ERROR_GH_FILE_STATUS_JSON % PLAN_ROOT_MUST_BE_ARRAY)
+    all_file_records: list[JsonObject] = []
+    for each_page in parsed_pages:
+        if isinstance(each_page, dict):
+            all_file_records.append(each_page)
+            continue
+        if not isinstance(each_page, list):
+            raise RuntimeError(ERROR_GH_FILE_STATUS_JSON % PLAN_ROOT_MUST_BE_ARRAY)
+        all_file_records.extend(
+            each_entry for each_entry in each_page if isinstance(each_entry, dict)
+        )
+    return all_file_records
+
+
+def assert_file_list_is_complete(all_pr_fields: JsonObject) -> None:
+    """Raise when the fetched file list is shorter than the PR's own count.
+
+    ::
+
+        assert_file_list_is_complete({"changedFiles": 672, "files": [...672]})
+        # ok: returns None
+        assert_file_list_is_complete({"changedFiles": 672, "files": [...100]})
+        # flag: RuntimeError
+
+    A splitting tool that loses files produces a stack that verifies clean while
+    dropping most of the work, so a short list fails the run outright.
+
+    Args:
+        all_pr_fields: Payload holding ``changedFiles`` and ``files``.
+
+    Raises:
+        RuntimeError: When the two counts disagree.
+    """
+    reported_count = all_pr_fields.get(GH_FIELD_CHANGED_FILES)
+    if not isinstance(reported_count, int) or isinstance(reported_count, bool):
+        return
+    all_files = all_pr_fields.get(GH_FIELD_FILES)
+    fetched_count = len(all_files) if isinstance(all_files, list) else 0
+    if fetched_count != reported_count:
+        raise RuntimeError(
+            ERROR_GH_FILE_COUNT_MISMATCH % (fetched_count, reported_count)
+        )
 
 
 def _payload_from_files_json(
@@ -285,6 +429,8 @@ def _payload_from_files_json(
         all_files = raw_object[GH_FIELD_FILES]
     else:
         raise ValueError(ERROR_CLI_ARGUMENTS)
+    if not isinstance(all_files, list):
+        raise ValueError(ERROR_CLI_ARGUMENTS)
     return {
         GH_FIELD_NUMBER: pr_number,
         GH_FIELD_TITLE: title,
@@ -292,6 +438,7 @@ def _payload_from_files_json(
         GH_FIELD_HEAD_REF: head_ref,
         GH_FIELD_HEAD_OID: TEST_HEAD_SHA,
         GH_FIELD_FILES: all_files,
+        GH_FIELD_CHANGED_FILES: len(all_files),
         GH_FIELD_URL: None,
         GH_FIELD_BODY: "",
     }
@@ -329,7 +476,14 @@ def main() -> int:
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(plan_payload, indent=indent))
         return EXIT_CODE_SUCCESS
-    except (ValueError, RuntimeError, OSError) as error:
+    except (
+        ValueError,
+        RuntimeError,
+        OSError,
+        KeyError,
+        TypeError,
+        subprocess.SubprocessError,
+    ) as error:
         print(json.dumps({PAYLOAD_KEY_ERROR: str(error)}))
         return EXIT_CODE_FAILURE
 

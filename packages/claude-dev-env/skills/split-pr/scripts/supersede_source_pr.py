@@ -24,9 +24,11 @@ import tempfile
 from pathlib import Path
 
 from split_pr_scripts_constants.config.execute_constants import (
+    EMPTY_JSON_OBJECT_TEXT,
     ERROR_SUPERSEDE_CLOSE_FAILED,
     ERROR_SUPERSEDE_COMMENT_FAILED,
     ERROR_SUPERSEDE_VIEW_FAILED,
+    ERROR_SUPERSEDE_VIEW_JSON,
     GH_BODY_FILE,
     GH_CLOSE,
     GH_COMMAND,
@@ -59,6 +61,7 @@ from split_pr_scripts_constants.config.execute_constants import (
     SUPERSEDE_SKIP_DISABLED,
     SUPERSEDE_SKIP_NO_CHILD_URLS,
     SUPERSEDE_SKIP_PARTIAL,
+    SUPERSEDE_UNKNOWN_PR_NUMBER,
     MARKDOWN_BODY_SUFFIX,
     NEWLINE,
 )
@@ -103,12 +106,8 @@ def build_supersede_comment_body(
         for each_number in all_child_pr_numbers
     )
     all_list_lines = [
-        SUPERSEDE_LIST_ITEM_TEMPLATE
-        % (each_index, each_number, each_url)
-        for each_index, (each_number, each_url) in enumerate(
-            zip(all_child_pr_numbers, all_child_pr_urls, strict=True),
-            start=1,
-        )
+        _format_child_pr_line(each_position, each_url)
+        for each_position, each_url in enumerate(all_child_pr_urls, start=1)
     ]
     return NEWLINE.join(
         [
@@ -122,6 +121,14 @@ def build_supersede_comment_body(
             "",
         ]
     )
+
+
+def _format_child_pr_line(position: int, pr_url: str) -> str:
+    pr_number = extract_pr_number_from_url(pr_url)
+    number_label = (
+        SUPERSEDE_UNKNOWN_PR_NUMBER if pr_number is None else str(pr_number)
+    )
+    return SUPERSEDE_LIST_ITEM_TEMPLATE % (position, number_label, pr_url)
 
 
 def resolve_supersede_skip_reason(
@@ -204,12 +211,15 @@ def supersede_source_pr(
         all_child_pr_urls=all_child_pr_urls,
     )
     body_path = _write_body_file(comment_body)
-    _run_gh_comment(
-        source_pr_number=source_pr_number,
-        body_path=body_path,
-        repo=repo,
-        working_directory=working_directory,
-    )
+    try:
+        _run_gh_comment(
+            source_pr_number=source_pr_number,
+            body_path=body_path,
+            repo=repo,
+            working_directory=working_directory,
+        )
+    finally:
+        Path(body_path).unlink(missing_ok=True)
     _run_gh_close(
         source_pr_number=source_pr_number,
         repo=repo,
@@ -270,7 +280,12 @@ def _is_already_superseded(
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
         raise RuntimeError(ERROR_SUPERSEDE_VIEW_FAILED % (source_pr_number, detail))
-    view_payload = json.loads(completed.stdout or "{}")
+    try:
+        view_payload: object = json.loads(completed.stdout or EMPTY_JSON_OBJECT_TEXT)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            ERROR_SUPERSEDE_VIEW_JSON % (source_pr_number, error)
+        ) from error
     if not isinstance(view_payload, dict):
         return False
     state_text = str(view_payload.get(GH_STATE_FIELD) or "")

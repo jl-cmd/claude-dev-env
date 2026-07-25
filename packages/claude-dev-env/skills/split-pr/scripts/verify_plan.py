@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from categorize_files import slice_fits_review_budget
@@ -26,11 +27,15 @@ from split_pr_scripts_constants.config.analyze_constants import (
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.plan_constants import (
+    ALL_REQUIRED_PLAN_KEYS,
+    ALL_REQUIRED_SLICE_KEYS,
     ERROR_NO_FILES,
     ERROR_NO_SLICES,
     ERROR_PLAN_INVALID_JSON,
     ERROR_PLAN_MISSING_KEY,
     ERROR_PLAN_UNREADABLE,
+    ERROR_SLICE_CHANGED_LINES_TYPE,
+    ERROR_SLICE_MISSING_KEY,
     FILE_KEY_ADDITIONS,
     FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
@@ -42,8 +47,8 @@ from split_pr_scripts_constants.config.plan_constants import (
     SLICE_KEY_FILES,
     SLICE_KEY_FILE_COUNT,
     SLICE_KEY_INDEX,
-    SLICE_KEY_OVERSIZED_ATOMIC,
     SLICE_KEY_SLUG,
+    UNKNOWN_SLICE_LABEL,
     VERIFY_KEY_COVERED_COUNT,
     VERIFY_KEY_DUPLICATE_FILES,
     VERIFY_KEY_EMPTY_SLICES,
@@ -124,12 +129,56 @@ def verify_plan(plan_payload: JsonObject) -> JsonObject:
 
 
 def _required_key_errors(plan_payload: JsonObject) -> list[str]:
-    all_errors: list[str] = []
-    if PLAN_KEY_ALL_FILES not in plan_payload:
-        all_errors.append(ERROR_PLAN_MISSING_KEY % PLAN_KEY_ALL_FILES)
-    if PLAN_KEY_PROPOSED_SLICES not in plan_payload:
-        all_errors.append(ERROR_PLAN_MISSING_KEY % PLAN_KEY_PROPOSED_SLICES)
+    """Return one error per plan or slice key the executor indexes directly.
+
+    ::
+
+        _required_key_errors({"all_files": [], "proposed_slices": []})
+        # flag: ["plan missing required key: source_branch", ...]
+
+    ``execute_split`` indexes these keys without a default, so a plan that
+    reaches it without them dies with a bare ``KeyError`` after branches exist.
+
+    Args:
+        plan_payload: Parsed plan dict.
+
+    Returns:
+        Human-readable error strings, empty when every key is present.
+    """
+    all_errors = [
+        ERROR_PLAN_MISSING_KEY % each_key
+        for each_key in ALL_REQUIRED_PLAN_KEYS
+        if each_key not in plan_payload
+    ]
+    all_errors.extend(_required_slice_key_errors(plan_payload))
     return all_errors
+
+
+def _required_slice_key_errors(plan_payload: JsonObject) -> list[str]:
+    all_slices = plan_payload.get(PLAN_KEY_PROPOSED_SLICES)
+    if not isinstance(all_slices, list):
+        return []
+    all_errors: list[str] = []
+    for each_position, each_slice in enumerate(all_slices, start=1):
+        if not isinstance(each_slice, dict):
+            continue
+        label = _slice_label(each_slice, fallback=str(each_position))
+        all_errors.extend(
+            ERROR_SLICE_MISSING_KEY % (label, each_key)
+            for each_key in ALL_REQUIRED_SLICE_KEYS
+            if each_key not in each_slice
+        )
+    return all_errors
+
+
+def _slice_label(each_slice: JsonObject, fallback: str = UNKNOWN_SLICE_LABEL) -> str:
+    slug = each_slice.get(SLICE_KEY_SLUG)
+    if slug:
+        return str(slug)
+    index = each_slice.get(SLICE_KEY_INDEX)
+    if index is not None:
+        return str(index)
+    return fallback
 
 
 def _source_paths(all_source_records: list[object]) -> set[str]:
@@ -170,14 +219,24 @@ def _collect_slice_paths(
             continue
         all_slice_files = each_slice.get(SLICE_KEY_FILES, [])
         if not isinstance(all_slice_files, list) or not all_slice_files:
-            slug = str(
-                each_slice.get(SLICE_KEY_SLUG, each_slice.get(SLICE_KEY_INDEX, "?"))
-            )
-            all_empty_slices.append(slug)
+            all_empty_slices.append(_slice_label(each_slice))
             continue
         for each_path in all_slice_files:
             all_covered_paths.append(str(each_path).replace("\\", "/"))
     return all_covered_paths, all_empty_slices, all_errors
+
+
+def _slice_changed_lines(
+    each_slice: JsonObject,
+    all_paths: list[str],
+    churn_by_path: dict[str, int],
+) -> int:
+    declared_lines = each_slice.get(SLICE_KEY_CHANGED_LINES)
+    if declared_lines is None:
+        return sum(churn_by_path.get(each_path, 0) for each_path in all_paths)
+    if isinstance(declared_lines, bool) or not isinstance(declared_lines, (int, float)):
+        raise TypeError(SLICE_KEY_CHANGED_LINES)
+    return int(declared_lines)
 
 
 def _oversized_slice_errors(
@@ -195,11 +254,16 @@ def _oversized_slice_errors(
         file_count = int(each_slice.get(SLICE_KEY_FILE_COUNT, len(all_paths)) or 0)
         if file_count <= 0:
             file_count = len(all_paths)
-        changed_lines = each_slice.get(SLICE_KEY_CHANGED_LINES)
-        if changed_lines is None:
-            changed_lines = sum(churn_by_path.get(each_path, 0) for each_path in all_paths)
-        changed_lines = int(changed_lines or 0)
-        is_oversized_atomic = bool(each_slice.get(SLICE_KEY_OVERSIZED_ATOMIC)) or (
+        slug = _slice_label(each_slice)
+        try:
+            changed_lines = _slice_changed_lines(each_slice, all_paths, churn_by_path)
+        except TypeError:
+            all_oversized.append(
+                ERROR_SLICE_CHANGED_LINES_TYPE
+                % (slug, type(each_slice.get(SLICE_KEY_CHANGED_LINES)).__name__)
+            )
+            continue
+        is_oversized_atomic = (
             len(all_paths) == 1 and changed_lines > MAXIMUM_SLICE_CHANGED_LINES
         )
         if is_oversized_atomic:
@@ -209,7 +273,6 @@ def _oversized_slice_errors(
             changed_lines=changed_lines,
         ):
             continue
-        slug = str(each_slice.get(SLICE_KEY_SLUG, each_slice.get(SLICE_KEY_INDEX, "?")))
         all_oversized.append(
             ERROR_SLICE_EXCEEDS_REVIEW_BUDGET
             % (
@@ -234,12 +297,9 @@ def _coverage_report(
     covered_set = set(all_covered_paths)
     all_missing = sorted(all_source_paths - covered_set)
     all_unknown = sorted(covered_set - all_source_paths)
+    count_by_path = Counter(all_covered_paths)
     all_duplicates = sorted(
-        {
-            each_path
-            for each_path in all_covered_paths
-            if all_covered_paths.count(each_path) > 1
-        }
+        each_path for each_path, each_count in count_by_path.items() if each_count > 1
     )
     if all_missing:
         all_errors.append(f"missing_files:{len(all_missing)}")
@@ -293,7 +353,7 @@ def main() -> int:
         if report[VERIFY_KEY_IS_VALID]:
             return EXIT_CODE_SUCCESS
         return EXIT_CODE_FAILURE
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, KeyError, TypeError) as error:
         print(json.dumps({PAYLOAD_KEY_ERROR: str(error)}))
         return EXIT_CODE_FAILURE
 
