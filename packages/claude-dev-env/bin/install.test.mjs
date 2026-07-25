@@ -1,13 +1,22 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync, readFileSync } from 'node:fs';
+import {
+    mkdtempSync,
+    rmSync,
+    mkdirSync,
+    writeFileSync,
+    symlinkSync,
+    readFileSync,
+    readdirSync,
+    existsSync,
+    copyFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
-    collectOrphanedSkillFiles,
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
@@ -24,6 +33,7 @@ import {
     commandReferencesManagedHook,
     mergeHooksIntoSettings,
     pruneManagedHooksFromSettings,
+    pruneStaleInstalledFiles,
 } from './install.mjs';
 import {
     expandHomeDirectoryTokens,
@@ -1253,73 +1263,279 @@ test('mergeHooksIntoSettings prunes the inline run_all_validators runner when th
 });
 
 
-function createSkillPair(sourceFiles, destinationFiles) {
-    const root = mkdtempSync(join(tmpdir(), 'cdev-skill-orphans-'));
-    const sourceSkill = join(root, 'source', 'demo-skill');
-    const destinationSkill = join(root, 'installed', 'demo-skill');
-    for (const [relativePath, contents] of Object.entries(sourceFiles)) {
-        const target = join(sourceSkill, relativePath);
-        mkdirSync(join(target, '..'), { recursive: true });
-        writeFileSync(target, contents);
+const README_BASENAME_PATTERN = /^readme\.md$/i;
+
+
+/**
+ * Build a sandbox holding an installed skills root and a run backup root.
+ *
+ * @param {object} installedFiles Forward-slash relative paths under the skills root mapped to contents.
+ * @returns {{root: string, skillsRoot: string, backupRoot: string}} The sandbox paths.
+ */
+function createStalePruneSandbox(installedFiles) {
+    const root = mkdtempSync(join(tmpdir(), 'cdev-stale-prune-'));
+    const skillsRoot = join(root, 'skills');
+    const backupRoot = join(root, 'pruned', 'run-timestamp');
+    mkdirSync(skillsRoot, { recursive: true });
+    for (const [relativePath, contents] of Object.entries(installedFiles)) {
+        const targetPath = join(skillsRoot, relativePath);
+        mkdirSync(dirname(targetPath), { recursive: true });
+        writeFileSync(targetPath, contents);
     }
-    for (const [relativePath, contents] of Object.entries(destinationFiles)) {
-        const target = join(destinationSkill, relativePath);
-        mkdirSync(join(target, '..'), { recursive: true });
-        writeFileSync(target, contents);
-    }
-    return { root, sourceSkill, destinationSkill };
+    return { root, skillsRoot, backupRoot };
 }
 
 
-test('collectOrphanedSkillFiles reports an installed file the current source no longer ships', () => {
-    const { root, sourceSkill, destinationSkill } = createSkillPair(
-        {
-            'SKILL.md': '# demo',
-            'scripts/execute_split.py': 'from constants import NEW_NAME\n',
-            'scripts/constants.py': 'NEW_NAME = 1\n',
-        },
-        {
-            'SKILL.md': '# demo',
-            'scripts/execute_split.py': 'from constants import NEW_NAME\n',
-            'scripts/constants.py': 'NEW_NAME = 1\n',
-            'scripts/validate_slice_collection.py': 'stale module from an earlier branch\n',
-            'scripts/config/old_constants.py': 'OLD_NAME = 1\n',
-        },
-    );
+/**
+ * Run a callable with console.warn captured, returning its value and the warnings.
+ *
+ * @param {Function} runnable The zero-argument callable to run.
+ * @returns {{returnedValue: *, allWarnings: string[]}} The result and captured warnings.
+ */
+function captureWarnings(runnable) {
+    const originalWarn = console.warn;
+    const allWarnings = [];
+    console.warn = (warningMessage) => allWarnings.push(String(warningMessage));
     try {
-        const orphans = collectOrphanedSkillFiles(sourceSkill, destinationSkill);
-
-        assert.deepEqual(orphans, [
-            'scripts/config/old_constants.py',
-            'scripts/validate_slice_collection.py',
-        ], 'both files absent from the source must be reported as orphans');
+        return { returnedValue: runnable(), allWarnings };
     } finally {
-        rmSync(root, { recursive: true, force: true });
+        console.warn = originalWarn;
+    }
+}
+
+
+test('pruneStaleInstalledFiles moves a file the prior manifest recorded and this run no longer writes', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/SKILL.md': '# demo\n',
+        'demo/scripts/retired_module.py': 'from constants import OLD_NAME\n',
+    });
+    try {
+        const keptFilePath = join(sandbox.skillsRoot, 'demo', 'SKILL.md');
+        const staleFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'retired_module.py');
+
+        const movedCount = pruneStaleInstalledFiles(
+            [keptFilePath, staleFilePath],
+            [keptFilePath],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        );
+
+        assert.equal(movedCount, 1, 'exactly the one no-longer-written file moves');
+        assert.equal(existsSync(staleFilePath), false, 'the stale file leaves the installed tree');
+        assert.equal(
+            existsSync(join(sandbox.backupRoot, 'demo', 'scripts', 'retired_module.py')),
+            true,
+            'the stale file lands under its mirrored relative path in the backup root',
+        );
+        assert.equal(existsSync(keptFilePath), true, 'a file this run wrote stays in place');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
     }
 });
 
 
-test('collectOrphanedSkillFiles reports nothing when the installed tree matches the source', () => {
-    const { root, sourceSkill, destinationSkill } = createSkillPair(
-        { 'SKILL.md': '# demo', 'scripts/run.py': 'print(1)\n' },
-        { 'SKILL.md': '# demo', 'scripts/run.py': 'print(1)\n' },
-    );
+test('pruneStaleInstalledFiles leaves a __pycache__ artifact the prior manifest never recorded in place', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/SKILL.md': '# demo\n',
+        'demo/scripts/__pycache__/helper.cpython-312.pyc': 'compiled bytecode\n',
+        'demo/notes.md': 'a file the user authored\n',
+    });
     try {
-        assert.deepEqual(collectOrphanedSkillFiles(sourceSkill, destinationSkill), []);
+        const shippedFilePath = join(sandbox.skillsRoot, 'demo', 'SKILL.md');
+        const runtimeArtifactPath = join(
+            sandbox.skillsRoot, 'demo', 'scripts', '__pycache__', 'helper.cpython-312.pyc',
+        );
+        const userFilePath = join(sandbox.skillsRoot, 'demo', 'notes.md');
+
+        const movedCount = pruneStaleInstalledFiles(
+            [shippedFilePath],
+            [shippedFilePath],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        );
+
+        assert.equal(movedCount, 0, 'a file the installer never wrote is outside the diff');
+        assert.equal(existsSync(runtimeArtifactPath), true, 'the compiled bytecode stays in place');
+        assert.equal(existsSync(userFilePath), true, 'the user-authored file stays in place');
+        assert.equal(existsSync(sandbox.backupRoot), false, 'an empty prune creates no backup root');
     } finally {
-        rmSync(root, { recursive: true, force: true });
+        rmSync(sandbox.root, { recursive: true, force: true });
     }
 });
 
 
-test('collectOrphanedSkillFiles reports nothing when the skill has never been installed', () => {
-    const { root, sourceSkill, destinationSkill } = createSkillPair(
-        { 'SKILL.md': '# demo' },
-        {},
-    );
+test('pruneStaleInstalledFiles returns zero and moves nothing when the prior manifest record is unknown', () => {
+    const sandbox = createStalePruneSandbox({ 'demo/SKILL.md': '# demo\n' });
     try {
-        assert.deepEqual(collectOrphanedSkillFiles(sourceSkill, destinationSkill), []);
+        const movedCount = pruneStaleInstalledFiles(null, [], sandbox.skillsRoot, sandbox.backupRoot);
+
+        assert.equal(movedCount, 0, 'an unknown prior record holds the prune for that run');
+        assert.equal(existsSync(join(sandbox.skillsRoot, 'demo', 'SKILL.md')), true);
     } finally {
-        rmSync(root, { recursive: true, force: true });
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles keeps the readme through a case-only rename', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/Readme.md': 'the readme an earlier install wrote\n',
+    });
+    try {
+        const shippedReadmeContents = '# demo readme\n';
+        const shippedReadmeSource = join(sandbox.root, 'README.md');
+        writeFileSync(shippedReadmeSource, shippedReadmeContents);
+        const priorReadmePath = join(sandbox.skillsRoot, 'demo', 'Readme.md');
+        const copiedReadmePath = join(sandbox.skillsRoot, 'demo', 'README.md');
+        copyFileSync(shippedReadmeSource, copiedReadmePath);
+
+        pruneStaleInstalledFiles(
+            [priorReadmePath],
+            [copiedReadmePath],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        );
+
+        const survivingReadmeNames = readdirSync(join(sandbox.skillsRoot, 'demo'))
+            .filter(entryName => README_BASENAME_PATTERN.test(entryName));
+        assert.equal(survivingReadmeNames.length, 1, 'the skill keeps exactly one readme');
+        assert.equal(
+            readFileSync(join(sandbox.skillsRoot, 'demo', survivingReadmeNames[0]), 'utf8'),
+            shippedReadmeContents,
+            'the surviving readme holds the freshly shipped content',
+        );
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles leaves a file in place and warns when the move fails', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/scripts/retired_module.py': 'stale module\n',
+    });
+    try {
+        mkdirSync(dirname(sandbox.backupRoot), { recursive: true });
+        writeFileSync(sandbox.backupRoot, 'a file standing where the backup root belongs\n');
+        const staleFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'retired_module.py');
+
+        const { returnedValue, allWarnings } = captureWarnings(() => pruneStaleInstalledFiles(
+            [staleFilePath],
+            [],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        ));
+
+        assert.equal(returnedValue, 0, 'a failed move counts as nothing moved');
+        assert.equal(existsSync(staleFilePath), true, 'the file stays in the installed tree');
+        assert.equal(allWarnings.length, 1, 'the failed move is reported once');
+        assert.match(allWarnings[0], /leaving in place/, 'the warning states the file was left in place');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles leaves a directory standing where a file was recorded and warns', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/scripts/former_file/inner.py': 'content the user put inside\n',
+    });
+    try {
+        const recordedFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'former_file');
+
+        const { returnedValue, allWarnings } = captureWarnings(() => pruneStaleInstalledFiles(
+            [recordedFilePath],
+            [],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        ));
+
+        assert.equal(returnedValue, 0, 'a directory is never renamed into the backup');
+        assert.equal(existsSync(join(recordedFilePath, 'inner.py')), true, 'the directory keeps its contents');
+        assert.equal(allWarnings.length, 1, 'the skipped path is reported once');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles skips a path the user already deleted without warning', () => {
+    const sandbox = createStalePruneSandbox({ 'demo/SKILL.md': '# demo\n' });
+    try {
+        const deletedFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'already_gone.py');
+
+        const { returnedValue, allWarnings } = captureWarnings(() => pruneStaleInstalledFiles(
+            [deletedFilePath],
+            [],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        ));
+
+        assert.equal(returnedValue, 0, 'a path that no longer exists moves nothing');
+        assert.deepEqual(allWarnings, [], 'an already-deleted path is skipped in silence');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles removes emptied parents up to the destination root and keeps a populated one', () => {
+    const sandbox = createStalePruneSandbox({
+        'kept/SKILL.md': '# kept\n',
+        'kept/scripts/retired_module.py': 'stale module\n',
+        'emptied/nested/only_module.py': 'the sole file under this tree\n',
+    });
+    try {
+        const populatedParentStalePath = join(sandbox.skillsRoot, 'kept', 'scripts', 'retired_module.py');
+        const solitaryStalePath = join(sandbox.skillsRoot, 'emptied', 'nested', 'only_module.py');
+
+        const movedCount = pruneStaleInstalledFiles(
+            [populatedParentStalePath, solitaryStalePath],
+            [join(sandbox.skillsRoot, 'kept', 'SKILL.md')],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        );
+
+        assert.equal(movedCount, 2, 'both recorded files move');
+        assert.equal(
+            existsSync(join(sandbox.skillsRoot, 'kept', 'scripts')),
+            false,
+            'the emptied scripts directory is removed',
+        );
+        assert.equal(
+            existsSync(join(sandbox.skillsRoot, 'kept')),
+            true,
+            'a parent still holding SKILL.md is left alone',
+        );
+        assert.equal(
+            existsSync(join(sandbox.skillsRoot, 'emptied')),
+            false,
+            'the walk climbs through every emptied parent',
+        );
+        assert.equal(existsSync(sandbox.skillsRoot), true, 'the destination root itself stays');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles ignores a recorded path outside the destination root', () => {
+    const sandbox = createStalePruneSandbox({ 'demo/SKILL.md': '# demo\n' });
+    try {
+        const outsideFilePath = join(sandbox.root, 'rules', 'some-rule.md');
+        mkdirSync(dirname(outsideFilePath), { recursive: true });
+        writeFileSync(outsideFilePath, 'a rule wired to another root\n');
+
+        const movedCount = pruneStaleInstalledFiles(
+            [outsideFilePath],
+            [],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+        );
+
+        assert.equal(movedCount, 0, 'only the wired root is pruned');
+        assert.equal(existsSync(outsideFilePath), true, 'content under another root stays in place');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
     }
 });

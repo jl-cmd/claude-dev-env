@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, renameSync, realpathSync } from 'node:fs';
-import { join, dirname, resolve, relative, basename, sep } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
+import { join, dirname, resolve, relative, basename, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,8 @@ export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'syst
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
 const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
+const RETIRED_SKILL_REASON_LABEL = 'retired';
+const STALE_FILE_REASON_LABEL = 'stale';
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -304,59 +306,161 @@ function currentRunBackupRoot() {
 }
 
 /**
- * List files under an installed skill directory that the current source no
- * longer ships.
+ * Move one managed path into the run's backup root, leaving it in place when the
+ * move fails.
  *
- * `copyTree` overwrites and adds but never removes, and retirement pruning
- * works at whole-directory granularity, so a file dropped or renamed between
- * two installs survives inside an otherwise current skill. That leaves a skill
- * whose modules come from one revision and whose companions come from another —
- * for example scripts importing constants a stale constants module never
- * defines, which fails at import with nothing in the directory to explain why.
+ * A retired skill directory and a stale file share this mover, so both land under
+ * the same timestamped recovery point and both report through the same wording.
+ * Content is moved rather than deleted, so a user-authored file that happens to
+ * sit inside a managed directory stays recoverable, and a failed move costs at
+ * most a cosmetic leftover.
  *
- * @param {string} sourceSkillDirectory The skill directory being installed from.
- * @param {string} destinationSkillDirectory The installed skill directory.
- * @returns {string[]} Sorted forward-slash relative paths present only in the destination.
+ * @param {string} sourcePath Absolute path under ~/.claude to move.
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @param {string} backupRelativePath Path to mirror the content at inside the backup root.
+ * @param {string} reasonLabel Why the path is being moved (`retired` or `stale`).
+ * @returns {boolean} True when the move succeeded.
  */
-export function collectOrphanedSkillFiles(sourceSkillDirectory, destinationSkillDirectory) {
-    if (!existsSync(destinationSkillDirectory)) return [];
-    const toRelativeSet = (base) => new Set(
-        collectFiles(base).map(each => relative(base, each).split(sep).join('/'))
-    );
-    const sourceRelativePaths = toRelativeSet(sourceSkillDirectory);
-    return [...toRelativeSet(destinationSkillDirectory)]
-        .filter(each => !sourceRelativePaths.has(each))
-        .sort();
+function moveIntoRunBackup(sourcePath, backupRoot, backupRelativePath, reasonLabel) {
+    const backupPath = join(backupRoot, backupRelativePath);
+    const displayPath = relative(CLAUDE_HOME, sourcePath);
+    const backupDisplayPath = join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), backupRelativePath);
+    try {
+        mkdirSync(dirname(backupPath), { recursive: true });
+        renameSync(sourcePath, backupPath);
+        console.log(`  ✗ ${displayPath} (${reasonLabel} — moved to ${backupDisplayPath})`);
+        return true;
+    } catch (moveError) {
+        console.warn(`  Warning: could not move ${reasonLabel} ${displayPath} to backup, leaving in place (${moveError.message})`);
+        return false;
+    }
 }
 
 /**
- * Move orphaned files out of an installed skill directory into the run's backup
- * root, mirroring their relative path under the skill name.
+ * Report whether a filesystem comparison on this platform ignores letter case.
  *
- * Orphans are moved rather than deleted, matching how a retired skill directory
- * is handled, so a user-authored file that happens to sit inside a managed skill
- * directory is recoverable. A move that fails is logged and the file is left in
- * place, so a prune failure never costs more than a stale file.
- *
- * @param {string} destinationSkillDirectory The installed skill directory.
- * @param {string} skillName The skill directory name, used inside the backup root.
- * @param {string[]} orphanRelativePaths Forward-slash relative paths to move.
- * @param {string} backupRoot The run's backup directory.
- * @returns {number} How many files were moved.
+ * @returns {boolean} True on the platforms whose default filesystem is case-insensitive.
  */
-function moveOrphanedSkillFilesToBackup(destinationSkillDirectory, skillName, orphanRelativePaths, backupRoot) {
-    let movedCount = 0;
-    for (const relativePath of orphanRelativePaths) {
-        const orphanPath = join(destinationSkillDirectory, relativePath);
-        const backupPath = join(backupRoot, skillName, relativePath);
+function isCaseInsensitiveFilesystem() {
+    return process.platform === 'win32' || process.platform === 'darwin';
+}
+
+/**
+ * Build the lookup key two absolute paths are compared through: resolved,
+ * forward-slashed, and lowercased wherever the filesystem ignores letter case.
+ *
+ * Case folding is what keeps a case-only rename safe. A skill whose readme ships
+ * as `README.md` over an installed `Readme.md` writes its bytes through the
+ * existing on-disk name, so a case-sensitive key would read the installed name as
+ * a file this run never wrote and move the freshly written content aside.
+ *
+ * @param {string} filesystemPath A path to build a comparison key for.
+ * @returns {string} The comparison key.
+ */
+function comparisonKeyForPath(filesystemPath) {
+    const normalizedPath = normalizePathForComparison(resolve(filesystemPath));
+    return isCaseInsensitiveFilesystem() ? normalizedPath.toLowerCase() : normalizedPath;
+}
+
+/**
+ * Report whether a path sits strictly inside a directory.
+ *
+ * @param {string} candidatePath The absolute path to test.
+ * @param {string} directoryPath The absolute directory to test against.
+ * @returns {boolean} True when the candidate is a descendant of the directory.
+ */
+function isInsideDirectory(candidatePath, directoryPath) {
+    const relativePath = relative(directoryPath, candidatePath);
+    return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
+
+/**
+ * Report whether a path the prior manifest recorded is still a plain file this
+ * run may move.
+ *
+ * A path the user already deleted is skipped in silence. A directory or a symlink
+ * standing where a file was recorded is skipped with a warning, so the mover
+ * never renames a tree and never follows a link out of ~/.claude.
+ *
+ * @param {string} candidatePath The absolute path the prior manifest recorded.
+ * @returns {boolean} True when the path is a plain file that may be moved.
+ */
+function isMovableStaleFile(candidatePath) {
+    let entryStats;
+    try {
+        entryStats = lstatSync(candidatePath);
+    } catch {
+        return false;
+    }
+    if (entryStats.isFile()) return true;
+    console.warn(
+        `  Warning: leaving ${relative(CLAUDE_HOME, candidatePath)} in place — a directory or link stands where the prior install recorded a file`,
+    );
+    return false;
+}
+
+/**
+ * Remove directories emptied by a move, walking from a directory up toward a
+ * destination root and stopping at the first directory that still holds content.
+ *
+ * `rmdirSync` removes only an empty directory, so a directory holding a user file
+ * survives. Stopping at the destination root keeps the managed root itself in
+ * place for the next install.
+ *
+ * @param {string} startDirectory The absolute directory the moved file sat in.
+ * @param {string} destinationRoot The absolute managed root to stop below.
+ */
+function removeEmptiedParentDirectories(startDirectory, destinationRoot) {
+    let currentDirectory = startDirectory;
+    while (isInsideDirectory(currentDirectory, destinationRoot)) {
         try {
-            mkdirSync(dirname(backupPath), { recursive: true });
-            renameSync(orphanPath, backupPath);
-            movedCount++;
-            console.log(`  ✗ ${join('skills', skillName, relativePath)} (stale — moved to ${join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), skillName, relativePath)})`);
-        } catch (moveError) {
-            console.warn(`  Warning: could not move stale ${join('skills', skillName, relativePath)} to backup, leaving in place (${moveError.message})`);
+            rmdirSync(currentDirectory);
+        } catch {
+            return;
         }
+        currentDirectory = dirname(currentDirectory);
+    }
+}
+
+/**
+ * Move files a prior install wrote under a managed root that the current install
+ * no longer writes into the run's backup root.
+ *
+ * `copyTree` overwrites and adds but never removes, so a file dropped or renamed
+ * between two installs survives inside an otherwise current directory. That
+ * leaves a skill whose modules come from one revision and whose companions come
+ * from another — for example scripts importing constants a stale constants module
+ * never defines, which fails at import with nothing in the directory to explain
+ * why. Diffing the prior manifest against the paths this run copied confines the
+ * move to content the installer itself wrote, so a runtime artifact such as a
+ * `__pycache__` entry, a user symlink, and any user-authored file all stay in
+ * place.
+ *
+ * `writeManifest` records the files of whichever install last ran, so a scoped
+ * `--only` install narrows the recorded set to that scope. The next full install
+ * then reads a smaller prior set and moves fewer files aside, which leaves a stale
+ * file in place rather than removing a live one.
+ *
+ * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
+ * @param {string[]} currentInstalledFiles Every file this run copied under the root.
+ * @param {string} destinationRoot The managed root the diff is confined to.
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @returns {number} How many files were moved aside.
+ */
+export function pruneStaleInstalledFiles(priorInstalledFiles, currentInstalledFiles, destinationRoot, backupRoot) {
+    if (priorInstalledFiles === null) return 0;
+    const currentFileKeys = new Set(currentInstalledFiles.map(comparisonKeyForPath));
+    const resolvedRoot = resolve(destinationRoot);
+    let movedCount = 0;
+    for (const priorFile of priorInstalledFiles) {
+        const stalePath = resolve(priorFile);
+        if (!isInsideDirectory(stalePath, resolvedRoot)) continue;
+        if (currentFileKeys.has(comparisonKeyForPath(stalePath))) continue;
+        if (!isMovableStaleFile(stalePath)) continue;
+        const backupRelativePath = relative(resolvedRoot, stalePath);
+        if (!moveIntoRunBackup(stalePath, backupRoot, backupRelativePath, STALE_FILE_REASON_LABEL)) continue;
+        movedCount++;
+        removeEmptiedParentDirectories(dirname(stalePath), resolvedRoot);
     }
     return movedCount;
 }
@@ -738,6 +842,27 @@ function readPriorManifestSkills() {
 }
 
 /**
+ * Read the file paths the previous install recorded.
+ *
+ * Returns null when the manifest is missing, unreadable, or carries no files
+ * array, so a caller treats every such case as "no prior record" and holds the
+ * stale-file prune for that run rather than guessing at what a prior install
+ * wrote. A `--update` run purges the manifest before reinstalling, so the read
+ * happens at the top of `install()` while the record is still on disk.
+ *
+ * @returns {string[]|null} The prior manifest's file paths, or null when absent.
+ */
+function readPriorManifestFiles() {
+    if (!existsSync(MANIFEST_FILE)) return null;
+    try {
+        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
+        return Array.isArray(priorManifest.files) ? priorManifest.files : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Move retired skill directories a prior install left under ~/.claude/skills into
  * a timestamped backup directory rather than deleting them.
  *
@@ -778,31 +903,12 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
         if (installedSkillNames.has(skillName)) continue;
         const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
         if (!isPruneCandidate) continue;
-        moveRetiredSkillToBackup(skillsDirectory, backupRoot, skillName);
-    }
-}
-
-/**
- * Move one retired skill directory into the run's backup root, leaving it in
- * place when the move fails.
- *
- * @param {string} skillsDirectory The ~/.claude/skills directory holding the skill.
- * @param {string} backupRoot The run's timestamped backup directory.
- * @param {string} skillName The retired skill directory name to move.
- */
-function moveRetiredSkillToBackup(skillsDirectory, backupRoot, skillName) {
-    const skillPath = join(skillsDirectory, skillName);
-    const backupPath = join(backupRoot, skillName);
-    try {
-        mkdirSync(backupRoot, { recursive: true });
-        renameSync(skillPath, backupPath);
-        console.log(`  ✗ ${join('skills', skillName)} (retired — moved to ${join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), skillName)})`);
-    } catch (moveError) {
-        console.warn(`  Warning: could not move retired ${join('skills', skillName)} to backup, leaving in place (${moveError.message})`);
+        moveIntoRunBackup(join(skillsDirectory, skillName), backupRoot, skillName, RETIRED_SKILL_REASON_LABEL);
     }
 }
 
 function install(selectedGroups, options = {}) {
+    const priorManifestFiles = readPriorManifestFiles();
     const isUpdateRefresh = Boolean(options.isUpdateRefresh);
     if (isUpdateRefresh && !selectedGroups && existsSync(MANIFEST_FILE)) {
         console.log(
@@ -898,7 +1004,6 @@ function install(selectedGroups, options = {}) {
     }
     let skillsCreated = 0;
     let skillsUpdated = 0;
-    let skillsPruned = 0;
     const skillPaths = [];
     const installedSkillNames = new Set();
     const copiedSkillNames = new Set();
@@ -910,16 +1015,7 @@ function install(selectedGroups, options = {}) {
             if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
             const skillSourceDirectory = join(skillsSource, skillDir.name);
             const skillDestinationDirectory = join(CLAUDE_HOME, 'skills', skillDir.name);
-            const orphanRelativePaths = collectOrphanedSkillFiles(skillSourceDirectory, skillDestinationDirectory);
             const stats = copyTree(skillSourceDirectory, skillDestinationDirectory);
-            if (orphanRelativePaths.length > 0) {
-                skillsPruned += moveOrphanedSkillFilesToBackup(
-                    skillDestinationDirectory,
-                    skillDir.name,
-                    orphanRelativePaths,
-                    currentRunBackupRoot(),
-                );
-            }
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
@@ -929,7 +1025,7 @@ function install(selectedGroups, options = {}) {
             }
         }
     }
-    summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: skillsPruned, paths: skillPaths };
+    summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
     if (shouldInstallAnyHooks) {
@@ -1019,11 +1115,17 @@ function install(selectedGroups, options = {}) {
     if (isFullInstall) {
         if (UNRESOLVED_DEPENDENCY_NAMES.length > 0) {
             console.log(
-                `  Skipping retired-skill prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
-                + 'A skill that migrated to a dependency package would look retired and be moved to backup, so the prune is held until every dependency resolves.',
+                `  Skipping retired-skill and stale-file prune — unresolved dependency group(s): ${UNRESOLVED_DEPENDENCY_NAMES.join(', ')}. `
+                + 'A skill that migrated to a dependency package would look retired and its files would look stale, so both prunes are held until every dependency resolves.',
             );
         } else {
             pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+            summary.skills.pruned = pruneStaleInstalledFiles(
+                priorManifestFiles,
+                skillPaths,
+                join(CLAUDE_HOME, 'skills'),
+                currentRunBackupRoot(),
+            );
         }
         manifestSkillNames = [...installedSkillNames].sort();
     }
@@ -1036,8 +1138,9 @@ function install(selectedGroups, options = {}) {
         }
     }
     if (summary.skills) {
-        const { created, updated } = summary.skills;
-        console.log(`  skills: ${created + updated} files (${created} new, ${updated} updated)`);
+        const { created, updated, pruned } = summary.skills;
+        const staleClause = pruned > 0 ? `, ${pruned} stale moved aside` : '';
+        console.log(`  skills: ${created + updated} files (${created} new, ${updated} updated${staleClause})`);
     }
     if (summary.hookFiles) {
         console.log(`  hooks: ${summary.hookFiles.created + summary.hookFiles.updated} files, ${summary.hookGroups} groups in settings.json`);
@@ -1056,8 +1159,8 @@ function pathsAreEquivalent(storedPath, installedPath) {
     if (normalizedStored === normalizedInstalled) {
         return true;
     }
-    const isMaybeCaseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
-    return isMaybeCaseInsensitive && normalizedStored.toLowerCase() === normalizedInstalled.toLowerCase();
+    return isCaseInsensitiveFilesystem()
+        && normalizedStored.toLowerCase() === normalizedInstalled.toLowerCase();
 }
 
 

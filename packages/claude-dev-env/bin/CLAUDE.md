@@ -6,7 +6,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 | File | Purpose |
 |---|---|
-| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, prunes retired skills on a full install, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
+| `install.mjs` | Main installer: discovers install groups, copies content directories (`rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`), merges hooks into `settings.json`, installs skills, prunes retired skill directories and stale skill files on a full install, runs `git_hooks_installer.mjs` and `install_mypy_ini.mjs` |
 | `ever-shipped-skills.mjs` | Static `EVER_SHIPPED_SKILL_NAMES` set of every top-level skill directory name the package has shipped; the installer subtracts the current skill set from it to prune retired skills left under `~/.claude/skills` |
 | `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
@@ -17,11 +17,23 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 ## Retired-skill prune
 
-The full-install prune renames a retired skill directory into a timestamped backup rather than deleting it. Each pruned directory is renamed to `~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/`, a backup root outside `~/.claude/skills` so a backed-up directory is never re-discovered as a skill. Backups accumulate — nothing cleans them — so a user can recover a directory. A rename that fails leaves the directory in place with a logged warning and never falls back to deletion, so a prune failure costs at most a cosmetic leftover.
+The full-install prune renames a retired skill directory into a timestamped backup rather than deleting it. Each pruned directory is renamed to `~/.claude/.claude-dev-env-pruned/<timestamp>/<skill-name>/`, a backup root outside `~/.claude/skills` so a backed-up directory is never re-discovered as a skill. One run shares one timestamped root, so a run leaves one recovery point. Backups accumulate — nothing cleans them — so a user can recover a directory. A rename that fails leaves the directory in place with a logged warning and never falls back to deletion, so a prune failure costs at most a cosmetic leftover.
 
 Matching is by directory name alone, so a user-authored directory whose name collides with a retired skill is backed up as if it were that skill. A directory is pruned when the prior install's manifest recorded it or the ever-shipped set names it, and the current install did not just write it. A name absent from all three of those sets, together with `~/.claude/skills/_shared`, is left in place.
 
-The prune is skipped for the whole run — with a logged notice naming the unresolved group — when any declared dependency group fails to resolve. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired; holding the prune until every dependency resolves keeps such a skill from being backed up.
+## Stale-file prune
+
+A full install also moves aside a file sitting inside a live skill directory that the run leaves unwritten. The installer reads the file list from `~/.claude/.claude-dev-env-manifest.json`, keeps the entries under `~/.claude/skills`, subtracts every skill file the run copied across all source roots, and moves what remains into the run's backup root, mirroring each file's path under the skills directory. Both prunes share that one backup root.
+
+The manifest diff limits the move to files the installer itself wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS, so a skill shipping `README.md` over an installed `Readme.md` keeps the bytes the run just wrote. A directory or a link standing where the manifest records a file is skipped with a warning, so the mover never renames a whole tree and never follows a link out of `~/.claude`. A directory emptied by a move is removed, walking up to the skills directory. A move that fails logs a warning and leaves the file in place, so a prune failure costs at most a stale file.
+
+A missing or unreadable manifest, or one carrying no file list, holds the stale-file prune for that run: with no record of what an install wrote, the run has nothing to diff against.
+
+A scoped `--only` install rewrites the manifest's file list to the scoped subset, so a full install that follows it reads a smaller record and moves aside less. That under-prunes safely — it leaves a stale file on disk rather than removing a live one.
+
+## Prune gates
+
+The retired-skill prune and the stale-file prune run behind the same two gates: a full install, and every declared dependency group resolved. When any dependency group fails to resolve, both are skipped for the whole run with a logged notice naming the unresolved group. An unresolved dependency contributes no skills to the installed set, so a live skill that a dependency package supplies would look retired and its files would look stale; holding both prunes until every dependency resolves keeps that skill and its files from being backed up.
 
 ## Key exports from install.mjs
 
@@ -32,6 +44,7 @@ The prune is skipped for the whole run — with a logged notice naming the unres
 | `isWindowsStorePythonStub(path)` | Returns true when the path resolves to the non-spawnable WindowsApps stub |
 | `interpreterCommandFromPath(path)` | Formats an absolute interpreter path as a settings.json hook command prefix |
 | `collectPackageSourceConflicts(dir)` | Returns any unmerged git conflicts in the package source; installer aborts when any exist |
+| `pruneStaleInstalledFiles(priorFiles, currentFiles, destinationRoot, backupRoot)` | Moves each manifest-recorded file under the destination root that the run leaves unwritten into the run's backup root; returns how many moved |
 
 ## Install groups
 

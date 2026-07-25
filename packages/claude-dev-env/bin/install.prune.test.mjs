@@ -31,7 +31,9 @@ const RETIRED_SKILL_DIRECTORIES = [
 const PERSONAL_SKILL_DIRECTORIES = ['balatro', 'midjourney-sref', 'credit-card-picker'];
 const SHIPPED_SKILL_DIRECTORY = 'autoconverge';
 const PRUNED_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
-const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill prune';
+const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill and stale-file prune';
+const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
+const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
 
 /**
@@ -190,6 +192,136 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
 function readManifest(manifestPath) {
     return JSON.parse(readFileSync(manifestPath, 'utf8'));
 }
+
+/**
+ * Write a file, creating the directories leading to it.
+ *
+ * @param {string} filePath The absolute file path to write.
+ * @param {string} contents The file contents.
+ */
+function writeFileWithParents(filePath, contents) {
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, contents);
+}
+
+/**
+ * Seed a shipped skill with a stale file the prior manifest records and a runtime
+ * artifact it does not, so one run exercises both sides of the manifest diff.
+ *
+ * @param {{skillsDirectory: string, manifestPath: string}} sandbox The sandbox paths.
+ * @returns {{staleFilePath: string, runtimeArtifactPath: string}} The seeded paths.
+ */
+function seedStaleSkillFile(sandbox) {
+    const staleFilePath = join(
+        sandbox.skillsDirectory, SHIPPED_SKILL_DIRECTORY, ...STALE_SKILL_FILE_RELATIVE_SEGMENTS,
+    );
+    const runtimeArtifactPath = join(
+        sandbox.skillsDirectory, SHIPPED_SKILL_DIRECTORY, ...RUNTIME_ARTIFACT_RELATIVE_SEGMENTS,
+    );
+    writeFileWithParents(staleFilePath, 'a module an earlier revision shipped\n');
+    writeFileWithParents(runtimeArtifactPath, 'compiled bytecode no install ever wrote\n');
+    const manifest = readManifest(sandbox.manifestPath);
+    manifest.files.push(staleFilePath);
+    writeFileSync(sandbox.manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    return { staleFilePath, runtimeArtifactPath };
+}
+
+test('a full reinstall moves a manifest-recorded skill file the package no longer ships and keeps runtime artifacts', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath, runtimeArtifactPath } = seedStaleSkillFile(sandbox);
+
+        const installerOutput = runInstaller(sandbox.homeDirectory, []);
+
+        assert.equal(
+            existsSync(staleFilePath),
+            false,
+            'the file the prior manifest recorded and this run no longer writes leaves the skill',
+        );
+        assert.equal(
+            prunedBackupContains(
+                sandbox.claudeDirectory,
+                join(SHIPPED_SKILL_DIRECTORY, ...STALE_SKILL_FILE_RELATIVE_SEGMENTS),
+            ),
+            true,
+            'the stale file lands under its mirrored relative path in the prune backup',
+        );
+        assert.equal(
+            existsSync(runtimeArtifactPath),
+            true,
+            'a __pycache__ artifact no install ever wrote stays in place',
+        );
+        assert.match(
+            installerOutput,
+            /skills: \d+ files \(\d+ new, \d+ updated, 1 stale moved aside\)/,
+            'the summary line reports the stale count',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a scoped --only install leaves a manifest-recorded stale skill file in place', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+
+        assert.equal(
+            existsSync(staleFilePath),
+            true,
+            'the stale-file prune runs on full installs only',
+        );
+        assert.equal(
+            prunedBackupContains(
+                sandbox.claudeDirectory,
+                join(SHIPPED_SKILL_DIRECTORY, ...STALE_SKILL_FILE_RELATIVE_SEGMENTS),
+            ),
+            false,
+            'a scoped install moves nothing to the prune backup',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('one install run collects retired skill directories and stale files under a single timestamped backup root', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const retiredSkillName = 'ghost-skill';
+        plantSkillDirectory(sandbox.skillsDirectory, retiredSkillName, true);
+        const { staleFilePath } = seedStaleSkillFile(sandbox);
+        const manifest = readManifest(sandbox.manifestPath);
+        manifest.skills.push(retiredSkillName);
+        writeFileSync(sandbox.manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        const backupRoot = join(sandbox.claudeDirectory, PRUNED_BACKUP_DIRECTORY_NAME);
+        const allTimestampDirectories = readdirSync(backupRoot, { withFileTypes: true })
+            .filter(entry => entry.isDirectory())
+            .map(entry => entry.name);
+        assert.equal(allTimestampDirectories.length, 1, 'one run leaves one recovery point');
+        const runBackupRoot = join(backupRoot, allTimestampDirectories[0]);
+        assert.equal(
+            existsSync(join(runBackupRoot, retiredSkillName)),
+            true,
+            'the retired skill directory sits under the shared root',
+        );
+        assert.equal(
+            existsSync(join(runBackupRoot, SHIPPED_SKILL_DIRECTORY, ...STALE_SKILL_FILE_RELATIVE_SEGMENTS)),
+            true,
+            'the stale file sits under the same shared root',
+        );
+        assert.equal(existsSync(staleFilePath), false, 'the stale file left the installed skill');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
 
 test('a full reinstall over a pre-manifest dirty tree prunes retired skills and keeps personal ones', () => {
     const sandbox = createSandbox();

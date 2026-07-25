@@ -19,7 +19,7 @@ The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude
 Two paths matter:
 
 - **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
-- **Skills.** Skill directories under `skills/` copy to `~/.claude/skills/<name>/`, with one filter described below.
+- **Skills.** Skill directories under `skills/` copy to `~/.claude/skills/<name>/`, with one filter described below. A full install also moves stale content out of `~/.claude/skills`, described below.
 
 ## Full install versus scoped install
 
@@ -31,6 +31,21 @@ The filter on skills depends on whether the user scoped the install:
 - **Scoped install** (`npx claude-dev-env --only core`): only skills named in the active groups' `skills` arrays copy. A new skill must be added to a group's `skills` array to install under a scoped run.
 
 So a new skill that should ship as part of a named group (for example `core`) needs its name added to that group's `skills` array in `install.mjs`. A skill left out of every group still ships on a full install, but a scoped install skips it.
+
+## Removing skill content the package drops
+
+A full install moves two kinds of content out of `~/.claude/skills` into one timestamped backup directory per run, `~/.claude/.claude-dev-env-pruned/<timestamp>/`:
+
+- **A retired skill directory** — a whole skill directory that the package leaves out of the set it ships. The directory keeps its name inside the backup. `~/.claude/skills/_shared` is always kept in place.
+- **A stale file inside a live skill** — a file that the install manifest, `~/.claude/.claude-dev-env-manifest.json`, records under `~/.claude/skills` and that the run leaves unwritten. Each moved file mirrors its relative path inside the backup directory, and a directory the move empties is removed up to the skills directory.
+
+Both prunes move content rather than delete it, so anything caught by mistake is recoverable from the backup. A move that fails logs a warning and leaves the content in place.
+
+The stale-file comparison reads the manifest, so it touches only files an install wrote. Runtime-generated content — a Python `__pycache__` entry, a ruff cache, a log — and any file a user authored inside a skill directory stay in place, because no install recorded them. Path comparison ignores letter case on Windows and macOS.
+
+Both prunes run behind the same two gates: a full install, and every dependency group resolved. An unresolved dependency contributes no skills, so a live skill it supplies would look retired and its files would look stale; holding both prunes keeps that content safe.
+
+One limit is worth knowing: a scoped `--only` install rewrites the manifest's file list to the scoped subset, so a full install that follows it reads a smaller record and moves aside less. That under-prunes safely — a stale file stays on disk, and a live file is never removed.
 
 ## Dependency groups
 
