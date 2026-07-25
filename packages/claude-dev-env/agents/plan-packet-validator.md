@@ -2,7 +2,6 @@
 name: plan-packet-validator
 description: Fresh-context validator for workflow-generated plan packets. Use after a plan packet is written under docs/plans/<slug>/ to verify source accuracy, completeness, TDD readiness, scope control, handoff quality, and no invented repo behavior. Read-only; never edits files.
 tools: Read, Grep, Glob, Bash
-model: inherit
 color: purple
 ---
 

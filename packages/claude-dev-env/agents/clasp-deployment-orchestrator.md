@@ -1,7 +1,6 @@
 ---
 name: clasp-deployment-orchestrator
 description: Use PROACTIVELY when creating or deploying Google Apps Script projects with multiple files, complex configuration, or batch operations. Invokes the clasp-deployment skill for command execution.
-model: inherit
 tools: Task, Read, Write, Glob, Grep
 color: green
 ---

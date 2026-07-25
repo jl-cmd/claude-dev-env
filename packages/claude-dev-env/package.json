@@ -7,7 +7,8 @@
         "claude-dev-env": "bin/install.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\"",
+        "prepack": "node bin/clean_pack_artifacts.mjs"
     },
     "files": [
         "bin/",
@@ -21,7 +22,15 @@
         "scripts/",
         "_shared/",
         "audit-rubrics/",
-        "CLAUDE.md"
+        "CLAUDE.md",
+        "!**/__pycache__/**",
+        "!**/*.py[cod]",
+        "!**/.pytest_cache/**",
+        "!**/.mypy_cache/**",
+        "!**/.ruff_cache/**",
+        "!**/*.log",
+        "!**/debug-*.log",
+        "!**/*.egg-info/**"
     ],
     "keywords": [
         "claude-code",

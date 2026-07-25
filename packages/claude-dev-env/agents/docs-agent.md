@@ -27,7 +27,6 @@ Examples:
   Non-technical audience — use docs-agent in user-docs writing mode.
   </commentary>
 </example>
-model: inherit
 color: cyan
 ---
 

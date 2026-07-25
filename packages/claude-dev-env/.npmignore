@@ -1,0 +1,14 @@
+# Pack root is this package directory. Monorepo-root .gitignore does not apply
+# to `npm pack` here. Prefer package.json `files` negations + `prepack` clean;
+# keep these patterns as a second layer for tooling that honors .npmignore.
+
+**/__pycache__/
+**/__pycache__/**
+**/*.py[cod]
+**/.pytest_cache/**
+**/.mypy_cache/**
+**/.ruff_cache/**
+**/*.log
+**/debug-*.log
+**/pytestdebug.log
+**/*.egg-info/**

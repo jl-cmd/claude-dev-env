@@ -5,26 +5,21 @@ Code subagent loader reads. The loader accepts a fixed key set; an unrecognized
 top-level key breaks the spawn — the subagent starts with a broken definition,
 idles, and dies without a report::
 
-    ok:   name / description / tools / model / color
+    ok:   name / description / tools / color
     flag: effort            <- unrecognized, subagent dies delivering nothing
 
-The accepted set is the one `agents/CLAUDE.md` documents (name, description,
-tools, color) plus the optional `model` key, which every agent either omits
-or sets to `inherit` — the orchestrator supplies a concrete model on every
-spawn, so no agent definition pins one::
+An agent definition carries no `model` key at all — the caller supplies the
+model on every spawn, so no agent definition names one, concrete or
+`inherit`::
 
-    ok:   model: inherit
     ok:   <no model key at all>
+    flag: model: inherit    <- caller can no longer choose the model
     flag: model: opus       <- pinned concrete model, caller can't override
 
-`frontmatter_pins_concrete_model` is the write-time hook's shared pin detector;
-importing it here reads a pin the same way the hook does. Its exhaustive value
-truth table lives beside it in
-`hooks_constants/test_agent_model_pin_detection.py`.
-
-Top-level keys are read with a line scan so an agent whose `description`
-embeds informal `<example>` prose is not mistaken for one carrying extra
-keys.
+Frontmatter parsing is self-contained here (stdlib only): the block is the
+text between the file's opening and closing `---` fence lines, and top-level
+keys are read with a line scan so an agent whose `description` embeds
+informal `<example>` prose is not mistaken for one carrying extra keys.
 """
 
 from __future__ import annotations
@@ -36,16 +31,32 @@ from pathlib import Path
 import pytest
 import yaml
 
-from hooks_constants.agent_model_pin_detection import (
-    extract_frontmatter_block,
-    frontmatter_pins_concrete_model,
-)
-
-ACCEPTED_FRONTMATTER_KEYS = frozenset(
-    {"name", "description", "tools", "model", "color"}
-)
+ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
 CODE_VERIFIER_AGENT_NAME = "code-verifier"
+EXEMPT_MARKDOWN_FILENAME = "CLAUDE.md"
+FRONTMATTER_FENCE_LINE = "---"
+MODEL_KEY_NAME = "model"
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^([a-z][a-z0-9_]*):", re.MULTILINE)
+
+
+def _extract_frontmatter_block(markdown_text: str) -> str | None:
+    """Return the YAML text between the file's opening and closing --- fences.
+
+    Args:
+        markdown_text: The full text of an agent definition markdown file.
+
+    Returns:
+        The frontmatter text (the lines strictly between the two fence
+        lines), or None when the file does not open with a --- fence line or
+        never closes one.
+    """
+    all_lines = markdown_text.splitlines()
+    if not all_lines or all_lines[0].strip() != FRONTMATTER_FENCE_LINE:
+        return None
+    for each_line_index in range(1, len(all_lines)):
+        if all_lines[each_line_index].strip() == FRONTMATTER_FENCE_LINE:
+            return "\n".join(all_lines[1:each_line_index])
+    return None
 
 
 @cache
@@ -55,13 +66,14 @@ def _agent_definition_paths() -> tuple[Path, ...]:
     return tuple(
         each_markdown_file
         for each_markdown_file in all_markdown_files
-        if extract_frontmatter_block(each_markdown_file.read_text(encoding="utf-8"))
+        if each_markdown_file.name != EXEMPT_MARKDOWN_FILENAME
+        and _extract_frontmatter_block(each_markdown_file.read_text(encoding="utf-8"))
         is not None
     )
 
 
 def _frontmatter_block(agent_definition_path: Path) -> str:
-    frontmatter_block = extract_frontmatter_block(
+    frontmatter_block = _extract_frontmatter_block(
         agent_definition_path.read_text(encoding="utf-8")
     )
     assert frontmatter_block is not None
@@ -103,12 +115,13 @@ def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
     _agent_definition_paths(),
     ids=lambda each_path: each_path.name,
 )
-def test_agent_frontmatter_carries_no_pinned_model(
+def test_agent_frontmatter_carries_no_model_key(
     agent_definition_path: Path,
 ) -> None:
     frontmatter_block = _frontmatter_block(agent_definition_path)
-    assert not frontmatter_pins_concrete_model(frontmatter_block), (
-        f"{agent_definition_path.name} pins a concrete model in frontmatter; "
+    declared_keys = _top_level_keys(frontmatter_block)
+    assert MODEL_KEY_NAME not in declared_keys, (
+        f"{agent_definition_path.name} carries a model: key in frontmatter; "
         "the caller supplies the model on every spawn, so agent definitions "
-        "carry no model: line or only model: inherit"
+        "carry no model key at all, not even model: inherit"
     )
