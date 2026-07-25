@@ -7,8 +7,7 @@
         "claude-dev-env": "bin/install.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\"",
-        "prepack": "node bin/clean_pack_artifacts.mjs"
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
     },
     "files": [
         "bin/",
