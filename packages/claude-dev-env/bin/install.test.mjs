@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+    collectOrphanedSkillFiles,
     collectPackageSourceConflicts,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
@@ -1249,4 +1250,76 @@ test('mergeHooksIntoSettings prunes the inline run_all_validators runner when th
     const dispatcherGroup = settings.hooks.PreToolUse.find(group => group.matcher === 'Write|Edit|MultiEdit');
     const dispatcherCommands = dispatcherGroup.hooks.filter(hook => isPreToolUseDispatcherCommand(hook.command));
     assert.equal(dispatcherCommands.length, 1, 'the PreToolUse dispatcher must remain exactly once');
+});
+
+
+function createSkillPair(sourceFiles, destinationFiles) {
+    const root = mkdtempSync(join(tmpdir(), 'cdev-skill-orphans-'));
+    const sourceSkill = join(root, 'source', 'demo-skill');
+    const destinationSkill = join(root, 'installed', 'demo-skill');
+    for (const [relativePath, contents] of Object.entries(sourceFiles)) {
+        const target = join(sourceSkill, relativePath);
+        mkdirSync(join(target, '..'), { recursive: true });
+        writeFileSync(target, contents);
+    }
+    for (const [relativePath, contents] of Object.entries(destinationFiles)) {
+        const target = join(destinationSkill, relativePath);
+        mkdirSync(join(target, '..'), { recursive: true });
+        writeFileSync(target, contents);
+    }
+    return { root, sourceSkill, destinationSkill };
+}
+
+
+test('collectOrphanedSkillFiles reports an installed file the current source no longer ships', () => {
+    const { root, sourceSkill, destinationSkill } = createSkillPair(
+        {
+            'SKILL.md': '# demo',
+            'scripts/execute_split.py': 'from constants import NEW_NAME\n',
+            'scripts/constants.py': 'NEW_NAME = 1\n',
+        },
+        {
+            'SKILL.md': '# demo',
+            'scripts/execute_split.py': 'from constants import NEW_NAME\n',
+            'scripts/constants.py': 'NEW_NAME = 1\n',
+            'scripts/validate_slice_collection.py': 'stale module from an earlier branch\n',
+            'scripts/config/old_constants.py': 'OLD_NAME = 1\n',
+        },
+    );
+    try {
+        const orphans = collectOrphanedSkillFiles(sourceSkill, destinationSkill);
+
+        assert.deepEqual(orphans, [
+            'scripts/config/old_constants.py',
+            'scripts/validate_slice_collection.py',
+        ], 'both files absent from the source must be reported as orphans');
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+
+test('collectOrphanedSkillFiles reports nothing when the installed tree matches the source', () => {
+    const { root, sourceSkill, destinationSkill } = createSkillPair(
+        { 'SKILL.md': '# demo', 'scripts/run.py': 'print(1)\n' },
+        { 'SKILL.md': '# demo', 'scripts/run.py': 'print(1)\n' },
+    );
+    try {
+        assert.deepEqual(collectOrphanedSkillFiles(sourceSkill, destinationSkill), []);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+
+test('collectOrphanedSkillFiles reports nothing when the skill has never been installed', () => {
+    const { root, sourceSkill, destinationSkill } = createSkillPair(
+        { 'SKILL.md': '# demo' },
+        {},
+    );
+    try {
+        assert.deepEqual(collectOrphanedSkillFiles(sourceSkill, destinationSkill), []);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
 });

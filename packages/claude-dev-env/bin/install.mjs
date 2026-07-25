@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync, unlinkSync, rmSync, renameSync, realpathSync } from 'node:fs';
-import { join, dirname, resolve, relative, basename } from 'node:path';
+import { join, dirname, resolve, relative, basename, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -283,6 +283,82 @@ function collectFiles(directory) {
         }
     }
     return collected;
+}
+
+let cachedRunBackupRoot = null;
+
+/**
+ * Return the one backup directory this install run moves pruned content into.
+ *
+ * Retired skill directories and stale files inside a live skill share a single
+ * timestamped root, so one run leaves one recovery point rather than several.
+ *
+ * @returns {string} Absolute path to the run's backup root.
+ */
+function currentRunBackupRoot() {
+    if (cachedRunBackupRoot === null) {
+        const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        cachedRunBackupRoot = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, runTimestamp);
+    }
+    return cachedRunBackupRoot;
+}
+
+/**
+ * List files under an installed skill directory that the current source no
+ * longer ships.
+ *
+ * `copyTree` overwrites and adds but never removes, and retirement pruning
+ * works at whole-directory granularity, so a file dropped or renamed between
+ * two installs survives inside an otherwise current skill. That leaves a skill
+ * whose modules come from one revision and whose companions come from another —
+ * for example scripts importing constants a stale constants module never
+ * defines, which fails at import with nothing in the directory to explain why.
+ *
+ * @param {string} sourceSkillDirectory The skill directory being installed from.
+ * @param {string} destinationSkillDirectory The installed skill directory.
+ * @returns {string[]} Sorted forward-slash relative paths present only in the destination.
+ */
+export function collectOrphanedSkillFiles(sourceSkillDirectory, destinationSkillDirectory) {
+    if (!existsSync(destinationSkillDirectory)) return [];
+    const toRelativeSet = (base) => new Set(
+        collectFiles(base).map(each => relative(base, each).split(sep).join('/'))
+    );
+    const sourceRelativePaths = toRelativeSet(sourceSkillDirectory);
+    return [...toRelativeSet(destinationSkillDirectory)]
+        .filter(each => !sourceRelativePaths.has(each))
+        .sort();
+}
+
+/**
+ * Move orphaned files out of an installed skill directory into the run's backup
+ * root, mirroring their relative path under the skill name.
+ *
+ * Orphans are moved rather than deleted, matching how a retired skill directory
+ * is handled, so a user-authored file that happens to sit inside a managed skill
+ * directory is recoverable. A move that fails is logged and the file is left in
+ * place, so a prune failure never costs more than a stale file.
+ *
+ * @param {string} destinationSkillDirectory The installed skill directory.
+ * @param {string} skillName The skill directory name, used inside the backup root.
+ * @param {string[]} orphanRelativePaths Forward-slash relative paths to move.
+ * @param {string} backupRoot The run's backup directory.
+ * @returns {number} How many files were moved.
+ */
+function moveOrphanedSkillFilesToBackup(destinationSkillDirectory, skillName, orphanRelativePaths, backupRoot) {
+    let movedCount = 0;
+    for (const relativePath of orphanRelativePaths) {
+        const orphanPath = join(destinationSkillDirectory, relativePath);
+        const backupPath = join(backupRoot, skillName, relativePath);
+        try {
+            mkdirSync(dirname(backupPath), { recursive: true });
+            renameSync(orphanPath, backupPath);
+            movedCount++;
+            console.log(`  ✗ ${join('skills', skillName, relativePath)} (stale — moved to ${join(PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, basename(backupRoot), skillName, relativePath)})`);
+        } catch (moveError) {
+            console.warn(`  Warning: could not move stale ${join('skills', skillName, relativePath)} to backup, leaving in place (${moveError.message})`);
+        }
+    }
+    return movedCount;
 }
 
 function copyTree(sourceBase, destBase) {
@@ -693,8 +769,7 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
         [...EVER_SHIPPED_SKILL_NAMES].filter(skillName => !installedSkillNames.has(skillName))
     );
     const priorSkillNames = new Set(priorManifestSkills || []);
-    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupRoot = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME, runTimestamp);
+    const backupRoot = currentRunBackupRoot();
     const existingSkillDirs = readdirSync(skillsDirectory, { withFileTypes: true })
         .filter(entry => entry.isDirectory());
     for (const skillDir of existingSkillDirs) {
@@ -823,6 +898,7 @@ function install(selectedGroups, options = {}) {
     }
     let skillsCreated = 0;
     let skillsUpdated = 0;
+    let skillsPruned = 0;
     const skillPaths = [];
     const installedSkillNames = new Set();
     const copiedSkillNames = new Set();
@@ -832,7 +908,18 @@ function install(selectedGroups, options = {}) {
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
             if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
-            const stats = copyTree(join(skillsSource, skillDir.name), join(CLAUDE_HOME, 'skills', skillDir.name));
+            const skillSourceDirectory = join(skillsSource, skillDir.name);
+            const skillDestinationDirectory = join(CLAUDE_HOME, 'skills', skillDir.name);
+            const orphanRelativePaths = collectOrphanedSkillFiles(skillSourceDirectory, skillDestinationDirectory);
+            const stats = copyTree(skillSourceDirectory, skillDestinationDirectory);
+            if (orphanRelativePaths.length > 0) {
+                skillsPruned += moveOrphanedSkillFilesToBackup(
+                    skillDestinationDirectory,
+                    skillDir.name,
+                    orphanRelativePaths,
+                    currentRunBackupRoot(),
+                );
+            }
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
@@ -842,7 +929,7 @@ function install(selectedGroups, options = {}) {
             }
         }
     }
-    summary.skills = { created: skillsCreated, updated: skillsUpdated, paths: skillPaths };
+    summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: skillsPruned, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
     if (shouldInstallAnyHooks) {
