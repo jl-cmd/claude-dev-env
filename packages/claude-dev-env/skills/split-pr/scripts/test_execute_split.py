@@ -16,8 +16,12 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
 from execute_split import (  # noqa: E402
     build_dry_run_steps,
     execute_plan,
+    guard_recursive_split_depth,
     is_working_tree_dirty,
     resolve_repo_root,
+)
+from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
+    MAXIMUM_RECURSIVE_SPLIT_DEPTH,
 )
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
     PAYLOAD_KEY_CREATED,
@@ -124,6 +128,7 @@ def test_execute_plan_dry_run() -> None:
         should_create_prs=False,
         should_push=False,
         should_supersede=False,
+        recursion_depth=0,
     )
     assert execution_payload[PAYLOAD_KEY_DRY_RUN] is True
     assert len(execution_payload[PAYLOAD_KEY_CREATED]) == 2
@@ -138,6 +143,7 @@ def test_execute_plan_creates_local_branches(tmp_path: Path) -> None:
         should_create_prs=False,
         should_push=False,
         should_supersede=False,
+        recursion_depth=0,
     )
     assert execution_payload[PAYLOAD_KEY_DRY_RUN] is False
     assert len(execution_payload[PAYLOAD_KEY_CREATED]) == 2
@@ -171,11 +177,46 @@ def test_execute_plan_partial_failure_includes_created(tmp_path: Path) -> None:
             should_create_prs=False,
             should_push=False,
             should_supersede=False,
+            recursion_depth=0,
         )
     payload = json.loads(str(raised.value))
     assert payload["partial"] is True
     assert len(payload[PAYLOAD_KEY_CREATED]) == 1
     assert payload[PAYLOAD_KEY_CREATED][0]["branch"] == "split/99/01-database"
+
+
+def test_guard_recursive_split_depth_allows_depth_at_the_bound() -> None:
+    guard_recursive_split_depth(MAXIMUM_RECURSIVE_SPLIT_DEPTH)
+
+
+def test_guard_recursive_split_depth_rejects_depth_past_the_bound() -> None:
+    with pytest.raises(ValueError) as raised:
+        guard_recursive_split_depth(MAXIMUM_RECURSIVE_SPLIT_DEPTH + 1)
+    assert str(MAXIMUM_RECURSIVE_SPLIT_DEPTH) in str(raised.value)
+
+
+def test_execute_plan_stops_when_recursion_depth_passes_the_bound(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    with pytest.raises(ValueError):
+        execute_plan(
+            plan_payload=sample_plan(),
+            repo_root=repo,
+            is_dry_run=False,
+            should_create_prs=False,
+            should_push=False,
+            should_supersede=False,
+            recursion_depth=MAXIMUM_RECURSIVE_SPLIT_DEPTH + 1,
+        )
+    all_branch_lines = subprocess.run(
+        ["git", "branch", "--list", "split/99/*"],
+        cwd=str(repo),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert all_branch_lines == ""
 
 
 def test_resolve_repo_root_and_dirty_flag(tmp_path: Path) -> None:

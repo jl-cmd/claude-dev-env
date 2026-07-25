@@ -114,16 +114,19 @@ State: source PR number, slice branches, draft PR URLs (if any), merge order (`#
 
 Report the `supersede` object from execute JSON (`commented`, `closed`, `child_pr_numbers`, or `skipped` + `skip_reason`). A supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
 
-### Phase 6 — Split further (mandatory)
+### Phase 6 — Split further (opt-in, default OFF)
 
-After Phase 5, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft without further user prompts until every leaf **fits a small review** (or is `oversized_atomic` / depth-capped).
+Default behavior is **one split pass and stop**. Phase 6 runs only when the operator asks for it in the invocation with the `--split-further` flag (`/split-pr <pr#> --split-further`). Without that flag, report Phase 5 and finish.
+
+With `--split-further`, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft until every leaf **fits a small review** (or is `oversized_atomic` / depth-capped). `MAXIMUM_RECURSIVE_SPLIT_DEPTH` is **1** — one generation of children below the original PR — and `execute_split.py` enforces it: pass the candidate's depth as `--recursion-depth <n>` and a run above the maximum stops with an error.
 
 ## Constraints
 
 - One capability: **excise a stacked file-based split from one PR**.
-- Pass 0 needs approval before any non-dry-run execute; recursive passes inherit that approval.
+- One split pass by default; Phase 6 recursion runs only with `--split-further`.
 - Draft stacked PRs; dependency bases preserved.
 - Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion` (Pass 0 only).
+- Approval before any non-dry-run execute. An opt-in `--split-further` pass inherits Pass 0's approval and stops at `MAXIMUM_RECURSIVE_SPLIT_DEPTH`.
 - No force-push. No ready. No delete of the source branch (source PR may close as superseded; branch stays).
 
 ## Sub-skills

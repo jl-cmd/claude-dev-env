@@ -57,6 +57,10 @@ ERROR_COMMIT_FAILED = "commit failed on %s: %s"
 ERROR_PUSH_FAILED = "push failed for %s: %s"
 ERROR_PR_CREATE_FAILED = "gh pr create failed for %s: %s"
 ERROR_EMPTY_SLICE_AFTER_CHECKOUT = "no files staged for slice %s after checkout"
+ERROR_RECURSION_DEPTH_EXCEEDED = (
+    "recursive split depth %s exceeds the maximum of %s; Phase 6 recursion is "
+    "opt-in and bounded"
+)
 ERROR_SUPERSEDE_COMMENT_FAILED = "gh pr comment failed for source #%s: %s"
 ERROR_SUPERSEDE_CLOSE_FAILED = "gh pr close failed for source #%s: %s"
 ERROR_SUPERSEDE_VIEW_FAILED = "gh pr view failed for source #%s: %s"

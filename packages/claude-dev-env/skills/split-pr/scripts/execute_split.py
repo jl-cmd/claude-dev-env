@@ -22,6 +22,7 @@ from pathlib import Path
 from split_pr_scripts_constants.config.analyze_constants import (
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
+    MAXIMUM_RECURSIVE_SPLIT_DEPTH,
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.execute_constants import (
@@ -34,6 +35,7 @@ from split_pr_scripts_constants.config.execute_constants import (
     ERROR_EXECUTE_FAILED,
     ERROR_PR_CREATE_FAILED,
     ERROR_PUSH_FAILED,
+    ERROR_RECURSION_DEPTH_EXCEEDED,
     ERROR_REPO_NOT_GIT,
     GH_BASE,
     GH_BODY_FILE,
@@ -169,6 +171,32 @@ def build_dry_run_steps(plan_payload: JsonObject) -> list[JsonObject]:
     return all_steps
 
 
+def guard_recursive_split_depth(recursion_depth: int) -> None:
+    """Stop a run whose Phase-6 recursion depth passes the enforced bound.
+
+    ::
+
+        maximum depth 1
+        ok:   depth 0 (Pass 0)      -> returns
+        ok:   depth 1 (one re-split) -> returns
+        flag: depth 2               -> ValueError
+
+    Pass 0 runs at depth 0. Each opt-in re-split of a child raises the depth
+    by one, so the bound caps how many generations a single approval spawns.
+
+    Args:
+        recursion_depth: Generations below the original pull request.
+
+    Raises:
+        ValueError: When recursion_depth passes MAXIMUM_RECURSIVE_SPLIT_DEPTH.
+    """
+    if recursion_depth > MAXIMUM_RECURSIVE_SPLIT_DEPTH:
+        raise ValueError(
+            ERROR_RECURSION_DEPTH_EXCEEDED
+            % (recursion_depth, MAXIMUM_RECURSIVE_SPLIT_DEPTH)
+        )
+
+
 def execute_plan(
     plan_payload: JsonObject,
     repo_root: Path,
@@ -176,6 +204,7 @@ def execute_plan(
     should_create_prs: bool,
     should_push: bool,
     should_supersede: bool,
+    recursion_depth: int,
 ) -> JsonObject:
     """Run the split (or dry-run) against repo_root.
 
@@ -187,14 +216,18 @@ def execute_plan(
         should_push: When True, push branches to origin.
         should_supersede: When True, close source_pr_number after a full
             multi-slice draft stack lands.
+        recursion_depth: Generations below the original pull request; 0 for
+            the operator-approved Pass 0.
 
     Returns:
         Result payload with created slice metadata.
 
     Raises:
         RuntimeError: On dirty tree, git, or gh failures (partial payload JSON).
-        ValueError: When the plan fails coverage verification.
+        ValueError: When the depth bound is passed or the plan fails coverage
+            verification.
     """
+    guard_recursive_split_depth(recursion_depth)
     report = verify_plan(plan_payload)
     if not report[VERIFY_KEY_IS_VALID]:
         raise ValueError(ERROR_EXECUTE_FAILED % report)
@@ -651,6 +684,7 @@ def main() -> int:
             should_create_prs=is_create_prs,
             should_push=parsed_arguments.push and not parsed_arguments.dry_run,
             should_supersede=is_supersede,
+            recursion_depth=parsed_arguments.recursion_depth,
         )
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(execution_payload, indent=indent))
@@ -699,6 +733,15 @@ def _parse_arguments() -> argparse.Namespace:
         help=(
             "Comment on and close source_pr_number after a full multi-slice draft "
             "stack lands (default: on when --create-prs)"
+        ),
+    )
+    parser.add_argument(
+        "--recursion-depth",
+        type=int,
+        default=0,
+        help=(
+            "Generations below the original pull request; 0 for Pass 0. Runs "
+            f"above {MAXIMUM_RECURSIVE_SPLIT_DEPTH} stop."
         ),
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
