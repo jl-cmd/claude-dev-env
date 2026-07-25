@@ -9,6 +9,6 @@ Register each item on the host task tool at skill start. Mark complete with evid
 5. Print decision brief in chat (re-buckets, slice table, merge order) before any approval control.
 6. Propose via `AskUserQuestion` (approve / local-only / abort).
 7. On approve: dry-run optional, then `execute_split.py` with push+draft PRs (or local-only if requested).
-8. After successful push+create with a draft URL for each entry in `planned_slice_count` (multi-slice only): supersede the source PR — comment merge order + child URLs via `--body-file`, then `gh pr close`. Skip when atomic, partial, local-only, or already superseded. Leave the source branch on the remote.
-9. Report merge order, branch names, PR URLs, and supersede outcome (`closed` / `skipped`); leave source branch unchanged.
+8. After successful push+create with a draft URL for each planned slice: post a family-tree comment on **each** child PR (source, merge order, full linked list, mark this PR) via `--body-file`. Then supersede the source PR — comment merge order + child URLs, then `gh pr close`. Skip family-tree and supersede when partial, local-only, or create-prs off; skip supersede when atomic or already superseded. Leave the source branch on the remote.
+9. Report merge order, branch names, PR URLs, `family_tree`, and supersede outcome; leave source branch unchanged.
 10. Run split-further loop ([split-further-loop.md](split-further-loop.md)): BFS re-split each draft without AskUserQuestion until stop reasons drain the queue.
