@@ -41,10 +41,7 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
         r"(^|/)(api|services?|server|backend|controllers?|middleware|handlers?)(/|$)",
         LAYER_BACKEND,
     ),
-    (
-        r"(^|/)hooks/(blocking|validators|advisory|lifecycle|session|workflow|diagnostic)(/|$)",
-        LAYER_BACKEND,
-    ),
+    (r"(^|/)hooks/[^/]+/", LAYER_BACKEND),
     (r"(^|/)skills/.+/scripts(/|$)", LAYER_BACKEND),
     (r"(^|/)_shared/.+/scripts(/|$)", LAYER_BACKEND),
     (
@@ -62,6 +59,9 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
 
 DEFAULT_LAYER = LAYER_OTHER
 
+PART_SLUG_SEPARATOR = "-part"
+PATH_SEPARATOR = "/"
+
 ALL_LAYER_STORY_BY_NAME: dict[str, str] = {
     LAYER_DATABASE: "Establish the data foundation",
     LAYER_CONTRACTS: "Add shared types and contracts",
@@ -72,6 +72,10 @@ ALL_LAYER_STORY_BY_NAME: dict[str, str] = {
     LAYER_DOCS: "Document the feature",
     LAYER_OTHER: "Ship remaining related changes",
 }
+
+WHOLE_PR_SLICE_SLUG = "whole-pr"
+WHOLE_PR_SLICE_TITLE_STEM = "single reviewable slice"
+WHOLE_PR_SLICE_STORY = "Ship the whole pull request as one reviewable slice"
 
 ALL_LAYER_TITLE_STEM_BY_NAME: dict[str, str] = {
     LAYER_DATABASE: "database foundation",
