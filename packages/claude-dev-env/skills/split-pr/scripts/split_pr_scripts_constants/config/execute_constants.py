@@ -15,7 +15,6 @@ PAYLOAD_KEY_CLOSED = "closed"
 PAYLOAD_KEY_CHILD_PR_NUMBERS = "child_pr_numbers"
 PAYLOAD_KEY_SKIPPED = "skipped"
 PAYLOAD_KEY_SKIP_REASON = "skip_reason"
-PAYLOAD_KEY_SUPERSEDE_ERROR = "error"
 
 GIT_COMMAND = "git"
 GIT_FETCH = "fetch"
