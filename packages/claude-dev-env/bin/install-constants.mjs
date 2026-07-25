@@ -46,26 +46,43 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
     /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
 
 /**
- * The `~/.claude` directory name skill directories install into.
+ * The directory name skill directories carry in a package source and under
+ * `~/.claude`.
  *
- * The skills copy loop, the retired-skill prune, and the per-root stale-file
- * prune each name this directory, so one spelling serves all three.
+ * The copy loop reads `<package-root>/skills` and writes `~/.claude/skills`, the
+ * dependency walk reads `<dependency-root>/skills`, the retired-skill prune reads
+ * the installed directory, and the per-root stale-file prune names it as one of
+ * its roots. One spelling serves every one of them, so the copy destination and
+ * the prune target stay the same directory.
  */
 export const MANAGED_SKILLS_DIRECTORY_NAME = 'skills';
 
 /**
- * The `~/.claude` directory name hook scripts install into.
+ * The directory name hook scripts carry in a package source and under
+ * `~/.claude`.
  *
- * The retired-hook diff reads its relative paths against this directory, and the
- * per-root stale-file prune moves its content under a backup child of the same
- * name.
+ * The copy loop reads `<package-root>/hooks` and writes `~/.claude/hooks`, the
+ * hooks.json reads sit under the same name in each package source, the git-hook
+ * shims and the mypy configuration point at the installed directory, the
+ * retired-hook diff takes its relative paths against it, and the per-root
+ * stale-file prune names it as one of its roots.
  */
 export const MANAGED_HOOKS_DIRECTORY_NAME = 'hooks';
 
 /**
  * The `~/.claude` file name that holds the user's harness settings.
  *
- * The hook merge writes it and the retired-hook prune rewrites it, so both reach
- * the file through one name.
+ * The hook merge writes it, the retired-hook prune rewrites it, and the uninstall
+ * purge rewrites it, so all three reach the file through one name.
  */
 export const SETTINGS_FILE_NAME = 'settings.json';
+
+/**
+ * The home-directory file name `install_mypy_ini.mjs` writes.
+ *
+ * mypy reads its configuration from the home directory, so this is the one file
+ * the installer writes outside `~/.claude`. The install records the path and the
+ * uninstall containment guard names it as a permitted location, so `--uninstall`
+ * removes the file the install created.
+ */
+export const MYPY_INI_FILE_NAME = '.mypy.ini';

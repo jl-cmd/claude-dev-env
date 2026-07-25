@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
     mkdtempSync,
     mkdirSync,
@@ -60,6 +60,8 @@ const RETIRED_HOOK_MATCHER = 'Write|Edit|MultiEdit';
 const UNMANAGED_SIBLING_DIRECTORY = 'my-notes';
 const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
+const MYPY_INI_FILE_NAME = '.mypy.ini';
+const SKIPPED_RECORD_SUMMARY_MARKER = 'manifest record(s) skipped';
 
 /**
  * Create a stub node_modules tree the installer can resolve the declared
@@ -207,6 +209,22 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
  * @returns {string} The installer's stdout.
  */
 function runInstaller(homeDirectory, extraArguments, options = {}) {
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, options);
+    return execFileSync('node', [installerPath, ...extraArguments], {
+        cwd: dirname(installerPath),
+        encoding: 'utf8',
+        env: childEnvironment,
+    });
+}
+
+/**
+ * Build the installer path and child environment one sandbox run uses.
+ *
+ * @param {string} homeDirectory The sandbox home the installer writes into.
+ * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
+ * @returns {{installerPath: string, childEnvironment: object}} The invocation inputs.
+ */
+function resolveInstallerInvocation(homeDirectory, options) {
     const dependencyResolvable = options.dependencyResolvable !== false;
     const childEnvironment = {
         ...process.env,
@@ -214,19 +232,33 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
     };
-    let installerPath;
     if (dependencyResolvable) {
         childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
-        installerPath = INSTALLER_PATH;
-    } else {
-        delete childEnvironment.NODE_PATH;
-        installerPath = ensureIsolatedInstallerPath();
+        return { installerPath: INSTALLER_PATH, childEnvironment };
     }
-    return execFileSync('node', [installerPath, ...extraArguments], {
+    delete childEnvironment.NODE_PATH;
+    return { installerPath: ensureIsolatedInstallerPath(), childEnvironment };
+}
+
+/**
+ * Run the real installer against the sandbox home and return both output streams.
+ *
+ * A warning the installer prints reaches stderr, so a test asserting that a run
+ * warns about nothing reads the two streams together.
+ *
+ * @param {string} homeDirectory The sandbox home the installer writes into.
+ * @param {string[]} extraArguments Installer arguments (for example ``['--uninstall']``).
+ * @returns {string} The child's stdout and stderr, joined.
+ */
+function runInstallerReadingBothStreams(homeDirectory, extraArguments) {
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, {});
+    const completedRun = spawnSync('node', [installerPath, ...extraArguments], {
         cwd: dirname(installerPath),
         encoding: 'utf8',
         env: childEnvironment,
     });
+    assert.equal(completedRun.status, 0, `the installer run exited with ${completedRun.status}`);
+    return `${completedRun.stdout}${completedRun.stderr}`;
 }
 
 function readManifest(manifestPath) {
@@ -1118,6 +1150,101 @@ test('an uninstall skips a manifest record outside ~/.claude and still removes t
         assert.equal(existsSync(sandbox.manifestPath), false, 'the uninstall runs to the end and clears the manifest');
     } finally {
         rmSync(outsideDirectory, { recursive: true, force: true });
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('an uninstall removes the home-directory .mypy.ini the install wrote and skips only a genuinely foreign record', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const mypyIniPath = join(sandbox.homeDirectory, MYPY_INI_FILE_NAME);
+        assert.equal(
+            existsSync(mypyIniPath),
+            true,
+            'the install writes the mypy configuration in the home directory and records it',
+        );
+        const foreignRecordPath = systemRootPathNeverWritten();
+        appendManifestFiles(sandbox.manifestPath, [foreignRecordPath]);
+
+        const installerOutput = runInstallerReadingBothStreams(
+            sandbox.homeDirectory, ['--uninstall'],
+        );
+
+        assert.equal(
+            existsSync(mypyIniPath),
+            false,
+            'the uninstall removes the one file the install writes outside ~/.claude',
+        );
+        assert.equal(
+            installerOutput.includes(`skipping ${mypyIniPath}`),
+            false,
+            'the containment guard raises no warning about a path the installer itself writes',
+        );
+        assert.match(
+            installerOutput,
+            /1 manifest record\(s\) skipped/,
+            'the record naming a path no install wrote is the only one skipped',
+        );
+        assert.equal(existsSync(foreignRecordPath), false, 'the skipped record never existed on disk');
+        assert.equal(
+            existsSync(sandbox.manifestPath),
+            false,
+            'the uninstall runs to the end and clears the manifest',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a second install records the home-directory .mypy.ini it finds already configured so the uninstall still removes it', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const mypyIniPath = join(sandbox.homeDirectory, MYPY_INI_FILE_NAME);
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        assert.equal(
+            readManifest(sandbox.manifestPath).files.includes(mypyIniPath),
+            true,
+            'the run that finds the file already configured records it on the fresh manifest',
+        );
+
+        const installerOutput = runInstallerReadingBothStreams(
+            sandbox.homeDirectory, ['--uninstall'],
+        );
+
+        assert.equal(
+            existsSync(mypyIniPath),
+            false,
+            'the uninstall reads the record and removes the mypy configuration',
+        );
+        assert.equal(
+            installerOutput.includes(mypyIniPath),
+            false,
+            'the containment guard raises no warning naming the mypy configuration',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('an uninstall of a clean install skips no manifest record at all', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+
+        const installerOutput = runInstallerReadingBothStreams(
+            sandbox.homeDirectory, ['--uninstall'],
+        );
+
+        assert.equal(
+            installerOutput.includes(SKIPPED_RECORD_SUMMARY_MARKER),
+            false,
+            'every record a plain install writes passes the containment guard',
+        );
+    } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }
 });

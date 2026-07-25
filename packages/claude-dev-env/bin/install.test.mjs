@@ -1819,6 +1819,116 @@ test('pruneRetiredHookEntriesFromSettings removes the retired entry and keeps th
 });
 
 
+test('pruneRetiredHookEntriesFromSettings keeps every settings shape the installer never wrote and still removes the retired entry', () => {
+    const retiredCommand = `python3 "$HOME/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}"`;
+    const entryWithoutCommand = { type: 'command' };
+    const entryWithNumericCommand = { type: 'command', command: 42 };
+    const entryWithObjectCommand = { type: 'command', command: { path: 'gate.py' } };
+    const groupWithoutHooksArray = { matcher: '*' };
+    const eventValueThatIsNotAnArray = { enabled: true };
+    const { settingsPath, sandboxRoot } = createSettingsFixture({
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit',
+                hooks: [
+                    { type: 'command', command: retiredCommand },
+                    entryWithoutCommand,
+                    entryWithNumericCommand,
+                    entryWithObjectCommand,
+                ],
+            }],
+            Notification: [groupWithoutHooksArray],
+            SessionStart: eventValueThatIsNotAnArray,
+        },
+    }, 4);
+    try {
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.equal(removedCount, 1, 'the one entry running the retired script is the only removal');
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        assert.deepEqual(
+            settings.hooks.PreToolUse[0].hooks,
+            [entryWithoutCommand, entryWithNumericCommand, entryWithObjectCommand],
+            'an entry whose command is absent, a number, or an object counts as unmanaged and stays',
+        );
+        assert.deepEqual(
+            settings.hooks.Notification,
+            [groupWithoutHooksArray],
+            'a matcher group carrying no hooks array is handed back untouched',
+        );
+        assert.deepEqual(
+            settings.hooks.SessionStart,
+            eventValueThatIsNotAnArray,
+            'an event type whose value is not an array of groups is left as the file holds it',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('mergeHooksIntoSettings merges its groups into a settings file holding shapes it never wrote', () => {
+    const entryWithoutCommand = { type: 'command' };
+    const settings = {
+        hooks: {
+            Stop: [{ matcher: '', hooks: [entryWithoutCommand] }],
+            Notification: [{ matcher: '*' }],
+            SessionStart: { enabled: true },
+        },
+    };
+
+    const groupCount = mergeHooksIntoSettings(
+        settings, SAMPLE_HOOKS_CONFIG, '/home/user/.claude', 'python3',
+    );
+
+    assert.equal(groupCount, 2, 'both sample matcher groups merge');
+    assert.deepEqual(
+        settings.hooks.Stop[0].hooks[0],
+        entryWithoutCommand,
+        'the entry carrying no command string keeps its place ahead of the merged hooks',
+    );
+    assert.equal(
+        settings.hooks.Stop[0].hooks.length,
+        3,
+        'the two managed Stop hooks append behind the entry the installer never wrote',
+    );
+    assert.deepEqual(
+        settings.hooks.Notification,
+        [{ matcher: '*' }],
+        'an event the package does not ship stays exactly as the file holds it',
+    );
+});
+
+
+test('pruneManagedHooksFromSettings keeps every settings shape the installer never wrote', () => {
+    const managedPaths = new Set(['notification/attention_needed_notify.py']);
+    const managedCommand = 'python3 $HOME/.claude/hooks/notification/attention_needed_notify.py';
+    const entryWithoutCommand = { type: 'command' };
+    const settings = {
+        hooks: {
+            Stop: [{
+                matcher: '',
+                hooks: [{ type: 'command', command: managedCommand }, entryWithoutCommand],
+            }],
+            Notification: [{ matcher: '*' }],
+            SessionStart: { enabled: true },
+        },
+    };
+
+    pruneManagedHooksFromSettings(settings, managedPaths);
+
+    assert.deepEqual(
+        settings.hooks.Stop[0].hooks,
+        [entryWithoutCommand],
+        'the managed entry leaves and the entry carrying no command string stays',
+    );
+    assert.deepEqual(settings.hooks.Notification, [{ matcher: '*' }], 'the group with no hooks array stays');
+    assert.deepEqual(settings.hooks.SessionStart, { enabled: true }, 'the non-array event value stays');
+});
+
+
 test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical when it retires nothing', () => {
     const { settingsPath, sandboxRoot } = createSettingsFixture({
         hooks: {

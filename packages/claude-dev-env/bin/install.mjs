@@ -17,11 +17,13 @@ import {
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
+    MYPY_INI_FILE_NAME,
 } from './install-constants.mjs';
 
 const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
+const MYPY_INI_INSTALL_PATH = join(homedir(), MYPY_INI_FILE_NAME);
 const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
@@ -171,13 +173,13 @@ function discoverDependencyGroups() {
             description: dependencyPackageJson.description || dependencyName,
             packageRoot: dependencyRoot,
         };
-        const skillsDirectory = join(dependencyRoot, 'skills');
+        const skillsDirectory = join(dependencyRoot, MANAGED_SKILLS_DIRECTORY_NAME);
         if (existsSync(skillsDirectory)) {
             group.skills = readdirSync(skillsDirectory, { withFileTypes: true })
                 .filter(entry => entry.isDirectory())
                 .map(entry => entry.name);
         }
-        const hooksDirectory = join(dependencyRoot, 'hooks');
+        const hooksDirectory = join(dependencyRoot, MANAGED_HOOKS_DIRECTORY_NAME);
         if (existsSync(hooksDirectory)) {
             const hookFiles = collectFiles(hooksDirectory)
                 .filter(file => !file.endsWith('hooks.json'))
@@ -348,8 +350,9 @@ let cachedRunBackupRoot = null;
 /**
  * Return the one backup directory this install run moves pruned content into.
  *
- * Retired skill directories and stale files inside a live skill share a single
- * timestamped root, so one run leaves one recovery point rather than several.
+ * Retired skill directories and the stale files of every managed root share a
+ * single timestamped root, so one run leaves one recovery point rather than
+ * several.
  *
  * @returns {string} Absolute path to the run's backup root.
  */
@@ -412,6 +415,9 @@ function removeSupersededRunBackups(keptRunBackupRoot) {
  * the recovery points earlier runs left; that run sweeps nothing and the user
  * keeps every one of them.
  *
+ * The log line names the run backup and the window it lasts, so a user reading the
+ * install output knows where to recover moved content and how long it stays.
+ *
  * @returns {void}
  */
 function retainNewestRunBackupOnly() {
@@ -419,7 +425,7 @@ function retainNewestRunBackupOnly() {
     if (!existsSync(runBackupRoot)) return;
     const removedCount = removeSupersededRunBackups(runBackupRoot);
     if (removedCount > 0) {
-        console.log(`  Prune backups: ${removedCount} older run backup(s) removed, this run's kept`);
+        console.log(`  Prune backups: ${removedCount} older run backup(s) removed — recover moved content from ${PRUNED_SKILLS_BACKUP_DIRECTORY_NAME}/${basename(runBackupRoot)}, which stays until the next pruning install`);
     }
 }
 
@@ -527,6 +533,25 @@ function isManagedPath(candidatePath, managedHomeDirectory = CLAUDE_HOME) {
 }
 
 /**
+ * Report whether a manifest record names a file this installer writes and may
+ * therefore remove.
+ *
+ * Most of what an install writes sits under ~/.claude, and `isManagedPath`
+ * answers for all of it. `installMypyIniForClaudeHooks` writes `~/.mypy.ini` in
+ * the home directory, because that is where mypy reads its configuration, and the
+ * install records the path. Naming that one file keeps the permitted set an
+ * enumeration: every other path in the home directory stays outside it, so a
+ * record pointing anywhere else is still skipped with a warning.
+ *
+ * @param {string} candidatePath The absolute path a manifest record names.
+ * @returns {boolean} True when the installer itself writes the path.
+ */
+function isRemovableManifestRecord(candidatePath) {
+    if (isManagedPath(candidatePath)) return true;
+    return comparisonKeyForPath(candidatePath) === comparisonKeyForPath(MYPY_INI_INSTALL_PATH);
+}
+
+/**
  * Return the managed top-level directory an installed path sits under.
  *
  * The uninstall walk-up needs a stop root, and ~/.claude is the wrong one: a walk
@@ -581,6 +606,7 @@ function isMovableStaleFile(candidatePath) {
  *
  * @param {string} startDirectory The absolute directory the moved file sat in.
  * @param {string} destinationRoot The absolute managed root to stop below.
+ * @returns {void}
  */
 function removeEmptiedParentDirectories(startDirectory, destinationRoot) {
     let currentDirectory = startDirectory;
@@ -608,13 +634,13 @@ function removeEmptiedParentDirectories(startDirectory, destinationRoot) {
  * `__pycache__` entry, a user symlink, and any user-authored file all stay in
  * place.
  *
- * A full install replaces the manifest's file list wholesale, so the next diff
- * reads as "the package stopped shipping this". A scoped `--only` install unions
- * what it wrote onto the prior record, which keeps every entry a later full
- * install needs. An entry a scoped install drops — a path the run rewrote under a
- * fresh spelling, or a record already lost to an older install — sits outside
- * every later diff, so it stays inside the live skill once the package stops
- * shipping it.
+ * A run whose prunes read the prior record all the way through replaces the
+ * manifest's file list wholesale, so the next diff reads as "the package stopped
+ * shipping this". Every other run unions what it wrote onto the prior record,
+ * which keeps every entry a later pruning install needs. An entry that leaves the
+ * record — a path the run rewrote under a fresh spelling, or a record already lost
+ * to an older install — sits outside every later diff, so it stays inside the tree
+ * once the package stops shipping it.
  *
  * A move that fails is reported through `failedPaths` so the caller records those
  * paths in the fresh manifest. Keeping a failed path on the record holds it inside
@@ -891,7 +917,7 @@ export function managedHookScriptRelativePaths(hooksConfig) {
 export function managedHookScriptRelativePathsFromSourceRoots(sourceRoots) {
     const relativePaths = new Set();
     for (const sourceRoot of sourceRoots) {
-        const hooksJsonPath = join(sourceRoot, 'hooks', 'hooks.json');
+        const hooksJsonPath = join(sourceRoot, MANAGED_HOOKS_DIRECTORY_NAME, 'hooks.json');
         if (!existsSync(hooksJsonPath)) continue;
         const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
         for (const relativePath of managedHookScriptRelativePaths(hooksConfig)) {
@@ -924,11 +950,15 @@ function managedPackageSourceRoots() {
  * earlier installs that used a different interpreter prefix, while leaving
  * user-authored hooks outside the managed set untouched.
  *
- * @param {string} commandString The hook command from settings.json.
+ * A command that is not a string belongs to an entry this installer never wrote,
+ * so it counts as unmanaged and its entry stays.
+ *
+ * @param {unknown} commandString The hook command from settings.json.
  * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
  * @returns {boolean} True when the command references a managed script.
  */
 export function commandReferencesManagedHook(commandString, managedHookRelativePaths) {
+    if (typeof commandString !== 'string') return false;
     const normalizedCommand = commandString.replace(/\\/g, '/');
     if (commandIsInlineManagedValidatorRunner(normalizedCommand)) {
         return true;
@@ -990,7 +1020,9 @@ export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
  * all existing matcher groups of one event in a settings object, dropping any
  * group left empty. Run before the per-group merge so a managed hook that an
  * upgrade moves to a different matcher group is pruned from its old group rather
- * than left to double-run. User-authored hooks outside the managed set stay.
+ * than left to double-run. User-authored hooks outside the managed set stay, and
+ * an event whose value is not an array of groups is left as the settings file
+ * holds it.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {string} eventType The lifecycle event whose groups are pruned.
@@ -999,15 +1031,11 @@ export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
  */
 function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths) {
     const existingGroups = settings.hooks[eventType];
-    if (!existingGroups) return;
-    settings.hooks[eventType] = existingGroups
-        .map(group => ({
-            ...group,
-            hooks: group.hooks.filter(
-                hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
-            ),
-        }))
-        .filter(group => group.hooks.length > 0);
+    if (!Array.isArray(existingGroups)) return;
+    settings.hooks[eventType] = retainedMatcherGroups(
+        existingGroups,
+        commandString => commandReferencesManagedHook(commandString, managedHookRelativePaths),
+    ).keptGroups;
 }
 
 /**
@@ -1020,6 +1048,12 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
  * command are expanded to absolute home paths so hosts that require referenced
  * env vars at load time (a third-party host on Windows) can execute them.
  *
+ * The merge reads a settings file another tool or a person may have written, so
+ * it recognizes the shapes it writes and steps around the rest: a `hooks` value
+ * that is not an object and an event value that is not an array of groups each
+ * start from an empty array, and a group carrying no hooks array contributes no
+ * user entries.
+ *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
  * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to
@@ -1030,10 +1064,10 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
 export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
     const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
     const pluginRootForward = pluginRootDir.replace(/\\/g, '/');
-    if (!settings.hooks) settings.hooks = {};
+    if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
-        if (!settings.hooks[eventType]) settings.hooks[eventType] = [];
+        if (!Array.isArray(settings.hooks[eventType])) settings.hooks[eventType] = [];
         pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths);
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
@@ -1046,12 +1080,12 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
                 return { ...hook, command };
             });
             const existingIndex = settings.hooks[eventType].findIndex(
-                group => group.matcher === sourceGroup.matcher
+                group => group?.matcher === sourceGroup.matcher
             );
             if (existingIndex >= 0) {
                 const existing = settings.hooks[eventType][existingIndex];
-                const userHooks = existing.hooks.filter(
-                    hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
+                const userHooks = (groupHookEntries(existing) || []).filter(
+                    hook => !commandReferencesManagedHook(hook?.command, managedHookRelativePaths)
                 );
                 settings.hooks[eventType][existingIndex] = {
                     ...existing,
@@ -1073,24 +1107,24 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
  * commandReferencesManagedHook so entries written with any home-path style
  * ($HOME, ~, ${HOME}, or absolute) and any path separator are pruned. Matcher
  * groups left empty are dropped, and an empty hooks map is removed entirely.
- * User-authored hooks outside the managed set are preserved untouched.
+ * User-authored hooks outside the managed set are preserved untouched, and an
+ * event whose value is not an array of groups is left as the settings file holds
+ * it.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
  * @returns {void}
  */
 export function pruneManagedHooksFromSettings(settings, managedHookRelativePaths) {
-    if (!settings.hooks) return;
+    if (!settings.hooks || typeof settings.hooks !== 'object') return;
     for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
-        settings.hooks[eventType] = matcherGroups
-            .map(group => ({
-                ...group,
-                hooks: group.hooks.filter(
-                    hook => !commandReferencesManagedHook(hook.command, managedHookRelativePaths)
-                ),
-            }))
-            .filter(group => group.hooks.length > 0);
-        if (settings.hooks[eventType].length === 0) delete settings.hooks[eventType];
+        if (!Array.isArray(matcherGroups)) continue;
+        const { keptGroups } = retainedMatcherGroups(
+            matcherGroups,
+            commandString => commandReferencesManagedHook(commandString, managedHookRelativePaths),
+        );
+        settings.hooks[eventType] = keptGroups;
+        if (keptGroups.length === 0) delete settings.hooks[eventType];
     }
     if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
 }
@@ -1137,11 +1171,16 @@ export function retiredManagedHookRelativePaths(
  * shape sits outside this test on purpose: it names no script, so no manifest
  * record can retire it, and the merge writes it fresh on every run.
  *
- * @param {string} commandString The hook command from settings.json.
+ * A command that is not a string belongs to an entry this installer never wrote —
+ * a hand-edited settings.json, or a third-party entry carrying another shape — so
+ * it names no retired script and its entry stays.
+ *
+ * @param {unknown} commandString The hook command from settings.json.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
  * @returns {boolean} True when the command runs a retired managed script.
  */
 export function commandReferencesRetiredHook(commandString, retiredHookRelativePaths) {
+    if (typeof commandString !== 'string') return false;
     const normalizedCommand = commandString.replace(/\\/g, '/');
     for (const relativePath of retiredHookRelativePaths) {
         if (commandTailEndsAtManagedHook(normalizedCommand, relativePath)) return true;
@@ -1150,31 +1189,49 @@ export function commandReferencesRetiredHook(commandString, retiredHookRelativeP
 }
 
 /**
- * Keep the matcher groups of one event, dropping each hook that runs a retired
- * managed script and each group the drop leaves empty.
+ * Keep the matcher groups of one event, dropping each hook a predicate names and
+ * each group the drop leaves empty.
  *
- * A group carrying no hooks array is handed back untouched, so a shape this
- * installer does not recognize survives the pass.
+ * Every settings walk shares this pass, so a settings.json a person or another
+ * tool wrote meets one set of shape rules. A group carrying no hooks array is
+ * handed back untouched, and an entry whose command is not a string reaches the
+ * predicate as-is — each predicate reads a non-string command as an entry this
+ * installer never wrote — so a shape this installer does not recognize survives.
  *
  * @param {object[]} matcherGroups The event's matcher groups from settings.json.
- * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @param {(commandString: unknown) => boolean} shouldRemoveHook Names the hooks that leave.
  * @returns {{keptGroups: object[], removedCount: number}} The surviving groups and how many hooks left.
  */
-function retainedMatcherGroups(matcherGroups, retiredHookRelativePaths) {
+function retainedMatcherGroups(matcherGroups, shouldRemoveHook) {
     const keptGroups = [];
     let removedCount = 0;
     for (const group of matcherGroups) {
-        if (!Array.isArray(group.hooks)) {
+        const hookEntries = groupHookEntries(group);
+        if (hookEntries === null) {
             keptGroups.push(group);
             continue;
         }
-        const keptHooks = group.hooks.filter(
-            hook => !commandReferencesRetiredHook(hook.command, retiredHookRelativePaths),
-        );
-        removedCount += group.hooks.length - keptHooks.length;
+        const keptHooks = hookEntries.filter(hook => !shouldRemoveHook(hook?.command));
+        removedCount += hookEntries.length - keptHooks.length;
         if (keptHooks.length > 0) keptGroups.push({ ...group, hooks: keptHooks });
     }
     return { keptGroups, removedCount };
+}
+
+/**
+ * Return the hook entries one matcher group holds, or null when the group carries
+ * no hooks array.
+ *
+ * The installer writes every group with a `hooks` array, and a settings.json it
+ * reads back can hold a group of any shape. Reading the array through one
+ * accessor lets each walk recognize the shape it wrote and hand every other shape
+ * back untouched.
+ *
+ * @param {unknown} group One matcher group read from settings.json.
+ * @returns {object[]|null} The group's hook entries, or null when it holds none.
+ */
+function groupHookEntries(group) {
+    return Array.isArray(group?.hooks) ? group.hooks : null;
 }
 
 /**
@@ -1192,7 +1249,10 @@ function stripRetiredHookEntries(settings, retiredHookRelativePaths) {
     let removedCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
         if (!Array.isArray(matcherGroups)) continue;
-        const eventOutcome = retainedMatcherGroups(matcherGroups, retiredHookRelativePaths);
+        const eventOutcome = retainedMatcherGroups(
+            matcherGroups,
+            commandString => commandReferencesRetiredHook(commandString, retiredHookRelativePaths),
+        );
         removedCount += eventOutcome.removedCount;
         if (eventOutcome.keptGroups.length === 0) {
             delete settings.hooks[eventType];
@@ -1225,24 +1285,39 @@ export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRel
         console.warn(`  Warning: leaving settings.json as it stands — the file holds JSON the installer cannot read (${parseError.message})`);
         return 0;
     }
-    if (!settings.hooks) return 0;
+    if (!settings.hooks || typeof settings.hooks !== 'object') return 0;
     const removedCount = stripRetiredHookEntries(settings, retiredHookRelativePaths);
     if (removedCount === 0) return 0;
     writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     return removedCount;
 }
 
+/**
+ * Merge one package source root's hook groups into ~/.claude/settings.json.
+ *
+ * A settings file holding anything other than a JSON object ends the install with
+ * a message naming the file, so the run stops before it writes hook entries onto
+ * a shape the harness cannot read.
+ *
+ * @param {string} hooksSourceRoot The package root whose hooks/hooks.json is merged.
+ * @param {string} pythonCommand Interpreter command that replaces python3.
+ * @returns {number} Count of matcher groups merged.
+ */
 function mergeHooks(hooksSourceRoot, pythonCommand) {
-    const hooksJsonPath = join(hooksSourceRoot, 'hooks', 'hooks.json');
+    const hooksJsonPath = join(hooksSourceRoot, MANAGED_HOOKS_DIRECTORY_NAME, 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
-    const settingsPath = join(CLAUDE_HOME, 'settings.json');
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     let settings = {};
     if (existsSync(settingsPath)) {
         const raw = readFileSync(settingsPath, 'utf8').trim();
         if (raw) {
             try { settings = JSON.parse(raw); }
             catch { console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.'); process.exit(1); }
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+                console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
+                process.exit(1);
+            }
         }
     }
     const groupCount = mergeHooksIntoSettings(settings, hooksConfig, CLAUDE_HOME, pythonCommand);
@@ -1370,13 +1445,16 @@ function manifestFilesWithFailedPrunes(installedFiles, failedPrunePaths) {
  * root outside ~/.claude/skills, so a moved directory is never re-discovered as a
  * skill — under one shared timestamp per run. That mirrors the ~/.claude layout
  * the per-root stale-file prune writes, so one recovery point reads as a copy of
- * the tree it came from. A backup is never cleaned up, so a
- * user can recover a wrongly-matched directory. One directory whose rename fails
+ * the tree it came from. The recovery window runs until the next pruning install:
+ * `retainNewestRunBackupOnly` keeps that run's backup and retires the rest, so a
+ * user recovers a wrongly-matched directory from the newest backup on disk. One
+ * directory whose rename fails
  * (for example a read-only file or a cross-device move) is logged and left in
  * place, never deleted, so a prune failure costs at most a cosmetic leftover.
  *
  * @param {Set<string>} installedSkillNames Skill names this install just wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
+ * @returns {void}
  */
 function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     const skillsDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME);
@@ -1424,13 +1502,13 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
  * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
  * @param {string[]} currentInstalledFiles Every file this run copied.
  * @param {string} backupRoot The run's timestamped backup directory.
- * @returns {{prunedCount: number, failedPaths: string[], prunedCountByRootName: Object<string, number>}}
- *   The summed count, every path whose move failed, and each root's own count.
+ * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
+ *   The summed count, the skills root's own count, and every path whose move failed.
  */
 function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalledFiles, backupRoot) {
     let prunedCount = 0;
+    let skillsPrunedCount = 0;
     const failedPaths = [];
-    const prunedCountByRootName = {};
     for (const rootName of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
         const rootOutcome = pruneStaleInstalledFiles(
             priorInstalledFiles,
@@ -1440,9 +1518,11 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
         );
         prunedCount += rootOutcome.prunedCount;
         failedPaths.push(...rootOutcome.failedPaths);
-        prunedCountByRootName[rootName] = rootOutcome.prunedCount;
+        if (rootName === MANAGED_SKILLS_DIRECTORY_NAME) {
+            skillsPrunedCount = rootOutcome.prunedCount;
+        }
     }
-    return { prunedCount, failedPaths, prunedCountByRootName };
+    return { prunedCount, skillsPrunedCount, failedPaths };
 }
 
 /**
@@ -1459,7 +1539,8 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
  * @param {string[]|null} priorManifestFiles The prior manifest's file list, or null.
  * @param {string[]} installedFiles Every file this run copied.
  * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
- *   The stale files moved across all roots, the skills root's share, and the failed paths.
+ *   The stale files moved across all roots, the skills root's share, and every
+ *   path whose move failed.
  */
 function runFullInstallPrunes(
     copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
@@ -1478,25 +1559,23 @@ function runFullInstallPrunes(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
     retainNewestRunBackupOnly();
-    return {
-        prunedCount: staleOutcome.prunedCount,
-        skillsPrunedCount: staleOutcome.prunedCountByRootName[MANAGED_SKILLS_DIRECTORY_NAME],
-        failedPaths: staleOutcome.failedPaths,
-    };
+    return staleOutcome;
 }
 
 /**
  * Copy the package into ~/.claude, merge hook groups into settings.json, and
  * write the manifest record the uninstall purge and the next run's prune read.
  *
- * Two booleans steer the run and answer different questions. `isFullInstall`
+ * Three booleans steer the run and answer different questions. `isFullInstall`
  * answers "should this run do work?" and gates the prunes. `didPruneRun` answers
- * "may this run forget a record?" and gates both manifest keys: only a run that
- * diffed the prior record may replace a key wholesale, because wholesale
- * replacement is what makes the next diff mean "the package stopped shipping
- * this". A scoped install and a full install holding its prunes behind an
- * unresolved dependency group each merge their record with the prior one, so
- * every path and skill name stays available to a later prune and to uninstall.
+ * "did the prunes start?" and gates the prune call itself. `didPruneFinish`
+ * answers "may this run forget a record?" and gates both manifest keys: only a run
+ * whose prunes read the prior record all the way through may replace a key
+ * wholesale, because wholesale replacement is what makes the next diff mean "the
+ * package stopped shipping this". A scoped install, a full install holding its
+ * prunes behind an unresolved dependency group, and a run whose prune step throws
+ * each merge their record with the prior one, so every path and skill name stays
+ * available to a later prune and to uninstall.
  *
  * @param {string[]|null} selectedGroups The `--only` group names, or null for a full install.
  * @param {{isUpdateRefresh?: boolean}} [options] Run options; `isUpdateRefresh` purges before reinstalling.
@@ -1603,13 +1682,13 @@ function install(selectedGroups, options = {}) {
     const installedSkillNames = new Set();
     const copiedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
-        const skillsSource = join(sourceRoot, 'skills');
+        const skillsSource = join(sourceRoot, MANAGED_SKILLS_DIRECTORY_NAME);
         if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
             if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
             const skillSourceDirectory = join(skillsSource, skillDir.name);
-            const skillDestinationDirectory = join(CLAUDE_HOME, 'skills', skillDir.name);
+            const skillDestinationDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME, skillDir.name);
             const stats = copyTree(skillSourceDirectory, skillDestinationDirectory);
             skillsCreated += stats.created;
             skillsUpdated += stats.updated;
@@ -1628,9 +1707,9 @@ function install(selectedGroups, options = {}) {
         let totalHooksUpdated = 0;
         let totalHookGroups = 0;
         for (const sourceRoot of allSourceRoots) {
-            const hooksSource = join(sourceRoot, 'hooks');
+            const hooksSource = join(sourceRoot, MANAGED_HOOKS_DIRECTORY_NAME);
             if (!existsSync(hooksSource)) continue;
-            const hooksDestination = join(CLAUDE_HOME, 'hooks');
+            const hooksDestination = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME);
             const filesToCopy = collectFiles(hooksSource)
                 .filter(file => !file.endsWith('hooks.json'))
                 .filter(file => {
@@ -1677,12 +1756,13 @@ function install(selectedGroups, options = {}) {
 
         const mypyIniInstallResult = installMypyIniForClaudeHooks({
             homeDirectory: homedir(),
-            claudeHooksDirectory: join(CLAUDE_HOME, 'hooks'),
+            claudeHooksDirectory: join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
         });
         if (mypyIniInstallResult.action === 'created') {
             allInstalledFiles.push(mypyIniInstallResult.path);
             console.log(`  ✓ ${relative(homedir(), mypyIniInstallResult.path)} (new — enables mypy to resolve config.messages imports)`);
         } else if (mypyIniInstallResult.action === 'already-configured') {
+            allInstalledFiles.push(mypyIniInstallResult.path);
             console.log(`  .mypy.ini: already configured for Claude hooks`);
         } else {
             console.warn(`  WARNING: .mypy.ini exists at ${mypyIniInstallResult.path} without the expected mypy_path.`);
@@ -1713,18 +1793,26 @@ function install(selectedGroups, options = {}) {
             + 'A skill that migrated to a dependency package would look retired and its files would look stale, so both prunes are held until every dependency resolves.',
         );
     }
+    let didPruneFinish = false;
     if (didPruneRun) {
-        const prunes = runFullInstallPrunes(
-            copiedSkillNames, priorManifestSkills, priorManifestFiles, allInstalledFiles,
-        );
-        summary.skills.pruned = prunes.skillsPrunedCount;
-        stalePrunedTotal = prunes.prunedCount;
-        failedPrunePaths = prunes.failedPaths;
+        try {
+            const prunes = runFullInstallPrunes(
+                copiedSkillNames, priorManifestSkills, priorManifestFiles, allInstalledFiles,
+            );
+            summary.skills.pruned = prunes.skillsPrunedCount;
+            stalePrunedTotal = prunes.prunedCount;
+            failedPrunePaths = prunes.failedPaths;
+            didPruneFinish = true;
+        } catch (pruneError) {
+            console.warn(
+                `  Warning: the prune step ended early (${pruneError.message}) — this run merges its manifest record with the prior one, so a later full install still names every file.`,
+            );
+        }
     }
-    const manifestSkillNames = didPruneRun
+    const manifestSkillNames = didPruneFinish
         ? [...installedSkillNames].sort()
         : unionOfSkillNames(priorManifestSkills || [], [...installedSkillNames]).sort();
-    const manifestFiles = didPruneRun
+    const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
     writeManifest(manifestFiles, manifestSkillNames);
@@ -1766,7 +1854,7 @@ function pathsAreEquivalent(storedPath, installedPath) {
 
 
 function unsetGlobalGitHooksPathIfOurs() {
-    const installedGitHooksDirectory = join(CLAUDE_HOME, 'hooks', 'git-hooks');
+    const installedGitHooksDirectory = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME, 'git-hooks');
     let currentHooksPath = '';
     try {
         currentHooksPath = execFileSync('git', ['config', '--global', '--get', 'core.hooksPath'], {
@@ -1822,10 +1910,12 @@ function removeRecordedFile(filePath) {
  * Remove every file the manifest records, then drop the directories the removals
  * emptied.
  *
- * A record naming a path outside ~/.claude is skipped with a warning and counted,
- * so one malformed entry costs that entry alone: the purge removes every
- * legitimate record, clears the manifest, and leaves the user with a whole
- * uninstall rather than a half-removed install.
+ * A record is removed when it names a path the installer writes: anything under
+ * ~/.claude, plus the `~/.mypy.ini` the install writes in the home directory.
+ * Every other record is skipped with a warning and counted, so one malformed
+ * entry costs that entry alone: the purge removes every legitimate record, clears
+ * the manifest, and leaves the user with a whole uninstall rather than a
+ * half-removed install.
  *
  * Directory cleanup runs after the file loop so a directory holding two recorded
  * files is judged once both are gone. Each walk stops at the managed root the
@@ -1848,8 +1938,8 @@ function purgeManagedInstallation({ requireManifest }) {
     let skippedUnmanagedCount = 0;
     const managedRootByEmptiedDirectory = new Map();
     for (const filePath of manifest.files) {
-        if (!isManagedPath(filePath)) {
-            console.warn(`  Warning: skipping ${filePath} — the manifest record resolves outside ${CLAUDE_HOME}`);
+        if (!isRemovableManifestRecord(filePath)) {
+            console.warn(`  Warning: skipping ${filePath} — the manifest record names no path this installer writes`);
             skippedUnmanagedCount++;
             continue;
         }
@@ -1861,9 +1951,9 @@ function purgeManagedInstallation({ requireManifest }) {
         removeEmptiedParentDirectories(emptiedDirectory, managedRoot);
     }
     if (skippedUnmanagedCount > 0) {
-        console.warn(`  ${skippedUnmanagedCount} manifest record(s) skipped — each resolves outside ${CLAUDE_HOME}`);
+        console.warn(`  ${skippedUnmanagedCount} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME} and outside ${MYPY_INI_INSTALL_PATH}`);
     }
-    const settingsPath = join(CLAUDE_HOME, 'settings.json');
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     if (existsSync(settingsPath)) {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
         if (settings.hooks) {
@@ -1893,7 +1983,19 @@ function uninstall() {
     purgeManagedInstallation({ requireManifest: true });
 }
 
+/**
+ * Print the usage text, listing the install groups this run resolved.
+ *
+ * The group list is read from `INSTALL_GROUPS`, so it names the built-in groups
+ * and every dependency group that resolved on this machine — the same set
+ * `--only` accepts.
+ *
+ * @returns {void}
+ */
 function printHelp() {
+    const groupLines = Object.entries(INSTALL_GROUPS)
+        .map(([groupName, group]) => `  ${groupName} — ${group.description}`)
+        .join('\n');
     console.log(`
 ${PACKAGE_NAME} - Claude Code development standards installer
 
@@ -1905,14 +2007,11 @@ Usage:
   npx ${PACKAGE_NAME} --help       Show this help
 
 Groups:
-  core              Development standards, hooks, agents, commands
-  prompt-generator  Prompt engineering tools
-  journal           Session logging and memory
-  research          Deep research and citation tools
+${groupLines}
 
 Examples:
-  npx ${PACKAGE_NAME} --only prompt-generator
-  npx ${PACKAGE_NAME} --only prompt-generator,research
+  npx ${PACKAGE_NAME} --only core
+  npx ${PACKAGE_NAME} --only core,journal
 
 Install location: ~/.claude/
 

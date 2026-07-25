@@ -52,7 +52,7 @@ node bin/install.mjs --update       # remove manifest-tracked files, then reinst
 node bin/install.mjs --uninstall    # remove every installed file
 ```
 
-Groups: `core`, `prompt-generator`, `journal`, `research`. The published package runs the same entry point as `npx claude-dev-env`.
+Groups: `core`, `journal`, and the discovered `prompt-generator` dependency group. Run `node bin/install.mjs --help` for the live list. The published package runs the same entry point as `npx claude-dev-env`.
 
 ## Test
 
@@ -60,7 +60,7 @@ Groups: `core`, `prompt-generator`, `journal`, `research`. The published package
 npm test
 ```
 
-Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's built-in test runner — no extra dependency, no network. Expected: `# pass 185  # fail 0` (count grows as tests are added).
+Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's built-in test runner — no extra dependency, no network. Expected: `# fail 0`, with the pass count growing as tests are added.
 
 ## Gotchas
 
