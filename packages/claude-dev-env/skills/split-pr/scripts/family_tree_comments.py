@@ -24,10 +24,8 @@ from gh_body_comment import run_gh_pr_comment, write_markdown_body_file
 from split_pr_scripts_constants.config.execute_constants import (
     ERROR_FAMILY_TREE_COMMENT_FAILED,
     FAMILY_TREE_HEADING,
-    FAMILY_TREE_LIST_ITEM_TEMPLATE,
     FAMILY_TREE_LIST_ITEM_THIS_TEMPLATE,
     FAMILY_TREE_MERGE_HINT,
-    FAMILY_TREE_MERGE_ORDER_LABEL,
     FAMILY_TREE_POSITION_TEMPLATE,
     FAMILY_TREE_SKIP_CREATE_PRS_OFF,
     FAMILY_TREE_SKIP_NO_CHILD_URLS,
@@ -39,10 +37,10 @@ from split_pr_scripts_constants.config.execute_constants import (
     PAYLOAD_KEY_COMMENTED_PR_NUMBERS,
     PAYLOAD_KEY_SKIPPED,
     PAYLOAD_KEY_SKIP_REASON,
-    SUPERSEDE_MERGE_ORDER_SEPARATOR,
-    SUPERSEDE_PR_HASH_PREFIX,
+    SUPERSEDE_LIST_ITEM_TEMPLATE,
+    SUPERSEDE_MERGE_ORDER_LABEL,
 )
-from supersede_source_pr import collect_pr_numbers_from_urls
+from supersede_source_pr import collect_pr_numbers_from_urls, format_merge_order
 
 JsonObject = dict[str, object]
 
@@ -64,10 +62,6 @@ def build_family_tree_comment_body(
     Returns:
         Markdown with source, merge order, full linked list, and position.
     """
-    merge_order = SUPERSEDE_MERGE_ORDER_SEPARATOR.join(
-        f"{SUPERSEDE_PR_HASH_PREFIX}{each_number}"
-        for each_number in all_child_pr_numbers
-    )
     all_list_lines: list[str] = []
     this_position = 1
     for each_index, (each_number, each_url) in enumerate(
@@ -76,14 +70,12 @@ def build_family_tree_comment_body(
     ):
         if each_number == this_pr_number:
             this_position = each_index
-            all_list_lines.append(
-                FAMILY_TREE_LIST_ITEM_THIS_TEMPLATE
-                % (each_index, each_number, each_url)
-            )
+            stack_line_template = FAMILY_TREE_LIST_ITEM_THIS_TEMPLATE
         else:
-            all_list_lines.append(
-                FAMILY_TREE_LIST_ITEM_TEMPLATE % (each_index, each_number, each_url)
-            )
+            stack_line_template = SUPERSEDE_LIST_ITEM_TEMPLATE
+        all_list_lines.append(
+            stack_line_template % (each_index, each_number, each_url)
+        )
     position_line = FAMILY_TREE_POSITION_TEMPLATE % (
         this_pr_number,
         this_position,
@@ -95,7 +87,7 @@ def build_family_tree_comment_body(
             "",
             f"{FAMILY_TREE_SOURCE_LABEL} #{source_pr_number}",
             "",
-            f"{FAMILY_TREE_MERGE_ORDER_LABEL} {merge_order}",
+            f"{SUPERSEDE_MERGE_ORDER_LABEL} {format_merge_order(all_child_pr_numbers)}",
             "",
             *all_list_lines,
             "",

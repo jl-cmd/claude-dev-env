@@ -36,6 +36,7 @@ from supersede_source_pr import (  # noqa: E402
     build_supersede_comment_body,
     collect_pr_numbers_from_urls,
     extract_pr_number_from_url,
+    format_merge_order,
     resolve_supersede_skip_reason,
     supersede_source_pr,
 )
@@ -57,6 +58,11 @@ def test_collect_pr_numbers_from_urls_keeps_order() -> None:
         [CHILD_PR_URL_ONE, "not-a-url", CHILD_PR_URL_TWO]
     )
     assert all_numbers == [10, 11]
+
+
+def test_format_merge_order_joins_hash_numbers() -> None:
+    assert format_merge_order([10, 11]) == "#10 → #11"
+    assert format_merge_order([42]) == "#42"
 
 
 def test_build_supersede_comment_body_lists_merge_order_and_urls() -> None:

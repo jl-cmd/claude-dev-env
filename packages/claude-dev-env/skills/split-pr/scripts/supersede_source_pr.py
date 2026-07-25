@@ -99,6 +99,21 @@ def collect_pr_numbers_from_urls(all_child_pr_urls: list[str]) -> list[int]:
     return all_numbers
 
 
+def format_merge_order(all_child_pr_numbers: list[int]) -> str:
+    """Return the ``#10 → #11`` merge-order line for a stack.
+
+    Args:
+        all_child_pr_numbers: Ordered child PR numbers for the stack.
+
+    Returns:
+        Single-line merge order using the shared separator and hash prefix.
+    """
+    return SUPERSEDE_MERGE_ORDER_SEPARATOR.join(
+        f"{SUPERSEDE_PR_HASH_PREFIX}{each_number}"
+        for each_number in all_child_pr_numbers
+    )
+
+
 def build_supersede_comment_body(
     all_child_pr_numbers: list[int],
     all_child_pr_urls: list[str],
@@ -112,10 +127,6 @@ def build_supersede_comment_body(
     Returns:
         Markdown body with heading, merge order, and numbered child links.
     """
-    merge_order = SUPERSEDE_MERGE_ORDER_SEPARATOR.join(
-        f"{SUPERSEDE_PR_HASH_PREFIX}{each_number}"
-        for each_number in all_child_pr_numbers
-    )
     all_list_lines = [
         SUPERSEDE_LIST_ITEM_TEMPLATE
         % (each_index, each_number, each_url)
@@ -130,7 +141,7 @@ def build_supersede_comment_body(
             "",
             SUPERSEDE_INTRO,
             "",
-            f"{SUPERSEDE_MERGE_ORDER_LABEL} {merge_order}",
+            f"{SUPERSEDE_MERGE_ORDER_LABEL} {format_merge_order(all_child_pr_numbers)}",
             "",
             *all_list_lines,
             "",
