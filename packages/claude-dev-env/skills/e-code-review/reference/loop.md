@@ -30,7 +30,7 @@ If the level emits no severity (for example untagged `low` lines), consult your 
 
 ## Required checks
 
-"Run required checks" means: run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against every file changed or added in the round. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
+"Run required checks" means: run `~/.claude/skills/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against every file changed or added in the round. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
 
 ## Terminal outcomes
 

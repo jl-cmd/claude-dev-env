@@ -16,8 +16,8 @@ One warm, addressable advisor available at the strongest model tier the session 
 ## Follow the shared protocol
 
 **Detect the host profile first** (Host profiles in
-[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-— e.g. %USERPROFILE%\.claude\_shared\advisor\advisor-protocol.md). Do not start a model-floor
+[`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md)
+— e.g. %USERPROFILE%\.claude\skills\_shared\advisor\advisor-protocol.md). Do not start a model-floor
 walk until the host is known. 
 
 This session is the shared advisor's sole consumer, so its model floor is
@@ -43,7 +43,7 @@ CORRECTION / PLAN / STOP as this third-party session.
 - One advisor bind per session (`team-advisor-agent` on Claude; one CLI
   `session_id` on a third-party host), owned by this session for its whole lifecycle
   (spawn or CLI bind, drift re-bind, shutdown) — see
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+  [`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md).
 - Never bind the advisor, or its CLI path, at a tier below the protocol floor
   for this host (Claude: this session's own tier; a third-party host: Opus floor
   with Fable first).

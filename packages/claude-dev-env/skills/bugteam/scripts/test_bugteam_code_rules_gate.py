@@ -1,7 +1,7 @@
 """Smoke tests for the skill-path code_rules_gate wrap.
 
 Behavioral coverage lives at
-``_shared/pr-loop/scripts/tests/test_code_rules_gate.py``.
+``skills/_shared/pr-loop/scripts/tests/test_code_rules_gate.py``.
 """
 
 from __future__ import annotations

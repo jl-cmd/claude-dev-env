@@ -444,7 +444,6 @@ class TestAreaMapPrefixesStayLive:
                 "rules/",
                 "bin/",
                 "scripts/",
-                "_shared/",
                 "docs/",
                 "audit-rubrics/",
                 ".github/",

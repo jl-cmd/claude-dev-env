@@ -260,7 +260,7 @@ def test_entry_exposes_every_symbol_the_preflight_hook_imports() -> None:
     turns its deny paths into allows.
     """
     hook_path = (
-        Path(__file__).resolve().parents[3]
+        Path(__file__).resolve().parents[4]
         / "hooks"
         / "blocking"
         / "code_verifier_spawn_preflight_gate.py"

@@ -22,7 +22,7 @@ The caller passes its identity (fills the final-report header and scratch-file p
 ## Open
 
 1. **Grant project permissions:**
-   `python "$HOME/.claude/_shared/pr-loop/scripts/grant_project_claude_permissions.py"`
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/grant_project_claude_permissions.py"`
    The script writes idempotent allow-rules and `additionalDirectories` entries into `~/.claude/settings.json` so subagents can edit the project's `.claude/` tree without prompting.
 
    **Auto-mode escalation:** in an unattended run the permission classifier can block this grant as an unrequested allowlist change. Keep the run alive — surface the exact command to the user through `AskUserQuestion` and ask them to approve it or run it themselves with the `!` prefix. Continue once the grant lands. A user who wants future runs to skip the prompt can add a standing Bash allow-rule for the script in their settings.
@@ -46,7 +46,7 @@ Run these in order from the lead session on EVERY exit — converged, cap reache
 3. **Clean the working tree.** Return to the session worktree, remove run-scoped scratch files, and leave `git status` clean of run artifacts.
 4. **Rewrite the PR description.** Follow [`reference/teardown-publish-permissions.md` § Publish the final PR description](reference/teardown-publish-permissions.md): capture the cumulative diff and original body, compose the new body directly against `docs/PR_DESCRIPTION_GUIDE.md`, publish via `update_pull_request`, remove the scratch files. On failure, report it and continue — the revoke still runs.
 5. **Revoke project permissions (always):**
-   `python "$HOME/.claude/_shared/pr-loop/scripts/revoke_project_claude_permissions.py"`
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/revoke_project_claude_permissions.py"`
    Non-negotiable, including on error exits: leaving the grant in place lets future sessions inherit elevated `.claude/**` access without an explicit opt-in. Run revoke even when earlier close steps partially failed; log cleanup errors separately.
 6. **Final report.** Print the caller's report block verbatim — no paraphrase, no extra commentary:
    ```

@@ -1,9 +1,9 @@
 # GitHub PR comments (bugteam-only)
 
 Transport, exit codes, retry/backoff, and payload shapes live in
-[`../../../_shared/pr-loop/gh-payloads.md`](../../../_shared/pr-loop/gh-payloads.md)
+[`../../_shared/pr-loop/gh-payloads.md`](../../_shared/pr-loop/gh-payloads.md)
 and
-[`post_audit_thread.py`](../../../_shared/pr-loop/scripts/post_audit_thread.py).
+[`post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py).
 Read those for how the review POST runs; this file covers only bugteam lead and
 FIX behavior around that transport.
 
@@ -12,7 +12,7 @@ FIX behavior around that transport.
 The lead runs `post_audit_thread.py` at the end of every audit pass:
 
 ```
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/post_audit_thread.py" \
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/post_audit_thread.py" \
   --skill bugteam \
   --owner <owner> \
   --repo <repo> \
@@ -91,7 +91,7 @@ mcp__plugin_github_github__pull_request_review_write(
 ```
 
 Reply body template:
-[`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md).
+[`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md).
 Per-status `<status_line>` / `<action_heading>` values live in
 [`../PROMPTS.md`](../PROMPTS.md) § FIX execution step 8. Identifier-shape
 rationale: [obstacles/fix-resolve-thread.md](obstacles/fix-resolve-thread.md).

@@ -67,7 +67,7 @@ Shared helper only — never restate the numeric percent in callers.
 ## Opt-out token
 
 ```bash
-python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex
 ```
 
 | Exit | Meaning |

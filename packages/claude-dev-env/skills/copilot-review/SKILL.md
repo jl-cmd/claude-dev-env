@@ -26,7 +26,7 @@ The user is on a PR branch, wants Copilot (the GitHub Copilot reviewer bot) to k
 Before any other work, run:
 
 ```bash
-python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer copilot
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer copilot
 ```
 
 Exit 0 — Copilot reviews are disabled: respond with the literal line

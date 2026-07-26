@@ -50,7 +50,7 @@ If `pr-fix-protocol` is not installed when findings exist, stop with: `/codex-re
 Before any other work, run:
 
 ```bash
-python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex
+python "$HOME/.claude/skills/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex
 ```
 
 - **Exit 0** — Codex reviews are disabled: refuse with the opt-out line above. Do not probe, review, or fix.

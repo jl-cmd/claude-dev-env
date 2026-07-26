@@ -12,8 +12,8 @@ Posting the per-loop audit review is handled by
 [`_shared/pr-loop/scripts/post_audit_thread.py`](scripts/post_audit_thread.py).
 The script owns the review-create/POST/retry flow internally; callers no longer
 build the GitHub reviews-API payload themselves. See
-[`skills/bugteam/SKILL.md` § Audit posting](../../skills/bugteam/SKILL.md#audit-posting)
-for the contract and [`skills/bugteam/PROMPTS.md`](../../skills/bugteam/PROMPTS.md)
+[`skills/bugteam/SKILL.md` § Audit posting](../../bugteam/SKILL.md#audit-posting)
+for the contract and [`skills/bugteam/PROMPTS.md`](../../bugteam/PROMPTS.md)
 for the AUDIT-step invocation shape.
 
 ## Review body skeleton

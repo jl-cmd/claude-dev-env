@@ -26,7 +26,7 @@ BUGBOT_RUN_BODY_PATTERN: re.Pattern[str] = re.compile(
 )
 
 AVAILABILITY_SCRIPT_RELATIVE_PATH: Path = (
-    Path("_shared") / "pr-loop" / "scripts" / "reviewer_availability.py"
+    Path("skills") / "_shared" / "pr-loop" / "scripts" / "reviewer_availability.py"
 )
 AVAILABILITY_SCRIPT_PATH_ENV_VAR_NAME: str = "REVIEWER_SPAWN_GATE_AVAILABILITY_SCRIPT_PATH"
 AVAILABILITY_SCRIPT_TIMEOUT_SECONDS: int = 15

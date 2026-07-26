@@ -20,8 +20,6 @@ area_map:
     label: "area: installer"
   - path_prefix: "scripts/"
     label: "area: scripts"
-  - path_prefix: "_shared/"
-    label: "area: scripts"
   - path_prefix: "docs/"
     label: "area: docs"
   - path_prefix: "audit-rubrics/"

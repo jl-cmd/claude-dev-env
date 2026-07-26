@@ -6,7 +6,7 @@ Shared spawn-once, consult-by-message protocol for a warm advisor. Two skills de
 
 ## Host profiles
 
-Detect the host profile **before** any model-floor walk. Source of truth for names and detection: `HOST_PROFILE_CLAUDE`, `HOST_PROFILE_THIRD_PARTY`, `ALL_HOST_PROFILES`, and `detect_host_profile(...)` in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py` and `tier_model_ids.py`.
+Detect the host profile **before** any model-floor walk. Source of truth for names and detection: `HOST_PROFILE_CLAUDE`, `HOST_PROFILE_THIRD_PARTY`, `ALL_HOST_PROFILES`, and `detect_host_profile(...)` in `$HOME/.claude/skills/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py` and `tier_model_ids.py`.
 
 Detection order:
 
@@ -50,7 +50,7 @@ Ladder, strongest first (canonical Title Case names: `Fable`, `Opus`, `Sonnet`, 
 Emit a structured spawn-walk log so it can be checked mechanically rather than inferred from a transcript. Record: `own_tier` (the floor tier), `candidate_tiers` (the ladder slice down to that floor), `attempts` (one `{tier, result}` entry appended as each bind try happens, `result` one of `spawned` for a Claude Agent spawn, `cli` for a CLI Claude-chain bind, or a failure reason such as `unavailable`), and `selected_tier` (the tier of the first successful bind — first `spawned` or `cli` entry — or `null` paired with a `fallback_reason` string when none bound). Write the log as JSON with those field names to a path the session controls — typically `<job-temp-dir>/model-tier-run.json` (or the OS temp directory when no job directory exists). Check it with:
 
 ```
-python "$HOME/.claude/_shared/advisor/scripts/model_tier_run_validator.py" <path-to-model-tier-run.json>
+python "$HOME/.claude/skills/_shared/advisor/scripts/model_tier_run_validator.py" <path-to-model-tier-run.json>
 ```
 
 Exit code `0` means every invariant holds; `1` means a ladder invariant failed; `2` means the path or JSON was unusable. The same checks are available in-process via `validate_model_tier_run(run)`.
@@ -62,7 +62,7 @@ The validator checks ladder shape only (candidate slice, attempt order, success-
 On a **third-party host**, follow **Host profiles → Third-party host** (CLI Claude-chain bind at Fable then Opus; no Agent-tool `session-advisor` spawn). Charter the CLI session as a standing reviewer that only answers with ENDORSE / CORRECTION / PLAN / STOP — same consult contract as the Agent path, without SendMessage.
 
 On a **Claude host**, the consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
-- `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../agents/session-advisor.md) for the full signal contract).
+- `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../../agents/session-advisor.md) for the full signal contract).
 - `model`: the short alias for that attempt's candidate tier via `resolve_cli_model_id` (or the alias table under CLI chain) — for example `opus`, not Title Case `Opus`. The floor is only the lower bound of the walk; the walk still tries stronger tiers first.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
@@ -128,7 +128,7 @@ The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" -- <
 
 **Claude host:** fall back to this runner when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.
-- `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
+- `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/skills/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
 - The running session is itself a subagent barred from spawning further agents.
 
 Map `selected_tier` when one exists (the warm agent already bound above the floor, or at it); map the floor tier only when the walk exhausted with `selected_tier=null`. Resolve that tier to its CLI / Agent model alias before the first call — the CLI's `--model` flag and the Agent tool's `model:` field take the short aliases below, not free-form ladder prose. Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in the same constants package / `tier_model_ids.py` helper:
@@ -141,7 +141,7 @@ Map `selected_tier` when one exists (the warm agent already bound above the floo
 | Haiku | `haiku` |
 | ThirdParty (third-party session model field only; not an advisor walk tier) | `third-party` |
 
-Resolve in code with `python -c "from tier_model_ids import resolve_cli_model_id; print(resolve_cli_model_id('Opus'))"` from `$HOME/.claude/_shared/advisor/scripts/` (any letter case accepted; unknown tiers raise `ValueError`). Write the charter or the consult brief to a temporary file under the job's own temporary directory (or the OS temp directory when no job directory exists) and pipe it in, rather than passing either as an inline argument, and drop that file once the consult completes.
+Resolve in code with `python -c "from tier_model_ids import resolve_cli_model_id; print(resolve_cli_model_id('Opus'))"` from `$HOME/.claude/skills/_shared/advisor/scripts/` (any letter case accepted; unknown tiers raise `ValueError`). Write the charter or the consult brief to a temporary file under the job's own temporary directory (or the OS temp directory when no job directory exists) and pipe it in, rather than passing either as an inline argument, and drop that file once the consult completes.
 
 Read the `session_id` out of the first call's JSON events and pass it to `-p --resume <session_id> --output-format json` on every later consult — `-p` stays on the resume call too, since it is still a non-interactive invocation. A usage-limit failover to the next binary in the chain does not carry the `session_id` forward: a session store belongs to the binary and account that minted it, so a `--resume` against the new binary can fail. Treat that failure as starting over, not as an error to retry — resend the charter plus a compact recap of the consults since the last one, capture the new `session_id` the fresh call returns, and continue from there.
 

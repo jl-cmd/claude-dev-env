@@ -19,7 +19,6 @@
         "hooks/",
         "system-prompts/",
         "scripts/",
-        "_shared/",
         "audit-rubrics/",
         "CLAUDE.md",
         "!**/__pycache__/**",

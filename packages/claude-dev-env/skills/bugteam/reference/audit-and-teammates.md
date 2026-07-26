@@ -93,10 +93,10 @@ Repeat until an exit condition fires.
    1. From the repository root, run the gate script (align `--base` with the PR base branch from Step 1, e.g. `origin/main` or `origin/develop`):
 
       ```bash
-      python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
+      python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
       ```
 
-      `git merge-base` + `git diff --name-only` live inside the script; see [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md) for what lives under this directory, and [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md) for gate-only merge-base / invocation semantics. The lead runs this (not a teammate).
+      `git merge-base` + `git diff --name-only` live inside the script; see [`../../_shared/pr-loop/scripts/README.md`](../../_shared/pr-loop/scripts/README.md) for what lives under this directory, and [`../../_shared/pr-loop/code-rules-gate.md`](../../_shared/pr-loop/code-rules-gate.md) for gate-only merge-base / invocation semantics. The lead runs this (not a teammate).
 
    2. If exit code **0** → continue to step 2.5 (AUDIT spawn) below.
    3. If exit code **non-zero** → run a **standards-fix pass** through the
@@ -127,7 +127,7 @@ Repeat until an exit condition fires.
 ## AUDIT action
 
 Walk all A–Q categories through the worker-spawn dispatcher
-([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Every loop
+([`worker-spawn.md`](../../_shared/pr-loop/worker-spawn.md)). Every loop
 is a fresh process or a fresh agent context.
 
 1. **Build the headless audit prompt** and write it to a prompt file under the
@@ -164,7 +164,7 @@ is a fresh process or a fresh agent context.
      dispatcher ran the worker to completion. Read the outcome XML at
      `<worktree_path>/.bugteam-pr<N>-loop<L>.outcomes.xml`. The **lead**
      posts the audit review with
-     [`post_audit_thread.py`](../../../_shared/pr-loop/scripts/post_audit_thread.py)
+     [`post_audit_thread.py`](../../_shared/pr-loop/scripts/post_audit_thread.py)
      (see [SKILL.md § Audit posting](../SKILL.md#audit-posting)).
    - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
      that reason): rebuild the prompt with default `--flavor agent` (omit
@@ -193,7 +193,7 @@ path (MCP posting).
 ## Standards-fix action
 
 Route through the worker-spawn dispatcher
-([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Role
+([`worker-spawn.md`](../../_shared/pr-loop/worker-spawn.md)). Role
 `clean-coder` maps to primary agent `clean-coder`. Every round is a fresh
 process or a fresh agent context. The **5-round cap** stays (each round = one
 worker session after a non-zero gate).
@@ -243,7 +243,7 @@ only; headless tiers rely on the preflight's agent-definition-file check.
 ## FIX action (fresh teammate)
 
 Route through the worker-spawn dispatcher
-([`worker-spawn.md`](../../../_shared/pr-loop/worker-spawn.md)). Role
+([`worker-spawn.md`](../../_shared/pr-loop/worker-spawn.md)). Role
 `clean-coder` maps to primary agent `clean-coder`. Every loop is a fresh
 process or a fresh agent context. The teammate sees only the latest audit’s
 findings — prior-loop findings, fix history, and chat stay in the lead.
@@ -288,7 +288,7 @@ Pass finding comment URL, comment id, and thread node id for each finding
      on the real diff. Read the outcome XML at
      `<worktree_path>/.bugteam-pr<N>-loop<L>.fix-outcomes.xml`. The **lead**
      posts one reply per finding using the unified template at
-     [`../../../_shared/pr-loop/audit-reply-template.md`](../../../_shared/pr-loop/audit-reply-template.md)
+     [`../../_shared/pr-loop/audit-reply-template.md`](../../_shared/pr-loop/audit-reply-template.md)
      — the full header / horizontal rule / `<action_heading> ✅` /
      explanation / anchored-bullet / closing-paragraph skeleton, with
      `<status_line>` set per the path (`Fixed in <short_sha>` for
@@ -296,7 +296,7 @@ Pass finding comment URL, comment id, and thread node id for each finding
      `status=could_not_address`, `Hook blocked the fix commit` for
      `status=hook_blocked`). Per-thread reply and `resolve_thread` are
      atomic; the mechanics follow the shared 13-step sequence in
-     [`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)
+     [`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
      (step 12 carries the exact reply-and-resolve sequence).
    - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
      that reason): Tier 2 keeps the current behavior end to end, including

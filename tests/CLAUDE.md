@@ -93,7 +93,7 @@ matching list under `.github/ci/` with an owner disposition for that node ID.
 | `test_local_identity.py` | Unit specs for `config/local_identity.py`: owner-scope resolution from the environment, a git-ignored local file, and the placeholder default, plus token environment-variable naming. |
 | `test_sync_ai_rules.py` | Specs for `.github/scripts/sync_ai_rules.py`: destination path logic, canonical-repo behaviour (writes `.cursor/BUGBOT.md` only), drift detection, and the listener's write logic against a real temporary git repo. |
 | `test_bugbot_rules_contract.py` | Contract test: verifies that `AGENTS.md` and `.cursor/BUGBOT.md` list the same CODE_RULES exemptions as `code_rules_enforcer.py`. Keeps the LLM review docs in step with the hook-enforced gate. |
-| `test_bugteam_code_rules_gate.py` | Exercises the `code_rules_gate.py` CLI in `_shared/pr-loop/scripts/` against a known example module, confirming the gate exits zero on help and non-zero on violations. |
+| `test_bugteam_code_rules_gate.py` | Exercises the `code_rules_gate.py` CLI in `skills/_shared/pr-loop/scripts/` against a known example module, confirming the gate exits zero on help and non-zero on violations. |
 | `test_bugteam_permission_scripts.py` | Verifies the bugteam grant/revoke permission scripts exist, are runnable, and produce expected exit codes. |
 | `test_bugteam_preflight.py` | Checks the bugteam preflight script logic. |
 | `test_doc_cross_references.py` | Walks Python docstrings and Markdown files for repo-relative path references and confirms each path exists on disk. |

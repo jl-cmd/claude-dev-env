@@ -1,7 +1,7 @@
 # Fix protocol
 
 Open and apply the shared fix sequence in
-[`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)
+[`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)
 — executor choice, the 13-step sequence, reply transport, thread resolution,
 and post-push resets. Hook handling per [ground-rules.md](ground-rules.md).
 

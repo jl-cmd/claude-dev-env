@@ -36,7 +36,7 @@ each PR its own checkout with `git worktree add`. For each PR the user named:
    the repo the PRs live in.
 5. **Copilot quota pre-check once for the whole run** — run the single-PR
    pre-flight step 5 check one time:
-   `python "$HOME/.claude/_shared/pr-loop/scripts/copilot_quota.py"`. Every PR in
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/copilot_quota.py"`. Every PR in
    the run shares one account's Copilot premium-request quota, so one check covers
    them all. Exit 0 sets `copilotDisabled: false` on every PR entry below; any
    non-zero exit sets `copilotDisabled: true` on every entry, so each child skips

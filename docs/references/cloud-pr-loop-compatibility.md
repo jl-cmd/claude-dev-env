@@ -4,7 +4,7 @@
 
 This document lets a zero-context agent run the PR-loop skill family
 (`pr-converge`, `autoconverge`, `bugteam`, `qbug`, `findbugs`, `fixbugs`,
-`monitor-open-prs`, `copilot-review`, and the shared `_shared/pr-loop`
+`monitor-open-prs`, `copilot-review`, and the shared `skills/_shared/pr-loop`
 scripts) inside a Claude Code cloud session, and lays out the code changes
 that make those skills cloud-native.
 
@@ -65,7 +65,7 @@ evidence (the probe or inventory line that proves it), and a fix summary
 
 - **Symptom:** Every `gh ...` shell step and every `subprocess.run(["gh", ...])` fails with command-not-found.
 - **Cause:** The cloud image ships no `gh` binary, and the binary cannot be fetched (RC5 blocks the release download).
-- **Evidence:** `command -v gh` fails. Affected scripts: `pr-converge/scripts/{fetch_copilot_reviews.py, check_convergence.py, check_bugbot_ci.py, check_pending_reviews.py, post_fix_reply.py}`; `_shared/pr-loop/scripts/{post_audit_thread.py, copilot_quota.py}`; `monitor-open-prs/scripts/discover_open_prs.py`; `autoconverge/workflow/converge.mjs` (dozens of literal `gh` commands in agent-prompt text).
+- **Evidence:** `command -v gh` fails. Affected scripts: `pr-converge/scripts/{fetch_copilot_reviews.py, check_convergence.py, check_bugbot_ci.py, check_pending_reviews.py, post_fix_reply.py}`; `skills/_shared/pr-loop/scripts/{post_audit_thread.py, copilot_quota.py}`; `monitor-open-prs/scripts/discover_open_prs.py`; `autoconverge/workflow/converge.mjs` (dozens of literal `gh` commands in agent-prompt text).
 - **Fix summary:** Phase A routes script transport through MCP and REST; Phase B rewrites SKILL.md prose to name the MCP path.
 
 ### RC2 — Deferred MCP schemas
@@ -114,7 +114,7 @@ evidence (the probe or inventory line that proves it), and a fix summary
 
 - **Symptom:** The Copilot quota pre-check crashes rather than returning its skip code.
 - **Cause:** `gh api copilot_internal/user` has no MCP equivalent and the internal endpoint is not served for proxy REST. `copilot_quota.py` `_run_gh` runs `subprocess.run(["gh", ...])` with no missing-binary handling, so the missing `gh` raises an uncaught `FileNotFoundError`.
-- **Evidence:** `_shared/pr-loop/scripts/copilot_quota.py` `_run_gh` (lines 63-90) has no `FileNotFoundError` guard around `subprocess.run(["gh", *all_command_arguments], ...)`. The quota read at line 169 calls `gh api copilot_internal/user`.
+- **Evidence:** `skills/_shared/pr-loop/scripts/copilot_quota.py` `_run_gh` (lines 63-90) has no `FileNotFoundError` guard around `subprocess.run(["gh", *all_command_arguments], ...)`. The quota read at line 169 calls `gh api copilot_internal/user`.
 - **Fix summary:** Phase A adds missing-binary handling that returns the documented skip code, so the quota gate treats Copilot status as unknown; Phase B has the caller work out `copilot_down` from what lands on the PR after `mcp__github__request_copilot_review`, since the request call itself confirms nothing.
 
 ### RC9 — Reviewer gates weaken with no notice
@@ -274,12 +274,12 @@ does nothing in cloud (it fails open).
 One work item per file. Each item names the source path, the exact change,
 and an acceptance check. Run Python checks from the repo root with
 `python3`; run the shared suite in
-`packages/claude-dev-env/_shared/pr-loop/scripts/tests/` and each skill's
+`packages/claude-dev-env/skills/_shared/pr-loop/scripts/tests/` and each skill's
 own `scripts/test_*.py` files.
 
 ### Phase A — Unblock transport in scripts
 
-**A1. `_shared/pr-loop/scripts/post_audit_thread.py` — env-token-first short-circuit.**
+**A1. `skills/_shared/pr-loop/scripts/post_audit_thread.py` — env-token-first short-circuit.**
 When `GH_TOKEN` (or `GITHUB_TOKEN`) is set and `BUGTEAM_REVIEWER_ACCOUNT` is
 unset, skip every `gh` identity call and use the env token: the `gh auth
 token` resolve (line 652), `gh api user` (line 695), `gh api
@@ -291,25 +291,25 @@ already uses `urllib.request` against
 so it works through the proxy for a covered owner.
 *Acceptance:* with `GH_TOKEN` set and `BUGTEAM_REVIEWER_ACCOUNT` unset, the
 resolve path runs no `gh` subprocess;
-`python3 -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
+`python3 -m pytest packages/claude-dev-env/skills/_shared/pr-loop/scripts/tests/` is green.
 
-**A2. `_shared/pr-loop/scripts/copilot_quota.py` — missing-binary handling in `_run_gh`.**
+**A2. `skills/_shared/pr-loop/scripts/copilot_quota.py` — missing-binary handling in `_run_gh`.**
 Wrap `subprocess.run(["gh", *all_command_arguments], ...)` (lines 81-89) so a
 `FileNotFoundError` returns the documented skip result rather than raising.
 The caller then treats Copilot quota as unknown and skips the Copilot spawn.
 *Acceptance:* with `gh` absent, the script exits with its skip code, not a
-traceback; `python3 -m pytest packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
+traceback; `python3 -m pytest packages/claude-dev-env/skills/_shared/pr-loop/scripts/tests/` is green.
 
-**A3. New `_shared/pr-loop/scripts/github_rest.py` — shared REST transport helper.**
+**A3. New `skills/_shared/pr-loop/scripts/github_rest.py` — shared REST transport helper.**
 A single helper that reads `GH_TOKEN`/`GITHUB_TOKEN`, sends the
 `Authorization: Bearer` header, trusts the proxy CA bundle
 (`/root/.ccr/ca-bundle.crt`), and returns parsed JSON with pagination. Its
 constants live in `pr_loop_shared_constants/`. The five pr-converge scripts
 import it for their REST reads. Add the file to the
-`_shared/pr-loop/scripts/CLAUDE.md` Key-scripts table in the same change.
+`skills/_shared/pr-loop/scripts/CLAUDE.md` Key-scripts table in the same change.
 *Acceptance:* a helper unit test hits `https://api.github.com/user` through
 the proxy and reads a 200 with a login; `python3 -m pytest
-packages/claude-dev-env/_shared/pr-loop/scripts/tests/` is green.
+packages/claude-dev-env/skills/_shared/pr-loop/scripts/tests/` is green.
 
 **A4. `skills/pr-converge/scripts/check_bugbot_ci.py` — route check-runs off `gh`.**
 Change the check-runs read (line 52,
@@ -364,11 +364,11 @@ workflow tests, and the emitted fence names a portable interpreter.
 
 ### Phase B — Make SKILL.md prose cloud-aware
 
-**B1. New `_shared/pr-loop/cloud-transport.md` — shared cloud-transport reference.**
+**B1. New `skills/_shared/pr-loop/cloud-transport.md` — shared cloud-transport reference.**
 One doc that carries the Section 5 preamble: the `ToolSearch` load line, the
 gh→MCP substitution matrix, the origin/HEAD fix, the identity rules, the
 Copilot fallback, and the hook-denial notes. Every PR-loop SKILL.md points to
-it by relative path. Add its row to the `_shared/pr-loop/CLAUDE.md`
+it by relative path. Add its row to the `skills/_shared/pr-loop/CLAUDE.md`
 Key-documents table in the same change.
 *Acceptance:* the doc exists and each PR-loop SKILL.md links it; a grep for
 `cloud-transport.md` finds a link in every PR-loop SKILL.md.
@@ -401,7 +401,7 @@ Each SKILL.md that names a `mcp__github__*` tool states the `ToolSearch` load
 step first: `skills/copilot-review/SKILL.md`, `skills/qbug/SKILL.md`,
 `skills/findbugs/SKILL.md`, `skills/pr-fix-protocol/SKILL.md`,
 `skills/pr-scope-resolve/SKILL.md`, `skills/pr-loop-lifecycle/SKILL.md`,
-`skills/bugteam/PROMPTS.md`, and the `_shared/pr-loop` docs `fix-protocol.md`
+`skills/bugteam/PROMPTS.md`, and the `skills/_shared/pr-loop` docs `fix-protocol.md`
 and `gh-payloads.md`.
 *Acceptance:* each file names the `ToolSearch` load step ahead of its first
 MCP tool call; a grep for `ToolSearch` finds a hit in each.

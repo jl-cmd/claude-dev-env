@@ -122,7 +122,7 @@
   description: "Test suites and test files"
 - name: "area: scripts"
   color: "1d76db"
-  description: "Helper scripts under scripts/ and _shared/"
+  description: "Helper scripts under scripts/ and skills/_shared/"
 - name: "area: docs"
   color: "1d76db"
   description: "Markdown files and docs/ directories"

@@ -41,10 +41,10 @@ const CONFIG = {
   codexReviewPollIntervalSeconds: 120,
   codexReviewMaxPolls: 21,
   sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
-  prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
+  prLoopScripts: '$HOME/.claude/skills/_shared/pr-loop/scripts',
   codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
-  bugteamRubric: '$HOME/.claude/_shared/pr-loop/audit-contract.md',
-  precatchRubric: '$HOME/.claude/_shared/pr-loop/precatch-rubric.md',
+  bugteamRubric: '$HOME/.claude/skills/_shared/pr-loop/audit-contract.md',
+  precatchRubric: '$HOME/.claude/skills/_shared/pr-loop/precatch-rubric.md',
 }
 
 const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '

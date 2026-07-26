@@ -1,6 +1,6 @@
 # Copilot gap analysis
 
-> **Of-record gate location:** skill-local `bugteam_code_rules_gate.py` is a thin re-export. The of-record implementation is `_shared/pr-loop/scripts/code_rules_gate.py`.
+> **Of-record gate location:** skill-local `bugteam_code_rules_gate.py` is a thin re-export. The of-record implementation is `skills/_shared/pr-loop/scripts/code_rules_gate.py`.
 
 > **Status: HISTORICAL — patch plan partially superseded.**
 >

@@ -9,7 +9,7 @@
     and from both the worktree (packages/claude-dev-env/scripts/check.ps1)
     and the installed runtime (~/.claude/scripts/check.ps1, after install.mjs
     propagates this file). Tools: ruff over hooks/, mypy over hooks blocking
-    and validators, mypy-pr-loop over _shared/pr-loop/scripts production
+    and validators, mypy-pr-loop over skills/_shared/pr-loop/scripts production
     modules, and optional pytest over the blocking enforcer suite. Each tool
     runs sequentially; the first non-zero exit code is preserved as the
     script's exit code so CI/pre-commit can short-circuit on the first failure.
@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
-$prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
+$prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'skills' '_shared' 'pr-loop' 'scripts')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0

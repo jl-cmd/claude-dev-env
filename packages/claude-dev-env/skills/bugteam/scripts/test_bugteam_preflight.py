@@ -1,7 +1,7 @@
 """Smoke tests for the skill-path preflight wrap.
 
 Behavioral coverage lives at
-``_shared/pr-loop/scripts/tests/test_preflight.py``.
+``skills/_shared/pr-loop/scripts/tests/test_preflight.py``.
 """
 
 from __future__ import annotations

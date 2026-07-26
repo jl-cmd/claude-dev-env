@@ -1,7 +1,7 @@
 """Smoke tests for the skill-path fix_hookspath wrap.
 
 Behavioral coverage lives at
-``_shared/pr-loop/scripts/tests/test_fix_hookspath.py``.
+``skills/_shared/pr-loop/scripts/tests/test_fix_hookspath.py``.
 """
 
 from __future__ import annotations

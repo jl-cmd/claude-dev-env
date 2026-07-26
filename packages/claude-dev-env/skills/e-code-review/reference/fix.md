@@ -16,7 +16,7 @@ every rule below.
 
 Before returning, the resumed agent attempts a commit on its own change:
 
-1. Run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo
+1. Run `~/.claude/skills/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo
    root> <changed/added files>` against every file it changed or added.
 2. If the gate reports violations, fix them and re-run the exact same command.
 3. Repeat until the gate returns clean.

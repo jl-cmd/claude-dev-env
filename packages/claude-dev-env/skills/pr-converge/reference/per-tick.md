@@ -187,9 +187,9 @@ resolve.
 
 a. **Static sweep — runs first, before `/code-review`.** Run the deterministic
    gates over the full `origin/main...HEAD` changed files:
-   `python "$HOME/.claude/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/code_rules_gate.py" --base origin/main`,
    `ruff`, `mypy`, and stem-matched `pytest`. On any failure, apply the
-   shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), commit and push,
+   shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), commit and push,
    reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
    [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
    `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), stay
@@ -258,7 +258,7 @@ c. Decide (three branches; match first whose predicate holds):
      not a clean stamp.
    - **Fixes applied (working tree dirty / `dirty_tree` true):** Commit the
      applied fixes in one commit → push, following the shared fix protocol
-     commit and push steps ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md)). Reset
+     commit and push steps ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md)). Reset
      push-invalidated markers per [ground-rules.md](ground-rules.md) /
      [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
      `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`). Stay
@@ -334,7 +334,7 @@ never falsely terminates:
      `phase = BUGBOT` — route into the terminal Bugbot gate, which confirms
      and then runs the convergence gates. Continue BUGBOT in the same tick.
    - **Findings without committed fixes:** apply the shared fix protocol
-     ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [fix-protocol.md](fix-protocol.md)). Reset push-invalidated markers
+     ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [fix-protocol.md](fix-protocol.md)). Reset push-invalidated markers
      per [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
      `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, apply Step 4 pacer
@@ -346,7 +346,7 @@ The terminal external confirmation gate. BUGTEAM routes here once the internal
 passes are clean; Bugbot confirms the HEAD, then the convergence gates run.
 
 **Availability gate (runs first, before any fetch or trigger).**
-`python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
+`python "$HOME/.claude/skills/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer bugbot`
 
 - Exit 0 (Bugbot disabled for this run — the default, unless
   `CLAUDE_REVIEWS_ENABLED` lists `bugbot`) → set `bugbot_down = true`, run the
@@ -390,7 +390,7 @@ pull_request_read(owner=OWNER, repo=REPO, pullNumber=NUMBER, method="get_review_
    ```
 
    Per-thread handling lives in the shared fix protocol's
-   unresolved-thread sweep (`../../../_shared/pr-loop/fix-protocol.md`).
+   unresolved-thread sweep (`../../_shared/pr-loop/fix-protocol.md`).
 
 c. Decide (four branches; match first whose predicate holds):
    - **No bugbot review yet, OR latest review's `commit_id` ≠
@@ -403,7 +403,7 @@ c. Decide (four branches; match first whose predicate holds):
      then advance to the [convergence gates](convergence-gates.md) in the same
      tick.
    - **`commit_id == current_head` with unaddressed inline findings:**
-     Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
+     Apply the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
      Reset `inline_lag_streak = 0` and push-invalidated markers per
      [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
@@ -438,7 +438,7 @@ b. Decide (three branches; match first whose predicate holds):
      convergence-gates.md gate (b) in same tick; re-validate gates (b), (c),
      then (e), (f) on the same HEAD.
    - **Copilot review dirty (CHANGES_REQUESTED or COMMENTED with findings)
-     at `current_head`:** Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) — it covers body-only findings with
+     at `current_head`:** Apply the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) — it covers body-only findings with
      no inline threads. Reset push-invalidated markers per
      [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
      (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
@@ -465,7 +465,7 @@ Uses the `codex-review` skill wrapper against the PR **base** branch (HEAD vs
 base), never an invented commit range.
 
 1. **Opt-out / down gate.**
-   `python "$HOME/.claude/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex`
+   `python "$HOME/.claude/skills/_shared/pr-loop/scripts/reviews_disabled.py" --reviewer codex`
    - Exit 0 → set `codex_down = true`, skip the skill, continue to convergence
      gates (export `CLAUDE_REVIEWS_DISABLED` including `codex` before the
      checklist so `check_convergence.py` bypasses without flags).

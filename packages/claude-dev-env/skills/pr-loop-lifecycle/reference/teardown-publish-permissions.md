@@ -4,12 +4,11 @@ The ordered close sequence for a PR-loop run. `<caller>` is the invoking skill's
 
 ## Utility scripts (progressive disclosure)
 
-Fragile or repeatable shell sequences live in one of two shared script directories. Match the reference depth to the directory:
+Fragile or repeatable shell sequences live in one shared script directory:
 
-- **Package-root** [`_shared/pr-loop/scripts/`](../../../_shared/pr-loop/scripts/) holds `code_rules_gate.py`, `preflight.py`, `post_audit_thread.py`, and the permission helpers. Reference it as `../../../_shared/…` in markdown and `${CLAUDE_SKILL_DIR}/../../_shared/…` at runtime (resolves to `~/.claude/_shared/`). Inventory: [`../../../_shared/pr-loop/scripts/README.md`](../../../_shared/pr-loop/scripts/README.md).
-- **Skill-tree** [`skills/_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) holds `teardown_worktrees.py`, `build_audit_prompt.py`, `build_fix_prompt.py`, `init_loop_state.py`, `write_audit_outcomes.py`, `write_fix_outcomes.py`, and `_path_resolver.py`. Reference it as `../../_shared/…` in markdown and `${CLAUDE_SKILL_DIR}/../_shared/…` at runtime (resolves to `~/.claude/skills/_shared/`).
+- [`skills/_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/) holds `code_rules_gate.py`, `preflight.py`, `post_audit_thread.py`, the permission helpers, `teardown_worktrees.py`, `build_audit_prompt.py`, `build_fix_prompt.py`, `init_loop_state.py`, `write_audit_outcomes.py`, `write_fix_outcomes.py`, and `_path_resolver.py`. Reference it as `../../_shared/…` in markdown and `${CLAUDE_SKILL_DIR}/../_shared/…` at runtime (resolves to `~/.claude/skills/_shared/`). Inventory: [`../../_shared/pr-loop/scripts/README.md`](../../_shared/pr-loop/scripts/README.md).
 
-Caller-specific scripts live in the calling skill's own `scripts/` directory with their own README inventory. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Gate-only merge-base / diff semantics: [`../../../_shared/pr-loop/code-rules-gate.md`](../../../_shared/pr-loop/code-rules-gate.md).
+Caller-specific scripts live in the calling skill's own `scripts/` directory with their own README inventory. Anthropic: [Progressive disclosure patterns](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices#progressive-disclosure-patterns) — utility scripts are **executed**, not loaded into context as primary reading. Gate-only merge-base / diff semantics: [`../../_shared/pr-loop/code-rules-gate.md`](../../_shared/pr-loop/code-rules-gate.md).
 
 ## Clean working tree
 
@@ -57,7 +56,7 @@ If this step fails (hook block, network), report in the final report and continu
 After team cleanup — including on error, cap-reached, or stuck exits — run:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/revoke_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/revoke_project_claude_permissions.py"
 ```
 
 This removes allow rules and `additionalDirectories` added at open. Revoke is non-negotiable: leaving the grant in place would let future sessions inherit elevated `.claude/**` access without an explicit opt-in. Run revoke even if teardown partially failed; log cleanup errors separately.

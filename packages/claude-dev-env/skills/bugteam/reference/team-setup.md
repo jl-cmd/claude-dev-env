@@ -7,7 +7,7 @@
 Skill-path thin entries for preflight and fix_hookspath live in the skill-local
 [`scripts/`](../scripts/) directory and delegate to package shared
 [`_shared/pr-loop/scripts/`](../../_shared/pr-loop/scripts/). Shared homes for
-grant, revoke, and code_rules_gate also live under `_shared/pr-loop/scripts/`
+grant, revoke, and code_rules_gate also live under `skills/_shared/pr-loop/scripts/`
 (run, do not paste into context). Utility scripts are **executed**, not loaded
 as primary context
 ([`sources.md`](../sources.md) § Progressive disclosure and utility scripts).
@@ -55,7 +55,7 @@ the auto-remediation only applies to the `core.hooksPath` failure mode.
 Before spawning any subagents, grant the session write access to the project's `.claude/**` tree:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/grant_project_claude_permissions.py"
 ```
 
 `${CLAUDE_SKILL_DIR}` is a Claude Code host-managed token, pre-substituted by the runtime before any shell sees it. Unlike `${TMPDIR}` and similar shell parameter expansions, it does not depend on the shell’s expansion semantics, so it behaves the same on Unix and Windows shells.

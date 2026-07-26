@@ -11,7 +11,7 @@ description: >-
 # Orchestrator Refresh
 
 Detect the host profile first (see Host profiles in
-[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)).
+[`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md)).
 Re-assert the discipline for that host only — do not invent an Agent-tool
 Claude `session-advisor` spawn on a third-party host.
 
@@ -121,4 +121,4 @@ Cancel matching host schedules; stop without re-arming.
 - `SKILL.md` — this skill (thin); gate implementation lives under
   `skills/orchestrator/scripts/`.
 - Advisor policy:
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+  [`_shared/advisor/advisor-protocol.md`](../_shared/advisor/advisor-protocol.md).

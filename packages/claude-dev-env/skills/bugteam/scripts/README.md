@@ -4,9 +4,9 @@ Scripts in this directory are **executed** by the lead or teammates. They are no
 
 | Script | Purpose |
 |--------|---------|
-| `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. Skill-path thin entry; implementation lives at package shared `_shared/pr-loop/scripts/preflight.py`. |
-| `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run preflight. Skill-path thin entry; implementation lives at package shared `_shared/pr-loop/scripts/fix_hookspath.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
-| `bugteam_code_rules_gate.py` | Thin skill-path entry that re-exports shared `_shared/pr-loop/scripts/code_rules_gate.py`. **Not the pre-audit gate of record** — invoke the shared script for live pre-audit (see `reference/audit-and-teammates.md`). |
+| `bugteam_preflight.py` | Run pytest (when configured) and optional `pre-commit` before `/bugteam`. Skill-path thin entry; implementation lives at the shared `skills/_shared/pr-loop/scripts/preflight.py`. |
+| `bugteam_fix_hookspath.py` | Auto-remediate a stale local `core.hooksPath` override, set canonical global value, re-run preflight. Skill-path thin entry; implementation lives at the shared `skills/_shared/pr-loop/scripts/fix_hookspath.py`. Invoked by Claude when preflight reports a `core.hooksPath` failure. |
+| `bugteam_code_rules_gate.py` | Thin skill-path entry that re-exports the shared `skills/_shared/pr-loop/scripts/code_rules_gate.py`. **Not the pre-audit gate of record** — invoke the shared script for live pre-audit (see `reference/audit-and-teammates.md`). |
 | `windows_safe_rmtree.py` | Windows-safe recursive directory removal (strips ReadOnly, retries). Standalone helper with unit tests; run-temp teardown is `skills/_shared/pr-loop/scripts/teardown_worktrees.py` under `pr-loop-lifecycle` Close. |
 | `probe_code_rules_enforcer_check.py` | Dynamically load `~/.claude/hooks/blocking/code_rules_enforcer.py` and invoke a named check function against a fixture file. Used by the historical Copilot gap-analysis investigation as a verification shape (see `reference/copilot-gap-analysis.md`). |
 
@@ -45,12 +45,12 @@ The bugteam SKILL invokes this automatically when preflight stderr indicates a `
 
 ## `bugteam_code_rules_gate.py` (thin skill-path entry)
 
-Skill-path thin entry; re-exports `main` from package-shared `_shared/pr-loop/scripts/code_rules_gate.py`.
+Skill-path thin entry; re-exports `main` from the shared `skills/_shared/pr-loop/scripts/code_rules_gate.py`.
 
 **Not the pre-audit gate of record.** The live pre-audit gate is the package-shared script:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
+python "${CLAUDE_SKILL_DIR}/../_shared/pr-loop/scripts/code_rules_gate.py" --base origin/<baseRefName>
 ```
 
 See `reference/audit-and-teammates.md`. Keep this wrap for callers that still invoke the skill-local path.

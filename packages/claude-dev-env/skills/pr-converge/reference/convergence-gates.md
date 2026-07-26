@@ -45,7 +45,7 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Fix protocol input (same shape as bugbot
-  dirty). Apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) in the same tick.
+  dirty). Apply the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) in the same tick.
   Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
   `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
@@ -55,7 +55,7 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Copilot posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Parse body for actionable findings. Apply the
-  shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), whose reply
+  shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)), whose reply
   step for body-only findings posts a top-level review reply citing the
   new HEAD SHA. Reset push-invalidated markers per
   [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
@@ -88,7 +88,7 @@ Decide (four branches; match first whose predicate holds):
 
 - **`classification == "dirty"` with non-empty inline comments matching
   `pull_request_review_id`:** Treat identically to gate (a) dirty+inline
-  path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset push-invalidated markers per
+  path — apply the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset push-invalidated markers per
   [ground-rules.md](ground-rules.md) / [state-schema.md](state-schema.md)
   (all `*_clean_at`, `merge_state_status`, `bugbot_down`,
   `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule next wakeup,
@@ -97,7 +97,7 @@ Decide (four branches; match first whose predicate holds):
   `pull_request_review_id`:** Claude posted findings only in review body
   (`CHANGES_REQUESTED` or `COMMENTED` with non-empty body, no inline
   threads). Treat identically to gate (a) dirty+body path — apply the
-  shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset
+  shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)). Reset
   push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
   `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
@@ -171,7 +171,7 @@ against `current_head`. Decide:
     waiting). Stay on `COPILOT_WAIT` — do not re-enter BUGTEAM.
     Continue to gate (e) when (b) and (c) still pass.
   - `state: CHANGES_REQUESTED` or `COMMENTED` with non-empty body → dirty.
-    Treat identically to gate (a) dirty path — apply the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
+    Treat identically to gate (a) dirty path — apply the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)).
     Reset push-invalidated markers per [ground-rules.md](ground-rules.md) /
     [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
     `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
@@ -198,14 +198,14 @@ Machine filter (same as `check_convergence.py`):
   (case-insensitive substrings only)
 
 Broader unresolved-thread sweeps (all authors, including human reviewers) are
-agent-side via the shared fix protocol ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) and are not script conditions.
+agent-side via the shared fix protocol ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md); skill deltas in [`fix-protocol.md`](fix-protocol.md)) and are not script conditions.
 
 Decide:
 
 - **Zero unresolved bot threads** under the filter above: Record evidence:
   "0 unresolved bot threads at <SHA>". Continue to gate (f).
 - **One or more unresolved bot threads:** Do **not** mark ready. Apply the
-  shared fix protocol unresolved-thread sweep ([`../../../_shared/pr-loop/fix-protocol.md`](../../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)). Push if any code changed → reset
+  shared fix protocol unresolved-thread sweep ([`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) step 12; skill deltas in [`fix-protocol.md`](fix-protocol.md)). Push if any code changed → reset
   push-invalidated markers per [ground-rules.md](ground-rules.md) /
   [state-schema.md](state-schema.md) (all `*_clean_at`, `merge_state_status`,
   `bugbot_down`, `bugbot_acknowledged_at`, `codex_down`), `phase = CODE_REVIEW`, schedule
