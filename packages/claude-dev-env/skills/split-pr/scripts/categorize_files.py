@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from split_pr_scripts_constants.config.analyze_constants import (
     MAXIMUM_SLICE_CHANGED_LINES,
@@ -150,7 +152,7 @@ def build_slices_from_files(
     Returns:
         Ordered slice dicts ready for the plan JSON.
     """
-    churn_by_path = _churn_by_path(all_files)
+    churn_by_path = compute_churn_by_path(all_files)
     paths_by_layer = _group_paths_by_layer(all_files)
     return _slices_from_layer_map(
         paths_by_layer,
@@ -184,7 +186,7 @@ def build_whole_pr_slice(
     Returns:
         A one-element slice list, or an empty list when no path is present.
     """
-    churn_by_path = _churn_by_path(all_files)
+    churn_by_path = compute_churn_by_path(all_files)
     all_paths = sorted(churn_by_path)
     if not all_paths:
         return []
@@ -213,15 +215,38 @@ def build_whole_pr_slice(
     ]
 
 
-def _churn_by_path(all_files: list[JsonObject]) -> dict[str, int]:
+def compute_churn_by_path(all_records: Sequence[object]) -> dict[str, int]:
+    """Return the changed-line budget each file record contributes.
+
+    ::
+
+        compute_churn_by_path([{"path": ".\\\\src\\\\a.py", "additions": 5,
+                                "deletions": 1}])
+        # ok: {"src/a.py": 6}
+
+    Records that are not objects, and records carrying no path, are skipped.
+    Every path normalizes to POSIX form so plan paths and source paths key
+    alike. This is the one definition of the budget, shared with the plan
+    verifier so the two can never disagree.
+
+    Args:
+        all_records: File records carrying ``path`` and optional
+            ``additions`` / ``deletions`` counts.
+
+    Returns:
+        Mapping of normalized path to additions plus deletions.
+    """
     churn_by_path: dict[str, int] = {}
-    for each_file in all_files:
-        path = str(each_file.get(FILE_KEY_PATH, ""))
-        if not path:
+    for each_record in all_records:
+        if not isinstance(each_record, dict):
             continue
-        additions = int(each_file.get(FILE_KEY_ADDITIONS, 0) or 0)
-        deletions = int(each_file.get(FILE_KEY_DELETIONS, 0) or 0)
-        churn_by_path[path] = max(0, additions) + max(0, deletions)
+        raw_path = each_record.get(FILE_KEY_PATH, "")
+        if not raw_path:
+            continue
+        additions = int(each_record.get(FILE_KEY_ADDITIONS, 0) or 0)
+        deletions = int(each_record.get(FILE_KEY_DELETIONS, 0) or 0)
+        normalized_path = normalize_path(str(raw_path))
+        churn_by_path[normalized_path] = max(0, additions) + max(0, deletions)
     return churn_by_path
 
 
@@ -280,7 +305,8 @@ def _build_one_slice(
 ) -> JsonObject:
     stem = ALL_LAYER_TITLE_STEM_BY_NAME.get(layer, layer)
     story = ALL_LAYER_STORY_BY_NAME.get(layer, ALL_LAYER_STORY_BY_NAME[DEFAULT_LAYER])
-    slug = layer if part_index is None else f"{layer}{PART_SLUG_SEPARATOR}{part_index}"
+    part_slug_separator = PART_SLUG_SEPARATOR
+    slug = layer if part_index is None else f"{layer}{part_slug_separator}{part_index}"
     title_stem = stem if part_index is None else f"{stem} part {part_index}"
     title = f"{title_prefix}: {feature_slug} {title_stem}".strip()
     changed_lines = _paths_changed_lines(all_paths, churn_by_path)
@@ -310,6 +336,19 @@ def _paths_changed_lines(all_paths: list[str], churn_by_path: dict[str, int]) ->
     return sum(churn_by_path.get(each_path, 0) for each_path in all_paths)
 
 
+@dataclass
+class _PathBin:
+    """One packed slice under construction, carrying its own running churn.
+
+    Attributes:
+        all_paths: Paths placed in this bin so far.
+        changed_lines: Sum of the churn of those paths.
+    """
+
+    all_paths: list[str] = field(default_factory=list)
+    changed_lines: int = 0
+
+
 def _pack_paths_to_review_budget(
     all_paths: list[str],
     churn_by_path: dict[str, int],
@@ -322,26 +361,37 @@ def _pack_paths_to_review_budget(
     ):
         return [list(all_paths)]
 
-    path_groups = _group_paths_by_directory(all_paths)
-    sorted_groups = sorted(
-        path_groups,
+    all_bins: list[_PathBin] = []
+    for each_group in _groups_by_descending_churn(all_paths, churn_by_path):
+        if slice_fits_review_budget(
+            file_count=len(each_group.all_paths),
+            changed_lines=each_group.changed_lines,
+        ):
+            _append_group_to_bins(all_bins, each_group)
+            continue
+        for each_pack in _pack_files_individually(each_group.all_paths, churn_by_path):
+            _append_group_to_bins(all_bins, each_pack)
+    return [each_bin.all_paths for each_bin in all_bins]
+
+
+def _groups_by_descending_churn(
+    all_paths: list[str],
+    churn_by_path: dict[str, int],
+) -> list[_PathBin]:
+    all_groups = [
+        _PathBin(
+            all_paths=each_group,
+            changed_lines=_paths_changed_lines(each_group, churn_by_path),
+        )
+        for each_group in _group_paths_by_directory(all_paths)
+    ]
+    return sorted(
+        all_groups,
         key=lambda each_group: (
-            -_paths_changed_lines(each_group, churn_by_path),
-            each_group[0] if each_group else "",
+            -each_group.changed_lines,
+            each_group.all_paths[0] if each_group.all_paths else "",
         ),
     )
-    all_bins: list[list[str]] = []
-    for each_group in sorted_groups:
-        group_lines = _paths_changed_lines(each_group, churn_by_path)
-        if slice_fits_review_budget(
-            file_count=len(each_group),
-            changed_lines=group_lines,
-        ):
-            _append_group_to_bins(all_bins, each_group, churn_by_path)
-            continue
-        for each_file_pack in _pack_files_individually(each_group, churn_by_path):
-            _append_group_to_bins(all_bins, each_file_pack, churn_by_path)
-    return all_bins if all_bins else [list(all_paths)]
 
 
 def _group_paths_by_directory(all_paths: list[str]) -> list[list[str]]:
@@ -361,35 +411,30 @@ def _directory_key(path: str) -> str:
 def _pack_files_individually(
     all_paths: list[str],
     churn_by_path: dict[str, int],
-) -> list[list[str]]:
+) -> list[_PathBin]:
     sorted_paths = sorted(
         all_paths,
         key=lambda each_path: (-churn_by_path.get(each_path, 0), each_path),
     )
-    all_bins: list[list[str]] = []
+    all_bins: list[_PathBin] = []
     for each_path in sorted_paths:
-        _append_group_to_bins(all_bins, [each_path], churn_by_path)
+        single_path_bin = _PathBin(
+            all_paths=[each_path],
+            changed_lines=churn_by_path.get(each_path, 0),
+        )
+        _append_group_to_bins(all_bins, single_path_bin)
     return all_bins
 
 
-def _append_group_to_bins(
-    all_bins: list[list[str]],
-    all_group_paths: list[str],
-    churn_by_path: dict[str, int],
-) -> None:
-    group_lines = _paths_changed_lines(all_group_paths, churn_by_path)
+def _append_group_to_bins(all_bins: list[_PathBin], group: _PathBin) -> None:
     for each_bin in all_bins:
-        candidate_paths = each_bin + all_group_paths
         if slice_fits_review_budget(
-            file_count=len(candidate_paths),
-            changed_lines=_paths_changed_lines(candidate_paths, churn_by_path),
+            file_count=len(each_bin.all_paths) + len(group.all_paths),
+            changed_lines=each_bin.changed_lines + group.changed_lines,
         ):
-            each_bin.extend(all_group_paths)
+            each_bin.all_paths.extend(group.all_paths)
+            each_bin.changed_lines += group.changed_lines
             return
-    if (
-        len(all_group_paths) == 1
-        and group_lines > MAXIMUM_SLICE_CHANGED_LINES
-    ):
-        all_bins.append(list(all_group_paths))
-        return
-    all_bins.append(list(all_group_paths))
+    all_bins.append(
+        _PathBin(all_paths=list(group.all_paths), changed_lines=group.changed_lines)
+    )

@@ -15,9 +15,14 @@ import argparse
 import json
 import sys
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from categorize_files import slice_fits_review_budget
+from categorize_files import (
+    compute_churn_by_path,
+    normalize_path,
+    slice_fits_review_budget,
+)
 from split_pr_scripts_constants.config.analyze_constants import (
     ERROR_SLICE_EXCEEDS_REVIEW_BUDGET,
     EXIT_CODE_FAILURE,
@@ -36,9 +41,6 @@ from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_UNREADABLE,
     ERROR_SLICE_CHANGED_LINES_TYPE,
     ERROR_SLICE_MISSING_KEY,
-    FILE_KEY_ADDITIONS,
-    FILE_KEY_DELETIONS,
-    FILE_KEY_PATH,
     JSON_INDENT_SPACES,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_PROPOSED_SLICES,
@@ -113,17 +115,16 @@ def verify_plan(plan_payload: JsonObject) -> JsonObject:
     if not isinstance(all_slices, list) or not all_slices:
         return _invalid_payload([ERROR_NO_SLICES])
 
-    all_source_paths = _source_paths(all_source_records)
-    churn_by_path = _churn_by_path(all_source_records)
-    all_covered_paths, all_empty_slices, all_errors = _collect_slice_paths(all_slices)
-    all_oversized = _oversized_slice_errors(all_slices, churn_by_path)
-    all_errors.extend(all_oversized)
+    churn_by_path = compute_churn_by_path(all_source_records)
+    inspection = _inspect_slices(all_slices, churn_by_path)
+    all_errors = inspection.all_structure_errors
+    all_errors.extend(inspection.all_oversized_slices)
     return _coverage_report(
-        all_source_paths=all_source_paths,
-        all_covered_paths=all_covered_paths,
-        all_empty_slices=all_empty_slices,
+        all_source_paths=set(churn_by_path),
+        all_covered_paths=inspection.all_covered_paths,
+        all_empty_slices=inspection.all_empty_slices,
         all_errors=all_errors,
-        all_oversized_slices=all_oversized,
+        all_oversized_slices=inspection.all_oversized_slices,
         slice_count=len(all_slices),
     )
 
@@ -181,49 +182,57 @@ def _slice_label(each_slice: JsonObject, fallback: str = UNKNOWN_SLICE_LABEL) ->
     return fallback
 
 
-def _source_paths(all_source_records: list[object]) -> set[str]:
-    all_paths: set[str] = set()
-    for each_record in all_source_records:
-        if not isinstance(each_record, dict):
-            continue
-        file_path = each_record.get(FILE_KEY_PATH)
-        if file_path:
-            all_paths.add(str(file_path).replace("\\", "/"))
-    return all_paths
+@dataclass
+class _SliceInspection:
+    """What one walk over the plan's slices collects.
+
+    ::
+
+        slices: [{"slug": "api", "files": ["./src/a.ts"]}, {"slug": "ui"}, 7]
+        ok:   all_covered_paths     -> ["src/a.ts"]
+        flag: all_empty_slices      -> ["ui"]
+        flag: all_structure_errors  -> ["slice entry is not an object"]
+
+    Attributes:
+        all_covered_paths: Normalized paths the slices claim, duplicates kept.
+        all_empty_slices: Labels of slices that claim no file.
+        all_structure_errors: Errors about slice shape.
+        all_oversized_slices: Errors about slices past the review budget.
+    """
+
+    all_covered_paths: list[str] = field(default_factory=list)
+    all_empty_slices: list[str] = field(default_factory=list)
+    all_structure_errors: list[str] = field(default_factory=list)
+    all_oversized_slices: list[str] = field(default_factory=list)
 
 
-def _churn_by_path(all_source_records: list[object]) -> dict[str, int]:
-    churn_by_path: dict[str, int] = {}
-    for each_record in all_source_records:
-        if not isinstance(each_record, dict):
-            continue
-        file_path = each_record.get(FILE_KEY_PATH)
-        if not file_path:
-            continue
-        path = str(file_path).replace("\\", "/")
-        additions = int(each_record.get(FILE_KEY_ADDITIONS, 0) or 0)
-        deletions = int(each_record.get(FILE_KEY_DELETIONS, 0) or 0)
-        churn_by_path[path] = max(0, additions) + max(0, deletions)
-    return churn_by_path
-
-
-def _collect_slice_paths(
+def _inspect_slices(
     all_slices: list[object],
-) -> tuple[list[str], list[str], list[str]]:
-    all_covered_paths: list[str] = []
-    all_empty_slices: list[str] = []
-    all_errors: list[str] = []
+    churn_by_path: dict[str, int],
+) -> _SliceInspection:
+    inspection = _SliceInspection()
     for each_slice in all_slices:
         if not isinstance(each_slice, dict):
-            all_errors.append("slice entry is not an object")
+            inspection.all_structure_errors.append("slice entry is not an object")
             continue
-        all_slice_files = each_slice.get(SLICE_KEY_FILES, [])
-        if not isinstance(all_slice_files, list) or not all_slice_files:
-            all_empty_slices.append(_slice_label(each_slice))
-            continue
-        for each_path in all_slice_files:
-            all_covered_paths.append(str(each_path).replace("\\", "/"))
-    return all_covered_paths, all_empty_slices, all_errors
+        _inspect_one_slice(each_slice, churn_by_path, inspection)
+    return inspection
+
+
+def _inspect_one_slice(
+    each_slice: JsonObject,
+    churn_by_path: dict[str, int],
+    inspection: _SliceInspection,
+) -> None:
+    all_slice_files = each_slice.get(SLICE_KEY_FILES, [])
+    if not isinstance(all_slice_files, list) or not all_slice_files:
+        inspection.all_empty_slices.append(_slice_label(each_slice))
+        return
+    all_paths = [normalize_path(str(each_file)) for each_file in all_slice_files]
+    inspection.all_covered_paths.extend(all_paths)
+    oversized_error = _oversized_slice_error(each_slice, all_paths, churn_by_path)
+    if oversized_error:
+        inspection.all_oversized_slices.append(oversized_error)
 
 
 def _slice_changed_lines(
@@ -239,51 +248,41 @@ def _slice_changed_lines(
     return int(declared_lines)
 
 
-def _oversized_slice_errors(
-    all_slices: list[object],
+def _oversized_slice_error(
+    each_slice: JsonObject,
+    all_paths: list[str],
     churn_by_path: dict[str, int],
-) -> list[str]:
-    all_oversized: list[str] = []
-    for each_slice in all_slices:
-        if not isinstance(each_slice, dict):
-            continue
-        all_slice_files = each_slice.get(SLICE_KEY_FILES, [])
-        if not isinstance(all_slice_files, list) or not all_slice_files:
-            continue
-        all_paths = [str(each).replace("\\", "/") for each in all_slice_files]
-        file_count = int(each_slice.get(SLICE_KEY_FILE_COUNT, len(all_paths)) or 0)
-        if file_count <= 0:
-            file_count = len(all_paths)
-        slug = _slice_label(each_slice)
-        try:
-            changed_lines = _slice_changed_lines(each_slice, all_paths, churn_by_path)
-        except TypeError:
-            all_oversized.append(
-                ERROR_SLICE_CHANGED_LINES_TYPE
-                % (slug, type(each_slice.get(SLICE_KEY_CHANGED_LINES)).__name__)
-            )
-            continue
-        is_oversized_atomic = (
-            len(all_paths) == 1 and changed_lines > MAXIMUM_SLICE_CHANGED_LINES
-        )
-        if is_oversized_atomic:
-            continue
-        if slice_fits_review_budget(
-            file_count=file_count,
-            changed_lines=changed_lines,
-        ):
-            continue
-        all_oversized.append(
-            ERROR_SLICE_EXCEEDS_REVIEW_BUDGET
-            % (
-                slug,
-                file_count,
-                MAXIMUM_SLICE_FILE_COUNT,
-                changed_lines,
-                MAXIMUM_SLICE_CHANGED_LINES,
-            )
-        )
-    return all_oversized
+) -> str | None:
+    slug = _slice_label(each_slice)
+    file_count = int(each_slice.get(SLICE_KEY_FILE_COUNT, len(all_paths)) or 0)
+    if file_count <= 0:
+        file_count = len(all_paths)
+    try:
+        changed_lines = _slice_changed_lines(each_slice, all_paths, churn_by_path)
+    except TypeError:
+        declared_type = type(each_slice.get(SLICE_KEY_CHANGED_LINES)).__name__
+        return ERROR_SLICE_CHANGED_LINES_TYPE % (slug, declared_type)
+    is_oversized_atomic = (
+        len(all_paths) == 1 and changed_lines > MAXIMUM_SLICE_CHANGED_LINES
+    )
+    if is_oversized_atomic:
+        return None
+    return _review_budget_error(slug, file_count, changed_lines)
+
+
+def _review_budget_error(slug: str, file_count: int, changed_lines: int) -> str | None:
+    if slice_fits_review_budget(
+        file_count=file_count,
+        changed_lines=changed_lines,
+    ):
+        return None
+    return ERROR_SLICE_EXCEEDS_REVIEW_BUDGET % (
+        slug,
+        file_count,
+        MAXIMUM_SLICE_FILE_COUNT,
+        changed_lines,
+        MAXIMUM_SLICE_CHANGED_LINES,
+    )
 
 
 def _coverage_report(
