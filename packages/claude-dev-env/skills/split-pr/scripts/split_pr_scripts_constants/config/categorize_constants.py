@@ -83,3 +83,9 @@ ALL_LAYER_TITLE_STEM_BY_NAME: dict[str, str] = {
     LAYER_DOCS: "docs",
     LAYER_OTHER: "remaining changes",
 }
+
+PART_SLUG_SEPARATOR = "-part"
+"""Joins a layer slug to its part number when one layer is packed into parts."""
+
+PATH_SEPARATOR = "/"
+"""POSIX path separator used to read a path's directory key."""

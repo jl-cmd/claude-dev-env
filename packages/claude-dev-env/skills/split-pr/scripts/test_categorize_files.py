@@ -137,7 +137,7 @@ def test_slice_fits_review_budget_enforces_both_axes() -> None:
     )
 
 
-def test_build_slices_packs_oversized_layer_by_directory() -> None:
+def test_build_slices_from_files_packs_oversized_layer_by_directory() -> None:
     all_files = annotate_files(
         [
             {
