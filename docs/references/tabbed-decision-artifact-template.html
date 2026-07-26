@@ -1223,6 +1223,78 @@ var ITEMS = [
   var copyButton = document.getElementById("copy");
   var copyRestingLabel = copyButton.textContent;
   var copyResetTimer = null;
+  var copySuccessLabel = "Copied";
+  var copyManualLabel = "Press Ctrl+C to copy";
+  var copyLabelHoldMs = 1600;
+
+  function flashCopyLabel(label) {
+    copyButton.textContent = label;
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(function () {
+      copyButton.textContent = copyRestingLabel;
+    }, copyLabelHoldMs);
+  }
+
+  function copyThroughSelection(text) {
+    /* A hidden textarea plus execCommand reaches the clipboard in pages
+       where the async clipboard is missing or blocked: a sandboxed frame,
+       a plain-http page, or a browser that withholds the permission. The
+       reader's own selection is put back afterwards. */
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+
+    var selection = document.getSelection();
+    var priorRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    area.select();
+    area.setSelectionRange(0, text.length);
+
+    var copied = false;
+    try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+
+    document.body.removeChild(area);
+    if (priorRange) {
+      selection.removeAllRanges();
+      selection.addRange(priorRange);
+    }
+    return copied;
+  }
+
+  function selectOutput(out) {
+    /* The last resort: the text is on screen and selected, so the
+       reader's own Ctrl+C finishes the copy. */
+    var range = document.createRange();
+    range.selectNodeContents(out);
+    var selection = document.getSelection();
+    if (!selection) { return; }
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function copyToClipboard(text, out) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashCopyLabel(copySuccessLabel);
+      }, function () {
+        finishWithoutAsyncClipboard(text, out);
+      });
+      return;
+    }
+    finishWithoutAsyncClipboard(text, out);
+  }
+
+  function finishWithoutAsyncClipboard(text, out) {
+    if (copyThroughSelection(text)) {
+      flashCopyLabel(copySuccessLabel);
+      return;
+    }
+    selectOutput(out);
+    flashCopyLabel(copyManualLabel);
+  }
 
   copyButton.addEventListener("click", function () {
     var lines = [CONFIG.copyHeading, ""], any = false;
@@ -1240,15 +1312,7 @@ var ITEMS = [
     var out = document.getElementById("out");
     out.textContent = text;
     out.classList.remove("hidden");
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        copyButton.textContent = "Copied";
-        clearTimeout(copyResetTimer);
-        copyResetTimer = setTimeout(function () {
-          copyButton.textContent = copyRestingLabel;
-        }, 1600);
-      }, function () { /* the text is shown below instead */ });
-    }
+    copyToClipboard(text, out);
     out.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 
