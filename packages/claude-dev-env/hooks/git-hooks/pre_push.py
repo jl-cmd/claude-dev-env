@@ -55,7 +55,10 @@ from git_hooks_constants import (
     ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX,
     ALL_PROTECTED_BRANCH_PUSH_NAMES,
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
+    ABBREVIATE_REFERENCE_OPTION,
+    ALL_REMOTE_TRACKING_REFERENCES_OPTION,
     BASE_REFERENCE_ARGUMENT,
+    COMMIT_PEEL_TEMPLATE,
     DEFAULT_REMOTE_BASE_REFERENCE,
     DEFAULT_REMOTE_NAME,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
@@ -65,6 +68,13 @@ from git_hooks_constants import (
     GIT_OUTPUT_DECODE_ERRORS_POLICY,
     GIT_OUTPUT_ENCODING_NAME,
     GIT_REFERENCE_QUERY_TIMEOUT_SECONDS,
+    GIT_QUIET_FLAG,
+    GIT_REV_PARSE_SUBCOMMAND,
+    GIT_REV_PARSE_VERIFY_FLAG,
+    EXCLUDE_REACHABLE_OPTION,
+    CONFIGURED_UPSTREAM_BASE_SOURCE,
+    FIRST_PUSH_BASE_FALLBACK_MESSAGE,
+    FIRST_PUSH_BASE_RESOLVED_MESSAGE,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
     LOCAL_REFERENCE_FIELD_INDEX,
@@ -73,15 +83,18 @@ from git_hooks_constants import (
     NO_PARSEABLE_STDIN_LINES_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_SENTINEL,
     PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE,
+    PARENT_COMMIT_TEMPLATE,
     PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE,
     PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE,
     REMOTE_BRANCH_REFERENCE_TEMPLATE,
     REMOTE_REFERENCE_FIELD_INDEX,
+    REV_LIST_SUBCOMMAND,
     STDIN_LINE_FIELD_COUNT,
     STDIN_READ_FAILURE_MESSAGE,
     STDIN_REMOTE_OBJECT_FIELD_INDEX,
     UNRESOLVABLE_MERGE_BASE_MESSAGE,
     UNRESOLVABLE_MERGE_BASE_SENTINEL,
+    UNPUSHED_COMMITS_BASE_SOURCE,
 )
 from pre_push_base_reference import (
     resolve_remote_name_from_arguments,
@@ -251,6 +264,10 @@ def _resolve_base_reference_from_lines(parsed_stdin: ParsedPushStdin) -> str | N
         is_all_valid_lines_deletions = False
         if is_branch_update(each_push_line):
             return each_push_line.remote_object_name
+        return resolve_first_push_base_reference(
+            f"{LOCAL_BRANCH_REFERENCE_PREFIX}{each_push_line.local_branch_name}",
+            each_push_line.local_object_name,
+        )
     if parsed_stdin.has_stdin_content and not parsed_stdin.all_push_lines:
         return NO_PARSEABLE_STDIN_LINES_SENTINEL
     if parsed_stdin.all_push_lines and is_all_valid_lines_deletions:
@@ -290,6 +307,93 @@ def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
         GIT_OUTPUT_ENCODING_NAME, errors=GIT_OUTPUT_DECODE_ERRORS_POLICY
     )
     return decoded_output.strip() or None
+
+
+def resolve_existing_reference(reference_expression: str) -> str | None:
+    """Return the commit object resolved by a git reference expression."""
+    return run_git_reference_query(
+        (
+            GIT_EXECUTABLE_NAME,
+            GIT_REV_PARSE_SUBCOMMAND,
+            GIT_REV_PARSE_VERIFY_FLAG,
+            GIT_QUIET_FLAG,
+            reference_expression,
+        )
+    )
+
+
+def resolve_configured_upstream_reference(local_reference: str) -> str | None:
+    """Return a live configured upstream for a first-push branch."""
+    local_branch_name = local_reference.removeprefix(LOCAL_BRANCH_REFERENCE_PREFIX)
+    upstream_reference = run_git_reference_query(
+        (
+            GIT_EXECUTABLE_NAME,
+            GIT_REV_PARSE_SUBCOMMAND,
+            ABBREVIATE_REFERENCE_OPTION,
+            f"{local_branch_name}@{{upstream}}",
+        )
+    )
+    if not upstream_reference:
+        return None
+    if not resolve_existing_reference(
+        COMMIT_PEEL_TEMPLATE.format(reference=upstream_reference)
+    ):
+        return None
+    return upstream_reference
+
+
+def resolve_unpushed_commit_base(local_sha: str) -> str | None:
+    """Return the parent of the oldest commit absent from remote refs."""
+    unpushed_commit_text = run_git_reference_query(
+        (
+            GIT_EXECUTABLE_NAME,
+            REV_LIST_SUBCOMMAND,
+            local_sha,
+            EXCLUDE_REACHABLE_OPTION,
+            ALL_REMOTE_TRACKING_REFERENCES_OPTION,
+        )
+    )
+    if not unpushed_commit_text:
+        return None
+    oldest_unpushed_commit = unpushed_commit_text.split()[-1]
+    return resolve_existing_reference(
+        PARENT_COMMIT_TEMPLATE.format(commit=oldest_unpushed_commit)
+    )
+
+
+def report_first_push_base(
+    local_reference: str, base_reference: str, base_source: str
+) -> None:
+    """Report the base selected for a branch with no remote ref."""
+    print(
+        FIRST_PUSH_BASE_RESOLVED_MESSAGE.format(
+            reference=local_reference, base=base_reference, source=base_source
+        ),
+        file=sys.stderr,
+    )
+
+
+def resolve_first_push_base_reference(local_reference: str, local_sha: str) -> str:
+    """Resolve a first-push base from new commits, upstream, or the default ref."""
+    unpushed_commit_base = resolve_unpushed_commit_base(local_sha)
+    if unpushed_commit_base:
+        report_first_push_base(
+            local_reference, unpushed_commit_base, UNPUSHED_COMMITS_BASE_SOURCE
+        )
+        return unpushed_commit_base
+    upstream_reference = resolve_configured_upstream_reference(local_reference)
+    if upstream_reference:
+        report_first_push_base(
+            local_reference, upstream_reference, CONFIGURED_UPSTREAM_BASE_SOURCE
+        )
+        return upstream_reference
+    print(
+        FIRST_PUSH_BASE_FALLBACK_MESSAGE.format(
+            reference=local_reference, base=DEFAULT_REMOTE_BASE_REFERENCE
+        ),
+        file=sys.stderr,
+    )
+    return DEFAULT_REMOTE_BASE_REFERENCE
 
 
 def resolve_default_branch_reference(remote_name: str = DEFAULT_REMOTE_NAME) -> str | None:

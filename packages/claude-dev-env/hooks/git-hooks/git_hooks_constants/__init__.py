@@ -76,6 +76,24 @@ ALL_GIT_MERGE_BASE_COMMAND_PREFIX: tuple[str, ...] = ("git", "merge-base")
 GIT_REFERENCE_QUERY_TIMEOUT_SECONDS: int = 15
 ALL_PROTECTED_BRANCH_PUSH_NAMES: tuple[str, ...] = ("main", "master")
 PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE: int = 1
+REV_LIST_SUBCOMMAND: str = "rev-list"
+ABBREVIATE_REFERENCE_OPTION: str = "--abbrev-ref"
+EXCLUDE_REACHABLE_OPTION: str = "--not"
+ALL_REMOTE_TRACKING_REFERENCES_OPTION: str = "--remotes"
+UPSTREAM_REFERENCE_TEMPLATE: str = "{reference}@{{upstream}}"
+COMMIT_PEEL_TEMPLATE: str = "{reference}^{{commit}}"
+PARENT_COMMIT_TEMPLATE: str = "{commit}^"
+UNPUSHED_COMMITS_BASE_SOURCE: str = "parent of the oldest commit missing from every remote"
+CONFIGURED_UPSTREAM_BASE_SOURCE: str = "configured upstream of the pushed branch"
+FIRST_PUSH_BASE_RESOLVED_MESSAGE: str = (
+    "claude-dev-env pre-push: {reference} has no remote ref yet; "
+    "scoping the gate to base {base} ({source})."
+)
+FIRST_PUSH_BASE_FALLBACK_MESSAGE: str = (
+    "claude-dev-env pre-push: {reference} has no remote ref yet and no branch-specific "
+    "base could be resolved; scoping the gate to {base}.\n"
+    "Violations reported below this branch may pre-date the commits being pushed."
+)
 PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE: str = (
     "claude-dev-env pre-push: blocked a push of local branch {local_branch!r} "
     "onto protected remote branch {remote_branch!r}.\n"
