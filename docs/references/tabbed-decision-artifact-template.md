@@ -39,6 +39,12 @@ That rule shapes the writing:
 - Say what a choice costs alongside what it gives. Cost is what the reader gives up: time, rework, work left undone, or a risk carried.
 - Keep sentences to 20 words and one idea. Move detail into a table, where a reader can find one row without reading the rest.
 - Cut any sentence that restates the one before it, or that argues a choice is good. The facts already made that case.
+- State what happens, then stop. Cut the clause that says what else it does — "does more than X, it also Y", "not simply X, but Y", "not only X, it is Y". The build-up costs the reader the point.
+
+  | Padded | Direct |
+  |---|---|
+  | Accepting it does more than add the new work. It also restores the old version of everything else. | Accepting it restores the old version of everything that copy contains. |
+  | This is not simply a formatting change; it also alters the output. | This alters the output. |
 - Reach for a table, chart, image, or diagram whenever the reader would otherwise hold several numbers in their head.
 - Draw the thing to scale when a decision turns on position, size, or layout. Two drawings side by side with the gap labelled between them carry a spatial disagreement that a pair of numbers leaves each reader to picture differently. Plain markup and styling draw this.
 - Put the measurements in a table beside any drawing, and name the command or measurement that produced them.

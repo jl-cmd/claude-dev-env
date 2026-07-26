@@ -692,6 +692,20 @@ var ITEMS = [
         "The page enforces the line length.",
         "The other three are conventions."
       ]},
+      {heading: "Say it once, straight", bullets: [
+        "State what happens. Cut the clause that says what else it does.",
+        "A sentence that builds to its point costs the reader the point.",
+        "Two verbs joined by &ldquo;and also&rdquo; are usually one verb and a repeat."
+      ]},
+      {heading: "The padding, and the sentence underneath it", table: {
+        head: ["Padded", "Direct"],
+        rows: [
+          ["Accepting it does more than add the new work. It also restores the old version of everything else.", "Accepting it restores the old version of everything that copy contains."],
+          ["This is not simply a formatting change; it also alters the output.", "This alters the output."],
+          ["The check does more than read the file &mdash; it rewrites it.", "The check rewrites the file."],
+          ["It is not only slow, it is wrong.", "It is wrong, and slow."]
+        ]
+      }},
       {heading: "Reach in this order", bullets: [
         "A table, when rows share columns.",
         "Bullets, when items share a shape.",
@@ -827,7 +841,7 @@ var ITEMS = [
     id: "house-rules", group: "Reference", readingOnly: true,
     tab: "The writing rules this follows",
     label: "Named, so you can look them up",
-    title: "Five rules shape every sentence",
+    title: "Six rules shape every sentence",
     summary: "The reader is a person, in a hurry, deciding something.",
     blocks: [
       {heading: "The rules", table: {
@@ -837,7 +851,8 @@ var ITEMS = [
           ["<code>no-justification-noise</code>", "Cut a sentence that argues a choice is good, or repeats a fact."],
           ["<code>self-contained-docs</code>", "Every statement stands without the conversation behind it."],
           ["<code>no-historical-clutter</code>", "Describe the thing as it stands today."],
-          ["<code>state-what-is</code>", "Name what the thing is. State guidance as the action to take."]
+          ["<code>state-what-is</code>", "Name what the thing is. State guidance as the action to take."],
+          ["<code>say-it-once</code>", "State what happens. Cut the clause naming what else it does."]
         ]
       }},
       {heading: "What each decides", bullets: [
@@ -845,7 +860,8 @@ var ITEMS = [
         "Justification noise decides which sentences survive.",
         "Self-contained decides whether a stranger can answer.",
         "Timeless decides the tense.",
-        "State-what-is decides the shape of every claim."
+        "State-what-is decides the shape of every claim.",
+        "Say-it-once decides where a sentence stops."
       ]},
       {heading: "Where a prohibition earns its place", bullets: [
         "The behaviour resists a positive description.",
