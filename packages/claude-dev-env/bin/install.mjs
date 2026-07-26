@@ -366,8 +366,8 @@ function currentRunBackupRoot() {
 }
 
 /**
- * Remove every run backup directory under ~/.claude/.claude-dev-env-pruned
- * except the one this run wrote.
+ * Remove every run backup directory sitting beside the one this run wrote, which
+ * places the sweep in ~/.claude/.claude-dev-env-pruned.
  *
  * A pruning install leaves one timestamped recovery point, and a recovery point
  * is worth keeping only while it describes content close to what sits on disk.
@@ -384,7 +384,7 @@ function currentRunBackupRoot() {
  * @returns {number} How many superseded run backup directories were removed.
  */
 function removeSupersededRunBackups(keptRunBackupRoot) {
-    const prunedBackupDirectory = join(CLAUDE_HOME, PRUNED_SKILLS_BACKUP_DIRECTORY_NAME);
+    const prunedBackupDirectory = dirname(keptRunBackupRoot);
     const keptComparisonKey = comparisonKeyForPath(keptRunBackupRoot);
     let allEntries;
     try {
@@ -410,20 +410,58 @@ function removeSupersededRunBackups(keptRunBackupRoot) {
 }
 
 /**
- * Retire older run backups once this run has written its own.
+ * Remove a directory tree that holds no file, walking depth first.
  *
- * A run that moved nothing created no backup root, so its `~/.claude` holds only
- * the recovery points earlier runs left; that run sweeps nothing and the user
- * keeps every one of them.
+ * `rmdirSync` removes only an empty directory, so a directory holding content
+ * survives and the walk stops there. `moveIntoRunBackup` creates the directories
+ * leading to a backup path before it renames, so a run whose every move failed
+ * leaves those directories standing with nothing inside them; clearing the run's
+ * backup root this way keeps the pruned-backup directory holding recovery points
+ * alone.
+ *
+ * @param {string} directoryPath The absolute directory to clear.
+ * @returns {void}
+ */
+function removeEmptyDirectoryTree(directoryPath) {
+    let childEntries;
+    try {
+        childEntries = readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+        return;
+    }
+    for (const childEntry of childEntries) {
+        if (!childEntry.isDirectory()) continue;
+        removeEmptyDirectoryTree(join(directoryPath, childEntry.name));
+    }
+    try {
+        rmdirSync(directoryPath);
+    } catch {
+        return;
+    }
+}
+
+/**
+ * Retire older run backups once this run has moved content into its own.
+ *
+ * The sweep answers to what the run moved, so a recovery point is retired only
+ * once a newer one holds content. A run that moved nothing leaves every recovery
+ * point the user holds where it is, and gives up the empty directories its
+ * attempted moves created, so the pruned-backup directory holds recovery points
+ * alone.
  *
  * The log line names the run backup and the window it lasts, so a user reading the
  * install output knows where to recover moved content and how long it stays.
  *
+ * @param {string} runBackupRoot The run's timestamped backup directory.
+ * @param {boolean} didRunMoveContent Whether a move into that directory succeeded.
  * @returns {void}
  */
-function retainNewestRunBackupOnly() {
-    const runBackupRoot = currentRunBackupRoot();
+export function retainNewestRunBackupOnly(runBackupRoot, didRunMoveContent) {
     if (!existsSync(runBackupRoot)) return;
+    if (!didRunMoveContent) {
+        removeEmptyDirectoryTree(runBackupRoot);
+        return;
+    }
     const removedCount = removeSupersededRunBackups(runBackupRoot);
     if (removedCount > 0) {
         console.log(`  Prune backups: ${removedCount} older run backup(s) removed — recover moved content from ${PRUNED_SKILLS_BACKUP_DIRECTORY_NAME}/${basename(runBackupRoot)}, which stays until the next pruning install`);
@@ -1486,11 +1524,11 @@ function manifestFilesWithFailedPrunes(installedFiles, failedPrunePaths) {
  *
  * @param {Set<string>} installedSkillNames Skill names this install just wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
- * @returns {void}
+ * @returns {number} How many retired skill directories reached the backup root.
  */
 function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     const skillsDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME);
-    if (!existsSync(skillsDirectory)) return;
+    if (!existsSync(skillsDirectory)) return 0;
     const retiredSkillNames = new Set(
         [...EVER_SHIPPED_SKILL_NAMES].filter(skillName => !installedSkillNames.has(skillName))
     );
@@ -1498,20 +1536,23 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     const backupRoot = currentRunBackupRoot();
     const existingSkillDirs = readdirSync(skillsDirectory, { withFileTypes: true })
         .filter(entry => entry.isDirectory());
+    let movedDirectoryCount = 0;
     for (const skillDir of existingSkillDirs) {
         const skillName = skillDir.name;
         if (NEVER_PRUNED_SKILL_DIRECTORIES.has(skillName)) continue;
         if (installedSkillNames.has(skillName)) continue;
         const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
         if (!isPruneCandidate) continue;
-        moveIntoRunBackup(
+        const didMove = moveIntoRunBackup(
             join(skillsDirectory, skillName),
             backupRoot,
             join(MANAGED_SKILLS_DIRECTORY_NAME, skillName),
             RETIRED_SKILL_REASON_LABEL,
             CLAUDE_HOME,
         );
+        if (didMove) movedDirectoryCount++;
     }
+    return movedDirectoryCount;
 }
 
 /**
@@ -1566,6 +1607,10 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
  * start invoke a missing script, so the reference leaves first and the script
  * follows.
  *
+ * Both prunes report how much content reached the run's backup root, and their sum
+ * is what backup retention answers to: the sweep of older recovery points runs
+ * only once this run holds one of its own.
+ *
  * @param {Set<string>} copiedSkillNames Skill directory names this run wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
  * @param {string[]|null} priorManifestFiles The prior manifest's file list, or null.
@@ -1577,7 +1622,7 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
 function runFullInstallPrunes(
     copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
 ) {
-    pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+    const retiredSkillMovedCount = pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
     const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
         join(CLAUDE_HOME, SETTINGS_FILE_NAME),
         retiredManagedHookRelativePaths(
@@ -1590,7 +1635,8 @@ function runFullInstallPrunes(
     const staleOutcome = pruneStaleFilesAcrossManagedRoots(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
-    retainNewestRunBackupOnly();
+    const didRunMoveContent = retiredSkillMovedCount + staleOutcome.prunedCount > 0;
+    retainNewestRunBackupOnly(currentRunBackupRoot(), didRunMoveContent);
     return staleOutcome;
 }
 

@@ -899,6 +899,33 @@ test('an install that prunes leaves its own run backup as the only one under the
     }
 });
 
+test('an install whose only move is a retired skill directory still retires the older run backups', () => {
+    const sandbox = createSandbox();
+    const retiredSkillName = RETIRED_SKILL_DIRECTORIES[0];
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        plantSkillDirectory(sandbox.skillsDirectory, retiredSkillName, true);
+        plantPriorRunBackups(sandbox.claudeDirectory);
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        const remainingBackupNames = listRunBackupDirectoryNames(sandbox.claudeDirectory);
+        assert.equal(remainingBackupNames.length, 1, 'the retired-skill move is enough to retire the rest');
+        assert.equal(
+            PRIOR_RUN_BACKUP_DIRECTORY_NAMES.includes(remainingBackupNames[0]),
+            false,
+            'the survivor is the run this install wrote',
+        );
+        assert.equal(
+            prunedSkillBackupContains(sandbox.claudeDirectory, retiredSkillName),
+            true,
+            'the surviving backup holds the retired skill directory the run moved',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('an install that prunes nothing leaves every existing run backup in place', () => {
     const sandbox = createSandbox();
     try {

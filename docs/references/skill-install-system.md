@@ -56,9 +56,9 @@ A run writes both manifest keys — the file list and the skill-name list — wh
 
 ## Backup retention
 
-A run that moves content writes its timestamped backup directory and then retires the other run backups under `~/.claude/.claude-dev-env-pruned/`, so the directory holds the one recovery point closest to what sits on disk. The sweep removes a direct child whose name matches the installer's timestamp shape (`2026-07-25T18-04-11-923Z`), leaving anything else under the pruned-backup directory in place along with the directory itself. A removal that fails logs a warning and the sweep carries on, so retention never ends an install. The install output names the count when the sweep removes anything.
+A run that moves content into its timestamped backup directory then retires the other run backups under `~/.claude/.claude-dev-env-pruned/`, so the directory holds the one recovery point closest to what sits on disk. The retired-skill prune and the stale-file prune each report how many moves succeeded, and their sum is the signal the sweep answers to. The sweep removes a direct child whose name matches the installer's timestamp shape (`2026-07-25T18-04-11-923Z`), leaving anything else under the pruned-backup directory in place along with the directory itself. A removal that fails logs a warning and the sweep carries on, so retention never ends an install. The install output names the count when the sweep removes anything.
 
-A run that moves nothing writes no backup root and sweeps nothing, so every recovery point the user holds stays where it is.
+A run that moves nothing sweeps nothing, so every recovery point the user holds stays where it is. The mover creates the directories leading to a backup path ahead of each rename, so a run whose every move fails leaves that timestamped root standing empty; retention clears it with `rmdirSync` alone, depth first, so a directory holding anything survives.
 
 ## Uninstall
 

@@ -40,6 +40,7 @@ import {
     caseOnlyRenameSourceName,
     retiredManagedHookRelativePaths,
     pruneRetiredHookEntriesFromSettings,
+    retainNewestRunBackupOnly,
 } from './install.mjs';
 import {
     expandHomeDirectoryTokens,
@@ -1995,5 +1996,142 @@ test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical wh
         );
     } finally {
         rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+const PRIOR_RUN_BACKUP_NAMES = ['2020-01-01T00-00-00-000Z', '2021-06-15T12-30-45-123Z'];
+const THIS_RUN_BACKUP_NAME = '2026-07-25T18-04-11-923Z';
+const MOVED_SKILL_BACKUP_SEGMENTS = ['skills', 'demo'];
+
+
+/**
+ * Build a pruned-backup directory holding two prior run backups and this run's
+ * own root, with the directories a move creates ahead of its rename already there.
+ *
+ * @param {boolean} doesThisRunHoldMovedContent Whether this run's root holds a moved file.
+ * @returns {{root: string, prunedDirectory: string, runBackupRoot: string, movedFilePath: string}} The sandbox paths.
+ */
+function createRunBackupSandbox(doesThisRunHoldMovedContent) {
+    const root = mkdtempSync(join(tmpdir(), 'cdev-run-backup-'));
+    const prunedDirectory = join(root, '.claude-dev-env-pruned');
+    for (const priorRunName of PRIOR_RUN_BACKUP_NAMES) {
+        const priorRunDirectory = join(prunedDirectory, priorRunName);
+        mkdirSync(priorRunDirectory, { recursive: true });
+        writeFileSync(join(priorRunDirectory, 'recovered.md'), `content ${priorRunName} holds\n`);
+    }
+    const runBackupRoot = join(prunedDirectory, THIS_RUN_BACKUP_NAME);
+    mkdirSync(join(runBackupRoot, ...MOVED_SKILL_BACKUP_SEGMENTS), { recursive: true });
+    const movedFilePath = join(runBackupRoot, ...MOVED_SKILL_BACKUP_SEGMENTS, 'SKILL.md');
+    if (doesThisRunHoldMovedContent) writeFileSync(movedFilePath, '# a skill moved aside\n');
+    return { root, prunedDirectory, runBackupRoot, movedFilePath };
+}
+
+
+/**
+ * List the run backup directory names under a pruned-backup directory, sorted.
+ *
+ * @param {string} prunedDirectory The directory holding the run backups.
+ * @returns {string[]} The directory names in sorted order.
+ */
+function listRunBackupNames(prunedDirectory) {
+    return readdirSync(prunedDirectory, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .sort();
+}
+
+
+test('retainNewestRunBackupOnly keeps every prior run backup and clears the empty root of a run that moved nothing', () => {
+    const sandbox = createRunBackupSandbox(false);
+    try {
+        retainNewestRunBackupOnly(sandbox.runBackupRoot, false);
+
+        assert.deepEqual(
+            listRunBackupNames(sandbox.prunedDirectory),
+            [...PRIOR_RUN_BACKUP_NAMES].sort(),
+            'every recovery point the user holds stays where it is',
+        );
+        assert.equal(
+            existsSync(sandbox.runBackupRoot),
+            false,
+            'the empty directories the attempted moves created leave the pruned-backup directory',
+        );
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('retainNewestRunBackupOnly retires every older run backup once this run holds moved content', () => {
+    const sandbox = createRunBackupSandbox(true);
+    try {
+        retainNewestRunBackupOnly(sandbox.runBackupRoot, true);
+
+        assert.deepEqual(
+            listRunBackupNames(sandbox.prunedDirectory),
+            [THIS_RUN_BACKUP_NAME],
+            'the run that moved content leaves its own backup as the only recovery point',
+        );
+        assert.equal(
+            existsSync(sandbox.movedFilePath),
+            true,
+            'the surviving backup holds the content this run moved aside',
+        );
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('retainNewestRunBackupOnly keeps a run backup root that holds content when the run reports no move', () => {
+    const sandbox = createRunBackupSandbox(true);
+    try {
+        retainNewestRunBackupOnly(sandbox.runBackupRoot, false);
+
+        assert.deepEqual(
+            listRunBackupNames(sandbox.prunedDirectory),
+            [...PRIOR_RUN_BACKUP_NAMES, THIS_RUN_BACKUP_NAME].sort(),
+            'every run backup stays, so clearing an empty root never reaches a file',
+        );
+        assert.equal(existsSync(sandbox.movedFilePath), true, 'the file inside the root stays');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneStaleInstalledFiles leaves the run backup root standing when the rename fails', () => {
+    const sandbox = createStalePruneSandbox({
+        'demo/scripts/retired_module.py': 'stale module\n',
+    });
+    try {
+        const occupiedDestination = join(sandbox.backupRoot, 'demo', 'scripts', 'retired_module.py');
+        mkdirSync(occupiedDestination, { recursive: true });
+        writeFileSync(join(occupiedDestination, 'inner.md'), 'content standing where the move lands\n');
+        const staleFilePath = join(sandbox.skillsRoot, 'demo', 'scripts', 'retired_module.py');
+
+        const { returnedValue } = captureWarnings(() => pruneStaleInstalledFiles(
+            [staleFilePath],
+            [],
+            sandbox.skillsRoot,
+            sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
+        ));
+
+        assert.equal(returnedValue.prunedCount, 0, 'a rename onto an occupied path moves nothing');
+        assert.deepEqual(
+            returnedValue.failedPaths,
+            [staleFilePath],
+            'the failed path is reported so the caller keeps it on the manifest record',
+        );
+        assert.equal(existsSync(staleFilePath), true, 'the file stays in the installed tree');
+        assert.equal(
+            existsSync(sandbox.backupRoot),
+            true,
+            'the mover creates the run backup root ahead of the rename, so retention reads the move count rather than the directory',
+        );
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
     }
 });

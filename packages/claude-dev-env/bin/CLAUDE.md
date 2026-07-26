@@ -12,7 +12,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 | `expand_home_directory_tokens.mjs` | Expands residual `$HOME` / `${HOME}` / `~/` tokens in settings.json hook and statusLine commands to absolute home paths at install time (literal-safe for homes that contain `$`) |
 | `git_hooks_installer.mjs` | Installs or updates the `pre-commit`, `pre-push`, and `post-commit` Git hooks in the user's git config; writes hook scripts that delegate to the installed Python hooks |
 | `install_mypy_ini.mjs` | Writes `~/.mypy.ini` with settings that make mypy find the hooks package and enforce strict type checking |
-| `install.test.mjs` | Unit tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging, the settings shapes the installer never wrote — those every hook walk hands back untouched, and the shipped-event value the merge replaces with a warning — the source-artifact skip in `collectFiles`, the case-only rename decision and the `copyTree` copy that acts on it, the retired-hook diff and settings prune, and the stale-file prune: the manifest diff, path-key case folding, emptied-parent cleanup, and the warn-and-keep paths |
+| `install.test.mjs` | Unit tests for `install.mjs` — covers conflict detection, interpreter detection, settings merging, the settings shapes the installer never wrote — those every hook walk hands back untouched, and the shipped-event value the merge replaces with a warning — the source-artifact skip in `collectFiles`, the case-only rename decision and the `copyTree` copy that acts on it, the retired-hook diff and settings prune, the stale-file prune: the manifest diff, path-key case folding, emptied-parent cleanup, and the warn-and-keep paths, and backup retention: the sweep a moved-content run drives, the empty root a run whose moves failed gives up, and the populated root retention keeps |
 | `install.prune.test.mjs` | End-to-end prune tests that run the real installer against a sandbox `HOME` — retired-skill, retired-hook, and stale-file moves into one timestamped backup, the settings entry a retired hook loses, the top-level paths every root's diff leaves alone, the manifest record a failed move keeps, the full-install and resolved-dependency gates, backup retention, and the uninstall: the `~/.mypy.ini` removal, the containment guard, and nested-directory cleanup |
 | `git_hooks_installer.test.mjs` | Tests for `git_hooks_installer.mjs` |
 | `install_mypy_ini.test.mjs` | Tests for `install_mypy_ini.mjs` |
@@ -61,9 +61,9 @@ Every settings walk recognizes the shapes the installer writes and steps around 
 
 ## Backup retention
 
-A run that moves content writes `~/.claude/.claude-dev-env-pruned/<timestamp>/` and then retires the other run backups, so the directory holds the one recovery point closest to what sits on disk. The sweep removes a direct child whose name matches the installer's timestamp shape (`2026-07-25T18-04-11-923Z`), which leaves anything else under the pruned-backup directory in place, along with the directory itself. A removal that fails logs a warning and the sweep carries on, so retention never ends an install. The install output names the count when the sweep removes anything.
+A run that moves content into `~/.claude/.claude-dev-env-pruned/<timestamp>/` then retires the other run backups, so the directory holds the one recovery point closest to what sits on disk. The retired-skill prune and the stale-file prune each report how many moves succeeded, and their sum is the signal the sweep answers to. The sweep removes a direct child whose name matches the installer's timestamp shape (`2026-07-25T18-04-11-923Z`), which leaves anything else under the pruned-backup directory in place, along with the directory itself. A removal that fails logs a warning and the sweep carries on, so retention never ends an install. The install output names the count when the sweep removes anything.
 
-A run that moves nothing writes no backup root and sweeps nothing, so every recovery point the user holds stays where it is.
+A run that moves nothing sweeps nothing, so every recovery point the user holds stays where it is. `moveIntoRunBackup` creates the directories leading to a backup path before it renames, so a run whose every move fails — the antivirus scanner or open editor case — leaves that timestamped root standing empty. Retention clears it with `rmdirSync` alone, depth first, so a directory holding anything survives every step.
 
 ## Uninstall
 
@@ -93,6 +93,7 @@ Every prune runs behind the same two gates: a full install, and every declared d
 | `caseOnlyRenameSourceName(shippedName, existingNames, options)` | Returns the existing directory entry a shipped file name would overwrite through a case-only spelling difference, or null; `options.isCaseInsensitive` defaults to this host's filesystem |
 | `retiredManagedHookRelativePaths(priorFiles, currentFiles, hooksRoot)` | Returns the hook script paths a prior install recorded under the hooks root that this run leaves unwritten, each relative to that root |
 | `pruneRetiredHookEntriesFromSettings(settingsPath, retiredPaths)` | Removes each settings.json entry running a retired managed hook script, writing the file only when an entry left it; returns the removed count |
+| `retainNewestRunBackupOnly(runBackupRoot, didRunMoveContent)` | Retires every run backup sitting beside the run's own when `didRunMoveContent` holds; clears the run's empty root with `rmdirSync` when it does not |
 | `comparisonKeyForPath(path, options)` | Builds the key two paths are compared through: resolved, forward-slashed, and lowercased when `options.isCaseInsensitive` holds — which defaults to true on Windows and macOS |
 
 ## Install groups
