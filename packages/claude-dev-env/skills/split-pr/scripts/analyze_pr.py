@@ -6,7 +6,8 @@
     python analyze_pr.py --pr 123
     {"pr_number": 123, "proposed_slices": [...], "all_files": [...]}
 
-Uses ``gh pr view --json``. Pass ``--files-json`` in tests to skip gh.
+Reads the pull request through ``gh``. :func:`analyze_pull_request` takes the
+fetcher as an argument, so a caller supplies its own payload source.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
+from typing import Protocol
 
 from categorize_files import (
     annotate_files,
@@ -30,7 +31,6 @@ from split_pr_scripts_constants.config.analyze_constants import (
     BRANCH_PREFIX,
     DEFAULT_BASE_REF_NAME,
     DEFAULT_TITLE_PREFIX,
-    ERROR_CLI_ARGUMENTS,
     ERROR_GH_FAILED,
     ERROR_GH_FILE_COUNT_MISMATCH,
     ERROR_GH_FILE_STATUS_FAILED,
@@ -77,7 +77,6 @@ from split_pr_scripts_constants.config.analyze_constants import (
     SLICE_INDEX_ZERO_PAD,
     SLUG_REPLACEMENT,
     SPLIT_OPTIONAL_NOTE_TEMPLATE,
-    TEST_HEAD_SHA,
     WARNING_OTHER_LAYER_NONEMPTY,
     WARNING_OVERSIZED_ATOMIC_SLICE,
     WARNING_SINGLE_LAYER,
@@ -113,8 +112,42 @@ from split_pr_scripts_constants.config.plan_constants import (
 JsonObject = dict[str, object]
 
 
+class PullRequestPayloadFetcher(Protocol):
+    """Reads the raw ``gh`` field payload for one pull request.
+
+    ::
+
+        fetch_pr_payload_through_gh(123, "owner/name")  # ok: real gh call
+        lambda pr_number, repo: {}  # ok: recorded stand-in inside a test
+
+    :func:`analyze_pull_request` takes an implementation of this protocol, so a
+    caller chooses the payload source without the production path branching on
+    a test flag.
+    """
+
+    def __call__(self, pr_number: int, repo: str | None) -> JsonObject:
+        """Return the ``gh`` field payload for one pull request.
+
+        Args:
+            pr_number: Pull request number.
+            repo: Optional ``owner/name`` scope for the lookup.
+
+        Returns:
+            Payload carrying the PR fields plus a ``files`` record list.
+        """
+
+
 def slugify_feature(title: str, pr_number: int) -> str:
     """Build a short branch-safe feature slug from a PR title.
+
+    ::
+
+        slugify_feature("feat: Add Bell!", 7)  # ok: "feat-add-bell"
+
+    The pr-loop helper ``sanitize_branch_name`` substitutes one replacement per
+    unsafe character and preserves case, so the same title yields
+    ``feat--Add-Bell-``. Slice branch names need the collapsed, lowercased,
+    trimmed form, so this slug stays local rather than reusing that helper.
 
     Args:
         title: PR title text.
@@ -286,7 +319,26 @@ def _collect_warnings(
     return all_warnings
 
 
-def _fetch_pr_payload(pr_number: int, repo: str | None) -> JsonObject:
+def fetch_pr_payload_through_gh(pr_number: int, repo: str | None) -> JsonObject:
+    """Read one pull request's fields and complete file list through ``gh``.
+
+    ::
+
+        fetch_pr_payload_through_gh(123, "owner/name")
+        # ok: {"number": 123, "files": [...]}
+
+    This is the default :class:`PullRequestPayloadFetcher` implementation.
+
+    Args:
+        pr_number: Pull request number.
+        repo: Optional ``owner/name`` scope for the lookup.
+
+    Returns:
+        Payload carrying the PR fields plus a ``files`` record list.
+
+    Raises:
+        RuntimeError: When gh fails, emits non-JSON, or returns a short list.
+    """
     all_pr_fields = _fetch_pr_overview(pr_number, repo)
     all_pr_fields[GH_FIELD_FILES] = fetch_all_pr_files(pr_number, repo)
     assert_file_list_is_complete(all_pr_fields)
@@ -415,33 +467,49 @@ def assert_file_list_is_complete(all_pr_fields: JsonObject) -> None:
         )
 
 
-def _payload_from_files_json(
-    files_json_path: Path,
+def analyze_pull_request(
     pr_number: int,
-    title: str,
-    base_ref: str,
-    head_ref: str,
+    repo: str | None,
+    title_prefix: str,
+    fetch_payload: PullRequestPayloadFetcher = fetch_pr_payload_through_gh,
 ) -> JsonObject:
-    raw_object: object = json.loads(files_json_path.read_text(encoding="utf-8"))
-    if isinstance(raw_object, list):
-        all_files = raw_object
-    elif isinstance(raw_object, dict) and GH_FIELD_FILES in raw_object:
-        all_files = raw_object[GH_FIELD_FILES]
-    else:
-        raise ValueError(ERROR_CLI_ARGUMENTS)
-    if not isinstance(all_files, list):
-        raise ValueError(ERROR_CLI_ARGUMENTS)
-    return {
-        GH_FIELD_NUMBER: pr_number,
-        GH_FIELD_TITLE: title,
-        GH_FIELD_BASE_REF: base_ref,
-        GH_FIELD_HEAD_REF: head_ref,
-        GH_FIELD_HEAD_OID: TEST_HEAD_SHA,
-        GH_FIELD_FILES: all_files,
-        GH_FIELD_CHANGED_FILES: len(all_files),
-        GH_FIELD_URL: None,
-        GH_FIELD_BODY: "",
-    }
+    """Fetch one pull request and turn it into a split plan.
+
+    ::
+
+        analyze_pull_request(123, "owner/name", "feat")
+        # ok: reads the live PR through gh
+        analyze_pull_request(123, None, "feat", fetch_payload=stub)
+        # ok: reads a recorded payload
+
+    ``fetch_payload`` is the seam a test uses in place of the live ``gh`` call.
+
+    Args:
+        pr_number: Pull request number.
+        repo: Optional ``owner/name`` stored on the plan and used for lookup.
+        title_prefix: Conventional-commit prefix for slice titles.
+        fetch_payload: Payload source; the ``gh``-backed reader by default.
+
+    Returns:
+        Plan dict with annotated files and proposed slices.
+    """
+    all_pr_fields = fetch_payload(pr_number, repo)
+    return build_plan_from_pr_payload(
+        all_pr_fields,
+        repo=repo,
+        title_prefix=title_prefix,
+    )
+
+
+def _plan_from_arguments(parsed_arguments: argparse.Namespace) -> JsonObject:
+    pr_number = parsed_arguments.pr
+    if pr_number is None or pr_number < 1:
+        raise ValueError(ERROR_PR_NUMBER_REQUIRED)
+    return analyze_pull_request(
+        pr_number=pr_number,
+        repo=parsed_arguments.repo,
+        title_prefix=parsed_arguments.title_prefix,
+    )
 
 
 def main() -> int:
@@ -455,24 +523,7 @@ def main() -> int:
     """
     try:
         parsed_arguments = _parse_arguments()
-        pr_number = parsed_arguments.pr
-        if pr_number is None or pr_number < 1:
-            raise ValueError(ERROR_PR_NUMBER_REQUIRED)
-        if parsed_arguments.files_json:
-            all_pr_fields = _payload_from_files_json(
-                files_json_path=Path(parsed_arguments.files_json),
-                pr_number=pr_number,
-                title=parsed_arguments.title or f"PR {pr_number}",
-                base_ref=parsed_arguments.base or DEFAULT_BASE_REF_NAME,
-                head_ref=parsed_arguments.head or f"feature/pr-{pr_number}",
-            )
-        else:
-            all_pr_fields = _fetch_pr_payload(pr_number, parsed_arguments.repo)
-        plan_payload = build_plan_from_pr_payload(
-            all_pr_fields,
-            repo=parsed_arguments.repo,
-            title_prefix=parsed_arguments.title_prefix,
-        )
+        plan_payload = _plan_from_arguments(parsed_arguments)
         indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
         print(json.dumps(plan_payload, indent=indent))
         return EXIT_CODE_SUCCESS
@@ -492,14 +543,6 @@ def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze a PR for file-based split")
     parser.add_argument("--pr", type=int, required=True, help="Pull request number")
     parser.add_argument("--repo", default=None, help="owner/name for gh --repo")
-    parser.add_argument(
-        "--files-json",
-        default=None,
-        help="Offline files payload (tests); skips gh",
-    )
-    parser.add_argument("--title", default=None, help="Override title with --files-json")
-    parser.add_argument("--base", default=None, help="Override base ref with --files-json")
-    parser.add_argument("--head", default=None, help="Override head ref with --files-json")
     parser.add_argument(
         "--title-prefix",
         default=DEFAULT_TITLE_PREFIX,

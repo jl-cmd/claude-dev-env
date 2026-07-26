@@ -119,7 +119,7 @@ def test_pagination_reads_every_file_past_the_first_page(
         all_pages,
     )
 
-    all_pr_fields = analyze_pr._fetch_pr_payload(PR_NUMBER, "owner/name")
+    all_pr_fields = analyze_pr.fetch_pr_payload_through_gh(PR_NUMBER, "owner/name")
 
     all_files = all_pr_fields[GH_FIELD_FILES]
     assert isinstance(all_files, list)
@@ -137,7 +137,7 @@ def test_a_truncated_file_list_fails_loudly(
     )
 
     with pytest.raises(RuntimeError) as raised:
-        analyze_pr._fetch_pr_payload(PR_NUMBER, "owner/name")
+        analyze_pr.fetch_pr_payload_through_gh(PR_NUMBER, "owner/name")
 
     assert str(GH_PAGE_SIZE) in str(raised.value)
     assert str(TRUNCATED_PR_FILE_COUNT) in str(raised.value)
@@ -161,7 +161,7 @@ def test_deleted_and_added_statuses_survive_into_the_plan(
     ]
     install_fake_gh(monkeypatch, build_overview(2), all_pages)
 
-    all_pr_fields = analyze_pr._fetch_pr_payload(PR_NUMBER, "owner/name")
+    all_pr_fields = analyze_pr.fetch_pr_payload_through_gh(PR_NUMBER, "owner/name")
     plan_payload = analyze_pr.build_plan_from_pr_payload(
         all_pr_fields,
         repo="owner/name",
@@ -250,6 +250,58 @@ def test_branch_names_carry_the_slice_slug() -> None:
 )
 def test_every_hook_subdirectory_lands_in_the_backend_layer(hook_path: str) -> None:
     assert assign_layer(hook_path) == LAYER_BACKEND
+
+
+def test_an_injected_fetcher_supplies_the_payload_without_calling_gh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_run(*_arguments: object, **_keyword_arguments: object) -> None:
+        raise AssertionError("gh was invoked despite an injected fetcher")
+
+    monkeypatch.setattr(analyze_pr.subprocess, "run", forbidden_run)
+    all_recorded_calls: list[tuple[int, str | None]] = []
+
+    def stub_fetch_payload(pr_number: int, repo: str | None) -> dict[str, object]:
+        all_recorded_calls.append((pr_number, repo))
+        recorded_payload = build_overview(2)
+        recorded_payload[GH_FIELD_FILES] = [
+            build_api_file("src/services/api.py", "modified", additions=300),
+            build_api_file("docs/guide.md", "modified", additions=300),
+        ]
+        return recorded_payload
+
+    plan_payload = analyze_pr.analyze_pull_request(
+        pr_number=PR_NUMBER,
+        repo="owner/name",
+        title_prefix=TITLE_PREFIX,
+        fetch_payload=stub_fetch_payload,
+    )
+
+    assert all_recorded_calls == [(PR_NUMBER, "owner/name")]
+    all_files = plan_payload[PLAN_KEY_ALL_FILES]
+    assert isinstance(all_files, list)
+    assert len(all_files) == 2
+
+
+def test_the_default_fetcher_reads_the_pull_request_through_gh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_recorded_commands = install_fake_gh(
+        monkeypatch,
+        build_overview(1),
+        [[build_api_file("src/services/api.py", "modified", additions=300)]],
+    )
+
+    plan_payload = analyze_pr.analyze_pull_request(
+        pr_number=PR_NUMBER,
+        repo="owner/name",
+        title_prefix=TITLE_PREFIX,
+    )
+
+    assert any(GH_API in each_command for each_command in all_recorded_commands)
+    all_files = plan_payload[PLAN_KEY_ALL_FILES]
+    assert isinstance(all_files, list)
+    assert len(all_files) == 1
 
 
 def test_a_heavy_single_file_pr_is_not_called_optional() -> None:
