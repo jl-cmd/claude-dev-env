@@ -1391,8 +1391,9 @@ class TestPrLabelerWorkflowContract:
         the existence check for free.
         """
         labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
-        assert "--config" in labeler_step["run"], "labeler step passes no --config"
-        config_flag_tail = labeler_step["run"].split("--config", 1)[1]
-        configured_config_path_token = config_flag_tail.split()[0]
+        config_flag_parts = labeler_step["run"].split("--config", 1)
+        assert len(config_flag_parts) == 2, "labeler step passes no --config"
+        assert config_flag_parts[1].split(), "labeler step passes --config with no path"
+        configured_config_path_token = config_flag_parts[1].split()[0]
         configured_config_path = _CI_SCRIPTS_DIR.parent.parent / configured_config_path_token
         assert configured_config_path.resolve() == CLAUDE_DEV_ENV_CONFIG_PATH.resolve()
