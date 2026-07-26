@@ -83,6 +83,7 @@ The file reads in this order — a token layer, then three numbered sections:
 | `title` | Panel heading. A full sentence beats a label. |
 | `summary` | One paragraph. The whole situation in plain words. |
 | `blocks` | List of body blocks. |
+| `chips` | Optional list of `{text, tone}` pills under the summary, stating where the tab stands. Tone: `""`, `"good"`, `"warn"`, `"risk"`. |
 | `options` | List of choices. Reading-only items leave it off. |
 
 Suggested groups, in reading order:
@@ -100,10 +101,10 @@ Three kinds, mixed freely in any order:
 {heading: "Heading", paragraphs: ["Paragraph.", "Another paragraph."]}
 {heading: "Heading", bullets: ["Point.", "Another point."]}
 {heading: "Heading", table: {head: ["Column", "Column"], rows: [["a", "b"]]}}
-{callout: "", paragraphs: ["The point in one or two sentences."]}
+{callout: "", claim: "One serif line.", paragraphs: ["The detail beneath it."]}
 ```
 
-Callout tones: `""` for a neutral recommendation, `"good"` for reassurance, `"warn"` for a warning, `"risk"` for a real hazard.
+Callout tones: `""` for a neutral recommendation, `"good"` for reassurance, `"warn"` for a warning, `"risk"` for a real hazard. An optional `claim` opens the callout in the serif face at a larger size, with the paragraphs beneath it.
 
 A table column whose cells all read as numbers gets right-aligned and set in tabular figures, so a reader can compare down the column. Commas, decimal points, spaces, percent signs, currency marks, and a leading sign all count as part of a number. That happens on its own — there is nothing to mark up.
 
@@ -138,7 +139,19 @@ The copy button strips the tags and entities back out, so the text a reader past
 - **Cross-tab links**: a link carrying `data-tab="<item id>"` jumps to that tab, so a rule can point at its worked example.
 - **Storage**: choices and notes are held in the browser under `CONFIG.storageKey`. Closing the tab and coming back keeps them. Nothing is sent anywhere.
 - **Counter**: the dock reads "N of M decided", counting only the tabs that carry a choice.
-- **Rail dots**: grey for untouched, red for urgent and unanswered, green once answered.
+- **Rail marks**: two channels, so colour is never the only carrier. Shape says what you owe — a ring waits for an answer, a filled disc holds one, a bar asks for nothing. Colour says which kind of attention it wants, on a four-step ramp: red today, amber this session, blue worth reading, green settled.
+
+  | Mark | Meaning |
+  |---|---|
+  | Ring, red | Wants your answer today |
+  | Ring, amber | Waiting for your answer |
+  | Disc, green | Answered |
+  | Bar, blue | Read this first |
+  | Bar, calm | Background, nothing to answer |
+
+  Every mark takes a hue from the palette. The calm tone is the accent hue drained of saturation, so a low-priority mark still belongs to the design; a neutral grey mark reads as unstyled rather than low-priority.
+
+  A legend under the rail lists the marks a docket actually uses, rendered from the same list the marks are drawn from.
 - **Themes**: light and dark, both from the token layer, following the viewer's system setting and their own toggle.
 - **Narrow screens**: below 860 pixels the rail turns into a horizontal strip along the top.
 

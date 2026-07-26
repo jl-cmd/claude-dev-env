@@ -25,6 +25,7 @@
     --warn-wash:  #F2E7D1;
     --risk-wash:  #F2DED7;
     --accent-wash:#DAE4EA;
+    --calm:       #4A6B80;
 
     --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
@@ -43,7 +44,7 @@
       --accent: #82B5D1; --accent-ink: #A9CEE3;
       --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
       --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
-      --accent-wash: #16272F;
+      --accent-wash: #16272F; --calm: #7E97A8;
     }
   }
   :root[data-theme="dark"] {
@@ -53,7 +54,7 @@
     --accent: #82B5D1; --accent-ink: #A9CEE3;
     --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
     --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
-    --accent-wash: #16272F;
+    --accent-wash: #16272F; --calm: #7E97A8;
   }
   :root[data-theme="light"] {
     --ink: #141A1F; --ink-soft: #30383F; --ink-faint: #42484E;
@@ -62,7 +63,7 @@
     --accent: #1D4E6B; --accent-ink: #14384E;
     --good: #3D6C48; --warn: #96631C; --risk: #8F3119;
     --good-wash: #DEE9E0; --warn-wash: #F2E7D1; --risk-wash: #F2DED7;
-    --accent-wash: #DAE4EA;
+    --accent-wash: #DAE4EA; --calm: #4A6B80;
   }
 
   body {
@@ -76,8 +77,8 @@
   /* ---------- masthead ---------- */
   .masthead { display: flex; flex-direction: column; gap: var(--s3); margin-bottom: var(--s5); }
   .topline {
-    font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--ink-faint);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: var(--accent-ink);
   }
   h1 {
     font-family: var(--serif); font-size: clamp(27px, 4vw, 38px); line-height: 1.1;
@@ -97,17 +98,26 @@
     text-decoration: none; width: 8px; height: 8px; border-radius: 50%;
     background: var(--accent); flex: 0 0 8px;
   }
-  .step-link { width: 34px; height: 1px; background: var(--rule); margin: 0 var(--s3); }
+  .step-link { width: 34px; height: 1px; background: var(--calm); margin: 0 var(--s3); }
 
-  .figures { display: flex; flex-wrap: wrap; gap: var(--s5); margin-top: var(--s2); }
-  .figures div { display: flex; flex-direction: column; }
+  /* One-pixel grid gaps over a rule-coloured ground draw the dividers, so
+     the row reads as a table without a table's markup. */
+  .figures {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+    margin-top: var(--s3);
+  }
+  .figures div {
+    display: flex; flex-direction: column;
+    background: var(--surface); padding: var(--s3) var(--s4);
+  }
   .figures b {
     font-family: var(--serif); font-size: 25px; font-weight: 600;
     line-height: 1.1; font-variant-numeric: tabular-nums;
   }
   .figures span {
-    font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.07em;
-    text-transform: uppercase; color: var(--ink-faint);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 500;
+    letter-spacing: 0; text-transform: none; color: var(--ink-soft);
   }
 
   /* ---------- layout ---------- */
@@ -120,19 +130,24 @@
   .tabs {
     display: flex; flex-direction: column;
     background: var(--rail); border: 1px solid var(--rule-soft);
-    position: sticky; top: var(--s4); max-height: calc(100vh - 90px); overflow-y: auto;
+    max-height: calc(100vh - 190px); overflow-y: auto;
   }
 
+  /* A rail group heading names a section of the docket, so it is set as a
+     heading: sentence case, full ink, at the body face. A rule above it
+     separates one group from the tabs of the group before. */
   .tabs-group {
-    font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--ink-faint);
-    padding: var(--s4) var(--s3) var(--s1);
+    font-family: var(--sans); font-size: 15px; font-weight: 700;
+    letter-spacing: -0.003em; text-transform: none; color: var(--ink);
+    padding: var(--s3) var(--s3) var(--s2);
+    border-top: 1px solid var(--rule-soft); margin-top: var(--s2);
   }
+  .tabs-group:first-child { border-top: 0; margin-top: 0; }
 
   .tab {
     display: flex; align-items: center; gap: var(--s2);
     padding: 9px var(--s3); border: 0; background: transparent;
-    font-family: var(--sans); font-size: 14px; line-height: 1.35;
+    font-family: var(--sans); font-size: 16px; line-height: 1.35;
     color: var(--ink-soft); text-align: left; width: 100%; cursor: pointer;
     border-left: 3px solid transparent;
     text-transform: none; letter-spacing: normal;
@@ -144,13 +159,48 @@
   }
   .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+  /* The mark carries two readings at once.
+     Shape says what you owe: a ring waits for an answer, a filled disc
+     holds one, a bar asks for nothing.
+     Colour says which kind of attention it wants, on a four-step ramp:
+     red today, amber this session, blue worth reading, green settled.
+     Background sits on the calm tone, which is the accent hue drained of
+     saturation, so a low-priority mark still belongs to the palette.
+     Shape repeats what colour says, so the rail reads without colour. */
   .dot {
-    width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px;
-    background: var(--rule); margin-top: 6px; align-self: flex-start;
+    width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px;
+    border: 2px solid var(--warn); background: transparent;
+    margin-top: 5px; align-self: flex-start; box-sizing: border-box;
   }
-  .tab[data-state="done"] .dot { background: var(--good); }
-  .tab[data-state="urgent"] .dot { background: var(--risk); }
+  .tab[data-state="open-urgent"] .dot,
+  .dot[data-legend="open-urgent"] { border-color: var(--risk); }
+  .tab[data-state="done"] .dot,
+  .dot[data-legend="done"] { border-color: var(--good); background: var(--good); }
+  .tab[data-state="reading"] .dot,
+  .tab[data-state="reading-urgent"] .dot,
+  .dot[data-legend="reading"],
+  .dot[data-legend="reading-urgent"] {
+    border: 0; border-radius: 1px; height: 3px; margin-top: 8px;
+    background: var(--calm);
+  }
+  .tab[data-state="reading-urgent"] .dot,
+  .dot[data-legend="reading-urgent"] { background: var(--accent); }
   .tab-label { flex: 1; }
+
+  /* ---------- rail legend ---------- */
+  .rail-column {
+    display: flex; flex-direction: column; gap: var(--s3);
+    position: sticky; top: var(--s4);
+  }
+  .legend {
+    border: 1px solid var(--rule-soft); background: var(--rail);
+    padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2);
+  }
+  .legend-title {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+    letter-spacing: -0.003em; text-transform: none; color: var(--ink);
+  }
+  .legend-row { display: flex; align-items: flex-start; gap: var(--s2); font-size: 13px; color: var(--ink-soft); }
 
   /* ---------- panel ---------- */
   .panel {
@@ -162,8 +212,8 @@
 
   .panel-head { display: flex; flex-direction: column; gap: var(--s2); }
   .panel-label {
-    font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--ink-faint);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: var(--accent-ink);
   }
   .panel h2 {
     font-family: var(--serif); font-size: clamp(22px, 3vw, 28px); line-height: 1.15;
@@ -171,19 +221,51 @@
   }
   .summary { font-size: 17px; color: var(--ink-soft); max-width: var(--measure); margin: 0; }
 
-  .block { display: flex; flex-direction: column; gap: var(--s2); }
+  /* A chip states where the tab stands. Tone picks the semantic colour and
+     its wash, so the pill reads at a glance without a legend. */
+  .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .chip {
+    display: inline-flex; align-items: center;
+    font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+    padding: 3px 10px; border-radius: 3px;
+    background: var(--accent-wash); color: var(--accent-ink);
+    border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+  .chip.good {
+    background: var(--good-wash); color: var(--good);
+    border-color: color-mix(in srgb, var(--good) 32%, transparent);
+  }
+  .chip.warn {
+    background: var(--warn-wash); color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+  }
+  .chip.risk {
+    background: var(--risk-wash); color: var(--risk);
+    border-color: color-mix(in srgb, var(--risk) 32%, transparent);
+  }
+
+  .block { display: flex; flex-direction: column; gap: var(--s3); }
+
+  /* A section heading inside a tab is a heading, so it is set like one:
+     sentence case, full ink, at the body family and a step above body size.
+     The mono uppercase treatment stays with the true micro-labels. */
   .block h3 {
-    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--ink-faint); margin: 0; font-weight: 600;
+    font-family: var(--sans); font-size: 16px; font-weight: 650;
+    letter-spacing: -0.006em; text-transform: none;
+    color: var(--ink); margin: 0; text-wrap: balance;
   }
   .block p { margin: 0; max-width: var(--measure); }
   .block p + p { margin-top: var(--s2); }
-  .block ul { margin: 0; padding-left: 1.15em; max-width: var(--measure); }
-  .block li { margin-bottom: var(--s2); }
+  .block ul { margin: 0; padding-left: 1.25em; max-width: var(--measure); }
+  .block li { margin-bottom: var(--s2); padding-left: 2px; }
+  .block li::marker { color: var(--calm); }
 
+  /* A name lifted out of prose is tinted, so a path or an identifier is
+     found by eye without reading the sentence around it. */
   code {
-    font-family: var(--mono); font-size: 0.88em;
-    background: var(--paper); padding: 1px 5px; border-radius: 2px;
+    font-family: var(--mono); font-size: 0.89em;
+    background: var(--accent-wash); color: var(--accent-ink);
+    padding: 1px 5px; border-radius: 2px;
   }
 
   .callout {
@@ -195,6 +277,10 @@
   .callout.good { background: var(--good-wash); border-left-color: var(--good); }
   .callout p { margin: 0; }
   .callout p + p { margin-top: var(--s2); }
+  .callout .claim {
+    font-family: var(--serif); font-size: 18px; line-height: 1.4;
+    color: var(--ink);
+  }
 
   table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
   .scroller { overflow-x: auto; border: 1px solid var(--rule-soft); }
@@ -202,17 +288,25 @@
     text-align: left; padding: 7px var(--s3);
     border-bottom: 1px solid var(--rule-soft); vertical-align: top;
   }
+  /* A column head is named by a rule under it rather than a grey band
+     behind it, so the header row belongs to the palette. */
   th {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
-    background: var(--paper); white-space: nowrap;
+    font-family: var(--sans); font-size: 13.5px; letter-spacing: 0;
+    text-transform: none; color: var(--ink); font-weight: 650;
+    background: transparent; white-space: nowrap;
+    border-bottom: 2px solid var(--calm);
   }
   th.num, td.num { text-align: right; }
   td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
 
-  a { color: var(--accent-ink); }
-  a:hover { text-decoration: underline; }
+  /* The underline is a tinted rule of its own, so it sits clear of the
+     descenders and firms up on hover rather than appearing from nothing. */
+  a {
+    color: var(--accent-ink); text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+  a:hover, a:focus-visible { border-bottom-color: var(--accent); }
 
   /* ---------- the choice control ---------- */
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--s3); }
@@ -283,7 +377,8 @@
     /* minmax(0, 1fr) caps the track at the available width. An auto-sized
        track grows to fit the widest tab and pushes the page sideways. */
     .board { grid-template-columns: minmax(0, 1fr); }
-    .tabs { position: static; max-height: none; flex-direction: row; overflow-x: auto; min-width: 0; }
+    .rail-column { position: static; }
+    .tabs { max-height: none; flex-direction: row; overflow-x: auto; min-width: 0; }
     .tabs-group { display: none; }
     .tab { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; width: auto; }
     .tab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--accent); }
@@ -298,7 +393,10 @@
   <header class="masthead" id="masthead"></header>
 
   <div class="board">
-    <nav class="tabs" role="tablist" aria-label="Decisions"></nav>
+    <div class="rail-column">
+      <nav class="tabs" role="tablist" aria-label="Decisions"></nav>
+      <div class="legend" id="legend"></div>
+    </div>
     <div id="panels"></div>
   </div>
 
@@ -379,13 +477,17 @@ var CONFIG = {
      title        Panel heading. A full sentence beats a label.
      summary      One paragraph. The whole situation in plain words.
      blocks       List of body blocks (below).
+     chips        Optional list of {text, tone} pills under the summary,
+                  stating where the tab stands. Tone: "" | "good" | "warn" | "risk".
      options      List of choices (below). Reading-only items leave it off.
 
    BODY BLOCKS — three kinds, mix freely, any order
      {heading: "Heading", paragraphs: ["Paragraph.", "Another."]}
      {heading: "Heading", bullets: ["Point.", "Another point."]}
      {heading: "Heading", table: {head: ["Col", "Col"], rows: [["a","b"]]}}
-     {callout: "", paragraphs: ["..."]}        tone: "" | "good" | "warn" | "risk"
+     {callout: "", claim: "One serif line.", paragraphs: ["..."]}
+                                              tone: "" | "good" | "warn" | "risk"
+                                              claim is optional
 
    OPTION FIELDS
      decision     The sentence written into the copied output. Write it in
@@ -426,14 +528,18 @@ var ITEMS = [
     label: "The rule that outranks the rest",
     title: "Check it, or leave it out",
     summary: "A sentence nobody checked gets acted on all the same.",
+    chips: [
+      {text: "Outranks every other rule", tone: "risk"},
+      {text: "Checked before it ships", tone: "good"}
+    ],
     blocks: [
       {heading: "Checked means", bullets: [
         "A command you ran, and its output.",
         "A file you opened, named by path.",
         "A page you read, named by title."
       ]},
-      {heading: "Keep these out", table: {
-        head: ["Keep out", "Write this"],
+      {heading: "Four unchecked claims, and what to write for each", table: {
+        head: ["Unchecked claim", "Write this"],
         rows: [
           ["A branching guess", "Check which case holds. Write that one."],
           ["An unconfirmed problem", "Reproduce it, or drop the tab."],
@@ -441,17 +547,19 @@ var ITEMS = [
           ["A vague number", "The count, and the command behind it."]
         ]
       }},
-      {heading: "Cannot reach a source", bullets: [
+      {heading: "When a source is out of reach", bullets: [
         "Say so in the tab.",
-        "Name what you could not reach."
+        "Name what you could not reach, and what reaching it would take."
       ]},
       {heading: "Before it ships", bullets: [
         "A second pass checks every claim against its source.",
         "Anything unconfirmed comes out, or ships flagged."
       ]},
-      {callout: "risk", paragraphs: [
-        "<strong>Write only what you checked. Name the source, or name the gap. Fix only a problem you reproduced.</strong>"
-      ]}
+      {callout: "risk",
+       claim: "Write only what you checked.",
+       paragraphs: [
+         "Name the source, or name the gap. Fix only a problem you reproduced."
+       ]}
     ]
   },
 
@@ -492,6 +600,7 @@ var ITEMS = [
     label: "The rail headings",
     title: "Groups say what each tab asks of the reader",
     summary: "Consecutive tabs sharing a group sit under one heading.",
+    chips: [{text: "Wants your answer today", tone: "risk"}],
     blocks: [
       {heading: "The four groups", table: {
         head: ["Group", "Holds", "Reader does"],
@@ -631,6 +740,26 @@ var ITEMS = [
           ["<code>risk</code>", "Serious", "A real hazard"]
         ]
       }},
+      {heading: "The rail marks", table: {
+        head: ["Mark", "Shape says", "Colour says", "Meaning"],
+        rows: [
+          ["Ring, red", "An answer is owed", "Today", "Wants your answer today"],
+          ["Ring, amber", "An answer is owed", "This session", "Waiting for your answer"],
+          ["Disc, green", "An answer is held", "Settled", "Answered"],
+          ["Bar, blue", "Nothing owed", "Worth reading", "Read this first"],
+          ["Bar, calm", "Nothing owed", "Background", "Background, nothing to answer"]
+        ]
+      }},
+      {heading: "Why two channels", bullets: [
+        "Shape carries what you owe. Colour carries which kind of attention.",
+        "The colour ramp runs red, amber, blue, green: today, this session, worth reading, settled.",
+        "Every state names both channels, so the rail reads without colour.",
+        "The legend under the rail lists only the marks in use."
+      ]},
+      {heading: "Every mark takes a hue", bullets: [
+        "The calm tone is the accent hue drained of saturation, so a low-priority mark still belongs to the palette.",
+        "A neutral grey mark reads as unstyled rather than low-priority."
+      ]},
       {heading: "Handled for you", bullets: [
         "A column of numbers right-aligns in tabular figures.",
         "A wide table scrolls in its own frame.",
@@ -743,6 +872,24 @@ var ITEMS = [
     return !item.readingOnly && !!(item.options && item.options.length);
   }
   var decidable = ITEMS.filter(hasChoices);
+
+  /* The rail mark, on two channels.
+     Shape  — ring: an answer is owed. disc: an answer is held. bar: none owed.
+     Colour — risk: wanted today. good: settled. rule/faint: ordinary.
+     Every state names both, so colour is never the only carrier. */
+  var ALL_MARK_STATES = [
+    {state: "open-urgent",    meaning: "Wants your answer today"},
+    {state: "",               meaning: "Waiting for your answer"},
+    {state: "done",           meaning: "Answered"},
+    {state: "reading-urgent", meaning: "Read this first"},
+    {state: "reading",        meaning: "Background, nothing to answer"}
+  ];
+
+  function markFor(item, isAnswered) {
+    if (!hasChoices(item)) { return item.urgent ? "reading-urgent" : "reading"; }
+    if (isAnswered) { return "done"; }
+    return item.urgent ? "open-urgent" : "";
+  }
   var tabsEl = document.querySelector(".tabs");
   var panelsEl = document.getElementById("panels");
 
@@ -768,6 +915,22 @@ var ITEMS = [
     }
     document.getElementById("masthead").innerHTML = html;
     document.getElementById("footnote").innerHTML = CONFIG.footnote;
+  })();
+
+  /* ---------- rail legend ---------- */
+  (function renderLegend() {
+    var used = ALL_MARK_STATES.filter(function (entry) {
+      return ITEMS.some(function (item) {
+        return markFor(item, false) === entry.state || (entry.state === "done" && hasChoices(item));
+      });
+    });
+    var html = '<div class="legend-title">What each mark means</div>';
+    used.forEach(function (entry) {
+      html += '<div class="legend-row"><span class="dot"' +
+        (entry.state ? ' data-legend="' + entry.state + '"' : "") +
+        "></span><span>" + entry.meaning + "</span></div>";
+    });
+    document.getElementById("legend").innerHTML = html;
   })();
 
   /* ---------- body blocks ---------- */
@@ -796,6 +959,7 @@ var ITEMS = [
     (item.blocks || []).forEach(function (b) {
       if (b.callout !== undefined) {
         html += '<div class="callout ' + (b.callout || "") + '">';
+        if (b.claim) { html += '<p class="claim">' + b.claim + "</p>"; }
         (b.paragraphs || []).forEach(function (t) { html += "<p>" + t + "</p>"; });
         html += "</div>";
         return;
@@ -834,7 +998,8 @@ var ITEMS = [
     btn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
     btn.tabIndex = idx === 0 ? 0 : -1;
     btn.innerHTML = '<span class="dot"></span><span class="tab-label">' + item.tab + "</span>";
-    if (item.urgent) { btn.setAttribute("data-state", "urgent"); }
+    var initialMark = markFor(item, false);
+    if (initialMark) { btn.setAttribute("data-state", initialMark); }
     tabsEl.appendChild(btn);
 
     var panel = document.createElement("div");
@@ -848,7 +1013,15 @@ var ITEMS = [
     var html = '<div class="panel-head">' +
       '<div class="panel-label">' + item.label + "</div>" +
       "<h2>" + item.title + "</h2>" +
-      '<p class="summary">' + item.summary + "</p></div>";
+      '<p class="summary">' + item.summary + "</p>";
+    if ((item.chips || []).length) {
+      html += '<div class="chips">';
+      item.chips.forEach(function (chip) {
+        html += '<span class="chip ' + (chip.tone || "") + '">' + chip.text + "</span>";
+      });
+      html += "</div>";
+    }
+    html += "</div>";
 
     html += renderBlocks(item);
 
@@ -920,13 +1093,13 @@ var ITEMS = [
 
   function refresh() {
     var n = 0;
-    decidable.forEach(function (item) {
-      var done = state[item.id] && state[item.id].choice;
-      if (done) { n++; }
+    ITEMS.forEach(function (item) {
+      var isAnswered = !!(state[item.id] && state[item.id].choice) && hasChoices(item);
+      if (isAnswered) { n++; }
       var tab = document.getElementById("tab-" + item.id);
       if (!tab) { return; }
-      if (done) { tab.setAttribute("data-state", "done"); }
-      else if (item.urgent) { tab.setAttribute("data-state", "urgent"); }
+      var mark = markFor(item, isAnswered);
+      if (mark) { tab.setAttribute("data-state", mark); }
       else { tab.removeAttribute("data-state"); }
     });
     document.getElementById("status").textContent = n + " of " + decidable.length + " decided";
