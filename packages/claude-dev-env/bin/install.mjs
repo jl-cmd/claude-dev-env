@@ -28,7 +28,7 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', 'audit-rubrics'];
 
 /**
  * Every top-level directory under ~/.claude the installer writes into: the
@@ -44,7 +44,17 @@ export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
 ];
 
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
-const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
+
+/**
+ * Skill-tree directories that hold cross-skill assets rather than a skill.
+ *
+ * Every consuming skill reads these by relative path, so a scoped `--only`
+ * install ships them even when the selected group does not name them, and the
+ * retired-skill prune never moves them to backup.
+ */
+export const SHARED_SKILL_DIRECTORY_NAMES = new Set(['_shared']);
+const LEGACY_ROOT_SHARED_DIRECTORY_NAME = '_shared';
+const LEGACY_ROOT_SHARED_BACKUP_NAME = '_shared-root-legacy';
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
@@ -52,7 +62,7 @@ const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
 
 export const CORE_INCLUDE_DIRECTORIES = [
-    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', 'scripts',
 ];
 
 export const CORE_SKILLS = [
@@ -1539,7 +1549,7 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     let movedDirectoryCount = 0;
     for (const skillDir of existingSkillDirs) {
         const skillName = skillDir.name;
-        if (NEVER_PRUNED_SKILL_DIRECTORIES.has(skillName)) continue;
+        if (SHARED_SKILL_DIRECTORY_NAMES.has(skillName)) continue;
         if (installedSkillNames.has(skillName)) continue;
         const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
         if (!isPruneCandidate) continue;
@@ -1556,6 +1566,32 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
 }
 
 /**
+ * Move a legacy top-level ~/.claude/_shared tree into the run's backup root.
+ *
+ * Shared assets now install under ~/.claude/skills/_shared/. A machine that ran
+ * an older install still carries files at ~/.claude/_shared/; renaming that
+ * directory into the same timestamped backup the retired skills use keeps the
+ * stale root recoverable and stops it shadowing the skills tree. A rename that
+ * fails is logged and the directory left in place, so the migration costs at
+ * most a cosmetic leftover.
+ *
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @param {string} claudeHomeDirectory The managed home holding the legacy tree.
+ * @returns {boolean} True when a legacy tree was found and moved.
+ */
+export function pruneLegacyRootSharedDirectory(backupRoot, claudeHomeDirectory = CLAUDE_HOME) {
+    const legacySharedDirectory = join(claudeHomeDirectory, LEGACY_ROOT_SHARED_DIRECTORY_NAME);
+    if (!existsSync(legacySharedDirectory)) return false;
+    return moveIntoRunBackup(
+        legacySharedDirectory,
+        backupRoot,
+        LEGACY_ROOT_SHARED_BACKUP_NAME,
+        RETIRED_SKILL_REASON_LABEL,
+        claudeHomeDirectory,
+    );
+}
+
+/**
  * Move every file a prior install wrote under a managed root that this run leaves
  * unwritten into the run's backup root, one call per root.
  *
@@ -1568,9 +1604,9 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
  * Nothing moves unless a prior install recorded it. A user-authored file, a
  * runtime artifact, and a recorded path under no managed root — ~/.claude/CLAUDE.md,
  * settings.json, the manifest itself, and ~/.mypy.ini outside the home — all sit
- * outside every root's diff and stay where they are. ~/.claude/_shared and
- * ~/.claude/skills/_shared are distinct absolute paths, so the `_shared` root call
- * and the skills root call each see their own files and neither sees the other's.
+ * outside every root's diff and stay where they are. ~/.claude/skills/_shared sits
+ * inside the skills root, so the shared tree enters the skills root's diff alone
+ * and no path reaches two diffs.
  *
  * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
  * @param {string[]} currentInstalledFiles Every file this run copied.
@@ -1623,6 +1659,7 @@ function runFullInstallPrunes(
     copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
 ) {
     const retiredSkillMovedCount = pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+    const didMoveLegacyShared = pruneLegacyRootSharedDirectory(currentRunBackupRoot(), CLAUDE_HOME);
     const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
         join(CLAUDE_HOME, SETTINGS_FILE_NAME),
         retiredManagedHookRelativePaths(
@@ -1635,7 +1672,9 @@ function runFullInstallPrunes(
     const staleOutcome = pruneStaleFilesAcrossManagedRoots(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
-    const didRunMoveContent = retiredSkillMovedCount + staleOutcome.prunedCount > 0;
+    const legacySharedMovedCount = didMoveLegacyShared ? 1 : 0;
+    const didRunMoveContent =
+        retiredSkillMovedCount + legacySharedMovedCount + staleOutcome.prunedCount > 0;
     retainNewestRunBackupOnly(currentRunBackupRoot(), didRunMoveContent);
     return staleOutcome;
 }
@@ -1764,7 +1803,8 @@ function install(selectedGroups, options = {}) {
         if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
-            if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
+            const isSharedSkillDirectory = SHARED_SKILL_DIRECTORY_NAMES.has(skillDir.name);
+            if (allowedSkills && !isSharedSkillDirectory && !allowedSkills.has(skillDir.name)) continue;
             const skillSourceDirectory = join(skillsSource, skillDir.name);
             const skillDestinationDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME, skillDir.name);
             const stats = copyTree(skillSourceDirectory, skillDestinationDirectory);
