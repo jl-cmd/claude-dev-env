@@ -64,7 +64,7 @@ The file reads in this order — a token layer, then three numbered sections:
 | `topline` | Small mono line above the headline. Date it, or name the source. |
 | `title` | The headline. Say what the reader is being asked for. |
 | `intro` | One or two short sentences saying what the docket is. |
-| `instruction` | A second line telling the reader what to do. |
+| `steps` | What the reader does, one entry per step. Renders as a stepper under the intro. An empty list hides it. |
 | `figures` | List of `{value, label}` tiles. An empty list hides the row. Keep any "decisions on this page" figure in step with the dock, which counts only the items carrying a choice. |
 | `footnote` | Small print. Where the numbers came from, and where the answers live. |
 | `copyHeading` | Heading on the text the copy button produces. |

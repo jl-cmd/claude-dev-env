@@ -9,8 +9,8 @@
      ============================================================ */
   :root {
     --ink:        #141A1F;
-    --ink-soft:   #46515B;
-    --ink-faint:  #76818A;
+    --ink-soft:   #30383F;
+    --ink-faint:  #42484E;
     --paper:      #E8EAE6;
     --surface:    #F5F6F3;
     --rail:       #DEE1DB;
@@ -37,7 +37,7 @@
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --ink: #DFE4E2; --ink-soft: #9BA6AD; --ink-faint: #6B767D;
+      --ink: #DFE4E2; --ink-soft: #B8C0C5; --ink-faint: #A2AAAF;
       --paper: #0F141A; --surface: #181F26; --rail: #141A20;
       --rule: #2D3740; --rule-soft: #222A32;
       --accent: #82B5D1; --accent-ink: #A9CEE3;
@@ -47,7 +47,7 @@
     }
   }
   :root[data-theme="dark"] {
-    --ink: #DFE4E2; --ink-soft: #9BA6AD; --ink-faint: #6B767D;
+    --ink: #DFE4E2; --ink-soft: #B8C0C5; --ink-faint: #A2AAAF;
     --paper: #0F141A; --surface: #181F26; --rail: #141A20;
     --rule: #2D3740; --rule-soft: #222A32;
     --accent: #82B5D1; --accent-ink: #A9CEE3;
@@ -56,7 +56,7 @@
     --accent-wash: #16272F;
   }
   :root[data-theme="light"] {
-    --ink: #141A1F; --ink-soft: #46515B; --ink-faint: #76818A;
+    --ink: #141A1F; --ink-soft: #30383F; --ink-faint: #42484E;
     --paper: #E8EAE6; --surface: #F5F6F3; --rail: #DEE1DB;
     --rule: #C7CBC4; --rule-soft: #DBDED8;
     --accent: #1D4E6B; --accent-ink: #14384E;
@@ -76,7 +76,7 @@
   /* ---------- masthead ---------- */
   .masthead { display: flex; flex-direction: column; gap: var(--s3); margin-bottom: var(--s5); }
   .topline {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--ink-faint);
   }
   h1 {
@@ -84,9 +84,20 @@
     font-weight: 600; letter-spacing: -0.015em; margin: 0; text-wrap: balance;
   }
   .intro {
-    font-family: var(--serif); font-size: 17px; color: var(--ink-soft);
+    font-family: var(--serif); font-size: 17px; color: var(--ink);
     max-width: var(--measure); margin: 0;
   }
+
+  /* The instruction reads as a sequence: a dot per step, a hairline
+     between them doing the counting. */
+  .stepper { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+  .step { display: flex; align-items: center; gap: var(--s2); }
+  .step span { font-size: 15px; color: var(--ink); }
+  .step u {
+    text-decoration: none; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 8px;
+  }
+  .step-link { width: 34px; height: 1px; background: var(--rule); margin: 0 var(--s3); }
 
   .figures { display: flex; flex-wrap: wrap; gap: var(--s5); margin-top: var(--s2); }
   .figures div { display: flex; flex-direction: column; }
@@ -95,7 +106,7 @@
     line-height: 1.1; font-variant-numeric: tabular-nums;
   }
   .figures span {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.07em;
     text-transform: uppercase; color: var(--ink-faint);
   }
 
@@ -113,7 +124,7 @@
   }
 
   .tabs-group {
-    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.13em;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--ink-faint);
     padding: var(--s4) var(--s3) var(--s1);
   }
@@ -151,7 +162,7 @@
 
   .panel-head { display: flex; flex-direction: column; gap: var(--s2); }
   .panel-label {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.13em;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--ink-faint);
   }
   .panel h2 {
@@ -162,8 +173,8 @@
 
   .block { display: flex; flex-direction: column; gap: var(--s2); }
   .block h3 {
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.13em;
-    text-transform: uppercase; color: var(--ink-faint); margin: 0; font-weight: 400;
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 0; font-weight: 600;
   }
   .block p { margin: 0; max-width: var(--measure); }
   .block p + p { margin-top: var(--s2); }
@@ -192,8 +203,8 @@
     border-bottom: 1px solid var(--rule-soft); vertical-align: top;
   }
   th {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--ink-faint); font-weight: 400;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
     background: var(--paper); white-space: nowrap;
   }
   th.num, td.num { text-align: right; }
@@ -276,6 +287,8 @@
     .tabs-group { display: none; }
     .tab { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; width: auto; }
     .tab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--accent); }
+    .stepper { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+    .step-link { display: none; }
     .panel { padding: var(--s5) var(--s4); }
     .shell { padding: var(--s5) var(--s4) var(--s6); }
   }
@@ -316,8 +329,9 @@ var CONFIG = {
   /* One paragraph telling the reader how the page works. */
   intro: "Each tab states one rule, and follows it.",
 
-  /* A second line under the intro. Tell the reader what to do. */
-  instruction: "Read a tab. Pick a direction. Add a note if you have one.",
+  /* What the reader does, one step per entry. Rendered as a stepper
+     under the intro. An empty list hides it. */
+  steps: ["Read a tab", "Pick a direction", "Add a note"],
 
   /* Headline figures. Use an empty list to hide this row entirely.
      Keep these in step with the tabs: the dock counts only the items
@@ -436,7 +450,7 @@ var ITEMS = [
         "Anything unconfirmed comes out, or ships flagged."
       ]},
       {callout: "risk", paragraphs: [
-        "<strong>Never hand-wave. Never assume. Never fix a problem you have not confirmed.</strong>"
+        "<strong>Write only what you checked. Name the source, or name the gap. Fix only a problem you reproduced.</strong>"
       ]}
     ]
   },
@@ -736,8 +750,15 @@ var ITEMS = [
   (function renderMasthead() {
     var html = '<div class="topline">' + CONFIG.topline + "</div>" +
       "<h1>" + CONFIG.title + "</h1>" +
-      '<p class="intro">' + CONFIG.intro + "</p>" +
-      '<p class="intro">' + CONFIG.instruction + "</p>";
+      '<p class="intro">' + CONFIG.intro + "</p>";
+    if ((CONFIG.steps || []).length) {
+      html += '<div class="stepper">';
+      CONFIG.steps.forEach(function (step, index) {
+        if (index) { html += '<span class="step-link"></span>'; }
+        html += '<span class="step"><u></u><span>' + step + "</span></span>";
+      });
+      html += "</div>";
+    }
     if ((CONFIG.figures || []).length) {
       html += '<div class="figures">';
       CONFIG.figures.forEach(function (f) {
