@@ -13,12 +13,12 @@ SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
-import supersede_source_pr  # noqa: E402
+import split_pr_process_runner  # noqa: E402
+from split_pr_scripts_constants.config.common_constants import GH_VIEW  # noqa: E402
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
     GH_BODY_FILE,
     GH_CLOSE,
     GH_COMMENT,
-    GH_VIEW,
     PAYLOAD_KEY_CLOSED,
     PAYLOAD_KEY_COMMENTED,
     SUPERSEDE_UNKNOWN_PR_NUMBER,
@@ -57,7 +57,7 @@ def install_recording_gh(
             return subprocess.CompletedProcess(all_command, 0, "", "")
         return subprocess.CompletedProcess(all_command, close_return_code, "", "denied")
 
-    monkeypatch.setattr(supersede_source_pr.subprocess, "run", fake_run)
+    monkeypatch.setattr(split_pr_process_runner.subprocess, "run", fake_run)
     return all_recorded_commands, all_posted_bodies
 
 
@@ -150,7 +150,7 @@ def test_the_comment_body_file_is_removed_after_the_run(
             all_body_paths.append(all_command[all_command.index(GH_BODY_FILE) + 1])
         return subprocess.CompletedProcess(all_command, 0, "", "")
 
-    monkeypatch.setattr(supersede_source_pr.subprocess, "run", fake_run)
+    monkeypatch.setattr(split_pr_process_runner.subprocess, "run", fake_run)
 
     run_supersede(
         source_pr_number=SOURCE_PR_NUMBER,

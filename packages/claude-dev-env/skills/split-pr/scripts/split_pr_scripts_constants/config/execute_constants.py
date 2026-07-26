@@ -1,17 +1,20 @@
-"""Constants for execute_split git and gh operations."""
+"""Constants for execute_split git and gh operations.
+
+Shared CLI, JSON, and gh names come from ``common_constants``. Everything below
+belongs to the execute and supersede stages: git subcommands and flags, the
+command-line argument names, the draft-PR body text, and the failure messages.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from .common_constants import FIELD_LIST_SEPARATOR, PATH_SEPARATOR
+
 FRESH_BRANCH_SCRIPTS_DIRECTORY = (
     Path(__file__).resolve().parents[4] / "fresh-branch" / "scripts"
 )
 
-EXIT_CODE_SUCCESS = 0
-EXIT_CODE_FAILURE = 1
-
-PAYLOAD_KEY_ERROR = "error"
 PAYLOAD_KEY_DRY_RUN = "dry_run"
 PAYLOAD_KEY_CREATED = "created_slices"
 PAYLOAD_KEY_PR_URLS = "pr_urls"
@@ -23,6 +26,8 @@ PAYLOAD_KEY_SKIPPED = "skipped"
 PAYLOAD_KEY_SKIP_REASON = "skip_reason"
 PAYLOAD_KEY_SKIPPED_SLICES = "skipped_slices"
 PAYLOAD_KEY_RESTORE_ERROR = "restore_error"
+PAYLOAD_KEY_PARTIAL = "partial"
+PAYLOAD_KEY_FAILED_SLICE = "failed_slice"
 
 GIT_COMMAND = "git"
 GIT_FETCH = "fetch"
@@ -46,26 +51,65 @@ GIT_LIST_FLAG = "--list"
 GIT_FORCE_FLAG = "--force"
 GIT_DELETE_BRANCH_FLAG = "-D"
 GIT_REMOVE = "rm"
-GIT_ABBREV_REF_FLAG = "--abbrev-ref"
 GIT_SYMBOLIC_REF = "symbolic-ref"
 GIT_SHORT_FLAG = "--short"
 GIT_HEAD_REF = "HEAD"
+GIT_CHECKOUT_FORCE_CREATE = "-B"
+GIT_ADD_PATHSPEC = "--"
+GIT_REFS_REMOTES_PREFIX = "refs/remotes/"
+GIT_REFS_HEADS_PREFIX = "refs/heads/"
+GIT_ORIGIN_PREFIX = f"{GIT_ORIGIN}{PATH_SEPARATOR}"
 
-GH_COMMAND = "gh"
-GH_PR = "pr"
 GH_CREATE = "create"
 GH_COMMENT = "comment"
 GH_CLOSE = "close"
-GH_VIEW = "view"
 GH_DRAFT = "--draft"
 GH_TITLE = "--title"
 GH_BODY_FILE = "--body-file"
 GH_BASE = "--base"
 GH_HEAD = "--head"
-GH_REPO_FLAG = "--repo"
-GH_JSON = "--json"
+GH_STATE_FIELD = "state"
+GH_COMMENTS_FIELD = "comments"
+GH_COMMENT_BODY_FIELD = "body"
+GH_STATE_CLOSED = "CLOSED"
+GH_VIEW_FIELDS = FIELD_LIST_SEPARATOR.join((GH_STATE_FIELD, GH_COMMENTS_FIELD))
+
+ARGUMENT_PLAN = "--plan"
+ARGUMENT_REPO_PATH = "--repo-path"
+ARGUMENT_DRY_RUN = "--dry-run"
+ARGUMENT_PUSH = "--push"
+ARGUMENT_CREATE_PRS = "--create-prs"
+ARGUMENT_ALLOW_OPTIONAL_SPLIT = "--allow-optional-split"
+ARGUMENT_SUPERSEDE_SOURCE = "--supersede-source"
+ARGUMENT_PRETTY = "--pretty"
+ARGUMENT_STORE_TRUE_ACTION = "store_true"
+DEFAULT_REPO_PATH = "."
+
+PARSER_DESCRIPTION = "Execute an approved split-pr plan"
+HELP_PLAN = "Path to approved plan JSON"
+HELP_REPO_PATH = "Path inside the target git repository"
+HELP_DRY_RUN = "Print planned steps without git mutations"
+HELP_PUSH = "Push created branches to origin"
+HELP_CREATE_PRS = "Open draft stacked PRs; implies --push"
+HELP_ALLOW_OPTIONAL_SPLIT = "Execute even when the plan says the split is optional"
+HELP_SUPERSEDE_SOURCE = (
+    "Comment on and close source_pr_number after a full multi-slice draft "
+    "stack lands (default: on when --create-prs)"
+)
+HELP_PRETTY = "Pretty-print JSON"
 
 DEFAULT_COMMIT_MESSAGE_TEMPLATE = "feat: %s\n\n%s\n\nSplit from PR #%s."
+
+DRAFT_PR_SUMMARY_HEADING = "## Summary"
+DRAFT_PR_SOURCE_HEADING = "## Split source"
+DRAFT_PR_SOURCE_TEMPLATE = "Excised from pull request #%s via `/split-pr`."
+DRAFT_PR_DEPENDENCIES_HEADING = "## Dependencies"
+DRAFT_PR_DEPENDENCIES_TEMPLATE = "Base branch: `%s`. Merge earlier slices first."
+DRAFT_PR_TESTING_HEADING = "## Testing"
+DRAFT_PR_TESTING_NOTE = (
+    "File-partitioned from the parent pull request. Project-wide CI on this "
+    "slice alone is not claimed by `/split-pr` unless verified separately."
+)
 
 ERROR_DIRTY_TREE = "working tree is dirty; commit or stash before execute_split"
 ERROR_REPO_NOT_GIT = "path is not inside a git repository: %s"
@@ -75,7 +119,6 @@ ERROR_CHECKOUT_FILES = "failed to checkout files from %s: %s"
 ERROR_COMMIT_FAILED = "commit failed on %s: %s"
 ERROR_PUSH_FAILED = "push failed for %s: %s"
 ERROR_PR_CREATE_FAILED = "gh pr create failed for %s: %s"
-ERROR_EMPTY_SLICE_AFTER_CHECKOUT = "no files staged for slice %s after checkout"
 ERROR_SUPERSEDE_COMMENT_FAILED = "gh pr comment failed for source #%s: %s"
 ERROR_SUPERSEDE_CLOSE_FAILED = "gh pr close failed for source #%s: %s"
 ERROR_SUPERSEDE_VIEW_FAILED = "gh pr view failed for source #%s: %s"
@@ -91,20 +134,12 @@ ERROR_SPLIT_OPTIONAL_REFUSED = (
     "plan says the split is optional (%s); pass --allow-optional-split to "
     "execute it anyway"
 )
-SKIP_REASON_EMPTY_SLICE = "no_change_against_base"
 ERROR_PLAN_MISSING_PR_IDENTITY = "plan missing pr identity (title and pr_number)"
-PRETTY_FLAG = "--pretty"
+SKIP_REASON_EMPTY_SLICE = "no_change_against_base"
 
-JSON_INDENT_SPACES = 2
 NEWLINE = "\n"
 EMPTY_JSON_OBJECT_TEXT = "{}"
-GIT_REFS_REMOTES_PREFIX = "refs/remotes/"
-GIT_REFS_HEADS_PREFIX = "refs/heads/"
 MARKDOWN_BODY_SUFFIX = ".md"
-GIT_CHECKOUT_FORCE_CREATE = "-B"
-GIT_ADD_PATHSPEC = "--"
-PAYLOAD_KEY_PARTIAL = "partial"
-PAYLOAD_KEY_FAILED_SLICE = "failed_slice"
 
 MINIMUM_SLICES_FOR_SUPERSEDE = 2
 PR_URL_NUMBER_MARKER = "/pull/"
@@ -124,9 +159,3 @@ SUPERSEDE_SKIP_PARTIAL = "partial_stack"
 SUPERSEDE_SKIP_CREATE_PRS_OFF = "create_prs_disabled"
 SUPERSEDE_SKIP_ALREADY_DONE = "already_superseded"
 SUPERSEDE_SKIP_DISABLED = "supersede_disabled"
-GH_STATE_FIELD = "state"
-GH_COMMENTS_FIELD = "comments"
-GH_COMMENT_BODY_FIELD = "body"
-GH_STATE_CLOSED = "CLOSED"
-GH_VIEW_FIELDS = "state,comments"
-

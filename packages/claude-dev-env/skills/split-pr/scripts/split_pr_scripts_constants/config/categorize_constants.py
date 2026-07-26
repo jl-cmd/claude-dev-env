@@ -1,9 +1,15 @@
 """Path-layer heuristics for file-based PR splits.
 
-Layers order is dependency-friendly: foundation → consumers → tests → config.
+Two independent orderings live here. ``ALL_LAYER_ORDER`` is the stacking order
+slices are emitted in, running foundation first and leftovers last: database,
+contracts, backend, frontend, tests, config, docs, other. ``ALL_LAYER_PATH_RULES``
+is match order, most specific pattern first: test and docs paths claim a file
+before the database, contracts, backend, frontend, and config patterns see it.
 """
 
 from __future__ import annotations
+
+from .common_constants import PATH_SEPARATOR  # noqa: F401
 
 LAYER_DATABASE = "database"
 LAYER_CONTRACTS = "contracts"
@@ -60,7 +66,6 @@ ALL_LAYER_PATH_RULES: tuple[tuple[str, str], ...] = (
 DEFAULT_LAYER = LAYER_OTHER
 
 PART_SLUG_SEPARATOR = "-part"
-PATH_SEPARATOR = "/"
 
 ALL_LAYER_STORY_BY_NAME: dict[str, str] = {
     LAYER_DATABASE: "Establish the data foundation",

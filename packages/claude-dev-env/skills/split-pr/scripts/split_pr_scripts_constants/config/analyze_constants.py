@@ -1,12 +1,32 @@
-"""CLI and GitHub field constants for analyze_pr."""
+"""CLI and GitHub field constants for analyze_pr.
+
+Shared CLI, JSON, and gh names come from ``common_constants``; plan field names
+come from ``plan_constants``. The re-exported aliases at the foot of this module
+keep the older ``GH_PR_VIEW`` and ``PLAN_*_KEY`` spellings importable while
+``analyze_pr`` still names them.
+"""
 
 from __future__ import annotations
 
-EXIT_CODE_SUCCESS = 0
-EXIT_CODE_FAILURE = 1
+from .common_constants import (
+    EXIT_CODE_FAILURE,  # noqa: F401
+    EXIT_CODE_SUCCESS,  # noqa: F401
+    FIELD_LIST_SEPARATOR,
+    GH_COMMAND,  # noqa: F401
+    GH_JSON_FLAG,  # noqa: F401
+    GH_PR,
+    GH_REPO_FLAG,  # noqa: F401
+    GH_VIEW,  # noqa: F401
+    JSON_INDENT_SPACES,  # noqa: F401
+    PAYLOAD_KEY_ERROR,  # noqa: F401
+)
+from .plan_constants import (
+    PLAN_KEY_BODY_EXCERPT,
+    PLAN_KEY_THRESHOLD_NOTE,
+    PLAN_KEY_URL,
+    PLAN_ROOT_MUST_BE_OBJECT,  # noqa: F401
+)
 
-PAYLOAD_KEY_ERROR = "error"
-JSON_INDENT_SPACES = 2
 BODY_EXCERPT_MAX_LENGTH = 400
 
 DEFAULT_BASE_REF_NAME = "main"
@@ -19,14 +39,6 @@ MAXIMUM_SLICE_FILE_COUNT = 10
 DEFAULT_TITLE_PREFIX = "feat"
 SLICE_INDEX_ZERO_PAD = 2
 
-GH_COMMAND = "gh"
-GH_PR_VIEW = "pr"
-GH_VIEW = "view"
-GH_JSON_FLAG = "--json"
-GH_REPO_FLAG = "--repo"
-GH_PR_JSON_FIELDS = (
-    "number,title,baseRefName,headRefName,headRefOid,changedFiles,url,body"
-)
 GH_API = "api"
 GH_PAGINATE_FLAG = "--paginate"
 GH_API_SLURP_FLAG = "--slurp"
@@ -48,17 +60,28 @@ GH_FILE_PATH = "path"
 GH_FILE_ADDITIONS = "additions"
 GH_FILE_DELETIONS = "deletions"
 
+GH_PR_JSON_FIELDS = FIELD_LIST_SEPARATOR.join(
+    (
+        GH_FIELD_NUMBER,
+        GH_FIELD_TITLE,
+        GH_FIELD_BASE_REF,
+        GH_FIELD_HEAD_REF,
+        GH_FIELD_HEAD_OID,
+        GH_FIELD_CHANGED_FILES,
+        GH_FIELD_URL,
+        GH_FIELD_BODY,
+    )
+)
+
 ERROR_PR_NUMBER_REQUIRED = "PR number is required and must be a positive integer"
 ERROR_GH_FAILED = "gh pr view failed: %s"
 ERROR_GH_JSON_PARSE = "gh output is not valid JSON: %s"
-ERROR_CLI_ARGUMENTS = "invalid or missing command-line arguments"
 ERROR_GH_FILE_STATUS_FAILED = "gh api pull files failed: %s"
 ERROR_GH_FILE_STATUS_JSON = "gh api pull files output is not valid JSON: %s"
 ERROR_GH_FILE_COUNT_MISMATCH = (
     "fetched %s changed files but the PR reports %s; refusing to split a "
     "truncated file list"
 )
-PLAN_ROOT_MUST_BE_OBJECT = "root must be an object"
 PLAN_ROOT_MUST_BE_ARRAY = "root must be an array of pages"
 SPLIT_OPTIONAL_NOTE_TEMPLATE = (
     "parent already fits review budget (files=%s/%s, changed_lines=%s/%s); "
@@ -74,7 +97,7 @@ ERROR_SLICE_EXCEEDS_REVIEW_BUDGET = (
     "slice %s exceeds review budget (files=%s/%s, changed_lines=%s/%s)"
 )
 
-PLAN_BODY_EXCERPT_KEY = "body_excerpt"
-PLAN_URL_KEY = "url"
-PLAN_THRESHOLD_NOTE_KEY = "threshold_note"
-TEST_HEAD_SHA = "test-sha"
+GH_PR_VIEW = GH_PR
+PLAN_BODY_EXCERPT_KEY = PLAN_KEY_BODY_EXCERPT
+PLAN_URL_KEY = PLAN_KEY_URL
+PLAN_THRESHOLD_NOTE_KEY = PLAN_KEY_THRESHOLD_NOTE
