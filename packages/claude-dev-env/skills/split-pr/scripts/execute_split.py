@@ -16,17 +16,39 @@ import argparse
 import json
 import subprocess
 import sys
-import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from split_pr_scripts_constants.config.analyze_constants import (
+from split_pr_draft_pr import create_draft_pr
+from split_pr_git_operations import (
+    branch_exists,
+    is_working_tree_dirty,
+    read_starting_state,
+    remote_exists,
+    remote_ref_exists,
+    restore_starting_state,
+)
+from split_pr_process_runner import run_checked_git, run_git
+from split_pr_script_types import JsonObject
+from split_pr_scripts_constants.config.common_constants import (
+    ALL_EMPTY_ERROR_CONTEXT,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
+    JSON_INDENT_SPACES,
     PAYLOAD_KEY_ERROR,
-    PLAN_THRESHOLD_NOTE_KEY,
 )
 from split_pr_scripts_constants.config.execute_constants import (
+    ARGUMENT_ALLOW_OPTIONAL_SPLIT,
+    ARGUMENT_CREATE_PRS,
+    ARGUMENT_DRY_RUN,
+    ARGUMENT_PLAN,
+    ARGUMENT_PRETTY,
+    ARGUMENT_PUSH,
+    ARGUMENT_REPO_PATH,
+    ARGUMENT_STORE_TRUE_ACTION,
+    ARGUMENT_SUPERSEDE_SOURCE,
     DEFAULT_COMMIT_MESSAGE_TEMPLATE,
+    DEFAULT_REPO_PATH,
     ERROR_BRANCH_EXISTS,
     ERROR_CHECKOUT_FILES,
     ERROR_COMMIT_FAILED,
@@ -34,71 +56,48 @@ from split_pr_scripts_constants.config.execute_constants import (
     ERROR_EXECUTE_FAILED,
     ERROR_NO_ORIGIN_REMOTE,
     ERROR_PLAN_MISSING_PR_IDENTITY,
-    ERROR_PR_CREATE_FAILED,
     ERROR_PUSH_FAILED,
-    ERROR_REPO_NOT_GIT,
     ERROR_RESTORE_FAILED,
     ERROR_SOURCE_HEAD_MOVED,
     ERROR_SOURCE_HEAD_UNREADABLE,
     ERROR_SPLIT_OPTIONAL_REFUSED,
     FRESH_BRANCH_SCRIPTS_DIRECTORY,
-    GH_BASE,
-    GH_BODY_FILE,
-    GH_COMMAND,
-    GH_CREATE,
-    GH_DRAFT,
-    GH_HEAD,
-    GH_PR,
-    GH_REPO_FLAG,
-    GH_TITLE,
-    GIT_ABBREV_REF_FLAG,
     GIT_ADD,
     GIT_ADD_PATHSPEC,
     GIT_BRANCH,
     GIT_CHECKOUT,
     GIT_CHECKOUT_FORCE_CREATE,
-    GIT_COMMAND,
     GIT_COMMIT,
     GIT_DELETE_BRANCH_FLAG,
     GIT_FETCH,
     GIT_FORCE_FLAG,
-    GIT_HEAD_REF,
-    GIT_LIST_FLAG,
     GIT_MESSAGE_FLAG,
     GIT_ORIGIN,
-    GIT_PORCELAIN,
+    GIT_ORIGIN_PREFIX,
     GIT_PUSH,
     GIT_QUIET_FLAG,
-    GIT_REFS_HEADS_PREFIX,
-    GIT_REFS_REMOTES_PREFIX,
-    GIT_REMOTE,
     GIT_REMOVE,
     GIT_REV_PARSE,
     GIT_SET_UPSTREAM,
-    GIT_SHORT_FLAG,
-    GIT_SHOW_REF,
-    GIT_SHOW_TOPLEVEL,
-    GIT_STATUS,
-    GIT_SYMBOLIC_REF,
-    GIT_VERIFY_FLAG,
-    JSON_INDENT_SPACES,
-    MARKDOWN_BODY_SUFFIX,
+    HELP_ALLOW_OPTIONAL_SPLIT,
+    HELP_CREATE_PRS,
+    HELP_DRY_RUN,
+    HELP_PLAN,
+    HELP_PRETTY,
+    HELP_PUSH,
+    HELP_REPO_PATH,
+    HELP_SUPERSEDE_SOURCE,
+    PARSER_DESCRIPTION,
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
     PAYLOAD_KEY_FAILED_SLICE,
     PAYLOAD_KEY_PARTIAL,
     PAYLOAD_KEY_PR_URLS,
-    PAYLOAD_KEY_CHILD_PR_NUMBERS,
-    PAYLOAD_KEY_CLOSED,
-    PAYLOAD_KEY_COMMENTED,
     PAYLOAD_KEY_RESTORE_ERROR,
-    PAYLOAD_KEY_SKIPPED,
     PAYLOAD_KEY_SKIPPED_SLICES,
     PAYLOAD_KEY_SUPERSEDE,
-    PRETTY_FLAG,
     SKIP_REASON_EMPTY_SLICE,
 )
-from supersede_source_pr import extract_pr_number_from_url, supersede_source_pr
 from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_PATH_REQUIRED,
     FILE_KEY_PATH,
@@ -111,6 +110,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     PLAN_KEY_PROPOSED_SLICES,
     PLAN_KEY_REPO,
     PLAN_KEY_SOURCE_BRANCH,
+    PLAN_KEY_THRESHOLD_NOTE,
     PLAN_KEY_TITLE,
     SLICE_KEY_BASE,
     SLICE_KEY_BRANCH,
@@ -123,14 +123,16 @@ from split_pr_scripts_constants.config.plan_constants import (
     SLICE_KEY_TITLE,
     VERIFY_KEY_IS_VALID,
 )
+from supersede_source_pr import build_failed_payload, supersede_source_pr
 from verify_plan import load_plan, verify_plan
 
 if str(FRESH_BRANCH_SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(FRESH_BRANCH_SCRIPTS_DIRECTORY))
 
-from fresh_branch_git_commands import assert_git_accepts_branch_name  # noqa: E402
-
-JsonObject = dict[str, object]
+from fresh_branch_git_commands import (  # noqa: E402
+    assert_git_accepts_branch_name,
+    resolve_repo_root,
+)
 
 
 class SliceExecutionError(RuntimeError):
@@ -155,47 +157,19 @@ class SliceExecutionError(RuntimeError):
         self.partial_payload = partial_payload
 
 
-def resolve_repo_root(repo_path: Path) -> Path:
-    """Return the git toplevel for repo_path.
+@dataclass
+class SliceStackOutcome:
+    """What one pass over the planned slices produced.
 
-    Args:
-        repo_path: Path inside a git repository.
-
-    Returns:
-        Absolute repository root.
-
-    Raises:
-        RuntimeError: When the path is not inside a git work tree.
+    Attributes:
+        all_created: Slice records for every branch that landed a commit.
+        all_pr_urls: Draft PR URLs, in stack order.
+        all_skipped: Records for slices that carried no change against base.
     """
-    completed = subprocess.run(
-        [GIT_COMMAND, GIT_REV_PARSE, GIT_SHOW_TOPLEVEL],
-        cwd=str(repo_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(ERROR_REPO_NOT_GIT % repo_path)
-    return Path(completed.stdout.strip())
 
-
-def is_working_tree_dirty(repo_root: Path) -> bool:
-    """Return True when the worktree has uncommitted changes.
-
-    Args:
-        repo_root: Git repository toplevel.
-
-    Returns:
-        True when ``git status --porcelain`` is non-empty.
-    """
-    completed = subprocess.run(
-        [GIT_COMMAND, GIT_STATUS, GIT_PORCELAIN],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return bool(completed.stdout.strip())
+    all_created: list[JsonObject] = field(default_factory=list)
+    all_pr_urls: list[str] = field(default_factory=list)
+    all_skipped: list[JsonObject] = field(default_factory=list)
 
 
 def build_dry_run_steps(plan_payload: JsonObject) -> list[JsonObject]:
@@ -343,9 +317,47 @@ def assert_split_is_advised(
     """
     if should_allow_optional_split:
         return
-    threshold_note = plan_payload.get(PLAN_THRESHOLD_NOTE_KEY)
+    threshold_note = plan_payload.get(PLAN_KEY_THRESHOLD_NOTE)
     if threshold_note:
         raise ValueError(ERROR_SPLIT_OPTIONAL_REFUSED % threshold_note)
+
+
+def assert_source_head_matches_plan(repo_root: Path, plan_payload: JsonObject) -> None:
+    """Raise when the source branch has moved since the plan was written.
+
+    ::
+
+        assert_source_head_matches_plan(repo_root, plan)  # ok: heads agree
+        # flag: RuntimeError naming the planned sha and the current head
+
+    ``analyze_pr`` records ``head_sha`` on the plan. A branch that has advanced
+    since then holds commits the plan never saw. Those files would be dropped
+    from the stack, then superseded away with the source PR. Failing here sends
+    the operator back to analyze instead.
+
+    Args:
+        repo_root: Git toplevel.
+        plan_payload: Parsed plan carrying ``head_sha`` and ``source_branch``.
+
+    Raises:
+        RuntimeError: When the head moved or cannot be read.
+    """
+    planned_head_sha = str(plan_payload.get(PLAN_KEY_HEAD_SHA) or "")
+    source_branch = str(plan_payload[PLAN_KEY_SOURCE_BRANCH])
+    if not planned_head_sha:
+        return
+    current_completed = run_checked_git(
+        [GIT_REV_PARSE, source_branch],
+        repo_root,
+        ERROR_SOURCE_HEAD_UNREADABLE,
+        (source_branch,),
+    )
+    current_head_sha = current_completed.stdout.strip()
+    if not current_head_sha.startswith(planned_head_sha):
+        raise RuntimeError(
+            ERROR_SOURCE_HEAD_MOVED
+            % (source_branch, current_head_sha, planned_head_sha)
+        )
 
 
 def _execute_slices(
@@ -377,10 +389,7 @@ def _execute_slices(
         should_push=should_push,
     )
     assert_source_head_matches_plan(repo_root, plan_payload)
-    all_created: list[JsonObject] = []
-    all_pr_urls: list[str] = []
-    all_skipped: list[JsonObject] = []
-    _create_slices_and_restore(
+    stack_outcome = _create_slices_and_restore(
         all_planned_slices=all_planned_slices,
         plan_payload=plan_payload,
         repo_root=repo_root,
@@ -389,16 +398,11 @@ def _execute_slices(
         should_push=should_push,
         should_create_prs=should_create_prs,
         repo_slug=repo_slug,
-        all_created=all_created,
-        all_pr_urls=all_pr_urls,
-        all_skipped=all_skipped,
     )
     return _build_success_payload(
-        all_created=all_created,
-        all_pr_urls=all_pr_urls,
-        all_skipped=all_skipped,
+        stack_outcome=stack_outcome,
         pr_number=pr_number,
-        planned_slice_count=len(all_planned_slices) - len(all_skipped),
+        planned_slice_count=len(all_planned_slices) - len(stack_outcome.all_skipped),
         should_create_prs=should_create_prs,
         should_supersede=should_supersede,
         repo_slug=repo_slug,
@@ -415,13 +419,10 @@ def _create_slices_and_restore(
     should_push: bool,
     should_create_prs: bool,
     repo_slug: str | None,
-    all_created: list[JsonObject],
-    all_pr_urls: list[str],
-    all_skipped: list[JsonObject],
-) -> None:
-    starting_state = _read_starting_state(repo_root)
+) -> SliceStackOutcome:
+    starting_state = read_starting_state(repo_root)
     try:
-        _create_all_slices(
+        stack_outcome = _create_all_slices(
             all_planned_slices=all_planned_slices,
             repo_root=repo_root,
             source_branch=source_branch,
@@ -430,19 +431,16 @@ def _create_slices_and_restore(
             should_create_prs=should_create_prs,
             repo_slug=repo_slug,
             all_deleted_paths=_deleted_paths(plan_payload),
-            all_created=all_created,
-            all_pr_urls=all_pr_urls,
-            all_skipped=all_skipped,
         )
     except SliceExecutionError as slice_error:
-        slice_error.partial_payload[PAYLOAD_KEY_SKIPPED_SLICES] = all_skipped
         slice_error.partial_payload[PAYLOAD_KEY_RESTORE_ERROR] = (
-            _restore_starting_state(repo_root, starting_state)
+            restore_starting_state(repo_root, starting_state)
         )
         raise
-    restore_failure = _restore_starting_state(repo_root, starting_state)
+    restore_failure = restore_starting_state(repo_root, starting_state)
     if restore_failure:
         raise RuntimeError(ERROR_RESTORE_FAILED % (starting_state, restore_failure))
+    return stack_outcome
 
 
 def _assert_plan_refs_are_safe(
@@ -464,59 +462,15 @@ def _fetch_plan_refs(
     source_branch: str,
     should_push: bool,
 ) -> None:
-    if not _remote_exists(repo_root, GIT_ORIGIN):
+    if not remote_exists(repo_root, GIT_ORIGIN):
         if should_push:
             raise RuntimeError(ERROR_NO_ORIGIN_REMOTE)
         return
-    _run_git([GIT_FETCH, GIT_ORIGIN, base_ref, source_branch], repo_root)
-
-
-def assert_source_head_matches_plan(repo_root: Path, plan_payload: JsonObject) -> None:
-    """Raise when the source branch has moved since the plan was written.
-
-    ::
-
-        assert_source_head_matches_plan(repo_root, plan)  # ok: heads agree
-        # flag: RuntimeError naming the planned sha and the current head
-
-    ``analyze_pr`` records ``head_sha`` on the plan. A branch that has advanced
-    since then holds commits the plan never saw. Those files would be dropped
-    from the stack, then superseded away with the source PR. Failing here sends
-    the operator back to analyze instead.
-
-    Args:
-        repo_root: Git toplevel.
-        plan_payload: Parsed plan carrying ``head_sha`` and ``source_branch``.
-
-    Raises:
-        RuntimeError: When the head moved or cannot be read.
-    """
-    planned_head_sha = str(plan_payload.get(PLAN_KEY_HEAD_SHA) or "")
-    source_branch = str(plan_payload[PLAN_KEY_SOURCE_BRANCH])
-    if not planned_head_sha:
-        return
-    current_completed = _read_ref_commit(repo_root, source_branch)
-    if current_completed.returncode != 0:
-        detail = (current_completed.stderr or current_completed.stdout or "").strip()
-        raise RuntimeError(ERROR_SOURCE_HEAD_UNREADABLE % (source_branch, detail))
-    current_head_sha = current_completed.stdout.strip()
-    if not current_head_sha.startswith(planned_head_sha):
-        raise RuntimeError(
-            ERROR_SOURCE_HEAD_MOVED
-            % (source_branch, current_head_sha, planned_head_sha)
-        )
-
-
-def _read_ref_commit(
-    repo_root: Path,
-    ref_name: str,
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [GIT_COMMAND, GIT_REV_PARSE, ref_name],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
+    run_checked_git(
+        [GIT_FETCH, GIT_ORIGIN, base_ref, source_branch],
+        repo_root,
+        ERROR_EXECUTE_FAILED,
+        ALL_EMPTY_ERROR_CONTEXT,
     )
 
 
@@ -542,49 +496,83 @@ def _create_all_slices(
     should_create_prs: bool,
     repo_slug: str | None,
     all_deleted_paths: set[str],
-    all_created: list[JsonObject],
-    all_pr_urls: list[str],
-    all_skipped: list[JsonObject],
-) -> None:
+) -> SliceStackOutcome:
+    stack_outcome = SliceStackOutcome()
     base_override: str | None = None
     for each_slice in all_planned_slices:
         base_name = base_override or str(each_slice[SLICE_KEY_BASE])
-        try:
-            created = _execute_one_slice(
-                slice_record=each_slice,
-                repo_root=repo_root,
-                base_name=base_name,
-                source_branch=source_branch,
-                pr_number=pr_number,
-                should_push=should_push,
-                should_create_prs=should_create_prs,
-                repo=repo_slug,
-                all_deleted_paths=all_deleted_paths,
-            )
-        except SliceExecutionError:
-            raise
-        except (RuntimeError, OSError, subprocess.SubprocessError) as slice_error:
-            raise SliceExecutionError(
-                {
-                    PAYLOAD_KEY_DRY_RUN: False,
-                    PAYLOAD_KEY_CREATED: all_created,
-                    PAYLOAD_KEY_PR_URLS: all_pr_urls,
-                    PAYLOAD_KEY_ERROR: str(slice_error),
-                    PAYLOAD_KEY_FAILED_SLICE: each_slice.get(SLICE_KEY_BRANCH),
-                    PAYLOAD_KEY_PARTIAL: True,
-                }
-            ) from slice_error
+        created = _execute_one_slice_or_fail(
+            slice_record=each_slice,
+            repo_root=repo_root,
+            base_name=base_name,
+            source_branch=source_branch,
+            pr_number=pr_number,
+            should_push=should_push,
+            should_create_prs=should_create_prs,
+            repo_slug=repo_slug,
+            all_deleted_paths=all_deleted_paths,
+            stack_outcome=stack_outcome,
+        )
         if created is None:
             base_override = base_name
-            all_skipped.append(
+            stack_outcome.all_skipped.append(
                 _build_skipped_record(each_slice, base_name, SKIP_REASON_EMPTY_SLICE)
             )
             continue
         base_override = None
-        all_created.append(created)
+        stack_outcome.all_created.append(created)
         pr_url = created.get(SLICE_KEY_PR_URL)
         if pr_url:
-            all_pr_urls.append(str(pr_url))
+            stack_outcome.all_pr_urls.append(str(pr_url))
+    return stack_outcome
+
+
+def _execute_one_slice_or_fail(
+    slice_record: JsonObject,
+    repo_root: Path,
+    base_name: str,
+    source_branch: str,
+    pr_number: int,
+    should_push: bool,
+    should_create_prs: bool,
+    repo_slug: str | None,
+    all_deleted_paths: set[str],
+    stack_outcome: SliceStackOutcome,
+) -> JsonObject | None:
+    try:
+        return _execute_one_slice(
+            slice_record=slice_record,
+            repo_root=repo_root,
+            base_name=base_name,
+            source_branch=source_branch,
+            pr_number=pr_number,
+            should_push=should_push,
+            should_create_prs=should_create_prs,
+            repo=repo_slug,
+            all_deleted_paths=all_deleted_paths,
+        )
+    except SliceExecutionError:
+        raise
+    except (RuntimeError, OSError, subprocess.SubprocessError) as slice_error:
+        raise SliceExecutionError(
+            _build_partial_payload(stack_outcome, slice_record, str(slice_error))
+        ) from slice_error
+
+
+def _build_partial_payload(
+    stack_outcome: SliceStackOutcome,
+    failed_slice_record: JsonObject,
+    error_text: str,
+) -> JsonObject:
+    return {
+        PAYLOAD_KEY_DRY_RUN: False,
+        PAYLOAD_KEY_CREATED: stack_outcome.all_created,
+        PAYLOAD_KEY_PR_URLS: stack_outcome.all_pr_urls,
+        PAYLOAD_KEY_SKIPPED_SLICES: stack_outcome.all_skipped,
+        PAYLOAD_KEY_ERROR: error_text,
+        PAYLOAD_KEY_FAILED_SLICE: failed_slice_record.get(SLICE_KEY_BRANCH),
+        PAYLOAD_KEY_PARTIAL: True,
+    }
 
 
 def _build_skipped_record(
@@ -602,9 +590,7 @@ def _build_skipped_record(
 
 
 def _build_success_payload(
-    all_created: list[JsonObject],
-    all_pr_urls: list[str],
-    all_skipped: list[JsonObject],
+    stack_outcome: SliceStackOutcome,
     pr_number: int,
     planned_slice_count: int,
     should_create_prs: bool,
@@ -612,23 +598,22 @@ def _build_success_payload(
     repo_slug: str | None,
     repo_root: Path,
 ) -> JsonObject:
-    execution_payload: JsonObject = {
+    return {
         PAYLOAD_KEY_DRY_RUN: False,
-        PAYLOAD_KEY_CREATED: all_created,
-        PAYLOAD_KEY_PR_URLS: all_pr_urls,
-        PAYLOAD_KEY_SKIPPED_SLICES: all_skipped,
+        PAYLOAD_KEY_CREATED: stack_outcome.all_created,
+        PAYLOAD_KEY_PR_URLS: stack_outcome.all_pr_urls,
+        PAYLOAD_KEY_SKIPPED_SLICES: stack_outcome.all_skipped,
         PAYLOAD_KEY_PARTIAL: False,
+        PAYLOAD_KEY_SUPERSEDE: _run_supersede_safely(
+            pr_number=pr_number,
+            all_pr_urls=stack_outcome.all_pr_urls,
+            planned_slice_count=planned_slice_count,
+            should_create_prs=should_create_prs,
+            should_supersede=should_supersede,
+            repo_slug=repo_slug,
+            repo_root=repo_root,
+        ),
     }
-    execution_payload[PAYLOAD_KEY_SUPERSEDE] = _run_supersede_safely(
-        pr_number=pr_number,
-        all_pr_urls=all_pr_urls,
-        planned_slice_count=planned_slice_count,
-        should_create_prs=should_create_prs,
-        should_supersede=should_supersede,
-        repo_slug=repo_slug,
-        repo_root=repo_root,
-    )
-    return execution_payload
 
 
 def _run_supersede_safely(
@@ -658,18 +643,7 @@ def _run_supersede_safely(
         TypeError,
         subprocess.SubprocessError,
     ) as supersede_error:
-        all_child_numbers = [
-            each_number
-            for each_url in all_pr_urls
-            if (each_number := extract_pr_number_from_url(each_url)) is not None
-        ]
-        return {
-            PAYLOAD_KEY_COMMENTED: False,
-            PAYLOAD_KEY_CLOSED: False,
-            PAYLOAD_KEY_CHILD_PR_NUMBERS: all_child_numbers,
-            PAYLOAD_KEY_SKIPPED: False,
-            PAYLOAD_KEY_ERROR: str(supersede_error),
-        }
+        return build_failed_payload(all_pr_urls, str(supersede_error))
 
 
 def _execute_one_slice(
@@ -687,12 +661,14 @@ def _execute_one_slice(
     all_files = [str(each) for each in (slice_record.get(SLICE_KEY_FILES) or [])]
     title = str(slice_record.get(SLICE_KEY_TITLE) or branch_name)
     story = str(slice_record.get(SLICE_KEY_STORY) or "")
-    if _branch_exists(repo_root, branch_name):
+    if branch_exists(repo_root, branch_name):
         raise RuntimeError(ERROR_BRANCH_EXISTS % branch_name)
     base_ref_for_checkout = _resolve_base_ref(repo_root, base_name, source_branch)
-    _run_git(
+    run_checked_git(
         [GIT_CHECKOUT, GIT_CHECKOUT_FORCE_CREATE, branch_name, base_ref_for_checkout],
         repo_root,
+        ERROR_EXECUTE_FAILED,
+        ALL_EMPTY_ERROR_CONTEXT,
     )
     _stage_slice_files(repo_root, source_branch, all_files, all_deleted_paths)
     if not is_working_tree_dirty(repo_root):
@@ -725,15 +701,20 @@ def _abandon_empty_slice(
     branch_name: str,
     base_ref_for_checkout: str,
 ) -> None:
-    _run_git([GIT_CHECKOUT, GIT_FORCE_FLAG, base_ref_for_checkout], repo_root)
-    _run_git([GIT_BRANCH, GIT_DELETE_BRANCH_FLAG, branch_name], repo_root, is_check=False)
+    run_checked_git(
+        [GIT_CHECKOUT, GIT_FORCE_FLAG, base_ref_for_checkout],
+        repo_root,
+        ERROR_EXECUTE_FAILED,
+        ALL_EMPTY_ERROR_CONTEXT,
+    )
+    run_git([GIT_BRANCH, GIT_DELETE_BRANCH_FLAG, branch_name], repo_root)
 
 
 def _resolve_base_ref(repo_root: Path, base_name: str, source_branch: str) -> str:
-    if base_name.startswith(f"{GIT_ORIGIN}/") or base_name == source_branch:
+    if base_name.startswith(GIT_ORIGIN_PREFIX) or base_name == source_branch:
         return base_name
-    origin_candidate = f"{GIT_ORIGIN}/{base_name}"
-    if _remote_ref_exists(repo_root, origin_candidate):
+    origin_candidate = f"{GIT_ORIGIN_PREFIX}{base_name}"
+    if remote_ref_exists(repo_root, origin_candidate):
         return origin_candidate
     return base_name
 
@@ -748,17 +729,17 @@ def _stage_slice_files(
     all_removed_paths = [each for each in all_files if each in all_deleted_paths]
     if all_present_paths:
         _checkout_source_files(repo_root, source_branch, all_present_paths)
-        _run_git([GIT_ADD, GIT_ADD_PATHSPEC, *all_present_paths], repo_root)
+        run_checked_git(
+            [GIT_ADD, GIT_ADD_PATHSPEC, *all_present_paths],
+            repo_root,
+            ERROR_EXECUTE_FAILED,
+            ALL_EMPTY_ERROR_CONTEXT,
+        )
     for each_removed_path in all_removed_paths:
-        _remove_slice_path(repo_root, each_removed_path)
-
-
-def _remove_slice_path(repo_root: Path, removed_path: str) -> None:
-    _run_git(
-        [GIT_REMOVE, GIT_QUIET_FLAG, GIT_ADD_PATHSPEC, removed_path],
-        repo_root,
-        is_check=False,
-    )
+        run_git(
+            [GIT_REMOVE, GIT_QUIET_FLAG, GIT_ADD_PATHSPEC, each_removed_path],
+            repo_root,
+        )
 
 
 def _checkout_source_files(
@@ -766,16 +747,12 @@ def _checkout_source_files(
     source_branch: str,
     all_files: list[str],
 ) -> None:
-    checkout_outcome = subprocess.run(
-        [GIT_COMMAND, GIT_CHECKOUT, source_branch, GIT_ADD_PATHSPEC, *all_files],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
+    run_checked_git(
+        [GIT_CHECKOUT, source_branch, GIT_ADD_PATHSPEC, *all_files],
+        repo_root,
+        ERROR_CHECKOUT_FILES,
+        (source_branch,),
     )
-    if checkout_outcome.returncode != 0:
-        detail = (checkout_outcome.stderr or checkout_outcome.stdout or "").strip()
-        raise RuntimeError(ERROR_CHECKOUT_FILES % (source_branch, detail))
 
 
 def _commit_slice(
@@ -786,16 +763,12 @@ def _commit_slice(
     branch_name: str,
 ) -> None:
     commit_message = DEFAULT_COMMIT_MESSAGE_TEMPLATE % (title, story, pr_number)
-    commit_outcome = subprocess.run(
-        [GIT_COMMAND, GIT_COMMIT, GIT_MESSAGE_FLAG, commit_message],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
+    run_checked_git(
+        [GIT_COMMIT, GIT_MESSAGE_FLAG, commit_message],
+        repo_root,
+        ERROR_COMMIT_FAILED,
+        (branch_name,),
     )
-    if commit_outcome.returncode != 0:
-        detail = (commit_outcome.stderr or commit_outcome.stdout or "").strip()
-        raise RuntimeError(ERROR_COMMIT_FAILED % (branch_name, detail))
 
 
 def _maybe_push_and_open_pr(
@@ -811,19 +784,15 @@ def _maybe_push_and_open_pr(
 ) -> str | None:
     if not should_push:
         return None
-    push_outcome = subprocess.run(
-        [GIT_COMMAND, GIT_PUSH, GIT_SET_UPSTREAM, GIT_ORIGIN, branch_name],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
+    run_checked_git(
+        [GIT_PUSH, GIT_SET_UPSTREAM, GIT_ORIGIN, branch_name],
+        repo_root,
+        ERROR_PUSH_FAILED,
+        (branch_name,),
     )
-    if push_outcome.returncode != 0:
-        detail = (push_outcome.stderr or push_outcome.stdout or "").strip()
-        raise RuntimeError(ERROR_PUSH_FAILED % (branch_name, detail))
     if not should_create_prs:
         return None
-    return _create_draft_pr(
+    return create_draft_pr(
         repo_root=repo_root,
         title=title,
         story=story,
@@ -832,164 +801,6 @@ def _maybe_push_and_open_pr(
         pr_number=pr_number,
         repo=repo,
     )
-
-
-def _create_draft_pr(
-    repo_root: Path,
-    title: str,
-    story: str,
-    base_name: str,
-    head_name: str,
-    pr_number: int,
-    repo: str | None,
-) -> str:
-    body = (
-        f"## Summary\n\n{story}\n\n"
-        f"## Split source\n\nExcised from pull request #{pr_number} via `/split-pr`.\n\n"
-        f"## Dependencies\n\nBase branch: `{base_name}`. Merge earlier slices first.\n\n"
-        "## Testing\n\n"
-        "File-partitioned from the parent pull request. Project-wide CI on this "
-        "slice alone is not claimed by `/split-pr` unless verified separately.\n"
-    )
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        suffix=MARKDOWN_BODY_SUFFIX,
-        delete=False,
-    ) as body_file:
-        body_file.write(body)
-        body_path = body_file.name
-    all_command = [
-        GH_COMMAND,
-        GH_PR,
-        GH_CREATE,
-        GH_DRAFT,
-        GH_TITLE,
-        title,
-        GH_BODY_FILE,
-        body_path,
-        GH_BASE,
-        base_name,
-        GH_HEAD,
-        head_name,
-    ]
-    if repo:
-        all_command.extend([GH_REPO_FLAG, repo])
-    try:
-        completed = subprocess.run(
-            all_command,
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    finally:
-        Path(body_path).unlink(missing_ok=True)
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise RuntimeError(ERROR_PR_CREATE_FAILED % (head_name, detail))
-    return (completed.stdout or "").strip()
-
-
-def _run_git(
-    all_arguments: list[str],
-    repo_root: Path,
-    is_check: bool = True,
-) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        [GIT_COMMAND, *all_arguments],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if is_check and completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise RuntimeError(ERROR_EXECUTE_FAILED % detail)
-    return completed
-
-
-def _read_starting_state(repo_root: Path) -> str:
-    """Return the ref to return to: the checked-out branch, else its commit."""
-    branch_completed = _run_git(
-        [GIT_SYMBOLIC_REF, GIT_QUIET_FLAG, GIT_SHORT_FLAG, GIT_HEAD_REF],
-        repo_root,
-        is_check=False,
-    )
-    branch_name = branch_completed.stdout.strip()
-    if branch_completed.returncode == 0 and branch_name:
-        return branch_name
-    commit_completed = _run_git([GIT_REV_PARSE, GIT_HEAD_REF], repo_root)
-    return commit_completed.stdout.strip()
-
-
-def _restore_starting_state(repo_root: Path, starting_state: str) -> str | None:
-    """Return to starting_state, discarding staged slice work; None when clean."""
-    completed = _run_git(
-        [GIT_CHECKOUT, GIT_FORCE_FLAG, starting_state],
-        repo_root,
-        is_check=False,
-    )
-    if completed.returncode == 0:
-        return None
-    return (completed.stderr or completed.stdout or "").strip()
-
-
-def _current_branch(repo_root: Path) -> str:
-    completed = _run_git([GIT_REV_PARSE, GIT_ABBREV_REF_FLAG, GIT_HEAD_REF], repo_root)
-    return completed.stdout.strip()
-
-
-def _branch_exists(repo_root: Path, branch_name: str) -> bool:
-    completed = subprocess.run(
-        [GIT_COMMAND, GIT_BRANCH, GIT_LIST_FLAG, branch_name],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return bool(completed.stdout.strip())
-
-
-def _show_ref_verifies(repo_root: Path, full_ref: str) -> bool:
-    completed = subprocess.run(
-        [GIT_COMMAND, GIT_SHOW_REF, GIT_VERIFY_FLAG, GIT_QUIET_FLAG, full_ref],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return completed.returncode == 0
-
-
-def _remote_ref_exists(repo_root: Path, remote_ref_name: str) -> bool:
-    """Answer whether ``refs/remotes/<remote_ref_name>`` is present."""
-    return _show_ref_verifies(repo_root, f"{GIT_REFS_REMOTES_PREFIX}{remote_ref_name}")
-
-
-def _local_branch_ref_exists(repo_root: Path, ref_name: str) -> bool:
-    """Answer whether a local branch exists, ignoring any ``origin/`` prefix."""
-    origin_prefix = f"{GIT_ORIGIN}/"
-    local_name = (
-        ref_name[len(origin_prefix) :]
-        if ref_name.startswith(origin_prefix)
-        else ref_name
-    )
-    return _show_ref_verifies(repo_root, f"{GIT_REFS_HEADS_PREFIX}{local_name}")
-
-
-def _remote_exists(repo_root: Path, remote_name: str) -> bool:
-    completed = subprocess.run(
-        [GIT_COMMAND, GIT_REMOTE],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        return False
-    all_remotes = {each.strip() for each in completed.stdout.splitlines() if each.strip()}
-    return remote_name in all_remotes
 
 
 def main() -> int:
@@ -1001,36 +812,11 @@ def main() -> int:
     Raises:
         Does not raise; failures print JSON error and return 1.
     """
+    parsed_arguments = _parse_arguments()
+    indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
     try:
-        parsed_arguments = _parse_arguments()
-        if not parsed_arguments.plan:
-            raise ValueError(ERROR_PLAN_PATH_REQUIRED)
-        plan_payload = load_plan(Path(parsed_arguments.plan))
-        if PLAN_KEY_TITLE not in plan_payload or PLAN_KEY_PR_NUMBER not in plan_payload:
-            raise ValueError(ERROR_EXECUTE_FAILED % ERROR_PLAN_MISSING_PR_IDENTITY)
-        repo_root = resolve_repo_root(Path(parsed_arguments.repo_path).resolve())
-        is_create_prs = parsed_arguments.create_prs and not parsed_arguments.dry_run
-        should_push = (
-            parsed_arguments.push or parsed_arguments.create_prs
-        ) and not parsed_arguments.dry_run
-        if parsed_arguments.supersede_source is None:
-            is_supersede = is_create_prs
-        else:
-            is_supersede = bool(parsed_arguments.supersede_source)
-        execution_payload = execute_plan(
-            plan_payload=plan_payload,
-            repo_root=repo_root,
-            is_dry_run=parsed_arguments.dry_run,
-            should_create_prs=is_create_prs,
-            should_push=should_push,
-            should_supersede=is_supersede,
-            should_allow_optional_split=parsed_arguments.allow_optional_split,
-        )
-        indent = JSON_INDENT_SPACES if parsed_arguments.pretty else None
-        print(json.dumps(execution_payload, indent=indent))
-        return EXIT_CODE_SUCCESS
+        execution_payload = _execute_parsed_arguments(parsed_arguments)
     except SliceExecutionError as partial_error:
-        indent = JSON_INDENT_SPACES if PRETTY_FLAG in sys.argv else None
         print(json.dumps(partial_error.partial_payload, indent=indent))
         return EXIT_CODE_FAILURE
     except (
@@ -1043,46 +829,75 @@ def main() -> int:
     ) as error:
         print(json.dumps({PAYLOAD_KEY_ERROR: str(error)}))
         return EXIT_CODE_FAILURE
+    print(json.dumps(execution_payload, indent=indent))
+    return EXIT_CODE_SUCCESS
+
+
+def _execute_parsed_arguments(parsed_arguments: argparse.Namespace) -> JsonObject:
+    if not parsed_arguments.plan:
+        raise ValueError(ERROR_PLAN_PATH_REQUIRED)
+    plan_payload = load_plan(Path(parsed_arguments.plan))
+    if PLAN_KEY_TITLE not in plan_payload or PLAN_KEY_PR_NUMBER not in plan_payload:
+        raise ValueError(ERROR_EXECUTE_FAILED % ERROR_PLAN_MISSING_PR_IDENTITY)
+    is_create_prs = parsed_arguments.create_prs and not parsed_arguments.dry_run
+    should_push = (
+        parsed_arguments.push or parsed_arguments.create_prs
+    ) and not parsed_arguments.dry_run
+    return execute_plan(
+        plan_payload=plan_payload,
+        repo_root=resolve_repo_root(Path(parsed_arguments.repo_path).resolve()),
+        is_dry_run=parsed_arguments.dry_run,
+        should_create_prs=is_create_prs,
+        should_push=should_push,
+        should_supersede=_resolve_supersede_choice(parsed_arguments, is_create_prs),
+        should_allow_optional_split=parsed_arguments.allow_optional_split,
+    )
+
+
+def _resolve_supersede_choice(
+    parsed_arguments: argparse.Namespace,
+    is_create_prs: bool,
+) -> bool:
+    if parsed_arguments.supersede_source is None:
+        return is_create_prs
+    return bool(parsed_arguments.supersede_source)
 
 
 def _parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Execute an approved split-pr plan")
-    parser.add_argument("--plan", required=True, help="Path to approved plan JSON")
+    parser = argparse.ArgumentParser(description=PARSER_DESCRIPTION)
+    parser.add_argument(ARGUMENT_PLAN, required=True, help=HELP_PLAN)
     parser.add_argument(
-        "--repo-path",
-        default=".",
-        help="Path inside the target git repository",
+        ARGUMENT_REPO_PATH,
+        default=DEFAULT_REPO_PATH,
+        help=HELP_REPO_PATH,
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print planned steps without git mutations",
+        ARGUMENT_DRY_RUN,
+        action=ARGUMENT_STORE_TRUE_ACTION,
+        help=HELP_DRY_RUN,
+    )
+    parser.add_argument(ARGUMENT_PUSH, action=ARGUMENT_STORE_TRUE_ACTION, help=HELP_PUSH)
+    parser.add_argument(
+        ARGUMENT_CREATE_PRS,
+        action=ARGUMENT_STORE_TRUE_ACTION,
+        help=HELP_CREATE_PRS,
     )
     parser.add_argument(
-        "--push",
-        action="store_true",
-        help="Push created branches to origin",
+        ARGUMENT_ALLOW_OPTIONAL_SPLIT,
+        action=ARGUMENT_STORE_TRUE_ACTION,
+        help=HELP_ALLOW_OPTIONAL_SPLIT,
     )
     parser.add_argument(
-        "--create-prs",
-        action="store_true",
-        help="Open draft stacked PRs; implies --push",
-    )
-    parser.add_argument(
-        "--allow-optional-split",
-        action="store_true",
-        help="Execute even when the plan says the split is optional",
-    )
-    parser.add_argument(
-        "--supersede-source",
+        ARGUMENT_SUPERSEDE_SOURCE,
         action=argparse.BooleanOptionalAction,
         default=None,
-        help=(
-            "Comment on and close source_pr_number after a full multi-slice draft "
-            "stack lands (default: on when --create-prs)"
-        ),
+        help=HELP_SUPERSEDE_SOURCE,
     )
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+    parser.add_argument(
+        ARGUMENT_PRETTY,
+        action=ARGUMENT_STORE_TRUE_ACTION,
+        help=HELP_PRETTY,
+    )
     return parser.parse_args()
 
 

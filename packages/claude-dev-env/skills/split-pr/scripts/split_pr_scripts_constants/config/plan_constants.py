@@ -1,6 +1,12 @@
-"""JSON plan field names and verification messages."""
+"""JSON plan field names and verification messages.
+
+Every ``PLAN_KEY_*`` name here owns one key of the plan schema, so a reader
+looking for a plan field has exactly one module to open.
+"""
 
 from __future__ import annotations
+
+from .common_constants import JSON_INDENT_SPACES  # noqa: F401
 
 PLAN_KEY_PR_NUMBER = "pr_number"
 PLAN_KEY_TITLE = "title"
@@ -14,6 +20,9 @@ PLAN_KEY_ALL_FILES = "all_files"
 PLAN_KEY_PROPOSED_SLICES = "proposed_slices"
 PLAN_KEY_WARNINGS = "warnings"
 PLAN_KEY_FEATURE_SLUG = "feature_slug"
+PLAN_KEY_BODY_EXCERPT = "body_excerpt"
+PLAN_KEY_URL = "url"
+PLAN_KEY_THRESHOLD_NOTE = "threshold_note"
 
 FILE_KEY_PATH = "path"
 FILE_KEY_STATUS = "status"
@@ -61,6 +70,11 @@ ERROR_SLICE_MISSING_KEY = "slice %s missing required key: %s"
 ERROR_SLICE_CHANGED_LINES_TYPE = "slice %s has non-numeric changed_lines: %s"
 ERROR_NO_FILES = "plan has no source files under all_files"
 ERROR_NO_SLICES = "plan has no proposed_slices"
+ERROR_SLICE_NOT_OBJECT = "slice entry is not an object"
+ERROR_MISSING_FILES_COUNT = "missing_files:%d"
+ERROR_UNKNOWN_FILES_COUNT = "unknown_files:%d"
+ERROR_DUPLICATE_FILES_COUNT = "duplicate_files:%d"
+ERROR_EMPTY_SLICES_COUNT = "empty_slices:%d"
 
 ALL_REQUIRED_PLAN_KEYS = (
     PLAN_KEY_ALL_FILES,
@@ -73,5 +87,4 @@ ALL_REQUIRED_PLAN_KEYS = (
 ALL_REQUIRED_SLICE_KEYS = (SLICE_KEY_BRANCH, SLICE_KEY_BASE)
 UNKNOWN_SLICE_LABEL = "?"
 
-JSON_INDENT_SPACES = 2
 PLAN_ROOT_MUST_BE_OBJECT = "root must be an object"

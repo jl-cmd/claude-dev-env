@@ -14,13 +14,16 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 import execute_split  # noqa: E402
+import split_pr_process_runner  # noqa: E402
 from execute_split import (  # noqa: E402
     SliceExecutionError,
-    _local_branch_ref_exists,
-    _remote_ref_exists,
     _resolve_base_ref,
     build_dry_run_steps,
     execute_plan,
+)
+from split_pr_git_operations import (  # noqa: E402
+    local_branch_ref_exists,
+    remote_ref_exists,
 )
 from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
     PAYLOAD_KEY_ERROR,
@@ -203,9 +206,9 @@ def test_a_stale_local_base_loses_to_the_remote_tracking_ref(tmp_path: Path) -> 
 def test_the_local_branch_probe_ignores_an_origin_prefix(tmp_path: Path) -> None:
     _, repo_path = build_repository(tmp_path)
 
-    assert _local_branch_ref_exists(repo_path, f"origin/{MAIN_BRANCH_NAME}") is True
-    assert _remote_ref_exists(repo_path, f"origin/{MAIN_BRANCH_NAME}") is True
-    assert _remote_ref_exists(repo_path, "origin/never-pushed") is False
+    assert local_branch_ref_exists(repo_path, f"origin/{MAIN_BRANCH_NAME}") is True
+    assert remote_ref_exists(repo_path, f"origin/{MAIN_BRANCH_NAME}") is True
+    assert remote_ref_exists(repo_path, "origin/never-pushed") is False
 
 
 def test_a_failed_fetch_stops_a_no_push_run(tmp_path: Path) -> None:
@@ -215,7 +218,7 @@ def test_a_failed_fetch_stops_a_no_push_run(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError):
         run_execute(repo_path, build_plan(repo_path))
 
-    assert not _local_branch_ref_exists(repo_path, BACKEND_BRANCH)
+    assert not local_branch_ref_exists(repo_path, BACKEND_BRANCH)
 
 
 def test_an_empty_slice_is_skipped_and_the_stack_keeps_going(tmp_path: Path) -> None:
@@ -233,7 +236,7 @@ def test_an_empty_slice_is_skipped_and_the_stack_keeps_going(tmp_path: Path) -> 
         DOCS_BRANCH,
     ]
     assert all_created[1][SLICE_KEY_BASE] == BACKEND_BRANCH
-    assert not _local_branch_ref_exists(repo_path, EMPTY_BRANCH)
+    assert not local_branch_ref_exists(repo_path, EMPTY_BRANCH)
 
 
 def test_a_deleted_path_is_removed_inside_its_slice(tmp_path: Path) -> None:
@@ -263,7 +266,7 @@ def test_a_moved_source_head_aborts_before_any_branch_exists(tmp_path: Path) -> 
         run_execute(repo_path, plan_payload)
 
     assert str(plan_payload[PLAN_KEY_HEAD_SHA]) in str(raised.value)
-    assert not _local_branch_ref_exists(repo_path, BACKEND_BRANCH)
+    assert not local_branch_ref_exists(repo_path, BACKEND_BRANCH)
 
 
 def test_a_failed_slice_restores_a_detached_head_and_clears_the_index(
@@ -455,8 +458,8 @@ def test_the_draft_pr_body_file_is_removed_after_gh_runs(
             return subprocess.CompletedProcess(all_command, 0, "https://pr/1", "")
         return original_run(all_command, **keyword_arguments)
 
-    original_run = execute_split.subprocess.run
-    monkeypatch.setattr(execute_split.subprocess, "run", fake_run)
+    original_run = split_pr_process_runner.subprocess.run
+    monkeypatch.setattr(split_pr_process_runner.subprocess, "run", fake_run)
 
     execute_plan(
         plan_payload=build_plan(repo_path),

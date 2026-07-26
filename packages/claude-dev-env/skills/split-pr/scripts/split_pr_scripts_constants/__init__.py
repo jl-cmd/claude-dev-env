@@ -1,6 +1,7 @@
-"""Named constants for split-pr skill scripts."""
+"""Named constants for split-pr skill scripts.
 
-from .config.analyze_constants import *
-from .config.categorize_constants import *
-from .config.execute_constants import *
-from .config.plan_constants import *
+Import from the module that owns the name, such as
+``split_pr_scripts_constants.config.execute_constants``. The package exports
+nothing itself, so two sibling modules can carry same-named values without one
+silently shadowing the other.
+"""
