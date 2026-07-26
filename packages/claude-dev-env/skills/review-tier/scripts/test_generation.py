@@ -7,7 +7,7 @@ from review_tier import build_generation, inventory_generation, router_state_dir
 
 
 def test_generation_uses_live_git_surface(tmp_path: Path) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
     (tmp_path / "tracked.py").write_text("x = 1\n", encoding="utf-8")
     subprocess.run(["git", "add", "tracked.py"], cwd=tmp_path, check=True)
     subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "init"], cwd=tmp_path, check=True)

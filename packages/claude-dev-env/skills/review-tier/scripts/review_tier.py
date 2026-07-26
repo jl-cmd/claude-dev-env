@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from review_tier_constants.config.constants import ALL_DEPENDENCY_MARKERS, ALL_HARD_TRIGGER_MARKERS, ALL_PACKAGE_ROOT_NAMES, ALL_PUBLIC_API_MARKERS, ALL_SOURCE_SUFFIXES, ALL_STATUS_ARGUMENTS, ALL_STATUS_DOMAINS, ALL_TIER_ORDER, ALL_UNTRACKED_ARGUMENTS, AMBIGUOUS_BASE_REF, DEFAULT_BRANCH_FALLBACK, GIT_COMMAND_FAILED, GIT_HEAD_REF, INVALID_BASE_REF, JSON_INDENT, MALFORMED_TIER_POLICY, MAX_AXIS_VALUE, MIN_NONEMPTY_RISK, PATH_SEPARATOR, PLUGIN_DATA_ENVIRONMENT, REMOTE_HEAD_REF, ROOT_PACKAGE, ROUTING_STATE_ROOT_TRACKED, STATUS_CODE_LENGTH, STATUS_PREFIX_LENGTH, UNAPPROVED_TIER_DOWNGRADE, UNKNOWN_TIER
+from review_tier_constants.config.constants import ALL_DEFAULT_BRANCH_FALLBACKS, ALL_DEPENDENCY_MARKERS, ALL_HARD_TRIGGER_MARKERS, ALL_PACKAGE_ROOT_NAMES, ALL_PUBLIC_API_MARKERS, ALL_SOURCE_SUFFIXES, ALL_STATUS_ARGUMENTS, ALL_STATUS_DOMAINS, ALL_TIER_ORDER, ALL_UNTRACKED_ARGUMENTS, AMBIGUOUS_BASE_REF, GIT_COMMAND_FAILED, GIT_HEAD_REF, INVALID_BASE_REF, JSON_INDENT, MALFORMED_TIER_POLICY, MAX_AXIS_VALUE, MIN_NONEMPTY_RISK, PATH_SEPARATOR, PLUGIN_DATA_ENVIRONMENT, REMOTE_HEAD_REF, ROOT_PACKAGE, ROUTING_STATE_ROOT_TRACKED, STATUS_CODE_LENGTH, STATUS_PREFIX_LENGTH, UNAPPROVED_TIER_DOWNGRADE, UNKNOWN_TIER
 
 
 def router_state_root(repo_root: str | Path, all_environment: Mapping[str, str] | None = None) -> Path:
@@ -53,9 +53,13 @@ def _resolve_base(root: Path, requested_base: str | None) -> tuple[str, str]:
         candidate = _git(root, ["rev-parse", "--verify", remote_head], is_required=False).decode().strip()
         if candidate:
             return remote_head, candidate
-    fallback = _git(root, ["rev-parse", "--verify", DEFAULT_BRANCH_FALLBACK], is_required=False).decode().strip()
-    if fallback:
-        return DEFAULT_BRANCH_FALLBACK, fallback
+    for each_fallback in ALL_DEFAULT_BRANCH_FALLBACKS:
+        fallback = _git(root, ["rev-parse", "--verify", each_fallback], is_required=False).decode().strip()
+        if fallback:
+            return each_fallback, fallback
+    head = _git(root, ["rev-parse", "--verify", GIT_HEAD_REF], is_required=False).decode().strip()
+    if head:
+        return GIT_HEAD_REF, head
     raise ValueError(AMBIGUOUS_BASE_REF)
 
 
