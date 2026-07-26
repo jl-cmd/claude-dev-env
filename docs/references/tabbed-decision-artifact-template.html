@@ -427,9 +427,13 @@ var CONFIG = {
   /* One paragraph telling the reader how the page works. */
   intro: "Each tab states one rule, and follows it.",
 
-  /* What the reader does, one step per entry. Rendered as a stepper
-     under the intro. An empty list hides it. */
-  steps: ["Read a tab", "Pick a direction", "Add a note"],
+  /* A sequence this docket's own work runs in, one step per entry,
+     rendered as a stepper under the intro. An empty list hides it.
+     Use it only when the tabs have a real order the reader needs --
+     a staged rollout, a migration, a dependency chain. Generic page
+     instructions belong nowhere: the reader can already see the tabs,
+     the choice cards, and the copy button. */
+  steps: [],
 
   /* Headline figures. Use an empty list to hide this row entirely.
      Keep these in step with the tabs: the dock counts only the items
@@ -537,6 +541,11 @@ var ITEMS = [
         "A command you ran, and its output.",
         "A file you opened, named by path.",
         "A page you read, named by title."
+      ]},
+      {heading: "Name it, then link it", bullets: [
+        "An issue or a pull request carries its link, not its number alone.",
+        "A file carries its path. A command carries its exact text.",
+        "The reader reaches the source from the tab, without going to search for it."
       ]},
       {heading: "Four unchecked claims, and what to write for each", table: {
         head: ["Unchecked claim", "Write this"],

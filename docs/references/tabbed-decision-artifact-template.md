@@ -35,6 +35,7 @@ That rule shapes the writing:
 
 - Name things the way the reader names them. A person runs *the test suite*, not *the pytest collection root*.
 - Give the number and where it came from. "437 test files" beats "a large number".
+- Link any source that has an address. An issue or pull request carries its link, not its number alone; a file carries its path; a command carries its exact text.
 - State the honest gap. When something rests on a theory nobody tested, say so in the tab.
 - Say what a choice costs alongside what it gives. Cost is what the reader gives up: time, rework, work left undone, or a risk carried.
 - Keep sentences to 20 words and one idea. Move detail into a table, where a reader can find one row without reading the rest.
@@ -70,7 +71,7 @@ The file reads in this order — a token layer, then three numbered sections:
 | `topline` | Small mono line above the headline. Date it, or name the source. |
 | `title` | The headline. Say what the reader is being asked for. |
 | `intro` | One or two short sentences saying what the docket is. |
-| `steps` | What the reader does, one entry per step. Renders as a stepper under the intro. An empty list hides it. |
+| `steps` | A sequence the docket's work runs in, one entry per step. Renders as a stepper under the intro. An empty list hides it. Use it for a real order — a staged rollout, a migration, a dependency chain. Generic page instructions belong nowhere: the reader can see the tabs, the cards, and the copy button already. |
 | `figures` | List of `{value, label}` tiles. An empty list hides the row. Keep any "decisions on this page" figure in step with the dock, which counts only the items carrying a choice. |
 | `footnote` | Small print. Where the numbers came from, and where the answers live. |
 | `copyHeading` | Heading on the text the copy button produces. |
