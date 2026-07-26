@@ -33,7 +33,7 @@ def test_active_decision_requires_exact_armed_spawn(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
     route_directory = _route_directory(data_root, tmp_path)
     decision = {"decision_id": "d1", "worktree": str(tmp_path.resolve())}
-    armed_spawn = {"decision_id": "d1", "slot_id": "slot-1", "tool_name": "Agent", "executor_type": "Luna", "model": "gpt-5.6-luna", "effort": "high", "prompt_hash": "p"}
+    armed_spawn = {"decision_id": "d1", "slot_id": "slot-1", "tool_name": "Agent", "executor_type": "Luna", "model": "opus-equivalent", "effort": "high", "prompt_hash": "p"}
     _write_record(route_directory, "decision.json", decision)
     _write_record(route_directory, "armed-spawn.json", armed_spawn)
     environment = {**os.environ, "CLAUDE_PLUGIN_DATA": str(data_root)}

@@ -58,7 +58,7 @@ def test_arm_derives_and_writes_real_spawn(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     resolved = json.loads(_run(tmp_path, "resolve", "--cwd", str(repository), "--arguments", "--tier 1").stdout)
     armed = _run(tmp_path, "arm", "--cwd", str(repository), "--decision-id", resolved["decision_id"], "--slot", resolved["slot_ids"][0])
-    assert json.loads(armed.stdout)["tool_input"]["model"] == "gpt-5.6-luna"
+    assert json.loads(armed.stdout)["tool_input"]["model"] == "opus-equivalent"
     assert list((tmp_path / "plugin-data").rglob("armed-spawn.json"))
 
 
@@ -103,7 +103,7 @@ def test_close_rejects_armed_then_closes_consumed_decision(tmp_path: Path) -> No
     assert _run(tmp_path, "close", "--cwd", str(repository), "--decision-id", resolved["decision_id"]).returncode == 0
 
 
-@pytest.mark.parametrize(("override", "model", "effort", "slot_count"), [("1", "gpt-5.6-luna", "high", 1), ("2", "gpt-5.6-luna", "max", 1), ("3", "gpt-5.6-luna", "high", 6)])
+@pytest.mark.parametrize(("override", "model", "effort", "slot_count"), [("1", "opus-equivalent", "high", 1), ("2", "opus-equivalent", "max", 1), ("3", "opus-equivalent", "high", 6)])
 def test_resolve_topology(override: str, model: str, effort: str, slot_count: int, tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     resolved = json.loads(_run(tmp_path, "resolve", "--cwd", str(repository), "--arguments", f"--tier {override}").stdout)

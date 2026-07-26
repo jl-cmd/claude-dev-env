@@ -17,6 +17,7 @@ if str(tier_script) not in sys.path:
     sys.path.insert(0, str(tier_script))
 from review_router_constants.config.constants import (  # noqa: E402
     ALL_OVERRIDE_VALUES,
+    ALL_SPAWN_MODEL_TOKENS,
     CLEANUP_CONTRACT,
     DECISION_ID_BYTES,
     INTEGRITY_KEY_BYTES,
@@ -25,6 +26,7 @@ from review_router_constants.config.constants import (  # noqa: E402
     MALFORMED_TIER_OVERRIDE,
     ROUTE_SPAWN_ARMED,
     UNKNOWN_ROUTE_SLOT,
+    UNRESOLVABLE_ROUTE_MODEL,
     UNSUPPORTED_ROUTE,
 )
 from review_tier import (  # noqa: E402
@@ -77,6 +79,34 @@ def _override(arguments: str) -> str | None:
     if override not in ALL_OVERRIDE_VALUES:
         raise ValueError(MALFORMED_TIER_OVERRIDE)
     return f"T{override}"
+
+
+def _validated_spawn_model(route_model: str) -> str:
+    """Return ``route_model`` when a spawning harness can resolve it.
+
+    ::
+
+        _validated_spawn_model("opus-equivalent")  # ok: "opus-equivalent"
+        _validated_spawn_model("sonnet")           # ok: "sonnet"
+        _validated_spawn_model("vendor-model-9")   # flag: ValueError
+
+    A route policy names a model tier rather than a dated vendor model id, so
+    the spawning agent maps the token to the strongest model its own harness
+    offers. A token outside that set fails here instead of reaching the Agent
+    tool as an unknown model name.
+
+    Args:
+        route_model: The model token the route policy names for this slot.
+
+    Returns:
+        The same token, once it is a recognised spawn model.
+
+    Raises:
+        ValueError: When the token is not a recognised spawn model.
+    """
+    if route_model not in ALL_SPAWN_MODEL_TOKENS:
+        raise ValueError(UNRESOLVABLE_ROUTE_MODEL)
+    return route_model
 
 
 def resolve(cwd: str, review_kind: str, arguments: str, base_ref: str | None) -> dict:
@@ -149,8 +179,9 @@ def arm(cwd: str, decision_id: str, slot_id: str) -> dict:
     current_hash = str(inventory_generation(cwd, decision_base, state_root=state_root)["diff_hash"])
     if current_hash != decision["diff_hash"]:
         raise ValueError(INVALID_ROUTE_ARM)
+    spawn_model = _validated_spawn_model(slot["model"])
     prompt = f"{CLEANUP_CONTRACT} Review {decision['review_kind']} for {decision['worktree']}. Angles: Reuse, Simplification, Efficiency, Altitude. Apply direct fixes within scope. Skip correctness, security, behavior-changing, and out-of-scope findings. Decision {decision_id}; slot {slot_id}."
-    spawn = {"decision_id": decision_id, "decision_hash": canonical_json_hash(decision), "state_root_id": router_state_root_id(state_root), "slot_id": slot_id, "tool_name": "Agent", "executor_type": "Luna", "model": slot["model"], "effort": slot["effort"], "prompt": prompt, "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(), "diff_hash": decision["diff_hash"]}
+    spawn = {"decision_id": decision_id, "decision_hash": canonical_json_hash(decision), "state_root_id": router_state_root_id(state_root), "slot_id": slot_id, "tool_name": "Agent", "executor_type": "Luna", "model": spawn_model, "effort": slot["effort"], "prompt": prompt, "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(), "diff_hash": decision["diff_hash"]}
     _write_signed(directory, "armed-spawn.json", spawn, secret)
     return {"tool_name": "Agent", "tool_input": {"executor_type": "Luna", "model": spawn["model"], "effort": spawn["effort"], "prompt": prompt}}
 
