@@ -1902,6 +1902,48 @@ test('mergeHooksIntoSettings merges its groups into a settings file holding shap
 });
 
 
+test('mergeHooksIntoSettings replaces a non-list value at a shipped event type and warns', () => {
+    const settings = { hooks: { PreToolUse: { enabled: true, note: 'user authored shape' } } };
+
+    const { allWarnings } = captureWarnings(
+        () => mergeHooksIntoSettings(settings, SAMPLE_HOOKS_CONFIG, '/home/user/.claude', 'python3'),
+    );
+
+    assert.deepEqual(
+        settings.hooks.PreToolUse.map(group => group.matcher),
+        ['Write'],
+        'the shipped PreToolUse group takes the place of the value the file held',
+    );
+    assert.equal(
+        allWarnings.filter(warning => warning.includes('PreToolUse')).length,
+        1,
+        'one warning names the event type whose value was replaced',
+    );
+    assert.match(
+        allWarnings.find(warning => warning.includes('PreToolUse')),
+        /not a list of hook groups/,
+        'the warning states what the replaced value was',
+    );
+});
+
+
+test('mergeHooksIntoSettings keeps a non-list value at an event type the package does not ship', () => {
+    const unshippedEventValue = { enabled: true, note: 'user authored shape' };
+    const settings = { hooks: { SessionStart: unshippedEventValue } };
+
+    const { allWarnings } = captureWarnings(
+        () => mergeHooksIntoSettings(settings, SAMPLE_HOOKS_CONFIG, '/home/user/.claude', 'python3'),
+    );
+
+    assert.deepEqual(
+        settings.hooks.SessionStart,
+        unshippedEventValue,
+        'an event type the sample config ships no groups for keeps the value the file holds',
+    );
+    assert.deepEqual(allWarnings, [], 'the merge warns about nothing it leaves in place');
+});
+
+
 test('pruneManagedHooksFromSettings keeps every settings shape the installer never wrote', () => {
     const managedPaths = new Set(['notification/attention_needed_notify.py']);
     const managedCommand = 'python3 $HOME/.claude/hooks/notification/attention_needed_notify.py';

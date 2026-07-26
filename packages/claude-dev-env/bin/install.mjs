@@ -314,9 +314,11 @@ function isSkippedSourceEntry(entryName) {
  * contributor's local tooling writes beside the source.
  *
  * Running the Python suites fills the package source with `__pycache__` trees and
- * tool caches. `.npmignore` keeps them out of the published tarball, so an `npx`
- * install never sees them; a local `node bin/install.mjs` reads the working tree
- * directly, so the walk itself skips them. `SKIPPED_SOURCE_ENTRY_NAMES` and
+ * tool caches. The `files` negations in `package.json` keep them out of the
+ * published tarball, with `.npmignore` carrying the same patterns for tooling
+ * that reads it, so an `npx` install never sees them; a local
+ * `node bin/install.mjs` reads the working tree directly, so the walk itself
+ * skips them. `SKIPPED_SOURCE_ENTRY_NAMES` and
  * `SKIPPED_SOURCE_FILE_EXTENSIONS` name what drops out.
  *
  * The skip and the cleanup of artifacts an earlier install already copied are one
@@ -1039,6 +1041,31 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
 }
 
 /**
+ * Give one event type a list of hook groups to merge into, warning when a value
+ * of another shape leaves settings.json.
+ *
+ * The settings schema holds a list of matcher groups at each event type, so a
+ * value of another shape has no place for the groups the package ships for that
+ * event, and the merge writes the list in its place. The warning names the event
+ * type so the user can recover the value from their own history.
+ *
+ * @param {object} settings The parsed settings.json object (mutated in place).
+ * @param {string} eventType The lifecycle event the package ships groups for.
+ * @returns {void}
+ */
+function startEventFromHookGroupList(settings, eventType) {
+    const existingEventValue = settings.hooks[eventType];
+    if (Array.isArray(existingEventValue)) return;
+    if (existingEventValue !== undefined) {
+        console.warn(
+            `  Warning: replacing the ${eventType} value in settings.json — it held a value that`
+            + ' was not a list of hook groups. Recover it from your own history.'
+        );
+    }
+    settings.hooks[eventType] = [];
+}
+
+/**
  * Merges the installer's managed hook groups into a settings object in memory,
  * pruning every prior managed hook (standalone script or inline validators
  * runner) from each event's existing matcher groups before appending the freshly
@@ -1050,9 +1077,10 @@ function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePath
  *
  * The merge reads a settings file another tool or a person may have written, so
  * it recognizes the shapes it writes and steps around the rest: a `hooks` value
- * that is not an object and an event value that is not an array of groups each
- * start from an empty array, and a group carrying no hooks array contributes no
- * user entries.
+ * that is not an object starts from an empty map, and a group carrying no hooks
+ * array contributes no user entries. At an event type the package ships groups
+ * for, a value that is not a list of hook groups is replaced by that list, with
+ * a warning naming the event type.
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
@@ -1067,7 +1095,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
     if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
-        if (!Array.isArray(settings.hooks[eventType])) settings.hooks[eventType] = [];
+        startEventFromHookGroupList(settings, eventType);
         pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths);
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
@@ -1179,7 +1207,7 @@ export function retiredManagedHookRelativePaths(
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
  * @returns {boolean} True when the command runs a retired managed script.
  */
-export function commandReferencesRetiredHook(commandString, retiredHookRelativePaths) {
+function commandReferencesRetiredHook(commandString, retiredHookRelativePaths) {
     if (typeof commandString !== 'string') return false;
     const normalizedCommand = commandString.replace(/\\/g, '/');
     for (const relativePath of retiredHookRelativePaths) {
