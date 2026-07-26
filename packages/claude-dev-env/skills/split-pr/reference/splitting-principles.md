@@ -37,7 +37,8 @@ Skip empty layers. Keep tests with their layer only when the user wants vertical
 ## Independence rules
 
 - Slice N must build on merge of 1…N−1 (stacked bases).
-- Prefer each slice green on its own after prior merges (project-specific validate is judgment; this skill does not invent `npm test` for every repo).
+- Prefer each slice green on its own after prior merges. For Python, execute runs `pytest --collect-only` on cumulative stack test modules after each slice commit so a definition on the wrong side of a cut aborts before push. Full suite execution stays project-specific judgment.
+- Put symbols a test imports on the same slice as that test, or on an earlier base slice. A later-only definition leaves a PR that never collects.
 - Never leave a source path unassigned.
 
 ## What this skill does not do

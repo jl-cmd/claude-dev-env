@@ -12,7 +12,7 @@ Base branch: `<base_branch>`. Merge earlier slices in the chain first.
 
 ## Testing
 
-Slice membership is file-partitioned from the source PR. Full project CI on this slice alone is **not** claimed by `/split-pr` unless a human or follow-up run verifies it.
+Slice membership is file-partitioned from the source PR. After each slice commit, `/split-pr` runs `pytest --collect-only` on cumulative stack test modules so a definition on the wrong side of the cut fails execute before push. Full project test execution on this slice alone is **not** claimed unless a human or follow-up run verifies it.
 
 ## Proof note
 

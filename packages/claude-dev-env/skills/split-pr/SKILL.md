@@ -17,6 +17,7 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 
 - **Do not chat the split step-by-step.** Run analyze → verify → one proposal → execute. The article’s interactive script-writing flow is replaced by this skill’s scripts.
 - **Coverage before execute.** Every source file must land in exactly one slice. Run `verify_plan.py`; never open PRs with missing or duplicate paths.
+- **A slice prefix must be closed under cross-file references.** A file-based split cuts the symbol graph along file lines, so a slice can read a name whose only definition lands later. Collection cannot see it — the read sits inside a function body, so imports resolve and `--collect-only` passes green — and neither can a per-slice test run, because nothing calls the new code until a later slice wires it up. Pass `--repo-path` to `verify_plan.py` so the dependency check runs; without it the check is skipped and the report says so. A shared config module is the common violator, and it is subject to two opposing constraints: runtime wants it no later than its first reader, while a dead-constant gate wants it no earlier than a production module reading each new field. When both fire, the report names the smallest set of files that must ship in one slice — coalesce to that set. Do not "fix" it by moving the config module to slice 1; the gate then rejects the commit, after branches already exist.
 - **Source branch stays intact.** Execution creates new `split/<pr>/…` branches via `git checkout <source> -- <files>`. Never rewrite or force-push the original head. After a full multi-slice draft stack lands, the skill comments and **closes the source PR** as superseded; the source branch remains on the remote for fallback checkout.
 - **Stacked bases, not all-off-main.** Slice 2’s base is slice 1’s branch (and so on). Opening every PR against `main` loses the dependency story.
 - **Clean tree required for real execute.** Dirty worktree → stop. Prefer a dedicated worktree if the session cwd is dirty; do not silently stash.
@@ -26,7 +27,8 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 - **Draft PRs only.** Always `--draft`. Never mark ready from this skill.
 - **Proof-of-work is human-owned.** The skill leaves every split PR in **draft** and does **not** post a five-part proof comment. Before `gh pr ready` on any slice, a human (or a later skill) must post proof per `proof-of-work-pr-comments`. Silent ready is the failure mode.
 - **Bodies use `--body-file`.** Never `gh … --body` with markdown (hook + backtick corruption).
-- **Grouping is path-layer heuristics, not an import graph.** seriousben’s method is file-based; `categorize_files.py` uses path rules as the deterministic proxy. Import/require edges are out of scope for v1 — re-bucket paths in the plan when a heuristic miss is obvious.
+- **Grouping is path-layer heuristics, not an import graph.** seriousben’s method is file-based; `categorize_files.py` uses path rules as the deterministic proxy. Re-bucket paths when a heuristic miss is obvious. After each slice commit, execute runs **pytest collection** on cumulative stack test modules so a definition on the wrong side of a cut fails before push — diff-reading review does not catch that class of defect.
+- **Collection gate is mandatory for Python tests.** `execute_split` runs `pytest --collect-only` on every cumulative `test_*.py` / `*_test.py` present on the slice tip. A failed collect aborts the stack as partial (no push for that slice). Escape only with `--skip-collection-check`. Soft-skip when the slice has no collectable tests or pytest is unavailable.
 - **Plan files come from `gh pr view` file list**, not a local stale `main` diff. Offline `--files-json` is tests only.
 
 ## When this applies
@@ -65,8 +67,12 @@ Load [reference/splitting-principles.md](reference/splitting-principles.md) only
 2. Optionally re-bucket paths (edit the plan JSON). Do **not** drop files.
 3. Adjust titles/stories so each slice has one review focus.
 4. **Execute:**  
-   `python "${CLAUDE_SKILL_DIR}/scripts/verify_plan.py" --plan <plan.json> --pretty`  
-   Exit must be 0 (`is_valid: true`). If not, fix the plan and re-run.
+   `python "${CLAUDE_SKILL_DIR}/scripts/verify_plan.py" --plan <plan.json> --repo-path . --pretty`  
+   Exit must be 0 (`is_valid: true`). If not, fix the plan and re-run.  
+   `--repo-path` turns on the slice dependency check, which reads the source and
+   base branches and reports `dependencies` alongside coverage. Reorder on a
+   `forward_references` finding; coalesce to `coalesce_suggestion` on a
+   `contradictions` finding, where no ordering can satisfy both constraints.
 
 Path rules: [reference/path-layers.md](reference/path-layers.md).
 
@@ -92,9 +98,9 @@ Path rules: [reference/path-layers.md](reference/path-layers.md).
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --pretty`
 5. **Execute (push + draft PRs) — default after Approve recommended:**  
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --push --create-prs --pretty`  
-   After every planned slice has a draft URL, the skill posts a **family-tree comment** on each child PR (full merge order + links; marks the current PR). Supersede of the source PR is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
-6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open and skip family-tree comments.
-7. **Verification honesty:** this skill does not run the repo’s full test suite on each slice. Each draft PR body must state that gap (the script’s short body does). Do not claim per-slice CI green unless you ran checks yourself.
+   After every planned slice has a draft URL, the skill posts a **family-tree comment** on each child PR (full merge order + links; marks the current PR), applies discovery labels **`split-pr`** and **`split-stack:<sourcePr>`** on the source and every child, then supersedes the source. Supersede is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
+6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open and skip family-tree comments and stack labels. A **collection failure** means re-bucket so consumers and their definitions share a base that already has the imports (often: put definitions earlier, or co-locate tests with the modules they import), then re-verify and re-execute.
+7. **Verification honesty:** execute runs **pytest collection** on stack test modules after each commit; it does **not** run the full test suite. Each draft PR body states both. Do not claim per-slice CI green unless you ran checks yourself.
 8. **Do not** run `gh pr ready` on split PRs from this skill.
 
 PR body template: [templates/pr-body.md](templates/pr-body.md).  
@@ -103,17 +109,19 @@ Supersede comment template: [templates/supersede-source-body.md](templates/super
 
 ### Phase 5 — Report
 
-State: source PR number, slice branches, draft PR URLs (if any), merge order (`#A → #B → …`), that the original **branch** is unchanged, family-tree comment outcome, and the supersede outcome:
+State: source PR number, slice branches, draft PR URLs (if any), merge order (`#A → #B → …`), that the original **branch** is unchanged, family-tree comment outcome, stack-label outcome, and the supersede outcome:
 
 | Execute result | Child PRs | Source PR |
 |---|---|---|
-| Multi-slice success with a draft URL for every planned slice | Family-tree comment on **each** child (`--body-file`: source, merge order, full linked list, “this PR”) | Comment then **close** as superseded |
-| Atomic (`atomic_single_slice`) | `family_tree_comments` may still post if create-prs produced a URL per planned slice | Stays open — source remains the delivery unit |
+| Multi-slice success with a draft URL for every planned slice | Family-tree comment on **each** child; labels `split-pr` + `split-stack:<N>` on source and each child | Labels applied; then comment and **close** as superseded |
+| Atomic (`atomic_single_slice`) | Family-tree and labels may still run when create-prs produced a URL per planned slice | Stays open — source remains the delivery unit |
 | Local-only (`--push` / `--create-prs` off) | Unchanged | Unchanged |
-| Partial stack (missing child URL) or execute failure with zero child URLs | Skip `family_tree_comments` | Stays open; report partial |
-| Already closed with a supersede comment | `family_tree_comments` still posts when child URLs are complete | Skip re-close (idempotent) |
+| Partial stack (missing child URL) or execute failure with zero child URLs | Skip family-tree and stack labels | Stays open; report partial |
+| Already closed with a supersede comment | Family-tree and labels still run when child URLs are complete | Skip re-close (idempotent) |
 
-Report `family_tree` and `supersede` from execute JSON. A family-tree or supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
+Report `family_tree`, `stack_labels`, and `supersede` from execute JSON. A family-tree, labels, or supersede `gh` failure records `error` on that object and leaves the split success intact — report the finding and the retry command; do not treat the run as a failed split.
+
+**Labels are discovery only.** Merge order and “this PR” stay on family-tree comments and stacked bases. Filter with `is:pr label:split-pr` or `label:split-stack:663`.
 
 ### Phase 6 — Split further (mandatory)
 
@@ -150,9 +158,12 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 | `templates/plan.example.json` | Example plan shape |
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
 | `scripts/categorize_files.py` | Library — path → layer, slice builder |
-| `scripts/verify_plan.py` | **Execute** — coverage gate |
-| `scripts/execute_split.py` | **Execute** — branches / draft PRs / family tree / supersede |
+| `scripts/verify_plan.py` | **Execute** — coverage gate, plus the dependency gate when `--repo-path` is given |
+| `scripts/verify_slice_dependencies.py` | **Execute** — plan-time forward-reference, dead-config, and contradiction check |
+| `scripts/execute_split.py` | **Execute** — branches / collection gate / draft PRs / family tree / stack labels / supersede |
+| `scripts/validate_slice_collection.py` | **Execute** — post-commit pytest `--collect-only` on cumulative stack tests |
 | `scripts/family_tree_comments.py` | **Execute** — full linked tree comment on each child PR |
+| `scripts/stack_labels.py` | **Execute** — apply `split-pr` + `split-stack:<source>` discovery labels |
 | `scripts/gh_body_comment.py` | Shared ``gh pr comment --body-file`` helpers |
 | `scripts/supersede_source_pr.py` | **Execute** — comment + close source after full stack |
 | `scripts/split_pr_scripts_constants/` | Named constants |
@@ -162,4 +173,4 @@ After Phase 5, run the loop in [reference/split-further-loop.md](reference/split
 
 - `reference/` — on-demand principles, layers, proposal, task seeds, split-further loop
 - `templates/` — PR body, family-tree body, supersede body, example plan
-- `scripts/` — analyze, verify, execute, family tree, supersede + tests + constants
+- `scripts/` — analyze, verify, execute, collection gate, family tree, stack labels, supersede + tests + constants
