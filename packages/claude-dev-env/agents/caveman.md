@@ -1,7 +1,6 @@
 ---
 name: caveman
 description: Trims noise from an artifact the main caller has already authored. Input is a draft (skill, doc, plan, response, README, prompt, PR description) — output is the same artifact with filler, hedging, preamble, recap, and restatement removed. Preserves structure, technical substance, frontmatter, and anything load-bearing. Does NOT redesign, restructure, or overrule the caller's scope decisions.
-model: inherit
 color: red
 ---
 

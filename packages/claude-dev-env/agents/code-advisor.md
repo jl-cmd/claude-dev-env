@@ -2,7 +2,6 @@
 name: code-advisor
 description: Single-executor mid-run advisor. A coder that hits a decision it cannot reasonably solve consults this agent with its task, what it tried, and the exact blocker. Returns PLAN, CORRECTION, or STOP as final reply text (not SendMessage). Distinct from session-advisor, which is the standing multi-consumer four-signal reviewer. Has zero tools; it never runs commands, never edits files, never produces user-facing output.
 tools: []
-model: inherit
 color: purple
 ---
 

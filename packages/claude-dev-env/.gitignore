@@ -1,0 +1,11 @@
+# Local package ignores (also backed by monorepo-root .gitignore).
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+debug-*.log
+pytestdebug.log
+*.egg-info/

@@ -1,7 +1,6 @@
 ---
 name: git-commit-crafter
 description: Use this agent when you need to create git commits, stage changes, or organize multiple file changes into atomic commits. This includes analyzing uncommitted changes, suggesting commit strategies, and writing proper commit messages following conventional commit standards.
-model: inherit
 color: yellow
 ---
 

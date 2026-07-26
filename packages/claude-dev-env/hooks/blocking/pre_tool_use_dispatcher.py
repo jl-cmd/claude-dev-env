@@ -26,10 +26,6 @@ from pathlib import Path
 
 import _path_setup  # noqa: F401
 
-from agent_model_pin_blocker import (
-    build_deny_payload as build_agent_model_pin_deny_payload,
-)
-from agent_model_pin_blocker import evaluate as evaluate_agent_model_pin
 from plain_language_blocker import (
     build_deny_payload as build_plain_language_deny_payload,
 )
@@ -39,9 +35,6 @@ from state_description_blocker import (
 )
 from state_description_blocker import evaluate as evaluate_state_description
 
-from hooks_constants.agent_model_pin_blocker_constants import (
-    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME,
-)
 from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALL_HOSTED_HOOK_ENTRIES,
     ALLOW_DECISION,
@@ -83,10 +76,6 @@ _native_hook_by_module_name: dict[str, NativeHook] = {
     PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
         evaluate=evaluate_plain_language,
         build_deny_payload=build_plain_language_deny_payload,
-    ),
-    AGENT_MODEL_PIN_BLOCKER_MODULE_NAME: NativeHook(
-        evaluate=evaluate_agent_model_pin,
-        build_deny_payload=build_agent_model_pin_deny_payload,
     ),
 }
 
