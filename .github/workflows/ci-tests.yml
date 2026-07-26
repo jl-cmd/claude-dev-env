@@ -32,6 +32,12 @@
 # ephemeral production scripts.
 #
 # permissions: contents read + pull-requests read (dorny/paths-filter on PRs).
+#
+# Trigger scope: the pull_request trigger carries no branches filter, so a PR
+# whose base is a stacked parent branch runs the same jobs as a PR based on
+# main. dorny/paths-filter compares against the PR's own base ref, so each PR
+# in a stack filters on the files that PR alone changes. The push trigger stays
+# pinned to main and always runs the full suite.
 
 name: CI — Full test suites
 
@@ -39,7 +45,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read

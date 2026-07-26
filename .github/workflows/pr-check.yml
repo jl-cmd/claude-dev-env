@@ -1,3 +1,5 @@
+# Trigger scope: no branches filter on pull_request, so a PR based on a stacked
+# parent branch gets its title validated the same way a PR based on main does.
 name: PR checks
 
 on:
@@ -7,8 +9,6 @@ on:
       - edited
       - synchronize
       - reopened
-    branches:
-      - main
 
 concurrency:
   group: pr-check-${{ github.ref }}
