@@ -6,6 +6,10 @@ Enforces the "describe current state only" rule — no "instead of", "previously
 documentation should describe what IS, not what WAS or what CHANGED. Inside a
 docstring, a phrase wrapped in double quotes or backticks is a mention rather
 than a use, so quoted spans are stripped before the scan.
+
+Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
+(default off). With the switch off ``evaluate`` allows every write, which
+covers both the standalone script and the in-process dispatcher path.
 """
 
 import ast
@@ -22,6 +26,9 @@ if _hooks_dir not in sys.path:
 from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
+from hooks_constants.prose_style_enforcement_constants import (  # noqa: E402
+    PROSE_STYLE_ENFORCEMENT_ENABLED,
+)
 from hooks_constants.state_description_blocker_constants import (  # noqa: E402
     ALL_BLOCK_COMMENT_EXTENSIONS,
     ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
@@ -276,7 +283,8 @@ def _build_deny_reason(file_path: str, all_detected_patterns: list[str]) -> str:
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether a Write/Edit payload carries historical/comparative language.
 
-    Applies the same tool-name gate, file-extension gate, content selection, and
+    Allows every write when the shared prose-style switch is off. Otherwise
+    applies the same tool-name gate, file-extension gate, content selection, and
     pattern scan the standalone hook applies. Returns the deny-reason text when a
     historical phrase is found, or None to allow.
 
@@ -287,6 +295,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         The permissionDecisionReason text when the write is denied, or None when
         the write is allowed.
     """
+    if not PROSE_STYLE_ENFORCEMENT_ENABLED:
+        return None
+
     raw_tool_name = payload_by_key.get("tool_name", "")
     tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
     if tool_name not in ("Write", "Edit"):

@@ -24,6 +24,30 @@ from stop_dispatcher import dispatch, select_first_block_stdout  # noqa: E402
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "stop_dispatcher.py")
 
 
+def _prose_switch_enabled_program(target_script_path: str) -> str:
+    """Build a launcher that turns the prose-style switch on, then runs a script.
+
+    The launcher patches the shared switch module in ``sys.modules`` before the
+    target runs, so every hook the dispatcher executes through runpy reads the
+    switch as on.
+
+    Args:
+        target_script_path: Absolute path of the script to run as ``__main__``.
+
+    Returns:
+        The program text to pass to the interpreter's ``-c`` flag.
+    """
+    return (
+        "import sys, runpy;"
+        f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
+        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
+        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+        f"sys.argv = [{repr(target_script_path)}];"
+        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
+    )
+
+
 def _block_json(
     reason: str, *, system_message: str = "", suppress_output: bool = False
 ) -> str:
@@ -160,7 +184,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
         }
     )
     completed = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
+        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
         check=False,
         input=payload_text,
         capture_output=True,
@@ -171,6 +195,26 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     parsed = json.loads(completed.stdout)
     assert parsed["decision"] == "block"
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
+
+
+def test_dispatcher_allows_hedging_message_when_the_switch_is_off() -> None:
+    """A hedging message passes through the dispatcher with the switch left off."""
+    payload_text = json.dumps(
+        {
+            "stop_hook_active": False,
+            "last_assistant_message": "This is probably correct without a source.",
+        }
+    )
+    completed = subprocess.run(
+        [sys.executable, _DISPATCHER_SCRIPT],
+        check=False,
+        input=payload_text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == ""
 
 
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:

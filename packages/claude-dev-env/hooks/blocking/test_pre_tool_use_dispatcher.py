@@ -50,10 +50,34 @@ _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_tes
 _MARKDOWN_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.md")
 
 
+def _prose_switch_enabled_program(target_script_path: str) -> str:
+    """Build a launcher that turns the prose-style switch on, then runs a script.
+
+    The launcher patches the shared switch module in ``sys.modules`` before the
+    target runs, so every hook the dispatcher executes through runpy reads the
+    switch as on.
+
+    Args:
+        target_script_path: Absolute path of the script to run as ``__main__``.
+
+    Returns:
+        The program text to pass to the interpreter's ``-c`` flag.
+    """
+    return (
+        "import sys, runpy;"
+        f"sys.path.insert(0, {repr(str(_HOOKS_ROOT))});"
+        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
+        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
+        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+        f"sys.argv = [{repr(target_script_path)}];"
+        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
+    )
+
+
 def _run_hook_subprocess(
     hook_relative_path: str, payload_text: str
 ) -> subprocess.CompletedProcess[str]:
-    """Run one hook script as a subprocess, returning the completed process.
+    """Run one hook script as a subprocess with the prose-style switch on.
 
     Args:
         hook_relative_path: Path relative to the hooks/ directory.
@@ -64,7 +88,7 @@ def _run_hook_subprocess(
     """
     script_path = str(_HOOKS_ROOT / hook_relative_path)
     return subprocess.run(
-        [sys.executable, script_path],
+        [sys.executable, "-c", _prose_switch_enabled_program(script_path)],
         check=False,
         input=payload_text,
         capture_output=True,
@@ -74,7 +98,7 @@ def _run_hook_subprocess(
 
 
 def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
-    """Run the dispatcher as a subprocess.
+    """Run the dispatcher as a subprocess with the prose-style switch on.
 
     Args:
         payload_text: The JSON payload to send on stdin.
@@ -83,6 +107,20 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         The completed subprocess result with stdout and stderr captured.
     """
     return subprocess.run(
+        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
+        check=False,
+        input=payload_text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+
+def _run_dispatcher_with_the_switch_off(
+    payload_text: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run the dispatcher script as shipped, with the prose-style switch left off."""
+    return subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
         check=False,
         input=payload_text,
@@ -90,6 +128,17 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         text=True,
         encoding="utf-8",
     )
+
+
+def test_dispatcher_allows_prose_violations_when_the_switch_is_off() -> None:
+    """Heavy and historical wording both pass the dispatcher with the switch off."""
+    prose_violation_content = "# Guide\n\nPreviously the system utilized a different mechanism.\n"
+    payload_text = _write_payload(_MARKDOWN_FILE_PATH, prose_violation_content)
+
+    dispatcher_result = _run_dispatcher_with_the_switch_off(payload_text)
+
+    is_deny, _reason = _parse_hook_decision(dispatcher_result)
+    assert is_deny is False
 
 
 def _parse_hook_decision(completed_process: subprocess.CompletedProcess[str]) -> tuple[bool, str]:

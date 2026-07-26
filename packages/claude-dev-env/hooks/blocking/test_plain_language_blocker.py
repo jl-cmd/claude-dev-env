@@ -43,7 +43,36 @@ build_block_reason = hook_module.build_block_reason
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 
 
+ENFORCEMENT_ENABLED_PROGRAM = (
+    "import sys;"
+    f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+    "import plain_language_blocker as hook_script;"
+    "hook_script.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+    "hook_script.main()"
+)
+
+
+@pytest.fixture(autouse=True)
+def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the shared prose-style switch on for every in-process test."""
+    monkeypatch.setattr(hook_module, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
+
+
 def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
+    """Run the hook script with the prose-style switch turned on."""
+    return subprocess.run(
+        [sys.executable, "-c", ENFORCEMENT_ENABLED_PROGRAM],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_hook_with_enforcement_switched_off(
+    payload: dict,
+) -> subprocess.CompletedProcess[str]:
+    """Run the hook script as shipped, with the prose-style switch left off."""
     return subprocess.run(
         [sys.executable, str(HOOK_SCRIPT_PATH)],
         input=json.dumps(payload),
@@ -51,6 +80,21 @@ def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def test_heavy_word_passes_when_the_switch_is_off() -> None:
+    completed_process = _run_hook_with_enforcement_switched_off(
+        {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": "notes.md",
+                "content": "This utilize pattern is heavy.",
+            },
+        }
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
 
 
 def _decision_from(completed: subprocess.CompletedProcess[str]) -> str | None:

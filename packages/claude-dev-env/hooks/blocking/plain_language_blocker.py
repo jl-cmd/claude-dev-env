@@ -8,6 +8,10 @@ file. Code fences, inline code, blockquotes, URLs, and file paths are stripped
 before matching so exact identifiers and paths are never flagged.
 
 See the plain-language rule for the full guidance this hook enforces.
+
+Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
+(default off). With the switch off ``evaluate`` allows every payload, which
+covers both the standalone script and the in-process dispatcher path.
 """
 
 import json
@@ -37,6 +41,9 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     REPOSITORY_MARKER_NAME,
     URL_PATTERN,
     USER_FACING_PLAIN_LANGUAGE_NOTICE,
+)
+from hooks_constants.prose_style_enforcement_constants import (  # noqa: E402
+    PROSE_STYLE_ENFORCEMENT_ENABLED,
 )
 
 
@@ -310,7 +317,8 @@ def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether a payload's prose carries heavy words to block.
 
-    Collects the prose for the payload's tool, scans it for banned terms, and
+    Allows every payload when the shared prose-style switch is off. Otherwise
+    collects the prose for the payload's tool, scans it for banned terms, and
     returns the deny-reason text when any heavy word is found, or None to allow.
 
     Args:
@@ -320,6 +328,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         The permissionDecisionReason text when the prose is denied, or None when
         the prose is allowed.
     """
+    if not PROSE_STYLE_ENFORCEMENT_ENABLED:
+        return None
+
     raw_tool_name = payload_by_key.get("tool_name", "")
     raw_tool_input = payload_by_key.get("tool_input", {})
     if not isinstance(raw_tool_name, str) or not isinstance(raw_tool_input, dict):

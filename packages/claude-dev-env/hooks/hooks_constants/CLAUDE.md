@@ -60,6 +60,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
 | `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
+| `prose_style_enforcement_constants.py` | The shared `PROSE_STYLE_ENFORCEMENT_ENABLED` switch (default off) that the five prose-style hooks read before they block, plus the roster of those hook modules and the flag name a coverage test greps for |
 | `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |

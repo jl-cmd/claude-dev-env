@@ -4,6 +4,9 @@ Stop hook that blocks Claude responses containing hedging language.
 
 Words like "likely", "probably", "presumably" signal unverified claims.
 When detected, Claude is forced to re-check and respond with verified facts.
+
+Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
+(default off). With the switch off the hook exits silently and blocks nothing.
 """
 
 import json
@@ -18,6 +21,9 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_NOTICE  # noqa: E402
+from hooks_constants.prose_style_enforcement_constants import (  # noqa: E402
+    PROSE_STYLE_ENFORCEMENT_ENABLED,
+)
 from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -75,6 +81,9 @@ def find_hedging_words(text: str) -> list[str]:
 
 
 def main() -> None:
+    if not PROSE_STYLE_ENFORCEMENT_ENABLED:
+        sys.exit(0)
+
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:

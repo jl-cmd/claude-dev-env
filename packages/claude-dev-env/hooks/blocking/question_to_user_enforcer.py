@@ -8,6 +8,9 @@ ends with a question mark or contains a recognized preamble phrase
 ("would you like", "should I", "do you want", "want me to", etc.), Claude is
 forced to re-output the response with the ask moved into an AskUserQuestion
 tool call.
+
+Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
+(default off). With the switch off the hook exits silently and blocks nothing.
 """
 
 import json
@@ -21,6 +24,9 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_ASKUSERQUESTION_NOTICE  # noqa: E402
+from hooks_constants.prose_style_enforcement_constants import (  # noqa: E402
+    PROSE_STYLE_ENFORCEMENT_ENABLED,
+)
 from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
 
 
@@ -78,6 +84,9 @@ def find_user_directed_question_indicators(text: str) -> list[str]:
 
 
 def main() -> None:
+    if not PROSE_STYLE_ENFORCEMENT_ENABLED:
+        sys.exit(0)
+
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:
