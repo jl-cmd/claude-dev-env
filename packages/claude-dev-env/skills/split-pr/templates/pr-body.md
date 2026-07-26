@@ -1,19 +1,23 @@
+# Draft PR body — illustration only
+
+`execute_split.py` writes this body itself in `_create_draft_pr` and passes it to `gh pr create --body-file`. The f-string in that function is the source of truth. This page shows the shape for reading; hand-posting it is never part of the flow.
+
+Placeholders: `<story>` is the slice story, `<source_pr>` the source PR number, `<base_branch>` the slice base.
+
+```markdown
 ## Summary
 
 <story>
 
 ## Split source
 
-Excised from PR #<source_pr> via `/split-pr`.
+Excised from pull request #<source_pr> via `/split-pr`.
 
 ## Dependencies
 
-Base branch: `<base_branch>`. Merge earlier slices in the chain first.
+Base branch: `<base_branch>`. Merge earlier slices first.
 
 ## Testing
 
-Slice membership is file-partitioned from the source PR. Full project CI on this slice alone is **not** claimed by `/split-pr` unless a human or follow-up run verifies it.
-
-## Proof note
-
-This PR is one link in a stacked split. Review focus is this slice’s story only; merge earlier bases first.
+File-partitioned from the parent pull request. Project-wide CI on this slice alone is not claimed by `/split-pr` unless verified separately.
+```

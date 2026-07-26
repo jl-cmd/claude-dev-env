@@ -20,7 +20,21 @@ A slice fits when **both** budgets hold (`slice_fits_review_budget`).
 `verify_plan` **fails** a multi-file slice that still exceeds the budget.  
 A **single file** over the line budget is `oversized_atomic` — terminal; do not invent intra-file splits.
 
-**Precedence:** when the **parent PR as a whole** already fits both budgets, treat the parent as already review-sized (`fits_review` / threshold note). That check supersedes `MINIMUM_SPLIT_FILE_COUNT` as an initiation stop; the minimum remains advisory-only in the proposal.
+## The initiation stop
+
+The same two budgets decide whether a split starts at all. `analyze_pr` measures the **parent PR as a whole** with `slice_fits_review_budget(file_count=…, changed_lines=…)`. When the parent fits both budgets it is already review-sized, and the plan says so in two places:
+
+- `threshold_note` carries the text `parent already fits review budget (files=<n>/10, changed_lines=<n>/400); split is optional — continue only if the user insists`.
+- `warnings` carries `parent_fits_review_budget_split_optional`.
+- `proposed_slices` holds **one** slice built by `build_whole_pr_slice`: `index` 1, `slug` `whole-pr`, `layer` `other`, `title` `<prefix>: <feature-slug> single reviewable slice`, and every changed path in its `files` list.
+
+`execute_split` calls `assert_split_is_advised(plan_payload, should_allow_optional_split)` before it touches git. A truthy `threshold_note` with no override raises:
+
+```
+plan says the split is optional (<threshold_note>); pass --allow-optional-split to execute it anyway
+```
+
+Recovery: leave the PR whole, or re-run `execute_split.py` with `--allow-optional-split` when the user insists on the one-slice `whole-pr` chain.
 
 ## Default chain
 

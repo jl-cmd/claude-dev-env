@@ -27,12 +27,12 @@ Autonomously split one large pull request into a **file-based stacked chain** of
 - **Proof-of-work is human-owned.** The skill leaves every split PR in **draft** and does **not** post a five-part proof comment. Before `gh pr ready` on any slice, a human (or a later skill) must post proof per `proof-of-work-pr-comments`. Silent ready is the failure mode.
 - **Bodies use `--body-file`.** Never `gh … --body` with markdown (hook + backtick corruption).
 - **Grouping is path-layer heuristics, not an import graph.** seriousben’s method is file-based; `categorize_files.py` uses path rules as the deterministic proxy. Import/require edges are out of scope for v1 — re-bucket paths in the plan when a heuristic miss is obvious.
-- **Plan files come from `gh pr view` file list**, not a local stale `main` diff. Offline `--files-json` is tests only.
+- **Plan files come from the live PR on GitHub**, never a local stale `main` diff. `fetch_all_pr_files` reads them with `gh api repos/<owner>/<repo>/pulls/<n>/files --paginate --slurp`, because `gh pr view --json files` caps its array at 100 entries with no page marker and silently loses files on a large PR. `assert_file_list_is_complete` then compares the fetched count against the PR's `changedFiles` and refuses a truncated list. Offline `--files-json` is tests only.
 
 ## When this applies
 
 - User runs `/split-pr <pr#>` or asks to split a large PR into smaller stacked PRs.
-- A single feature PR is too large for a human review pass (rough default: ≥8 files or multi-layer mix).
+- A single feature PR is too large for a human review pass. The governing budget is `MAXIMUM_SLICE_FILE_COUNT` (`10` files) and `MAXIMUM_SLICE_CHANGED_LINES` (`400` additions + deletions), both in `scripts/split_pr_scripts_constants/config/analyze_constants.py`. A parent inside **both** budgets is already review-sized: `analyze_pr` records a `threshold_note`, emits a single `whole-pr` slice, and `execute_split` refuses the plan until the caller passes `--allow-optional-split`. See [reference/splitting-principles.md](reference/splitting-principles.md) § The initiation stop.
 
 **Refuse (exact line, first match wins):**
 
@@ -93,12 +93,12 @@ Path rules: [reference/path-layers.md](reference/path-layers.md).
 5. **Execute (push + draft PRs) — default after Approve recommended:**  
    `python "${CLAUDE_SKILL_DIR}/scripts/execute_split.py" --plan <plan.json> --push --create-prs --pretty`  
    Supersede of the source PR is **on by default** with `--create-prs` (use `--no-supersede-source` to leave the source open).
-6. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open.
-7. **Verification honesty:** this skill does not run the repo’s full test suite on each slice. Each draft PR body must state that gap (the script’s short body does). Do not claim per-slice CI green unless you ran checks yourself.
-8. **Do not** run `gh pr ready` on split PRs from this skill.
+6. **Optional-split refusal.** `execute_split.py` calls `assert_split_is_advised` before any git work. A plan carrying `threshold_note` — the parent already fits `MAXIMUM_SLICE_FILE_COUNT` and `MAXIMUM_SLICE_CHANGED_LINES`, so `proposed_slices` holds one `whole-pr` slice — raises `plan says the split is optional (<note>); pass --allow-optional-split to execute it anyway`. Recovery: leave the PR whole, or re-run with `--allow-optional-split` when the user insists on the one-slice chain.
+7. On failure, the JSON includes `error` plus `created_slices` / `pr_urls` for slices that already landed — report that partial stack; do not invent recovery pushes. Partial stacks leave the source PR open.
+8. **Verification honesty:** this skill does not run the repo’s full test suite on each slice. Each draft PR body must state that gap (the script’s short body does). Do not claim per-slice CI green unless you ran checks yourself.
+9. **Do not** run `gh pr ready` on split PRs from this skill.
 
-PR body template: [templates/pr-body.md](templates/pr-body.md).  
-Supersede comment template: [templates/supersede-source-body.md](templates/supersede-source-body.md).
+The scripts write both bodies themselves and pass each one to `gh` with `--body-file`; the constants and f-strings in `scripts/` are the source of truth. Read [templates/pr-body.md](templates/pr-body.md) and [templates/supersede-source-body.md](templates/supersede-source-body.md) to see the shape those bodies take. Posting either by hand breaks the supersede idempotency check, which keys off the shipped heading text.
 
 ### Phase 5 — Report
 
@@ -135,11 +135,11 @@ Report the `supersede` object from execute JSON (`commented`, `closed`, `child_p
 | `SKILL.md` | Hub: gotchas, phases, constraints |
 | `CLAUDE.md` | Package map for this skill folder |
 | `reference/task-seeds.md` | Ordered work items to register on the task tool |
-| `reference/splitting-principles.md` | Empathic file-based chain rules |
+| `reference/splitting-principles.md` | Review budgets, the initiation stop, and the default layer chain |
 | `reference/path-layers.md` | Layer catalog and heuristic notes |
 | `reference/proposal-format.md` | AskUserQuestion proposal shape |
-| `templates/pr-body.md` | Draft PR body skeleton |
-| `templates/supersede-source-body.md` | Source-PR supersede comment skeleton |
+| `templates/pr-body.md` | Illustration of the draft PR body `_create_draft_pr` writes |
+| `templates/supersede-source-body.md` | Illustration of the supersede comment `build_supersede_comment_body` writes |
 | `templates/plan.example.json` | Example plan shape |
 | `scripts/analyze_pr.py` | **Execute** — gh PR → plan JSON |
 | `scripts/categorize_files.py` | Library — path → layer, slice builder |
