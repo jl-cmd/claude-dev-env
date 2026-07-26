@@ -9,6 +9,7 @@ the GitHub API, so none of this needs mocking.
 
 import dataclasses
 import io
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -177,15 +178,33 @@ class TestDeriveTypeLabel:
     def should_return_none_for_an_unmapped_conventional_commit_prefix(self) -> None:
         assert pr_labeler_derivation.derive_type_label("wip: pause the installer rewrite") is None
 
+    def should_return_none_for_a_mapped_prefix_that_is_not_at_the_start(self) -> None:
+        assert pr_labeler_derivation.derive_type_label('Revert "feat: add the v2 endpoint"') is None
+
+    def should_reject_a_mapped_prefix_that_is_not_at_the_start_of_the_title(self) -> None:
+        """Pins the `^` anchor directly, independent of `derive_type_label`'s `.match()` call.
+
+        ::
+
+            ok:   pattern with `^`     -> search("Revert \\"feat: ...\\"") finds nothing
+            flag: pattern without `^`  -> search finds "feat:" at index 8
+
+        `derive_type_label` only ever calls `.match()`, which is itself
+        anchored to position 0 regardless of `^` — so this case alone would
+        never catch the anchor going missing. Probing `.search()` directly
+        pins the anchor's own behavior, so a future caller that reaches for
+        `.search()` (a natural choice for scanning a longer commit body) does
+        not silently pick up a mid-string conventional-commit prefix.
+        """
+        assert (
+            pr_labeler_derivation.CONVENTIONAL_COMMIT_PREFIX_PATTERN.search(
+                'Revert "feat: add the v2 endpoint"'
+            )
+            is None
+        )
+
 
 class TestDeriveSizeLabel:
-    THRESHOLDS = pr_labeler_derivation.SizeThresholds(
-        extra_small_max_lines=20,
-        small_max_lines=100,
-        medium_max_lines=500,
-        large_max_lines=1000,
-    )
-
     @pytest.mark.parametrize(
         ("changed_line_count", "expected_size_label"),
         [
@@ -203,7 +222,9 @@ class TestDeriveSizeLabel:
         self, changed_line_count: int, expected_size_label: str
     ) -> None:
         assert (
-            pr_labeler_derivation.derive_size_label(changed_line_count, self.THRESHOLDS)
+            pr_labeler_derivation.derive_size_label(
+                changed_line_count, CLAUDE_DEV_ENV_CONFIG.size_thresholds
+            )
             == expected_size_label
         )
 
@@ -378,6 +399,57 @@ class TestLoadLabelerConfig:
         }
         assert area_label_by_path_prefix["hooks/"] == "area: hooks"
         assert area_label_by_path_prefix[".github/"] == "area: ci"
+
+
+_REPO_ROOT_PATH = _CI_SCRIPTS_DIR.parent.parent
+
+
+def _tracked_file_count_for_prefix(path_prefix: str) -> int:
+    completed_git_ls_files = subprocess.run(
+        ["git", "ls-files", "--", path_prefix],
+        cwd=_REPO_ROOT_PATH,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return len(completed_git_ls_files.stdout.splitlines())
+
+
+class TestAreaMapPrefixesStayLive:
+    """Guards the area map against a dead prefix: one that matches no tracked file.
+
+    Round 3 fixed a dead prefix; nothing guarded against the next one. Every
+    prefix resolves either bare or under the configured strip prefix, since
+    this repo's area map targets paths inside `packages/claude-dev-env/`.
+    """
+
+    def should_resolve_every_configured_prefix_to_at_least_one_tracked_file(self) -> None:
+        for each_mapping in CLAUDE_DEV_ENV_CONFIG.area_mappings:
+            bare_match_count = _tracked_file_count_for_prefix(each_mapping.path_prefix)
+            stripped_match_count = _tracked_file_count_for_prefix(
+                CLAUDE_DEV_ENV_CONFIG.path_prefix_to_strip + each_mapping.path_prefix
+            )
+            assert bare_match_count > 0 or stripped_match_count > 0, each_mapping.path_prefix
+
+    def should_declare_exactly_the_expected_prefix_set(self) -> None:
+        all_declared_prefixes = frozenset(
+            each_mapping.path_prefix for each_mapping in CLAUDE_DEV_ENV_CONFIG.area_mappings
+        )
+        assert all_declared_prefixes == frozenset(
+            {
+                "hooks/",
+                "skills/",
+                "agents/",
+                "commands/",
+                "rules/",
+                "bin/",
+                "scripts/",
+                "_shared/",
+                "docs/",
+                "audit-rubrics/",
+                ".github/",
+            }
+        )
 
 
 class TestLabelPlanPostInit:
@@ -865,6 +937,39 @@ class TestAreaLabelsForPath:
     def should_return_an_empty_list_for_an_unmatched_path(self) -> None:
         assert pr_labeler_derivation.area_labels_for_path("README.md", CLAUDE_DEV_ENV_CONFIG.area_mappings) == []
 
+    def should_preserve_config_declaration_order_for_overlapping_prefixes(self) -> None:
+        """Pins the within-path order the list comprehension guarantees over a set.
+
+        ::
+
+            ok:   config declares docs/, docs/api/, docs/api/v2/,
+                  docs/api/v2/schemas/ in that order
+                  -> ["area: docs", "area: api", "area: v2", "area: schemas"]
+                     every run
+            flag: a set comprehension in area_labels_for_path
+                  -> the four labels come back in a PYTHONHASHSEED-dependent
+                     order
+
+        A two-element fixture only catches this at half of all hash seeds (a
+        two-element set has a coin-flip chance of preserving declaration
+        order by accident). Four overlapping prefixes drop the odds of an
+        accidental pass to 1 in 24 (4!) per seed, so a set-comprehension
+        regression fails reliably rather than flapping. Neither repo's real
+        area map has overlapping top-level prefixes today, so this builds
+        its own config to exercise the case directly.
+        """
+        overlapping_area_mappings = (
+            pr_labeler_derivation.AreaMapping(path_prefix="docs/", area_label="area: docs"),
+            pr_labeler_derivation.AreaMapping(path_prefix="docs/api/", area_label="area: api"),
+            pr_labeler_derivation.AreaMapping(path_prefix="docs/api/v2/", area_label="area: v2"),
+            pr_labeler_derivation.AreaMapping(
+                path_prefix="docs/api/v2/schemas/", area_label="area: schemas"
+            ),
+        )
+        assert pr_labeler_derivation.area_labels_for_path(
+            "docs/api/v2/schemas/x.md", overlapping_area_mappings
+        ) == ["area: docs", "area: api", "area: v2", "area: schemas"]
+
 
 class TestCountAreaLabelMatches:
     def should_count_matches_across_every_changed_path(self) -> None:
@@ -1217,3 +1322,60 @@ class TestTypeLabelMapCoversPrCheckTypes:
     def should_map_every_type_the_pr_title_check_enforces(self) -> None:
         all_pr_check_types = _pr_check_conventional_commit_types()
         assert all_pr_check_types <= pr_labeler_derivation.ALL_TYPE_LABELS_BY_COMMIT_PREFIX.keys()
+
+
+def _pr_labeler_workflow_steps() -> list[dict[str, object]]:
+    pr_labeler_workflow_path = _CI_SCRIPTS_DIR.parent / "workflows" / "pr-labeler.yml"
+    raw_workflow = yaml.safe_load(pr_labeler_workflow_path.read_text(encoding="utf-8"))
+    return raw_workflow["jobs"]["label"]["steps"]
+
+
+def _pr_labeler_step(all_steps: list[dict[str, object]]) -> dict[str, object]:
+    for each_step in all_steps:
+        run_value = each_step.get("run", "")
+        assert isinstance(run_value, str)
+        if "pr_labeler.py" in run_value:
+            return each_step
+    raise AssertionError("no step runs pr_labeler.py")
+
+
+class TestPrLabelerWorkflowContract:
+    """Pins the workflow that actually drives `pr_labeler.py` in production.
+
+    Every `TestMain` case sets the `GITHUB_TOKEN` environment variable
+    through `pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME`, so those
+    tests validate the constant against itself and would stay green even if
+    the constant and the workflow's `env:` key drifted apart. This class
+    reads `pr-labeler.yml` directly instead, so a typo in the workflow's own
+    `GITHUB_TOKEN:` key fails here regardless of what the Python constant says.
+    """
+
+    def should_set_the_configured_token_env_var_in_the_labeler_steps_environment(self) -> None:
+        """Pins both sides of the token name against each other, not a hardcoded literal.
+
+        ::
+
+            ok:   constant == "GITHUB_TOKEN", workflow env has "GITHUB_TOKEN"  -> pass
+            flag: constant renamed to "GH_TOKEN", workflow still sets
+                  "GITHUB_TOKEN"                                              -> fails here
+
+        Asserting a literal `"GITHUB_TOKEN"` only catches a typo on the
+        workflow side. Every labeler run reads the token through
+        `pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME`, so a rename of
+        that constant with no matching workflow update is the failure this
+        finding actually describes, and only comparing the two live sources
+        against each other catches it.
+        """
+        labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
+        assert pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME in labeler_step.get("env", {})
+
+    def should_run_the_labeler_script_at_its_known_repository_path(self) -> None:
+        labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
+        assert ".github/ci/pr_labeler.py" in labeler_step["run"]
+
+    def should_pass_a_config_argument_that_exists_on_disk(self) -> None:
+        labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
+        config_flag_tail = labeler_step["run"].split("--config", 1)[1]
+        configured_config_path_token = config_flag_tail.split()[0]
+        configured_config_path = _CI_SCRIPTS_DIR.parent.parent / configured_config_path_token
+        assert configured_config_path.exists()

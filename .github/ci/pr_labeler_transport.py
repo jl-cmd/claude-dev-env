@@ -198,8 +198,6 @@ def fetch_all_changed_file_paths(
         )
         page_of_files = call_api(url, github_token, "GET", None)
         assert isinstance(page_of_files, list)
-        if not page_of_files:
-            break
         all_changed_file_paths.extend(each_file["filename"] for each_file in page_of_files)
         if len(page_of_files) < PULL_REQUEST_FILES_PAGE_SIZE:
             break
