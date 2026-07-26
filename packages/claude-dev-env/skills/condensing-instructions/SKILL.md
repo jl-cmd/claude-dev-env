@@ -1,81 +1,72 @@
 ---
 name: condensing-instructions
 description: >-
-  Rewrite existing instruction documents or turn first drafts and requirements
-  into compact, high-information operational instructions without changing or
-  inventing their contract. Use for prompts, skills, policies, runbooks,
-  agent-facing documents, reference instructions, token reduction,
-  deduplication, restructuring, or concise instruction authoring.
+  Refine an instruction document for Claude 5 generation models: cut rules the
+  model's judgment already covers, move detail behind progressive disclosure,
+  and route each remaining piece to the system prompt, CLAUDE.md, a skill, or a
+  reference. Use for system prompts, CLAUDE.md files, skills, tool
+  descriptions, agent instructions, context engineering, prompt slimming, and
+  token reduction.
 ---
 
 # Condensing Instructions
 
-Rewrite an existing instruction document or turn a first draft, notes, or requirements into compact operational instructions. Preserve behavior; reduce length only after the contract is complete and unambiguous.
+Cut an instruction document to what a Claude 5 generation model needs, and move the rest to the surface that loads it on demand. Over 80% of Claude Code's system prompt came out for Claude Opus 5 and Claude Fable 5 with no measurable drop in performance, so treat a long instruction document as a place with room to cut.
 
-## Preserve the full contract
+## Clear the conflicts first
 
-Treat every execution-relevant detail as binding: required, prohibited, and permitted behavior; safety and authority boundaries; actors, objects, data or resource kinds, and scope; force, negation, and quantifiers; triggers, defaults, conditions, exceptions, thresholds, and precedence; dependencies, prerequisites, order, timing, duration, persistence, and state; failure and recovery behavior; exact strings, names, paths, URLs, identifiers, commands, flags, numbers, placeholders, schemas, and error text; and input, output, formatting, validation, acceptance, and completion requirements.
+Read the system prompt, the CLAUDE.md, and the skills as one body of text and find the lines that pull against each other — "leave documentation as appropriate" sitting beside "DO NOT add comments". A conflict makes the model deliberate at length before it acts. Resolve each pair into one statement, or delete both when neither changes what the model does.
 
-Keep rationale or examples only when they define a decision, boundary, exception, exact value, or required behavior. Preserve required frontmatter, tags, wrappers, templates, schemas, and other machine-read structure.
+## Trade rules for judgment
 
-When rewriting, change wording and structure, not behavior. When authoring, supply organization, wording, and conventional editorial choices, but do not invent material obligations, permissions, exceptions, or defaults. Ask one concise blocking question when missing, contradictory, or ambiguous information would materially change behavior, safety, authority, scope, precedence, failure handling, or output. Otherwise proceed.
+Delete a rule written to block a worst case, such as file deletion. Claude 5 generation models read the surrounding context and decide well without it, and a rigid rule blocks the user who has a real reason to want the behavior it forbids.
 
-If no instruction material or requirements are provided, respond exactly: `Provide the instructions or draft requirements.`
+State the outcome and the signal the model should read:
 
-## Build a requirement ledger first
+- Cut: "Default to writing no comments. Never write multi-paragraph docstrings or multi-line comment blocks — one short line max. Don't create planning, decision, or analysis documents unless the user asks for them."
+- Keep: "Write code that reads like the surrounding code: match its comment density, naming, and idiom."
 
-Before deleting, merging, or drafting text, record each atomic commitment internally. Capture its force, actor, trigger, action, object or type, required outcome, scope, timing or persistence, dependencies, defaults, exceptions, precedence, failure behavior, and exact literals when applicable.
+## Design the interface in place of examples
 
-For an existing document, inventory every behaviorally meaningful statement. Distinguish true duplicates from similar rules that apply to different actors, stages, conditions, or scopes. For a first draft, translate each stated goal into observable behavior or an acceptance condition; mark material gaps instead of silently choosing an answer. Do not promote a preference to a hard rule or average conflicting rules.
+Examples constrain exploration. Carry usage in the tool's own shape: expressive names, expressive parameters, and types that signal intent. A status parameter enumerated as `pending`, `in_progress`, `completed` shows correct use with no example attached.
 
-Do not expose the ledger unless requested.
+## Load detail at the point of use
 
-## Group rules by the decisions they control
+Move detail out of always-on text and into a surface the model reaches for:
 
-- Group requirements by function or decision point, not by draft order.
-- Default to this sequence when it fits: purpose and scope; inputs and prerequisites; operating defaults; procedures and branches; constraints and safety; outputs and failures; verification. Override it when dependencies require another sequence.
-- Place a safety rule or other constraint before the first action it governs.
-- Within a group, put prerequisites before actions, general rules before narrow exceptions, and production requirements before their checks.
-- Put each exception beside the rule it modifies. State precedence when rules overlap.
-- Give each rule one authoritative location. State a shared actor, condition, default, or scope once at the narrowest level that covers every affected rule.
-- Let a heading carry scope only when every instruction beneath it clearly inherits that scope. Use the fewest headings that preserve navigation.
+- A skill the model calls when the task calls for it. Code review and verification detail belongs here.
+- A linked file the model opens on demand.
+- A tool with deferred loading, where the model searches for the definition before it uses the tool.
 
-## Write direct, dense rules
+Keep the always-on context lean and let the model pull the rest.
 
-- Use active, imperative language and concrete verbs. Put a condition before its action and an exception immediately after its default.
-- Preserve force and quantifiers. Keep `must`, `never`, `only`, `should`, `may`, `all`, `any`, and exact counts distinct.
-- Combine statements only when their actor, force, scope, trigger, timing, persistence, and exceptions align.
-- Replace true repetition with one rule and a compact list of affected cases. Keep separate statements when repetition protects distinct stages, scopes, or failure modes.
-- Use one sentence per decision. Join clauses only when they form one testable rule.
-- Use paragraphs for cohesive rules and lists for parallel obligations, mappings, or branches. Avoid decorative headings and structural ceremony.
-- Remove non-operative background, history, rationale, transition text, conversational framing, restatement, setup narration, and examples. Remove inventories or folder maps that merely describe the document.
-- Use one term for each concept. Define unfamiliar terms at first use. Do not compress complete sentences into fragments, stacked jargon, or vague shorthand.
-- Preserve operational literals character for character, including spelling, case, punctuation, quoting, and placeholders. Preserve whether a list is exhaustive or illustrative; never replace an exact enumeration with `etc.` or a broader category.
+## Say each thing once
 
-## Imply only what cannot change behavior
+Put tool usage guidance in the tool description alone. Delete the copy that repeats it in the system prompt.
 
-Rely on ordinary language competence and document conventions only when every reasonable reader would take the same action. State a detail when omitting it could change permission, safety, actor, object or type, scope, force, trigger, sequence, timing, persistence, precedence, failure behavior, exact output, or acceptance.
+## Let memory carry session facts
 
-Match detail to fragility. Specify exact steps for brittle, high-risk, or order-dependent work. For flexible work, state the required outcome and constraints, then leave the method open.
+Claude's automatic memory captures relevant context and carries it across sessions. Delete hand-written memory notes from CLAUDE.md when memory already holds them.
 
-Never use implication to carry a prohibition, exception, dependency, safety boundary, or exact literal. Do not retain obvious advice that constrains nothing, and do not omit a non-obvious rule because it seems intuitive.
+## Point at rich references
 
-## Pass the quality gate
+Include files as references with @mentions. Prefer a reference the model can read with no ambiguity, in this order:
 
-Run these checks silently:
+1. Code from this or another codebase — the highest fidelity specification available.
+2. A test suite that pins the behavior.
+3. An HTML artifact or a mockup.
+4. A rubric, which lets a verification agent score work against a quality standard.
+5. Prose description or a screenshot.
 
-1. **Coverage:** Map every ledger item to a clause in the finished document.
-2. **Support:** Map every material clause back to a stated or confirmed requirement; remove invented behavior.
-3. **Fidelity:** Compare force, negation, quantifiers, actor, object or type, scope, conditions, exceptions, dependencies, order, timing, persistence, failure behavior, outputs, and protected literals. Nothing may be weakened, broadened, narrowed, contradicted, or altered character for character where exactness matters.
-4. **Boundary behavior:** Test the normal case, each branch and exception, prohibited cases, missing dependencies, failures, and acceptance checks when present. Each case must yield the intended action.
-5. **Clarity:** Resolve ambiguous references, hidden precedence, scattered exceptions, inconsistent terms, and unclear qualifier scope.
-6. **Density:** Delete any sentence that changes no behavior, safety boundary, interpretation, or validation result. Merge remaining text only when the boundary stays equally clear.
-7. **Independent use:** Reconstruct the ledger from only the finished document. It must stand alone without background or unstated context.
+## Route what remains
 
-Do not finish until every check passes. If multiple versions pass, prefer fewer words, fewer sections, and lower lookup cost. Shorter text never compensates for lost behavior or precision.
+| Surface | What belongs there |
+|---|---|
+| System prompt | The product Claude works within and the role it plays. For a custom agent, spend real effort here. |
+| CLAUDE.md | A short line on what the repository is, then the gotchas found inside the codebase. Drop anything the model can read off the file structure. Link to skills for the detail. |
+| Skills | Opinions, knowledge, and practices particular to your team or product, written as a guide the model consults. Split a long skill into several files. Constrain only where it matters. |
+| References | Specs, mockups, and codebases pulled in by @mention. |
 
-## Deliver the requested artifact
+## Deliver
 
-Preserve the requested format and required syntactic envelope. If no format is specified, use the leanest clear Markdown structure.
-
-For text supplied in the conversation, output only the finished instruction document. For file tasks, write only the requested paths: edit an existing file in place, and create a new file only when requested. Report changed paths with a concise behavior summary. Do not include the ledger or process narration unless requested.
+Rewrite the document in place and report what moved to which surface. Offer `claude doctor` as a follow-up pass — it rightsizes skills and CLAUDE.md files against these same rules.
