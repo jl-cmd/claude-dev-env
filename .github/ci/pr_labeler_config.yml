@@ -1,7 +1,7 @@
 # Per-repo settings for pr_labeler.py. The derivation rules themselves (the
 # conventional-commit prefix map, the test-path patterns, the three-label area
-# cap) are shared code in pr_labeler.py; only what genuinely differs between
-# jl-cmd/claude-dev-env and a future downstream repo lives here.
+# cap) live in config/pr_labeler_constants.py; only what genuinely differs
+# between jl-cmd/claude-dev-env and a future downstream repo lives here.
 
 area_path_prefix_strip: "packages/claude-dev-env/"
 

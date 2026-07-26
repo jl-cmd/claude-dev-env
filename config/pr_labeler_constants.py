@@ -53,7 +53,7 @@ ALL_HUMAN_MANAGED_STATUS_LABELS: frozenset[str] = frozenset(
 )
 
 STACKED_LABEL: str = "stacked"
-ALL_DEFAULT_BASE_BRANCH_NAMES: frozenset[str] = frozenset({"main", "master"})
+DEFAULT_BRANCH_NAME_FALLBACK: str = "main"
 
 TESTS_AREA_LABEL: str = "area: tests"
 MAXIMUM_AREA_LABELS: int = 3
@@ -63,7 +63,9 @@ ALL_TEST_PATH_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(^|/)test_"),
     re.compile(r"_test\.py$"),
     re.compile(r"\.test\.mjs$"),
+    re.compile(r"\.spec\."),
 )
 
-LABEL_DIFF_REPORT_LINE_SEPARATOR: str = "\n"
+HTTP_STATUS_NOT_FOUND: int = 404
 GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME: str = "GITHUB_TOKEN"
+FAILURE_DETAIL_JOIN_SEPARATOR: str = "; "

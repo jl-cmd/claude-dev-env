@@ -25,7 +25,6 @@ if _repo_root_path not in sys.path:
 
 from config.pr_labeler_constants import (
     ALL_AUTOMATED_STATUS_LABELS,
-    ALL_DEFAULT_BASE_BRANCH_NAMES,
     ALL_HUMAN_MANAGED_STATUS_LABELS,
     ALL_SIZE_LABELS,
     ALL_TEST_PATH_PATTERNS,
@@ -43,13 +42,6 @@ from config.pr_labeler_constants import (
     STATUS_LABEL_NEEDS_REVIEW,
     TESTS_AREA_LABEL,
 )
-
-__all__ = [
-    "ALL_AUTOMATED_STATUS_LABELS",
-    "ALL_SIZE_LABELS",
-    "ALL_TYPE_LABELS",
-    "TESTS_AREA_LABEL",
-]
 
 
 @dataclass(frozen=True)
@@ -78,6 +70,7 @@ class PullRequestSnapshot:
     title: str
     is_draft: bool
     base_branch_name: str
+    default_branch_name: str
     changed_line_count: int
     changed_file_paths: tuple[str, ...]
     current_labels: frozenset[str]
@@ -85,8 +78,69 @@ class PullRequestSnapshot:
 
 @dataclass(frozen=True)
 class LabelPlan:
+    """An axis's desired labels and the labels it may remove to reach them.
+
+    ::
+
+        ok:   from_derivation(None, all_vocabulary_labels)
+              -> (frozenset(), frozenset())
+        ok:   from_derivation(frozenset({"x"}), all_vocabulary_labels)
+              -> (frozenset({"x"}), all_vocabulary_labels)
+        flag: from_derivation(frozenset(), all_vocabulary_labels)
+              -> (frozenset(), all_vocabulary_labels, should_clear_stale_labels=True)
+
+    `desired_labels=frozenset()` paired with a non-empty `removable_labels`
+    means an axis derived a real signal of "no label."
+
+    Only the stacked axis legitimately derives that signal (a PR whose base
+    becomes main clears `stacked`). Every other empty-desired axis means
+    "undeliverable," which must pair with an empty `removable_labels` so
+    nothing gets touched.
+
+    `__post_init__` rejects the ambiguous shape unless `should_clear_stale_labels`
+    says a real derivation produced it on purpose. `from_derivation` always
+    constructs through `cls(...)`, so `__post_init__` runs on every axis
+    plan, not only on ones built by hand.
+    """
+
     desired_labels: frozenset[str]
     removable_labels: frozenset[str]
+    should_clear_stale_labels: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.desired_labels and self.removable_labels and not self.should_clear_stale_labels:
+            raise ValueError(
+                "LabelPlan with empty desired_labels must also have empty "
+                "removable_labels; build through LabelPlan.from_derivation "
+                "for the legitimate stacked-axis exception"
+            )
+
+    @classmethod
+    def from_derivation(
+        cls, all_derived_labels: frozenset[str] | None, all_vocabulary_labels: frozenset[str]
+    ) -> "LabelPlan":
+        """Build a plan from a derivation result, telling "no signal" apart from "empty signal".
+
+        Args:
+            all_derived_labels: The axis's derived labels, or None when the
+                axis could not derive anything at all (no conventional-commit
+                prefix, no matched area, a human status label already present).
+            all_vocabulary_labels: Every label this axis may remove once it
+                has derived a real signal.
+
+        Returns:
+            An untouchable empty plan for `all_derived_labels=None`, or a plan
+            desiring `all_derived_labels` (which may itself be empty, as the
+            stacked axis needs) and able to remove anything in
+            `all_vocabulary_labels`.
+        """
+        if all_derived_labels is None:
+            return cls(desired_labels=frozenset(), removable_labels=frozenset())
+        return cls(
+            desired_labels=all_derived_labels,
+            removable_labels=all_vocabulary_labels,
+            should_clear_stale_labels=True,
+        )
 
 
 @dataclass(frozen=True)
@@ -144,8 +198,23 @@ def has_human_managed_status_label(all_current_labels: frozenset[str]) -> bool:
     return bool(all_current_labels & ALL_HUMAN_MANAGED_STATUS_LABELS)
 
 
-def derive_stacked_label(base_branch_name: str) -> str | None:
-    if base_branch_name in ALL_DEFAULT_BASE_BRANCH_NAMES:
+def derive_stacked_label(base_branch_name: str, default_branch_name: str) -> str | None:
+    """Return the `stacked` label when a PR targets a branch other than the repo's own default.
+
+    ::
+
+        ok:   base="split/601/x", default="main"  -> "stacked"
+        flag: base="develop", default="develop"   -> None (this repo's own default)
+
+    Args:
+        base_branch_name: The pull request's base branch.
+        default_branch_name: The repository's own default branch, read from
+            the API response rather than guessed from a fixed name set.
+
+    Returns:
+        `STACKED_LABEL` when the base is not the repo's default branch, else None.
+    """
+    if base_branch_name == default_branch_name:
         return None
     return STACKED_LABEL
 
@@ -162,42 +231,52 @@ def strip_configured_path_prefix(changed_file_path: str, path_prefix_to_strip: s
 
 def area_labels_for_path(
     stripped_path: str, all_area_mappings: tuple[AreaMapping, ...]
-) -> set[str]:
-    """Every area-map entry whose prefix matches, plus the tests label for a test-shaped path.
+) -> list[str]:
+    """Every area-map entry whose prefix matches, in config order, plus the tests label.
+
+    Returning a list in the config's own declared order (rather than an
+    unordered set) keeps a path's contribution deterministic: two labels a
+    path contributes always insert into a count map in the same order, so a
+    tie between them always breaks the same way regardless of PYTHONHASHSEED.
 
     Args:
         stripped_path: The changed-file path with the repo's configured prefix removed.
         all_area_mappings: The area-map entries to match the path's prefix against.
 
     Returns:
-        The set of area labels the path contributes to.
+        The area labels the path contributes to, in config declaration
+        order, with the tests label appended last for a test-shaped path.
     """
-    matched_area_labels = {
+    matched_area_labels = [
         each_mapping.area_label
         for each_mapping in all_area_mappings
         if stripped_path.startswith(each_mapping.path_prefix)
-    }
-    if matches_test_path(stripped_path):
-        matched_area_labels.add(TESTS_AREA_LABEL)
+    ]
+    if matches_test_path(stripped_path) and TESTS_AREA_LABEL not in matched_area_labels:
+        matched_area_labels.append(TESTS_AREA_LABEL)
     return matched_area_labels
 
 
 def count_area_label_matches(
     all_changed_file_paths: Sequence[str], config: LabelerConfig
-) -> tuple[dict[str, int], dict[str, int]]:
-    """Count area-label matches across every changed path, and record first appearance.
+) -> dict[str, int]:
+    """Count area-label matches across every changed path.
+
+    Every path contributes its labels in a fixed, deterministic order (see
+    `area_labels_for_path`). The match count's insertion order is itself
+    deterministic as a result. A later stable sort over `-count` alone is
+    enough to break ties by first appearance, with no separate first-seen
+    tracking needed.
 
     Args:
         all_changed_file_paths: Every path the pull request changed.
         config: The area map and path-prefix settings to match against.
 
     Returns:
-        A pair of maps keyed by area label: match count, and the index of the
-        first changed path that matched it.
+        A map from area label to how many changed paths matched it.
     """
     match_count_by_area_label: dict[str, int] = {}
-    first_seen_index_by_area_label: dict[str, int] = {}
-    for each_file_index, each_changed_file_path in enumerate(all_changed_file_paths):
+    for each_changed_file_path in all_changed_file_paths:
         stripped_path = strip_configured_path_prefix(
             each_changed_file_path, config.path_prefix_to_strip
         )
@@ -205,8 +284,7 @@ def count_area_label_matches(
             match_count_by_area_label[each_area_label] = (
                 match_count_by_area_label.get(each_area_label, 0) + 1
             )
-            first_seen_index_by_area_label.setdefault(each_area_label, each_file_index)
-    return match_count_by_area_label, first_seen_index_by_area_label
+    return match_count_by_area_label
 
 
 def derive_area_labels(all_changed_file_paths: Sequence[str], config: LabelerConfig) -> list[str]:
@@ -219,15 +297,9 @@ def derive_area_labels(all_changed_file_paths: Sequence[str], config: LabelerCon
     Returns:
         The ranked area labels, capped at the configured maximum.
     """
-    match_count_by_area_label, first_seen_index_by_area_label = count_area_label_matches(
-        all_changed_file_paths, config
-    )
+    match_count_by_area_label = count_area_label_matches(all_changed_file_paths, config)
     ranked_area_labels = sorted(
-        match_count_by_area_label,
-        key=lambda each_label: (
-            -match_count_by_area_label[each_label],
-            first_seen_index_by_area_label[each_label],
-        ),
+        match_count_by_area_label, key=lambda each_label: -match_count_by_area_label[each_label]
     )
     return ranked_area_labels[:MAXIMUM_AREA_LABELS]
 
@@ -252,14 +324,13 @@ def build_type_label_plan(pull_request_title: str) -> LabelPlan:
         plan when the title has no derivable prefix.
     """
     maybe_type_label = derive_type_label(pull_request_title)
-    if maybe_type_label is None:
-        return LabelPlan(desired_labels=frozenset(), removable_labels=frozenset())
-    return LabelPlan(desired_labels=frozenset({maybe_type_label}), removable_labels=ALL_TYPE_LABELS)
+    derived_type_labels = frozenset({maybe_type_label}) if maybe_type_label is not None else None
+    return LabelPlan.from_derivation(derived_type_labels, ALL_TYPE_LABELS)
 
 
 def build_size_label_plan(changed_line_count: int, size_thresholds: SizeThresholds) -> LabelPlan:
     size_label = derive_size_label(changed_line_count, size_thresholds)
-    return LabelPlan(desired_labels=frozenset({size_label}), removable_labels=ALL_SIZE_LABELS)
+    return LabelPlan.from_derivation(frozenset({size_label}), ALL_SIZE_LABELS)
 
 
 def build_status_label_plan(
@@ -276,11 +347,9 @@ def build_status_label_plan(
         status label (changes-requested, needs-rebase, ready-to-merge) is set.
     """
     if has_human_managed_status_label(all_current_labels):
-        return LabelPlan(desired_labels=frozenset(), removable_labels=frozenset())
+        return LabelPlan.from_derivation(None, ALL_AUTOMATED_STATUS_LABELS)
     status_label = derive_status_label(is_pull_request_draft)
-    return LabelPlan(
-        desired_labels=frozenset({status_label}), removable_labels=ALL_AUTOMATED_STATUS_LABELS
-    )
+    return LabelPlan.from_derivation(frozenset({status_label}), ALL_AUTOMATED_STATUS_LABELS)
 
 
 def build_area_label_plan(all_changed_file_paths: Sequence[str], config: LabelerConfig) -> LabelPlan:
@@ -300,17 +369,37 @@ def build_area_label_plan(all_changed_file_paths: Sequence[str], config: Labeler
         when no changed path matches any configured area.
     """
     area_labels = derive_area_labels(all_changed_file_paths, config)
-    if not area_labels:
-        return LabelPlan(desired_labels=frozenset(), removable_labels=frozenset())
-    return LabelPlan(
-        desired_labels=frozenset(area_labels), removable_labels=area_label_universe(config)
-    )
+    derived_area_labels = frozenset(area_labels) if area_labels else None
+    return LabelPlan.from_derivation(derived_area_labels, area_label_universe(config))
 
 
-def build_stacked_label_plan(base_branch_name: str) -> LabelPlan:
-    maybe_stacked_label = derive_stacked_label(base_branch_name)
-    desired_labels = frozenset({maybe_stacked_label}) if maybe_stacked_label else frozenset()
-    return LabelPlan(desired_labels=desired_labels, removable_labels=frozenset({STACKED_LABEL}))
+def build_stacked_label_plan(base_branch_name: str, default_branch_name: str) -> LabelPlan:
+    """Build the stacked axis's plan: it always derives, so it always clears a stale label.
+
+    ::
+
+        ok:   base="split/601/x", default="main"  -> desires {"stacked"}
+        ok:   base="main", default="main"          -> desires {} but still
+                                                       clears a stale "stacked"
+
+    Unlike the other axes, `stacked` always has an opinion. A PR either
+    targets the repo's own default branch (no signal to add, but the label
+    must still clear if present) or it does not (the label belongs). This is
+    the one axis where `desired_labels=frozenset()` legitimately pairs with a
+    non-empty `removable_labels`, which is why it routes through
+    `LabelPlan.from_derivation` with a derived value that is never None.
+
+    Args:
+        base_branch_name: The pull request's base branch.
+        default_branch_name: The repository's own default branch.
+
+    Returns:
+        A plan desiring `stacked` for a non-default base, or a plan
+        desiring nothing but still able to clear a stale `stacked` label.
+    """
+    maybe_stacked_label = derive_stacked_label(base_branch_name, default_branch_name)
+    derived_stacked_labels = frozenset({maybe_stacked_label}) if maybe_stacked_label else frozenset()
+    return LabelPlan.from_derivation(derived_stacked_labels, frozenset({STACKED_LABEL}))
 
 
 def diff_from_label_plans(
@@ -360,7 +449,7 @@ def compute_label_diff(snapshot: PullRequestSnapshot, config: LabelerConfig) -> 
         build_size_label_plan(snapshot.changed_line_count, config.size_thresholds),
         build_status_label_plan(snapshot.is_draft, snapshot.current_labels),
         build_area_label_plan(snapshot.changed_file_paths, config),
-        build_stacked_label_plan(snapshot.base_branch_name),
+        build_stacked_label_plan(snapshot.base_branch_name, snapshot.default_branch_name),
     ]
     return diff_from_label_plans(snapshot.current_labels, all_label_plans)
 

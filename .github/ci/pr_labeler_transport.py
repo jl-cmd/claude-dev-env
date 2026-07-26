@@ -15,6 +15,7 @@ inject a recording fake in tests without touching the network.
 
 import json
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -25,16 +26,15 @@ _repo_root_path = str(Path(__file__).resolve().parents[2])
 if _repo_root_path not in sys.path:
     sys.path.insert(0, _repo_root_path)
 
-_ci_scripts_dir_path = str(Path(__file__).resolve().parent)
-if _ci_scripts_dir_path not in sys.path:
-    sys.path.insert(0, _ci_scripts_dir_path)
-
 from pr_labeler_derivation import LabelDiff, PullRequestSnapshot, coerce_to_int
 
 from config.pr_labeler_constants import (
+    DEFAULT_BRANCH_NAME_FALLBACK,
+    FAILURE_DETAIL_JOIN_SEPARATOR,
     GITHUB_API_BASE_URL,
     GITHUB_API_REQUEST_TIMEOUT_SECONDS,
     GITHUB_API_VERSION_HEADER,
+    HTTP_STATUS_NOT_FOUND,
     ISSUE_LABEL_DELETE_URL_TEMPLATE,
     ISSUE_LABELS_URL_TEMPLATE,
     PULL_REQUEST_DETAIL_URL_TEMPLATE,
@@ -42,7 +42,26 @@ from config.pr_labeler_constants import (
     PULL_REQUEST_FILES_PAGE_URL_TEMPLATE,
 )
 
-__all__ = ["PULL_REQUEST_FILES_PAGE_SIZE"]
+
+class GitHubApiError(Exception):
+    """A GitHub API request failed with a non-2xx HTTP status.
+
+    ::
+
+        ok:   404 on a label DELETE   -> caller may treat it as already-removed
+        flag: 403 on a GET or POST    -> caller should surface the failure
+
+    Args:
+        status_code: The HTTP status code the API returned.
+        failure_detail_text: The raw response body text, for diagnostics.
+    """
+
+    def __init__(self, status_code: int, failure_detail_text: str) -> None:
+        super().__init__(
+            f"GitHub API request failed with status {status_code}: {failure_detail_text}"
+        )
+        self.status_code = status_code
+        self.failure_detail_text = failure_detail_text
 
 
 def build_github_api_request(
@@ -107,10 +126,18 @@ def call_github_api(
 
     Returns:
         The parsed JSON body, or None when the response body is empty.
+
+    Raises:
+        GitHubApiError: The API returned a non-2xx status, carrying the
+            status code and response body for the caller to inspect.
     """
     api_request = build_github_api_request(url, github_token, http_method, json_payload)
-    with open_url(api_request) as api_connection:
-        payload_bytes = api_connection.read()
+    try:
+        with open_url(api_request) as api_connection:
+            payload_bytes = api_connection.read()
+    except urllib.error.HTTPError as http_error:
+        failure_detail_text = http_error.read().decode("utf-8", errors="replace")
+        raise GitHubApiError(http_error.code, failure_detail_text) from http_error
     if not payload_bytes:
         return None
     return json.loads(payload_bytes.decode("utf-8"))
@@ -186,6 +213,27 @@ def extract_current_labels(all_pull_request_detail: dict[str, object]) -> frozen
     return frozenset(each_label["name"] for each_label in raw_labels)
 
 
+def default_branch_name_from_base_ref(all_base_ref_fields: dict[str, object]) -> str:
+    """Read the repo's default branch from `base.repo.default_branch`.
+
+    ::
+
+        ok:   base={"repo": {"default_branch": "develop"}}  -> "develop"
+        flag: base={"repo": {}} (field missing)              -> "main" (fallback)
+
+    Args:
+        all_base_ref_fields: The `base` object from a pull-request-detail response.
+
+    Returns:
+        The repository's default branch name, or the fallback when the
+        field or its enclosing `repo` object is missing.
+    """
+    base_repo_info = all_base_ref_fields.get("repo")
+    if not isinstance(base_repo_info, dict):
+        return DEFAULT_BRANCH_NAME_FALLBACK
+    return str(base_repo_info.get("default_branch", DEFAULT_BRANCH_NAME_FALLBACK))
+
+
 def build_pull_request_snapshot(
     all_pull_request_detail: dict[str, object], all_changed_file_paths: tuple[str, ...]
 ) -> PullRequestSnapshot:
@@ -198,12 +246,13 @@ def build_pull_request_snapshot(
     Returns:
         The `PullRequestSnapshot` `compute_label_diff` derives labels from.
     """
-    base_ref_info = all_pull_request_detail["base"]
-    assert isinstance(base_ref_info, dict)
+    all_base_ref_fields = all_pull_request_detail["base"]
+    assert isinstance(all_base_ref_fields, dict)
     return PullRequestSnapshot(
         title=str(all_pull_request_detail["title"]),
         is_draft=bool(all_pull_request_detail["draft"]),
-        base_branch_name=str(base_ref_info["ref"]),
+        base_branch_name=str(all_base_ref_fields["ref"]),
+        default_branch_name=default_branch_name_from_base_ref(all_base_ref_fields),
         changed_line_count=coerce_to_int(all_pull_request_detail["additions"])
         + coerce_to_int(all_pull_request_detail["deletions"]),
         changed_file_paths=all_changed_file_paths,
@@ -300,17 +349,39 @@ def apply_label_diff(
 ) -> None:
     """Add every label the diff wants, then remove every label the diff drops.
 
+    Each removal is guarded on its own: a 404 means the label is already
+    gone (another run beat this one to it), so that one label is skipped
+    and every other removal is still attempted. Any other failure is
+    collected and re-raised once the loop finishes, so one bad label never
+    strands the rest of the removals behind it.
+
     Args:
         repository: The `owner/name` repository slug.
         pull_request_number: The pull request number.
         github_token: The bearer token for the Authorization header.
         label_diff: The labels to add and the labels to remove.
         call_api: The GitHub API transport, overridable for tests.
+
+    Raises:
+        GitHubApiError: At least one removal failed with a status other
+            than 404, after every removal was attempted.
     """
     add_labels_to_pull_request(
         repository, pull_request_number, github_token, label_diff.labels_to_add, call_api
     )
+    all_removal_errors: list[GitHubApiError] = []
     for each_label_name in sorted(label_diff.labels_to_remove):
-        remove_label_from_pull_request(
-            repository, pull_request_number, github_token, each_label_name, call_api
+        try:
+            remove_label_from_pull_request(
+                repository, pull_request_number, github_token, each_label_name, call_api
+            )
+        except GitHubApiError as removal_error:
+            if removal_error.status_code == HTTP_STATUS_NOT_FOUND:
+                continue
+            all_removal_errors.append(removal_error)
+    if all_removal_errors:
+        combined_failure_detail_text = FAILURE_DETAIL_JOIN_SEPARATOR.join(
+            f"{each_error.status_code}: {each_error.failure_detail_text}"
+            for each_error in all_removal_errors
         )
+        raise GitHubApiError(all_removal_errors[0].status_code, combined_failure_detail_text)

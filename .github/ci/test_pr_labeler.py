@@ -8,10 +8,17 @@ the GitHub API, so none of this needs mocking.
 """
 
 import dataclasses
+import io
 import sys
+import urllib.error
+import urllib.parse
 from collections.abc import Sequence
+from email.message import Message
 from pathlib import Path
-from typing import Self
+from typing import ClassVar, Self
+
+import pytest
+import yaml
 
 _CI_SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_CI_SCRIPTS_DIR) not in sys.path:
@@ -23,6 +30,22 @@ import pr_labeler_transport
 
 CLAUDE_DEV_ENV_CONFIG_PATH = _CI_SCRIPTS_DIR / "pr_labeler_config.yml"
 CLAUDE_DEV_ENV_CONFIG = pr_labeler_derivation.load_labeler_config(CLAUDE_DEV_ENV_CONFIG_PATH)
+
+TDD_ENFORCER_SNAPSHOT = pr_labeler_derivation.PullRequestSnapshot(
+    title="fix(tdd-enforcer): count a split test family for any module",
+    is_draft=True,
+    base_branch_name="main",
+    default_branch_name="main",
+    changed_line_count=115 + 11,
+    changed_file_paths=(
+        "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
+        "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/config/tdd_enforcer_constants.py",
+        "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/tests/test_candidate_paths.py",
+    ),
+    current_labels=frozenset(
+        {"type: bug", "status: draft", "size: M", "area: hooks", "area: tests", "P1"}
+    ),
+)
 
 
 class RecordingApiCaller:
@@ -43,6 +66,39 @@ class RecordingApiCaller:
         if not self.remaining_responses:
             return None
         return self.remaining_responses.pop(0)
+
+
+class RaisingApiCaller:
+    """A GitHubApiCaller stand-in: raises a typed API error on every call it receives."""
+
+    def __init__(self, status_code: int, response_body: str) -> None:
+        self.status_code = status_code
+        self.response_body = response_body
+
+    def __call__(
+        self, url: str, github_token: str, http_method: str, json_payload: object
+    ) -> object:
+        raise pr_labeler_transport.GitHubApiError(self.status_code, self.response_body)
+
+
+class FlakyRemovalApiCaller:
+    """A GitHubApiCaller stand-in whose DELETE calls fail for a chosen subset of labels."""
+
+    def __init__(self, failing_status_code_by_label_name: dict[str, int]) -> None:
+        self.failing_status_code_by_label_name = failing_status_code_by_label_name
+        self.all_recorded_calls: list[tuple[str, str, str, object]] = []
+
+    def __call__(
+        self, url: str, github_token: str, http_method: str, json_payload: object
+    ) -> object:
+        self.all_recorded_calls.append((url, github_token, http_method, json_payload))
+        if http_method != "DELETE":
+            return None
+        for each_label_name, each_status_code in self.failing_status_code_by_label_name.items():
+            encoded_label_name = urllib.parse.quote(each_label_name, safe="")
+            if encoded_label_name in url:
+                raise pr_labeler_transport.GitHubApiError(each_status_code, "removal failed")
+        return None
 
 
 class FakeUrlOpener:
@@ -66,55 +122,60 @@ class FakeUrlOpener:
         return None
 
 
+class FakeUrlOpenerThatRaisesHttpError:
+    """A Callable[[Request], ReadableHttpResponse] stand-in that always raises HTTPError."""
+
+    def __init__(self, status_code: int, response_body_bytes: bytes) -> None:
+        self.status_code = status_code
+        self.response_body_bytes = response_body_bytes
+
+    def __call__(self, api_request: object) -> pr_labeler_transport.GithubApiConnection:
+        raise urllib.error.HTTPError(
+            url="https://api.github.com/repos/jl-cmd/claude-dev-env/pulls/679",
+            code=self.status_code,
+            msg="Forbidden",
+            hdrs=Message(),
+            fp=io.BytesIO(self.response_body_bytes),
+        )
+
+
 class TestDeriveTypeLabel:
-    def should_map_feat_prefix_to_feature_label(self) -> None:
-        title = "feat(split-pr): fail a plan whose slice prefix is not closed under references"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: feature"
-
-    def should_map_fix_prefix_to_bug_label(self) -> None:
-        title = "fix(install): move stale skill files aside instead of leaving them installed"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: bug"
-
-    def should_map_docs_prefix_to_docs_label(self) -> None:
-        assert pr_labeler_derivation.derive_type_label("docs(rules): add state-what-is rule") == "type: docs"
-
-    def should_map_refactor_prefix_to_refactor_label(self) -> None:
-        title = "refactor(skills): move package-root _shared under skills/"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: refactor"
-
-    def should_map_style_prefix_to_refactor_label(self) -> None:
-        title = "style(hooks): apply ruff formatting across blocking hooks"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: refactor"
-
-    def should_map_test_prefix_to_test_label(self) -> None:
-        title = "test(split-pr): paired script and supersede coverage"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: test"
-
-    def should_map_ci_prefix_to_ci_label(self) -> None:
-        title = "ci: path-filter Python and JS suites on pull requests"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: ci"
-
-    def should_map_build_prefix_to_ci_label(self) -> None:
-        assert pr_labeler_derivation.derive_type_label("build(deps): bump esbuild to 0.24.2") == "type: ci"
-
-    def should_map_chore_prefix_to_chore_label(self) -> None:
-        title = "chore(labels): add label file, sync workflow, and template label names"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: chore"
-
-    def should_map_revert_prefix_to_chore_label(self) -> None:
-        title = "revert: undo accidental merges API merge of #286 into main"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: chore"
-
-    def should_map_perf_prefix_to_perf_label(self) -> None:
-        title = "perf(code_rules_gate): batch blob reads with git cat-file --batch"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: perf"
-
-    def should_match_a_scoped_breaking_change_title(self) -> None:
-        title = "feat(api)!: drop the legacy v1 endpoint"
-        assert pr_labeler_derivation.derive_type_label(title) == "type: feature"
+    @pytest.mark.parametrize(
+        ("pull_request_title", "expected_type_label"),
+        [
+            (
+                "feat(split-pr): fail a plan whose slice prefix is not closed under references",
+                "type: feature",
+            ),
+            (
+                "fix(install): move stale skill files aside instead of leaving them installed",
+                "type: bug",
+            ),
+            ("docs(rules): add state-what-is rule", "type: docs"),
+            ("refactor(skills): move package-root _shared under skills/", "type: refactor"),
+            ("style(hooks): apply ruff formatting across blocking hooks", "type: refactor"),
+            ("test(split-pr): paired script and supersede coverage", "type: test"),
+            ("ci: path-filter Python and JS suites on pull requests", "type: ci"),
+            ("build(deps): bump esbuild to 0.24.2", "type: ci"),
+            (
+                "chore(labels): add label file, sync workflow, and template label names",
+                "type: chore",
+            ),
+            ("revert: undo accidental merges API merge of #286 into main", "type: chore"),
+            ("perf(code_rules_gate): batch blob reads with git cat-file --batch", "type: perf"),
+            ("feat(api)!: drop the legacy v1 endpoint", "type: feature"),
+        ],
+    )
+    def should_map_conventional_commit_prefix_to_type_label(
+        self, pull_request_title: str, expected_type_label: str
+    ) -> None:
+        assert pr_labeler_derivation.derive_type_label(pull_request_title) == expected_type_label
 
     def should_return_none_for_an_unparseable_title(self) -> None:
         assert pr_labeler_derivation.derive_type_label("Update xhigh.md") is None
+
+    def should_return_none_for_an_unmapped_conventional_commit_prefix(self) -> None:
+        assert pr_labeler_derivation.derive_type_label("wip: pause the installer rewrite") is None
 
 
 class TestDeriveSizeLabel:
@@ -125,29 +186,26 @@ class TestDeriveSizeLabel:
         large_max_lines=1000,
     )
 
-    def should_label_twenty_lines_as_extra_small(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(20, self.THRESHOLDS) == "size: XS"
-
-    def should_label_twenty_one_lines_as_small(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(21, self.THRESHOLDS) == "size: S"
-
-    def should_label_one_hundred_lines_as_small(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(100, self.THRESHOLDS) == "size: S"
-
-    def should_label_one_hundred_one_lines_as_medium(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(101, self.THRESHOLDS) == "size: M"
-
-    def should_label_five_hundred_lines_as_medium(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(500, self.THRESHOLDS) == "size: M"
-
-    def should_label_five_hundred_one_lines_as_large(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(501, self.THRESHOLDS) == "size: L"
-
-    def should_label_one_thousand_lines_as_large(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(1000, self.THRESHOLDS) == "size: L"
-
-    def should_label_one_thousand_one_lines_as_extra_large(self) -> None:
-        assert pr_labeler_derivation.derive_size_label(1001, self.THRESHOLDS) == "size: XL"
+    @pytest.mark.parametrize(
+        ("changed_line_count", "expected_size_label"),
+        [
+            (20, "size: XS"),
+            (21, "size: S"),
+            (100, "size: S"),
+            (101, "size: M"),
+            (500, "size: M"),
+            (501, "size: L"),
+            (1000, "size: L"),
+            (1001, "size: XL"),
+        ],
+    )
+    def should_label_lines_at_each_threshold_boundary(
+        self, changed_line_count: int, expected_size_label: str
+    ) -> None:
+        assert (
+            pr_labeler_derivation.derive_size_label(changed_line_count, self.THRESHOLDS)
+            == expected_size_label
+        )
 
 
 class TestDeriveStatusLabel:
@@ -159,20 +217,22 @@ class TestDeriveStatusLabel:
 
 
 class TestHasHumanManagedStatusLabel:
-    def should_detect_changes_requested_label(self) -> None:
-        current_labels = frozenset({"status: changes-requested"})
-        assert pr_labeler_derivation.has_human_managed_status_label(current_labels)
-
-    def should_detect_needs_rebase_label(self) -> None:
-        current_labels = frozenset({"status: needs-rebase"})
-        assert pr_labeler_derivation.has_human_managed_status_label(current_labels)
-
-    def should_detect_ready_to_merge_label(self) -> None:
-        current_labels = frozenset({"status: ready-to-merge"})
-        assert pr_labeler_derivation.has_human_managed_status_label(current_labels)
-
-    def should_not_detect_an_automated_status_label(self) -> None:
-        assert not pr_labeler_derivation.has_human_managed_status_label(frozenset({"status: draft"}))
+    @pytest.mark.parametrize(
+        ("current_labels", "expected_has_human_managed_status_label"),
+        [
+            (frozenset({"status: changes-requested"}), True),
+            (frozenset({"status: needs-rebase"}), True),
+            (frozenset({"status: ready-to-merge"}), True),
+            (frozenset({"status: draft"}), False),
+        ],
+    )
+    def should_detect_whether_a_human_managed_status_label_is_present(
+        self, current_labels: frozenset[str], expected_has_human_managed_status_label: bool
+    ) -> None:
+        assert (
+            pr_labeler_derivation.has_human_managed_status_label(current_labels)
+            == expected_has_human_managed_status_label
+        )
 
 
 class TestBuildStatusLabelPlan:
@@ -189,20 +249,24 @@ class TestBuildStatusLabelPlan:
 
 
 class TestMatchesTestPath:
-    def should_match_a_tests_directory_segment(self) -> None:
-        assert pr_labeler_derivation.matches_test_path("hooks/blocking/tdd_enforcer_parts/tests/foo.py")
-
-    def should_match_a_test_underscore_prefix(self) -> None:
-        assert pr_labeler_derivation.matches_test_path("hooks/blocking/test_pre_tool_use_dispatcher.py")
-
-    def should_match_a_test_underscore_suffix(self) -> None:
-        assert pr_labeler_derivation.matches_test_path("skills/split-pr/scripts/verify_plan_test.py")
-
-    def should_match_a_dot_test_mjs_suffix(self) -> None:
-        assert pr_labeler_derivation.matches_test_path("skills/theme-icon-set/scripts/palette.test.mjs")
-
-    def should_not_match_an_unrelated_production_path(self) -> None:
-        assert not pr_labeler_derivation.matches_test_path("hooks/blocking/pre_tool_use_dispatcher.py")
+    @pytest.mark.parametrize(
+        ("changed_file_path", "expected_matches_test_path"),
+        [
+            ("hooks/blocking/tdd_enforcer_parts/tests/foo.py", True),
+            ("hooks/blocking/test_pre_tool_use_dispatcher.py", True),
+            ("skills/split-pr/scripts/verify_plan_test.py", True),
+            ("skills/theme-icon-set/scripts/palette.test.mjs", True),
+            ("skills/theme-icon-set/scripts/palette.spec.mjs", True),
+            ("hooks/blocking/pre_tool_use_dispatcher.py", False),
+        ],
+    )
+    def should_match_test_shaped_paths_only(
+        self, changed_file_path: str, expected_matches_test_path: bool
+    ) -> None:
+        assert (
+            pr_labeler_derivation.matches_test_path(changed_file_path)
+            == expected_matches_test_path
+        )
 
 
 class TestDeriveAreaLabels:
@@ -253,19 +317,51 @@ class TestDeriveAreaLabels:
             "area: agents",
         ]
 
+    def should_break_a_four_way_tie_deterministically_at_the_cap(self) -> None:
+        """Pins the A1 regression: a same-count tie must not flap across PYTHONHASHSEED.
+
+        ::
+
+            ok:   skills, rules, hooks each match once; hooks also matches tests
+                  -> ["area: skills", "area: rules", "area: hooks"] every run
+            flag: an unordered set feeding the count map could let the third
+                  slot flip between "area: hooks" and "area: tests" run to run
+
+        Four labels match this snapshot (skills, rules, hooks, tests), all
+        tied at one match each, and the 3-label cap must drop exactly one of
+        them — always the same one, regardless of PYTHONHASHSEED.
+        """
+        changed_paths = [
+            "packages/claude-dev-env/skills/x.md",
+            "packages/claude-dev-env/rules/y.md",
+            "packages/claude-dev-env/hooks/test_z.py",
+        ]
+        assert pr_labeler_derivation.derive_area_labels(changed_paths, CLAUDE_DEV_ENV_CONFIG) == [
+            "area: skills",
+            "area: rules",
+            "area: hooks",
+        ]
+
 
 class TestDeriveStackedLabel:
-    def should_flag_a_pull_request_targeting_a_stacked_split_branch(self) -> None:
-        assert pr_labeler_derivation.derive_stacked_label("split/601/01-backend-part1") == "stacked"
-
-    def should_flag_a_pull_request_targeting_a_feature_branch(self) -> None:
-        assert pr_labeler_derivation.derive_stacked_label("feat/split-pr-slice-collection") == "stacked"
-
-    def should_not_flag_a_pull_request_targeting_main(self) -> None:
-        assert pr_labeler_derivation.derive_stacked_label("main") is None
-
-    def should_not_flag_a_pull_request_targeting_master(self) -> None:
-        assert pr_labeler_derivation.derive_stacked_label("master") is None
+    @pytest.mark.parametrize(
+        ("base_branch_name", "default_branch_name", "expected_stacked_label"),
+        [
+            ("split/601/01-backend-part1", "main", "stacked"),
+            ("feat/split-pr-slice-collection", "main", "stacked"),
+            ("main", "main", None),
+            ("master", "master", None),
+            ("main", "develop", "stacked"),
+            ("develop", "develop", None),
+        ],
+    )
+    def should_flag_a_pull_request_targeting_a_branch_other_than_the_repos_default(
+        self, base_branch_name: str, default_branch_name: str, expected_stacked_label: str | None
+    ) -> None:
+        assert (
+            pr_labeler_derivation.derive_stacked_label(base_branch_name, default_branch_name)
+            == expected_stacked_label
+        )
 
 
 class TestLoadLabelerConfig:
@@ -284,37 +380,66 @@ class TestLoadLabelerConfig:
         assert area_label_by_path_prefix[".github/"] == "area: ci"
 
 
+class TestLabelPlanPostInit:
+    def should_reject_empty_desired_with_non_empty_removable_when_built_by_a_future_axis(
+        self,
+    ) -> None:
+        """A shape a real caller could produce: a sixth axis that hand-builds
+
+        a `LabelPlan` instead of routing through `from_derivation`, and
+        forgets to route its "no signal" case through `None` first.
+        """
+        with pytest.raises(ValueError):
+            pr_labeler_derivation.LabelPlan(
+                desired_labels=frozenset(), removable_labels=frozenset({"type: bug"})
+            )
+
+    def should_allow_the_legitimate_stacked_shape_through_the_factory(self) -> None:
+        label_plan = pr_labeler_derivation.LabelPlan.from_derivation(
+            frozenset(), frozenset({"stacked"})
+        )
+        assert label_plan.desired_labels == frozenset()
+        assert label_plan.removable_labels == frozenset({"stacked"})
+        assert label_plan.should_clear_stale_labels is True
+
+    def should_return_an_untouchable_plan_for_a_none_derivation(self) -> None:
+        label_plan = pr_labeler_derivation.LabelPlan.from_derivation(None, frozenset({"type: bug"}))
+        assert label_plan.desired_labels == frozenset()
+        assert label_plan.removable_labels == frozenset()
+        assert label_plan.should_clear_stale_labels is False
+
+    def should_run_post_init_on_the_production_path_through_from_derivation(self) -> None:
+        """Production-path guard check.
+
+        ::
+
+            ok:   build_stacked_label_plan("main", "main") -> desired=∅,
+                  removable={"stacked"}, should_clear_stale_labels=True
+
+        `from_derivation` now constructs through `cls(...)` instead of
+        `object.__new__`, so `__post_init__` runs on every axis plan it
+        returns instead of being skipped entirely. The one legitimate
+        empty-desired-with-removable shape, produced by a real builder,
+        comes back correctly flagged rather than silently unvalidated.
+        """
+        stacked_plan = pr_labeler_derivation.build_stacked_label_plan("main", "main")
+        assert stacked_plan.desired_labels == frozenset()
+        assert stacked_plan.removable_labels == frozenset({pr_labeler_derivation.STACKED_LABEL})
+        assert stacked_plan.should_clear_stale_labels is True
+
+
 class TestComputeLabelDiff:
     def should_produce_an_empty_diff_when_current_labels_already_match(self) -> None:
-        snapshot = pr_labeler_derivation.PullRequestSnapshot(
-            title="fix(tdd-enforcer): count a split test family for any module",
-            is_draft=True,
-            base_branch_name="main",
-            changed_line_count=115 + 11,
-            changed_file_paths=(
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/config/tdd_enforcer_constants.py",
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/tests/test_candidate_paths.py",
-            ),
-            current_labels=frozenset(
-                {"type: bug", "status: draft", "size: M", "area: hooks", "area: tests", "P1"}
-            ),
+        label_diff = pr_labeler_derivation.compute_label_diff(
+            TDD_ENFORCER_SNAPSHOT, CLAUDE_DEV_ENV_CONFIG
         )
-        label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
         assert label_diff.labels_to_add == frozenset()
         assert label_diff.labels_to_remove == frozenset()
 
     def should_add_missing_labels_and_remove_stale_ones_while_keeping_flags(self) -> None:
-        snapshot = pr_labeler_derivation.PullRequestSnapshot(
-            title="fix(tdd-enforcer): count a split test family for any module",
+        snapshot = dataclasses.replace(
+            TDD_ENFORCER_SNAPSHOT,
             is_draft=False,
-            base_branch_name="main",
-            changed_line_count=115 + 11,
-            changed_file_paths=(
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/config/tdd_enforcer_constants.py",
-                "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/tests/test_candidate_paths.py",
-            ),
             current_labels=frozenset(
                 {"type: chore", "status: draft", "size: S", "area: docs", "tech-debt"}
             ),
@@ -329,11 +454,9 @@ class TestComputeLabelDiff:
         assert "tech-debt" not in label_diff.labels_to_remove
 
     def should_leave_the_status_axis_alone_when_changes_are_requested(self) -> None:
-        snapshot = pr_labeler_derivation.PullRequestSnapshot(
-            title="fix(tdd-enforcer): count a split test family for any module",
+        snapshot = dataclasses.replace(
+            TDD_ENFORCER_SNAPSHOT,
             is_draft=False,
-            base_branch_name="main",
-            changed_line_count=115 + 11,
             changed_file_paths=(
                 "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
             ),
@@ -351,6 +474,7 @@ class TestComputeLabelDiff:
             title="chore(labels): add label file, sync workflow, and template label names",
             is_draft=False,
             base_branch_name="main",
+            default_branch_name="main",
             changed_line_count=211 + 2,
             changed_file_paths=(
                 ".github/ISSUE_TEMPLATE/bug-report.yml",
@@ -371,6 +495,7 @@ class TestComputeLabelDiff:
             title="Update xhigh.md",
             is_draft=False,
             base_branch_name="main",
+            default_branch_name="main",
             changed_line_count=1 + 1,
             changed_file_paths=("packages/claude-dev-env/package.json",),
             current_labels=frozenset(
@@ -388,6 +513,7 @@ class TestIdempotence:
             title="feat(split-pr): fail a plan whose slice prefix is not closed under references",
             is_draft=True,
             base_branch_name="feat/split-pr-slice-collection",
+            default_branch_name="main",
             changed_line_count=1276 + 3,
             changed_file_paths=(
                 "packages/claude-dev-env/skills/split-pr/SKILL.md",
@@ -452,6 +578,134 @@ class TestParseCommandLineArguments:
             ]
         )
         assert parsed_arguments.dry_run is True
+
+
+class TestMain:
+    def _canned_pull_request_detail(
+        self, *, is_draft: bool, current_labels: list[str]
+    ) -> dict[str, object]:
+        return {
+            "title": "fix(tdd-enforcer): count a split test family for any module",
+            "draft": is_draft,
+            "base": {"ref": "main", "repo": {"default_branch": "main"}},
+            "additions": 115,
+            "deletions": 11,
+            "labels": [{"name": each_label_name} for each_label_name in current_labels],
+        }
+
+    _CANNED_FILES_PAGE: ClassVar[list[dict[str, object]]] = [
+        {"filename": "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py"}
+    ]
+
+    def should_dry_run_and_record_only_the_two_gets(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME, "fake-token")
+        recording_api_caller = RecordingApiCaller(
+            canned_responses=[
+                self._canned_pull_request_detail(is_draft=True, current_labels=[]),
+                self._CANNED_FILES_PAGE,
+            ]
+        )
+
+        exit_code = pr_labeler.main(
+            [
+                "--repo",
+                "jl-cmd/claude-dev-env",
+                "--pr",
+                "679",
+                "--config",
+                str(CLAUDE_DEV_ENV_CONFIG_PATH),
+                "--dry-run",
+            ],
+            call_api=recording_api_caller,
+        )
+
+        assert exit_code == 0
+        assert len(recording_api_caller.all_recorded_calls) == 2
+        assert {each_call[2] for each_call in recording_api_caller.all_recorded_calls} == {"GET"}
+
+    def should_apply_the_diff_and_record_post_and_delete_when_not_dry_run(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME, "fake-token")
+        recording_api_caller = RecordingApiCaller(
+            canned_responses=[
+                self._canned_pull_request_detail(
+                    is_draft=False, current_labels=["type: chore", "P1", "epic"]
+                ),
+                self._CANNED_FILES_PAGE,
+                {"id": 1},
+            ]
+        )
+
+        exit_code = pr_labeler.main(
+            [
+                "--repo",
+                "jl-cmd/claude-dev-env",
+                "--pr",
+                "679",
+                "--config",
+                str(CLAUDE_DEV_ENV_CONFIG_PATH),
+            ],
+            call_api=recording_api_caller,
+        )
+
+        assert exit_code == 0
+        all_recorded_methods = [each_call[2] for each_call in recording_api_caller.all_recorded_calls]
+        assert all_recorded_methods == ["GET", "GET", "POST", "DELETE"]
+
+        post_call = recording_api_caller.all_recorded_calls[2]
+        assert post_call[0] == "https://api.github.com/repos/jl-cmd/claude-dev-env/issues/679/labels"
+        assert post_call[3] == {
+            "labels": ["area: hooks", "size: M", "status: needs-review", "type: bug"]
+        }
+
+        delete_call = recording_api_caller.all_recorded_calls[3]
+        assert delete_call[0] == (
+            "https://api.github.com/repos/jl-cmd/claude-dev-env/issues/679/labels/type%3A%20chore"
+        )
+
+    def should_return_one_and_record_no_calls_when_github_token_is_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv(pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME, raising=False)
+        recording_api_caller = RecordingApiCaller()
+
+        exit_code = pr_labeler.main(
+            [
+                "--repo",
+                "jl-cmd/claude-dev-env",
+                "--pr",
+                "679",
+                "--config",
+                str(CLAUDE_DEV_ENV_CONFIG_PATH),
+            ],
+            call_api=recording_api_caller,
+        )
+
+        assert exit_code == 1
+        assert recording_api_caller.all_recorded_calls == []
+
+    def should_return_one_and_report_an_error_when_the_api_call_fails(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(pr_labeler.GITHUB_TOKEN_ENVIRONMENT_VARIABLE_NAME, "fake-token")
+        raising_api_caller = RaisingApiCaller(403, "rate limited")
+
+        exit_code = pr_labeler.main(
+            [
+                "--repo",
+                "jl-cmd/claude-dev-env",
+                "--pr",
+                "679",
+                "--config",
+                str(CLAUDE_DEV_ENV_CONFIG_PATH),
+            ],
+            call_api=raising_api_caller,
+        )
+
+        assert exit_code == 1
 
 
 class TestRemoveLabelFromPullRequest:
@@ -519,6 +773,39 @@ class TestApplyLabelDiff:
         }
         assert len(recording_api_caller.all_recorded_calls) == 3
 
+    def should_treat_a_404_on_delete_as_already_removed_and_continue(self) -> None:
+        flaky_api_caller = FlakyRemovalApiCaller({"size: M": 404})
+        label_diff = pr_labeler_derivation.LabelDiff(
+            labels_to_add=frozenset(),
+            labels_to_remove=frozenset({"size: M", "status: draft", "type: chore"}),
+        )
+
+        pr_labeler_transport.apply_label_diff(
+            "jl-cmd/claude-dev-env", 679, "fake-token", label_diff, call_api=flaky_api_caller
+        )
+
+        all_delete_calls = [
+            each_call for each_call in flaky_api_caller.all_recorded_calls if each_call[2] == "DELETE"
+        ]
+        assert len(all_delete_calls) == 3
+
+    def should_attempt_every_removal_then_raise_when_a_non_404_failure_occurs(self) -> None:
+        flaky_api_caller = FlakyRemovalApiCaller({"size: M": 500})
+        label_diff = pr_labeler_derivation.LabelDiff(
+            labels_to_add=frozenset(),
+            labels_to_remove=frozenset({"size: M", "status: draft", "type: chore"}),
+        )
+
+        with pytest.raises(pr_labeler_transport.GitHubApiError):
+            pr_labeler_transport.apply_label_diff(
+                "jl-cmd/claude-dev-env", 679, "fake-token", label_diff, call_api=flaky_api_caller
+            )
+
+        all_delete_calls = [
+            each_call for each_call in flaky_api_caller.all_recorded_calls if each_call[2] == "DELETE"
+        ]
+        assert len(all_delete_calls) == 3
+
 
 class TestAddLabelsToPullRequest:
     def should_post_the_sorted_label_list_and_return_the_response(self) -> None:
@@ -573,24 +860,23 @@ class TestAreaLabelsForPath:
             "hooks/blocking/tdd_enforcer_parts/tests/test_candidate_paths.py",
             CLAUDE_DEV_ENV_CONFIG.area_mappings,
         )
-        assert matched_area_labels == {"area: hooks", "area: tests"}
+        assert matched_area_labels == ["area: hooks", "area: tests"]
 
-    def should_return_an_empty_set_for_an_unmatched_path(self) -> None:
-        assert pr_labeler_derivation.area_labels_for_path("README.md", CLAUDE_DEV_ENV_CONFIG.area_mappings) == set()
+    def should_return_an_empty_list_for_an_unmatched_path(self) -> None:
+        assert pr_labeler_derivation.area_labels_for_path("README.md", CLAUDE_DEV_ENV_CONFIG.area_mappings) == []
 
 
 class TestCountAreaLabelMatches:
-    def should_count_matches_and_record_the_first_seen_index(self) -> None:
+    def should_count_matches_across_every_changed_path(self) -> None:
         changed_paths = [
             "packages/claude-dev-env/hooks/blocking/pre_tool_use_dispatcher.py",
             "packages/claude-dev-env/skills/split-pr/SKILL.md",
             "packages/claude-dev-env/hooks/blocking/agent_model_pin_blocker.py",
         ]
-        match_count_by_area_label, first_seen_index_by_area_label = pr_labeler_derivation.count_area_label_matches(
+        match_count_by_area_label = pr_labeler_derivation.count_area_label_matches(
             changed_paths, CLAUDE_DEV_ENV_CONFIG
         )
         assert match_count_by_area_label == {"area: hooks": 2, "area: skills": 1}
-        assert first_seen_index_by_area_label == {"area: hooks": 0, "area: skills": 1}
 
 
 class TestAreaLabelUniverse:
@@ -614,6 +900,11 @@ class TestBuildTypeLabelPlan:
 
     def should_leave_the_type_axis_untouched_for_an_unparseable_title(self) -> None:
         type_plan = pr_labeler_derivation.build_type_label_plan("Update xhigh.md")
+        assert type_plan.desired_labels == frozenset()
+        assert type_plan.removable_labels == frozenset()
+
+    def should_leave_the_type_axis_untouched_for_an_unmapped_prefix(self) -> None:
+        type_plan = pr_labeler_derivation.build_type_label_plan("wip: pause the installer rewrite")
         assert type_plan.desired_labels == frozenset()
         assert type_plan.removable_labels == frozenset()
 
@@ -644,12 +935,18 @@ class TestBuildAreaLabelPlan:
 
 
 class TestBuildStackedLabelPlan:
-    def should_desire_the_stacked_label_for_a_non_main_base(self) -> None:
-        stacked_plan = pr_labeler_derivation.build_stacked_label_plan("split/601/01-backend-part1")
+    def should_desire_the_stacked_label_for_a_non_default_base(self) -> None:
+        stacked_plan = pr_labeler_derivation.build_stacked_label_plan(
+            "split/601/01-backend-part1", "main"
+        )
         assert stacked_plan.desired_labels == frozenset({"stacked"})
 
-    def should_desire_no_label_for_main(self) -> None:
-        assert pr_labeler_derivation.build_stacked_label_plan("main").desired_labels == frozenset()
+    def should_desire_no_label_for_the_repos_default_branch(self) -> None:
+        assert pr_labeler_derivation.build_stacked_label_plan("main", "main").desired_labels == frozenset()
+
+    def should_still_be_able_to_clear_a_stale_stacked_label_for_the_default_branch(self) -> None:
+        stacked_plan = pr_labeler_derivation.build_stacked_label_plan("main", "main")
+        assert stacked_plan.removable_labels == frozenset({"stacked"})
 
 
 class TestDiffFromLabelPlans:
@@ -659,8 +956,8 @@ class TestDiffFromLabelPlans:
             pr_labeler_derivation.LabelPlan(
                 desired_labels=frozenset({"type: bug"}), removable_labels=pr_labeler_derivation.ALL_TYPE_LABELS
             ),
-            pr_labeler_derivation.LabelPlan(
-                desired_labels=frozenset({"stacked"}), removable_labels=frozenset({"stacked"})
+            pr_labeler_derivation.LabelPlan.from_derivation(
+                frozenset({"stacked"}), frozenset({"stacked"})
             ),
         ]
 
@@ -669,11 +966,6 @@ class TestDiffFromLabelPlans:
         assert label_diff.labels_to_add == frozenset({"type: bug", "stacked"})
         assert label_diff.labels_to_remove == frozenset({"type: chore"})
         assert "tech-debt" not in label_diff.labels_to_remove
-
-
-class TestCoerceToInt:
-    def should_return_the_int_value_unchanged(self) -> None:
-        assert pr_labeler_derivation.coerce_to_int(42) == 42
 
 
 class TestLoadSizeThresholds:
@@ -746,6 +1038,23 @@ class TestCallGithubApi:
         assert parsed_response is None
 
 
+class TestCallGithubApiHttpError:
+    def should_translate_an_http_error_into_a_typed_api_error(self) -> None:
+        fake_url_opener = FakeUrlOpenerThatRaisesHttpError(403, b'{"message": "rate limited"}')
+
+        with pytest.raises(pr_labeler_transport.GitHubApiError) as raised_error:
+            pr_labeler_transport.call_github_api(
+                "https://api.github.com/repos/jl-cmd/claude-dev-env/pulls/679",
+                "fake-token",
+                "GET",
+                None,
+                open_url=fake_url_opener,
+            )
+
+        assert raised_error.value.status_code == 403
+        assert "rate limited" in raised_error.value.failure_detail_text
+
+
 class TestFetchPullRequestDetail:
     def should_return_the_pull_request_detail_the_injected_caller_provides(self) -> None:
         canned_detail = {"number": 679, "title": "fix(x): y", "draft": True}
@@ -800,12 +1109,26 @@ class TestExtractCurrentLabels:
         assert pr_labeler_transport.extract_current_labels({}) == frozenset()
 
 
+class TestDefaultBranchNameFromBaseRef:
+    def should_read_the_configured_default_branch(self) -> None:
+        base_ref_info: dict[str, object] = {"ref": "feat/x", "repo": {"default_branch": "develop"}}
+        assert pr_labeler_transport.default_branch_name_from_base_ref(base_ref_info) == "develop"
+
+    def should_fall_back_to_main_when_the_repo_object_is_missing(self) -> None:
+        base_ref_info: dict[str, object] = {"ref": "feat/x"}
+        assert pr_labeler_transport.default_branch_name_from_base_ref(base_ref_info) == "main"
+
+    def should_fall_back_to_main_when_default_branch_is_missing(self) -> None:
+        base_ref_info: dict[str, object] = {"ref": "feat/x", "repo": {}}
+        assert pr_labeler_transport.default_branch_name_from_base_ref(base_ref_info) == "main"
+
+
 class TestBuildPullRequestSnapshot:
     def should_build_a_snapshot_from_a_raw_pull_request_detail(self) -> None:
         raw_pull_request_detail: dict[str, object] = {
             "title": "fix(tdd-enforcer): count a split test family for any module",
             "draft": True,
-            "base": {"ref": "main"},
+            "base": {"ref": "main", "repo": {"default_branch": "main"}},
             "additions": 115,
             "deletions": 11,
             "labels": [{"name": "type: bug"}, {"name": "status: draft"}],
@@ -819,6 +1142,7 @@ class TestBuildPullRequestSnapshot:
         assert snapshot.title == "fix(tdd-enforcer): count a split test family for any module"
         assert snapshot.is_draft is True
         assert snapshot.base_branch_name == "main"
+        assert snapshot.default_branch_name == "main"
         assert snapshot.changed_line_count == 126
         assert snapshot.current_labels == frozenset({"type: bug", "status: draft"})
 
@@ -828,7 +1152,7 @@ class TestFetchPullRequestSnapshot:
         canned_detail: dict[str, object] = {
             "title": "docs(rules): add state-what-is rule",
             "draft": False,
-            "base": {"ref": "main"},
+            "base": {"ref": "main", "repo": {"default_branch": "main"}},
             "additions": 26,
             "deletions": 0,
             "labels": [],
@@ -850,3 +1174,46 @@ class TestFetchPullRequestSnapshot:
             "packages/claude-dev-env/rules/state-what-is.md",
         )
         assert len(recording_api_caller.all_recorded_calls) == 2
+
+
+def _declared_label_names() -> frozenset[str]:
+    labels_yml_path = _CI_SCRIPTS_DIR.parent / "labels.yml"
+    raw_labels = yaml.safe_load(labels_yml_path.read_text(encoding="utf-8"))
+    return frozenset(str(each_entry["name"]) for each_entry in raw_labels)
+
+
+class TestLabelVocabularyMatchesDeclaredLabels:
+    def should_declare_every_label_the_labeler_can_add_or_remove(self) -> None:
+        declared_label_names = _declared_label_names()
+        all_labeler_managed_labels = (
+            pr_labeler_derivation.ALL_TYPE_LABELS
+            | pr_labeler_derivation.ALL_SIZE_LABELS
+            | pr_labeler_derivation.ALL_AUTOMATED_STATUS_LABELS
+            | pr_labeler_derivation.ALL_HUMAN_MANAGED_STATUS_LABELS
+            | pr_labeler_derivation.area_label_universe(CLAUDE_DEV_ENV_CONFIG)
+            | frozenset({pr_labeler_derivation.STACKED_LABEL})
+        )
+        assert all_labeler_managed_labels <= declared_label_names
+
+
+def _semantic_pull_request_step(all_steps: list[dict[str, object]]) -> dict[str, object]:
+    for each_step in all_steps:
+        uses_value = each_step.get("uses", "")
+        assert isinstance(uses_value, str)
+        if "action-semantic-pull-request" in uses_value:
+            return each_step
+    raise AssertionError("no step uses action-semantic-pull-request")
+
+
+def _pr_check_conventional_commit_types() -> frozenset[str]:
+    pr_check_workflow_path = _CI_SCRIPTS_DIR.parent / "workflows" / "pr-check.yml"
+    raw_workflow = yaml.safe_load(pr_check_workflow_path.read_text(encoding="utf-8"))
+    semantic_pull_request_step = _semantic_pull_request_step(raw_workflow["jobs"]["validate"]["steps"])
+    types_block = semantic_pull_request_step["with"]["types"]
+    return frozenset(each_line.strip() for each_line in types_block.splitlines() if each_line.strip())
+
+
+class TestTypeLabelMapCoversPrCheckTypes:
+    def should_map_every_type_the_pr_title_check_enforces(self) -> None:
+        all_pr_check_types = _pr_check_conventional_commit_types()
+        assert all_pr_check_types <= pr_labeler_derivation.ALL_TYPE_LABELS_BY_COMMIT_PREFIX.keys()
