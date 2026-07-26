@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -9,6 +9,7 @@ import {
     readFileSync,
     readdirSync,
     rmSync,
+    cpSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
@@ -62,6 +63,56 @@ const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
 const MYPY_INI_FILE_NAME = '.mypy.ini';
 const SKIPPED_RECORD_SUMMARY_MARKER = 'manifest record(s) skipped';
+const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
+const PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST = 'probe-skill-without-manifest';
+const PROBE_SKILL_FILE_SEGMENTS = ['scripts', 'probe_helper.py'];
+const PYTHON_BYTECODE_CACHE_DIRECTORY_NAME = '__pycache__';
+const PYTHON_BYTECODE_FILE_NAME = 'probe_helper.cpython-312.pyc';
+
+let isolatedInstallerPath = null;
+let isolatedPackageCopyRoot = null;
+
+function ensureIsolatedInstallerPath() {
+    if (isolatedInstallerPath !== null) return isolatedInstallerPath;
+    isolatedPackageCopyRoot = copyPackageWithoutModules();
+    isolatedInstallerPath = installerPathUnder(isolatedPackageCopyRoot);
+    return isolatedInstallerPath;
+}
+
+function copyPackageWithoutModules() {
+    const packageCopyRoot = mkdtempSync(join(tmpdir(), 'cdev-prune-package-'));
+    cpSync(PACKAGE_DIRECTORY, packageCopyRoot, {
+        recursive: true,
+        filter: sourcePath => basename(sourcePath) !== EXCLUDED_PACKAGE_COPY_DIRECTORY,
+    });
+    return packageCopyRoot;
+}
+
+function installerPathUnder(packageSourceRoot) {
+    if (!packageSourceRoot) return INSTALLER_PATH;
+    return join(packageSourceRoot, 'bin', 'install.mjs');
+}
+
+after(() => {
+    if (isolatedPackageCopyRoot !== null) {
+        rmSync(isolatedPackageCopyRoot, { recursive: true, force: true });
+    }
+});
+
+function ensureDependencyStub(homeDirectory) {
+    const stubModulesRoot = join(homeDirectory, 'dependency-stub-modules');
+    const stubPackageDirectory = join(stubModulesRoot, ...DEPENDENCY_STUB_PACKAGE_SEGMENTS);
+    mkdirSync(stubPackageDirectory, { recursive: true });
+    writeFileSync(
+        join(stubPackageDirectory, 'package.json'),
+        JSON.stringify({
+            name: DEPENDENCY_STUB_PACKAGE_SEGMENTS.join('/'),
+            version: '1.0.0',
+            description: 'sandbox dependency stub',
+        }) + '\n',
+    );
+    return stubModulesRoot;
+}
 
 /**
  * Report whether a path under one managed root landed in a run backup.
@@ -136,8 +187,8 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
  * @param {string[]} extraArguments Installer arguments (for example ``['--only', 'core']``).
  * @returns {string} The installer's stdout.
  */
-function runInstaller(homeDirectory, extraArguments) {
-    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory);
+function runInstaller(homeDirectory, extraArguments, options = {}) {
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, options);
     return execFileSync('node', [installerPath, ...extraArguments], {
         cwd: dirname(installerPath),
         encoding: 'utf8',
@@ -151,7 +202,8 @@ function runInstaller(homeDirectory, extraArguments) {
  * @param {string} homeDirectory The sandbox home the installer writes into.
  * @returns {{installerPath: string, childEnvironment: object}} The invocation inputs.
  */
-function resolveInstallerInvocation(homeDirectory) {
+function resolveInstallerInvocation(homeDirectory, options = {}) {
+    const dependencyResolvable = options.dependencyResolvable !== false;
     const childEnvironment = {
         ...process.env,
         HOME: homeDirectory,
@@ -159,7 +211,12 @@ function resolveInstallerInvocation(homeDirectory) {
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
         CODEX_HOME: join(homeDirectory, '.codex'),
     };
-    return { installerPath: INSTALLER_PATH, childEnvironment };
+    if (dependencyResolvable) {
+        childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
+        return { installerPath: installerPathUnder(options.packageSourceRoot), childEnvironment };
+    }
+    delete childEnvironment.NODE_PATH;
+    return { installerPath: ensureIsolatedInstallerPath(), childEnvironment };
 }
 
 /**
@@ -173,7 +230,7 @@ function resolveInstallerInvocation(homeDirectory) {
  * @returns {string} The child's stdout and stderr, joined.
  */
 function runInstallerReadingBothStreams(homeDirectory, extraArguments) {
-    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory);
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, {});
     const completedRun = spawnSync('node', [installerPath, ...extraArguments], {
         cwd: dirname(installerPath),
         encoding: 'utf8',
@@ -1119,6 +1176,68 @@ test('an uninstall of a clean install skips no manifest record at all', () => {
         );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+function plantSourceSkillDirectoryWithoutManifest(packageSourceRoot) {
+    const skillsSourceDirectory = join(
+        packageSourceRoot, '.agents', SKILLS_DIRECTORY_NAME,
+    );
+    const probeSourceDirectory = join(
+        skillsSourceDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+    );
+    writeFileWithParents(
+        join(probeSourceDirectory, ...PROBE_SKILL_FILE_SEGMENTS),
+        'a helper the skill directory ships without a SKILL.md\n',
+    );
+    writeFileWithParents(
+        join(skillsSourceDirectory, PYTHON_BYTECODE_CACHE_DIRECTORY_NAME, PYTHON_BYTECODE_FILE_NAME),
+        'compiled bytecode a contributor test run left in the source\n',
+    );
+    return probeSourceDirectory;
+}
+
+test('a shipped skill directory without a SKILL.md reaches the manifest and is pruned once the package drops it', () => {
+    const sandbox = createSandbox();
+    const packageSourceRoot = copyPackageWithoutModules();
+    try {
+        const probeSourceDirectory = plantSourceSkillDirectoryWithoutManifest(packageSourceRoot);
+
+        runInstaller(sandbox.homeDirectory, [], { packageSourceRoot });
+
+        const installedProbeDirectory = join(
+            sandbox.skillsDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+        );
+        assert.equal(existsSync(installedProbeDirectory), true);
+        const manifestAfterShipping = readManifest(sandbox.manifestPath);
+        assert.equal(
+            manifestAfterShipping.skills.includes(PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST),
+            true,
+        );
+        assert.equal(manifestAfterShipping.skills.includes(SHARED_DIRECTORY_NAME), false);
+        assert.equal(
+            manifestAfterShipping.skills.includes(PYTHON_BYTECODE_CACHE_DIRECTORY_NAME),
+            false,
+        );
+
+        rmSync(probeSourceDirectory, { recursive: true, force: true });
+        runInstaller(sandbox.homeDirectory, [], { packageSourceRoot });
+
+        assert.equal(existsSync(installedProbeDirectory), false);
+        assert.equal(
+            prunedSkillBackupContains(
+                sandbox.claudeDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+            ),
+            true,
+        );
+        assert.equal(
+            readManifest(sandbox.manifestPath).skills
+                .includes(PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST),
+            false,
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+        rmSync(packageSourceRoot, { recursive: true, force: true });
     }
 });
 
