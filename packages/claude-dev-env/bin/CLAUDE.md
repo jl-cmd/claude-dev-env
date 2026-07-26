@@ -37,13 +37,13 @@ Matching is by directory name alone, so a user-authored directory whose name col
 
 ## Legacy root `_shared` migration
 
-Shared assets install under `~/.claude/skills/_shared/`. A machine that ran an older install still carries a top-level `~/.claude/_shared/` tree that nothing writes to any more. On each full install, `pruneLegacyRootSharedDirectory` renames that directory to `~/.claude/.claude-dev-env-pruned/<timestamp>/_shared-root-legacy/`, the same timestamped recovery point the retired-skill prune writes into, so the dead folder stops shadowing the skills tree while its content stays recoverable. A fresh install finds no such directory and does nothing; a rename that fails logs a warning and leaves the directory in place.
+Shared assets install under `~/.claude/skills/_shared/`. A machine that ran an older install still carries a top-level `~/.claude/_shared/` tree that nothing writes to any more. On each full install, `pruneLegacyRootSharedDirectory` renames that directory to `~/.claude/.claude-dev-env-pruned/<timestamp>/_shared-root-legacy/`, the same timestamped recovery point the retired-skill prune writes into, so the dead folder stops shadowing the skills tree while its content stays recoverable. A rename that fails logs a warning and leaves the directory in place, never deleting it. A fresh install finds no such directory and does nothing.
 
 ## Stale-file prune
 
 A full install also moves aside a file under a managed root that the run leaves unwritten. `copyTree` adds and overwrites but never removes, so every root the installer writes carries the same drift, and the prune covers all of them: `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `audit-rubrics`, `skills`, and `hooks` — the names in `MANAGED_TOP_LEVEL_DIRECTORY_NAMES`.
 
-Nothing moves unless a prior install recorded it. That single rule is what makes covering ten roots as safe as covering one: the installer reads the file list from `~/.claude/.claude-dev-env-manifest.json`, subtracts every file the run copied across all source roots, and moves what remains.
+Nothing moves unless a prior install recorded it. That single rule is what makes covering nine roots as safe as covering one: the installer reads the file list from `~/.claude/.claude-dev-env-manifest.json`, subtracts every file the run copied across all source roots, and moves what remains.
 
 The prune runs once per root, each call confined to its own root. Per-root iteration gives the containment guard and the emptied-parent walk the root that owns each file. `~/.claude/skills/_shared` sits inside the `skills` root, so the shared tree enters the `skills` diff alone and no path enters two diffs. Each root's content lands under `~/.claude/.claude-dev-env-pruned/<timestamp>/<root-name>/<relative>`, so the backup mirrors `~/.claude`. Every prune in a run shares that one timestamped root. A recorded path under no managed root — `~/.claude/CLAUDE.md`, `settings.json`, the manifest itself, and the `~/.mypy.ini` that sits in the home directory beside `~/.claude` — reaches no root's diff and stays where it is. The install summary reports the skills root's own count on the `skills:` line and the sum across roots on its own line.
 
@@ -75,7 +75,9 @@ A run that moves nothing sweeps nothing, so every recovery point the user holds 
 
 Each record passes a containment guard first: the path resolves under `~/.claude`, or it names the `~/.mypy.ini` the install writes in the home directory. Every other record is skipped with a warning and counted. Skipping keeps one malformed record — hand-edited, or written by an installer that ran against a different home — from stranding the user with a half-removed install. The purge removes every legitimate record, clears the manifest, and reports the skipped count.
 
-Removing a file leaves its directory a candidate for cleanup. Once the file loop ends, the purge walks up from each such directory to the managed top-level directory the file sits under (`MANAGED_TOP_LEVEL_DIRECTORY_NAMES`), removing each directory it finds empty. That reaches a nested tree such as `skills/<name>/scripts/`. A record under no managed root gets no walk, so `~/.claude` itself is never a stop root and a directory the installer never wrote stays. A separate pass drops each managed top-level directory the purge empties.
+Removing a file leaves its directory a candidate for cleanup. Once the file loop ends, the purge walks up from each such directory to the top-level stop root the file sits under (`allPurgeStopRootDirectoryNames()`), removing each directory it finds empty. That reaches a nested tree such as `skills/<name>/scripts/`. A record under no stop root gets no walk, so `~/.claude` itself is never a stop root and a directory the installer never wrote stays. A separate pass over the same list drops each of those top-level directories the purge empties.
+
+The stop-root list the walk-up reads is `MANAGED_TOP_LEVEL_DIRECTORY_NAMES` plus `RETIRED_MANAGED_TOP_LEVEL_DIRECTORY_NAMES`, which names `_shared`. So a record an older manifest wrote under `~/.claude/_shared` gets the same bounded walk-up every other record gets, and the closing pass drops that root once it stands empty. Anything the user authored in there, file or directory, enters no record's walk and stays.
 
 ## Prune gates
 
@@ -86,7 +88,9 @@ Every prune runs behind the same two gates: a full install, and every declared d
 | Export | Description |
 |---|---|
 | `CONTENT_DIRECTORIES` | Array of package subdirectory names copied verbatim to `~/.claude/` |
-| `MANAGED_TOP_LEVEL_DIRECTORY_NAMES` | The content directories plus `skills` and `hooks`; the stale-file prune walks it to give each root its own diff, and the uninstall purge reads it to find the root a recorded file belongs to |
+| `MANAGED_TOP_LEVEL_DIRECTORY_NAMES` | The content directories plus `skills` and `hooks`; the stale-file prune walks it to give each root its own diff, and the uninstall purge walks it together with the retired names (`_shared`) to find the stop root a recorded file belongs to |
+| `SHARED_SKILL_DIRECTORY_NAMES` | The skill-tree directory names holding cross-skill assets rather than a skill (`_shared`); the retired-skill prune never moves them to backup, and a scoped `--only` install ships them even when the selected group does not name them |
+| `pruneLegacyRootSharedDirectory(backupRoot, claudeHomeDirectory)` | Renames a legacy top-level `~/.claude/_shared` tree into the run's timestamped backup under `_shared-root-legacy/`; returns true when a tree was found and moved, false when none exists or the rename fails |
 | `collectFiles(directory)` | Lists every file under a source directory, skipping the build-artifact names and extensions in `install-constants.mjs` |
 | `pythonCandidatesForPlatform(platform)` | Returns ordered Python interpreter candidates to probe; `py -3` first on Windows to avoid Microsoft Store alias issues |
 | `isWindowsStorePythonStub(path)` | Returns true when the path resolves to the non-spawnable WindowsApps stub |
@@ -102,4 +106,4 @@ Every prune runs behind the same two gates: a full install, and every declared d
 
 ## Install groups
 
-`install.mjs` defines install groups (`core`, `journal`) plus any dependency groups discovered from `package.json` `dependencies`. The `core` group installs skills, all hooks, and the content directories. `journal` installs only its skill set.
+`install.mjs` defines install groups (`core`, `journal`) plus any dependency groups discovered from `package.json` `dependencies`. The `core` group installs its skill set, all hooks, and the directories in `CORE_INCLUDE_DIRECTORIES` (`rules`, `docs`, `commands`, `agents`, `audit-rubrics`, `scripts`). `journal` installs its skill set alone. Every group, scoped or not, also writes `skills/_shared/`, because each consuming skill reads those assets by relative path.

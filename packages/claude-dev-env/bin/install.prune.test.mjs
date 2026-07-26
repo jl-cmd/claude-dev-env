@@ -1305,3 +1305,78 @@ test('an uninstall removes the nested directories its records emptied and keeps 
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }
 });
+
+
+test('an uninstall clears the legacy ~/.claude/_shared skeleton its records emptied', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME)),
+            false,
+            'the legacy shared tree leaves no empty skeleton behind',
+        );
+        assert.equal(existsSync(sandbox.claudeDirectory), true, 'the managed home itself stays');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('an uninstall keeps a legacy ~/.claude/_shared directory holding a user-authored file', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+        const legacySharedDirectory = join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME);
+        const userAuthoredPath = join(legacySharedDirectory, 'my-notes.md');
+        writeFileSync(userAuthoredPath, 'a file the user authored\n');
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(userAuthoredPath),
+            true,
+            'the file the user authored survives the uninstall',
+        );
+        assert.equal(
+            existsSync(legacySharedDirectory),
+            true,
+            'the directory holding that file stays standing',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('an uninstall keeps a user-authored empty directory under the legacy ~/.claude/_shared', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+        const legacySharedDirectory = join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME);
+        const userAuthoredDirectory = join(legacySharedDirectory, 'my-own-notes');
+        mkdirSync(userAuthoredDirectory, { recursive: true });
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(userAuthoredDirectory),
+            true,
+            'a directory no manifest record named enters no walk and stays, even while empty',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
