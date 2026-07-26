@@ -25,6 +25,7 @@ from categorize_files import (
     build_whole_pr_slice,
     slice_fits_review_budget,
 )
+from split_pr_script_types import JsonObject
 from split_pr_scripts_constants.config.analyze_constants import (
     BODY_EXCERPT_MAX_LENGTH,
     BRANCH_NAME_SEPARATOR,
@@ -37,13 +38,10 @@ from split_pr_scripts_constants.config.analyze_constants import (
     ERROR_GH_FILE_STATUS_JSON,
     ERROR_GH_JSON_PARSE,
     ERROR_PR_NUMBER_REQUIRED,
-    EXIT_CODE_FAILURE,
-    EXIT_CODE_SUCCESS,
     GH_API,
     GH_API_FILE_FILENAME,
     GH_API_FILE_STATUS,
     GH_API_SLURP_FLAG,
-    GH_COMMAND,
     GH_FIELD_BASE_REF,
     GH_FIELD_BODY,
     GH_FIELD_CHANGED_FILES,
@@ -56,24 +54,14 @@ from split_pr_scripts_constants.config.analyze_constants import (
     GH_FILE_ADDITIONS,
     GH_FILE_DELETIONS,
     GH_FILE_PATH,
-    GH_JSON_FLAG,
     GH_PAGINATE_FLAG,
     GH_PR_FILES_DEFAULT_OWNER_REPO,
     GH_PR_FILES_ENDPOINT_TEMPLATE,
     GH_PR_JSON_FIELDS,
-    GH_PR_VIEW,
-    GH_REPO_FLAG,
-    GH_VIEW,
-    JSON_INDENT_SPACES,
     MAXIMUM_FEATURE_SLUG_LENGTH,
     MAXIMUM_SLICE_CHANGED_LINES,
     MAXIMUM_SLICE_FILE_COUNT,
-    PAYLOAD_KEY_ERROR,
-    PLAN_BODY_EXCERPT_KEY,
     PLAN_ROOT_MUST_BE_ARRAY,
-    PLAN_ROOT_MUST_BE_OBJECT,
-    PLAN_THRESHOLD_NOTE_KEY,
-    PLAN_URL_KEY,
     SLICE_INDEX_ZERO_PAD,
     SLUG_REPLACEMENT,
     SPLIT_OPTIONAL_NOTE_TEMPLATE,
@@ -83,6 +71,17 @@ from split_pr_scripts_constants.config.analyze_constants import (
     WARNING_SPLIT_OPTIONAL,
 )
 from split_pr_scripts_constants.config.categorize_constants import LAYER_OTHER
+from split_pr_scripts_constants.config.common_constants import (
+    EXIT_CODE_FAILURE,
+    EXIT_CODE_SUCCESS,
+    GH_COMMAND,
+    GH_JSON_FLAG,
+    GH_PR,
+    GH_REPO_FLAG,
+    GH_VIEW,
+    JSON_INDENT_SPACES,
+    PAYLOAD_KEY_ERROR,
+)
 from split_pr_scripts_constants.config.plan_constants import (
     FILE_KEY_ADDITIONS,
     FILE_KEY_DELETIONS,
@@ -92,6 +91,7 @@ from split_pr_scripts_constants.config.plan_constants import (
     FILE_STATUS_MODIFIED,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_BASE_REF,
+    PLAN_KEY_BODY_EXCERPT,
     PLAN_KEY_FEATURE_SLUG,
     PLAN_KEY_FILE_COUNT,
     PLAN_KEY_HEAD_REF,
@@ -100,16 +100,17 @@ from split_pr_scripts_constants.config.plan_constants import (
     PLAN_KEY_PROPOSED_SLICES,
     PLAN_KEY_REPO,
     PLAN_KEY_SOURCE_BRANCH,
+    PLAN_KEY_THRESHOLD_NOTE,
     PLAN_KEY_TITLE,
+    PLAN_KEY_URL,
     PLAN_KEY_WARNINGS,
+    PLAN_ROOT_MUST_BE_OBJECT,
     SLICE_KEY_BASE,
     SLICE_KEY_BRANCH,
     SLICE_KEY_INDEX,
     SLICE_KEY_OVERSIZED_ATOMIC,
     SLICE_KEY_SLUG,
 )
-
-JsonObject = dict[str, object]
 
 
 class PullRequestPayloadFetcher(Protocol):
@@ -225,9 +226,9 @@ def build_plan_from_pr_payload(
         PLAN_KEY_ALL_FILES: all_annotated,
         PLAN_KEY_PROPOSED_SLICES: all_slices,
         PLAN_KEY_WARNINGS: all_warnings,
-        PLAN_URL_KEY: all_pr_fields.get(GH_FIELD_URL),
-        PLAN_BODY_EXCERPT_KEY: body_text[:BODY_EXCERPT_MAX_LENGTH],
-        PLAN_THRESHOLD_NOTE_KEY: threshold_note,
+        PLAN_KEY_URL: all_pr_fields.get(GH_FIELD_URL),
+        PLAN_KEY_BODY_EXCERPT: body_text[:BODY_EXCERPT_MAX_LENGTH],
+        PLAN_KEY_THRESHOLD_NOTE: threshold_note,
     }
 
 
@@ -348,7 +349,7 @@ def fetch_pr_payload_through_gh(pr_number: int, repo: str | None) -> JsonObject:
 def _fetch_pr_overview(pr_number: int, repo: str | None) -> JsonObject:
     all_command = [
         GH_COMMAND,
-        GH_PR_VIEW,
+        GH_PR,
         GH_VIEW,
         str(pr_number),
         GH_JSON_FLAG,

@@ -13,6 +13,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from split_pr_script_types import JsonObject
 from split_pr_scripts_constants.config.analyze_constants import (
     MAXIMUM_SLICE_CHANGED_LINES,
     MAXIMUM_SLICE_FILE_COUNT,
@@ -24,11 +25,11 @@ from split_pr_scripts_constants.config.categorize_constants import (
     ALL_LAYER_TITLE_STEM_BY_NAME,
     DEFAULT_LAYER,
     PART_SLUG_SEPARATOR,
-    PATH_SEPARATOR,
     WHOLE_PR_SLICE_SLUG,
     WHOLE_PR_SLICE_STORY,
     WHOLE_PR_SLICE_TITLE_STEM,
 )
+from split_pr_scripts_constants.config.common_constants import PATH_SEPARATOR
 from split_pr_scripts_constants.config.plan_constants import (
     FILE_KEY_ADDITIONS,
     FILE_KEY_DELETIONS,
@@ -45,8 +46,6 @@ from split_pr_scripts_constants.config.plan_constants import (
     SLICE_KEY_STORY,
     SLICE_KEY_TITLE,
 )
-
-JsonObject = dict[str, object]
 
 
 def normalize_path(path: str) -> str:

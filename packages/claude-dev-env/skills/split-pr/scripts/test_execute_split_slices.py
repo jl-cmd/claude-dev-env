@@ -25,9 +25,8 @@ from split_pr_git_operations import (  # noqa: E402
     local_branch_ref_exists,
     remote_ref_exists,
 )
-from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
+from split_pr_scripts_constants.config.common_constants import (  # noqa: E402
     PAYLOAD_KEY_ERROR,
-    PLAN_THRESHOLD_NOTE_KEY,
 )
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
     PAYLOAD_KEY_CREATED,
@@ -48,6 +47,7 @@ from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
     PLAN_KEY_PR_NUMBER,
     PLAN_KEY_PROPOSED_SLICES,
     PLAN_KEY_SOURCE_BRANCH,
+    PLAN_KEY_THRESHOLD_NOTE,
     PLAN_KEY_TITLE,
     SLICE_KEY_BASE,
     SLICE_KEY_BRANCH,
@@ -306,7 +306,7 @@ def test_dry_run_and_executed_records_share_one_key_shape(tmp_path: Path) -> Non
 def test_an_optional_split_plan_needs_an_explicit_override(tmp_path: Path) -> None:
     _, repo_path = build_repository(tmp_path)
     plan_payload = build_plan(repo_path)
-    plan_payload[PLAN_THRESHOLD_NOTE_KEY] = "parent already fits review budget"
+    plan_payload[PLAN_KEY_THRESHOLD_NOTE] = "parent already fits review budget"
 
     with pytest.raises(ValueError):
         run_execute(repo_path, plan_payload)

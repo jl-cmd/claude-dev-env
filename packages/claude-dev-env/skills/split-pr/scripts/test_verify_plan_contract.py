@@ -11,7 +11,7 @@ SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
-from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
+from split_pr_scripts_constants.config.common_constants import (  # noqa: E402
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
@@ -155,6 +155,56 @@ def test_duplicate_paths_across_slices_are_reported_once_each() -> None:
     report = verify_plan(plan_payload)
 
     assert report[VERIFY_KEY_DUPLICATE_FILES] == ["src/one.py"]
+
+
+def build_plan_failing_every_coverage_rule() -> dict[str, object]:
+    plan_payload = build_complete_plan()
+    plan_payload[PLAN_KEY_ALL_FILES] = [{"path": "src/one.py"}, {"path": "src/two.py"}]
+    plan_payload[PLAN_KEY_PROPOSED_SLICES] = [
+        {
+            SLICE_KEY_SLUG: "one",
+            SLICE_KEY_FILES: ["src/one.py", "src/ghost.py"],
+            SLICE_KEY_BRANCH: "split/1/01-one",
+            SLICE_KEY_BASE: "main",
+        },
+        {
+            SLICE_KEY_SLUG: "two",
+            SLICE_KEY_FILES: ["src/one.py"],
+            SLICE_KEY_BRANCH: "split/1/02-two",
+            SLICE_KEY_BASE: "split/1/01-one",
+        },
+        {
+            SLICE_KEY_SLUG: "empty",
+            SLICE_KEY_FILES: [],
+            SLICE_KEY_BRANCH: "split/1/03-empty",
+            SLICE_KEY_BASE: "split/1/02-two",
+        },
+    ]
+    return plan_payload
+
+
+def test_coverage_count_errors_keep_their_exact_wire_text() -> None:
+    report = verify_plan(build_plan_failing_every_coverage_rule())
+
+    all_errors = report[VERIFY_KEY_ERRORS]
+    assert isinstance(all_errors, list)
+    assert "missing_files:1" in all_errors
+    assert "unknown_files:1" in all_errors
+    assert "duplicate_files:1" in all_errors
+    assert "empty_slices:1" in all_errors
+
+
+def test_a_non_object_slice_entry_keeps_its_exact_wire_text() -> None:
+    plan_payload = build_complete_plan()
+    all_slices = plan_payload[PLAN_KEY_PROPOSED_SLICES]
+    assert isinstance(all_slices, list)
+    all_slices.append("not a slice object")
+
+    report = verify_plan(plan_payload)
+
+    all_errors = report[VERIFY_KEY_ERRORS]
+    assert isinstance(all_errors, list)
+    assert "slice entry is not an object" in all_errors
 
 
 def test_main_reports_a_json_error_for_a_non_numeric_addition_count(

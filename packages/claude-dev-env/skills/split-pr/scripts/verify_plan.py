@@ -23,17 +23,24 @@ from categorize_files import (
     normalize_path,
     slice_fits_review_budget,
 )
+from split_pr_script_types import JsonObject
 from split_pr_scripts_constants.config.analyze_constants import (
     ERROR_SLICE_EXCEEDS_REVIEW_BUDGET,
-    EXIT_CODE_FAILURE,
-    EXIT_CODE_SUCCESS,
     MAXIMUM_SLICE_CHANGED_LINES,
     MAXIMUM_SLICE_FILE_COUNT,
+)
+from split_pr_scripts_constants.config.common_constants import (
+    EXIT_CODE_FAILURE,
+    EXIT_CODE_SUCCESS,
+    JSON_INDENT_SPACES,
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.plan_constants import (
     ALL_REQUIRED_PLAN_KEYS,
     ALL_REQUIRED_SLICE_KEYS,
+    ERROR_DUPLICATE_FILES_COUNT,
+    ERROR_EMPTY_SLICES_COUNT,
+    ERROR_MISSING_FILES_COUNT,
     ERROR_NO_FILES,
     ERROR_NO_SLICES,
     ERROR_PLAN_INVALID_JSON,
@@ -41,7 +48,8 @@ from split_pr_scripts_constants.config.plan_constants import (
     ERROR_PLAN_UNREADABLE,
     ERROR_SLICE_CHANGED_LINES_TYPE,
     ERROR_SLICE_MISSING_KEY,
-    JSON_INDENT_SPACES,
+    ERROR_SLICE_NOT_OBJECT,
+    ERROR_UNKNOWN_FILES_COUNT,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_PROPOSED_SLICES,
     PLAN_ROOT_MUST_BE_OBJECT,
@@ -62,8 +70,6 @@ from split_pr_scripts_constants.config.plan_constants import (
     VERIFY_KEY_SOURCE_COUNT,
     VERIFY_KEY_UNKNOWN_FILES,
 )
-
-JsonObject = dict[str, object]
 
 
 def load_plan(plan_path: Path) -> JsonObject:
@@ -213,7 +219,7 @@ def _inspect_slices(
     inspection = _SliceInspection()
     for each_slice in all_slices:
         if not isinstance(each_slice, dict):
-            inspection.all_structure_errors.append("slice entry is not an object")
+            inspection.all_structure_errors.append(ERROR_SLICE_NOT_OBJECT)
             continue
         _inspect_one_slice(each_slice, churn_by_path, inspection)
     return inspection
@@ -301,13 +307,13 @@ def _coverage_report(
         each_path for each_path, each_count in count_by_path.items() if each_count > 1
     )
     if all_missing:
-        all_errors.append(f"missing_files:{len(all_missing)}")
+        all_errors.append(ERROR_MISSING_FILES_COUNT % len(all_missing))
     if all_unknown:
-        all_errors.append(f"unknown_files:{len(all_unknown)}")
+        all_errors.append(ERROR_UNKNOWN_FILES_COUNT % len(all_unknown))
     if all_duplicates:
-        all_errors.append(f"duplicate_files:{len(all_duplicates)}")
+        all_errors.append(ERROR_DUPLICATE_FILES_COUNT % len(all_duplicates))
     if all_empty_slices:
-        all_errors.append(f"empty_slices:{len(all_empty_slices)}")
+        all_errors.append(ERROR_EMPTY_SLICES_COUNT % len(all_empty_slices))
     return {
         VERIFY_KEY_IS_VALID: not all_errors,
         VERIFY_KEY_MISSING_FILES: all_missing,

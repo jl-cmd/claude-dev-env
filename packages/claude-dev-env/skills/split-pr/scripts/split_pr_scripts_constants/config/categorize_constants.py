@@ -9,8 +9,6 @@ before the database, contracts, backend, frontend, and config patterns see it.
 
 from __future__ import annotations
 
-from .common_constants import PATH_SEPARATOR  # noqa: F401
-
 LAYER_DATABASE = "database"
 LAYER_CONTRACTS = "contracts"
 LAYER_BACKEND = "backend"

@@ -28,7 +28,6 @@ from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
     GH_FIELD_URL,
     GH_PAGINATE_FLAG,
     MAXIMUM_SLICE_CHANGED_LINES,
-    PLAN_THRESHOLD_NOTE_KEY,
 )
 from split_pr_scripts_constants.config.categorize_constants import (  # noqa: E402
     LAYER_BACKEND,
@@ -39,6 +38,7 @@ from split_pr_scripts_constants.config.plan_constants import (  # noqa: E402
     FILE_STATUS_REMOVED,
     PLAN_KEY_ALL_FILES,
     PLAN_KEY_PROPOSED_SLICES,
+    PLAN_KEY_THRESHOLD_NOTE,
     SLICE_KEY_BRANCH,
     SLICE_KEY_SLUG,
 )
@@ -194,7 +194,7 @@ def test_a_few_files_with_heavy_churn_still_advises_a_split() -> None:
         title_prefix=TITLE_PREFIX,
     )
 
-    assert plan_payload[PLAN_THRESHOLD_NOTE_KEY] is None
+    assert plan_payload[PLAN_KEY_THRESHOLD_NOTE] is None
     all_slices = plan_payload[PLAN_KEY_PROPOSED_SLICES]
     assert isinstance(all_slices, list)
     assert len(all_slices) > 1
@@ -216,7 +216,7 @@ def test_a_pr_inside_the_review_budget_emits_one_slice_with_the_optional_note() 
     all_slices = plan_payload[PLAN_KEY_PROPOSED_SLICES]
     assert isinstance(all_slices, list)
     assert len(all_slices) == 1
-    assert plan_payload[PLAN_THRESHOLD_NOTE_KEY]
+    assert plan_payload[PLAN_KEY_THRESHOLD_NOTE]
     assert len(all_slices[0]["files"]) == SMALL_PR_FILE_COUNT
 
 
@@ -320,4 +320,4 @@ def test_a_heavy_single_file_pr_is_not_called_optional() -> None:
         title_prefix=TITLE_PREFIX,
     )
 
-    assert plan_payload[PLAN_THRESHOLD_NOTE_KEY] is None
+    assert plan_payload[PLAN_KEY_THRESHOLD_NOTE] is None

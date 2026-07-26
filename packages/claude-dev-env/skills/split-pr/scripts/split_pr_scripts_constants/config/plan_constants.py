@@ -6,8 +6,6 @@ looking for a plan field has exactly one module to open.
 
 from __future__ import annotations
 
-from .common_constants import JSON_INDENT_SPACES  # noqa: F401
-
 PLAN_KEY_PR_NUMBER = "pr_number"
 PLAN_KEY_TITLE = "title"
 PLAN_KEY_BASE_REF = "base_ref"

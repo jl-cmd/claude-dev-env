@@ -1,31 +1,13 @@
 """CLI and GitHub field constants for analyze_pr.
 
 Shared CLI, JSON, and gh names come from ``common_constants``; plan field names
-come from ``plan_constants``. The re-exported aliases at the foot of this module
-keep the older ``GH_PR_VIEW`` and ``PLAN_*_KEY`` spellings importable while
-``analyze_pr`` still names them.
+come from ``plan_constants``. Every consumer imports each of those names from
+its owning module, so this module holds only the analyze-specific values.
 """
 
 from __future__ import annotations
 
-from .common_constants import (
-    EXIT_CODE_FAILURE,  # noqa: F401
-    EXIT_CODE_SUCCESS,  # noqa: F401
-    FIELD_LIST_SEPARATOR,
-    GH_COMMAND,  # noqa: F401
-    GH_JSON_FLAG,  # noqa: F401
-    GH_PR,
-    GH_REPO_FLAG,  # noqa: F401
-    GH_VIEW,  # noqa: F401
-    JSON_INDENT_SPACES,  # noqa: F401
-    PAYLOAD_KEY_ERROR,  # noqa: F401
-)
-from .plan_constants import (
-    PLAN_KEY_BODY_EXCERPT,
-    PLAN_KEY_THRESHOLD_NOTE,
-    PLAN_KEY_URL,
-    PLAN_ROOT_MUST_BE_OBJECT,  # noqa: F401
-)
+from .common_constants import FIELD_LIST_SEPARATOR
 
 BODY_EXCERPT_MAX_LENGTH = 400
 
@@ -96,8 +78,3 @@ WARNING_OVERSIZED_ATOMIC_SLICE = "oversized_atomic_slice"
 ERROR_SLICE_EXCEEDS_REVIEW_BUDGET = (
     "slice %s exceeds review budget (files=%s/%s, changed_lines=%s/%s)"
 )
-
-GH_PR_VIEW = GH_PR
-PLAN_BODY_EXCERPT_KEY = PLAN_KEY_BODY_EXCERPT
-PLAN_URL_KEY = PLAN_KEY_URL
-PLAN_THRESHOLD_NOTE_KEY = PLAN_KEY_THRESHOLD_NOTE
