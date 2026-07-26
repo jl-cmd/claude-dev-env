@@ -118,7 +118,9 @@ Report the `supersede` object from execute JSON (`commented`, `closed`, `child_p
 
 Default behavior is **one split pass and stop**. Phase 6 runs only when the operator asks for it in the invocation with the `--split-further` flag (`/split-pr <pr#> --split-further`). Without that flag, report Phase 5 and finish.
 
-With `--split-further`, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): re-split each new draft until every leaf **fits a small review** (or is `oversized_atomic` / depth-capped). `MAXIMUM_RECURSIVE_SPLIT_DEPTH` is **1** — one generation of children below the original PR — and `execute_split.py` enforces it: pass the candidate's depth as `--recursion-depth <n>` and a run above the maximum stops with an error.
+With `--split-further`, run the loop in [reference/split-further-loop.md](reference/split-further-loop.md): walk each new draft and report whether it **fits a small review**, is `oversized_atomic`, or is still oversized. The loop executes nothing.
+
+Pass 0 creates one generation of children below the original PR, and nothing re-splits those children. `MAXIMUM_EXECUTABLE_SPLIT_DEPTH` is **0** — the highest depth a run may execute at — and `execute_split.py` reads the depth from the plan itself: a plan whose source branch is a generated `split/<pr>/<NN>-<slug>` branch reads as depth 1 and stops with an error, with or without `--recursion-depth`. That flag may raise the depth, never lower it.
 
 ## Constraints
 
@@ -126,7 +128,7 @@ With `--split-further`, run the loop in [reference/split-further-loop.md](refere
 - One split pass by default; Phase 6 recursion runs only with `--split-further`.
 - Draft stacked PRs; dependency bases preserved.
 - Scripts own git/gh mechanics; the agent owns plan judgment and `AskUserQuestion` (Pass 0 only).
-- Approval before any non-dry-run execute. An opt-in `--split-further` pass inherits Pass 0's approval and stops at `MAXIMUM_RECURSIVE_SPLIT_DEPTH`.
+- Every non-dry-run execute needs its own approval. Pass 0's approval covers Pass 0 alone; a `--split-further` pass asks again, and `execute_split.py` refuses any plan whose source branch Pass 0 generated.
 - No force-push. No ready. No delete of the source branch (source PR may close as superseded; branch stays).
 
 ## Sub-skills

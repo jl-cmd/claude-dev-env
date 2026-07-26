@@ -20,9 +20,10 @@ import tempfile
 from pathlib import Path
 
 from split_pr_scripts_constants.config.analyze_constants import (
+    BRANCH_NAME_SEPARATOR,
+    BRANCH_PREFIX,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
-    MAXIMUM_RECURSIVE_SPLIT_DEPTH,
     PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.execute_constants import (
@@ -33,6 +34,7 @@ from split_pr_scripts_constants.config.execute_constants import (
     ERROR_DIRTY_TREE,
     ERROR_EMPTY_SLICE_AFTER_CHECKOUT,
     ERROR_EXECUTE_FAILED,
+    ERROR_NEGATIVE_RECURSION_DEPTH,
     ERROR_PR_CREATE_FAILED,
     ERROR_PUSH_FAILED,
     ERROR_RECURSION_DEPTH_EXCEEDED,
@@ -46,6 +48,7 @@ from split_pr_scripts_constants.config.execute_constants import (
     GH_PR,
     GH_REPO_FLAG,
     GH_TITLE,
+    GENERATED_SLICE_BRANCH_DEPTH,
     GIT_ADD,
     GIT_ADD_PATHSPEC,
     GIT_BRANCH,
@@ -66,6 +69,7 @@ from split_pr_scripts_constants.config.execute_constants import (
     GIT_STATUS,
     JSON_INDENT_SPACES,
     MARKDOWN_BODY_SUFFIX,
+    MAXIMUM_EXECUTABLE_SPLIT_DEPTH,
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
     PAYLOAD_KEY_FAILED_SLICE,
@@ -171,29 +175,100 @@ def build_dry_run_steps(plan_payload: JsonObject) -> list[JsonObject]:
     return all_steps
 
 
-def guard_recursive_split_depth(recursion_depth: int) -> None:
-    """Stop a run whose Phase-6 recursion depth passes the enforced bound.
+def derive_split_depth_from_source_branch(source_branch: str) -> int:
+    """Report the split depth a plan's own source branch proves.
 
     ::
 
-        maximum depth 1
-        ok:   depth 0 (Pass 0)      -> returns
-        ok:   depth 1 (one re-split) -> returns
-        flag: depth 2               -> ValueError
+        ok:   feature/big           -> 0  operator branch, Pass 0
+        flag: split/377/05-config   -> 1  already a generated slice
+        flag: split/377             -> 1  malformed split name, fail closed
 
-    Pass 0 runs at depth 0. Each opt-in re-split of a child raises the depth
-    by one, so the bound caps how many generations a single approval spawns.
+    ``_assign_stack_branches`` in ``analyze_pr.py`` names every generated
+    slice ``split/<pr>/<NN>-<slug>``, so a source branch under the
+    ``split/`` prefix is the output of an earlier split pass and its run
+    sits at least one generation below the original pull request. A
+    ``split/``-prefixed name that misses the rest of that shape reports
+    the same depth: an unrecognized name counts as deeper, never
+    shallower.
 
     Args:
-        recursion_depth: Generations below the original pull request.
+        source_branch: The plan payload's source branch name.
+
+    Returns:
+        0 for an operator branch, GENERATED_SLICE_BRANCH_DEPTH for a
+        branch the split pipeline generated.
+    """
+    all_segments = source_branch.strip().split(BRANCH_NAME_SEPARATOR)
+    if all_segments[0] != BRANCH_PREFIX:
+        return 0
+    return GENERATED_SLICE_BRANCH_DEPTH
+
+
+def resolve_effective_split_depth(
+    plan_payload: JsonObject,
+    reported_recursion_depth: int,
+) -> int:
+    """Combine the caller's reported depth with the depth the plan proves.
+
+    ::
+
+        ok:   reported 0, source feature/big         -> 0
+        flag: reported 0, source split/377/05-config -> 1  derived wins
+        flag: reported -5                            -> ValueError
+
+    The derived depth wins whenever it is higher, so a caller that omits
+    ``--recursion-depth`` (or passes a smaller number) cannot report a
+    generated slice as a fresh Pass 0.
+
+    Args:
+        plan_payload: Verified plan holding the source branch.
+        reported_recursion_depth: Depth the caller passed on the CLI.
+
+    Returns:
+        The higher of the reported and derived depths.
 
     Raises:
-        ValueError: When recursion_depth passes MAXIMUM_RECURSIVE_SPLIT_DEPTH.
+        ValueError: When reported_recursion_depth is negative.
     """
-    if recursion_depth > MAXIMUM_RECURSIVE_SPLIT_DEPTH:
+    if reported_recursion_depth < 0:
+        raise ValueError(ERROR_NEGATIVE_RECURSION_DEPTH % reported_recursion_depth)
+    source_branch = str(plan_payload.get(PLAN_KEY_SOURCE_BRANCH) or "")
+    derived_depth = derive_split_depth_from_source_branch(source_branch)
+    return max(derived_depth, reported_recursion_depth)
+
+
+def guard_recursive_split_depth(
+    plan_payload: JsonObject,
+    reported_recursion_depth: int,
+) -> None:
+    """Stop a run whose effective split depth passes the executable bound.
+
+    ::
+
+        maximum executable depth 0
+        ok:   depth 0 (Pass 0)            -> returns
+        flag: depth 1 (re-split of a child) -> ValueError
+
+    Pass 0 splits the original pull request into one generation of
+    children. Nothing re-splits those children, so every depth above the
+    bound stops here, before any branch, push, or pull request.
+
+    Args:
+        plan_payload: Verified plan holding the source branch.
+        reported_recursion_depth: Depth the caller passed on the CLI.
+
+    Raises:
+        ValueError: When the effective depth is negative or passes
+            MAXIMUM_EXECUTABLE_SPLIT_DEPTH.
+    """
+    effective_depth = resolve_effective_split_depth(
+        plan_payload, reported_recursion_depth
+    )
+    if effective_depth > MAXIMUM_EXECUTABLE_SPLIT_DEPTH:
         raise ValueError(
             ERROR_RECURSION_DEPTH_EXCEEDED
-            % (recursion_depth, MAXIMUM_RECURSIVE_SPLIT_DEPTH)
+            % (effective_depth, MAXIMUM_EXECUTABLE_SPLIT_DEPTH)
         )
 
 
@@ -216,8 +291,9 @@ def execute_plan(
         should_push: When True, push branches to origin.
         should_supersede: When True, close source_pr_number after a full
             multi-slice draft stack lands.
-        recursion_depth: Generations below the original pull request; 0 for
-            the operator-approved Pass 0.
+        recursion_depth: Generations below the original pull request the
+            caller reports; 0 for the operator-approved Pass 0. The depth
+            derived from the plan's source branch wins when it is higher.
 
     Returns:
         Result payload with created slice metadata.
@@ -227,7 +303,7 @@ def execute_plan(
         ValueError: When the depth bound is passed or the plan fails coverage
             verification.
     """
-    guard_recursive_split_depth(recursion_depth)
+    guard_recursive_split_depth(plan_payload, recursion_depth)
     report = verify_plan(plan_payload)
     if not report[VERIFY_KEY_IS_VALID]:
         raise ValueError(ERROR_EXECUTE_FAILED % report)
@@ -740,8 +816,9 @@ def _parse_arguments() -> argparse.Namespace:
         type=int,
         default=0,
         help=(
-            "Generations below the original pull request; 0 for Pass 0. Runs "
-            f"above {MAXIMUM_RECURSIVE_SPLIT_DEPTH} stop."
+            "Generations below the original pull request; 0 for Pass 0. The "
+            "depth read from the plan's source branch wins when it is higher, "
+            f"and runs above depth {MAXIMUM_EXECUTABLE_SPLIT_DEPTH} stop."
         ),
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")

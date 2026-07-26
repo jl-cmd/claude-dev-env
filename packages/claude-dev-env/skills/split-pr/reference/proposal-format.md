@@ -13,7 +13,7 @@ Cover, in order:
 3. **Slice table** — index, story, file count, branch, base  
 4. **Merge order** — `1 → 2 → …`  
 5. **Execute mode after approve** — draft stacked PRs (default) or local branches only  
-6. **Split further** — off unless the operator passed `--split-further`; state which. Approval before any non-dry-run execute covers the opt-in recursive passes, bounded at depth 1 (see [split-further-loop.md](split-further-loop.md))  
+6. **Split further** — off unless the operator passed `--split-further`; state which. Every non-dry-run execute needs its own approval, and this one covers Pass 0 alone: a later pass over any slice Pass 0 created asks again (see [split-further-loop.md](split-further-loop.md))  
 7. **Source branch** — stays intact (no rewrite, no force-push)
 
 Keep it scannable: short paragraphs, one table, no open-ended “how should we split?” prose.
@@ -26,7 +26,7 @@ After the brief is visible, call `AskUserQuestion` with a short confirm question
 2. **Approve local branches only** — execute without push/PRs  
 3. **Abort** — no git mutations  
 
-The question text may restate the slice count and merge order in one line. Approval before any non-dry-run execute: this answer is that approval, and with `--split-further` it also covers the bounded recursive passes, so note that those extra draft PRs appear without another ask. Full tables and decision rationale live in the chat brief above the tool call.
+The question text may restate the slice count and merge order in one line. Every non-dry-run execute needs its own approval, and this answer is the approval for Pass 0 alone: it creates the one generation of slice PRs shown in the brief and no more. Splitting any of those slices again needs a fresh approval, so no extra draft PRs appear without another ask. Full tables and the reasons behind each decision live in the chat brief above the tool call.
 
 Use **Other** for adjust instructions (move path X to slice Y, rename, drop a layer merge). After adjust: edit plan → verify → new decision brief → new `AskUserQuestion`.
 

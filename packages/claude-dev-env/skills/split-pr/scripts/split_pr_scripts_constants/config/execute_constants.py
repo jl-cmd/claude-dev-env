@@ -58,8 +58,11 @@ ERROR_PUSH_FAILED = "push failed for %s: %s"
 ERROR_PR_CREATE_FAILED = "gh pr create failed for %s: %s"
 ERROR_EMPTY_SLICE_AFTER_CHECKOUT = "no files staged for slice %s after checkout"
 ERROR_RECURSION_DEPTH_EXCEEDED = (
-    "recursive split depth %s exceeds the maximum of %s; Phase 6 recursion is "
-    "opt-in and bounded"
+    "split depth %s passes the maximum executable depth %s; only a Pass 0 run "
+    "off an operator branch executes, so this generated slice is not re-split"
+)
+ERROR_NEGATIVE_RECURSION_DEPTH = (
+    "recursion depth %s is negative; pass 0 for Pass 0 or a positive integer"
 )
 ERROR_SUPERSEDE_COMMENT_FAILED = "gh pr comment failed for source #%s: %s"
 ERROR_SUPERSEDE_CLOSE_FAILED = "gh pr close failed for source #%s: %s"
@@ -74,6 +77,18 @@ GIT_CHECKOUT_FORCE_CREATE = "-B"
 GIT_ADD_PATHSPEC = "--"
 PAYLOAD_KEY_PARTIAL = "partial"
 PAYLOAD_KEY_FAILED_SLICE = "failed_slice"
+
+MAXIMUM_EXECUTABLE_SPLIT_DEPTH = 0
+"""Highest split depth a run may execute at, counted as a depth value.
+
+Depth 0 is Pass 0: the operator-approved split of the original pull
+request, which creates one generation of child slices. Depth 1 is a
+re-split of one of those children. The bound is 0, so Pass 0 executes and
+every deeper generation stops.
+"""
+
+GENERATED_SLICE_BRANCH_DEPTH = 1
+"""Depth reported for a source branch that is itself a generated slice."""
 
 MINIMUM_SLICES_FOR_SUPERSEDE = 2
 PR_URL_NUMBER_MARKER = "/pull/"

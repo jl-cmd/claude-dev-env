@@ -14,16 +14,23 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 from execute_split import (  # noqa: E402
+    _parse_arguments,
     build_dry_run_steps,
+    derive_split_depth_from_source_branch,
     execute_plan,
     guard_recursive_split_depth,
     is_working_tree_dirty,
+    main,
+    resolve_effective_split_depth,
     resolve_repo_root,
 )
 from split_pr_scripts_constants.config.analyze_constants import (  # noqa: E402
-    MAXIMUM_RECURSIVE_SPLIT_DEPTH,
+    EXIT_CODE_FAILURE,
+    PAYLOAD_KEY_ERROR,
 )
 from split_pr_scripts_constants.config.execute_constants import (  # noqa: E402
+    GENERATED_SLICE_BRANCH_DEPTH,
+    MAXIMUM_EXECUTABLE_SPLIT_DEPTH,
     PAYLOAD_KEY_CREATED,
     PAYLOAD_KEY_DRY_RUN,
     PAYLOAD_KEY_SKIPPED,
@@ -185,14 +192,81 @@ def test_execute_plan_partial_failure_includes_created(tmp_path: Path) -> None:
     assert payload[PAYLOAD_KEY_CREATED][0]["branch"] == "split/99/01-database"
 
 
-def test_guard_recursive_split_depth_allows_depth_at_the_bound() -> None:
-    guard_recursive_split_depth(MAXIMUM_RECURSIVE_SPLIT_DEPTH)
+def slice_source_plan() -> dict:
+    plan_payload = sample_plan()
+    plan_payload[PLAN_KEY_SOURCE_BRANCH] = "split/377/05-split-further"
+    return plan_payload
+
+
+@pytest.mark.parametrize(
+    ("source_branch", "expected_depth"),
+    [
+        ("feature/big", 0),
+        ("main", 0),
+        ("cleanup/478-depth-guard", 0),
+        ("split/377/05-split-further", GENERATED_SLICE_BRANCH_DEPTH),
+        ("split/99/01-database", GENERATED_SLICE_BRANCH_DEPTH),
+        ("split/377", GENERATED_SLICE_BRANCH_DEPTH),
+        ("split", GENERATED_SLICE_BRANCH_DEPTH),
+    ],
+)
+def test_derive_split_depth_from_source_branch_reads_generated_slice_shape(
+    source_branch: str,
+    expected_depth: int,
+) -> None:
+    assert derive_split_depth_from_source_branch(source_branch) == expected_depth
+
+
+def test_resolve_effective_split_depth_keeps_the_higher_derived_depth() -> None:
+    assert resolve_effective_split_depth(slice_source_plan(), 0) == (
+        GENERATED_SLICE_BRANCH_DEPTH
+    )
+
+
+def test_resolve_effective_split_depth_keeps_a_higher_reported_depth() -> None:
+    reported_depth = GENERATED_SLICE_BRANCH_DEPTH + 3
+    assert resolve_effective_split_depth(sample_plan(), reported_depth) == (
+        reported_depth
+    )
+
+
+def test_resolve_effective_split_depth_rejects_a_negative_reported_depth() -> None:
+    with pytest.raises(ValueError) as raised:
+        resolve_effective_split_depth(sample_plan(), -5)
+    assert "-5" in str(raised.value)
+
+
+def test_guard_recursive_split_depth_allows_pass_zero() -> None:
+    guard_recursive_split_depth(sample_plan(), MAXIMUM_EXECUTABLE_SPLIT_DEPTH)
 
 
 def test_guard_recursive_split_depth_rejects_depth_past_the_bound() -> None:
     with pytest.raises(ValueError) as raised:
-        guard_recursive_split_depth(MAXIMUM_RECURSIVE_SPLIT_DEPTH + 1)
-    assert str(MAXIMUM_RECURSIVE_SPLIT_DEPTH) in str(raised.value)
+        guard_recursive_split_depth(
+            sample_plan(), MAXIMUM_EXECUTABLE_SPLIT_DEPTH + 1
+        )
+    assert str(MAXIMUM_EXECUTABLE_SPLIT_DEPTH) in str(raised.value)
+
+
+def test_guard_blocks_a_generated_slice_source_with_no_reported_depth() -> None:
+    with pytest.raises(ValueError) as raised:
+        guard_recursive_split_depth(slice_source_plan(), 0)
+    assert str(GENERATED_SLICE_BRANCH_DEPTH) in str(raised.value)
+
+
+def is_depth_executable(candidate_depth: int) -> bool:
+    try:
+        guard_recursive_split_depth(sample_plan(), candidate_depth)
+    except ValueError:
+        return False
+    return True
+
+
+def test_exactly_one_generation_of_children_is_permitted() -> None:
+    all_executable_depths = [
+        each_depth for each_depth in range(5) if is_depth_executable(each_depth)
+    ]
+    assert all_executable_depths == [0]
 
 
 def test_execute_plan_stops_when_recursion_depth_passes_the_bound(
@@ -207,10 +281,126 @@ def test_execute_plan_stops_when_recursion_depth_passes_the_bound(
             should_create_prs=False,
             should_push=False,
             should_supersede=False,
-            recursion_depth=MAXIMUM_RECURSIVE_SPLIT_DEPTH + 1,
+            recursion_depth=MAXIMUM_EXECUTABLE_SPLIT_DEPTH + 1,
         )
     all_branch_lines = subprocess.run(
         ["git", "branch", "--list", "split/99/*"],
+        cwd=str(repo),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert all_branch_lines == ""
+
+
+def test_parse_arguments_defaults_recursion_depth_to_pass_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["execute_split.py", "--plan", "plan.json", "--push", "--create-prs", "--pretty"],
+    )
+    parsed_arguments = _parse_arguments()
+    assert parsed_arguments.recursion_depth == 0
+    assert parsed_arguments.push is True
+    assert parsed_arguments.create_prs is True
+
+
+def test_parse_arguments_reads_an_explicit_recursion_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["execute_split.py", "--plan", "plan.json", "--recursion-depth", "3"],
+    )
+    assert _parse_arguments().recursion_depth == 3
+
+
+def write_plan_file(tmp_path: Path, plan_payload: dict) -> Path:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan_payload), encoding="utf-8")
+    return plan_path
+
+
+def test_main_refuses_a_generated_slice_source_on_the_canonical_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = make_repo(tmp_path)
+    plan_path = write_plan_file(tmp_path, slice_source_plan())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "execute_split.py",
+            "--plan",
+            str(plan_path),
+            "--repo-path",
+            str(repo),
+            "--push",
+            "--create-prs",
+            "--pretty",
+        ],
+    )
+    assert main() == EXIT_CODE_FAILURE
+    reported_payload = json.loads(capsys.readouterr().out)
+    assert str(GENERATED_SLICE_BRANCH_DEPTH) in reported_payload[PAYLOAD_KEY_ERROR]
+
+
+def test_main_rejects_a_negative_recursion_depth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = make_repo(tmp_path)
+    plan_path = write_plan_file(tmp_path, sample_plan())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "execute_split.py",
+            "--plan",
+            str(plan_path),
+            "--repo-path",
+            str(repo),
+            "--recursion-depth",
+            "-5",
+        ],
+    )
+    assert main() == EXIT_CODE_FAILURE
+    reported_payload = json.loads(capsys.readouterr().out)
+    assert "-5" in reported_payload[PAYLOAD_KEY_ERROR]
+
+
+def test_canonical_phase_four_command_refuses_a_generated_slice_source(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    plan_path = write_plan_file(tmp_path, slice_source_plan())
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_DIRECTORY / "execute_split.py"),
+            "--plan",
+            str(plan_path),
+            "--push",
+            "--create-prs",
+            "--pretty",
+        ],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == EXIT_CODE_FAILURE
+    assert str(GENERATED_SLICE_BRANCH_DEPTH) in json.loads(completed.stdout)[
+        PAYLOAD_KEY_ERROR
+    ]
+    all_branch_lines = subprocess.run(
+        ["git", "branch", "--list", "split/*"],
         cwd=str(repo),
         check=True,
         capture_output=True,
