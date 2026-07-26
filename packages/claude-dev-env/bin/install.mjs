@@ -322,11 +322,10 @@ function isSkippedSourceEntry(entryName) {
  * `SKIPPED_SOURCE_FILE_EXTENSIONS` name what drops out.
  *
  * The skip and the cleanup of artifacts an earlier install already copied are one
- * code path. A `.pyc` under `~/.claude/skills` that a prior manifest records sits
- * outside the set this walk returns, so the next full install reads it as stale
- * and moves it into that run's backup root. A recorded artifact under another
- * managed root leaves the manifest on the same run, so `--uninstall` stops
- * naming it.
+ * code path. A `.pyc` a prior manifest records under any managed root sits
+ * outside the set this walk returns, so the next full install reads it as stale,
+ * moves it into that run's backup root, and drops it from the manifest the run
+ * writes.
  *
  * @param {string} directory The absolute source directory to walk.
  * @returns {string[]} Absolute paths of the files the installer copies.
@@ -1354,9 +1353,14 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
 }
 
 function writeManifest(installedFiles, skillNames) {
-    const manifest = { package: PACKAGE_NAME, version: PACKAGE_VERSION, installedAt: new Date().toISOString(), files: installedFiles };
+    const manifest = {
+        package: PACKAGE_NAME,
+        version: PACKAGE_VERSION,
+        installedAt: new Date().toISOString(),
+        [MANIFEST_FILES_KEY]: installedFiles,
+    };
     if (skillNames) {
-        manifest.skills = skillNames;
+        manifest[MANIFEST_SKILLS_KEY] = skillNames;
     }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }

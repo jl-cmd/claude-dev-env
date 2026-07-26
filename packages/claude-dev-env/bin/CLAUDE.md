@@ -21,7 +21,7 @@ The installer and its companion modules. Running `npx claude-dev-env` (or `node 
 
 `collectFiles` walks the package source and skips the artifacts a contributor's tooling writes beside it: the entry names `__pycache__`, `.ruff_cache`, `.pytest_cache`, `.mypy_cache`, `node_modules`, `.DS_Store`, and any file ending `.pyc` or `.pyo`. A skipped directory takes everything under it out of the walk. The `files` negations in `package.json` (`!**/__pycache__/**`, `!**/*.py[cod]`, the cache directories, `!**/*.log`, `!**/*.egg-info/**`) keep the same artifacts out of the published tarball, and `.npmignore` carries those patterns for tooling that reads it — keep the two in step. An `npx` install reads a clean tree; the walk covers a local `node bin/install.mjs` run against a working tree that holds the artifacts.
 
-The skip and the cleanup of artifacts an earlier install copied are one code path. A `.pyc` under `~/.claude/skills` that a prior manifest records sits outside the set the walk returns, so the next full install reads it as stale and moves it into that run's backup root. An artifact recorded under another managed root leaves the manifest on that same run, so `--uninstall` stops naming it.
+The skip and the cleanup of artifacts an earlier install copied are one code path. A `.pyc` a prior manifest records under any managed root sits outside the set the walk returns, so the next full install reads it as stale, moves it into that run's backup root, and drops it from the manifest the run writes.
 
 ## Copying a file whose name changed letter case
 
