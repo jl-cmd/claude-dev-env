@@ -26,6 +26,7 @@
     --risk-wash:  #F2DED7;
     --accent-wash:#DAE4EA;
     --calm:       #4A6B80;
+    --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
 
     --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
@@ -45,6 +46,7 @@
       --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
       --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
       --accent-wash: #16272F; --calm: #7E97A8;
+      --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
     }
   }
   :root[data-theme="dark"] {
@@ -55,6 +57,7 @@
     --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
     --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
     --accent-wash: #16272F; --calm: #7E97A8;
+    --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
   }
   :root[data-theme="light"] {
     --ink: #141A1F; --ink-soft: #30383F; --ink-faint: #42484E;
@@ -64,6 +67,7 @@
     --good: #3D6C48; --warn: #96631C; --risk: #8F3119;
     --good-wash: #DEE9E0; --warn-wash: #F2E7D1; --risk-wash: #F2DED7;
     --accent-wash: #DAE4EA; --calm: #4A6B80;
+    --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
   }
 
   body {
@@ -115,6 +119,15 @@
     font-family: var(--serif); font-size: 25px; font-weight: 600;
     line-height: 1.1; font-variant-numeric: tabular-nums;
   }
+  /* The denominator rides inside the number at a smaller size, so
+     "3 of 8" reads as one value rather than two. */
+  .figures b small {
+    font-size: 0.55em; font-weight: 500; color: var(--ink-faint);
+    margin-left: 2px;
+  }
+  .figures div[data-tone="good"] b { color: var(--good); }
+  .figures div[data-tone="warn"] b { color: var(--warn); }
+  .figures div[data-tone="risk"] b { color: var(--risk); }
   .figures span {
     font-family: var(--sans); font-size: 13.5px; font-weight: 500;
     letter-spacing: 0; text-transform: none; color: var(--ink-soft);
@@ -140,9 +153,14 @@
     font-family: var(--sans); font-size: 15px; font-weight: 700;
     letter-spacing: -0.003em; text-transform: none; color: var(--ink);
     padding: var(--s3) var(--s3) var(--s2);
-    border-top: 1px solid var(--rule-soft); margin-top: var(--s2);
+    margin-top: var(--s2); position: relative;
   }
-  .tabs-group:first-child { border-top: 0; margin-top: 0; }
+  .tabs-group::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: var(--seam);
+  }
+  .tabs-group:first-child { margin-top: 0; }
+  .tabs-group:first-child::before { display: none; }
 
   .tab {
     display: flex; align-items: center; gap: var(--s2);
@@ -282,7 +300,22 @@
     color: var(--ink);
   }
 
+  /* A command is quoted exactly, so the reader runs what the tab claims
+     was run. It scrolls rather than wrapping, since a wrapped command
+     line is a command the reader mistypes. */
+  pre {
+    margin: 0; overflow-x: auto; background: var(--paper);
+    border: 1px solid var(--rule-soft); border-left: 3px solid var(--calm);
+    padding: var(--s3) var(--s4); font-family: var(--mono);
+    font-size: 13px; line-height: 1.5; color: var(--ink);
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
   table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  caption {
+    text-align: left; color: var(--ink-soft); font-size: 13.5px;
+    padding-bottom: var(--s2);
+  }
   .scroller { overflow-x: auto; border: 1px solid var(--rule-soft); }
   th, td {
     text-align: left; padding: 7px var(--s3);
@@ -358,7 +391,16 @@
     padding: var(--s3) var(--s5); display: flex; flex-wrap: wrap;
     align-items: center; gap: var(--s4);
   }
-  .dock-status { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .dock-status { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  /* The counter gains a bar, so progress is read without arithmetic. */
+  .meter { display: flex; flex-direction: column; gap: 5px; min-width: 190px; }
+  .meter-track {
+    height: 8px; background: var(--paper);
+    border: 1px solid var(--rule-soft); overflow: hidden;
+  }
+  .meter-fill { height: 100%; background: var(--accent); transition: width 180ms ease; }
+  .meter-fill[data-full="true"] { background: var(--good); }
   .dock-actions { display: flex; gap: var(--s2); margin-left: auto; }
 
   .out {
@@ -401,7 +443,10 @@
   </div>
 
   <div class="dock">
-    <span class="dock-status" id="status"></span>
+    <div class="meter">
+      <span class="dock-status" id="status"></span>
+      <div class="meter-track"><div class="meter-fill" id="meter"></div></div>
+    </div>
     <div class="dock-actions">
       <button class="ghost" id="clear">Clear all</button>
       <button id="copy">Copy my decisions</button>
@@ -440,10 +485,10 @@ var CONFIG = {
      that carry a choice, so a "decisions on this page" figure that
      disagrees with it is the first thing a reader notices. */
   figures: [
+    {value: "3",  unit: " of 8", label: "Tabs asking for a decision"},
     {value: "1",  label: "Decision per tab"},
-    {value: "1",  label: "Source per claim"},
-    {value: "20", label: "Words per sentence, max"},
-    {value: "3",  label: "Decisions on this page"}
+    {value: "1",  label: "Source per claim", tone: "risk"},
+    {value: "20", label: "Words per sentence, max", tone: "warn"}
   ],
 
   /* Small print under the dock. Say where the numbers came from and
@@ -489,6 +534,7 @@ var CONFIG = {
      {heading: "Heading", paragraphs: ["Paragraph.", "Another."]}
      {heading: "Heading", bullets: ["Point.", "Another point."]}
      {heading: "Heading", table: {head: ["Col", "Col"], rows: [["a","b"]]}}
+     {heading: "Heading", command: "python -m pytest tests/"}
      {callout: "", claim: "One serif line.", paragraphs: ["..."]}
                                               tone: "" | "good" | "warn" | "risk"
                                               claim is optional
@@ -542,6 +588,7 @@ var ITEMS = [
         "A file you opened, named by path.",
         "A page you read, named by title."
       ]},
+      {heading: "A command carries its exact text", command: "python -m pytest packages/claude-dev-env\n# 437 test files, 0 failures"},
       {heading: "Name it, then link it", bullets: [
         "An issue or a pull request carries its link, not its number alone.",
         "A file carries its path. A command carries its exact text.",
@@ -799,6 +846,7 @@ var ITEMS = [
     summary: "Drawn from this repository, so you can check any line.",
     blocks: [
       {heading: "Read this first", table: {
+        caption: "Context the other tabs depend on.",
         head: ["Part", "Content"],
         rows: [
           ["Title", "Typing <code>pytest</code> reaches 10 of 447 test files."],
@@ -809,6 +857,7 @@ var ITEMS = [
         ]
       }},
       {heading: "Only you can answer", table: {
+        caption: "A judgement call with three live paths.",
         head: ["Part", "Content"],
         rows: [
           ["Title", "A rule change has to land twice, and nothing checks that it did."],
@@ -934,7 +983,9 @@ var ITEMS = [
     if ((CONFIG.figures || []).length) {
       html += '<div class="figures">';
       CONFIG.figures.forEach(function (f) {
-        html += "<div><b>" + f.value + "</b><span>" + f.label + "</span></div>";
+        html += "<div" + (f.tone ? ' data-tone="' + f.tone + '"' : "") + "><b>" +
+          f.value + (f.unit ? "<small>" + f.unit + "</small>" : "") +
+          "</b><span>" + f.label + "</span></div>";
       });
       html += "</div>";
     }
@@ -966,7 +1017,9 @@ var ITEMS = [
     var numeric = t.head.map(function (h, col) {
       return t.rows.every(function (r) { return /^[\d,.\s%£$€+-]+$/.test(String(r[col] || "")); });
     });
-    var html = '<div class="scroller"><table><thead><tr>';
+    var html = '<div class="scroller"><table>';
+    if (t.caption) { html += "<caption>" + t.caption + "</caption>"; }
+    html += "<thead><tr>";
     t.head.forEach(function (h, i) {
       html += "<th" + (numeric[i] ? ' class="num"' : "") + ">" + h + "</th>";
     });
@@ -997,6 +1050,7 @@ var ITEMS = [
         b.bullets.forEach(function (t) { html += "<li>" + t + "</li>"; });
         html += "</ul>";
       }
+      if (b.command) { html += "<pre><code>" + b.command + "</code></pre>"; }
       if (b.table) { html += renderTable(b.table); }
       html += "</section>";
     });
@@ -1128,6 +1182,10 @@ var ITEMS = [
       else { tab.removeAttribute("data-state"); }
     });
     document.getElementById("status").textContent = n + " of " + decidable.length + " decided";
+    var meter = document.getElementById("meter");
+    var share = decidable.length ? Math.round((n / decidable.length) * 100) : 0;
+    meter.style.width = share + "%";
+    meter.setAttribute("data-full", String(n > 0 && n === decidable.length));
   }
 
   panelsEl.querySelectorAll('input[type="radio"]').forEach(function (el) {

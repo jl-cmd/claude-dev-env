@@ -72,7 +72,7 @@ The file reads in this order — a token layer, then three numbered sections:
 | `title` | The headline. Say what the reader is being asked for. |
 | `intro` | One or two short sentences saying what the docket is. |
 | `steps` | A sequence the docket's work runs in, one entry per step. Renders as a stepper under the intro. An empty list hides it. Use it for a real order — a staged rollout, a migration, a dependency chain. Generic page instructions belong nowhere: the reader can see the tabs, the cards, and the copy button already. |
-| `figures` | List of `{value, label}` tiles. An empty list hides the row. Keep any "decisions on this page" figure in step with the dock, which counts only the items carrying a choice. |
+| `figures` | List of `{value, label}` tiles, each taking an optional `unit` and `tone`. `unit` rides inside the number at a smaller size, so `{value: "3", unit: " of 8"}` reads as one value. `tone` (`good` / `warn` / `risk`) colours the number itself. An empty list hides the row. Keep any "decisions on this page" figure in step with the dock, which counts only the items carrying a choice. |
 | `footnote` | Small print. Where the numbers came from, and where the answers live. |
 | `copyHeading` | Heading on the text the copy button produces. |
 | `storageKey` | Browser storage key. Give each docket its own so two open dockets never overwrite each other. |
@@ -107,11 +107,14 @@ Three kinds, mixed freely in any order:
 ```js
 {heading: "Heading", paragraphs: ["Paragraph.", "Another paragraph."]}
 {heading: "Heading", bullets: ["Point.", "Another point."]}
-{heading: "Heading", table: {head: ["Column", "Column"], rows: [["a", "b"]]}}
+{heading: "Heading", table: {caption: "Optional line above it.", head: ["Column"], rows: [["a"]]}}
+{heading: "Heading", command: "python -m pytest tests/"}
 {callout: "", claim: "One serif line.", paragraphs: ["The detail beneath it."]}
 ```
 
 Callout tones: `""` for a neutral recommendation, `"good"` for reassurance, `"warn"` for a warning, `"risk"` for a real hazard. An optional `claim` opens the callout in the serif face at a larger size, with the paragraphs beneath it.
+
+A `command` block quotes text exactly, in a bordered frame that scrolls rather than wraps — a wrapped command line is one the reader mistypes. It is what the evidence rule asks for when a claim rests on something you ran.
 
 A table column whose cells all read as numbers gets right-aligned and set in tabular figures, so a reader can compare down the column. Commas, decimal points, spaces, percent signs, currency marks, and a leading sign all count as part of a number. That happens on its own — there is nothing to mark up.
 
@@ -145,7 +148,7 @@ The copy button strips the tags and entities back out, so the text a reader past
 - **Keyboard**: arrow keys move along the rail, Home and End jump to the ends, every focus state is visible.
 - **Cross-tab links**: a link carrying `data-tab="<item id>"` jumps to that tab, so a rule can point at its worked example.
 - **Storage**: choices and notes are held in the browser under `CONFIG.storageKey`. Closing the tab and coming back keeps them. Nothing is sent anywhere.
-- **Counter**: the dock reads "N of M decided", counting only the tabs that carry a choice.
+- **Counter**: the dock reads "N of M decided", counting only the tabs that carry a choice, above a bar that fills as answers land and turns green on the last one.
 - **Rail marks**: two channels, so colour is never the only carrier. Shape says what you owe — a ring waits for an answer, a filled disc holds one, a bar asks for nothing. Colour says which kind of attention it wants, on a four-step ramp: red today, amber this session, blue worth reading, green settled.
 
   | Mark | Meaning |
