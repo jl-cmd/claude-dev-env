@@ -28,14 +28,15 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', 'audit-rubrics'];
+
+const SHARED_DIRECTORY_NAME = '_shared';
 
 /**
  * Every top-level directory under ~/.claude the installer writes into: the
  * content directories plus the two it fills through their own copy loops. The
- * uninstall purge walks this list to find the root a recorded file belongs to and
- * to drop a managed directory the purge empties, and the full-install stale-file
- * prune walks it to give each root its own diff.
+ * full-install stale-file prune walks this list to give each root its own diff,
+ * and the uninstall purge walks it together with the retired names below.
  */
 export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     ...CONTENT_DIRECTORIES,
@@ -43,8 +44,28 @@ export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     MANAGED_HOOKS_DIRECTORY_NAME,
 ];
 
+/**
+ * Top-level directories under ~/.claude that an earlier install wrote and this
+ * one no longer fills.
+ *
+ * The uninstall purge reads these alongside the managed names, so a record an
+ * older manifest wrote under one of them gets the same walk-up stop root, and the
+ * closing sweep drops the root once it stands empty. The stale-file prune leaves
+ * them out: nothing writes them, so they carry no diff.
+ */
+const RETIRED_MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [SHARED_DIRECTORY_NAME];
+
 const SKILL_MANIFEST_FILENAME = 'SKILL.md';
-const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
+
+/**
+ * Skill-tree directories that hold cross-skill assets rather than a skill.
+ *
+ * Every consuming skill reads these by relative path, so a scoped `--only`
+ * install ships them even when the selected group does not name them, and the
+ * retired-skill prune never moves them to backup.
+ */
+export const SHARED_SKILL_DIRECTORY_NAMES = new Set([SHARED_DIRECTORY_NAME]);
+const LEGACY_ROOT_SHARED_BACKUP_NAME = '_shared-root-legacy';
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
@@ -52,7 +73,7 @@ const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
 
 export const CORE_INCLUDE_DIRECTORIES = [
-    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', 'scripts',
 ];
 
 export const CORE_SKILLS = [
@@ -591,23 +612,40 @@ function isRemovableManifestRecord(candidatePath) {
 }
 
 /**
- * Return the managed top-level directory an installed path sits under.
+ * Return the top-level stop root an installed path sits under.
  *
  * The uninstall walk-up needs a stop root, and ~/.claude is the wrong one: a walk
  * that reaches it would try to remove the user's home configuration directory.
- * Naming the owning managed root keeps the walk inside the tree the installer
- * wrote, and a path under no managed root gets no walk at all.
+ * Naming the owning root keeps the walk inside a tree some install of ours wrote
+ * — managed today or retired — and a path under no such root gets no walk at all.
  *
  * @param {string} installedFilePath The absolute path a manifest record names.
- * @returns {string|null} The absolute managed root, or null when the path sits under none.
+ * @returns {string|null} The absolute stop root, or null when the path sits under none.
  */
 function owningManagedRoot(installedFilePath) {
     const resolvedPath = resolve(installedFilePath);
-    for (const directoryName of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
+    for (const directoryName of allPurgeStopRootDirectoryNames()) {
         const managedRoot = join(CLAUDE_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
     }
     return null;
+}
+
+/**
+ * List the top-level directory names the uninstall purge treats as stop roots.
+ *
+ * ::
+ *
+ *     managed today:  rules, docs, ..., skills, hooks
+ *     retired:        _shared
+ *
+ * A retired root belongs here because an older manifest still records files under
+ * it, and those records need the same bounded walk-up every other record gets.
+ *
+ * @returns {string[]} Managed directory names followed by retired ones.
+ */
+function allPurgeStopRootDirectoryNames() {
+    return [...MANAGED_TOP_LEVEL_DIRECTORY_NAMES, ...RETIRED_MANAGED_TOP_LEVEL_DIRECTORY_NAMES];
 }
 
 /**
@@ -1539,7 +1577,7 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     let movedDirectoryCount = 0;
     for (const skillDir of existingSkillDirs) {
         const skillName = skillDir.name;
-        if (NEVER_PRUNED_SKILL_DIRECTORIES.has(skillName)) continue;
+        if (SHARED_SKILL_DIRECTORY_NAMES.has(skillName)) continue;
         if (installedSkillNames.has(skillName)) continue;
         const isPruneCandidate = priorSkillNames.has(skillName) || retiredSkillNames.has(skillName);
         if (!isPruneCandidate) continue;
@@ -1556,6 +1594,32 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
 }
 
 /**
+ * Move a legacy top-level ~/.claude/_shared tree into the run's backup root.
+ *
+ * Shared assets now install under ~/.claude/skills/_shared/. A machine that ran
+ * an older install still carries files at ~/.claude/_shared/; renaming that
+ * directory into the same timestamped backup the retired skills use keeps the
+ * stale root recoverable and stops it shadowing the skills tree. A rename that
+ * fails is logged and the directory left in place, so the migration costs at
+ * most a cosmetic leftover.
+ *
+ * @param {string} backupRoot The run's timestamped backup directory.
+ * @param {string} claudeHomeDirectory The managed home holding the legacy tree.
+ * @returns {boolean} True when a legacy tree was found and moved.
+ */
+export function pruneLegacyRootSharedDirectory(backupRoot, claudeHomeDirectory = CLAUDE_HOME) {
+    const legacySharedDirectory = join(claudeHomeDirectory, SHARED_DIRECTORY_NAME);
+    if (!existsSync(legacySharedDirectory)) return false;
+    return moveIntoRunBackup(
+        legacySharedDirectory,
+        backupRoot,
+        LEGACY_ROOT_SHARED_BACKUP_NAME,
+        RETIRED_SKILL_REASON_LABEL,
+        claudeHomeDirectory,
+    );
+}
+
+/**
  * Move every file a prior install wrote under a managed root that this run leaves
  * unwritten into the run's backup root, one call per root.
  *
@@ -1568,9 +1632,9 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
  * Nothing moves unless a prior install recorded it. A user-authored file, a
  * runtime artifact, and a recorded path under no managed root — ~/.claude/CLAUDE.md,
  * settings.json, the manifest itself, and ~/.mypy.ini outside the home — all sit
- * outside every root's diff and stay where they are. ~/.claude/_shared and
- * ~/.claude/skills/_shared are distinct absolute paths, so the `_shared` root call
- * and the skills root call each see their own files and neither sees the other's.
+ * outside every root's diff and stay where they are. ~/.claude/skills/_shared sits
+ * inside the skills root, so the shared tree enters the skills root's diff alone
+ * and no path reaches two diffs.
  *
  * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
  * @param {string[]} currentInstalledFiles Every file this run copied.
@@ -1607,9 +1671,14 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
  * start invoke a missing script, so the reference leaves first and the script
  * follows.
  *
- * Both prunes report how much content reached the run's backup root, and their sum
- * is what backup retention answers to: the sweep of older recovery points runs
- * only once this run holds one of its own.
+ * The legacy top-level ~/.claude/_shared migration runs beside the retired-skill
+ * prune, before the stale-file pass, since it moves a whole tree rather than a
+ * manifest-diffed file.
+ *
+ * Each content prune reports what reached the run's backup root — a count from the
+ * retired-skill and stale-file prunes, a boolean from the legacy-shared migration
+ * — and backup retention answers to any one of them: the sweep of older recovery
+ * points runs only once this run holds one of its own.
  *
  * @param {Set<string>} copiedSkillNames Skill directory names this run wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
@@ -1623,6 +1692,7 @@ function runFullInstallPrunes(
     copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
 ) {
     const retiredSkillMovedCount = pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
+    const didMoveLegacyShared = pruneLegacyRootSharedDirectory(currentRunBackupRoot(), CLAUDE_HOME);
     const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
         join(CLAUDE_HOME, SETTINGS_FILE_NAME),
         retiredManagedHookRelativePaths(
@@ -1635,7 +1705,8 @@ function runFullInstallPrunes(
     const staleOutcome = pruneStaleFilesAcrossManagedRoots(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
-    const didRunMoveContent = retiredSkillMovedCount + staleOutcome.prunedCount > 0;
+    const didRunMoveContent =
+        didMoveLegacyShared || retiredSkillMovedCount + staleOutcome.prunedCount > 0;
     retainNewestRunBackupOnly(currentRunBackupRoot(), didRunMoveContent);
     return staleOutcome;
 }
@@ -1764,7 +1835,8 @@ function install(selectedGroups, options = {}) {
         if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
-            if (allowedSkills && !allowedSkills.has(skillDir.name)) continue;
+            const isSharedSkillDirectory = SHARED_SKILL_DIRECTORY_NAMES.has(skillDir.name);
+            if (allowedSkills && !isSharedSkillDirectory && !allowedSkills.has(skillDir.name)) continue;
             const skillSourceDirectory = join(skillsSource, skillDir.name);
             const skillDestinationDirectory = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME, skillDir.name);
             const stats = copyTree(skillSourceDirectory, skillDestinationDirectory);
@@ -1998,7 +2070,12 @@ function removeRecordedFile(filePath) {
  * Directory cleanup runs after the file loop so a directory holding two recorded
  * files is judged once both are gone. Each walk stops at the managed root the
  * purged file sits under, which keeps ~/.claude itself and every unmanaged
- * sibling directory in place.
+ * sibling directory in place. A retired root carries the same walk: a manifest
+ * written before shared assets moved into the skills tree records files under
+ * ~/.claude/_shared, and naming that root in
+ * `RETIRED_MANAGED_TOP_LEVEL_DIRECTORY_NAMES` gives those records a stop root, so
+ * the skeleton they empty is removed and anything the user authored in there —
+ * file or directory — stays, having entered no record's walk.
  *
  * @param {{requireManifest: boolean}} options `requireManifest` exits when no manifest exists.
  * @returns {number|void} 0 when no manifest exists and none is required.
@@ -2045,7 +2122,7 @@ function purgeManagedInstallation({ requireManifest }) {
     }
     unsetGlobalGitHooksPathIfOurs();
     unlinkSync(MANIFEST_FILE);
-    for (const directory of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
+    for (const directory of allPurgeStopRootDirectoryNames()) {
         const dirPath = join(CLAUDE_HOME, directory);
         try {
             if (existsSync(dirPath) && readdirSync(dirPath).length === 0) {

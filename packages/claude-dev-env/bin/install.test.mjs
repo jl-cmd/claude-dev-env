@@ -41,6 +41,8 @@ import {
     retiredManagedHookRelativePaths,
     pruneRetiredHookEntriesFromSettings,
     retainNewestRunBackupOnly,
+    pruneLegacyRootSharedDirectory,
+    SHARED_SKILL_DIRECTORY_NAMES,
 } from './install.mjs';
 import {
     expandHomeDirectoryTokens,
@@ -167,19 +169,23 @@ test('collectPackageSourceConflicts returns empty when directory is not inside a
 });
 
 
-test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ to ~/.claude/_shared/', () => {
+test('CONTENT_DIRECTORIES leaves _shared out because it ships inside the skills tree', () => {
     assert.ok(
-        CONTENT_DIRECTORIES.includes('_shared'),
-        '_shared must be in CONTENT_DIRECTORIES so the installer copies _shared/pr-loop/ alongside skills/',
+        !CONTENT_DIRECTORIES.includes('_shared'),
+        '_shared installs under ~/.claude/skills/_shared/ through the skills loop, not as its own content root',
     );
 });
 
 
-test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
+test('the shared skill directory installs on every scoped run so the advisor protocol always lands', () => {
     assert.ok(
-        CORE_INCLUDE_DIRECTORIES.includes('_shared'),
-        '_shared must ship with --only core so advisor-protocol.md lands for team-advisor/orchestrator',
+        SHARED_SKILL_DIRECTORY_NAMES.has('_shared'),
+        '_shared must bypass the --only skill filter so advisor-protocol.md lands for team-advisor/orchestrator',
     );
+});
+
+
+test('core includeDirectories ships scripts for the advisor CLI fallback', () => {
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),
         'scripts must ship with --only core so claude_chain_runner.py is available for advisor CLI fallback',
@@ -2133,5 +2139,42 @@ test('pruneStaleInstalledFiles leaves the run backup root standing when the rena
         );
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+
+test('pruneLegacyRootSharedDirectory moves an old top-level _shared tree into the run backup root', () => {
+    const claudeHomeDirectory = mkdtempSync(join(tmpdir(), 'legacy-shared-'));
+    try {
+        const legacySharedDirectory = join(claudeHomeDirectory, '_shared');
+        mkdirSync(join(legacySharedDirectory, 'pr-loop'), { recursive: true });
+        writeFileSync(join(legacySharedDirectory, 'pr-loop', 'audit-contract.md'), 'old shared doc\n');
+        const backupRoot = join(claudeHomeDirectory, '.claude-dev-env-pruned', 'run-timestamp');
+
+        const didMove = pruneLegacyRootSharedDirectory(backupRoot, claudeHomeDirectory);
+
+        assert.equal(didMove, true, 'the legacy tree reports as moved');
+        assert.equal(existsSync(legacySharedDirectory), false, 'the legacy tree no longer shadows the skills tree');
+        assert.equal(
+            readFileSync(join(backupRoot, '_shared-root-legacy', 'pr-loop', 'audit-contract.md'), 'utf8'),
+            'old shared doc\n',
+            'the moved content stays recoverable under the run backup root',
+        );
+    } finally {
+        rmSync(claudeHomeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('pruneLegacyRootSharedDirectory reports no move when no legacy _shared tree exists', () => {
+    const claudeHomeDirectory = mkdtempSync(join(tmpdir(), 'legacy-shared-absent-'));
+    try {
+        const backupRoot = join(claudeHomeDirectory, '.claude-dev-env-pruned', 'run-timestamp');
+
+        const didMove = pruneLegacyRootSharedDirectory(backupRoot, claudeHomeDirectory);
+
+        assert.equal(didMove, false, 'a fresh install reports nothing moved');
+        assert.equal(existsSync(backupRoot), false, 'no backup root is created when nothing moves');
+    } finally {
+        rmSync(claudeHomeDirectory, { recursive: true, force: true });
     }
 });

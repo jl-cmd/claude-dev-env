@@ -49,6 +49,7 @@ const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
 const CLAUDE_HUB_FILE_NAME = 'CLAUDE.md';
 const RULES_DIRECTORY_NAME = 'rules';
 const SHARED_DIRECTORY_NAME = '_shared';
+const LEGACY_SHARED_BACKUP_DIRECTORY_NAME = '_shared-root-legacy';
 const STALE_RULE_FILE_NAME = 'retired-rule.md';
 const STALE_SHARED_FILE_SEGMENTS = ['pr-loop', 'retired_shared.md'];
 const STALE_SHARED_SKILL_FILE_SEGMENTS = [SHARED_DIRECTORY_NAME, 'retired_skill_shared.md'];
@@ -1022,7 +1023,7 @@ test('a full reinstall moves a stale file out of every managed root into that ro
         const staleRulePath = seedStaleFileUnderManagedRoot(
             sandbox, [RULES_DIRECTORY_NAME, STALE_RULE_FILE_NAME],
         );
-        const staleSharedPath = seedStaleFileUnderManagedRoot(
+        const legacySharedPath = seedStaleFileUnderManagedRoot(
             sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
         );
         const staleSkillSharedPath = seedStaleFileUnderManagedRoot(
@@ -1031,7 +1032,7 @@ test('a full reinstall moves a stale file out of every managed root into that ro
 
         runInstaller(sandbox.homeDirectory, []);
 
-        for (const movedPath of [staleRulePath, staleSharedPath, staleSkillSharedPath]) {
+        for (const movedPath of [staleRulePath, legacySharedPath, staleSkillSharedPath]) {
             assert.equal(existsSync(movedPath), false, `${movedPath} leaves its managed root`);
         }
         assert.equal(
@@ -1043,24 +1044,23 @@ test('a full reinstall moves a stale file out of every managed root into that ro
         );
         assert.equal(
             prunedBackupContains(
-                sandbox.claudeDirectory, join(SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS),
+                sandbox.claudeDirectory,
+                join(LEGACY_SHARED_BACKUP_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS),
             ),
             true,
-            'the ~/.claude/_shared file mirrors its path under the _shared folder of the backup',
+            'the legacy ~/.claude/_shared tree moves whole into the legacy folder of the backup',
+        );
+        assert.equal(
+            existsSync(join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME)),
+            false,
+            'no top-level _shared directory is left to shadow the skills tree',
         );
         assert.equal(
             prunedSkillBackupContains(
                 sandbox.claudeDirectory, join(...STALE_SHARED_SKILL_FILE_SEGMENTS),
             ),
             true,
-            'the ~/.claude/skills/_shared file lands under the skills folder, so neither root prunes the other\'s content',
-        );
-        assert.equal(
-            prunedBackupContains(
-                sandbox.claudeDirectory, join(SHARED_DIRECTORY_NAME, ...STALE_SHARED_SKILL_FILE_SEGMENTS),
-            ),
-            false,
-            'the skills _shared file reaches the _shared root backup through no second move',
+            'the ~/.claude/skills/_shared file lands under the skills folder, where the skills root prunes it',
         );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
@@ -1301,6 +1301,81 @@ test('an uninstall removes the nested directories its records emptied and keeps 
         );
         assert.equal(existsSync(sandbox.claudeDirectory), true, 'the managed home itself stays');
         assert.equal(existsSync(unmanagedDirectory), true, 'a directory the installer never wrote stays');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('an uninstall clears the legacy ~/.claude/_shared skeleton its records emptied', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME)),
+            false,
+            'the legacy shared tree leaves no empty skeleton behind',
+        );
+        assert.equal(existsSync(sandbox.claudeDirectory), true, 'the managed home itself stays');
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('an uninstall keeps a legacy ~/.claude/_shared directory holding a user-authored file', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+        const legacySharedDirectory = join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME);
+        const userAuthoredPath = join(legacySharedDirectory, 'my-notes.md');
+        writeFileSync(userAuthoredPath, 'a file the user authored\n');
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(userAuthoredPath),
+            true,
+            'the file the user authored survives the uninstall',
+        );
+        assert.equal(
+            existsSync(legacySharedDirectory),
+            true,
+            'the directory holding that file stays standing',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('an uninstall keeps a user-authored empty directory under the legacy ~/.claude/_shared', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedStaleFileUnderManagedRoot(
+            sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
+        );
+        const legacySharedDirectory = join(sandbox.claudeDirectory, SHARED_DIRECTORY_NAME);
+        const userAuthoredDirectory = join(legacySharedDirectory, 'my-own-notes');
+        mkdirSync(userAuthoredDirectory, { recursive: true });
+
+        runInstaller(sandbox.homeDirectory, ['--uninstall']);
+
+        assert.equal(
+            existsSync(userAuthoredDirectory),
+            true,
+            'a directory no manifest record named enters no walk and stays, even while empty',
+        );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }
