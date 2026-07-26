@@ -1,6 +1,7 @@
 """Constants for code_rules_gate.py per CODE_RULES centralized-config rule."""
 
 import re
+from typing import Literal
 
 MAX_VIOLATIONS_PER_CHECK: int = 3
 
@@ -113,7 +114,7 @@ GIT_QUOTED_PATH_DELIMITER: str = '"'
 
 GIT_C_STYLE_ESCAPE_BACKSLASH: str = "\\"
 
-GIT_C_STYLE_ESCAPE_ENCODING: str = "unicode_escape"
+GIT_C_STYLE_ESCAPE_ENCODING: Literal["unicode_escape"] = "unicode_escape"
 
 GIT_C_STYLE_LATIN1_ENCODING: str = "latin-1"
 
