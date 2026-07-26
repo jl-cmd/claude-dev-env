@@ -1373,9 +1373,26 @@ class TestPrLabelerWorkflowContract:
         labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
         assert ".github/ci/pr_labeler.py" in labeler_step["run"]
 
-    def should_pass_a_config_argument_that_exists_on_disk(self) -> None:
+    def should_pass_a_config_argument_that_is_the_suite_config(self) -> None:
+        """Pins the workflow's `--config` path to the exact file the suite loads, not just any file.
+
+        ::
+
+            ok:   workflow --config resolves to CLAUDE_DEV_ENV_CONFIG_PATH  -> pass
+            flag: workflow --config points at a different, still-existing
+                  config file (a new downstream config, or a moved file
+                  updated only in the workflow)                            -> fails here
+
+        An existence check alone passes for any config file, so a workflow
+        drifted onto the wrong config would still read as correct while
+        every area, size, and prefix-liveness test kept validating the old
+        config through the module-level path. `load_labeler_config` already
+        fails collection when the file is missing, so identity subsumes
+        the existence check for free.
+        """
         labeler_step = _pr_labeler_step(_pr_labeler_workflow_steps())
+        assert "--config" in labeler_step["run"], "labeler step passes no --config"
         config_flag_tail = labeler_step["run"].split("--config", 1)[1]
         configured_config_path_token = config_flag_tail.split()[0]
         configured_config_path = _CI_SCRIPTS_DIR.parent.parent / configured_config_path_token
-        assert configured_config_path.exists()
+        assert configured_config_path.resolve() == CLAUDE_DEV_ENV_CONFIG_PATH.resolve()
