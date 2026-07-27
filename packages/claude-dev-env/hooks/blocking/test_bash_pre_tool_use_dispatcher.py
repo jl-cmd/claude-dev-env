@@ -212,13 +212,14 @@ def test_additional_context_is_collected_from_deciding_hooks() -> None:
     assert aggregated.all_additional_context == ["see docs/runbook.md"]
 
 
-def test_powershell_selects_the_three_shared_hooks() -> None:
+def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
     """Selecting for PowerShell yields the shared hooks in registration order."""
     powershell_paths = [
         each_entry.script_relative_path
         for each_entry in select_applicable_entries(POWERSHELL_TOOL_NAME)
     ]
     assert powershell_paths == [
+        "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
         "blocking/verified_commit_gate.py",
         "blocking/verdict_directory_write_blocker.py",
