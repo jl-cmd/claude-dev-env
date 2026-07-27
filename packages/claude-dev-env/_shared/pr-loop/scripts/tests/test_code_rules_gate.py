@@ -276,6 +276,77 @@ def test_staged_added_lines_by_file_maps_every_staged_code_file(
     assert added_lines_map[resolved_repository_root / "added_file.py"] == {1}
 
 
+def test_added_lines_by_file_staged_matches_per_file_for_new_and_empty_files(
+    temporary_git_repository: Path,
+) -> None:
+    write_file(temporary_git_repository / "seed.py", "seed = 1\n")
+    commit_all_files(temporary_git_repository, "seed")
+    write_file(temporary_git_repository / "brand_new.py", "alpha = 1\nbeta = 2\n")
+    write_file(temporary_git_repository / "empty_new.py", "")
+    stage_file(temporary_git_repository, "brand_new.py")
+    stage_file(temporary_git_repository, "empty_new.py")
+
+    brand_new_path = (temporary_git_repository / "brand_new.py").resolve()
+    empty_new_path = (temporary_git_repository / "empty_new.py").resolve()
+    combined_map = gate_module.added_lines_by_file_staged(
+        temporary_git_repository,
+        [brand_new_path, empty_new_path],
+    )
+    per_file_brand_new = gate_module.added_lines_for_staged_file(
+        temporary_git_repository,
+        "brand_new.py",
+    )
+    per_file_empty = gate_module.added_lines_for_staged_file(
+        temporary_git_repository,
+        "empty_new.py",
+    )
+
+    assert combined_map[brand_new_path] == per_file_brand_new == {1, 2}
+    assert combined_map[empty_new_path] == per_file_empty == set()
+
+
+def test_added_lines_by_file_staged_skips_git_diff_for_non_code_paths(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "value = 1\n")
+    write_file(temporary_git_repository / "notes.md", "docs\n")
+    commit_all_files(temporary_git_repository, "seed")
+    write_file(temporary_git_repository / "module.py", "value = 1\nextra = 2\n")
+    write_file(temporary_git_repository / "notes.md", "docs\nmore\n")
+    stage_file(temporary_git_repository, "module.py")
+    stage_file(temporary_git_repository, "notes.md")
+
+    original_combined = gate_module.added_line_maps.combined_added_line_map_staged
+    captured_pathspecs: list[list[str] | None] = []
+
+    def tracking_combined(
+        repository_root: Path,
+        all_relative_posix_paths: list[str] | None = None,
+    ) -> dict[str, set[int]]:
+        captured_pathspecs.append(
+            None if all_relative_posix_paths is None else list(all_relative_posix_paths)
+        )
+        return original_combined(repository_root, all_relative_posix_paths)
+
+    monkeypatch.setattr(
+        gate_module.added_line_maps,
+        "combined_added_line_map_staged",
+        tracking_combined,
+    )
+
+    module_path = (temporary_git_repository / "module.py").resolve()
+    notes_path = (temporary_git_repository / "notes.md").resolve()
+    added_lines_map = gate_module.added_lines_by_file_staged(
+        temporary_git_repository,
+        [module_path, notes_path],
+    )
+
+    assert captured_pathspecs == [["module.py"]]
+    assert added_lines_map[module_path] == {2}
+    assert added_lines_map[notes_path] == set()
+
+
 def test_main_staged_mode_blocks_when_staged_lines_introduce_violations(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2898,3 +2969,78 @@ def test_diff_mode_mixed_py_and_png_validates_py_silently_skips_png(
     assert _SKIPPING_UNREADABLE_MARKER not in captured.err
     assert "inspected 1 file(s)" in captured.err
     assert "mixed_icon.png" not in captured.err
+
+
+def test_run_staged_mode_calls_paths_from_git_staged_once(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Staged mode must read the staged index once and reuse the path list."""
+    write_file(temporary_git_repository / "plain.py", "value = 1\n")
+    stage_file(temporary_git_repository, "plain.py")
+    call_count = {"paths_from_git_staged": 0}
+    real_paths_from_git_staged = gate_module.paths_from_git_staged
+
+    def counting_paths_from_git_staged(repository_root: Path) -> list[Path]:
+        call_count["paths_from_git_staged"] += 1
+        return real_paths_from_git_staged(repository_root)
+
+    monkeypatch.setattr(gate_module, "paths_from_git_staged", counting_paths_from_git_staged)
+    monkeypatch.setattr(
+        gate_module.staged_test_running,
+        "paths_from_git_staged",
+        counting_paths_from_git_staged,
+    )
+    monkeypatch.setattr(gate_module, "staged_terminology_findings", lambda _root: [])
+    monkeypatch.setattr(gate_module, "_report_terminology_findings", lambda _findings: None)
+    monkeypatch.setattr(
+        gate_module,
+        "run_gate",
+        lambda *args, **kwargs: 0,
+    )
+    arguments = gate_module.parse_arguments(["--staged"])
+
+    exit_code = gate_module._run_staged_mode(lambda *_a, **_k: [], arguments, temporary_git_repository)
+
+    assert exit_code == 0
+    assert call_count["paths_from_git_staged"] == 1
+
+
+def test_run_diff_mode_resolves_merge_base_once(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Diff mode must resolve the merge base once and reuse that SHA."""
+    write_file(temporary_git_repository / "seed.py", "value = 1\n")
+    commit_all_files(temporary_git_repository, "seed")
+    write_file(temporary_git_repository / "changed.py", "value = 2\n")
+    commit_all_files(temporary_git_repository, "change")
+    call_count = {"resolve_merge_base": 0}
+    real_resolve_merge_base = gate_module.resolve_merge_base
+
+    def counting_resolve_merge_base(repository_root: Path, base_reference: str) -> str:
+        call_count["resolve_merge_base"] += 1
+        return real_resolve_merge_base(repository_root, base_reference)
+
+    monkeypatch.setattr(gate_module, "resolve_merge_base", counting_resolve_merge_base)
+    monkeypatch.setattr(
+        gate_module.git_file_sets,
+        "resolve_merge_base",
+        counting_resolve_merge_base,
+    )
+    monkeypatch.setattr(
+        gate_module.added_line_maps,
+        "resolve_merge_base",
+        counting_resolve_merge_base,
+    )
+    monkeypatch.setattr(
+        gate_module,
+        "run_gate",
+        lambda *args, **kwargs: 0,
+    )
+    arguments = gate_module.parse_arguments(["--base", "HEAD~1"])
+
+    exit_code = gate_module._run_diff_mode(lambda *_a, **_k: [], arguments, temporary_git_repository)
+
+    assert exit_code == 0
+    assert call_count["resolve_merge_base"] == 1

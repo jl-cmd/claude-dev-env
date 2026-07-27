@@ -161,17 +161,29 @@ __all__ = [
 ]
 
 
-def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str) -> set[int]:
+def added_lines_for_staged_file(
+    repository_root: Path,
+    relative_path_posix: str,
+    all_combined_added_lines: dict[str, set[int]] | None = None,
+) -> set[int]:
     """Return added line numbers within the staged diff for one file.
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
         relative_path_posix: Repository-relative POSIX path to inspect.
+        all_combined_added_lines: Optional precomputed map from one combined
+            ``git diff --cached --unified=0 --no-renames``; when the path is
+            present the map value is returned and no per-file diff runs.
 
     Returns:
         Line numbers added in the staged diff, or the whole staged blob when
-        the file is newly added.
+        the file is newly added and the combined map omits it.
     """
+    if (
+        all_combined_added_lines is not None
+        and relative_path_posix in all_combined_added_lines
+    ):
+        return all_combined_added_lines[relative_path_posix]
     diff_text = staged_unified_diff_text(repository_root, relative_path_posix)
     if diff_text.strip():
         return parse_added_line_numbers(diff_text)
@@ -182,10 +194,28 @@ def added_lines_for_staged_file(repository_root: Path, relative_path_posix: str)
     return set()
 
 
+def _staged_added_lines_for_resolved_path(
+    resolved_root: Path,
+    relative_posix: str,
+    all_combined_added_lines: dict[str, set[int]],
+) -> set[int]:
+    """Resolve staged added lines via the combined map threaded into the helper."""
+    return added_lines_for_staged_file(
+        resolved_root,
+        relative_posix,
+        all_combined_added_lines=all_combined_added_lines,
+    )
+
+
 def added_lines_by_file_staged(
     repository_root: Path, all_file_paths: list[Path]
 ) -> dict[Path, set[int]]:
     """Build a per-file map of staged-added line numbers.
+
+    Code paths are pathspec-filtered into one combined cached diff. Non-code
+    paths get an empty set without a git call. A path absent from the combined
+    map falls back to the per-file staged helper (including the newly-added
+    whole-blob case).
 
     Args:
         repository_root: Repository root for diff invocations.
@@ -196,20 +226,40 @@ def added_lines_by_file_staged(
     """
     resolved_root = repository_root.resolve()
     added_by_path: dict[Path, set[int]] = {}
+    all_code_relative_paths: list[str] = []
+    all_resolved_code_paths: list[tuple[Path, str]] = []
     for each_path in all_file_paths:
         resolved = added_line_maps._resolved_under_root(each_path, resolved_root)
         if resolved is None:
             continue
         relative_posix = str(resolved.relative_to(resolved_root)).replace("\\", "/")
-        added_by_path[resolved] = added_lines_for_staged_file(resolved_root, relative_posix)
+        if not is_code_path(resolved):
+            added_by_path[resolved] = set()
+            continue
+        all_code_relative_paths.append(relative_posix)
+        all_resolved_code_paths.append((resolved, relative_posix))
+    all_combined_added_lines = added_line_maps.combined_added_line_map_staged(
+        resolved_root, all_code_relative_paths
+    )
+    for each_resolved, each_relative_posix in all_resolved_code_paths:
+        added_by_path[each_resolved] = _staged_added_lines_for_resolved_path(
+            resolved_root,
+            each_relative_posix,
+            all_combined_added_lines,
+        )
     return added_by_path
 
 
-def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
+def _staged_pytest_exit_code_for_current_python(
+    repository_root: Path,
+    all_staged_paths: list[Path] | None = None,
+) -> int:
     """Run the staged test files, or skip them on a Python below the minimum.
 
     Args:
         repository_root: The repository root whose staged test files run.
+        all_staged_paths: Precomputed staged paths shared with the staged gate
+            file set; when omitted, the staged index is read inside the test run.
 
     Returns:
         0 when the running Python is below the staged-test minimum, otherwise the
@@ -226,7 +276,7 @@ def _staged_pytest_exit_code_for_current_python(repository_root: Path) -> int:
             f"minimum {minimum_version}; skipping the staged pytest step.\n"
         )
         return 0
-    return run_staged_test_files(repository_root)
+    return run_staged_test_files(repository_root, all_staged_paths=all_staged_paths)
 
 
 def _deduplicate_paths(all_paths: list[Path]) -> list[Path]:
@@ -270,9 +320,12 @@ def _run_staged_mode(
 ) -> int:
     """Validate the staged changes, run staged tests, and sweep terminology."""
     _report_terminology_findings(staged_terminology_findings(repository_root))
-    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    all_staged_paths = paths_from_git_staged(repository_root)
+    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(
+        repository_root, all_staged_paths=all_staged_paths
+    )
     staged_file_paths = filter_paths_under_prefixes(
-        paths_from_git_staged(repository_root), repository_root, arguments.only_under
+        all_staged_paths, repository_root, arguments.only_under
     )
     if not staged_file_paths:
         sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
@@ -300,8 +353,13 @@ def _run_diff_mode(
     left with no code files after the code-path filter flows through
     ``run_gate`` over zero files and exits clean.
     """
+    resolved_merge_base = resolve_merge_base(repository_root, arguments.base)
     all_candidate_paths = _deduplicate_paths(
-        paths_from_git_diff(repository_root, arguments.base)
+        paths_from_git_diff(
+            repository_root,
+            arguments.base,
+            resolved_merge_base=resolved_merge_base,
+        )
         + paths_from_git_untracked(repository_root)
     )
     if not all_candidate_paths:
@@ -311,7 +369,14 @@ def _run_diff_mode(
     )
     file_paths = [each_path for each_path in file_paths if is_code_path(each_path)]
     scoped_added_lines = (
-        added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
+        added_lines_by_file(
+            repository_root,
+            arguments.base,
+            file_paths,
+            resolved_merge_base=resolved_merge_base,
+        )
+        if file_paths
+        else {}
     )
     return run_gate(
         validate_content,

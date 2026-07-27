@@ -1,6 +1,7 @@
 """Constants for code_rules_gate.py per CODE_RULES centralized-config rule."""
 
 import re
+from typing import Literal
 
 MAX_VIOLATIONS_PER_CHECK: int = 3
 
@@ -78,6 +79,47 @@ ALL_GIT_DIFF_NAME_ONLY_NULL_TERMINATED_COMMAND_PREFIX: tuple[str, ...] = (
     "-z",
 )
 
+ALL_GIT_DIFF_UNIFIED_ZERO_NO_RENAMES_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "diff",
+    "--unified=0",
+    "--no-renames",
+)
+
+ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_NO_RENAMES_COMMAND: tuple[str, ...] = (
+    "git",
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "diff",
+    "--cached",
+    "--unified=0",
+    "--no-renames",
+)
+
+DIFF_GIT_HEADER_PREFIX: str = "diff --git "
+
+GIT_DIFF_SOURCE_PATH_PREFIX: str = "a/"
+
+GIT_DIFF_DESTINATION_PATH_PREFIX: str = "b/"
+
+GIT_DIFF_PATH_ARGUMENT_SEPARATOR: str = "--"
+
+GIT_QUOTED_PATH_DELIMITER: str = '"'
+
+GIT_C_STYLE_ESCAPE_BACKSLASH: str = "\\"
+
+GIT_C_STYLE_ESCAPE_ENCODING: Literal["unicode_escape"] = "unicode_escape"
+
+GIT_C_STYLE_LATIN1_ENCODING: str = "latin-1"
+
+GIT_PATH_UTF8_ENCODING: str = "utf-8"
+
 ALL_GIT_LS_FILES_UNTRACKED_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
     "git",
     "ls-files",
@@ -85,6 +127,34 @@ ALL_GIT_LS_FILES_UNTRACKED_NULL_TERMINATED_COMMAND: tuple[str, ...] = (
     "--exclude-standard",
     "-z",
 )
+
+ALL_GIT_CAT_FILE_BATCH_COMMAND: tuple[str, ...] = (
+    "git",
+    "cat-file",
+    "--batch",
+)
+
+GIT_CAT_FILE_MISSING_SUFFIX: bytes = b" missing"
+
+HEAD_BLOB_REQUEST_PREFIX: str = "HEAD:"
+
+STAGED_BLOB_REQUEST_PREFIX: str = ":"
+
+GIT_BLOB_UTF8_ENCODING: str = "utf-8"
+
+GIT_BLOB_UTF8_REPLACE_ERRORS: str = "replace"
+
+BATCH_STDIN_LINE_SEPARATOR: str = "\n"
+
+BATCH_STDIN_CARRIAGE_RETURN: str = "\r"
+
+UNIVERSAL_NEWLINE_CRLF: str = "\r\n"
+
+UNIVERSAL_NEWLINE_CR: str = "\r"
+
+UNIVERSAL_NEWLINE_LF: str = "\n"
+
+GIT_CAT_FILE_HEADER_MINIMUM_PART_COUNT: int = 3
 
 
 ALL_PYTEST_MODULE_INVOCATION: tuple[str, ...] = (

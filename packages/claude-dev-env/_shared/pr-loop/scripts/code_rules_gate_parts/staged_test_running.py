@@ -66,18 +66,28 @@ def _pytest_target_paths(all_test_paths: list[Path]) -> list[Path]:
     ]
 
 
-def _staged_test_file_paths(repository_root: Path) -> list[Path]:
+def _staged_test_file_paths(
+    repository_root: Path,
+    all_staged_paths: list[Path] | None = None,
+) -> list[Path]:
     """Return the staged Python test files that exist under a repository.
 
     Args:
         repository_root: The repository root whose staged index is read.
+        all_staged_paths: Precomputed staged paths; when omitted, the staged
+            index is read once here.
 
     Returns:
         Staged paths whose extension is Python, whose name matches a test-file
         pattern, and which exist on disk.
     """
+    staged_paths = (
+        all_staged_paths
+        if all_staged_paths is not None
+        else paths_from_git_staged(repository_root)
+    )
     all_test_paths: list[Path] = []
-    for each_path in paths_from_git_staged(repository_root):
+    for each_path in staged_paths:
         if each_path.suffix != PYTHON_FILE_EXTENSION:
             continue
         if is_test_path(str(each_path)) and each_path.is_file():
@@ -343,7 +353,10 @@ def _run_grouped_staged_tests(
     return first_failing_exit_code
 
 
-def run_staged_test_files(repository_root: Path) -> int:
+def run_staged_test_files(
+    repository_root: Path,
+    all_staged_paths: list[Path] | None = None,
+) -> int:
     """Run pytest over the staged test files and return the gate exit code.
 
     ``conftest.py`` files are excluded from collection targets. Pytest still
@@ -352,13 +365,17 @@ def run_staged_test_files(repository_root: Path) -> int:
 
     Args:
         repository_root: The repository root the staged test files belong to.
+        all_staged_paths: Precomputed staged paths; when omitted, the staged
+            index is read inside the test-file filter.
 
     Returns:
         0 when no collectable test file is staged, when every group collects no
         tests, or when every group passes. The first failing group's exit code
         otherwise.
     """
-    all_test_paths = _staged_test_file_paths(repository_root)
+    all_test_paths = _staged_test_file_paths(
+        repository_root, all_staged_paths=all_staged_paths
+    )
     all_pytest_targets = _pytest_target_paths(all_test_paths)
     if not all_pytest_targets:
         return 0
