@@ -22,6 +22,7 @@ Commit lands behind ``verified_commit_gate``; only push is gated here.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -47,8 +48,11 @@ try:
         CODE_REVIEW_BYPASS_MARKER,
         CODE_REVIEW_ENFORCEMENT_ENABLED,
         GATED_PUSH_SUBCOMMANDS,
+        GIT_HOOK_SKIP_ENABLED_VALUE,
+        GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE,
         HASH_PREVIEW_LENGTH,
         PUSH_GATE_CORRECTIVE_MESSAGE,
+        PUSH_GATE_GIT_HOOK_CORRECTIVE_MESSAGE,
         PUSH_GATE_HOOK_MODULE_NAME,
         PUSH_REQUIRED_EFFORT,
     )
@@ -68,18 +72,17 @@ except ImportError as import_error:
     ) from import_error
 
 
-def deny_reason_for_directory(target_directory: str) -> str | None:
-    """Decide whether a push from a directory must be blocked.
-
-    Allowed when enforcement is off, the directory is no repo, has no upstream
-    base, is a mechanically exempt surface, or a clean low-or-higher stamp
-    covers it.
+def _uncovered_surface_deny_reason(target_directory: str, message: str) -> str | None:
+    """Judge one directory's push surface and word the denial for its caller.
 
     Args:
         target_directory: The directory the push targets.
+        message: The remedy text the denial leads with.
 
     Returns:
-        The deny reason when the surface lacks a covering low stamp, else None.
+        The deny reason when the surface lacks a covering low stamp; None when
+        enforcement is off, the directory is no repo, has no upstream base, is
+        mechanically exempt, or a clean low-or-higher stamp covers it.
     """
     if not CODE_REVIEW_ENFORCEMENT_ENABLED:
         return None
@@ -97,7 +100,68 @@ def deny_reason_for_directory(target_directory: str) -> str | None:
     if stamp_covers_surface(repo_root, surface_hash, PUSH_REQUIRED_EFFORT):
         return None
     hash_preview = surface_hash[:HASH_PREVIEW_LENGTH]
-    return f"{PUSH_GATE_CORRECTIVE_MESSAGE} (repo: {repo_root}, surface sha256 {hash_preview}...)"
+    return f"{message} (repo: {repo_root}, surface sha256 {hash_preview}...)"
+
+
+def deny_reason_for_directory(target_directory: str) -> str | None:
+    """Decide whether a tool-level push from a directory must be blocked.
+
+    ::
+
+        Bash "git push origin main" -> deny reason naming the comment marker
+
+    The shell command text reaches this path, so its denial offers the
+    trailing-comment marker as the escape.
+
+    Args:
+        target_directory: The directory the push targets.
+
+    Returns:
+        The deny reason when the surface lacks a covering low stamp, else None.
+    """
+    return _uncovered_surface_deny_reason(target_directory, PUSH_GATE_CORRECTIVE_MESSAGE)
+
+
+def _is_git_hook_skip_requested() -> bool:
+    """Read the one-shot environment skip signal a git hook can see.
+
+    ::
+
+        CLAUDE_CODE_REVIEW_SKIP=1     -> True   this push is exempt
+        CLAUDE_CODE_REVIEW_SKIP=yes   -> False  unrecognized value gates
+        unset                         -> False  the gate applies
+
+    Only the exact enabled value counts, so a stray value keeps the gate on.
+
+    Returns:
+        True when the caller set the skip signal for this push.
+    """
+    raw_signal = os.environ.get(GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE, "").strip()
+    return raw_signal == GIT_HOOK_SKIP_ENABLED_VALUE
+
+
+def git_hook_deny_reason(target_directory: str) -> str | None:
+    """Decide whether a native git pre-push hook must block the push.
+
+    ::
+
+        git push                            -> deny reason naming the env var
+        CLAUDE_CODE_REVIEW_SKIP=1 git push  -> None, the push runs
+
+    A git hook receives no shell command, so the environment signal is the
+    escape it can act on and its denial names that signal.
+
+    Args:
+        target_directory: The work tree the push targets.
+
+    Returns:
+        The deny reason when the surface lacks a covering low stamp, else None.
+    """
+    if _is_git_hook_skip_requested():
+        return None
+    return _uncovered_surface_deny_reason(
+        target_directory, PUSH_GATE_GIT_HOOK_CORRECTIVE_MESSAGE
+    )
 
 
 def _emit_first_denied_directory(command_text: str, session_directory: str, tool_name: str) -> None:

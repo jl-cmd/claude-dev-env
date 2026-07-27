@@ -8,7 +8,7 @@ Mode decision::
     host=ThirdParty, any model        -> mode chain
 
 Chain mode runs ``run_claude`` with argv from ``build_code_review_arguments``
-(single-turn prompt, model opus, json output, bypassPermissions).
+(single-turn, opus, json, bypassPermissions; one retry drops that last pair).
 
 cwd is the PR working tree and stdin is redirected from the empty stream so
 the spawn does not wait for interactive input. Result JSON on stdout only::
@@ -40,11 +40,16 @@ from types import ModuleType
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-_advisor_scripts_path = str(
+_advisor_scripts_directory = (
     Path(__file__).resolve().parent.parent / "_shared" / "advisor" / "scripts"
 )
+_advisor_scripts_path = str(_advisor_scripts_directory)
 if _advisor_scripts_path not in sys.path:
     sys.path.insert(0, _advisor_scripts_path)
+
+_advisor_constants_path = str(_advisor_scripts_directory / "config")
+if _advisor_constants_path not in sys.path:
+    sys.path.insert(0, _advisor_constants_path)
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     HOST_PROFILE_CLAUDE,
@@ -61,6 +66,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 )
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER,
+    ALL_PERMISSION_MODE_REJECTION_SIGNATURES,
     CLI_EFFORT_HELP,
     CLI_EFFORT_METAVAR,
     CLI_RECORD_STAMP_HELP,
@@ -119,6 +125,32 @@ _CHAIN_RUNNER_LOCK = threading.Lock()
 def _chain_runner_lock() -> threading.Lock:
     """Return the module lock that serializes chain-runner stdin/cwd swaps."""
     return _CHAIN_RUNNER_LOCK
+
+
+def _is_permission_mode_rejected(chain_outcome: ChainInvocationOutcome) -> bool:
+    """Report whether the host refused the bypass permission mode.
+
+    ::
+
+        rc 1 + stderr "--permission-mode is not supported" -> True
+        rc 1 + stderr "no commits to review"               -> False
+        rc 0 + any text                                    -> False
+
+    A clean exit never counts, so a host that accepts the mode keeps using it.
+
+    Args:
+        chain_outcome: Outcome of one headless chain spawn.
+
+    Returns:
+        True when the spawn failed and its text names the refused flag pair.
+    """
+    if chain_outcome.returncode == SUCCESSFUL_REVIEW_RETURNCODE:
+        return False
+    all_spawn_text = f"{chain_outcome.stderr}{chain_outcome.stdout}".lower()
+    return any(
+        each_signature in all_spawn_text
+        for each_signature in ALL_PERMISSION_MODE_REJECTION_SIGNATURES
+    )
 
 
 @dataclass(frozen=True)
@@ -286,30 +318,34 @@ def build_code_review_prompt(effort: str) -> str:
 
 def build_code_review_arguments(
     effort: str = DEFAULT_CODE_REVIEW_EFFORT,
+    *,
+    is_permission_mode_included: bool = True,
 ) -> list[str]:
     """Return the argv tokens passed to ``run_claude`` for a chain review.
 
     ::
 
-        build_code_review_arguments("high")
-            # ok: ["-p", "/code-review high --fix", "--model", "opus", ...]
+        included=True  -> [..., "--permission-mode", "bypassPermissions"]
+        included=False -> the same tokens without that trailing pair
 
     Args:
         effort: Effort token embedded in the slash-command prompt.
+        is_permission_mode_included: Append the bypass permission-mode pair.
 
     Returns:
         Ordered claude CLI arguments for the headless opus review slash command.
     """
-    return [
+    all_review_arguments = [
         SINGLE_TURN_FLAG,
         build_code_review_prompt(effort),
         MODEL_FLAG,
         CODE_REVIEW_MODEL_ALIAS,
         OUTPUT_FORMAT_FLAG,
         OUTPUT_FORMAT_JSON,
-        PERMISSION_MODE_FLAG,
-        PERMISSION_MODE_BYPASS,
     ]
+    if is_permission_mode_included:
+        all_review_arguments += [PERMISSION_MODE_FLAG, PERMISSION_MODE_BYPASS]
+    return all_review_arguments
 
 
 def validate_effort_token(effort: str) -> str | None:
@@ -495,18 +531,42 @@ def _failure_code_review_outcome(returncode: int) -> CodeReviewOutcome:
         is_dirty_tree=False,
     )
 
+def _spawn_chain_review(
+    *,
+    working_directory: Path,
+    timeout_seconds: int,
+    effort: str,
+    is_permission_mode_included: bool,
+) -> ChainInvocationOutcome:
+    all_claude_arguments = build_code_review_arguments(
+        effort, is_permission_mode_included=is_permission_mode_included
+    )
+    return _run_claude_with_empty_stdin(
+        all_claude_arguments,
+        timeout_seconds=timeout_seconds,
+        working_directory=working_directory,
+    )
+
+
 def _run_chain_review(
     *,
     working_directory: Path,
     timeout_seconds: int,
     effort: str,
 ) -> CodeReviewOutcome:
-    all_claude_arguments = build_code_review_arguments(effort)
-    chain_outcome = _run_claude_with_empty_stdin(
-        all_claude_arguments,
-        timeout_seconds=timeout_seconds,
+    chain_outcome = _spawn_chain_review(
         working_directory=working_directory,
+        timeout_seconds=timeout_seconds,
+        effort=effort,
+        is_permission_mode_included=True,
     )
+    if _is_permission_mode_rejected(chain_outcome):
+        chain_outcome = _spawn_chain_review(
+            working_directory=working_directory,
+            timeout_seconds=timeout_seconds,
+            effort=effort,
+            is_permission_mode_included=False,
+        )
     return _chain_outcome(chain_outcome, working_directory=working_directory)
 
 

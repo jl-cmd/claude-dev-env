@@ -17,8 +17,13 @@ installed; deletions and same-name pushes pass.
 
 Gate base: the first non-zero remote-sha is used as the gate `--base`, so
 violations are scoped to commits that are not already on the remote. When
-every remote object name is zero (new branch) or stdin is empty, the gate
-falls back to the remote's default branch symbolic ref.
+every remote object name is zero (new branch) or stdin is empty, the base
+comes from the remote default: the `origin/HEAD` symbolic target when that
+ref exists, otherwise the first remote-tracking fallback (`origin/main`,
+then `origin/master`) the work tree carries, otherwise the newest ref under
+`refs/remotes/`. A work tree that carries no remote-tracking ref at all, on
+a push that names no remote object, skips the CODE_RULES gate and keeps the
+code-review backstop.
 
 Exit codes:
   0 - the push destination is allowed and its commits pass the gate (or
@@ -37,6 +42,7 @@ import sys
 from pathlib import Path
 
 from git_hooks_constants import (
+    ALL_FALLBACK_REMOTE_BASE_REFERENCES,
     ALL_PROTECTED_BRANCH_PUSH_NAMES,
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
@@ -48,13 +54,17 @@ from git_hooks_constants import (
     CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
     DEFAULT_REMOTE_BASE_REFERENCE,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
+    GIT_QUERY_TIMEOUT_SECONDS,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
     LOCAL_REFERENCE_FIELD_INDEX,
     LOCAL_SHA_FIELD_INDEX,
     MALFORMED_STDIN_LINE_MESSAGE,
+    ALL_NEWEST_REMOTE_TRACKING_REFERENCE_ARGUMENTS,
     NO_PARSEABLE_STDIN_LINES_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_SENTINEL,
+    ALL_ORIGIN_HEAD_SYMBOLIC_REFERENCE_ARGUMENTS,
+    ALL_REFERENCE_EXISTENCE_ARGUMENTS,
     PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE,
     PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE,
     PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE,
@@ -62,8 +72,97 @@ from git_hooks_constants import (
     STDIN_LINE_FIELD_COUNT,
     STDIN_READ_FAILURE_MESSAGE,
     STDIN_REMOTE_OBJECT_FIELD_INDEX,
+    UNRESOLVED_REMOTE_BASE_MESSAGE,
 )
 from gate_utils import is_safe_regular_file, resolve_gate_script_path
+
+
+def read_git_query_output(all_git_command_arguments: tuple[str, ...]) -> str | None:
+    """Run a read-only git query and hand back what it printed.
+
+    ::
+
+        ("git", "rev-parse", "--verify", "--quiet", "origin/main")
+            reference exists -> "9f2c1ab..."
+            reference absent -> None          git exits non-zero
+
+    A launch failure, a timeout, and a non-zero exit all read as no answer, so
+    a caller probes a reference without the push dying on a missing one.
+
+    Args:
+        all_git_command_arguments: The git command, argument by argument.
+
+    Returns:
+        The trimmed stdout when git prints something; None otherwise.
+    """
+    try:
+        completion = subprocess.run(
+            list(all_git_command_arguments),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_QUERY_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completion.stdout.strip() or None if completion.returncode == 0 else None
+
+
+def resolve_remote_default_base_reference() -> str | None:
+    """Name a commit the remote already holds for the gate to measure against.
+
+    ::
+
+        origin/HEAD present  -> "refs/remotes/origin/main"  its symbolic target
+        origin/HEAD absent   -> "origin/main"               first fallback present
+        one topic ref only   -> "refs/remotes/origin/topic" newest ref present
+        no remote-tracking   -> None                        caller skips the gate
+
+    A fresh clone carries no ``refs/remotes/origin/HEAD``, so the fixed
+    remote-tracking fallbacks answer for it. A checkout that fetched one topic
+    branch and no default branch is answered by the newest remote-tracking
+    ref: every commit that ref holds is already on the remote, which is what a
+    base has to be. Nothing resolving means the work tree knows no remote
+    commit at all.
+
+    Returns:
+        The reference to pass as the gate base, or None when none resolves.
+    """
+    origin_head_target = read_git_query_output(ALL_ORIGIN_HEAD_SYMBOLIC_REFERENCE_ARGUMENTS)
+    if origin_head_target:
+        return origin_head_target
+    for each_fallback_reference in ALL_FALLBACK_REMOTE_BASE_REFERENCES:
+        all_existence_arguments = ALL_REFERENCE_EXISTENCE_ARGUMENTS + (each_fallback_reference,)
+        if read_git_query_output(all_existence_arguments):
+            return each_fallback_reference
+    return read_git_query_output(ALL_NEWEST_REMOTE_TRACKING_REFERENCE_ARGUMENTS)
+
+
+def resolve_gate_base_reference(parsed_base_reference: str) -> str | None:
+    """Turn the stdin-derived base into a reference git can actually name.
+
+    ::
+
+        "1a2b3c..."   -> "1a2b3c..."   a real remote object, used as is
+        "origin/HEAD" -> "origin/main" resolved for a fresh clone
+        "origin/HEAD" -> None          no remote base, reported on stderr
+
+    The push protocol reports an all-zeros remote object for a brand-new
+    branch, so the parser hands back the remote-default placeholder. Resolving
+    it here keeps the gate alive in a clone that never wrote ``origin/HEAD``.
+
+    Args:
+        parsed_base_reference: The base the stdin parser produced.
+
+    Returns:
+        A reference to hand the gate, or None when no remote base resolves.
+    """
+    if parsed_base_reference != DEFAULT_REMOTE_BASE_REFERENCE:
+        return parsed_base_reference
+    resolved_base_reference = resolve_remote_default_base_reference()
+    if resolved_base_reference is None:
+        sys.stderr.write(UNRESOLVED_REMOTE_BASE_MESSAGE + "\n")
+    return resolved_base_reference
 
 
 def is_all_zeros_object_name(object_name: str) -> bool:
@@ -276,12 +375,15 @@ def main() -> int:
             file=sys.stderr,
         )
         return code_review_stamp_block_exit_code()
-    base_reference = resolve_base_reference_from_stdin(stdin_text)
-    if base_reference is None:
+    parsed_base_reference = resolve_base_reference_from_stdin(stdin_text)
+    if parsed_base_reference is None:
         return 0
-    if base_reference == no_parseable_stdin_lines_sentinel:
+    if parsed_base_reference == no_parseable_stdin_lines_sentinel:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
+    base_reference = resolve_gate_base_reference(parsed_base_reference)
+    if base_reference is None:
+        return code_review_stamp_block_exit_code()
     code_rules_exit_code = invoke_gate(gate_script_path, base_reference)
     if code_rules_exit_code != 0:
         return code_rules_exit_code

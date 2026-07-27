@@ -45,6 +45,10 @@ def _load_module(module_name: str) -> ModuleType:
 gate_module = _load_module("code_review_push_gate")
 store_module = _load_module("code_review_stamp_store")
 
+GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE: str = gate_module.GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE
+GIT_HOOK_SKIP_ENABLED_VALUE: str = gate_module.GIT_HOOK_SKIP_ENABLED_VALUE
+UNRECOGNIZED_SKIP_VALUE: str = "maybe"
+
 
 @pytest.fixture(autouse=True)
 def enable_code_review_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,6 +197,50 @@ def test_code_review_skip_marker_allows_push(
     work_directory = _prepared_code_repo(monkeypatch, tmp_path)
     emitted = _run_main(monkeypatch, f"git push origin main {BYPASS_MARKER}", work_directory)
     assert emitted == ""
+
+
+def test_git_hook_deny_reason_denies_without_skip_signal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    work_directory = _prepared_code_repo(monkeypatch, tmp_path)
+    monkeypatch.delenv(GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE, raising=False)
+
+    deny_reason = gate_module.git_hook_deny_reason(str(work_directory))
+
+    assert deny_reason is not None
+    assert GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE in deny_reason
+    assert BYPASS_MARKER not in deny_reason
+
+
+def test_git_hook_deny_reason_allows_with_skip_signal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    work_directory = _prepared_code_repo(monkeypatch, tmp_path)
+    monkeypatch.setenv(GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE, GIT_HOOK_SKIP_ENABLED_VALUE)
+
+    assert gate_module.git_hook_deny_reason(str(work_directory)) is None
+
+
+def test_git_hook_deny_reason_denies_on_unrecognized_skip_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    work_directory = _prepared_code_repo(monkeypatch, tmp_path)
+    monkeypatch.setenv(GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE, UNRECOGNIZED_SKIP_VALUE)
+
+    deny_reason = gate_module.git_hook_deny_reason(str(work_directory))
+
+    assert "PUSH_GATE" in str(deny_reason)
+
+
+def test_skip_environment_variable_leaves_tool_path_gated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    work_directory = _prepared_code_repo(monkeypatch, tmp_path)
+    monkeypatch.setenv(GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE, GIT_HOOK_SKIP_ENABLED_VALUE)
+
+    emitted = _run_main(monkeypatch, "git push origin main", work_directory)
+
+    assert "PUSH_GATE" in emitted
 
 
 def test_enforcement_off_allows_push_without_stamp(

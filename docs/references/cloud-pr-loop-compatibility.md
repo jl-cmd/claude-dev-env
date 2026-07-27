@@ -46,7 +46,7 @@ so a running cloud session sees the same files under `/root/.claude/`.
 | Raw GraphQL through the proxy | Pinned. Any query outside the pinned PR-review set returns `{"message":"This GraphQL query is not enabled for this session — only the pinned set of PR-review operations is served. Use REST via 'gh api repos/{owner}/{repo}/...' instead."}`. Custom `gh api graphql` queries fail even with transport fixed. |
 | Installing the `gh` binary | Blocked. `GET /repos/cli/cli/releases/latest` returns 403 (out-of-scope repo); `https://github.com/...` release downloads return 403. |
 | Git push identity | `user.name=Claude`, `user.email=noreply@anthropic.com`. Remotes are plain https; the proxy injects credentials. Push dry-runs succeed for both in-scope repos after the origin/HEAD fix below. |
-| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook resolves `git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE = "origin/HEAD"`. Cloud clones do not set `origin/HEAD`, so every `git push` fails with `fatal: Not a valid object name origin/HEAD` until `git remote set-head origin -a` runs in that repo. |
+| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook resolves the remote base by reading `refs/remotes/origin/HEAD` and, when a clone carries no such ref, falling back to `origin/main` then `origin/master`. A clone with no usable remote base skips the CODE_RULES gate and keeps the code-review backstop. |
 | `BUGTEAM_REVIEWER_ACCOUNT`, `CLAUDE_REVIEWS_DISABLED` | Both unset. |
 | `ScheduleWakeup` | Available to the main session (verified by use). Subagents do not see it. |
 | `EnterWorktree`, `Monitor` | Available. `Monitor` is deferred (load its schema with ToolSearch first). |

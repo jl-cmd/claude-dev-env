@@ -102,6 +102,9 @@ determined attacker who sets out to defeat them.
 - Directory guard: `hooks/blocking/code_review_stamp_directory_write_blocker.py`.
 - Shared constants: `hooks/blocking/config/code_review_enforcement_constants.py`.
 - Native backstop: `hooks/git-hooks/pre_push.py` reuses the push gate's
-  `deny_reason_for_directory` so the native hook and the Claude gate share one
-  decision source.
+  `git_hook_deny_reason` so the native hook and the Claude gate share one
+  decision source. That entry point honours the `CLAUDE_CODE_REVIEW_SKIP=1`
+  environment variable and prints a message naming it, since a git hook
+  receives no shell command string and cannot read the tool path's
+  `# code-review-skip` comment marker.
 - Minter: `scripts/invoke_code_review.py --record-stamp`.

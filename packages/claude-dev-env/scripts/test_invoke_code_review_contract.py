@@ -91,6 +91,20 @@ def test_build_code_review_arguments_matches_contract() -> None:
     ]
 
 
+def test_build_code_review_arguments_omits_permission_mode_on_request() -> None:
+    all_arguments = invoker.build_code_review_arguments(
+        DEFAULT_CODE_REVIEW_EFFORT, is_permission_mode_included=False
+    )
+    assert all_arguments == [
+        SINGLE_TURN_FLAG,
+        invoker.build_code_review_prompt(DEFAULT_CODE_REVIEW_EFFORT),
+        MODEL_FLAG,
+        CODE_REVIEW_MODEL_ALIAS,
+        OUTPUT_FORMAT_FLAG,
+        OUTPUT_FORMAT_JSON,
+    ]
+
+
 def test_chain_failure_preserves_returncode(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

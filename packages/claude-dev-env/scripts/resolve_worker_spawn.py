@@ -35,11 +35,16 @@ from typing import IO
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-_advisor_scripts_path = str(
+_advisor_scripts_directory = (
     Path(__file__).resolve().parent.parent / "_shared" / "advisor" / "scripts"
 )
+_advisor_scripts_path = str(_advisor_scripts_directory)
 if _advisor_scripts_path not in sys.path:
     sys.path.insert(0, _advisor_scripts_path)
+
+_advisor_constants_path = str(_advisor_scripts_directory / "config")
+if _advisor_constants_path not in sys.path:
+    sys.path.insert(0, _advisor_constants_path)
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     HOST_PROFILE_CLAUDE,

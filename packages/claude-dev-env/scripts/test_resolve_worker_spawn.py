@@ -12,18 +12,14 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-import claude_chain_runner as chain_runner  # noqa: E402
-import resolve_worker_spawn as dispatcher  # noqa: E402
-from claude_chain_runner import (  # noqa: E402
+import claude_chain_runner as chain_runner
+import resolve_worker_spawn as dispatcher
+from claude_chain_runner import (
     ChainAttempt,
     ChainConfigurationError,
     ChainInvocationOutcome,
 )
-from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+from dev_env_scripts_constants.grok_worker_constants import (
     AGENT_FLAG,
     ALL_AGENT_FILENAMES_BY_ROLE,
     ATTEMPT_KEY_OK,
@@ -59,8 +55,14 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TIER_CLAUDE_HEADLESS,
     TIER_GROK,
 )
-from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
-from grok_worker_preflight import PreflightOutcome  # noqa: E402
+from grok_headless_runner import GrokRunnerOutcome
+from grok_worker_preflight import PreflightOutcome
+
+SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+PYTHON_EXECUTABLE = sys.executable
+PYTHON_INLINE_COMMAND_FLAG = "-c"
+PYTHON_PATH_VARIABLE = "PYTHONPATH"
+DISPATCHER_IMPORT_STATEMENT = "import resolve_worker_spawn"
 
 HOST_PROFILE_CLAUDE = "Claude"
 HOST_PROFILE_THIRD_PARTY = "ThirdParty"
@@ -145,6 +147,42 @@ def _paths(tmp_path: Path) -> tuple[Path, Path, Path]:
     run_state_directory = tmp_path / "run-state"
     run_state_directory.mkdir()
     return prompt_file, working_directory, run_state_directory
+
+
+def _chain_config_entry(command: str) -> dict[str, object]:
+    return {
+        chain_runner.CONFIG_COMMAND_KEY: command,
+        chain_runner.CONFIG_EXTRA_ARGS_KEY: [],
+    }
+
+
+def _install_test_owned_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, all_chain_commands: list[str]
+) -> None:
+    """Point the chain runner at a chain file this test writes.
+
+    ::
+
+        all_chain_commands=["claude", "claude-ev"]
+        -> the walk tries claude, then claude-ev
+        -> the host home directory and the host PATH stay out of the run
+
+    A failover test owns its chain, so it writes the config file and names it
+    through ``chain_config_path``. The weekly-usage probe reports nothing, so
+    the walk keeps the order the file lists.
+    """
+    config_file = tmp_path / chain_runner.CONFIG_FILENAME
+    all_config_entries = [
+        _chain_config_entry(each_command) for each_command in all_chain_commands
+    ]
+    config_file.write_text(
+        json.dumps({chain_runner.CONFIG_CHAIN_KEY: all_config_entries}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(chain_runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        chain_runner, "chain_weekly_usage_reporter", lambda **_keywords: []
+    )
 
 
 @dataclass
@@ -849,11 +887,7 @@ def test_prompt_open_failure_not_classified_as_executable_not_found(
         "spawn_host_profile_detector",
         lambda *all_positionals, **all_keywords: HOST_PROFILE_THIRD_PARTY,
     )
-    monkeypatch.setattr(
-        chain_runner,
-        "load_chain",
-        lambda _config_path: [chain_runner.ChainEntry(command="claude", extra_args=())],
-    )
+    _install_test_owned_chain(monkeypatch, tmp_path, ["claude"])
     monkeypatch.setattr(
         chain_runner,
         "chain_subprocess_runner",
@@ -965,14 +999,7 @@ def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
         "spawn_host_profile_detector",
         lambda *all_positionals, **all_keywords: HOST_PROFILE_THIRD_PARTY,
     )
-    monkeypatch.setattr(
-        chain_runner,
-        "load_chain",
-        lambda _config_path: [
-            chain_runner.ChainEntry(command="claude", extra_args=()),
-            chain_runner.ChainEntry(command="claude-ev", extra_args=()),
-        ],
-    )
+    _install_test_owned_chain(monkeypatch, tmp_path, ["claude", "claude-ev"])
     prompt_text_by_command: dict[str, str] = {}
 
     def _reading_subprocess_runner(
@@ -1012,3 +1039,19 @@ def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
     assert prompt_text_by_command["claude-ev"] == FIXTURE_PROMPT_TEXT
     assert outcome.tier_used == TIER_CLAUDE_HEADLESS
     assert outcome.is_ok is True
+
+
+def test_dispatcher_imports_without_the_package_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(PYTHON_PATH_VARIABLE, raising=False)
+
+    completed_import = subprocess.run(
+        [PYTHON_EXECUTABLE, PYTHON_INLINE_COMMAND_FLAG, DISPATCHER_IMPORT_STATEMENT],
+        cwd=str(SCRIPTS_DIRECTORY),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed_import.returncode == 0, completed_import.stderr

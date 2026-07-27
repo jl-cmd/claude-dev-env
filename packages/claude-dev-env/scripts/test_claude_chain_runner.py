@@ -822,12 +822,98 @@ def test_cli_missing_config_exits_config_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     missing_config = tmp_path / CONFIG_FILENAME
+    _install_empty_path(monkeypatch, tmp_path)
     monkeypatch.setattr(runner, "chain_config_path", lambda: missing_config)
     _install_tty_stdin(monkeypatch)
     exit_code = runner.main([CLI_ARGUMENTS_SEPARATOR, "-p", "hi"])
     captured = capsys.readouterr()
     assert exit_code == CHAIN_CONFIG_ERROR_EXIT_CODE
     assert EXAMPLE_CONFIG_FILENAME in captured.err
+
+
+_FALLBACK_BINARY_DIRECTORY_NAME = "fake-bin"
+_EMPTY_BINARY_DIRECTORY_NAME = "empty-bin"
+_PATH_ENVIRONMENT_VARIABLE = "PATH"
+_PATHEXT_ENVIRONMENT_VARIABLE = "PATHEXT"
+_WINDOWS_OS_NAME = "nt"
+_WINDOWS_BINARY_SUFFIX = ".cmd"
+_EXECUTABLE_FILE_MODE = 0o755
+_FALLBACK_BINARY_BODY = "echo fallback\n"
+_PATH_MENTION_IN_ERROR = "PATH"
+
+
+def _install_fake_claude_on_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> str:
+    binary_directory = tmp_path / _FALLBACK_BINARY_DIRECTORY_NAME
+    binary_directory.mkdir()
+    binary_suffix = _WINDOWS_BINARY_SUFFIX if os.name == _WINDOWS_OS_NAME else ""
+    fallback_binary = binary_directory / f"claude{binary_suffix}"
+    fallback_binary.write_text(_FALLBACK_BINARY_BODY, encoding=UTF8_ENCODING)
+    fallback_binary.chmod(_EXECUTABLE_FILE_MODE)
+    monkeypatch.setenv(_PATH_ENVIRONMENT_VARIABLE, str(binary_directory))
+    monkeypatch.setenv(_PATHEXT_ENVIRONMENT_VARIABLE, _WINDOWS_BINARY_SUFFIX)
+    return str(fallback_binary)
+
+
+def _install_empty_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    empty_directory = tmp_path / _EMPTY_BINARY_DIRECTORY_NAME
+    empty_directory.mkdir()
+    monkeypatch.setenv(_PATH_ENVIRONMENT_VARIABLE, str(empty_directory))
+    monkeypatch.setenv(_PATHEXT_ENVIRONMENT_VARIABLE, _WINDOWS_BINARY_SUFFIX)
+
+
+def _install_without_config(
+    monkeypatch: pytest.MonkeyPatch,
+    config_file: Path,
+    behavior_by_command: dict[str, subprocess.CompletedProcess[str]],
+) -> _Recorder:
+    recorder = _Recorder(behavior_by_command)
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(runner, "chain_subprocess_runner", recorder)
+    _install_tty_stdin(monkeypatch)
+    return recorder
+
+
+def test_absent_config_falls_back_to_claude_binary_on_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    absent_config = tmp_path / CONFIG_FILENAME
+    resolved_binary = _install_fake_claude_on_path(monkeypatch, tmp_path)
+    recorder = _install_without_config(
+        monkeypatch, absent_config, {resolved_binary: _completed(resolved_binary, 0)}
+    )
+    chain_outcome = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_outcome.served_command == resolved_binary
+    assert chain_outcome.returncode == 0
+    assert recorder.invocations[0] == [resolved_binary, "-p", "hello"]
+
+
+def test_malformed_config_still_errors_even_with_claude_on_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = tmp_path / CONFIG_FILENAME
+    config_file.write_text("{ not valid json", encoding=UTF8_ENCODING)
+    _install_fake_claude_on_path(monkeypatch, tmp_path)
+    _install_without_config(monkeypatch, config_file, {})
+    with pytest.raises(runner.ChainConfigurationError) as raised:
+        runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    malformed_prefix = CONFIG_MALFORMED_MESSAGE_TEMPLATE.split("{config_path}")[0]
+    assert malformed_prefix in str(raised.value)
+
+
+def test_absent_config_without_claude_on_path_raises_configuration_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    absent_config = tmp_path / CONFIG_FILENAME
+    _install_empty_path(monkeypatch, tmp_path)
+    _install_without_config(monkeypatch, absent_config, {})
+    with pytest.raises(runner.ChainConfigurationError) as raised:
+        runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    error_message = str(raised.value)
+    assert str(absent_config) in error_message
+    assert _PATH_MENTION_IN_ERROR in error_message
+    assert EXAMPLE_CONFIG_FILENAME in error_message
 
 
 def test_missing_config_raises_naming_path_and_example(tmp_path: Path) -> None:

@@ -105,6 +105,16 @@ def test_push_gate_message_names_the_push_action_and_low_effort() -> None:
     assert "'low'" in PUSH_GATE_CORRECTIVE_MESSAGE
 
 
+def test_git_hook_message_offers_the_environment_skip_over_the_shell_marker() -> None:
+    git_hook_message = _constants_module.PUSH_GATE_GIT_HOOK_CORRECTIVE_MESSAGE
+    assert _constants_module.GIT_HOOK_SKIP_ENVIRONMENT_VARIABLE in git_hook_message
+    assert _constants_module.CODE_REVIEW_BYPASS_MARKER not in git_hook_message
+
+
+def test_tool_level_message_keeps_offering_the_shell_marker() -> None:
+    assert _constants_module.CODE_REVIEW_BYPASS_MARKER in PUSH_GATE_CORRECTIVE_MESSAGE
+
+
 def test_guard_message_directs_users_to_the_sanctioned_minter_flag() -> None:
     assert SANCTIONED_STAMP_MINTER_FLAG in STAMP_DIRECTORY_GUARD_MESSAGE
 
