@@ -173,6 +173,33 @@ The copy button strips the tags and entities back out, so the text a reader past
 4. Read each tab as somebody who has never seen the system. Anywhere you reach for outside knowledge, write that knowledge into the tab.
 5. Publish it with the Artifact tool, passing the file path.
 
+## A second shape: six views of one item set
+
+A worked example sits beside this file: `tabbed-decision-artifact-multiview-example.html`. It captures decisions the same way and displays them differently. Six tabs hold six views of one item set.
+
+Every view renders the same item objects. A decision recorded in the swimlane shows in the table, the timeline, and the tree. Clicking an item in any view opens a drawer with the full case, the choice cards, and the note box.
+
+Use this shape when the items are stages of one piece of work. The reader's first question is then how the items relate. One tab per decision suits independent questions. Six views suit a chain.
+
+Each view answers a different question about the same items:
+
+| View | What it is good at |
+|---|---|
+| Swimlane | Who acts at each stage. Shows how few stages need a person. |
+| Dependencies | What must exist before the next thing can start. |
+| State machine | The life of one record through the system, including a branch held out of the comparison. |
+| Order | Build order and relative weight, as bars rather than dates. |
+| Table | Every item at once, for scanning. |
+| Evidence cards | One card per check you ran. A flagged card marks a check that changed the plan. |
+
+The state machine view carries the lesson worth copying. The example counts alerts engineers acted on against alerts they ignored. It holds untriaged alerts out of that comparison. An alert nobody looked at is not an alert somebody rejected. Name the pile you hold out, and say why, wherever a view shows a split.
+
+Write every string in the example to the [`eli11-replies`](../../packages/claude-dev-env/rules/eli11-replies.md) shape: one idea per sentence, the action first, few words. A drawer holds four or five short lines, not two long paragraphs. A reader deciding five things reads every panel, so length costs them five times over.
+
+Give the example's `STORE` constant a fresh value when you copy the file. Two artifacts sharing a storage key overwrite each other's answers.
+
+Fill it in by rewriting `ITEMS`, then the six panels' static text. The swimlane cells and tree tiers carry a `data-slot` attribute naming an item `id`; the engine renders each named item into its slot.
+
 ## Changing the look
 
 The palette is a token layer: three blocks near the top of the file define the same set of custom properties for the default theme, for `prefers-color-scheme: dark`, and for the viewer's explicit `data-theme` toggle. Components style themselves through those tokens only.
