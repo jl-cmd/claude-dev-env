@@ -32,6 +32,7 @@ try:
         gate_running,
         git_blob_readers,
         git_file_sets,
+        staged_test_regression,
         staged_test_running,
         violation_scoping,
         wrapper_plumb_check,
@@ -136,7 +137,7 @@ def _report_partitioned_violations(
         is_whole_file_scope,
     )
 
-run_staged_test_files = staged_test_running.run_staged_test_files
+run_staged_test_files = staged_test_regression.run_staged_test_files
 _staged_test_file_paths = staged_test_running._staged_test_file_paths
 _resolve_owning_test_root = staged_test_running._resolve_owning_test_root
 _group_staged_tests_by_root = staged_test_running._group_staged_tests_by_root
