@@ -3,15 +3,17 @@
 ::
 
     staged run:   pkg/test_a.py -> 2 failures (test_x, test_y)
-    baseline run (HEAD, via git stash): pkg/test_a.py -> 1 failure (test_x)
+    baseline run (HEAD worktree): pkg/test_a.py -> 1 failure (test_x)
     regression = staged - baseline = {test_y}   -> blocks
     test_x was already red before this change   -> does not block
 
 A staged test group that fails is re-run against the code as it stood before
-the change: the working tree is snapshotted to HEAD with 'git stash', the
-same group runs again, and the two failure sets are diffed by (classname,
-name) identity read from each run's JUnit XML report. Only a failure absent
-from the baseline run blocks the commit.
+the change: a throwaway detached-HEAD worktree is created under the OS temp
+root, the same group runs there with its paths remapped into that tree, and
+the two failure sets are diffed by (classname, name) identity read from each
+run's JUnit XML report. Only a failure absent from the baseline run blocks the
+commit. The user's own working tree and index are never moved, so a crashed
+run leaves every staged edit exactly where it was.
 """
 
 from __future__ import annotations
@@ -26,8 +28,10 @@ from typing import Iterable
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
     ALL_GIT_HEAD_EXISTS_ARGS,
-    ALL_GIT_STASH_POP_ARGS,
-    ALL_GIT_STASH_PUSH_ARGS,
+    ALL_GIT_WORKTREE_ADD_DETACH_ARGS,
+    ALL_GIT_WORKTREE_PRUNE_ARGS,
+    ALL_GIT_WORKTREE_REMOVE_FORCE_ARGS,
+    GIT_HEAD_REVISION,
     JUNIT_XML_CLASSNAME_ATTRIBUTE,
     JUNIT_XML_ERROR_TAG,
     JUNIT_XML_FAILURE_TAG,
@@ -35,13 +39,15 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     JUNIT_XML_NAME_ATTRIBUTE,
     JUNIT_XML_TESTCASE_TAG,
     REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME,
+    REGRESSION_BASELINE_WORKTREE_DIRECTORY_NAME,
+    REGRESSION_BASELINE_WORKTREE_TEMP_DIRECTORY_PREFIX,
     REGRESSION_GROUP_FAILURE_MESSAGE,
     REGRESSION_JUNIT_TEMP_DIRECTORY_PREFIX,
     REGRESSION_NO_BASELINE_MESSAGE,
     REGRESSION_PRE_EXISTING_FAILURE_BYPASSED_MESSAGE,
     REGRESSION_STAGED_JUNIT_SUBDIRECTORY_NAME,
-    REGRESSION_STASH_FAILED_MESSAGE,
-    REGRESSION_STASH_POP_FAILED_MESSAGE,
+    REGRESSION_WORKTREE_ADD_FAILED_MESSAGE,
+    REGRESSION_WORKTREE_REMOVE_FAILED_MESSAGE,
     STAGED_TEST_FAILURE_HEADER,
 )
 from terminology_sweep import repository_environment
@@ -129,27 +135,76 @@ def _run_group_and_collect(
 
 
 def _existing_group_targets(all_group_test_paths: list[Path]) -> list[Path]:
-    """Return the staged test paths that exist on disk right now.
+    """Return the given test paths that exist on disk.
 
-    Called after the working tree is reverted to HEAD: a test file staged for
-    the first time does not exist at that point, so it drops out of the
-    baseline run entirely — every one of its failures is then, correctly,
-    treated as new by the staged/baseline set difference.
+    Applied to paths already remapped into the baseline worktree: a test file
+    staged for the first time has no counterpart at HEAD, so its remapped path
+    is absent from that worktree and drops out of the baseline run entirely —
+    every one of its failures is then, correctly, treated as new by the
+    staged/baseline set difference.
     """
     return [each_path for each_path in all_group_test_paths if each_path.is_file()]
+
+
+def _path_under_baseline_worktree(
+    original_path: Path, repository_root: Path, baseline_worktree: Path
+) -> Path:
+    """Return *original_path* rebased onto the baseline worktree.
+
+    ::
+
+        repository_root   = /repo
+        baseline_worktree = /tmp/code_rules_gate_baseline_ab/tree
+        ok: /repo/pkg_a/test_alpha.py -> /tmp/.../tree/pkg_a/test_alpha.py
+
+    The baseline run happens inside a separate checkout, so every group root
+    and every collection target moves with it.
+
+    Args:
+        original_path: A path under the user's repository root.
+        repository_root: The repository root *original_path* is relative to.
+        baseline_worktree: The detached-HEAD worktree the baseline run uses.
+
+    Returns:
+        The same repository-relative location inside *baseline_worktree*.
+    """
+    repository_relative_path = original_path.resolve().relative_to(repository_root.resolve())
+    return baseline_worktree / repository_relative_path
+
+
+def _baseline_group_targets(
+    all_group_test_paths: list[Path], repository_root: Path, baseline_worktree: Path
+) -> list[Path]:
+    """Return the group's collection targets, rebased into the baseline worktree."""
+    return _existing_group_targets(
+        [
+            _path_under_baseline_worktree(each_path, repository_root, baseline_worktree)
+            for each_path in all_group_test_paths
+        ]
+    )
 
 
 def _baseline_outcomes_for_failing_groups(
     repository_root: Path,
     failing_group_test_paths: dict[Path, list[Path]],
     junit_root: Path,
+    baseline_worktree: Path,
 ) -> dict[Path, GroupOutcome]:
-    """Run, against the HEAD baseline, only the groups whose staged run failed."""
+    """Run, inside the baseline worktree, only the groups whose staged run failed.
+
+    Each group's root and collection targets are rebased into
+    *baseline_worktree*, while *repository_root* stays the user's own
+    repository so the interpreter still resolves against the project venv that
+    lives there. Every outcome stays keyed by the original group root, which is
+    the key the caller looks the staged outcome up by.
+    """
     baseline_outcomes: dict[Path, GroupOutcome] = {}
     for group_index, (group_root, all_group_test_paths) in enumerate(
         sorted(failing_group_test_paths.items())
     ):
-        baseline_targets = _existing_group_targets(all_group_test_paths)
+        baseline_targets = _baseline_group_targets(
+            all_group_test_paths, repository_root, baseline_worktree
+        )
         if not baseline_targets:
             baseline_outcomes[group_root] = GroupOutcome(0, frozenset())
             continue
@@ -157,7 +212,10 @@ def _baseline_outcomes_for_failing_groups(
             junit_root / REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME / str(group_index)
         )
         baseline_outcomes[group_root] = _run_group_and_collect(
-            group_root, baseline_targets, repository_root, group_junit_dir
+            _path_under_baseline_worktree(group_root, repository_root, baseline_worktree),
+            baseline_targets,
+            repository_root,
+            group_junit_dir,
         )
     return baseline_outcomes
 
@@ -197,25 +255,32 @@ def _first_nonzero(all_exit_codes: Iterable[int]) -> int:
     return 0
 
 
-def _run_regression_gate(
-    repository_root: Path,
+def _add_baseline_worktree(repository_root: Path, baseline_worktree: Path) -> bool:
+    """Attach a detached-HEAD checkout at *baseline_worktree*; True when git created it."""
+    worktree_added = _run_git(
+        repository_root,
+        (*ALL_GIT_WORKTREE_ADD_DETACH_ARGS, str(baseline_worktree), GIT_HEAD_REVISION),
+    )
+    return worktree_added.returncode == 0
+
+
+def _remove_baseline_worktree(repository_root: Path, baseline_worktree: Path) -> None:
+    """Detach and delete the baseline worktree, pruning its registration when removal fails."""
+    worktree_removed = _run_git(
+        repository_root, (*ALL_GIT_WORKTREE_REMOVE_FORCE_ARGS, str(baseline_worktree))
+    )
+    if worktree_removed.returncode == 0:
+        return
+    _run_git(repository_root, ALL_GIT_WORKTREE_PRUNE_ARGS)
+    sys.stderr.write(REGRESSION_WORKTREE_REMOVE_FAILED_MESSAGE + "\n")
+
+
+def _score_groups_against_baseline(
     failing_group_test_paths: dict[Path, list[Path]],
     staged_outcomes: dict[Path, GroupOutcome],
-    junit_root: Path,
+    baseline_outcomes: dict[Path, GroupOutcome],
 ) -> int:
-    """Snapshot HEAD, re-run the failing groups there, restore the stage, and score the diff."""
-    stash_pushed = _run_git(repository_root, ALL_GIT_STASH_PUSH_ARGS)
-    if stash_pushed.returncode != 0:
-        sys.stderr.write(REGRESSION_STASH_FAILED_MESSAGE + "\n")
-        return _first_nonzero(outcome.exit_code for outcome in staged_outcomes.values())
-    try:
-        baseline_outcomes = _baseline_outcomes_for_failing_groups(
-            repository_root, failing_group_test_paths, junit_root
-        )
-    finally:
-        stash_popped = _run_git(repository_root, ALL_GIT_STASH_POP_ARGS)
-        if stash_popped.returncode != 0:
-            sys.stderr.write(REGRESSION_STASH_POP_FAILED_MESSAGE + "\n")
+    """Report each group's staged-minus-baseline diff and return the first blocking code."""
     return _first_nonzero(
         _report_group_outcome(
             group_root,
@@ -224,6 +289,38 @@ def _run_regression_gate(
         )
         for group_root in sorted(failing_group_test_paths)
     )
+
+
+def _run_regression_gate(
+    repository_root: Path,
+    failing_group_test_paths: dict[Path, list[Path]],
+    staged_outcomes: dict[Path, GroupOutcome],
+    junit_root: Path,
+) -> int:
+    """Re-run the failing groups in a throwaway HEAD worktree and score the diff.
+
+    The user's own working tree and index stay where they are for the whole
+    run: the baseline lives in its own detached checkout under the OS temp
+    root, and that checkout is removed before the gate returns.
+    """
+    with tempfile.TemporaryDirectory(
+        prefix=REGRESSION_BASELINE_WORKTREE_TEMP_DIRECTORY_PREFIX, ignore_cleanup_errors=True
+    ) as baseline_parent_text:
+        baseline_worktree = (
+            Path(baseline_parent_text) / REGRESSION_BASELINE_WORKTREE_DIRECTORY_NAME
+        )
+        if not _add_baseline_worktree(repository_root, baseline_worktree):
+            sys.stderr.write(REGRESSION_WORKTREE_ADD_FAILED_MESSAGE + "\n")
+            return _first_nonzero(outcome.exit_code for outcome in staged_outcomes.values())
+        try:
+            baseline_outcomes = _baseline_outcomes_for_failing_groups(
+                repository_root, failing_group_test_paths, junit_root, baseline_worktree
+            )
+        finally:
+            _remove_baseline_worktree(repository_root, baseline_worktree)
+        return _score_groups_against_baseline(
+            failing_group_test_paths, staged_outcomes, baseline_outcomes
+        )
 
 
 def _run_staged_groups(
@@ -247,8 +344,8 @@ def run_grouped_tests_with_regression_gate(
     """Run every staged test group and block only on failures the staged change introduces.
 
     Every group runs once under the staged state. A group that passes needs no
-    further check. A group that fails is re-run against the HEAD baseline (the
-    working tree temporarily snapshotted back with 'git stash'), and only a
+    further check. A group that fails is re-run against the HEAD baseline (a
+    throwaway detached-HEAD worktree under the OS temp root), and only a
     failure absent from that baseline run blocks the commit — a failure
     already present before this change does not.
 

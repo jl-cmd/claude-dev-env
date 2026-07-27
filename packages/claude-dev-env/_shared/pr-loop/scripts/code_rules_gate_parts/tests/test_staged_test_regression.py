@@ -78,7 +78,9 @@ def test_mixed_group_blocks_only_on_the_newly_broken_test(tmp_path: Path) -> Non
     assert staged_test_regression.run_staged_test_files(repository_root) != 0
 
 
-def test_regression_gate_restores_the_staged_index_after_running(tmp_path: Path) -> None:
+def test_regression_gate_leaves_the_staged_index_and_worktree_list_alone(
+    tmp_path: Path,
+) -> None:
     repository_root = repository_with_root_pytest_config(tmp_path)
     write_commit_and_stage_change(
         repository_root,
@@ -101,8 +103,11 @@ def test_regression_gate_restores_the_staged_index_after_running(tmp_path: Path)
     assert "assert 1 == 1" in staged_content
     status = run_git(repository_root, "status", "--porcelain").stdout.decode("utf-8")
     assert "M  pkg_a/test_alpha.py" in status
-    stash_list = run_git(repository_root, "stash", "list").stdout.decode("utf-8")
-    assert stash_list == ""
+    worktree_list = run_git(
+        repository_root, "worktree", "list", "--porcelain"
+    ).stdout.decode("utf-8")
+    assert worktree_list.count("worktree ") == 1
+    assert "code_rules_gate_baseline_" not in worktree_list
 
 
 def test_run_staged_test_files_returns_zero_when_nothing_staged(tmp_path: Path) -> None:

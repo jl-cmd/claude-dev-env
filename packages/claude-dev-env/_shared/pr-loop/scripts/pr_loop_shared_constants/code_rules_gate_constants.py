@@ -167,34 +167,40 @@ REGRESSION_STAGED_JUNIT_SUBDIRECTORY_NAME: str = "staged"
 
 REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME: str = "baseline"
 
-REGRESSION_GIT_STASH_MESSAGE: str = "code_rules_gate: regression-baseline snapshot"
+REGRESSION_BASELINE_WORKTREE_TEMP_DIRECTORY_PREFIX: str = "code_rules_gate_baseline_"
+
+REGRESSION_BASELINE_WORKTREE_DIRECTORY_NAME: str = "tree"
+
+GIT_HEAD_REVISION: str = "HEAD"
 
 ALL_GIT_HEAD_EXISTS_ARGS: tuple[str, ...] = ("rev-parse", "--verify", "HEAD")
 
-ALL_GIT_STASH_PUSH_ARGS: tuple[str, ...] = (
-    "stash",
-    "push",
+ALL_GIT_WORKTREE_ADD_DETACH_ARGS: tuple[str, ...] = (
+    "worktree",
+    "add",
+    "--detach",
     "--quiet",
-    "--message",
-    REGRESSION_GIT_STASH_MESSAGE,
 )
 
-ALL_GIT_STASH_POP_ARGS: tuple[str, ...] = ("stash", "pop", "--quiet", "--index")
+ALL_GIT_WORKTREE_REMOVE_FORCE_ARGS: tuple[str, ...] = ("worktree", "remove", "--force")
+
+ALL_GIT_WORKTREE_PRUNE_ARGS: tuple[str, ...] = ("worktree", "prune")
 
 REGRESSION_NO_BASELINE_MESSAGE: str = (
     "code_rules_gate: no prior commit to compare against (first commit on this branch); "
     "every staged test failure blocks."
 )
 
-REGRESSION_STASH_FAILED_MESSAGE: str = (
-    "code_rules_gate: could not snapshot the pre-staged baseline (git stash push failed); "
-    "falling back to blocking on every staged test failure."
+REGRESSION_WORKTREE_ADD_FAILED_MESSAGE: str = (
+    "code_rules_gate: could not open a detached HEAD worktree for the pre-staged baseline "
+    "(git worktree add --detach failed); falling back to blocking on every staged test "
+    "failure."
 )
 
-REGRESSION_STASH_POP_FAILED_MESSAGE: str = (
-    "code_rules_gate: git stash pop failed after the baseline check — your staged changes "
-    "are sitting in the stash, not lost. Run 'git stash list' then 'git stash pop' to "
-    "restore them by hand."
+REGRESSION_WORKTREE_REMOVE_FAILED_MESSAGE: str = (
+    "code_rules_gate: git worktree remove --force failed after the baseline check — your "
+    "staged changes are untouched in this worktree. Run 'git worktree list' and "
+    "'git worktree prune' if a temporary baseline tree remains registered."
 )
 
 REGRESSION_PRE_EXISTING_FAILURE_BYPASSED_MESSAGE: str = (
