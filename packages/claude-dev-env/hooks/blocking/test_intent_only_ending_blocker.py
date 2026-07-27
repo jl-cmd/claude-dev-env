@@ -42,10 +42,28 @@ USER_DIRECTED_NEXT_STEPS_MESSAGE = (
 EMPTY_MESSAGE = ""
 
 
+ENFORCEMENT_ENABLED_PROGRAM = (
+    "import sys;"
+    f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+    "import intent_only_ending_blocker as hook_module;"
+    "hook_module.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+    "hook_module.main()"
+)
+
+ENFORCEMENT_DISABLED_PROGRAM = (
+    "import sys;"
+    f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+    "import intent_only_ending_blocker as hook_module;"
+    "hook_module.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
+    "hook_module.main()"
+)
+
+
 def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
+    """Run the hook with the prose-style switch turned on."""
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
     return subprocess.run(
-        [sys.executable, HOOK_SCRIPT_PATH],
+        [sys.executable, "-c", ENFORCEMENT_ENABLED_PROGRAM],
         input=hook_input_payload,
         capture_output=True,
         text=True,
@@ -54,13 +72,35 @@ def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess
 
 
 def run_hook_with_payload(hook_input_payload: dict) -> subprocess.CompletedProcess:
+    """Run the hook on a full payload with the prose-style switch turned on."""
     return subprocess.run(
-        [sys.executable, HOOK_SCRIPT_PATH],
+        [sys.executable, "-c", ENFORCEMENT_ENABLED_PROGRAM],
         input=json.dumps(hook_input_payload),
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def run_hook_with_enforcement_switched_off(
+    assistant_message: str,
+) -> subprocess.CompletedProcess:
+    """Run the hook with the prose-style switch pinned off."""
+    hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    return subprocess.run(
+        [sys.executable, "-c", ENFORCEMENT_DISABLED_PROGRAM],
+        input=hook_input_payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_intent_ending_passes_when_the_switch_is_off() -> None:
+    completed_process = run_hook_with_enforcement_switched_off(INTENT_ENDING_MESSAGE)
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
 
 
 def test_user_facing_notice_matches_config_messages_module():

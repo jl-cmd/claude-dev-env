@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
@@ -42,6 +44,37 @@ _STATE_DESCRIPTION_ALLOW_CONTENT = "# Guide\n\nThe API uses port 8080.\n"
 _STATE_DESCRIPTION_DENY_CONTENT = "# Guide\n\nPreviously the system used port 8080.\n"
 _PLAIN_LANGUAGE_ALLOW_CONTENT = "# Guide\n\nStart the build to make the report.\n"
 _PLAIN_LANGUAGE_DENY_CONTENT = "# Guide\n\nUtilize this to commence the process.\n"
+
+
+@pytest.fixture(autouse=True)
+def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the shared prose-style switch on for every in-process test."""
+    monkeypatch.setattr(plain_language_blocker, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
+    monkeypatch.setattr(state_description_blocker, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
+
+
+def _prose_switch_enabled_program(target_script_path: str) -> str:
+    """Build a launcher that turns the prose-style switch on, then runs a script.
+
+    The launcher patches the shared switch module in ``sys.modules`` before the
+    target runs, so every hook the dispatcher executes through runpy reads the
+    switch as on.
+
+    Args:
+        target_script_path: Absolute path of the script to run as ``__main__``.
+
+    Returns:
+        The program text to pass to the interpreter's ``-c`` flag.
+    """
+    return (
+        "import sys, runpy;"
+        f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
+        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
+        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+        f"sys.argv = [{repr(target_script_path)}];"
+        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
+    )
 
 
 def _write_payload_dictionary(file_path: str, content: str) -> dict[str, object]:
@@ -110,7 +143,7 @@ def _run_script_subprocess(script_path: str, payload_dictionary: dict[str, objec
         The hook's stdout text, stripped of surrounding whitespace.
     """
     completed_process = subprocess.run(
-        [sys.executable, script_path],
+        [sys.executable, "-c", _prose_switch_enabled_program(script_path)],
         check=False,
         input=json.dumps(payload_dictionary),
         capture_output=True,
@@ -151,7 +184,7 @@ def _deny_reason_from_dispatcher(payload_dictionary: dict[str, object]) -> str |
         None when it allows.
     """
     completed_process = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
+        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
         check=False,
         input=json.dumps(payload_dictionary),
         capture_output=True,
@@ -171,7 +204,7 @@ def _deny_payload_from_dispatcher(payload_dictionary: dict[str, object]) -> dict
         The dispatcher's emitted deny JSON parsed into a dict.
     """
     completed_process = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
+        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
         check=False,
         input=json.dumps(payload_dictionary),
         capture_output=True,

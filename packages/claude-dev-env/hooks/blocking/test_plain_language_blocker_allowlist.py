@@ -5,9 +5,12 @@ import json
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 BLOCKER_PATH = Path(__file__).parent / "plain_language_blocker.py"
 ALLOWLIST_RELATIVE_PATH = Path(".claude") / "plain-language-allow.json"
 ALWAYS_HEAVY_WORD = "utilize"
+MARKER_NAME_NO_DIRECTORY_CARRIES = ".plain-language-allowlist-test-marker"
 
 
 def _load_blocker() -> ModuleType:
@@ -21,6 +24,12 @@ def _load_blocker() -> ModuleType:
 
 
 _BLOCKER = _load_blocker()
+
+
+@pytest.fixture(autouse=True)
+def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the shared prose-style switch on for every allowlist test."""
+    monkeypatch.setattr(_BLOCKER, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
 
 
 def _init_repo(root: Path) -> Path:
@@ -164,8 +173,15 @@ def test_allowlist_at_the_repo_root_is_applied(tmp_path: Path) -> None:
     assert deny_reason is None
 
 
-def test_allowlist_without_a_repo_root_is_not_applied(tmp_path: Path) -> None:
+def test_allowlist_without_a_repo_root_is_not_applied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _write_allowlist(tmp_path, ["submit"])
+    monkeypatch.setattr(
+        _BLOCKER, "REPOSITORY_MARKER_NAME", MARKER_NAME_NO_DIRECTORY_CARRIES
+    )
+
+    assert _BLOCKER._find_project_allowlist_file(tmp_path / "docs") is None
 
     deny_reason = _BLOCKER.evaluate(
         _markdown_write_payload(tmp_path, "Please submit the notes.")

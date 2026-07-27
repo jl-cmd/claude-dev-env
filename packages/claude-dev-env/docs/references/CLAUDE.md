@@ -8,6 +8,7 @@ Pointer documents to external sources, standard terminology, and internal tool o
 |---|---|
 | `dead-code-elimination.md` | External sources and standard terms behind CODE_RULES §9.8 (remove code you orphan): DCE, tree shaking, reachability analysis, and the Lava Flow anti-pattern |
 | `code-review-enforcement.md` | How the code-review gates work: the two required efforts (push at low, PR creation at xhigh), the stamp bound to the branch-surface hash, the single sanctioned minter, the two-layer stamp-directory guard, and the bypass surfaces the gates leave open |
+| `prose-style-enforcement.md` | The five prose-style hooks and the shared `PROSE_STYLE_ENFORCEMENT_ENABLED` switch (default off): what each hook blocks, where the flag lives, how to turn it on, and what silence off means |
 | `advisor-tool.md` | The `advisor()` tool: a no-parameter review call that forwards the full conversation history to a stronger reviewer model, and when to call it |
 | `team-advisor-skill.md` | The `/team-advisor` skill: spawning a standing review agent at the strongest reachable tier, and how it relates to the `advisor()` tool |
 
