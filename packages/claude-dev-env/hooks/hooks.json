@@ -103,16 +103,6 @@
         ]
       },
       {
-        "matcher": "ScheduleWakeup|CronCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/orchestrator_refresh_reschedule_gate.py",
-            "timeout": 15
-          }
-        ]
-      },
-      {
         "matcher": "Skill",
         "hooks": [
           {
@@ -186,6 +176,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_list_loop_starter.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/policy/guards/git_find_handle_guard.py",
+            "timeout": 30
           }
         ]
       }
