@@ -46,20 +46,16 @@ from hooks_constants.local_identity import (  # noqa: E402
     nas_host,
 )
 from hooks_constants.nas_ssh_binary_enforcer_constants import (  # noqa: E402
-    ALL_LAUNCHER_WRAPPER_COMMANDS,
     ALL_OPENSSH_BINARY_PATH_SUFFIXES,
-    ALL_SHELL_CONTROL_OPERATOR_TOKENS,
     ALL_SSH_FAMILY_COMMAND_BASENAMES,
     BASH_TOOL_NAME,
     BATCH_MODE_PATTERN,
-    CONTROL_OPERATOR_SPLIT_PATTERN,
-    LAUNCHER_DURATION_PATTERN,
-    LEADING_ASSIGNMENT_PATTERN,
 )
-
-
-def _token_basename(token: str) -> str:
-    return token.replace("\\", "/").rsplit("/", 1)[-1].lower()
+from hooks_constants.shell_command_segments import (  # noqa: E402
+    effective_leading_program as _effective_leading_program,
+    split_into_segments as _split_into_segments,
+    token_basename as _token_basename,
+)
 
 
 def _is_openssh_binary_path(token: str) -> bool:
@@ -72,40 +68,6 @@ def _is_openssh_binary_path(token: str) -> bool:
 
 def _nas_host_token_pattern() -> re.Pattern[str]:
     return re.compile(rf"(?:^|@){re.escape(nas_host())}(?::|$)")
-
-
-def _split_into_segments(all_command_tokens: list[str]) -> list[list[str]]:
-    all_exploded_tokens: list[str] = []
-    for each_token in all_command_tokens:
-        for each_fragment in CONTROL_OPERATOR_SPLIT_PATTERN.split(each_token):
-            if each_fragment:
-                all_exploded_tokens.append(each_fragment)
-    all_segments: list[list[str]] = []
-    current_segment: list[str] = []
-    for each_token in all_exploded_tokens:
-        if each_token in ALL_SHELL_CONTROL_OPERATOR_TOKENS:
-            all_segments.append(current_segment)
-            current_segment = []
-            continue
-        current_segment.append(each_token)
-    all_segments.append(current_segment)
-    return all_segments
-
-
-def _effective_leading_program(all_segment_tokens: list[str]) -> str | None:
-    has_seen_launcher_wrapper = False
-    for each_token in all_segment_tokens:
-        if LEADING_ASSIGNMENT_PATTERN.match(each_token):
-            continue
-        if _token_basename(each_token) in ALL_LAUNCHER_WRAPPER_COMMANDS:
-            has_seen_launcher_wrapper = True
-            continue
-        if has_seen_launcher_wrapper and (
-            each_token.startswith("-") or LAUNCHER_DURATION_PATTERN.match(each_token)
-        ):
-            continue
-        return each_token
-    return None
 
 
 def _segment_references_nas(
