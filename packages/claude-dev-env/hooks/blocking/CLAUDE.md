@@ -108,10 +108,12 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
 | `session_edit_stage_gate.py` | PreToolUse (Bash) | A `git commit` that would drop files edited this session because they are tracked but left unstaged |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
+| `shell_substitution_blocker.py` | PreToolUse (Bash) | A command carrying `$(...)`, a live backtick, or `<(...)`/`>(...)` process substitution, which the allowlist matcher cannot descend into |
 | `stale_comment_reference_blocker.py` | PreToolUse (Edit) | An Edit that rewrites a Python code line while keeping the standalone comment directly above it, when that comment names an identifier the rewrite removes from the line |
 | `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |
+| `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, or bare home |
 | `verdict_directory_write_blocker.py` | PreToolUse (Bash/PowerShell) | Shell writes into `~/.claude/verification/` |
 | `verified_commit_gate.py` | PreToolUse (Bash/PowerShell) | `git commit`/`git push` without a passing verifier verdict |
 | `verified_commit_message_accuracy_blocker.py` | PreToolUse | Commit messages that misstate what the diff has |

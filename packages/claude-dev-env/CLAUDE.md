@@ -8,6 +8,8 @@ Reply shape and length: follow `~/.claude/rules/eli11-replies.md`. Word choice: 
 
 Collect credentials through secure UI only; never request secrets in chat.
 
+A runtime value that is itself private — a host, an SSH user or port, an owner scope, an account ID — lives in git-ignored local configuration with a committed placeholder in its place. Source files never carry the real value.
+
 ## Advisors
 
 When the `advisor()` tool is available, read `~/.claude/docs/references/advisor-tool.md`. For complex tasks use the `/team-advisor` skill.
