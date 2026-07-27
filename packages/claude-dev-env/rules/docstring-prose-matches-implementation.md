@@ -28,13 +28,13 @@ Read the body and the docstring side by side. Apply each check that matches the 
 - **Gate-outcome status flags** — an outcome routed to a blocker (`blocker = ...; break`) reads as blocked everywhere, never as a bypass.
 - **Returns / Raises / Note claims** — each free-form claim matches the body.
 
-Many deterministic shapes of this drift have Write/Edit gates in `packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py` (and the JS/`.mjs` slices in `code_rules_imports_logging.py`). Free-form rest is judgment.
+Many deterministic shapes of this drift have Write/Edit gates in `~/.claude/hooks/blocking/code_rules_docstrings.py` (and the JS/`.mjs` slices in `code_rules_imports_logging.py`). Free-form rest is judgment.
 
 ## Full standard
 
 The full Category O judgment standard — sub-buckets O1–O9, the complete write-time gate inventory, free-form checklists, and worked examples — lives in:
 
-`packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`
+`~/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`
 
 ## Division of labor
 

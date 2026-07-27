@@ -48,7 +48,7 @@ cannot tell which name states the truth. Rename the callee to a neutral form
 the two names agree on at every call site.
 ```
 
-The live version of this docstring sits on `check_polarity_name_contradiction` in `packages/claude-dev-env/hooks/blocking/code_rules_naming_collection.py`.
+The live version of this docstring sits on `check_polarity_name_contradiction` in `~/.claude/hooks/blocking/code_rules_naming_collection.py`.
 
 A short narrative with no diagram is fine when a couple of plain sentences carry the whole picture. The diagram earns its place once the explanation grows past what two or three lines hold — the moment a wall of prose starts to form.
 
@@ -86,9 +86,9 @@ one — and you're debugging blind.
 
 Two surfaces carry this standard:
 
-- **Hook (the run-on backstop).** `check_docstring_runon_sentence` in `packages/claude-dev-env/hooks/blocking/code_rules_docstrings.py` flags the one mechanical mark of a wall: a single narrative sentence that is both over the word limit and joined by an em-dash or a semicolon. A hook cannot judge whether prose paints a picture, so it catches only this structural mark. It reads the narrative through a shared partition that sets aside any `::` literal block and any doctest, so a diagram's own arrows and dashes never count against the sentence.
+- **Hook (the run-on backstop).** `check_docstring_runon_sentence` in `~/.claude/hooks/blocking/code_rules_docstrings.py` flags the one mechanical mark of a wall: a single narrative sentence that is both over the word limit and joined by an em-dash or a semicolon. A hook cannot judge whether prose paints a picture, so it catches only this structural mark. It reads the narrative through a shared partition that sets aside any `::` literal block and any doctest, so a diagram's own arrows and dashes never count against the sentence.
 - **Hook (the prose-wall backstop).** `check_docstring_prose_wall_without_illustration` in the same module flags a narrative that runs more than six prose lines with no diagram block. It marks the wall so the writer shows the behavior with a `::` example or a doctest and trims the prose to a few short lines. It cannot judge whether the diagram illustrates well; that stays with the audit lane.
-- **Audit (the judgment lane).** Category O sub-bucket O9 in `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` carries the illustrative-and-brief judgment the hook cannot. The audit teammate reads each changed docstring's narrative and asks whether a general developer follows it on the first read.
+- **Audit (the judgment lane).** Category O sub-bucket O9 in `~/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` carries the illustrative-and-brief judgment the hook cannot. The audit teammate reads each changed docstring's narrative and asks whether a general developer follows it on the first read.
 
 ## Why
 

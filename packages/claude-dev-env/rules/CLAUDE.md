@@ -33,8 +33,8 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images |
 | `hook-prose-matches-detector.md` | Hook prose descriptions match what the hook actually detects |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
-| `nas-ssh-invocation.md` | Reach the NAS through the `System32/OpenSSH` binary with `-o BatchMode=yes`; bare `ssh`/`scp`/`sftp` stalls on an interactive password prompt |
-| `no-cross-skill-duplicate-helpers.md` | No duplicating shared helpers across skills; use `_shared/` |
+| `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |
+| `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
 | `no-historical-clutter.md` | Documentation describes current state only; no historical or transitional language |
 | `no-inline-destructive-literals.md` | No destructive-command literals in Bash tool command strings, even as data |
 | `no-justification-noise.md` | Markdown states facts a reader can act on; cut a present-tense sentence that only justifies a stated choice or restates a gain the reader already works out from the behavior or from a rule enforced elsewhere |
@@ -65,4 +65,4 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 
 ## Hook enforcement
 
-Rules marked with ⚡ in `packages/claude-dev-env/docs/CODE_RULES.md` are backed by a blocking hook in `hooks/blocking/`. Rules without a hook are judgment-based and enforced via audit rubrics (`audit-rubrics/`).
+Rules marked with ⚡ in `~/.claude/docs/CODE_RULES.md` are backed by a blocking hook in `hooks/blocking/`. Rules without a hook are judgment-based and enforced via audit rubrics (`audit-rubrics/`).
