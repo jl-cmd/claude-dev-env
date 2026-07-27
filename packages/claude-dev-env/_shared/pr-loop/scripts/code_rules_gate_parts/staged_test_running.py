@@ -260,13 +260,18 @@ def _batched_pytest_arguments(
 
 
 def _pytest_batch_exit_code(
-    all_batch_command: list[str], group_root: Path, junit_xml_path: Path | None = None
+    all_batch_command: list[str],
+    group_root: Path,
+    environment: dict[str, str],
+    junit_xml_path: Path | None = None,
 ) -> int:
     """Run one pytest invocation and normalize its exit code.
 
     Args:
         all_batch_command: The full argv for this pytest invocation.
         group_root: The owning test root used as the working directory.
+        environment: The environment the pytest subprocess runs under, which
+            decides where its imports resolve from.
         junit_xml_path: When given, the batch also writes a JUnit XML report
             here (via ``--junitxml``), for a caller that needs the per-test
             pass/fail identities alongside the exit code.
@@ -283,7 +288,7 @@ def _pytest_batch_exit_code(
         cwd=str(group_root),
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
-        env=_staged_pytest_environment(),
+        env=environment,
     )
     if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
         return 0
@@ -302,6 +307,7 @@ def _first_failing_batch_exit_code(
     all_fixed_command: list[str],
     all_batches: list[list[str]],
     group_root: Path,
+    environment: dict[str, str],
     junit_xml_dir: Path | None = None,
 ) -> int:
     """Run each batch and return the first non-zero pytest exit code, or zero.
@@ -310,6 +316,7 @@ def _first_failing_batch_exit_code(
         all_fixed_command: The interpreter-and-pytest prefix shared by every batch.
         all_batches: The command-line-length-safe argument batches to run in order.
         group_root: The owning test root used as the working directory.
+        environment: The environment every pytest subprocess runs under.
         junit_xml_dir: When given, each batch also writes its own JUnit XML report
             here (one file per batch index), for a caller that needs per-test
             pass/fail identities alongside the exit code.
@@ -324,7 +331,10 @@ def _first_failing_batch_exit_code(
             junit_xml_dir / f"batch_{batch_index}.xml" if junit_xml_dir is not None else None
         )
         batch_exit_code = _pytest_batch_exit_code(
-            [*all_fixed_command, *each_batch], group_root, junit_xml_path=junit_xml_path
+            [*all_fixed_command, *each_batch],
+            group_root,
+            environment,
+            junit_xml_path=junit_xml_path,
         )
         if batch_exit_code != 0 and first_failing_exit_code == 0:
             first_failing_exit_code = batch_exit_code
@@ -336,6 +346,7 @@ def _run_pytest_for_group(
     all_group_test_paths: list[Path],
     repository_root: Path,
     junit_xml_dir: Path | None = None,
+    environment: dict[str, str] | None = None,
 ) -> int:
     """Run pytest over one group's test files, split into budget-safe batches.
 
@@ -346,6 +357,10 @@ def _run_pytest_for_group(
         junit_xml_dir: When given, a JUnit XML report is written per batch under
             this directory, for a caller that needs per-test pass/fail identities
             (the regression gate) alongside the exit code.
+        environment: When given, the environment every pytest subprocess runs
+            under; the regression gate passes a baseline environment here so the
+            HEAD run resolves its imports inside the baseline worktree. Defaults
+            to the staged environment.
 
     Returns:
         0 when every batch passes or collects nothing; the first failing batch's
@@ -360,5 +375,9 @@ def _run_pytest_for_group(
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS - fixed_command_length,
     )
     return _first_failing_batch_exit_code(
-        all_fixed_command, all_batches, group_root, junit_xml_dir=junit_xml_dir
+        all_fixed_command,
+        all_batches,
+        group_root,
+        _staged_pytest_environment() if environment is None else environment,
+        junit_xml_dir=junit_xml_dir,
     )

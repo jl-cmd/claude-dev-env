@@ -7,6 +7,8 @@ exercises.
 
 from pathlib import Path
 
+import pytest
+
 from code_rules_gate_parts import staged_test_regression
 from code_rules_gate_parts.tests._repo_test_helpers import (
     init_repository,
@@ -15,6 +17,72 @@ from code_rules_gate_parts.tests._repo_test_helpers import (
     write_and_stage,
     write_commit_and_stage_change,
 )
+
+CONSUMER_TEST_TEXT = (
+    "import foo\n\n\ndef test_consumer_reads_head_value() -> None:\n"
+    "    assert foo.VALUE == 'clean', foo.__file__\n"
+)
+
+CONSUMER_TEST_TEXT_WITH_STAGED_EDIT = CONSUMER_TEST_TEXT + (
+    "\n\ndef test_consumer_extra() -> None:\n    assert True\n"
+)
+
+IMPORT_HOOK_SITECUSTOMIZE_TEMPLATE = (
+    "import sys\n"
+    "from importlib.machinery import PathFinder\n\n"
+    "PINNED_ROOT = r'{pinned_root}'\n\n\n"
+    "class PinnedFinder(PathFinder):\n"
+    "    @classmethod\n"
+    "    def find_spec(cls, fullname, path=None, target=None):\n"
+    "        if fullname.split('.')[0] != 'foo':\n"
+    "            return None\n"
+    "        return super().find_spec(fullname, [PINNED_ROOT], target)\n\n\n"
+    "sys.meta_path.insert(0, PinnedFinder)\n"
+)
+
+
+def stage_a_change_that_breaks_a_consumer(repository_root: Path) -> None:
+    """Commit a passing consumer of ``foo``, then stage a ``foo`` edit that breaks it.
+
+    The consumer imports ``foo`` by name, so which copy of ``foo`` the baseline
+    run loads decides whether the gate sees a regression at all.
+    """
+    write_and_stage(repository_root, "packages/foo/__init__.py", "VALUE = 'clean'\n")
+    write_and_stage(repository_root, "pkg_a/test_alpha.py", CONSUMER_TEST_TEXT)
+    run_git(repository_root, "commit", "--no-verify", "-m", "seed consumer")
+    write_and_stage(repository_root, "packages/foo/__init__.py", "VALUE = 'dirty'\n")
+    write_and_stage(
+        repository_root, "pkg_a/test_alpha.py", CONSUMER_TEST_TEXT_WITH_STAGED_EDIT
+    )
+
+
+def test_pythonpath_route_into_the_working_tree_does_not_hide_a_regression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    stage_a_change_that_breaks_a_consumer(repository_root)
+    monkeypatch.setenv("PYTHONPATH", str(repository_root / "packages"))
+
+    assert staged_test_regression.run_staged_test_files(repository_root) != 0
+
+
+def test_import_hook_route_into_the_working_tree_is_reported_and_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    stage_a_change_that_breaks_a_consumer(repository_root)
+    import_hook_directory = tmp_path / "import_hook"
+    import_hook_directory.mkdir()
+    (import_hook_directory / "sitecustomize.py").write_text(
+        IMPORT_HOOK_SITECUSTOMIZE_TEMPLATE.format(pinned_root=repository_root / "packages"),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(import_hook_directory))
+
+    exit_code = staged_test_regression.run_staged_test_files(repository_root)
+
+    assert exit_code != 0
+    assert "imported 1 module(s) from your working tree" in capsys.readouterr().err
 
 
 def test_pre_existing_failure_does_not_block_an_unrelated_staged_change(

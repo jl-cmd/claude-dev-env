@@ -14,6 +14,14 @@ the two failure sets are diffed by (classname, name) identity read from each
 run's JUnit XML report. Only a failure absent from the baseline run blocks the
 commit. The user's own working tree and index are never moved, so a crashed
 run leaves every staged edit exactly where it was.
+
+Moving the working directory alone would leave an absolute import route — a
+``PYTHONPATH`` entry under the repository root, or an editable install pointing
+at it — still feeding staged code to the baseline, whose identical failure
+would then cancel a real regression out. ``baseline_import_isolation`` moves
+every repository import root into the baseline worktree and reports which
+modules the baseline actually loaded from the user's tree; a baseline that read
+staged code is discarded, and every staged failure in that group blocks.
 """
 
 from __future__ import annotations
@@ -28,6 +36,8 @@ from typing import Iterable
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
     ALL_GIT_HEAD_EXISTS_ARGS,
+    BASELINE_LEAK_PLUGIN_DIRECTORY_NAME,
+    BASELINE_LEAK_REPORT_FILENAME,
     ALL_GIT_WORKTREE_ADD_DETACH_ARGS,
     ALL_GIT_WORKTREE_PRUNE_ARGS,
     ALL_GIT_WORKTREE_REMOVE_FORCE_ARGS,
@@ -38,7 +48,9 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     JUNIT_XML_MISSING_ATTRIBUTE_FALLBACK,
     JUNIT_XML_NAME_ATTRIBUTE,
     JUNIT_XML_TESTCASE_TAG,
+    REGRESSION_BASELINE_IMPORT_LEAK_MESSAGE,
     REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME,
+    REGRESSION_BASELINE_LEAK_UNREPORTED_MESSAGE,
     REGRESSION_BASELINE_WORKTREE_DIRECTORY_NAME,
     REGRESSION_BASELINE_WORKTREE_TEMP_DIRECTORY_PREFIX,
     REGRESSION_GROUP_FAILURE_MESSAGE,
@@ -52,7 +64,7 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
 )
 from terminology_sweep import repository_environment
 
-from code_rules_gate_parts import staged_test_running
+from code_rules_gate_parts import baseline_import_isolation, staged_test_running
 
 TestIdentity = tuple[str, str]
 
@@ -125,11 +137,28 @@ def _run_group_and_collect(
     all_group_test_paths: list[Path],
     repository_root: Path,
     junit_xml_dir: Path,
+    environment: dict[str, str] | None = None,
 ) -> GroupOutcome:
-    """Run one test group and return its exit code with its failing test identities."""
+    """Run one test group and return its exit code with its failing test identities.
+
+    Args:
+        group_root: The pytest working directory for this run.
+        all_group_test_paths: The collection targets to pass pytest.
+        repository_root: The repository root the interpreter resolves against.
+        junit_xml_dir: Where this run's JUnit XML reports are written.
+        environment: When given, the environment the run uses; the baseline run
+            passes one that resolves imports inside the baseline worktree.
+
+    Returns:
+        The run's exit code alongside every failing test identity it reported.
+    """
     junit_xml_dir.mkdir(parents=True, exist_ok=True)
     exit_code = staged_test_running._run_pytest_for_group(
-        group_root, all_group_test_paths, repository_root, junit_xml_dir=junit_xml_dir
+        group_root,
+        all_group_test_paths,
+        repository_root,
+        junit_xml_dir=junit_xml_dir,
+        environment=environment,
     )
     return GroupOutcome(exit_code, _junit_failure_identities(junit_xml_dir))
 
@@ -184,6 +213,104 @@ def _baseline_group_targets(
     )
 
 
+@dataclass(frozen=True)
+class BaselineRunContext:
+    """What every baseline group run in one gate run shares.
+
+    Attributes:
+        worktree: The detached-HEAD worktree the baseline runs happen in.
+        all_import_roots: Every directory the interpreter resolves imported
+            packages from, including the roots an editable install registers.
+        plugin_directory: Where the import-origin reporting plugin was written.
+        staged_environment: The environment the staged runs used.
+    """
+
+    worktree: Path
+    all_import_roots: list[Path]
+    plugin_directory: Path
+    staged_environment: dict[str, str]
+
+
+def _baseline_run_context(
+    repository_root: Path, baseline_worktree: Path, junit_root: Path
+) -> BaselineRunContext:
+    """Install the leak plugin and probe the interpreter's import roots once per gate run."""
+    plugin_directory = junit_root / BASELINE_LEAK_PLUGIN_DIRECTORY_NAME
+    baseline_import_isolation.install_leak_plugin(plugin_directory)
+    staged_environment = staged_test_running._staged_pytest_environment()
+    all_import_roots = baseline_import_isolation.discover_import_roots(
+        staged_test_running._resolve_gate_python_executable(repository_root),
+        staged_environment,
+        baseline_worktree.parent,
+    )
+    return BaselineRunContext(
+        baseline_worktree, all_import_roots, plugin_directory, staged_environment
+    )
+
+
+def _trusted_baseline_outcome(
+    group_root: Path, baseline_outcome: GroupOutcome, leak_report_path: Path
+) -> GroupOutcome:
+    """Return the baseline outcome, emptied of failures when the run read the user's own tree.
+
+    ::
+
+        ok:   report []                 -> baseline kept; its failures cancel staged ones
+        flag: report [/repo/pkg/foo.py] -> baseline discarded; every staged failure blocks
+        flag: no report at all          -> baseline discarded; nothing was proven
+
+    A baseline that imported staged code fails the same way the staged run did,
+    which would cancel a real regression out. Emptying its failure set makes
+    every staged failure count as new, so the commit blocks instead.
+    """
+    all_leaked_modules = baseline_import_isolation.modules_imported_from_primary_tree(
+        leak_report_path
+    )
+    if all_leaked_modules is None:
+        sys.stderr.write(
+            REGRESSION_BASELINE_LEAK_UNREPORTED_MESSAGE.format(group_root=group_root) + "\n"
+        )
+        return GroupOutcome(baseline_outcome.exit_code, frozenset())
+    if not all_leaked_modules:
+        return baseline_outcome
+    sys.stderr.write(
+        REGRESSION_BASELINE_IMPORT_LEAK_MESSAGE.format(
+            group_root=group_root,
+            count=len(all_leaked_modules),
+            first_module=all_leaked_modules[0],
+        )
+        + "\n"
+    )
+    return GroupOutcome(baseline_outcome.exit_code, frozenset())
+
+
+def _baseline_group_outcome(
+    group_root: Path,
+    baseline_targets: list[Path],
+    repository_root: Path,
+    group_junit_dir: Path,
+    context: BaselineRunContext,
+) -> GroupOutcome:
+    """Run one group inside the baseline worktree and keep the result only when it stayed clean."""
+    leak_report_path = group_junit_dir / BASELINE_LEAK_REPORT_FILENAME
+    baseline_environment = baseline_import_isolation.baseline_pytest_environment(
+        context.staged_environment,
+        repository_root,
+        context.worktree,
+        context.all_import_roots,
+        context.plugin_directory,
+        leak_report_path,
+    )
+    baseline_outcome = _run_group_and_collect(
+        _path_under_baseline_worktree(group_root, repository_root, context.worktree),
+        baseline_targets,
+        repository_root,
+        group_junit_dir,
+        environment=baseline_environment,
+    )
+    return _trusted_baseline_outcome(group_root, baseline_outcome, leak_report_path)
+
+
 def _baseline_outcomes_for_failing_groups(
     repository_root: Path,
     failing_group_test_paths: dict[Path, list[Path]],
@@ -193,11 +320,14 @@ def _baseline_outcomes_for_failing_groups(
     """Run, inside the baseline worktree, only the groups whose staged run failed.
 
     Each group's root and collection targets are rebased into
-    *baseline_worktree*, while *repository_root* stays the user's own
-    repository so the interpreter still resolves against the project venv that
-    lives there. Every outcome stays keyed by the original group root, which is
-    the key the caller looks the staged outcome up by.
+    *baseline_worktree*, and so is every import root that resolves inside the
+    user's repository, so an absolute import route never serves staged code to
+    the baseline. *repository_root* stays the user's own repository, because
+    the interpreter resolves against the project venv that lives there. Every
+    outcome stays keyed by the original group root, which is the key the caller
+    looks the staged outcome up by.
     """
+    context = _baseline_run_context(repository_root, baseline_worktree, junit_root)
     baseline_outcomes: dict[Path, GroupOutcome] = {}
     for group_index, (group_root, all_group_test_paths) in enumerate(
         sorted(failing_group_test_paths.items())
@@ -211,11 +341,8 @@ def _baseline_outcomes_for_failing_groups(
         group_junit_dir = (
             junit_root / REGRESSION_BASELINE_JUNIT_SUBDIRECTORY_NAME / str(group_index)
         )
-        baseline_outcomes[group_root] = _run_group_and_collect(
-            _path_under_baseline_worktree(group_root, repository_root, baseline_worktree),
-            baseline_targets,
-            repository_root,
-            group_junit_dir,
+        baseline_outcomes[group_root] = _baseline_group_outcome(
+            group_root, baseline_targets, repository_root, group_junit_dir, context
         )
     return baseline_outcomes
 
