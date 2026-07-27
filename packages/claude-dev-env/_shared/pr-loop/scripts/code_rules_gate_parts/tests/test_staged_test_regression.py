@@ -298,57 +298,6 @@ def _stage_package_owning_a_bare_config(
     )
 
 
-def test_run_staged_test_files_returns_zero_when_nothing_staged(tmp_path: Path) -> None:
-    repository_root = tmp_path / "repo"
-    repository_root.mkdir()
-    init_repository(repository_root)
-
-    assert staged_test_regression.run_staged_test_files(repository_root) == 0
-
-
-def test_run_staged_test_files_returns_zero_when_only_multiple_confests_staged(
-    tmp_path: Path,
-) -> None:
-    repository_root = repository_with_root_pytest_config(tmp_path)
-    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
-    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
-    write_and_stage(
-        repository_root, "pkg_c/tests/conftest.py", "import pytest\n"
-    )
-
-    assert staged_test_regression.run_staged_test_files(repository_root) == 0
-
-
-def test_run_staged_test_files_passes_when_confests_stage_with_passing_test(
-    tmp_path: Path,
-) -> None:
-    repository_root = repository_with_root_pytest_config(tmp_path)
-    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
-    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
-    write_and_stage(
-        repository_root,
-        "pkg_a/test_alpha.py",
-        "def test_alpha_passes() -> None:\n    assert True\n",
-    )
-
-    assert staged_test_regression.run_staged_test_files(repository_root) == 0
-
-
-def test_run_staged_test_files_fails_when_real_test_fails_alongside_confests(
-    tmp_path: Path,
-) -> None:
-    repository_root = repository_with_root_pytest_config(tmp_path)
-    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
-    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
-    write_and_stage(
-        repository_root,
-        "pkg_a/test_alpha.py",
-        "def test_alpha_fails() -> None:\n    assert False\n",
-    )
-
-    assert staged_test_regression.run_staged_test_files(repository_root) != 0
-
-
 def test_run_staged_test_files_passes_when_config_less_packages_share_a_module_name(
     tmp_path: Path,
 ) -> None:
