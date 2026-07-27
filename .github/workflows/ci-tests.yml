@@ -32,6 +32,12 @@
 # ephemeral production scripts.
 #
 # permissions: contents read + pull-requests read (dorny/paths-filter on PRs).
+#
+# Trigger scope: the pull_request trigger carries no branches filter, so a PR
+# whose base is a stacked parent branch runs the same jobs as a PR based on
+# main. dorny/paths-filter compares against the PR's own base ref, so each PR
+# in a stack filters on the files that PR alone changes. The push trigger stays
+# pinned to main and always runs the full suite.
 
 name: CI — Full test suites
 
@@ -39,7 +45,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -90,6 +95,7 @@ jobs:
               - 'docs/**'
               - 'scripts/**'
               - '.github/workflows/**'
+              - '.github/labels.yml'
               - '.cursor/BUGBOT.md'
             javascript:
               - 'packages/claude-dev-env/**'
@@ -174,13 +180,46 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
 
-      - name: Root suite (tests/)
+      # Collect-count floor (mirrors the pattern in
+      # .github/workflows/standalone-packages-tests.yml in python-automation):
+      # renaming or moving a root-suite test file outside python_files =
+      # test_*.py collects zero from that path while the rest of tests/ still
+      # passes, so the step would otherwise exit 0 looking identical to
+      # success. Raise ROOT_SUITE_COLLECT_FLOOR whenever new tests land.
+      - name: Enforce the root suite collect-count floor
+        env:
+          ROOT_SUITE_COLLECT_FLOOR: "258"
+        run: |
+          set -euo pipefail
+          source .github/ci/build-deselect-args.sh
+          python -m pytest tests/ .github/ci --collect-only -q "${deselect_args[@]}" | tee collect-only.txt
+          COLLECT_LINE=$(grep -E '[0-9]+ tests? collected' collect-only.txt | tail -1 || true)
+          COLLECTED_COUNT=$(echo "${COLLECT_LINE}" | grep -oE '^[0-9]+' || true)
+          case "${ROOT_SUITE_COLLECT_FLOOR}" in
+            ''|*[!0-9]*)
+              echo "Collect floor is unreadable ('${ROOT_SUITE_COLLECT_FLOOR}') — refusing to pass the floor check" >&2
+              exit 1
+              ;;
+          esac
+          case "${COLLECTED_COUNT}" in
+            ''|*[!0-9]*)
+              echo "Collected count is unreadable ('${COLLECTED_COUNT}') — refusing to pass the floor check" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${COLLECTED_COUNT}" -lt "${ROOT_SUITE_COLLECT_FLOOR}" ]; then
+            echo "Collected count ${COLLECTED_COUNT} is BELOW the floor ${ROOT_SUITE_COLLECT_FLOOR} — tests went missing" >&2
+            exit 1
+          fi
+          echo "Root suite collected ${COLLECTED_COUNT} tests, floor is ${ROOT_SUITE_COLLECT_FLOOR}"
+
+      - name: Root suite (tests/, .github/ci/)
         env:
           GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-root.md
         run: |
           set -euo pipefail
           source .github/ci/build-deselect-args.sh
-          python -m pytest tests/ \
+          python -m pytest tests/ .github/ci \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
             -q \
             -n auto \

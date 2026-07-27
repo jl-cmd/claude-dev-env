@@ -8,6 +8,14 @@ Do not ask whether to fix, which nits to keep, whether to commit or push, or whe
 
 Report progress while you work. Stop for the user only on a terminal outcome below.
 
+## Where fixes come from
+
+When `--fix` is also set, each round's fix pass runs `reference\fix.md`
+(relative to this skill's folder) — it owns which agent applies each fix, the
+commit gate, skip logging, and outcome reporting. Apply the branch rules below
+on top of it: they decide whether a round fixes, commits, pushes, and
+re-reviews.
+
 ## Scope stays narrow
 
 Auto-fix only verified findings on the review target. Leave deferred PR-body follow-ups and unrelated refactors alone.

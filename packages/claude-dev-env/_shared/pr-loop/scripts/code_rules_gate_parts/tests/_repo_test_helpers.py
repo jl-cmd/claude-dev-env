@@ -58,6 +58,13 @@ def write_commit_and_stage_change(
     return file_path
 
 
+def repository_root_without_pytest_config(tmp_path: Path) -> Path:
+    """Return a fresh repository-root directory holding no pytest configuration."""
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    return repository_root
+
+
 def repository_with_root_pytest_config(tmp_path: Path) -> Path:
     """Return a fresh repo under *tmp_path* with a root-level ``pytest.ini`` committed."""
     repository_root = tmp_path / "repo"

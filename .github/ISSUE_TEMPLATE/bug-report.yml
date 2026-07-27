@@ -2,7 +2,8 @@ name: Bug Report
 description: Report a bug in claude-dev-env
 title: "[Bug] "
 labels:
-  - bug
+  - "type: bug"
+  - "status: backlog"
 body:
   - type: textarea
     id: description

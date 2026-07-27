@@ -1,30 +1,8 @@
-# xhigh effort — full review procedure
+`xhigh effort → 5+5 angles → 1-vote verify → sweep`
 
-## Contents
-
-- [Framing](#framing)
-- [Phase 0 — Gather the diff](#phase-0--gather-the-diff)
-- [Phase 1 — Find candidates](#phase-1--find-candidates)
-- [Phase 2 — Verify](#phase-2--verify-batched-3-state)
-- [Phase 3 — Sweep for gaps](#phase-3--sweep-for-gaps)
-- [When the Agent tool is unavailable](#when-the-agent-tool-is-unavailable)
-- [Output](#output)
-- [Loop](#loop)
-
-## Framing
-
-`xhigh effort → 5 grouped-lens hunters → one batched verify → verified sweep → every validated finding`
-
-You are reviewing for recall at extra-high effort: catch every real bug. At
+You are reviewing for **recall** at extra-high effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives — a
 missed bug ships. Err on the side of surfacing.
-
-You are the **orchestrator** of this review. You own the flow end to end: gather
-the diff, split it across the finder subagents, then merge, dedup, and rank
-their findings into the final list. The subagents hunt and verify; the merge is
-yours. Hand every subagent the same Phase 0 diff verbatim and enough context to
-work on its own — never make a subagent re-derive the scope with its own
-`git diff`.
 
 ## Phase 0 — Gather the diff
 
@@ -33,27 +11,15 @@ if there's no upstream) to get the unified diff under review. If there are
 uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
 include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
-review that target instead. Treat this diff as the review scope, and pass it
-verbatim to every subagent you spawn.
+review that target instead. Treat this diff as the review scope.
 
-## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, grouped into 5 lens subagents)
+## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle)
 
-Run the 10 finder angles via the Agent tool as **five grouped lens subagents** —
-breadth at moderate cost. Spawn them in parallel: one Agent-tool call per
-subagent, all in a single batch so they run at once. Hand each subagent the full
-Phase 0 diff, permission to Read the enclosing functions and Grep the repo, and
-its grouped angles:
-
-- **Subagent 1 — Close-read lens:** Angle A + Angle D.
-- **Subagent 2 — Trace lens:** Angle B + Angle C.
-- **Subagent 3 — Structure lens:** Angle E.
-- **Subagent 4 — Cleanup lens:** Reuse, Simplification, Efficiency, Altitude.
-- **Subagent 5 — Conventions lens:** CLAUDE.md conventions.
-
-Each subagent surfaces all candidate findings it identifies across its angles. Do
-NOT let one angle's conclusions suppress another's — if two angles flag the same
-line for different reasons, record both. Merge every subagent's list into one
-candidate pool for Phase 2.
+Run **10 independent finder angles** via the Agent tool. Each surfaces
+candidate findings. Do NOT let one angle's conclusions suppress another's — if
+two angles flag the same line for different reasons, record both. If the Agent
+tool is not available in your current tool set, do not error — perform each
+angle (and each verification) yourself, sequentially, in this context.
 
 ### Angle A — line-by-line diff scan
 
@@ -127,10 +93,11 @@ special cases.
 ### Conventions (CLAUDE.md)
 
 Find the CLAUDE.md files that govern the changed code: the user-level
-`~/.claude/CLAUDE.md`, the repo-root CLAUDE.md, plus any CLAUDE.md or
+~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or
 CLAUDE.local.md in a directory that is an ancestor of a changed file (a
 directory's CLAUDE.md only applies to files at or below it). Read each one
 that exists, then check the diff for clear violations of the rules they state.
+
 Only flag a violation when you can quote the exact rule and the exact line
 that breaks it — no style preferences, no vague "spirit of the doc"
 inferences. In the finding, name the CLAUDE.md path and quote the rule so the
@@ -140,30 +107,30 @@ Cleanup, altitude, and conventions candidates use the same
 `file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
 cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) instead of a crash. Correctness bugs always outrank cleanup,
-altitude, and conventions findings when you rank the output (see
-[Output](#output)).
+altitude, and conventions findings.
 
-## Phase 2 — Verify (batched, 3-state)
+## Phase 2 — Verify (1-vote, 3-state)
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
-the most concrete failure scenario. Then run **one batched verifier subagent**
-over the whole merged candidate list — not one verifier per candidate. Give it
-the diff, the relevant file(s), and every candidate; it returns exactly one of
-these per candidate:
+the most concrete failure scenario. For each remaining candidate, run **one
+verifier** via the Agent tool: give it the diff, the relevant
+file(s), and the candidate, and have it return exactly one of:
 
-* CONFIRMED — can name the inputs/state that trigger it and the wrong
+- **CONFIRMED** — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
-* PLAUSIBLE — mechanism is real, trigger is uncertain (timing, env,
+- **PLAUSIBLE** — mechanism is real, trigger is uncertain (timing, env,
   config). State what would confirm it.
-* REFUTED — factually wrong (code doesn't say that) or guarded elsewhere.
+- **REFUTED** — factually wrong (code doesn't say that) or guarded elsewhere.
   Quote the line that proves it.
 
 Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
-This is recall mode — a single non-REFUTED vote carries the finding. Do NOT discard candidates on uncertainty.
+
+This is recall mode — a single non-REFUTED vote carries the finding. Do NOT
+drop on uncertainty.
 
 ## Phase 3 — Sweep for gaps
 
-Run one more finder as a fresh reviewer who has the verified list. Re-read
+Run **one more finder** as a fresh reviewer who has the verified list. Re-read
 the diff and enclosing functions looking ONLY for defects not already listed.
 Do not re-derive or re-confirm anything already there — the job is gaps. Focus
 on what the first pass tends to miss: moved/extracted code that dropped a guard
@@ -171,53 +138,45 @@ or anchor; second-tier footguns (dataclass default evaluated once, `hash()`
 non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.
 
-Surface every additional candidate, each naming a defect not already on the
-list. Then run a **second batched verifier pass** over the sweep candidates with
-the same three states, and retain every candidate marked CONFIRMED or PLAUSIBLE.
-xhigh runs exactly two verifier calls total — the Phase 2 pool and this sweep
-pass. If nothing new, return an empty sweep — do not pad.
-
-## When the Agent tool is unavailable
-
-If this context cannot spawn subagents, do not skip angles. Run all 10 angles
-yourself, sequentially, in this one context; then run the verify as a single
-self-check pass over your own candidates, and sweep as one more self-check read.
-This is the single-context fallback — it trades the independent-context recall
-of the fan-out for a working review when no Agent tool is present. Name this
-shape in the closing summary so the reader knows the fan-out did not run.
+Surface additional candidates, each naming a defect not already on the list.
+If nothing new, return an empty sweep — do not pad.
 
 ## Output
 
-Dedup before you rank: candidates naming the same file, the same line, and the
-same root cause are one finding — keep the strongest wording. Then rank the
-survivors: correctness bugs (`severity: bug`) before nits (`severity: nit`),
-then by verifier confidence (CONFIRMED before PLAUSIBLE), then by blast radius.
+Report this review's results — `{level, findings}` — through the structured
+findings-report call: the mechanism that renders a review's results as a typed
+list in the host UI, ranked most-severe first. Each entry has `file`, `line`,
+`summary`, `short_summary` — the claim compressed to ≤60 characters, no
+rationale or consequence clause — `failure_scenario`, and `category` — a short
+kebab-case slug for the angle that produced it (`correctness`,
+`simplification`, `efficiency`, `reuse`, `altitude`, `conventions`, or a more
+specific slug like `test-coverage` when one fits better) — plus `verdict` when
+a verify pass produced one. If nothing survives verification, make that call
+with an empty array. Do not also print the findings as text, and do not create
+or publish an artifact of the review — the structured call is the report.
 
-Return findings as a JSON array containing every finding that survives verification:
+## Applying fixes (--fix)
 
-```json
-[
-  {
-    "file": "path/to/file.ext",
-    "line": 123,
-    "severity": "bug | nit",
-    "summary": "one-sentence statement of the bug",
-    "failure_scenario": "concrete inputs/state → wrong output/crash"
-  }
-]
-```
+The `--fix` flag was passed. Follow `reference\fix.md` (relative to this
+skill's folder) for the exact fix, commit-gate, and skip-handling behavior —
+it governs which agent applies each fix, how a fix gets committed, how a skip
+is logged, and how outcomes get reported. Do not repeat the findings as text;
+follow that document's reporting rules once fixes land.
 
-Ranked most-severe first. If nothing survives verification, return `[]`. Do not
-call the ReportFindings tool even if it is available — this JSON block is the
-review's output contract.
+## If findings are fixed later
 
-State which execution shape actually ran — the grouped-5 fan-out (parallel lens
-hunters, a batched verifier, a verified sweep) or the single-context fallback —
-so the reader knows what executed. In loop mode, state it once per iteration's
-findings output.
+Whenever a reported finding is fixed later in this session — the user asks you
+to fix it, or later work fixes it incidentally — follow `reference\fix.md`'s
+reporting rules again: report the same findings through the structured
+findings-report call, each carrying an `outcome`. Do not repeat the findings
+as text. Make that call immediately after the fixes land, before any prose
+summary; the host UI's per-finding status updates only from that call.
 
-## Loop
+## Looping (`loop`)
 
-With `loop`, hand findings to the hub and follow `reference/loop.md`. Each
-re-review re-runs **this xhigh procedure**. Without `loop`, return the findings
-and stop.
+The `loop` arg was passed. Follow `reference\loop.md` (relative to this
+skill's folder) for how to re-run Phases 0–3, Output, and (if `--fix` is also
+present) `reference\fix.md`'s fix pass, repeatedly — including its exit
+condition, iteration cap, and re-invocation rules. Do not treat a single pass
+through this document as complete while `loop` is active; hand control to that
+document instead of stopping at Output.

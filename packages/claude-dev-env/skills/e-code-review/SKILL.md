@@ -1,46 +1,52 @@
 ---
 name: e-code-review
 description: >-
-  Max-recall code review at a selectable effort level (low, xhigh, max), with an
-  optional auto-execute loop for any level. Triggers: /e-code-review,
-  /e-code-review low, /e-code-review xhigh, /e-code-review max,
-  /e-code-review <level> loop.
+  Max-recall code review at a selectable effort level (low, medium, xhigh), with
+  optional auto-fix and an auto-execute loop for any level. Triggers:
+  /e-code-review, /e-code-review low, /e-code-review medium, /e-code-review
+  xhigh, /e-code-review <level> --fix, /e-code-review <level> loop.
 ---
 
 # e-code-review
 
-**Pick a level, run that review, optionally loop.** Each level has its own procedure file. Shared fix-and-re-review lives in `reference/loop.md`.
+**Pick a level, run that review, optionally fix and loop.** Each level has its own procedure file. Fix application lives in `reference/fix.md`; repeat-until-clean lives in `reference/loop.md`.
 
 ## Gotchas
 
 - **`low` stays single-pass.** Do not spawn subagents. One diff read, one findings pass.
+- **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) surface only findings a maintainer would act on. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
+- **`--fix` applies findings once.** Load `reference/fix.md` and follow it — it owns the fix agent, the commit gate, skip logging, and outcome reporting.
 - **`loop` never asks.** After findings, fix nits or stop on bugs. Load `reference/loop.md` and follow it.
+- **`--fix` and `loop` combine.** With both, each loop round runs the level file, then `reference/fix.md`, then re-reviews.
 
 ## When this skill applies
 
-Triggers: `/e-code-review <level> [loop]`. `<level>` is `low`, `xhigh`, or `max`. `loop` is optional on every level.
+Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`, or `xhigh`. `--fix` and `loop` are each optional and may be used together.
 
 **Refusal — first match wins:**
 
-- **No level, or an unknown level.** Respond exactly: `Which effort level — low, xhigh, or max?`
+- **No level, or an unknown level.** Respond exactly: `Which effort level — low, medium, or xhigh?`
 
 ## The process
 
-1. Read `<level>` and the optional `loop` flag. Apply the refusal first.
-2. Load `reference/low.md`, `reference/xhigh.md`, or `reference/max.md`. Run that file as one review cycle.
-3. If `loop` is set, load `reference/loop.md` and follow it. Each re-review re-runs the same level file from step 2. Without `loop`, return the cycle findings and stop.
+1. Read `<level>` and the optional `--fix` and `loop` flags. Apply the refusal first.
+2. Load `reference/low.md`, `reference/medium.md`, or `reference/xhigh.md`. Run that file as one review cycle, ending in its structured findings report.
+3. If `--fix` is set, load `reference/fix.md` and apply it to that cycle's findings.
+4. If `loop` is set, load `reference/loop.md` and follow it. Each round re-runs the same level file from step 2, plus step 3 when `--fix` is set.
+5. Without `--fix` or `loop`, return the cycle findings and stop.
 
 ## File index
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Route by level; dispatch `loop` |
-| `reference/loop.md` | Auto-execute fix cycle for any level |
-| `reference/xhigh.md` | xhigh review procedure |
-| `reference/max.md` | max review procedure |
-| `reference/low.md` | low review procedure |
+| `SKILL.md` | Route by level; dispatch `--fix` and `loop` |
+| `reference/low.md` | low review procedure — 1 diff pass, no verify |
+| `reference/medium.md` | medium review procedure — 8 angles, 1-vote verify |
+| `reference/xhigh.md` | xhigh review procedure — 10 angles, 1-vote verify, gap sweep |
+| `reference/fix.md` | Fix application, commit gate, skip logging, outcome reporting |
+| `reference/loop.md` | Repeat review/fix rounds until clean |
 
 ## Folder map
 
 - `SKILL.md` — route and dispatch.
-- `reference/` — one procedure per level, plus `loop.md`.
+- `reference/` — one procedure per level, plus `fix.md` and `loop.md`.

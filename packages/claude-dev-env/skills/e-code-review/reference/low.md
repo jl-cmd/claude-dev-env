@@ -1,8 +1,4 @@
-# low effort — full review procedure
-
-## Framing
-
-`low effort → 1 diff pass → no verify → every finding returned`
+`low effort → 1 diff pass → no verify → ≥min(files,4) findings`
 
 ## Turn 1 — read
 
@@ -25,18 +21,37 @@ helper visible in the diff context, and dead code the diff leaves behind.
 Do **not** flag style, naming, perf, missing tests, or anything outside the
 hunk.
 
-Return every finding, most-severe first (bugs before nits), one line each,
-tagging each with its severity: `path/to/file.ext:123 — [bug|nit] what's wrong
-and the concrete failure`. Do not call the ReportFindings tool even if it is
-available — these plain lines are the output. If you have no findings, do one
-more pass focused on the largest changed file and on any **removed** code
-blocks. Output `(none)` only if the diff is trivially correct after that pass.
-This procedure runs single-pass with no subagents — say so if asked what
-executed.
+Target **min(files_changed, 4) findings**, most-severe first, reported in one
+call to the structured findings-report call — the mechanism that renders
+findings as a typed list in the host UI — with `{level, findings}`; each
+entry has `file`, `line`, `summary`, `short_summary` (≤60 characters), and
+`failure_scenario`. If you have fewer, do one more pass focused on the largest
+changed file and on any **removed** code blocks. Make that call with an empty
+findings array only if the diff is trivially correct after that pass. Do not
+also print the findings as text.
 
-## Loop
+## Applying fixes (--fix)
 
-With `loop`, hand findings to the hub and follow `reference/loop.md`. Each
-re-review re-runs **this low procedure**. Tag lines `[bug|nit]` when the hunk
-supports that label. Untagged findings count as `bug`. `(none)` is clean.
-Without `loop`, return the findings and stop.
+The `--fix` flag was passed. Follow `reference\fix.md` (relative to this
+skill's folder) for the exact fix, commit-gate, and skip-handling behavior —
+it governs which agent applies each fix, how a fix gets committed, how a skip
+is logged, and how outcomes get reported. Do not repeat the findings as text;
+follow that document's reporting rules once fixes land.
+
+## If findings are fixed later
+
+Whenever a reported finding is fixed later in this session — the user asks you
+to fix it, or later work fixes it incidentally — follow `reference\fix.md`'s
+reporting rules again: report the same findings through the structured
+findings-report call, each carrying an `outcome`. Do not repeat the findings
+as text. Make that call immediately after the fixes land, before any prose
+summary; the host UI's per-finding status updates only from that call.
+
+## Looping (`loop`)
+
+The `loop` arg was passed. Follow `reference\loop.md` (relative to this
+skill's folder) for how to re-run Turn 1 (read), Turn 2 (findings), and (if
+`--fix` is also present) `reference\fix.md`'s fix pass, repeatedly —
+including its exit condition, iteration cap, and re-invocation rules. Do not
+treat a single pass through this document as complete while `loop` is active;
+hand control to that document instead of stopping at Turn 2.

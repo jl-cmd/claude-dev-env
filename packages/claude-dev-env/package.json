@@ -1,6 +1,6 @@
 {
     "name": "claude-dev-env",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
@@ -21,7 +21,15 @@
         "scripts/",
         "_shared/",
         "audit-rubrics/",
-        "CLAUDE.md"
+        "CLAUDE.md",
+        "!**/__pycache__/**",
+        "!**/*.py[cod]",
+        "!**/.pytest_cache/**",
+        "!**/.mypy_cache/**",
+        "!**/.ruff_cache/**",
+        "!**/*.log",
+        "!**/debug-*.log",
+        "!**/*.egg-info/**"
     ],
     "keywords": [
         "claude-code",

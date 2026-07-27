@@ -1,0 +1,1330 @@
+<title>Decision docket — tabbed artifact template</title>
+
+<style>
+  /* ============================================================
+     PALETTE AND TYPE TOKENS
+     Every colour below is a token. Components style themselves
+     through the tokens, so the three theme blocks are the only
+     place a colour is ever written down.
+     ============================================================ */
+  :root {
+    --ink:        #141A1F;
+    --ink-soft:   #30383F;
+    --ink-faint:  #42484E;
+    --paper:      #E8EAE6;
+    --surface:    #F5F6F3;
+    --rail:       #DEE1DB;
+    --rule:       #C7CBC4;
+    --rule-soft:  #DBDED8;
+    --accent:     #1D4E6B;
+    --accent-ink: #14384E;
+    --good:       #3D6C48;
+    --warn:       #96631C;
+    --risk:       #8F3119;
+    --good-wash:  #DEE9E0;
+    --warn-wash:  #F2E7D1;
+    --risk-wash:  #F2DED7;
+    --accent-wash:#DAE4EA;
+    --calm:       #4A6B80;
+    --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
+
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 44px;
+    --measure: 66ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #DFE4E2; --ink-soft: #B8C0C5; --ink-faint: #A2AAAF;
+      --paper: #0F141A; --surface: #181F26; --rail: #141A20;
+      --rule: #2D3740; --rule-soft: #222A32;
+      --accent: #82B5D1; --accent-ink: #A9CEE3;
+      --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
+      --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
+      --accent-wash: #16272F; --calm: #7E97A8;
+      --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #DFE4E2; --ink-soft: #B8C0C5; --ink-faint: #A2AAAF;
+    --paper: #0F141A; --surface: #181F26; --rail: #141A20;
+    --rule: #2D3740; --rule-soft: #222A32;
+    --accent: #82B5D1; --accent-ink: #A9CEE3;
+    --good: #83B48F; --warn: #D6A863; --risk: #D9866F;
+    --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
+    --accent-wash: #16272F; --calm: #7E97A8;
+    --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
+  }
+  :root[data-theme="light"] {
+    --ink: #141A1F; --ink-soft: #30383F; --ink-faint: #42484E;
+    --paper: #E8EAE6; --surface: #F5F6F3; --rail: #DEE1DB;
+    --rule: #C7CBC4; --rule-soft: #DBDED8;
+    --accent: #1D4E6B; --accent-ink: #14384E;
+    --good: #3D6C48; --warn: #96631C; --risk: #8F3119;
+    --good-wash: #DEE9E0; --warn-wash: #F2E7D1; --risk-wash: #F2DED7;
+    --accent-wash: #DAE4EA; --calm: #4A6B80;
+    --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
+  }
+
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: var(--s3); margin-bottom: var(--s5); }
+  .topline {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: var(--accent-ink);
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(27px, 4vw, 38px); line-height: 1.1;
+    font-weight: 600; letter-spacing: -0.015em; margin: 0; text-wrap: balance;
+  }
+  .intro {
+    font-family: var(--serif); font-size: 17px; color: var(--ink);
+    max-width: var(--measure); margin: 0;
+  }
+
+  /* The instruction reads as a sequence: a dot per step, a hairline
+     between them doing the counting. */
+  .stepper { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+  .step { display: flex; align-items: center; gap: var(--s2); }
+  .step span { font-size: 15px; color: var(--ink); }
+  .step u {
+    text-decoration: none; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 8px;
+  }
+  .step-link { width: 34px; height: 1px; background: var(--calm); margin: 0 var(--s3); }
+
+  /* One-pixel grid gaps over a rule-coloured ground draw the dividers, so
+     the row reads as a table without a table's markup. */
+  .figures {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+    margin-top: var(--s3);
+  }
+  .figures div {
+    display: flex; flex-direction: column;
+    background: var(--surface); padding: var(--s3) var(--s4);
+  }
+  .figures b {
+    font-family: var(--serif); font-size: 25px; font-weight: 600;
+    line-height: 1.1; font-variant-numeric: tabular-nums;
+  }
+  /* The denominator rides inside the number at a smaller size, so
+     "3 of 8" reads as one value rather than two. */
+  .figures b small {
+    font-size: 0.55em; font-weight: 500; color: var(--ink-faint);
+    margin-left: 2px;
+  }
+  .figures div[data-tone="good"] b { color: var(--good); }
+  .figures div[data-tone="warn"] b { color: var(--warn); }
+  .figures div[data-tone="risk"] b { color: var(--risk); }
+  .figures span {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 500;
+    letter-spacing: 0; text-transform: none; color: var(--ink-soft);
+  }
+
+  /* ---------- layout ---------- */
+  .board {
+    display: grid; grid-template-columns: 258px minmax(0, 1fr);
+    gap: var(--s5); align-items: start;
+  }
+
+  /* ---------- tab rail ---------- */
+  .tabs {
+    display: flex; flex-direction: column;
+    background: var(--rail); border: 1px solid var(--rule-soft);
+    max-height: calc(100vh - 190px); overflow-y: auto;
+  }
+
+  /* A rail group heading names a section of the docket, so it is set as a
+     heading: sentence case, full ink, at the body face. A rule above it
+     separates one group from the tabs of the group before. */
+  .tabs-group {
+    font-family: var(--sans); font-size: 15px; font-weight: 700;
+    letter-spacing: -0.003em; text-transform: none; color: var(--ink);
+    padding: var(--s3) var(--s3) var(--s2);
+    margin-top: var(--s2); position: relative;
+  }
+  .tabs-group::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: var(--seam);
+  }
+  .tabs-group:first-child { margin-top: 0; }
+  .tabs-group:first-child::before { display: none; }
+
+  .tab {
+    display: flex; align-items: center; gap: var(--s2);
+    padding: 9px var(--s3); border: 0; background: transparent;
+    font-family: var(--sans); font-size: 16px; line-height: 1.35;
+    color: var(--ink-soft); text-align: left; width: 100%; cursor: pointer;
+    border-left: 3px solid transparent;
+    text-transform: none; letter-spacing: normal;
+  }
+  .tab:hover { background: var(--surface); color: var(--ink); }
+  .tab[aria-selected="true"] {
+    background: var(--surface); color: var(--ink);
+    border-left-color: var(--accent); font-weight: 600;
+  }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* The mark carries two readings at once.
+     Shape says what you owe: a ring waits for an answer, a filled disc
+     holds one, a bar asks for nothing.
+     Colour says which kind of attention it wants, on a four-step ramp:
+     red today, amber this session, blue worth reading, green settled.
+     Background sits on the calm tone, which is the accent hue drained of
+     saturation, so a low-priority mark still belongs to the palette.
+     Shape repeats what colour says, so the rail reads without colour. */
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px;
+    border: 2px solid var(--warn); background: transparent;
+    margin-top: 5px; align-self: flex-start; box-sizing: border-box;
+  }
+  .tab[data-state="open-urgent"] .dot,
+  .dot[data-legend="open-urgent"] { border-color: var(--risk); }
+  .tab[data-state="done"] .dot,
+  .dot[data-legend="done"] { border-color: var(--good); background: var(--good); }
+  .tab[data-state="reading"] .dot,
+  .tab[data-state="reading-urgent"] .dot,
+  .dot[data-legend="reading"],
+  .dot[data-legend="reading-urgent"] {
+    border: 0; border-radius: 1px; height: 3px; margin-top: 8px;
+    background: var(--calm);
+  }
+  .tab[data-state="reading-urgent"] .dot,
+  .dot[data-legend="reading-urgent"] { background: var(--accent); }
+  .tab-label { flex: 1; }
+
+  /* ---------- rail legend ---------- */
+  .rail-column {
+    display: flex; flex-direction: column; gap: var(--s3);
+    position: sticky; top: var(--s4);
+  }
+  .legend {
+    border: 1px solid var(--rule-soft); background: var(--rail);
+    padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2);
+  }
+  .legend-title {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+    letter-spacing: -0.003em; text-transform: none; color: var(--ink);
+  }
+  .legend-row { display: flex; align-items: flex-start; gap: var(--s2); font-size: 13px; color: var(--ink-soft); }
+
+  /* ---------- panel ---------- */
+  .panel {
+    background: var(--surface); border: 1px solid var(--rule-soft);
+    padding: var(--s5) var(--s6) var(--s6);
+    display: flex; flex-direction: column; gap: var(--s5);
+  }
+  .panel[hidden] { display: none; }
+
+  .panel-head { display: flex; flex-direction: column; gap: var(--s2); }
+  .panel-label {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; color: var(--accent-ink);
+  }
+  .panel h2 {
+    font-family: var(--serif); font-size: clamp(22px, 3vw, 28px); line-height: 1.15;
+    font-weight: 600; margin: 0; letter-spacing: -0.012em; text-wrap: balance;
+  }
+  .summary { font-size: 17px; color: var(--ink-soft); max-width: var(--measure); margin: 0; }
+
+  /* A chip states where the tab stands. Tone picks the semantic colour and
+     its wash, so the pill reads at a glance without a legend. */
+  .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .chip {
+    display: inline-flex; align-items: center;
+    font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+    padding: 3px 10px; border-radius: 3px;
+    background: var(--accent-wash); color: var(--accent-ink);
+    border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+  .chip.good {
+    background: var(--good-wash); color: var(--good);
+    border-color: color-mix(in srgb, var(--good) 32%, transparent);
+  }
+  .chip.warn {
+    background: var(--warn-wash); color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+  }
+  .chip.risk {
+    background: var(--risk-wash); color: var(--risk);
+    border-color: color-mix(in srgb, var(--risk) 32%, transparent);
+  }
+
+  .block { display: flex; flex-direction: column; gap: var(--s3); }
+
+  /* A section heading inside a tab is a heading, so it is set like one:
+     sentence case, full ink, at the body family and a step above body size.
+     The mono uppercase treatment stays with the true micro-labels. */
+  .block h3 {
+    font-family: var(--sans); font-size: 16px; font-weight: 650;
+    letter-spacing: -0.006em; text-transform: none;
+    color: var(--ink); margin: 0; text-wrap: balance;
+  }
+  .block p { margin: 0; max-width: var(--measure); }
+  .block p + p { margin-top: var(--s2); }
+  .block ul { margin: 0; padding-left: 1.25em; max-width: var(--measure); }
+  .block li { margin-bottom: var(--s2); padding-left: 2px; }
+  .block li::marker { color: var(--calm); }
+
+  /* A name lifted out of prose is tinted, so a path or an identifier is
+     found by eye without reading the sentence around it. */
+  code {
+    font-family: var(--mono); font-size: 0.89em;
+    background: var(--accent-wash); color: var(--accent-ink);
+    padding: 1px 5px; border-radius: 2px;
+  }
+
+  .callout {
+    background: var(--accent-wash); border-left: 3px solid var(--accent);
+    padding: var(--s3) var(--s4); max-width: var(--measure);
+  }
+  .callout.risk { background: var(--risk-wash); border-left-color: var(--risk); }
+  .callout.warn { background: var(--warn-wash); border-left-color: var(--warn); }
+  .callout.good { background: var(--good-wash); border-left-color: var(--good); }
+  .callout p { margin: 0; }
+  .callout p + p { margin-top: var(--s2); }
+  .callout .claim {
+    font-family: var(--serif); font-size: 18px; line-height: 1.4;
+    color: var(--ink);
+  }
+
+  /* A command is quoted exactly, so the reader runs what the tab claims
+     was run. It scrolls rather than wrapping, since a wrapped command
+     line is a command the reader mistypes. */
+  pre {
+    margin: 0; overflow-x: auto; background: var(--paper);
+    border: 1px solid var(--rule-soft); border-left: 3px solid var(--calm);
+    padding: var(--s3) var(--s4); font-family: var(--mono);
+    font-size: 13px; line-height: 1.5; color: var(--ink);
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  caption {
+    text-align: left; color: var(--ink-soft); font-size: 13.5px;
+    padding-bottom: var(--s2);
+  }
+  .scroller { overflow-x: auto; border: 1px solid var(--rule-soft); }
+  th, td {
+    text-align: left; padding: 7px var(--s3);
+    border-bottom: 1px solid var(--rule-soft); vertical-align: top;
+  }
+  /* A column head is named by a rule under it rather than a grey band
+     behind it, so the header row belongs to the palette. */
+  th {
+    font-family: var(--sans); font-size: 13.5px; letter-spacing: 0;
+    text-transform: none; color: var(--ink); font-weight: 650;
+    background: transparent; white-space: nowrap;
+    border-bottom: 2px solid var(--calm);
+  }
+  th.num, td.num { text-align: right; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+
+  /* The underline is a tinted rule of its own, so it sits clear of the
+     descenders and firms up on hover rather than appearing from nothing. */
+  a {
+    color: var(--accent-ink); text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+  a:hover, a:focus-visible { border-bottom-color: var(--accent); }
+
+  /* ---------- the choice control ---------- */
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--s3); }
+  .option {
+    border: 1px solid var(--rule); background: var(--paper);
+    display: flex; flex-direction: column; position: relative;
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .option:hover { border-color: var(--accent); }
+  .option input {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; width: 100%; height: 100%;
+  }
+  .option-inner { padding: var(--s3) var(--s4); display: flex; flex-direction: column; gap: var(--s1); pointer-events: none; }
+  .option-flag {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--paper); background: var(--accent);
+    align-self: flex-start; padding: 2px 6px; margin-bottom: var(--s1);
+  }
+  .option-title { font-weight: 600; font-size: 15px; }
+  .option-detail { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; }
+  .option input:checked ~ .option-inner { color: var(--ink); }
+  .option:has(input:checked) { border-color: var(--accent); border-width: 2px; background: var(--accent-wash); }
+  .option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  textarea {
+    font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--rule);
+    padding: var(--s3); width: 100%; min-height: 92px; resize: vertical;
+  }
+  textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea::placeholder { color: var(--ink-faint); }
+
+  .navrow { display: flex; gap: var(--s2); border-top: 1px solid var(--rule-soft); padding-top: var(--s4); }
+  .navrow .spacer { flex: 1; }
+
+  button {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.07em;
+    text-transform: uppercase; padding: 9px 16px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--paper);
+  }
+  button:hover { opacity: 0.87; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.ghost { background: transparent; color: var(--accent-ink); border-color: var(--rule); }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  .dock {
+    margin-top: var(--s5); background: var(--surface);
+    border: 1px solid var(--rule-soft); border-top: 2px solid var(--ink);
+    padding: var(--s3) var(--s5); display: flex; flex-wrap: wrap;
+    align-items: center; gap: var(--s4);
+  }
+  .dock-status { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  /* The counter gains a bar, so progress is read without arithmetic. */
+  .meter { display: flex; flex-direction: column; gap: 5px; min-width: 190px; }
+  .meter-track {
+    height: 8px; background: var(--paper);
+    border: 1px solid var(--rule-soft); overflow: hidden;
+  }
+  .meter-fill { height: 100%; background: var(--accent); transition: width 180ms ease; }
+  .meter-fill[data-full="true"] { background: var(--good); }
+  .dock-actions { display: flex; gap: var(--s2); margin-left: auto; }
+
+  .out {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+    background: var(--surface); border: 1px solid var(--rule);
+    padding: var(--s4); margin-top: var(--s3); white-space: pre-wrap;
+    word-break: break-word; max-height: 320px; overflow-y: auto;
+  }
+  .hidden { display: none; }
+
+  footer { margin-top: var(--s5); font-size: 13.5px; color: var(--ink-faint); max-width: var(--measure); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  @media (max-width: 860px) {
+    /* minmax(0, 1fr) caps the track at the available width. An auto-sized
+       track grows to fit the widest tab and pushes the page sideways. */
+    .board { grid-template-columns: minmax(0, 1fr); }
+    .rail-column { position: static; }
+    .tabs { max-height: none; flex-direction: row; overflow-x: auto; min-width: 0; }
+    .tabs-group { display: none; }
+    .tab { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; width: auto; }
+    .tab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--accent); }
+    .stepper { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+    .step-link { display: none; }
+    .panel { padding: var(--s5) var(--s4); }
+    .shell { padding: var(--s5) var(--s4) var(--s6); }
+  }
+</style>
+
+<div class="shell">
+  <header class="masthead" id="masthead"></header>
+
+  <div class="board">
+    <div class="rail-column">
+      <nav class="tabs" role="tablist" aria-label="Decisions"></nav>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="panels"></div>
+  </div>
+
+  <div class="dock">
+    <div class="meter">
+      <span class="dock-status" id="status"></span>
+      <div class="meter-track"><div class="meter-fill" id="meter"></div></div>
+    </div>
+    <div class="dock-actions">
+      <button class="ghost" id="clear">Clear all</button>
+      <button id="copy">Copy my decisions</button>
+    </div>
+  </div>
+  <div class="out hidden" id="out"></div>
+
+  <footer id="footnote"></footer>
+</div>
+
+<script>
+/* ================================================================
+   SECTION 1 — CONFIG
+   Everything above the tabs, plus the page's own wiring.
+   ================================================================ */
+var CONFIG = {
+  /* Small mono line above the headline. Date it, or name the source. */
+  topline: "Writing standard &middot; decision docket",
+
+  /* The headline. Say what the reader is being asked for. */
+  title: "How to write a docket somebody can answer",
+
+  /* One paragraph telling the reader how the page works. */
+  intro: "Each tab states one rule, and follows it.",
+
+  /* A sequence this docket's own work runs in, one step per entry,
+     rendered as a stepper under the intro. An empty list hides it.
+     Use it only when the tabs have a real order the reader needs --
+     a staged rollout, a migration, a dependency chain. Generic page
+     instructions belong nowhere: the reader can already see the tabs,
+     the choice cards, and the copy button. */
+  steps: [],
+
+  /* Headline figures. Use an empty list to hide this row entirely.
+     Keep these in step with the tabs: the dock counts only the items
+     that carry a choice, so a "decisions on this page" figure that
+     disagrees with it is the first thing a reader notices. */
+  figures: [
+    {value: "3",  unit: " of 8", label: "Tabs asking for a decision"},
+    {value: "1",  label: "Decision per tab"},
+    {value: "1",  label: "Source per claim", tone: "risk"},
+    {value: "20", label: "Words per sentence, max", tone: "warn"}
+  ],
+
+  /* Small print under the dock. Say where the numbers came from and
+     where the reader's answers live. */
+  footnote: "Replace these tabs with your own. Your answers stay in this browser until you press copy.",
+
+  /* Heading on the text the copy button produces. */
+  copyHeading: "## My decisions",
+
+  /* Browser storage key. Give each docket its own, so two dockets
+     open in the same browser never overwrite each other. */
+  storageKey: "decision-docket-standard-v1"
+};
+
+/* ================================================================
+   SECTION 2 — CONTENT
+   One entry per tab, in the order the reader should meet them.
+
+   ITEM FIELDS
+     id          Short slug. Must be unique. Used for storage and anchors.
+     group       Rail heading. Consecutive items sharing a group sit under
+                 one heading. Suggested set:
+                   "Read this first"  — context the rest depends on
+                   "Only you can answer" — genuine judgement calls
+                   "Ready when you say go" — decided in principle, awaiting a yes
+                   "Reference" — background, no decision
+     tab          Rail label. Short enough to read at a glance.
+     urgent       true paints the rail dot red. On an item with choices the
+                  dot turns green once answered. On a reading-only item it
+                  stays red, marking a tab that always wants attention.
+     readingOnly  true makes it a reading-only tab: choices and the note box
+                  stay off, and the "N of M decided" count skips it. An item
+                  carrying no options list reads the same way.
+     label        Mono line above the panel heading. Scope, owner, or state.
+     title        Panel heading. A full sentence beats a label.
+     summary      One paragraph. The whole situation in plain words.
+     blocks       List of body blocks (below).
+     chips        Optional list of {text, tone} pills under the summary,
+                  stating where the tab stands. Tone: "" | "good" | "warn" | "risk".
+     options      List of choices (below). Reading-only items leave it off.
+
+   BODY BLOCKS — three kinds, mix freely, any order
+     {heading: "Heading", paragraphs: ["Paragraph.", "Another."]}
+     {heading: "Heading", bullets: ["Point.", "Another point."]}
+     {heading: "Heading", table: {head: ["Col", "Col"], rows: [["a","b"]]}}
+     {heading: "Heading", command: "python -m pytest tests/"}
+     {callout: "", claim: "One serif line.", paragraphs: ["..."]}
+                                              tone: "" | "good" | "warn" | "risk"
+                                              claim is optional
+
+   OPTION FIELDS
+     decision     The sentence written into the copied output. Write it in
+                  the reader's voice, first person: "Bring everything up to
+                  date first".
+     title        Card title. Two or three words.
+     detail       Where the path goes, and what it costs.
+     recommended  true puts a Recommended flag on the card. At most one.
+
+   NOTES ON WRITING
+     - Text is placed as HTML. Use <strong>, <em>, <code>, and entities
+       such as &mdash; and &ldquo;. The author of the docket writes every
+       string, so the page places them as written.
+     - Give full context in the tab. A reference number with a link is not
+       context; say what the thing is and why it matters.
+     - Name things the way the reader names them, not the way the system
+       is built.
+     - A table column whose cells all read as numbers is right-aligned and
+       set in tabular figures automatically.
+     - A link carrying data-tab jumps to another tab: <a href="#"
+       data-tab="blocks">the blocks</a>.
+     - Every claim in a tab carries a source you checked. Flag a claim you
+       cannot check as unchecked, in the tab, or leave it out.
+     - State a claim by naming what the thing is, and state guidance as the
+       action to take. Reserve naming what to avoid for behaviour you can
+       pin down only by its failure.
+     - Draw a picture whenever the reader would otherwise hold several
+       numbers at once, and put the measurements beside it.
+
+   The items below state the standard for writing a tab, and follow it.
+   Read them once, then replace them with your own decisions.
+   ================================================================ */
+var ITEMS = [
+
+  {
+    id: "evidence", group: "Read this first", urgent: true, readingOnly: true,
+    tab: "Every claim carries a source",
+    label: "The rule that outranks the rest",
+    title: "Check it, or leave it out",
+    summary: "A sentence nobody checked gets acted on all the same.",
+    chips: [
+      {text: "Outranks every other rule", tone: "risk"},
+      {text: "Checked before it ships", tone: "good"}
+    ],
+    blocks: [
+      {heading: "Checked means", bullets: [
+        "A command you ran, and its output.",
+        "A file you opened, named by path.",
+        "A page you read, named by title."
+      ]},
+      {heading: "A command carries its exact text", command: "python -m pytest packages/claude-dev-env\n# 437 test files, 0 failures"},
+      {heading: "Name it, then link it", bullets: [
+        "An issue or a pull request carries its link, not its number alone.",
+        "A file carries its path. A command carries its exact text.",
+        "The reader reaches the source from the tab, without going to search for it."
+      ]},
+      {heading: "Four unchecked claims, and what to write for each", table: {
+        head: ["Unchecked claim", "Write this"],
+        rows: [
+          ["A branching guess", "Check which case holds. Write that one."],
+          ["An unconfirmed problem", "Reproduce it, or drop the tab."],
+          ["A softened claim", "Say what happens, or say you do not know."],
+          ["A vague number", "The count, and the command behind it."]
+        ]
+      }},
+      {heading: "When a source is out of reach", bullets: [
+        "Say so in the tab.",
+        "Name what you could not reach, and what reaching it would take."
+      ]},
+      {heading: "Before it ships", bullets: [
+        "A second pass checks every claim against its source.",
+        "Anything unconfirmed comes out, or ships flagged."
+      ]},
+      {callout: "risk",
+       claim: "Write only what you checked.",
+       paragraphs: [
+         "Name the source, or name the gap. Fix only a problem you reproduced."
+       ]}
+    ]
+  },
+
+  {
+    id: "self-contained", group: "Read this first", urgent: true, readingOnly: true,
+    tab: "Every tab carries its own context",
+    label: "The reason this format exists",
+    title: "A reference number is not context",
+    summary: "The reader answers from the tab alone.",
+    blocks: [
+      {heading: "Each tab says", bullets: [
+        "What the thing is.",
+        "What it does today.",
+        "What happens if it lands.",
+        "What it costs."
+      ]},
+      {heading: "Name it the reader&rsquo;s way", table: {
+        head: ["Built the system&rsquo;s way", "Named the reader&rsquo;s way"],
+        rows: [
+          ["The pytest collection root", "The test suite"],
+          ["The notification webhook", "Appointment reminders"],
+          ["The pre-commit AST gate", "The check before a commit"]
+        ]
+      }},
+      {heading: "Write for a stranger", bullets: [
+        "Assume no knowledge of the system.",
+        "Anything they would look up belongs in the tab."
+      ]},
+      {callout: "", paragraphs: [
+        "Full tabs live in <a href=\"#\" data-tab=\"worked\">Four worked tabs</a>."
+      ]}
+    ]
+  },
+
+  {
+    id: "grouping", group: "Only you can answer", urgent: true,
+    tab: "How to group your tabs",
+    label: "The rail headings",
+    title: "Groups say what each tab asks of the reader",
+    summary: "Consecutive tabs sharing a group sit under one heading.",
+    chips: [{text: "Wants your answer today", tone: "risk"}],
+    blocks: [
+      {heading: "The four groups", table: {
+        head: ["Group", "Holds", "Reader does"],
+        rows: [
+          ["Read this first", "Context the rest depends on", "Reads"],
+          ["Only you can answer", "Judgement calls", "Picks a path"],
+          ["Ready when you say go", "Decided in principle", "Says yes"],
+          ["Reference", "Background and examples", "Consults"]
+        ]
+      }},
+      {heading: "Order", bullets: [
+        "Most demanding first.",
+        "A reader who stops halfway has still answered what only they could."
+      ]},
+      {callout: "", paragraphs: [
+        "One example per group in <a href=\"#\" data-tab=\"worked\">Four worked tabs</a>."
+      ]}
+    ],
+    options: [
+      {recommended: true, decision: "Use the four suggested groups", title: "The four groups", detail: "Sorts by what each tab asks. Works for any subject."},
+      {decision: "Group by subject area", title: "By subject", detail: "Fits a one-system docket. Drops the urgency signal."},
+      {decision: "One flat list, no groups", title: "No groups", detail: "Fits a short rail. A long one loses its scan."}
+    ]
+  },
+
+  {
+    id: "choices", group: "Only you can answer",
+    tab: "How to write the choices",
+    label: "The cards under &ldquo;Your call&rdquo;",
+    title: "Every card names its cost",
+    summary: "A card says where the path goes, and what it costs to walk it.",
+    blocks: [
+      {heading: "The fields", table: {
+        head: ["Field", "Holds"],
+        rows: [
+          ["<code>decision</code>", "The sentence copied out. First person."],
+          ["<code>title</code>", "Two or three words."],
+          ["<code>detail</code>", "Where it goes, and what it costs."],
+          ["<code>recommended</code>", "A flag on the card. At most one."]
+        ]
+      }},
+      {heading: "Cost is what the reader gives up", bullets: [
+        "Time.",
+        "Rework.",
+        "Work left undone.",
+        "A risk carried."
+      ]},
+      {heading: "Half a card, and a whole one", table: {
+        head: ["Card", "Half", "Whole"],
+        rows: [
+          ["Update everything first", "Cleanest result.", "Cleanest result. Two days of nothing else."],
+          ["Fix it properly", "The durable answer.", "The durable answer. Touches both systems."],
+          ["Leave it", "No work now.", "No work now. The next person loses the same afternoon."]
+        ]
+      }},
+      {heading: "Rules", bullets: [
+        "Write <code>decision</code> as the reader would say it.",
+        "Flag one card, and say why in a callout.",
+        "Offer as many paths as the decision has."
+      ]},
+      {callout: "good", paragraphs: [
+        "A note box sits under every card set."
+      ]}
+    ],
+    options: [
+      {recommended: true, decision: "Flag one card, and give every card its cost", title: "Flag and cost", detail: "The reader answers fast or reads on. Most work to write."},
+      {decision: "Neutral cards, no flag", title: "Stay neutral", detail: "Fits a genuine no-view. The reader weighs it alone."},
+      {decision: "Cards without cost lines", title: "No costs", detail: "Fastest to write. The reader comes back to ask."}
+    ]
+  },
+
+  {
+    id: "density", group: "Ready when you say go",
+    tab: "How much to write, and in what form",
+    label: "Length and shape",
+    title: "One idea per sentence, and a picture where it reads faster",
+    summary: "A tab is read once, quickly, by somebody deciding something.",
+    blocks: [
+      {heading: "The measures", table: {
+        head: ["Measure", "Target"],
+        rows: [
+          ["Words per sentence", "20 or fewer"],
+          ["Ideas per sentence", "1"],
+          ["Sentences per paragraph", "1 to 3"],
+          ["Line length", "66 characters, set by the page"]
+        ]
+      }},
+      {heading: "Where these come from", bullets: [
+        "The page enforces the line length.",
+        "The other three are conventions."
+      ]},
+      {heading: "Say it once, straight", bullets: [
+        "State what happens. Cut the clause that says what else it does.",
+        "A sentence that builds to its point costs the reader the point.",
+        "Two verbs joined by &ldquo;and also&rdquo; are usually one verb and a repeat."
+      ]},
+      {heading: "The padding, and the sentence underneath it", table: {
+        head: ["Padded", "Direct"],
+        rows: [
+          ["Accepting it does more than add the new work. It also restores the old version of everything else.", "Accepting it restores the old version of everything that copy contains."],
+          ["This is not simply a formatting change; it also alters the output.", "This alters the output."],
+          ["The check does more than read the file &mdash; it rewrites it.", "The check rewrites the file."],
+          ["It is not only slow, it is wrong.", "It is wrong, and slow."]
+        ]
+      }},
+      {heading: "Reach in this order", bullets: [
+        "A table, when rows share columns.",
+        "Bullets, when items share a shape.",
+        "A picture, when the reader would hold several numbers at once.",
+        "A paragraph, for what the other three cannot carry."
+      ]},
+      {heading: "Draw to scale", bullets: [
+        "Position, size, and layout decisions get a drawing.",
+        "Put the two side by side. Shade the disputed band. Label the gap.",
+        "Plain markup and styling draw it.",
+        "Set the measurements in a table beside it."
+      ]},
+      {callout: "warn", paragraphs: [
+        "<strong>Long tabs go unread.</strong> Move detail into a table."
+      ]}
+    ],
+    options: [
+      {recommended: true, decision: "Hold the targets, and use pictures where they read faster", title: "Targets and pictures", detail: "Stays scannable. Costs a second pass on some tabs."},
+      {decision: "Hold the targets, keep everything as text", title: "Text only", detail: "Simpler to write. Numbers a picture would settle stay numbers."},
+      {decision: "Treat the targets as guidance", title: "Guidance only", detail: "Nothing enforces the first three."}
+    ]
+  },
+
+  {
+    id: "blocks", group: "Reference", readingOnly: true,
+    tab: "The blocks you can use",
+    label: "No action needed",
+    title: "What each block is for",
+    summary: "A tab body is a list of blocks, mixed in any order.",
+    blocks: [
+      {heading: "The kinds", table: {
+        head: ["Block", "Use it for"],
+        rows: [
+          ["<code>{heading, paragraphs}</code>", "What the other kinds cannot carry"],
+          ["<code>{heading, bullets}</code>", "Items sharing a shape"],
+          ["<code>{heading, table}</code>", "Rows sharing columns"],
+          ["<code>{callout, paragraphs}</code>", "The line to read first"]
+        ]
+      }},
+      {heading: "Callout tones", table: {
+        head: ["Tone", "Reads as", "Use it for"],
+        rows: [
+          ["<code>\"\"</code>", "Neutral", "A recommendation"],
+          ["<code>good</code>", "Reassuring", "Something already handled"],
+          ["<code>warn</code>", "Cautionary", "A warning worth acting on"],
+          ["<code>risk</code>", "Serious", "A real hazard"]
+        ]
+      }},
+      {heading: "The rail marks", table: {
+        head: ["Mark", "Shape says", "Colour says", "Meaning"],
+        rows: [
+          ["Ring, red", "An answer is owed", "Today", "Wants your answer today"],
+          ["Ring, amber", "An answer is owed", "This session", "Waiting for your answer"],
+          ["Disc, green", "An answer is held", "Settled", "Answered"],
+          ["Bar, blue", "Nothing owed", "Worth reading", "Read this first"],
+          ["Bar, calm", "Nothing owed", "Background", "Background, nothing to answer"]
+        ]
+      }},
+      {heading: "Why two channels", bullets: [
+        "Shape carries what you owe. Colour carries which kind of attention.",
+        "The colour ramp runs red, amber, blue, green: today, this session, worth reading, settled.",
+        "Every state names both channels, so the rail reads without colour.",
+        "The legend under the rail lists only the marks in use."
+      ]},
+      {heading: "Every mark takes a hue", bullets: [
+        "The calm tone is the accent hue drained of saturation, so a low-priority mark still belongs to the palette.",
+        "A neutral grey mark reads as unstyled rather than low-priority."
+      ]},
+      {heading: "Handled for you", bullets: [
+        "A column of numbers right-aligns in tabular figures.",
+        "A wide table scrolls in its own frame.",
+        "A link carrying <code>data-tab</code> jumps to another tab."
+      ]}
+    ]
+  },
+
+  {
+    id: "worked", group: "Reference", readingOnly: true,
+    tab: "Four worked tabs",
+    label: "One per group &middot; every fact sourced",
+    title: "A finished tab in each group",
+    summary: "Drawn from this repository, so you can check any line.",
+    blocks: [
+      {heading: "Read this first", table: {
+        caption: "Context the other tabs depend on.",
+        head: ["Part", "Content"],
+        rows: [
+          ["Title", "Typing <code>pytest</code> reaches 10 of 447 test files."],
+          ["Summary", "The plain command reaches 10 files. Another 437 sit in a second suite."],
+          ["Body", "Two folders are named <code>config</code>. The test notes direct running the suites separately. Tests for a shipped check sit in the larger suite."],
+          ["Sources", "<code>ls tests/test_*.py</code>, <code>find packages/claude-dev-env -name 'test_*.py'</code>, <code>tests/CLAUDE.md</code>, <code>pytest.ini</code>"],
+          ["Why it leads", "Every tab about a code change rests on which command covered it."]
+        ]
+      }},
+      {heading: "Only you can answer", table: {
+        caption: "A judgement call with three live paths.",
+        head: ["Part", "Content"],
+        rows: [
+          ["Title", "A rule change has to land twice, and nothing checks that it did."],
+          ["Summary", "Coding standards are enforced in two places. Each runs in ignorance of the other."],
+          ["Body", "A rule in the rulebook alone is raised in review, never blocked. A rule in the check alone blocks with a message no reviewer can look up."],
+          ["The choice", "Change both in one commit. Or gate the pairing. Or generate the check list from the rulebook."],
+          ["Costs", "A habit that slips. Refusing honest one-sided changes. Rewriting every check registration."],
+          ["Sources", "<code>code_rules_enforcer.py</code> and 36 sibling modules; <code>AGENTS.md</code>, 198 lines"],
+          ["Why only you", "All three work. The pick depends on the friction you accept."]
+        ]
+      }},
+      {heading: "Ready when you say go", table: {
+        head: ["Part", "Content"],
+        rows: [
+          ["Title", "Choosing a group tells you nothing about what you turned down."],
+          ["Summary", "The install flag narrows what lands. Nothing shows what it leaves behind."],
+          ["Body", "The help text gives each group a name and one line. The installer walks each directory and copies as it goes, so the file list arrives as a by-product."],
+          ["Sources", "<code>printHelp</code> and <code>copyTree</code> in <code>packages/claude-dev-env/bin/install.mjs</code>"],
+          ["Why it sits here", "The direction is settled and the work is bounded. It needs a yes."]
+        ]
+      }},
+      {heading: "Reference", table: {
+        head: ["Part", "Content"],
+        rows: [
+          ["Title", "One rules file is written by a script."],
+          ["Body", "<code>AGENTS.md</code> is the original at 198 lines. <code>.cursor/BUGBOT.md</code> is its copy at 208. The extra 10 are an AUTO-GENERATED header naming source, workflow, commit, and sync time."],
+          ["Triggers", "A push to main touching the original. A weekly run, Mondays 12:00 UTC. A request."],
+          ["Sources", "The header block in <code>.cursor/BUGBOT.md</code>; the <code>on:</code> block of each workflow"],
+          ["Why no choice", "It exists so another tab can say &ldquo;the review rules&rdquo; once."]
+        ]
+      }},
+      {callout: "good", paragraphs: [
+        "Every fact above was read off this repository. That is the bar from <a href=\"#\" data-tab=\"evidence\">Every claim carries a source</a>."
+      ]}
+    ]
+  },
+
+  {
+    id: "house-rules", group: "Reference", readingOnly: true,
+    tab: "The writing rules this follows",
+    label: "Named, so you can look them up",
+    title: "Six rules shape every sentence",
+    summary: "The reader is a person, in a hurry, deciding something.",
+    blocks: [
+      {heading: "The rules", table: {
+        head: ["Rule", "Asks for"],
+        rows: [
+          ["<code>plain-language</code>", "Everyday words. Short active sentences. The answer first."],
+          ["<code>no-justification-noise</code>", "Cut a sentence that argues a choice is good, or repeats a fact."],
+          ["<code>self-contained-docs</code>", "Every statement stands without the conversation behind it."],
+          ["<code>no-historical-clutter</code>", "Describe the thing as it stands today."],
+          ["<code>state-what-is</code>", "Name what the thing is. State guidance as the action to take."],
+          ["<code>say-it-once</code>", "State what happens. Cut the clause naming what else it does."]
+        ]
+      }},
+      {heading: "What each decides", bullets: [
+        "Plain language decides the words.",
+        "Justification noise decides which sentences survive.",
+        "Self-contained decides whether a stranger can answer.",
+        "Timeless decides the tense.",
+        "State-what-is decides the shape of every claim.",
+        "Say-it-once decides where a sentence stops."
+      ]},
+      {heading: "Where a prohibition earns its place", bullets: [
+        "The behaviour resists a positive description.",
+        "The failure is the only precise thing you can name.",
+        "This docket spends that once, on <a href=\"#\" data-tab=\"evidence\">Every claim carries a source</a>."
+      ]}
+    ]
+  }
+];
+
+/* ================================================================
+   SECTION 3 — ENGINE
+   Renders the page and stores the reader's answers. No edits needed
+   here to fill the template in.
+   ================================================================ */
+(function () {
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(CONFIG.storageKey) || "{}"); } catch (e) { state = {}; }
+
+  /* An item is decidable when it actually renders choices. Deriving the
+     dock count from the same test the renderer uses keeps the denominator
+     honest when an item carries no options. */
+  function hasChoices(item) {
+    return !item.readingOnly && !!(item.options && item.options.length);
+  }
+  var decidable = ITEMS.filter(hasChoices);
+
+  /* The rail mark, on two channels.
+     Shape  — ring: an answer is owed. disc: an answer is held. bar: none owed.
+     Colour — risk: wanted today. good: settled. rule/faint: ordinary.
+     Every state names both, so colour is never the only carrier. */
+  var ALL_MARK_STATES = [
+    {state: "open-urgent",    meaning: "Wants your answer today"},
+    {state: "",               meaning: "Waiting for your answer"},
+    {state: "done",           meaning: "Answered"},
+    {state: "reading-urgent", meaning: "Read this first"},
+    {state: "reading",        meaning: "Background, nothing to answer"}
+  ];
+
+  function markFor(item, isAnswered) {
+    if (!hasChoices(item)) { return item.urgent ? "reading-urgent" : "reading"; }
+    if (isAnswered) { return "done"; }
+    return item.urgent ? "open-urgent" : "";
+  }
+  var tabsEl = document.querySelector(".tabs");
+  var panelsEl = document.getElementById("panels");
+
+  /* ---------- masthead ---------- */
+  (function renderMasthead() {
+    var html = '<div class="topline">' + CONFIG.topline + "</div>" +
+      "<h1>" + CONFIG.title + "</h1>" +
+      '<p class="intro">' + CONFIG.intro + "</p>";
+    if ((CONFIG.steps || []).length) {
+      html += '<div class="stepper">';
+      CONFIG.steps.forEach(function (step, index) {
+        if (index) { html += '<span class="step-link"></span>'; }
+        html += '<span class="step"><u></u><span>' + step + "</span></span>";
+      });
+      html += "</div>";
+    }
+    if ((CONFIG.figures || []).length) {
+      html += '<div class="figures">';
+      CONFIG.figures.forEach(function (f) {
+        html += "<div" + (f.tone ? ' data-tone="' + f.tone + '"' : "") + "><b>" +
+          f.value + (f.unit ? "<small>" + f.unit + "</small>" : "") +
+          "</b><span>" + f.label + "</span></div>";
+      });
+      html += "</div>";
+    }
+    document.getElementById("masthead").innerHTML = html;
+    document.getElementById("footnote").innerHTML = CONFIG.footnote;
+  })();
+
+  /* ---------- rail legend ---------- */
+  (function renderLegend() {
+    var used = ALL_MARK_STATES.filter(function (entry) {
+      return ITEMS.some(function (item) {
+        return markFor(item, false) === entry.state || (entry.state === "done" && hasChoices(item));
+      });
+    });
+    var html = '<div class="legend-title">What each mark means</div>';
+    used.forEach(function (entry) {
+      html += '<div class="legend-row"><span class="dot"' +
+        (entry.state ? ' data-legend="' + entry.state + '"' : "") +
+        "></span><span>" + entry.meaning + "</span></div>";
+    });
+    document.getElementById("legend").innerHTML = html;
+  })();
+
+  /* ---------- body blocks ---------- */
+  function renderTable(t) {
+    /* A column is numeric when every cell in it is digits, spaces, commas,
+       percent signs, or currency. Numeric columns align right in tabular
+       figures so they can be compared down the column. */
+    var numeric = t.head.map(function (h, col) {
+      return t.rows.every(function (r) { return /^[\d,.\s%£$€+-]+$/.test(String(r[col] || "")); });
+    });
+    var html = '<div class="scroller"><table>';
+    if (t.caption) { html += "<caption>" + t.caption + "</caption>"; }
+    html += "<thead><tr>";
+    t.head.forEach(function (h, i) {
+      html += "<th" + (numeric[i] ? ' class="num"' : "") + ">" + h + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    t.rows.forEach(function (r) {
+      html += "<tr>";
+      r.forEach(function (c, i) { html += "<td" + (numeric[i] ? ' class="num"' : "") + ">" + c + "</td>"; });
+      html += "</tr>";
+    });
+    return html + "</tbody></table></div>";
+  }
+
+  function renderBlocks(item) {
+    var html = "";
+    (item.blocks || []).forEach(function (b) {
+      if (b.callout !== undefined) {
+        html += '<div class="callout ' + (b.callout || "") + '">';
+        if (b.claim) { html += '<p class="claim">' + b.claim + "</p>"; }
+        (b.paragraphs || []).forEach(function (t) { html += "<p>" + t + "</p>"; });
+        html += "</div>";
+        return;
+      }
+      html += '<section class="block">';
+      if (b.heading) { html += "<h3>" + b.heading + "</h3>"; }
+      (b.paragraphs || []).forEach(function (t) { html += "<p>" + t + "</p>"; });
+      if (b.bullets) {
+        html += "<ul>";
+        b.bullets.forEach(function (t) { html += "<li>" + t + "</li>"; });
+        html += "</ul>";
+      }
+      if (b.command) { html += "<pre><code>" + b.command + "</code></pre>"; }
+      if (b.table) { html += renderTable(b.table); }
+      html += "</section>";
+    });
+    return html;
+  }
+
+  /* ---------- tabs and panels ---------- */
+  var lastGroup = null;
+  ITEMS.forEach(function (item, idx) {
+    if (item.group !== lastGroup) {
+      var g = document.createElement("div");
+      g.className = "tabs-group";
+      g.innerHTML = item.group;
+      tabsEl.appendChild(g);
+      lastGroup = item.group;
+    }
+
+    var btn = document.createElement("button");
+    btn.className = "tab";
+    btn.type = "button";
+    btn.setAttribute("role", "tab");
+    btn.id = "tab-" + item.id;
+    btn.setAttribute("aria-controls", "panel-" + item.id);
+    btn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
+    btn.tabIndex = idx === 0 ? 0 : -1;
+    btn.innerHTML = '<span class="dot"></span><span class="tab-label">' + item.tab + "</span>";
+    var initialMark = markFor(item, false);
+    if (initialMark) { btn.setAttribute("data-state", initialMark); }
+    tabsEl.appendChild(btn);
+
+    var panel = document.createElement("div");
+    panel.className = "panel";
+    panel.id = "panel-" + item.id;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "tab-" + item.id);
+    panel.tabIndex = 0;
+    if (idx !== 0) { panel.hidden = true; }
+
+    var html = '<div class="panel-head">' +
+      '<div class="panel-label">' + item.label + "</div>" +
+      "<h2>" + item.title + "</h2>" +
+      '<p class="summary">' + item.summary + "</p>";
+    if ((item.chips || []).length) {
+      html += '<div class="chips">';
+      item.chips.forEach(function (chip) {
+        html += '<span class="chip ' + (chip.tone || "") + '">' + chip.text + "</span>";
+      });
+      html += "</div>";
+    }
+    html += "</div>";
+
+    html += renderBlocks(item);
+
+    if (hasChoices(item)) {
+      html += '<section class="block"><h3>Your call</h3><div class="options">';
+      item.options.forEach(function (o) {
+        html += '<label class="option"><input type="radio" name="' + item.id + '" value="' +
+          o.decision.replace(/"/g, "&quot;") + '"><span class="option-inner">' +
+          (o.recommended ? '<span class="option-flag">Recommended</span>' : "") +
+          '<span class="option-title">' + o.title + '</span><span class="option-detail">' + o.detail +
+          "</span></span></label>";
+      });
+      html += "</div></section>";
+      html += '<section class="block"><h3>Anything you want to add</h3>' +
+        '<textarea data-note="' + item.id + '" placeholder="Your own words &mdash; questions, constraints, a different idea entirely."></textarea></section>';
+    }
+
+    html += '<div class="navrow"><button class="ghost" data-nav="prev">&larr; Previous</button>' +
+      '<span class="spacer"></span><button class="ghost" data-nav="next">Next &rarr;</button></div>';
+
+    panel.innerHTML = html;
+    panelsEl.appendChild(panel);
+  });
+
+  var tabs = Array.prototype.slice.call(tabsEl.querySelectorAll(".tab"));
+  var panels = Array.prototype.slice.call(panelsEl.querySelectorAll(".panel"));
+
+  function select(i) {
+    if (i < 0 || i >= tabs.length) { return; }
+    tabs.forEach(function (t, j) {
+      t.setAttribute("aria-selected", j === i ? "true" : "false");
+      t.tabIndex = j === i ? 0 : -1;
+      panels[j].hidden = j !== i;
+    });
+    tabs[i].focus();
+    if (window.scrollY > 220) { window.scrollTo({ top: 220, behavior: "smooth" }); }
+  }
+
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { select(i); });
+    t.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); select((i + 1) % tabs.length); }
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); select((i - 1 + tabs.length) % tabs.length); }
+      if (e.key === "Home") { e.preventDefault(); select(0); }
+      if (e.key === "End") { e.preventDefault(); select(tabs.length - 1); }
+    });
+  });
+
+  panelsEl.addEventListener("click", function (e) {
+    /* A link carrying data-tab jumps to another tab in this docket, so a rule
+       can point at the worked example that follows it. */
+    var jump = e.target.closest("a[data-tab]");
+    if (jump) {
+      e.preventDefault();
+      var target = tabs.findIndex(function (t) { return t.id === "tab-" + jump.getAttribute("data-tab"); });
+      if (target !== -1) { select(target); }
+      return;
+    }
+    var nav = e.target.closest("[data-nav]");
+    if (!nav) { return; }
+    var cur = tabs.findIndex(function (t) { return t.getAttribute("aria-selected") === "true"; });
+    select(nav.getAttribute("data-nav") === "next" ? Math.min(cur + 1, tabs.length - 1) : Math.max(cur - 1, 0));
+  });
+
+  /* ---------- answers ---------- */
+  function save() {
+    try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+
+  function refresh() {
+    var n = 0;
+    ITEMS.forEach(function (item) {
+      var isAnswered = !!(state[item.id] && state[item.id].choice) && hasChoices(item);
+      if (isAnswered) { n++; }
+      var tab = document.getElementById("tab-" + item.id);
+      if (!tab) { return; }
+      var mark = markFor(item, isAnswered);
+      if (mark) { tab.setAttribute("data-state", mark); }
+      else { tab.removeAttribute("data-state"); }
+    });
+    document.getElementById("status").textContent = n + " of " + decidable.length + " decided";
+    var meter = document.getElementById("meter");
+    var share = decidable.length ? Math.round((n / decidable.length) * 100) : 0;
+    meter.style.width = share + "%";
+    meter.setAttribute("data-full", String(n > 0 && n === decidable.length));
+  }
+
+  panelsEl.querySelectorAll('input[type="radio"]').forEach(function (el) {
+    var id = el.name;
+    if (state[id] && state[id].choice === el.value) { el.checked = true; }
+    el.addEventListener("change", function () {
+      state[id] = state[id] || {};
+      state[id].choice = el.value;
+      save();
+      refresh();
+    });
+  });
+
+  panelsEl.querySelectorAll("textarea[data-note]").forEach(function (el) {
+    var id = el.getAttribute("data-note");
+    if (state[id] && state[id].note) { el.value = state[id].note; }
+    el.addEventListener("input", function () {
+      state[id] = state[id] || {};
+      state[id].note = el.value;
+      save();
+    });
+  });
+
+  function plain(s) {
+    /* The copied text is read outside the browser, so entity codes and
+       tags are turned back into ordinary characters. */
+    var d = document.createElement("div");
+    d.innerHTML = s;
+    return (d.textContent || "").trim();
+  }
+
+  /* The button's own label is captured once, up front. Reading it back at
+     click time would capture "Copied" on a rapid second click and restore
+     that as the resting label. */
+  var copyButton = document.getElementById("copy");
+  var copyRestingLabel = copyButton.textContent;
+  var copyResetTimer = null;
+  var copySuccessLabel = "Copied";
+  var copyManualLabel = "Press Ctrl+C to copy";
+  var copyLabelHoldMs = 1600;
+
+  function flashCopyLabel(label) {
+    copyButton.textContent = label;
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(function () {
+      copyButton.textContent = copyRestingLabel;
+    }, copyLabelHoldMs);
+  }
+
+  function copyThroughSelection(text) {
+    /* A hidden textarea plus execCommand reaches the clipboard in pages
+       where the async clipboard is missing or blocked: a sandboxed frame,
+       a plain-http page, or a browser that withholds the permission. The
+       reader's own selection is put back afterwards. */
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+
+    var selection = document.getSelection();
+    var priorRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    area.select();
+    area.setSelectionRange(0, text.length);
+
+    var copied = false;
+    try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+
+    document.body.removeChild(area);
+    if (priorRange) {
+      selection.removeAllRanges();
+      selection.addRange(priorRange);
+    }
+    return copied;
+  }
+
+  function selectOutput(out) {
+    /* The last resort: the text is on screen and selected, so the
+       reader's own Ctrl+C finishes the copy. */
+    var range = document.createRange();
+    range.selectNodeContents(out);
+    var selection = document.getSelection();
+    if (!selection) { return; }
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function copyToClipboard(text, out) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashCopyLabel(copySuccessLabel);
+      }, function () {
+        finishWithoutAsyncClipboard(text, out);
+      });
+      return;
+    }
+    finishWithoutAsyncClipboard(text, out);
+  }
+
+  function finishWithoutAsyncClipboard(text, out) {
+    if (copyThroughSelection(text)) {
+      flashCopyLabel(copySuccessLabel);
+      return;
+    }
+    selectOutput(out);
+    flashCopyLabel(copyManualLabel);
+  }
+
+  copyButton.addEventListener("click", function () {
+    var lines = [CONFIG.copyHeading, ""], any = false;
+    decidable.forEach(function (item) {
+      var s = state[item.id];
+      if (!s || (!s.choice && !(s.note || "").trim())) { return; }
+      any = true;
+      lines.push("**" + plain(item.tab) + "** (" + plain(item.label) + ")");
+      if (s.choice) { lines.push("- Decision: " + plain(s.choice)); }
+      if ((s.note || "").trim()) { lines.push("- Note: " + s.note.trim()); }
+      lines.push("");
+    });
+    if (!any) { lines.push("_Nothing decided yet._"); }
+    var text = lines.join("\n");
+    var out = document.getElementById("out");
+    out.textContent = text;
+    out.classList.remove("hidden");
+    copyToClipboard(text, out);
+    out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  document.getElementById("clear").addEventListener("click", function () {
+    state = {};
+    try { localStorage.removeItem(CONFIG.storageKey); } catch (e) { /* storage unavailable */ }
+    panelsEl.querySelectorAll('input[type="radio"]').forEach(function (r) { r.checked = false; });
+    panelsEl.querySelectorAll("textarea[data-note]").forEach(function (t) { t.value = ""; });
+    document.getElementById("out").classList.add("hidden");
+    refresh();
+  });
+
+  refresh();
+})();
+</script>

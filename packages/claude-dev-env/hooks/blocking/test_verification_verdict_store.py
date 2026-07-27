@@ -28,6 +28,7 @@ store_module = importlib.util.module_from_spec(store_spec)
 store_spec.loader.exec_module(store_module)
 is_verification_exempt_diff = store_module.is_verification_exempt_diff
 resolve_merge_base = store_module.resolve_merge_base
+untracked_file_paths = store_module.untracked_file_paths
 branch_surface_manifest = store_module.branch_surface_manifest
 manifest_sha256 = store_module.manifest_sha256
 workflow_verdict_covers_surface = store_module.workflow_verdict_covers_surface
@@ -259,6 +260,59 @@ def test_untracked_claude_worktree_scratch_copy_stays_filtered(
     assert merge_base_sha is not None
     surface_manifest_text = branch_surface_manifest(str(work_dir), merge_base_sha)
     assert surface_manifest_text == ""
+
+
+def test_untracked_plugin_runtime_state_is_filtered_while_plain_file_is_kept(
+    tmp_path: pathlib.Path,
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    plugin_state_dir = (
+        work_dir / ".claude-plugin-data" / "review-routing" / "v1" / "7366ca28"
+    )
+    plugin_state_dir.mkdir(parents=True)
+    (plugin_state_dir / "decision.json").write_text("{}\n", encoding="utf-8")
+    (work_dir / "scratch.py").write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    assert untracked_file_paths(str(work_dir)) == ["scratch.py"]
+
+
+@pytest.mark.parametrize(
+    "tooling_state_relative_path",
+    [
+        ".claude/verification/verdict.json",
+        ".claude/worktrees/feature/src/app.py",
+        ".claude/daemon/state.json",
+        ".claude/teams/roster.json",
+        ".claude/sessions/session.json",
+        ".cursor/worktrees/feature/src/app.py",
+        ".claude-plugin-data/review-routing/v1/7366ca28/decision.json",
+    ],
+)
+def test_untracked_tooling_state_path_stays_out_of_the_surface(
+    tmp_path: pathlib.Path, tooling_state_relative_path: str
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    tooling_state_file = work_dir / tooling_state_relative_path
+    tooling_state_file.parent.mkdir(parents=True)
+    tooling_state_file.write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    assert untracked_file_paths(str(work_dir)) == []
+
+
+@pytest.mark.parametrize(
+    "lookalike_relative_path",
+    [
+        ".claude-plugin-database/settings.py",
+        "src/.claude-plugin-data/nested_module.py",
+    ],
+)
+def test_untracked_prefix_lookalike_stays_in_the_surface(
+    tmp_path: pathlib.Path, lookalike_relative_path: str
+) -> None:
+    work_dir = _make_repo_with_origin(tmp_path)
+    lookalike_file = work_dir / lookalike_relative_path
+    lookalike_file.parent.mkdir(parents=True)
+    lookalike_file.write_text(PRODUCTION_SOURCE, encoding="utf-8")
+    kept_paths = untracked_file_paths(str(work_dir))
+    assert kept_paths == [lookalike_relative_path.replace("\\", "/")]
 
 
 def _git_output(work_dir: pathlib.Path, *git_arguments: str) -> str:

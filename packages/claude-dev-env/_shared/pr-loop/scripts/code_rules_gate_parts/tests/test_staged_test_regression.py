@@ -12,6 +12,7 @@ import pytest
 from code_rules_gate_parts import baseline_import_isolation, staged_test_regression
 from code_rules_gate_parts.tests._repo_test_helpers import (
     init_repository,
+    repository_root_without_pytest_config,
     repository_with_root_pytest_config,
     run_git,
     write_and_stage,
@@ -272,3 +273,88 @@ def test_no_head_baseline_blocks_on_any_staged_failure(tmp_path: Path) -> None:
     )
 
     assert staged_test_regression.run_staged_test_files(repository_root) != 0
+
+
+def _stage_package_owning_a_bare_config(
+    repository_root: Path, package_name: str, marker_value: str
+) -> None:
+    """Stage a config-less top-level package whose tests import a bare ``config``.
+
+    Two such packages staged together reproduce the measured collision: one
+    pytest session binds ``config`` to whichever package imports first, so the
+    other package's test reads the wrong marker.
+    """
+    write_and_stage(
+        repository_root,
+        f"{package_name}/config/__init__.py",
+        f'PACKAGE_MARKER = "{marker_value}"\n',
+    )
+    write_and_stage(
+        repository_root,
+        f"{package_name}/test_{package_name}.py",
+        "from config import PACKAGE_MARKER\n\n\n"
+        f"def test_{package_name}_reads_its_own_config() -> None:\n"
+        f'    assert PACKAGE_MARKER == "{marker_value}"\n',
+    )
+
+
+def test_run_staged_test_files_returns_zero_when_nothing_staged(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    init_repository(repository_root)
+
+    assert staged_test_regression.run_staged_test_files(repository_root) == 0
+
+
+def test_run_staged_test_files_returns_zero_when_only_multiple_confests_staged(
+    tmp_path: Path,
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
+    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
+    write_and_stage(
+        repository_root, "pkg_c/tests/conftest.py", "import pytest\n"
+    )
+
+    assert staged_test_regression.run_staged_test_files(repository_root) == 0
+
+
+def test_run_staged_test_files_passes_when_confests_stage_with_passing_test(
+    tmp_path: Path,
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
+    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
+    write_and_stage(
+        repository_root,
+        "pkg_a/test_alpha.py",
+        "def test_alpha_passes() -> None:\n    assert True\n",
+    )
+
+    assert staged_test_regression.run_staged_test_files(repository_root) == 0
+
+
+def test_run_staged_test_files_fails_when_real_test_fails_alongside_confests(
+    tmp_path: Path,
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    write_and_stage(repository_root, "pkg_a/conftest.py", "import pytest\n")
+    write_and_stage(repository_root, "pkg_b/conftest.py", "import pytest\n")
+    write_and_stage(
+        repository_root,
+        "pkg_a/test_alpha.py",
+        "def test_alpha_fails() -> None:\n    assert False\n",
+    )
+
+    assert staged_test_regression.run_staged_test_files(repository_root) != 0
+
+
+def test_run_staged_test_files_passes_when_config_less_packages_share_a_module_name(
+    tmp_path: Path,
+) -> None:
+    repository_root = repository_root_without_pytest_config(tmp_path)
+    init_repository(repository_root)
+    _stage_package_owning_a_bare_config(repository_root, "alpha_package", "alpha")
+    _stage_package_owning_a_bare_config(repository_root, "beta_package", "beta")
+
+    assert staged_test_regression.run_staged_test_files(repository_root) == 0
