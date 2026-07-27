@@ -6,9 +6,10 @@ The `eli11-replies` rule asks every chat reply to lead with the action, keep
 findings to a few bullets, and stay short. This hook reads the final assistant
 message, strips code fences, inline code, blockquotes, table rows, and link
 targets, then judges what a reader actually sees: the word count against a hard
-cap, whether numbered steps lead a reply that tells the user to act, and the
-number of bullet lines. A reply opening with "Long form:" opts out, so a
-user-requested full report still goes through.
+cap, whether numbered steps lead a reply that tells the user to act, the number
+of bullet lines, and how many lines pack more than one idea's worth of words.
+A reply opening with "Long form:" opts out, so a user-requested full report
+still goes through.
 """
 
 import json
@@ -29,7 +30,9 @@ from hooks_constants.eli11_reply_enforcer_constants import (  # noqa: E402
     LIST_MARKER_PREFIX_PATTERN,
     LONG_FORM_ESCAPE_PREFIX,
     MAXIMUM_BULLET_LINE_COUNT,
+    MAXIMUM_OVERPACKED_LINE_COUNT,
     MAXIMUM_REPLY_WORD_COUNT,
+    MAXIMUM_WORDS_PER_LINE,
     MINIMUM_ENFORCED_WORD_COUNT,
     NUMBERED_STEP_PATTERN,
     TABLE_ROW_PATTERN,
@@ -155,6 +158,40 @@ def count_bullet_lines(all_prose_lines: list[str]) -> int:
     )
 
 
+def count_words_in_line(prose_line: str) -> int:
+    """Return the countable words a line carries once its list marker comes off.
+
+    ::
+
+        in:  "- **Save** the draft"
+        out: 3
+
+    Args:
+        prose_line: One non-empty line of reply prose.
+
+    Returns:
+        The count of tokens carrying a letter or digit, marker text excluded.
+    """
+    unmarked_line = LIST_MARKER_PREFIX_PATTERN.sub("", prose_line, count=1)
+    return len(COUNTABLE_WORD_PATTERN.findall(unmarked_line))
+
+
+def count_overpacked_lines(all_prose_lines: list[str]) -> int:
+    """Return how many lines carry more words than one idea needs.
+
+    Args:
+        all_prose_lines: The non-empty lines of reply prose.
+
+    Returns:
+        The count of lines over the per-line word cap.
+    """
+    return sum(
+        1
+        for each_line in all_prose_lines
+        if count_words_in_line(each_line) > MAXIMUM_WORDS_PER_LINE
+    )
+
+
 def opens_with_long_form_escape(assistant_message: str) -> bool:
     """Return True when the reply opts out through the Long form prefix.
 
@@ -183,6 +220,14 @@ def describe_bullet_cap_violation(bullet_line_count: int) -> str:
     return (
         f"{bullet_line_count} bullets, over the {MAXIMUM_BULLET_LINE_COUNT}-bullet "
         f"cap - cut findings to {TARGET_BULLET_LINE_COUNT} bullets"
+    )
+
+
+def describe_overpacked_line_violation(overpacked_line_count: int) -> str:
+    """Return the violation text naming how many lines pack too much in."""
+    return (
+        f"{overpacked_line_count} lines carry too many words - one idea per line, "
+        f"at most {MAXIMUM_WORDS_PER_LINE} words each"
     )
 
 
@@ -234,6 +279,11 @@ def collect_shape_violations(
     bullet_line_count = count_bullet_lines(all_prose_lines)
     if bullet_line_count > MAXIMUM_BULLET_LINE_COUNT:
         all_violations.append(describe_bullet_cap_violation(bullet_line_count))
+    overpacked_line_count = count_overpacked_lines(all_prose_lines)
+    if overpacked_line_count > MAXIMUM_OVERPACKED_LINE_COUNT:
+        all_violations.append(
+            describe_overpacked_line_violation(overpacked_line_count)
+        )
     return all_violations
 
 
@@ -243,7 +293,7 @@ def find_reply_shape_violations(assistant_message: str) -> list[str]:
     ::
 
         ok:   a 40-word outcome sentence -> []
-        flag: a 260-word wall            -> ["260 words, over the 220-word cap"]
+        flag: a 260-word wall            -> ["260 words, over the 120-word cap"]
 
     A reply opening with the escape prefix, and a reply under the enforced word
     floor, are both returned as in shape.

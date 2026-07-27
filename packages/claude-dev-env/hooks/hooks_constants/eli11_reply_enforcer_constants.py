@@ -1,6 +1,7 @@
 """Tunables for the eli11_reply_enforcer Stop hook.
 
-Holds the reply-shape thresholds the `eli11-replies` rule names, the compiled
+Holds the reply-shape thresholds the `eli11-replies` rule names, including the
+whole-reply word cap and the per-line word cap behind one idea per line, the compiled
 patterns that find bullets, numbered steps, table rows, link targets, and
 words in a reply, and the user-facing notice the hook emits when it blocks.
 """
@@ -17,7 +18,9 @@ __all__ = [
     "LIST_MARKER_PREFIX_PATTERN",
     "LONG_FORM_ESCAPE_PREFIX",
     "MAXIMUM_BULLET_LINE_COUNT",
+    "MAXIMUM_OVERPACKED_LINE_COUNT",
     "MAXIMUM_REPLY_WORD_COUNT",
+    "MAXIMUM_WORDS_PER_LINE",
     "MINIMUM_ENFORCED_WORD_COUNT",
     "NUMBERED_STEP_PATTERN",
     "TABLE_ROW_PATTERN",
@@ -26,11 +29,13 @@ __all__ = [
     "VIOLATION_SEPARATOR",
 ]
 
-MAXIMUM_REPLY_WORD_COUNT = 220
-MINIMUM_ENFORCED_WORD_COUNT = 80
+MAXIMUM_REPLY_WORD_COUNT = 120
+MINIMUM_ENFORCED_WORD_COUNT = 60
 MAXIMUM_BULLET_LINE_COUNT = 6
 TARGET_BULLET_LINE_COUNT = 3
 ACTION_FIRST_LEAD_LINE_COUNT = 6
+MAXIMUM_WORDS_PER_LINE = 20
+MAXIMUM_OVERPACKED_LINE_COUNT = 2
 
 LONG_FORM_ESCAPE_PREFIX = "long form:"
 VIOLATION_SEPARATOR = "; "

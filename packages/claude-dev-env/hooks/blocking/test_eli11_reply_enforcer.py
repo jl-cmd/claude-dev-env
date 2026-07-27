@@ -28,8 +28,18 @@ def build_bullet_block(bullet_count: int, words_per_bullet: int) -> str:
     )
 
 
+def build_prose_block(line_count: int, words_per_line: int) -> str:
+    """Return a block of plain prose lines, each holding the requested words."""
+    return "\n".join(build_filler_prose(words_per_line) for _ in range(line_count))
+
+
 SHORT_REPLY = build_filler_prose(40)
 OVERLONG_REPLY = build_filler_prose(260)
+UNDER_FLOOR_REPLY = build_prose_block(3, 18)
+JUST_OVER_WORD_CAP_REPLY = build_prose_block(13, 10)
+THREE_OVERPACKED_LINE_REPLY = build_prose_block(3, 25)
+TWO_OVERPACKED_LINE_REPLY = f"{build_prose_block(2, 25)}\n{build_filler_prose(15)}"
+SEVEN_BULLET_JUST_OVER_FLOOR_REPLY = build_bullet_block(7, 10)
 LONG_FORM_OVERLONG_REPLY = f"Long form: the audit report follows.\n\n{OVERLONG_REPLY}"
 ACTION_WITHOUT_STEPS_FIRST_REPLY = (
     f"{build_filler_prose(90)}\n\nRun the migration script.\n\nMerge the branch."
@@ -103,7 +113,59 @@ def test_reply_over_word_cap_emits_block() -> None:
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
     assert "260" in parsed_response["reason"]
-    assert "220" in parsed_response["reason"]
+    assert "120" in parsed_response["reason"]
+
+
+def test_reply_just_over_word_cap_emits_block() -> None:
+    """A 130-word reply sits past the 120-word cap and blocks on length alone."""
+    completed_process = run_hook_with_message(JUST_OVER_WORD_CAP_REPLY)
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "130 words, over the 120-word cap" in parsed_response["reason"]
+
+
+def test_reply_under_word_floor_passes_through() -> None:
+    """A 54-word reply sits under the 60-word floor and is never judged."""
+    completed_process = run_hook_with_message(UNDER_FLOOR_REPLY)
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_reply_just_over_word_floor_is_judged() -> None:
+    """A 70-word reply clears the 60-word floor and earns its bullet violation."""
+    completed_process = run_hook_with_message(SEVEN_BULLET_JUST_OVER_FLOOR_REPLY)
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "cut findings to 3 bullets" in parsed_response["reason"]
+
+
+def test_three_overpacked_lines_emit_block() -> None:
+    """A third line carrying more than 20 words blocks on one idea per line."""
+    completed_process = run_hook_with_message(THREE_OVERPACKED_LINE_REPLY)
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "lines carry too many words - one idea per line" in (
+        parsed_response["reason"]
+    )
+
+
+def test_two_overpacked_lines_pass_through() -> None:
+    """Two over-packed lines sit at the cap and pass."""
+    completed_process = run_hook_with_message(TWO_OVERPACKED_LINE_REPLY)
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_bullet_marker_is_not_counted_as_a_line_word() -> None:
+    """A 20-word bullet stays under the per-line cap once its marker comes off."""
+    twenty_word_bullet_lines = build_bullet_block(4, 20)
+    all_violations = eli11_reply_enforcer.find_reply_shape_violations(
+        twenty_word_bullet_lines
+    )
+    assert all_violations == []
 
 
 def test_long_form_prefix_exempts_an_overlong_reply() -> None:
