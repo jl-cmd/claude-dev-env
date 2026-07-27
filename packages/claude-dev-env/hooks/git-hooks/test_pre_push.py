@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,12 +45,123 @@ def test_resolve_base_reference_uses_remote_object_when_non_zero() -> None:
     assert base_reference == NON_ZERO_REMOTE_SHA_ONE
 
 
-def test_resolve_base_reference_falls_back_when_remote_is_all_zeros() -> None:
+def _run_git(working_directory: Path, *all_git_arguments: str) -> str:
+    disable_hooks_argument = f"core.hooksPath={working_directory / 'unused_hooks'}"
+    completion = subprocess.run(
+        ["git", "-c", disable_hooks_argument, *all_git_arguments],
+        cwd=working_directory,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completion.stdout.strip()
+
+
+def _build_repository_with_pushed_parent_branch(tmp_path: Path) -> Path:
+    """Create a work tree whose ``parent`` branch is already on a remote.
+
+    Layout after this helper runs::
+
+        remote.git   parent -> commit "parent work"
+        work         parent -> same commit, origin/parent tracked
+
+    A branch cut from ``origin/parent`` therefore has a real base that is
+    not the remote default branch.
+
+    Args:
+        tmp_path: The pytest temporary directory to build inside.
+
+    Returns:
+        The path of the work tree.
+    """
+    remote_path = tmp_path / "remote.git"
+    _run_git(tmp_path, "init", "--bare", "--initial-branch", "parent", str(remote_path))
+    work_path = tmp_path / "work"
+    work_path.mkdir()
+    _run_git(work_path, "init", "--initial-branch", "parent")
+    _run_git(work_path, "config", "user.email", "hook-test@example.com")
+    _run_git(work_path, "config", "user.name", "Hook Test")
+    (work_path / "parent_file.txt").write_text("parent work\n", encoding="utf-8")
+    _run_git(work_path, "add", "parent_file.txt")
+    _run_git(work_path, "commit", "-m", "parent work")
+    _run_git(work_path, "remote", "add", "origin", str(remote_path))
+    _run_git(work_path, "push", "origin", "parent")
+    return work_path
+
+
+def test_resolve_base_reference_from_stdin_prefers_configured_upstream_on_first_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_path = _build_repository_with_pushed_parent_branch(tmp_path)
+    _run_git(work_path, "checkout", "-b", "child", "origin/parent")
+    child_sha = _run_git(work_path, "rev-parse", "HEAD")
+    monkeypatch.chdir(work_path)
+    stdin_text = (
+        f"refs/heads/child {child_sha} refs/heads/child {ALL_ZEROS_OBJECT_NAME}\n"
+    )
+
+    base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
+
+    assert base_reference == "origin/parent"
+
+
+def test_resolve_base_reference_from_stdin_uses_unpushed_commit_parent_on_first_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_path = _build_repository_with_pushed_parent_branch(tmp_path)
+    parent_sha = _run_git(work_path, "rev-parse", "HEAD")
+    _run_git(work_path, "checkout", "-b", "stacked-child")
+    (work_path / "child_file.txt").write_text("child work\n", encoding="utf-8")
+    _run_git(work_path, "add", "child_file.txt")
+    _run_git(work_path, "commit", "-m", "child work")
+    child_sha = _run_git(work_path, "rev-parse", "HEAD")
+    monkeypatch.chdir(work_path)
+    stdin_text = (
+        f"refs/heads/stacked-child {child_sha} "
+        f"refs/heads/stacked-child {ALL_ZEROS_OBJECT_NAME}\n"
+    )
+
+    base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
+
+    assert base_reference == parent_sha
+
+
+def test_resolve_base_reference_from_stdin_falls_back_and_names_the_base_it_chose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    outside_any_repository = tmp_path / "outside"
+    outside_any_repository.mkdir()
+    monkeypatch.chdir(outside_any_repository)
     stdin_text = f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
 
     assert base_reference == pre_push.DEFAULT_REMOTE_BASE_REFERENCE
+    captured = capsys.readouterr()
+    assert pre_push.DEFAULT_REMOTE_BASE_REFERENCE in captured.err
+    assert "refs/heads/feature" in captured.err
+
+
+def test_resolve_base_reference_from_stdin_leaves_a_normal_push_undiagnosed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    outside_any_repository = tmp_path / "outside"
+    outside_any_repository.mkdir()
+    monkeypatch.chdir(outside_any_repository)
+    stdin_text = (
+        f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
+    )
+
+    base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
+
+    assert base_reference == NON_ZERO_REMOTE_SHA_ONE
+    assert capsys.readouterr().err == ""
 
 
 def test_resolve_base_reference_falls_back_when_stdin_empty() -> None:
