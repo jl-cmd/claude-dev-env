@@ -1,9 +1,11 @@
 """Run the staged Python test files, grouped by their owning pytest config.
 
 The commit gate runs each staged test file so a broken test blocks the commit.
-Files are grouped by the nearest ancestor holding a pytest config, and each
-group runs in its own pytest session with the working directory at that root, so
-two packages exposing a same-named top-level package never shadow each other.
+Files are grouped by the nearest ancestor holding a pytest config, falling back
+to the file's own top-level directory under the repository root when no ancestor
+owns one. Each group runs in its own pytest session with the working directory
+at that root, so two packages exposing a same-named top-level package never
+shadow each other.
 
 ``conftest.py`` paths are never passed as pytest collection targets: pytest loads
 them automatically when nearby tests run, and collecting multiple bare confests
@@ -121,22 +123,85 @@ def _resolve_owning_test_root(test_file_path: Path, repository_root: Path) -> Pa
     return resolved_repository_root
 
 
+def _top_level_group_root(test_file_path: Path, resolved_repository_root: Path) -> Path:
+    """Return the repository top-level directory *test_file_path* sits under.
+
+    ::
+
+        resolved_repository_root = /repo
+        ok:   /repo/tools/tests/test_a.py -> /repo/tools
+        ok:   /repo/test_b.py             -> /repo
+        ok:   /elsewhere/test_c.py        -> /repo   (outside the repository)
+
+    Args:
+        test_file_path: The staged test file to place under a top-level directory.
+        resolved_repository_root: The already-resolved repository root.
+
+    Returns:
+        The repository root joined to the file's first repository-relative path
+        component; the repository root itself for a file sitting directly at it
+        or outside it.
+    """
+    try:
+        repository_relative_path = test_file_path.resolve().relative_to(resolved_repository_root)
+    except ValueError:
+        return resolved_repository_root
+    all_relative_parts = repository_relative_path.parts
+    if len(all_relative_parts) <= 1:
+        return resolved_repository_root
+    return resolved_repository_root / all_relative_parts[0]
+
+
+def _group_root_for_test_file(test_file_path: Path, repository_root: Path) -> Path:
+    """Return the pytest session root *test_file_path* runs under.
+
+    ::
+
+        repository_root = /repo, holding no pytest config of its own
+        ok:   /repo/pkg/pytest.ini next to /repo/pkg/suite/test_a.py -> /repo/pkg
+        ok:   /repo/tools/tests/test_b.py                            -> /repo/tools
+        ok:   /repo/test_c.py                                        -> /repo
+        flag: /repo/tools/... and /repo/pipeline/... in one /repo bucket
+
+    A config-owning ancestor always wins. A file no ancestor config owns falls
+    back to its top-level directory, so two config-less packages exposing a
+    same-named top-level module run in separate pytest processes rather than
+    shadowing each other in one.
+
+    Args:
+        test_file_path: The staged test file to place in a group.
+        repository_root: The repository root that bounds the upward walk.
+
+    Returns:
+        The config-owning ancestor when one exists, the repository root when the
+        root itself owns the config, else the file's top-level directory.
+    """
+    resolved_repository_root = repository_root.resolve()
+    owning_root = _resolve_owning_test_root(test_file_path, repository_root)
+    if owning_root != resolved_repository_root:
+        return owning_root
+    if _directory_holds_pytest_config(resolved_repository_root):
+        return resolved_repository_root
+    return _top_level_group_root(test_file_path, resolved_repository_root)
+
+
 def _group_staged_tests_by_root(
     all_test_paths: list[Path], repository_root: Path
 ) -> dict[Path, list[Path]]:
-    """Group *all_test_paths* by their owning pytest-config root.
+    """Group *all_test_paths* by the pytest session root that runs them.
 
     Args:
         all_test_paths: The staged test files to partition.
         repository_root: The repository root that bounds each upward walk.
 
     Returns:
-        A mapping from owning test root to the staged test files under it.
+        A mapping from group root to the staged test files running under it.
+        Every input path lands in exactly one group.
     """
     all_tests_by_root: dict[Path, list[Path]] = {}
     for each_test_path in all_test_paths:
-        owning_root = _resolve_owning_test_root(each_test_path, repository_root)
-        all_tests_by_root.setdefault(owning_root, []).append(each_test_path)
+        group_root = _group_root_for_test_file(each_test_path, repository_root)
+        all_tests_by_root.setdefault(group_root, []).append(each_test_path)
     return all_tests_by_root
 
 

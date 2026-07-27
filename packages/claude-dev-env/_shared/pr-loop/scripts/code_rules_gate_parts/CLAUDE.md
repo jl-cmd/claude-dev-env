@@ -15,7 +15,7 @@ surface for the test suite.
 | `violation_scoping.py` | Recovers a violation's line span from the enforcer message and partitions violations into blocking versus advisory |
 | `wrapper_plumb_check.py` | Flags a public wrapper that drops a same-file delegate's optional keyword arguments; holds the code-path and test-path classifiers |
 | `gate_running.py` | Validates the eligible file set, reports the inspected-file count, and prints the partitioned violation report |
-| `staged_test_running.py` | Runs the staged Python test files, grouped by their owning pytest config, in command-line-length-safe batches |
+| `staged_test_running.py` | Runs the staged Python test files, grouped by their owning pytest config and by top-level directory when no config owns them, in command-line-length-safe batches |
 | `gate_arguments.py` | Parses the gate's command-line arguments |
 | `__init__.py` | Package marker |
 
