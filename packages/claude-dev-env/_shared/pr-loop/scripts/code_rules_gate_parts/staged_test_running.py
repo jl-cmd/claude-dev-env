@@ -1,4 +1,4 @@
-"""Run the staged Python test files, grouped by their owning pytest config.
+"""Run the staged Python test files, grouped by owning pytest config or top-level directory.
 
 The commit gate runs each staged test file so a broken test blocks the commit.
 Files are grouped by the nearest ancestor holding a pytest config, falling back
@@ -10,6 +10,19 @@ shadow each other.
 ``conftest.py`` paths are never passed as pytest collection targets: pytest loads
 them automatically when nearby tests run, and collecting multiple bare confests
 in one session collides on the shared module basename.
+
+Boundaries of the top-level fallback, which fires only in a repository whose
+root holds no pytest config::
+
+    repository_root = /repo, holding no pytest config of its own
+    ok:   /repo/alpha/test_a.py, /repo/beta/test_b.py           -> two sessions
+    flag: /repo/pkgs/alpha/test_a.py, /repo/pkgs/beta/test_b.py -> one session
+
+Config-less packages nested under one shared top-level directory run in that
+directory's single session, so the split separates top-level neighbors alone.
+A repository-root ``conftest.py`` stays unloaded for those groups as well: the
+session works from the top-level directory, which leaves the root file outside
+the tree pytest treats as its root.
 """
 
 import os
@@ -104,6 +117,36 @@ def _directory_holds_pytest_config(directory: Path) -> bool:
     return False
 
 
+def _walk_to_owning_test_root(
+    resolved_test_file_path: Path, resolved_repository_root: Path
+) -> tuple[Path, bool]:
+    """Walk up once for the owning test root and whether that root holds a config.
+
+    ::
+
+        resolved_repository_root = /repo, holding no pytest config of its own
+        ok:   /repo/pkg/pytest.ini above /repo/pkg/suite/test_a.py -> (/repo/pkg, True)
+        ok:   /repo/tools/tests/test_b.py                          -> (/repo, False)
+
+    One walk answers both questions a caller has, so the repository root's
+    config is read once per staged file rather than once per question.
+
+    Args:
+        resolved_test_file_path: The already-resolved staged test file.
+        resolved_repository_root: The already-resolved repository root.
+
+    Returns:
+        The nearest config-owning ancestor paired with True, or the repository
+        root paired with False when no ancestor up to it owns a config.
+    """
+    for each_ancestor in resolved_test_file_path.parents:
+        if _directory_holds_pytest_config(each_ancestor):
+            return each_ancestor, True
+        if each_ancestor == resolved_repository_root:
+            return resolved_repository_root, False
+    return resolved_repository_root, False
+
+
 def _resolve_owning_test_root(test_file_path: Path, repository_root: Path) -> Path:
     """Return the nearest ancestor of *test_file_path* owning a pytest config.
 
@@ -114,17 +157,24 @@ def _resolve_owning_test_root(test_file_path: Path, repository_root: Path) -> Pa
     Returns:
         The resolved owning test root directory.
     """
-    resolved_repository_root = repository_root.resolve()
-    for each_ancestor in test_file_path.resolve().parents:
-        if _directory_holds_pytest_config(each_ancestor):
-            return each_ancestor
-        if each_ancestor == resolved_repository_root:
-            return resolved_repository_root
-    return resolved_repository_root
+    owning_root, _has_owning_pytest_config = _walk_to_owning_test_root(
+        test_file_path.resolve(), repository_root.resolve()
+    )
+    return owning_root
 
 
-def _top_level_group_root(test_file_path: Path, resolved_repository_root: Path) -> Path:
-    """Return the repository top-level directory *test_file_path* sits under.
+def _resolved_path_or_none(each_path: Path) -> Path | None:
+    """Return *each_path* resolved, or None when the filesystem refuses to resolve it."""
+    try:
+        return each_path.resolve()
+    except OSError:
+        return None
+
+
+def _top_level_group_root(
+    resolved_test_file_path: Path, resolved_repository_root: Path
+) -> Path:
+    """Return the repository top-level directory *resolved_test_file_path* sits under.
 
     ::
 
@@ -134,7 +184,8 @@ def _top_level_group_root(test_file_path: Path, resolved_repository_root: Path) 
         ok:   /elsewhere/test_c.py        -> /repo   (outside the repository)
 
     Args:
-        test_file_path: The staged test file to place under a top-level directory.
+        resolved_test_file_path: The already-resolved staged test file to place
+            under a top-level directory.
         resolved_repository_root: The already-resolved repository root.
 
     Returns:
@@ -143,7 +194,7 @@ def _top_level_group_root(test_file_path: Path, resolved_repository_root: Path) 
         or outside it.
     """
     try:
-        repository_relative_path = test_file_path.resolve().relative_to(resolved_repository_root)
+        repository_relative_path = resolved_test_file_path.relative_to(resolved_repository_root)
     except ValueError:
         return resolved_repository_root
     all_relative_parts = repository_relative_path.parts
@@ -166,7 +217,8 @@ def _group_root_for_test_file(test_file_path: Path, repository_root: Path) -> Pa
     A config-owning ancestor always wins. A file no ancestor config owns falls
     back to its top-level directory, so two config-less packages exposing a
     same-named top-level module run in separate pytest processes rather than
-    shadowing each other in one.
+    shadowing each other in one. A staged path the filesystem refuses to
+    resolve joins the repository-root group instead of aborting the gate.
 
     Args:
         test_file_path: The staged test file to place in a group.
@@ -174,15 +226,19 @@ def _group_root_for_test_file(test_file_path: Path, repository_root: Path) -> Pa
 
     Returns:
         The config-owning ancestor when one exists, the repository root when the
-        root itself owns the config, else the file's top-level directory.
+        root owns the config or the path fails to resolve, else the file's
+        top-level directory.
     """
     resolved_repository_root = repository_root.resolve()
-    owning_root = _resolve_owning_test_root(test_file_path, repository_root)
-    if owning_root != resolved_repository_root:
-        return owning_root
-    if _directory_holds_pytest_config(resolved_repository_root):
+    resolved_test_file_path = _resolved_path_or_none(test_file_path)
+    if resolved_test_file_path is None:
         return resolved_repository_root
-    return _top_level_group_root(test_file_path, resolved_repository_root)
+    owning_root, has_owning_pytest_config = _walk_to_owning_test_root(
+        resolved_test_file_path, resolved_repository_root
+    )
+    if has_owning_pytest_config:
+        return owning_root
+    return _top_level_group_root(resolved_test_file_path, resolved_repository_root)
 
 
 def _group_staged_tests_by_root(

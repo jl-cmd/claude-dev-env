@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from code_rules_gate_parts import git_file_sets, staged_test_running
 
 
@@ -63,6 +65,22 @@ def _write_test_file(repository_root: Path, relative_path: str) -> Path:
         "def test_placeholder() -> None:\n    assert True\n", encoding="utf-8"
     )
     return file_path
+
+
+def _refuse_to_resolve(monkeypatch: pytest.MonkeyPatch, refused_path: Path) -> None:
+    """Make ``Path.resolve`` raise ``OSError`` for *refused_path* and nothing else.
+
+    Stands in for a staged file the filesystem accepts as a file yet refuses to
+    resolve, such as a broken junction or a path the user may not traverse.
+    """
+    original_resolve = Path.resolve
+
+    def _resolve_unless_refused(each_path: Path, strict: bool = False) -> Path:
+        if each_path == refused_path:
+            raise OSError("resolve refused")
+        return original_resolve(each_path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", _resolve_unless_refused)
 
 
 def _stage_package_owning_a_bare_config(
@@ -230,6 +248,22 @@ def test_group_staged_tests_by_root_keeps_a_repository_root_file_at_the_root(
     )
 
     assert all_tests_by_root == {repository_root.resolve(): [root_level_test_path]}
+
+
+def test_group_staged_tests_by_root_falls_back_to_the_root_when_resolve_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = _repository_root_without_pytest_config(tmp_path)
+    unresolvable_test_path = _write_test_file(
+        repository_root, "alpha_package/tests/test_alpha.py"
+    )
+    _refuse_to_resolve(monkeypatch, unresolvable_test_path)
+
+    all_tests_by_root = staged_test_running._group_staged_tests_by_root(
+        [unresolvable_test_path], repository_root
+    )
+
+    assert all_tests_by_root == {repository_root.resolve(): [unresolvable_test_path]}
 
 
 def test_run_staged_test_files_passes_when_config_less_packages_share_a_module_name(
