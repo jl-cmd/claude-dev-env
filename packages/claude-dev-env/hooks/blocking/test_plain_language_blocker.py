@@ -51,6 +51,14 @@ ENFORCEMENT_ENABLED_PROGRAM = (
     "hook_script.main()"
 )
 
+ENFORCEMENT_DISABLED_PROGRAM = (
+    "import sys;"
+    f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+    "import plain_language_blocker as hook_script;"
+    "hook_script.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
+    "hook_script.main()"
+)
+
 
 @pytest.fixture(autouse=True)
 def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,9 +80,9 @@ def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
 def _run_hook_with_enforcement_switched_off(
     payload: dict,
 ) -> subprocess.CompletedProcess[str]:
-    """Run the hook script as shipped, with the prose-style switch left off."""
+    """Run the hook with the prose-style switch pinned off."""
     return subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT_PATH)],
+        [sys.executable, "-c", ENFORCEMENT_DISABLED_PROGRAM],
         input=json.dumps(payload),
         capture_output=True,
         text=True,

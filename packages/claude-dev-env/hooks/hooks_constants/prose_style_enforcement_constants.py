@@ -1,8 +1,8 @@
 """Single source of truth for the shared prose-style enforcement switch.
 
 Holds the master flag ``PROSE_STYLE_ENFORCEMENT_ENABLED`` (default off) that
-every prose-style hook reads before it blocks anything, the roster of hook
-modules that read it, and the flag name a coverage test greps for.
+every prose-style hook reads before it blocks anything, and the roster of hook
+modules that read it.
 
 ::
 
@@ -19,7 +19,6 @@ writes nothing at all: it neither blocks nor reports.
 from __future__ import annotations
 
 PROSE_STYLE_ENFORCEMENT_ENABLED = False
-PROSE_STYLE_ENFORCEMENT_FLAG_NAME = "PROSE_STYLE_ENFORCEMENT_ENABLED"
 ALL_PROSE_STYLE_HOOK_MODULE_NAMES = (
     "hedging_language_blocker",
     "question_to_user_enforcer",

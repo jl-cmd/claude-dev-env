@@ -25,6 +25,9 @@ Set it to `True` to turn all five checks back on:
 PROSE_STYLE_ENFORCEMENT_ENABLED = True
 ```
 
+The flag takes the `True` and `False` literals alone. Each hook reads it for
+truthiness, so any other value — the string `"False"` included — counts as on.
+
 ## What off means
 
 Off means silent. Each hook reads the flag before it looks at any text, and
@@ -52,5 +55,13 @@ cross:
 | `state_description_blocker` | `evaluate()` |
 
 `ALL_PROSE_STYLE_HOOK_MODULE_NAMES` in the constants module lists the five, and
-`test_prose_style_enforcement_constants.py` reads each hook's source to confirm
-it names the flag.
+`test_prose_style_enforcement_constants.py` walks that roster: it runs each hook
+on one violating payload with the flag forced on, asserts the block, then runs
+the same payload with the flag forced off and asserts silence.
+
+## Hooks outside the switch
+
+`session_handoff_blocker` runs on the same Stop dispatcher and enforces the same
+long-horizon-autonomy rule on reply prose, and it sits outside this switch by
+design: it protects run continuity rather than word choice. Treat this placement
+as provisional pending the owner's confirmation.

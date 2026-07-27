@@ -54,6 +54,14 @@ ENFORCEMENT_ENABLED_PROGRAM = (
     "hook_script.main()"
 )
 
+ENFORCEMENT_DISABLED_PROGRAM = (
+    "import sys;"
+    f"sys.path.insert(0, {repr(_BLOCKING_DIR)});"
+    "import state_description_blocker as hook_script;"
+    "hook_script.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
+    "hook_script.main()"
+)
+
 
 class _RunHook:
     """Helper to test the hook via subprocess with the switch turned on."""
@@ -83,7 +91,7 @@ def test_historical_comment_passes_when_the_switch_is_off() -> None:
         }
     )
     completed_process = subprocess.run(
-        [sys.executable, HOOK_SCRIPT_PATH],
+        [sys.executable, "-c", ENFORCEMENT_DISABLED_PROGRAM],
         input=payload,
         capture_output=True,
         text=True,

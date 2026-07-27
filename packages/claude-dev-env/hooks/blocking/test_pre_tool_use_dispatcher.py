@@ -74,6 +74,30 @@ def _prose_switch_enabled_program(target_script_path: str) -> str:
     )
 
 
+def _prose_switch_disabled_program(target_script_path: str) -> str:
+    """Build a launcher that pins the prose-style switch off, then runs a script.
+
+    The launcher patches the shared switch module in ``sys.modules`` before the
+    target runs, so every hook the dispatcher executes reads the switch as off
+    whatever the shipped constant holds.
+
+    Args:
+        target_script_path: Absolute path of the script to run as ``__main__``.
+
+    Returns:
+        The program text to pass to the interpreter's ``-c`` flag.
+    """
+    return (
+        "import sys, runpy;"
+        f"sys.path.insert(0, {repr(str(_HOOKS_ROOT))});"
+        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
+        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
+        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
+        f"sys.argv = [{repr(target_script_path)}];"
+        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
+    )
+
+
 def _run_hook_subprocess(
     hook_relative_path: str, payload_text: str
 ) -> subprocess.CompletedProcess[str]:
@@ -119,9 +143,9 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
 def _run_dispatcher_with_the_switch_off(
     payload_text: str,
 ) -> subprocess.CompletedProcess[str]:
-    """Run the dispatcher script as shipped, with the prose-style switch left off."""
+    """Run the dispatcher with the prose-style switch pinned off."""
     return subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
+        [sys.executable, "-c", _prose_switch_disabled_program(_DISPATCHER_SCRIPT)],
         check=False,
         input=payload_text,
         capture_output=True,
@@ -137,6 +161,7 @@ def test_dispatcher_allows_prose_violations_when_the_switch_is_off() -> None:
 
     dispatcher_result = _run_dispatcher_with_the_switch_off(payload_text)
 
+    assert dispatcher_result.returncode == 0
     is_deny, _reason = _parse_hook_decision(dispatcher_result)
     assert is_deny is False
 

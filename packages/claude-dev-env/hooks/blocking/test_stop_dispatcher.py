@@ -48,6 +48,30 @@ def _prose_switch_enabled_program(target_script_path: str) -> str:
     )
 
 
+def _prose_switch_disabled_program(target_script_path: str) -> str:
+    """Build a launcher that pins the prose-style switch off, then runs a script.
+
+    The launcher patches the shared switch module in ``sys.modules`` before the
+    target runs, so every hook the dispatcher executes through runpy reads the
+    switch as off whatever the shipped constant holds.
+
+    Args:
+        target_script_path: Absolute path of the script to run as ``__main__``.
+
+    Returns:
+        The program text to pass to the interpreter's ``-c`` flag.
+    """
+    return (
+        "import sys, runpy;"
+        f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
+        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
+        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
+        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
+        f"sys.argv = [{repr(target_script_path)}];"
+        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
+    )
+
+
 def _block_json(
     reason: str, *, system_message: str = "", suppress_output: bool = False
 ) -> str:
@@ -198,7 +222,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
 
 
 def test_dispatcher_allows_hedging_message_when_the_switch_is_off() -> None:
-    """A hedging message passes through the dispatcher with the switch left off."""
+    """A hedging message passes through the dispatcher with the switch pinned off."""
     payload_text = json.dumps(
         {
             "stop_hook_active": False,
@@ -206,7 +230,7 @@ def test_dispatcher_allows_hedging_message_when_the_switch_is_off() -> None:
         }
     )
     completed = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
+        [sys.executable, "-c", _prose_switch_disabled_program(_DISPATCHER_SCRIPT)],
         check=False,
         input=payload_text,
         capture_output=True,
