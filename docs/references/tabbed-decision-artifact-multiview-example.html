@@ -1,0 +1,1075 @@
+<title>Ignored Alert Loop — Build Plan</title>
+
+<style>
+  :root {
+    /* Palette carried over from tabbed-decision-artifact-template.html.
+       Local names are kept so every rule below is unchanged; only the values
+       come from the house tokens, mapped by meaning:
+         accent -> warn (needs your call)   keep -> good (settled)
+         bin    -> risk (dropped)           info -> accent (changes wanted) */
+    --ground: #E8EAE6;      /* paper     */
+    --surface: #F5F6F3;     /* surface   */
+    --surface-2: #DEE1DB;   /* rail      */
+    --line: #C7CBC4;        /* rule      */
+    --line-soft: #DBDED8;   /* rule-soft */
+    --ink: #141A1F;
+    --ink-2: #30383F;       /* ink-soft  */
+    --ink-3: #42484E;       /* ink-faint */
+    --accent: #96631C;      /* warn      */
+    --accent-soft: #F2E7D1; /* warn-wash */
+    --keep: #3D6C48;        /* good      */
+    --keep-soft: #DEE9E0;   /* good-wash */
+    --bin: #8F3119;         /* risk      */
+    --bin-soft: #F2DED7;    /* risk-wash */
+    --info: #1D4E6B;        /* accent    */
+    --info-soft: #DAE4EA;   /* accent-wash */
+
+    --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --font-body: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+
+    --r: 3px;
+    --pad: clamp(16px, 3vw, 32px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0F141A;      /* paper       */
+      --surface: #181F26;     /* surface     */
+      --surface-2: #141A20;   /* rail        */
+      --line: #2D3740;        /* rule        */
+      --line-soft: #222A32;   /* rule-soft   */
+      --ink: #DFE4E2;
+      --ink-2: #B8C0C5;       /* ink-soft    */
+      --ink-3: #A2AAAF;       /* ink-faint   */
+      --accent: #D6A863;      /* warn        */
+      --accent-soft: #2B2417; /* warn-wash   */
+      --keep: #83B48F;        /* good        */
+      --keep-soft: #1C2A21;   /* good-wash   */
+      --bin: #D9866F;         /* risk        */
+      --bin-soft: #2E1E18;    /* risk-wash   */
+      --info: #82B5D1;        /* accent      */
+      --info-soft: #16272F;   /* accent-wash */
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0F141A;
+    --surface: #181F26;
+    --surface-2: #141A20;
+    --line: #2D3740;
+    --line-soft: #222A32;
+    --ink: #DFE4E2;
+    --ink-2: #B8C0C5;
+    --ink-3: #A2AAAF;
+    --accent: #D6A863;
+    --accent-soft: #2B2417;
+    --keep: #83B48F;
+    --keep-soft: #1C2A21;
+    --bin: #D9866F;
+    --bin-soft: #2E1E18;
+    --info: #82B5D1;
+    --info-soft: #16272F;
+  }
+
+  :root[data-theme="light"] {
+    --ground: #E8EAE6;
+    --surface: #F5F6F3;
+    --surface-2: #DEE1DB;
+    --line: #C7CBC4;
+    --line-soft: #DBDED8;
+    --ink: #141A1F;
+    --ink-2: #30383F;
+    --ink-3: #42484E;
+    --accent: #96631C;
+    --accent-soft: #F2E7D1;
+    --keep: #3D6C48;
+    --keep-soft: #DEE9E0;
+    --bin: #8F3119;
+    --bin-soft: #F2DED7;
+    --info: #1D4E6B;
+    --info-soft: #DAE4EA;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1140px; margin: 0 auto; padding: var(--pad); }
+
+  /* ---------- header ---------- */
+  header.masthead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(28px, 4.6vw, 44px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .sub { color: var(--ink-2); margin: 10px 0 0; max-width: 56ch; }
+
+  .tally {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .tally .n { font-size: 30px; color: var(--accent); display: block; line-height: 1; }
+  .tally .lbl { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* ---------- view switcher ---------- */
+  nav.views {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 22px 0 0;
+    border-bottom: 1px solid var(--line);
+  }
+  nav.views button {
+    appearance: none;
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 9px 14px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink-2);
+    cursor: pointer;
+    border-radius: var(--r) var(--r) 0 0;
+  }
+  nav.views button:hover { color: var(--ink); background: var(--surface-2); }
+  nav.views button[aria-selected="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  nav.views button:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
+
+  .viewnote {
+    font-size: 13px;
+    color: var(--ink-2);
+    margin: 14px 0 20px;
+    max-width: 70ch;
+  }
+
+  .panel { display: none; }
+  .panel.on { display: block; }
+
+  .scroller { overflow-x: auto; padding-bottom: 6px; }
+
+  /* ---------- shared node styling ---------- */
+  .node {
+    position: relative;
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--line);
+    border-radius: var(--r);
+    padding: 11px 13px;
+    font: inherit;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .node:hover { border-color: var(--ink-3); }
+  .node:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .node .nid {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+    display: block;
+  }
+  .node .nname { font-weight: 600; font-size: 14px; display: block; margin-top: 2px; }
+  .node .nwhat { font-size: 12.5px; color: var(--ink-2); display: block; margin-top: 3px; }
+
+  .node[data-state="approved"] { border-left-color: var(--keep); }
+  .node[data-state="changed"]  { border-left-color: var(--info); }
+  .node[data-state="rejected"] { border-left-color: var(--bin); }
+  .node[data-state="open"]     { border-left-color: var(--accent); }
+
+  .node .flag {
+    position: absolute;
+    top: 10px; right: 11px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  [data-state="open"]     .flag { background: var(--accent-soft); color: var(--accent); }
+  [data-state="approved"] .flag { background: var(--keep-soft);   color: var(--keep); }
+  [data-state="changed"]  .flag { background: var(--info-soft);   color: var(--info); }
+  [data-state="rejected"] .flag { background: var(--bin-soft);    color: var(--bin); }
+
+  /* ---------- swimlane ---------- */
+  .lanes { min-width: 860px; display: grid; gap: 1px; background: var(--line-soft); border: 1px solid var(--line); border-radius: var(--r); }
+  .lane { display: grid; grid-template-columns: 132px repeat(5, 1fr); gap: 1px; background: var(--line-soft); }
+  .lane > * { background: var(--surface); padding: 12px; }
+  .lane.head > * { background: var(--surface-2); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+  .lanelabel {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    display: flex; align-items: center;
+  }
+  .cell { display: flex; align-items: stretch; }
+  .cell.empty { background: var(--surface-2); }
+  .cell .node { border-left-width: 3px; }
+  .actor-you   { box-shadow: inset 3px 0 0 var(--accent); }
+
+  /* ---------- dependency tree ---------- */
+  .tree { display: grid; gap: 0; max-width: 720px; }
+  .tier { display: grid; gap: 10px; }
+  .connector {
+    height: 26px;
+    margin-left: 26px;
+    border-left: 2px solid var(--line);
+    position: relative;
+  }
+  .connector::after {
+    content: "";
+    position: absolute; left: -5px; bottom: 0;
+    width: 8px; height: 8px;
+    border-right: 2px solid var(--line);
+    border-bottom: 2px solid var(--line);
+    transform: rotate(45deg);
+  }
+  .feeder {
+    background: var(--surface-2);
+    border: 1px dashed var(--line);
+    border-radius: var(--r);
+    padding: 10px 13px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+  .feeder strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- state machine ---------- */
+  .states { min-width: 780px; display: flex; align-items: center; gap: 0; flex-wrap: nowrap; }
+  .st {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 10px 12px;
+    min-width: 108px;
+    text-align: center;
+  }
+  .st .stname { font-weight: 600; font-size: 13px; }
+  .st .stwho { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
+  .st.keep { border-color: var(--keep); background: var(--keep-soft); }
+  .st.bin  { border-color: var(--bin);  background: var(--bin-soft); }
+  .st.you  { border-color: var(--accent); background: var(--accent-soft); }
+  .arrow { flex: 0 0 30px; text-align: center; color: var(--ink-3); font-family: var(--font-mono); font-size: 15px; }
+  .branch { display: grid; gap: 10px; }
+
+  /* ---------- timeline ---------- */
+  .timeline { display: grid; gap: 0; }
+  .trow { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line-soft); align-items: start; }
+  .trow:last-child { border-bottom: 0; }
+  .tmeta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; padding-top: 12px; }
+  .bar { height: 5px; border-radius: 3px; background: var(--accent); margin-top: 9px; }
+
+  /* ---------- table ---------- */
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+  }
+  tbody tr:hover { background: var(--surface-2); }
+  td.idc { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+  .linkish { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  .linkish:hover { text-decoration-color: var(--accent); }
+  .pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .pill.open     { background: var(--accent-soft); color: var(--accent); }
+  .pill.approved { background: var(--keep-soft);   color: var(--keep); }
+  .pill.changed  { background: var(--info-soft);   color: var(--info); }
+  .pill.rejected { background: var(--bin-soft);    color: var(--bin); }
+
+  /* ---------- decision drawer ---------- */
+  .drawer {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(520px, 100%);
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 48px rgba(0,0,0,0.18);
+    padding: 26px var(--pad) 32px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    z-index: 40;
+  }
+  .drawer.on { transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+
+  .drawer .closer {
+    position: absolute; top: 14px; right: 16px;
+    background: none; border: 1px solid var(--line); border-radius: var(--r);
+    color: var(--ink-2); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer;
+  }
+  .drawer .closer:hover { color: var(--ink); border-color: var(--ink-3); }
+  .drawer h2 {
+    font-family: var(--font-display);
+    font-size: 25px;
+    line-height: 1.15;
+    margin: 6px 0 4px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .drawer .did { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+  .dsec { margin-top: 20px; }
+  .dsec h3 {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 7px;
+    font-weight: 500;
+  }
+  .dsec ul { margin: 0; padding-left: 17px; }
+  .dsec li { margin-bottom: 5px; }
+  .dsec p { margin: 0 0 8px; }
+  .kv { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r); padding: 9px 11px; overflow-x: auto; white-space: pre; }
+  .caution {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 11px 13px;
+    border-radius: 0 var(--r) var(--r) 0;
+    font-size: 13px;
+  }
+  .caution strong { display: block; margin-bottom: 3px; }
+
+  .choices { display: grid; gap: 8px; margin-top: 8px; }
+  .choice {
+    display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 11px 13px;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .choice:hover { border-color: var(--ink-3); }
+  .choice input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
+  .choice .ctext { font-size: 13.5px; }
+  .choice .ctext b { display: block; margin-bottom: 2px; }
+  .choice .ctext span { color: var(--ink-2); font-size: 12.5px; }
+  .choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .choice:has(input:focus-visible) { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  textarea {
+    width: 100%;
+    min-height: 84px;
+    resize: vertical;
+    background: var(--surface-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 13.5px;
+  }
+  textarea:focus-visible { outline: 2px solid var(--info); outline-offset: -1px; }
+
+  .scrim {
+    position: fixed; inset: 0;
+    background: rgba(10,12,16,0.42);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease;
+    z-index: 30;
+  }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+
+  /* ---------- footer ---------- */
+  footer.actions {
+    margin-top: 34px;
+    padding-top: 20px;
+    border-top: 2px solid var(--ink);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .btn {
+    background: var(--ink);
+    color: var(--ground);
+    border: 1px solid var(--ink);
+    border-radius: var(--r);
+    padding: 10px 18px;
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { opacity: 0.87; }
+  .btn:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .btn.ghost { background: none; color: var(--ink-2); border-color: var(--line); font-weight: 400; }
+  .btn.ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+  .foothint { font-size: 12.5px; color: var(--ink-3); max-width: 46ch; }
+
+  /* ---------- evidence ---------- */
+  .evgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(272px, 1fr)); gap: 14px; }
+  .ev {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--keep);
+    border-radius: var(--r);
+    padding: 15px 16px 17px;
+  }
+  .ev.flag { border-top-color: var(--accent); }
+  .ev h3 { font-family: var(--font-display); font-size: 18px; margin: 7px 0 7px; letter-spacing: -0.01em; text-wrap: balance; }
+  .ev p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .ev p b { color: var(--ink); }
+  .ev code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); padding: 1px 4px; border-radius: 2px; color: var(--ink); }
+  .evtag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--keep);
+  }
+  .ev.flag .evtag { color: var(--accent); }
+
+  @media (max-width: 720px) {
+    .trow { grid-template-columns: 1fr; gap: 4px; }
+    .tmeta { padding-top: 0; }
+    footer.actions { flex-direction: column; align-items: stretch; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">Build plan &middot; checked against the alert service &middot; awaiting your approval</p>
+      <h1>Learning from the alerts nobody opens</h1>
+      <p class="sub">Every ignored alert is a judgement your team already makes for free. This plan turns those judgements into tuning rules. Nothing is built, and no rule ships, without your yes.</p>
+    </div>
+    <div class="tally">
+      <span class="n" id="tallyN">0/5</span>
+      <span class="lbl">decided</span>
+    </div>
+  </header>
+
+  <nav class="views" role="tablist" aria-label="Plan views">
+    <button role="tab" aria-selected="true"  data-view="lanes">Swimlane</button>
+    <button role="tab" aria-selected="false" data-view="tree">Dependencies</button>
+    <button role="tab" aria-selected="false" data-view="states">Alert lifecycle</button>
+    <button role="tab" aria-selected="false" data-view="time">Order</button>
+    <button role="tab" aria-selected="false" data-view="table">Table</button>
+    <button role="tab" aria-selected="false" data-view="evidence">What I verified</button>
+  </nav>
+
+  <p class="viewnote" id="viewnote"></p>
+
+  <!-- SWIMLANE -->
+  <section class="panel on" id="view-lanes">
+    <div class="scroller">
+      <div class="lanes">
+        <div class="lane head">
+          <div>Who acts</div>
+          <div>Access</div>
+          <div>Fetch</div>
+          <div>Count</div>
+          <div>Review</div>
+          <div>Apply</div>
+        </div>
+        <div class="lane">
+          <div class="lanelabel">You</div>
+          <div class="cell" data-slot="D0"></div>
+          <div class="cell empty"></div>
+          <div class="cell empty"></div>
+          <div class="cell" data-slot="B3"></div>
+          <div class="cell empty"></div>
+        </div>
+        <div class="lane">
+          <div class="lanelabel">System</div>
+          <div class="cell empty"></div>
+          <div class="cell" data-slot="B1"></div>
+          <div class="cell" data-slot="B2"></div>
+          <div class="cell empty"></div>
+          <div class="cell" data-slot="B4"></div>
+        </div>
+        <div class="lane">
+          <div class="lanelabel">CI service</div>
+          <div class="cell empty"></div>
+          <div class="cell"><div class="feeder"><strong>Alert console &mdash; one authenticated pass</strong><br>acted-on &middot; ignored &middot; untriaged &middot; escalated</div></div>
+          <div class="cell empty"></div>
+          <div class="cell empty"></div>
+          <div class="cell empty"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEPENDENCY TREE -->
+  <section class="panel" id="view-tree">
+    <div class="tree">
+      <div class="tier" data-slot="D0"></div>
+      <div class="connector"></div>
+      <div class="tier" data-slot="B1"></div>
+      <div class="connector"></div>
+      <div class="tier">
+        <div class="feeder"><strong>Also feeds in:</strong> the existing acted-on export &mdash; 2,480 rows, 1,930 already matched to a named pipeline.</div>
+      </div>
+      <div class="connector"></div>
+      <div class="tier" data-slot="B2"></div>
+      <div class="connector"></div>
+      <div class="tier" data-slot="B3"></div>
+      <div class="connector"></div>
+      <div class="tier" data-slot="B4"></div>
+    </div>
+  </section>
+
+  <!-- STATE MACHINE -->
+  <section class="panel" id="view-states">
+    <div class="scroller">
+      <div class="states">
+        <div class="st"><div class="stname">Build fails</div><div class="stwho">system</div></div>
+        <div class="arrow">&rarr;</div>
+        <div class="st"><div class="stname">Alert raised</div><div class="stwho">system</div></div>
+        <div class="arrow">&rarr;</div>
+        <div class="branch">
+          <div class="st keep"><div class="stname">Acted on</div><div class="stwho">engineer, in console</div></div>
+          <div class="st keep"><div class="stname">Escalated</div><div class="stwho">engineer, in console</div></div>
+          <div class="st bin"><div class="stname">Ignored</div><div class="stwho">engineer, in console</div></div>
+          <div class="st"><div class="stname">Untriaged</div><div class="stwho">held out</div></div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="st"><div class="stname">Counted</div><div class="stwho">system</div></div>
+        <div class="arrow">&rarr;</div>
+        <div class="branch">
+          <div class="st you"><div class="stname">Finding</div><div class="stwho">you decide</div></div>
+          <div class="st you"><div class="stname">Question</div><div class="stwho">thin data</div></div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="st keep"><div class="stname">Tuning rule</div><div class="stwho">approved only</div></div>
+      </div>
+    </div>
+    <p class="viewnote" style="margin-top:18px">A human touches this twice. Engineers triage as they already do. You rule on every finding before it becomes a rule. A finding you never approve dies there. Untriaged never enters the comparison &mdash; an alert nobody looked at is not an alert somebody ignored.</p>
+  </section>
+
+  <!-- TIMELINE -->
+  <section class="panel" id="view-time">
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <!-- TABLE -->
+  <section class="panel" id="view-table">
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Item</th><th>What it does</th><th>Writes</th><th>Status</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- EVIDENCE -->
+  <section class="panel" id="view-evidence">
+    <div class="evgrid">
+      <div class="ev">
+        <div class="evtag">confirmed</div>
+        <h3>Ignored is a filter, not a tab</h3>
+        <p>The console on <code>ci.example.internal</code> has one list and a Filters rail. Four states sit in it: <b>Escalated</b>, <b>Acted on</b>, <b>Untriaged</b>, <b>Ignored</b>. I toggled Ignored on, watched the list change, then toggled it back off.</p>
+      </div>
+      <div class="ev flag">
+        <div class="evtag">changes the plan</div>
+        <h3>Untriaged is a third pile</h3>
+        <p>An alert nobody opened is not a rejection. It is an alert nobody judged. Count Untriaged as ignored and every finding is poisoned. The counter holds it out.</p>
+      </div>
+      <div class="ev">
+        <div class="evtag">confirmed</div>
+        <h3>One call returns everything</h3>
+        <p>Applying the Ignored filter fired no network request. The console filters data it already holds, pulled from <code>/api/v1/alerts</code> at a page size of 5,000. So the fetcher needs one pass, not four reads.</p>
+      </div>
+      <div class="ev flag">
+        <div class="evtag">narrows your options</div>
+        <h3>Cookies alone will not do it</h3>
+        <p>I called <code>/api/v1/alerts</code> with session cookies and got <b>401 Unauthorized</b>. The console sends a bearer header a plain client does not have. So a reader needs a signed-in session or its own token.</p>
+      </div>
+      <div class="ev">
+        <div class="evtag">confirmed</div>
+        <h3>The join key holds</h3>
+        <p>Every alert links to <code>/alerts/alert-1a2b3c?run=N</code>. That is the <code>alert_id</code> plus <code>run_index</code> pair the existing export uses. New data joins onto the 2,480 rows on hand with no matching step.</p>
+      </div>
+      <div class="ev">
+        <div class="evtag">still unknown</div>
+        <h3>The field name for state</h3>
+        <p>The console filters locally, so the triage state must ride in the <code>/api/v1/alerts</code> payload. I held no token to read a real response. That detail gets settled from a live payload while building.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="actions">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="copyBtn">Copy my decisions</button>
+      <button class="btn ghost" id="resetBtn">Clear</button>
+    </div>
+    <p class="foothint">Your choices stay in this browser. Nothing is sent anywhere. Paste them back when ready and I build only what you approved.</p>
+  </footer>
+
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Item decision"></aside>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE = "ci-alert-tuning-multiview-example-v1";
+
+  var ITEMS = [
+    {
+      id: "D0",
+      kind: "decision",
+      name: "How we reach the alert service",
+      what: "Pick the access route before anything reads the alert history.",
+      writes: "—",
+      effort: 0.5,
+      lane: "You",
+      why: "Nothing reads the alert history until you pick a route.",
+      detail: [
+        "Tested live: session cookies alone return 401. The console sends a bearer header a plain client does not have.",
+        "So a scraper cannot just sign in and pull.",
+        "Two routes work. Drive a signed-in session, or get a read-only token scoped to the alerts endpoint.",
+        "Both can run unattended. Faking a session cannot."
+      ],
+      caution: {
+        title: "The policy question is still yours",
+        body: "I checked what works, not what is allowed. I cannot confirm your policy on automated telemetry reads, and will not guess. Say if you have cleared it."
+      },
+      options: [
+        { v: "browser", b: "Drive a signed-in browser session", s: "Uses credentials that already exist. Needs a session kept alive." },
+        { v: "token",   b: "Read-only service token, policy cleared", s: "Clean and unattended. Only once the platform team issues a scoped token." },
+        { v: "manual",  b: "Export by hand and pass me the file", s: "No automation at all. Most friction, zero access question." }
+      ]
+    },
+    {
+      id: "B1",
+      kind: "build",
+      name: "Fetcher",
+      what: "One pass over the alert history, writing every alert with its triage state.",
+      writes: "alert_events.csv",
+      effort: 1.5,
+      lane: "System",
+      why: "The acted-on half is a stale export. The ignored half does not exist. Nothing to compare yet.",
+      detail: [
+        "One pass, not four. The console pulls the whole history in one call and filters in the browser.",
+        "This records each alert's triage state as it goes.",
+        "Read-only. It never triages, silences, reopens, or closes anything.",
+        "It also replaces the hand-run export, so the acted-on data stops going stale."
+      ],
+      fields: "alert_id, run_index, check_name, pipeline, severity, source, triage_state, raised_utc, alert_url\n\ntriage_state is one of: acted-on | ignored | untriaged | escalated",
+      options: [
+        { v: "approve", b: "Approved — build it",        s: "I write it, run it, and show you the row counts before going further." },
+        { v: "change",  b: "Change the columns or scope",     s: "Tell me what to add, cut, or forbid." },
+        { v: "reject",  b: "Not this",                        s: "Skip or replace this item." }
+      ]
+    },
+    {
+      id: "B2",
+      kind: "build",
+      name: "Counter",
+      what: "Tally what ignored alerts share that acted-on ones don't.",
+      writes: "alert_findings.json",
+      effort: 3,
+      lane: "System",
+      why: "Why one alert was ignored is a guess. What the ignored pile shares is arithmetic.",
+      detail: [
+        "It counts attributes already on the alert: check name, pipeline, severity, source, hour raised.",
+        "Acted-on count against ignored count. That is the whole method.",
+        "Untriaged alerts are held out. An alert nobody judged is not a rejection.",
+        "Fold them in and real signals drown under alerts nobody reached.",
+        "A finding is a lopsided count with its raw numbers. Never an opinion."
+      ],
+      fields: "check: flaky-integration-suite → acted-on 4,  ignored 61  (untriaged 88, held out)\nseverity: warning        → acted-on 31, ignored 12\nsource: nightly-schedule → acted-on 3,  ignored 47",
+      caution: {
+        title: "It will not invent what it cannot see",
+        body: "Check name and severity are fields, so they count cleanly. Whether the failure was real is not on the alert. It will say so rather than guess."
+      },
+      options: [
+        { v: "approve", b: "Approved — build it",   s: "Counting only. No interpretation at this stage." },
+        { v: "change",  b: "Change what gets counted",   s: "Add or drop attributes." },
+        { v: "reject",  b: "Not this",                   s: "Skip or replace this item." }
+      ]
+    },
+    {
+      id: "B3",
+      kind: "build",
+      name: "Review",
+      what: "Show each finding with its counts. You approve, reject, or rewrite the reason.",
+      writes: "reviewed_findings.json",
+      effort: 3,
+      lane: "You",
+      why: "You asked for transparent and collaborative. This item is where that happens.",
+      detail: [
+        "Each finding arrives with its raw counts and example alerts from both piles.",
+        "You see what the machine saw. Then you approve it, reject it, or write your own reason.",
+        "Thin evidence arrives as a question, not a claim. It says how many examples it has and asks.",
+        "Where it cannot tell, it says so and stops. No guessing was your rule."
+      ],
+      options: [
+        { v: "approve", b: "Approved — build it",       s: "Findings with counts, plus thin ones as questions." },
+        { v: "change",  b: "Change the review flow",         s: "Tell me what you want to see or do differently." },
+        { v: "reject",  b: "Not this",                       s: "Skip or replace this item." }
+      ]
+    },
+    {
+      id: "B4",
+      kind: "build",
+      name: "Apply",
+      what: "Write approved tuning rules where the alert router reads them.",
+      writes: "alert_rules.json",
+      effort: 2,
+      lane: "System",
+      why: "Without this the loop is a report that changes nothing.",
+      detail: [
+        "Only findings you approved land here.",
+        "Rejected ones keep your reasoning, so the same pattern stops coming back.",
+        "Every rule records the finding behind it and the date you approved it.",
+        "So any rule traces back to its counts, and switches off.",
+        "A rule lowers a severity, groups a noisy check, or reroutes it. It never deletes an alert."
+      ],
+      caution: {
+        title: "The alert router is a separate service",
+        body: "The router reads config from its own deployment, not this repository. Wiring rules in means a change in another team's service. That is its own decision."
+      },
+      options: [
+        { v: "approve", b: "Approved — build it",          s: "Approved rules only, each traceable to its counts." },
+        { v: "change",  b: "Change how rules are applied",      s: "Tell me where and how they should bite." },
+        { v: "reject",  b: "Not this",                          s: "Stop at the report; change nothing automatically." }
+      ]
+    }
+  ];
+
+  var NOTES = {
+    lanes: "Who acts, and when. You appear in two columns. Everything between is machine work.",
+    tree:  "What must exist before the next thing starts. Read top to bottom.",
+    states: "The life of one alert, from raised to acted on. The split in the middle is the signal.",
+    time:  "Build order and rough weight. Bars are effort, not dates.",
+    table: "Every item at once, for scanning. Click a name to open its decision.",
+    evidence: "Checked live, read-only. I toggled one filter and put it back. Two of these changed the plan."
+  };
+
+  var state = load();
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+  function get(id) { return state[id] || { choice: null, note: "" }; }
+
+  function stateOf(id) {
+    var c = get(id).choice;
+    if (!c) return "open";
+    if (c === "approve" || c === "browser" || c === "token" || c === "manual") {
+      return (c === "approve") ? "approved" : "approved";
+    }
+    if (c === "change") return "changed";
+    if (c === "reject") return "rejected";
+    return "approved";
+  }
+  function flagText(id) {
+    var s = stateOf(id);
+    if (s === "open") return "your call";
+    if (s === "approved") return "settled";
+    if (s === "changed") return "changes";
+    return "dropped";
+  }
+
+  function byId(id) {
+    for (var i = 0; i < ITEMS.length; i++) { if (ITEMS[i].id === id) return ITEMS[i]; }
+    return null;
+  }
+
+  function nodeHTML(item) {
+    var s = stateOf(item.id);
+    return '<button class="node" data-open="' + item.id + '" data-state="' + s + '">' +
+      '<span class="flag">' + flagText(item.id) + '</span>' +
+      '<span class="nid">' + item.id + '</span>' +
+      '<span class="nname">' + item.name + '</span>' +
+      '<span class="nwhat">' + item.what + '</span>' +
+      '</button>';
+  }
+
+  function renderSlots() {
+    var slots = document.querySelectorAll("[data-slot]");
+    for (var i = 0; i < slots.length; i++) {
+      var it = byId(slots[i].getAttribute("data-slot"));
+      if (it) slots[i].innerHTML = nodeHTML(it);
+    }
+  }
+
+  function renderTimeline() {
+    var max = 0, i;
+    for (i = 0; i < ITEMS.length; i++) { if (ITEMS[i].effort > max) max = ITEMS[i].effort; }
+    var out = "";
+    for (i = 0; i < ITEMS.length; i++) {
+      var it = ITEMS[i];
+      var pct = Math.max(9, Math.round((it.effort / max) * 100));
+      out += '<div class="trow">' +
+        '<div class="tmeta">Step ' + (i + 1) + '</div>' +
+        '<div>' + nodeHTML(it) + '<div class="bar" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+    }
+    document.getElementById("timeline").innerHTML = out;
+  }
+
+  function renderTable() {
+    var out = "", i;
+    for (i = 0; i < ITEMS.length; i++) {
+      var it = ITEMS[i];
+      var s = stateOf(it.id);
+      out += "<tr>" +
+        '<td class="idc">' + it.id + "</td>" +
+        "<td><button class=\"linkish\" data-open=\"" + it.id + "\">" + it.name + "</button></td>" +
+        "<td>" + it.what + "</td>" +
+        '<td class="idc">' + it.writes + "</td>" +
+        '<td><span class="pill ' + s + '">' + flagText(it.id) + "</span></td>" +
+        "</tr>";
+    }
+    document.getElementById("tbody").innerHTML = out;
+  }
+
+  function renderTally() {
+    var done = 0, i;
+    for (i = 0; i < ITEMS.length; i++) { if (get(ITEMS[i].id).choice) done++; }
+    document.getElementById("tallyN").textContent = done + "/" + ITEMS.length;
+  }
+
+  function renderAll() {
+    renderSlots();
+    renderTimeline();
+    renderTable();
+    renderTally();
+  }
+
+  /* ---------- drawer ---------- */
+  var drawer = document.getElementById("drawer");
+  var scrim = document.getElementById("scrim");
+  var openId = null;
+  var lastFocus = null;
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function openDrawer(id) {
+    var it = byId(id);
+    if (!it) return;
+    openId = id;
+    lastFocus = document.activeElement;
+    var cur = get(id);
+
+    var html = '<button class="closer" id="closeDrawer">Close</button>' +
+      '<div class="did">' + it.id + " &middot; " + (it.kind === "decision" ? "decision" : "build item") + "</div>" +
+      "<h2>" + esc(it.name) + "</h2>";
+
+    html += '<div class="dsec"><h3>Why it exists</h3><p>' + esc(it.why) + "</p></div>";
+
+    html += '<div class="dsec"><h3>What it does</h3>';
+    for (var i = 0; i < it.detail.length; i++) { html += "<p>" + esc(it.detail[i]) + "</p>"; }
+    html += "</div>";
+
+    if (it.fields) {
+      html += '<div class="dsec"><h3>' + (it.kind === "build" && it.id === "B1" ? "Columns" : "Shape of the output") +
+        '</h3><div class="kv">' + esc(it.fields) + "</div></div>";
+    }
+    if (it.writes && it.writes !== "—") {
+      html += '<div class="dsec"><h3>Writes</h3><div class="kv">' + esc(it.writes) + "</div></div>";
+    }
+    if (it.caution) {
+      html += '<div class="dsec"><div class="caution"><strong>' + esc(it.caution.title) + "</strong>" +
+        esc(it.caution.body) + "</div></div>";
+    }
+
+    html += '<div class="dsec"><h3>Your call</h3><div class="choices">';
+    for (var j = 0; j < it.options.length; j++) {
+      var o = it.options[j];
+      var checked = cur.choice === o.v ? " checked" : "";
+      html += '<label class="choice"><input type="radio" name="choice-' + it.id + '" value="' + o.v + '"' + checked + ">" +
+        '<span class="ctext"><b>' + esc(o.b) + "</b><span>" + esc(o.s) + "</span></span></label>";
+    }
+    html += "</div></div>";
+
+    html += '<div class="dsec"><h3>Anything to add</h3>' +
+      '<textarea id="noteBox" placeholder="Constraints, changes, or your own reasoning. This comes back to me with your decision.">' +
+      esc(cur.note || "") + "</textarea></div>";
+
+    drawer.innerHTML = html;
+    drawer.classList.add("on");
+    drawer.setAttribute("aria-hidden", "false");
+    scrim.classList.add("on");
+
+    document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+    var radios = drawer.querySelectorAll('input[type="radio"]');
+    for (var k = 0; k < radios.length; k++) {
+      radios[k].addEventListener("change", function (e) {
+        var s = get(openId);
+        s.choice = e.target.value;
+        state[openId] = s;
+        save();
+        renderAll();
+      });
+    }
+    document.getElementById("noteBox").addEventListener("input", function (e) {
+      var s = get(openId);
+      s.note = e.target.value;
+      state[openId] = s;
+      save();
+    });
+
+    var firstFocus = drawer.querySelector('input[type="radio"]') || document.getElementById("closeDrawer");
+    if (firstFocus) firstFocus.focus();
+  }
+
+  function closeDrawer() {
+    drawer.classList.remove("on");
+    drawer.setAttribute("aria-hidden", "true");
+    scrim.classList.remove("on");
+    openId = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  scrim.addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && openId) closeDrawer();
+  });
+
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    while (t && t !== document.body) {
+      if (t.getAttribute && t.getAttribute("data-open")) {
+        openDrawer(t.getAttribute("data-open"));
+        return;
+      }
+      t = t.parentNode;
+    }
+  });
+
+  /* ---------- views ---------- */
+  var tabs = document.querySelectorAll("nav.views button");
+  function showView(v) {
+    var i;
+    for (i = 0; i < tabs.length; i++) {
+      tabs[i].setAttribute("aria-selected", tabs[i].getAttribute("data-view") === v ? "true" : "false");
+    }
+    var panels = document.querySelectorAll(".panel");
+    for (i = 0; i < panels.length; i++) { panels[i].classList.remove("on"); }
+    document.getElementById("view-" + v).classList.add("on");
+    document.getElementById("viewnote").textContent = NOTES[v];
+  }
+  for (var t = 0; t < tabs.length; t++) {
+    tabs[t].addEventListener("click", function (e) { showView(e.currentTarget.getAttribute("data-view")); });
+  }
+
+  /* ---------- copy back ---------- */
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    var lines = ["Decisions on the ignored-alert plan:", ""];
+    for (var i = 0; i < ITEMS.length; i++) {
+      var it = ITEMS[i];
+      var cur = get(it.id);
+      var label = "no decision yet";
+      if (cur.choice) {
+        for (var j = 0; j < it.options.length; j++) {
+          if (it.options[j].v === cur.choice) { label = it.options[j].b; break; }
+        }
+      }
+      lines.push(it.id + " " + it.name + " — " + label);
+      if (cur.note && cur.note.trim()) { lines.push("    note: " + cur.note.trim()); }
+    }
+    lines.push("");
+    lines.push("Build only what is approved above.");
+    var text = lines.join("\n");
+
+    var btn = document.getElementById("copyBtn");
+    function flash(msg) {
+      var old = btn.textContent;
+      btn.textContent = msg;
+      setTimeout(function () { btn.textContent = old; }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flash("Copied"); }, function () { fallback(text, flash); });
+    } else {
+      fallback(text, flash);
+    }
+  });
+
+  function fallback(text, flash) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); flash("Copied"); }
+    catch (e) { flash("Press Ctrl+C"); }
+    document.body.removeChild(ta);
+  }
+
+  document.getElementById("resetBtn").addEventListener("click", function () {
+    state = {};
+    save();
+    renderAll();
+    if (openId) closeDrawer();
+  });
+
+  showView("lanes");
+  renderAll();
+})();
+</script>
