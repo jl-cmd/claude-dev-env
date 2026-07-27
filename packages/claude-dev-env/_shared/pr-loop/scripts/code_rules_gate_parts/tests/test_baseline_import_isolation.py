@@ -23,6 +23,8 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
 
 from code_rules_gate_parts import baseline_import_isolation
 
+UNREACHABLE_PROBE_TIMEOUT_SECONDS = 0.001
+
 
 def baseline_environment_for(
     tmp_path: Path,
@@ -119,6 +121,34 @@ def test_discover_import_roots_reports_a_pythonpath_directory(tmp_path: Path) ->
     )
 
     assert library_directory.resolve() in all_import_roots
+
+
+def test_discover_import_roots_gives_up_on_a_probe_that_runs_out_of_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        baseline_import_isolation,
+        "BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS",
+        UNREACHABLE_PROBE_TIMEOUT_SECONDS,
+    )
+
+    all_import_roots = baseline_import_isolation.discover_import_roots(
+        sys.executable, dict(os.environ), tmp_path
+    )
+
+    assert all_import_roots == []
+    assert "import-root probe" in capsys.readouterr().err
+
+
+def test_discover_import_roots_gives_up_on_an_interpreter_that_cannot_start(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    all_import_roots = baseline_import_isolation.discover_import_roots(
+        str(tmp_path / "no_such_interpreter"), dict(os.environ), tmp_path
+    )
+
+    assert all_import_roots == []
+    assert "import-root probe" in capsys.readouterr().err
 
 
 def test_discover_import_roots_reports_an_editable_install_package_root(

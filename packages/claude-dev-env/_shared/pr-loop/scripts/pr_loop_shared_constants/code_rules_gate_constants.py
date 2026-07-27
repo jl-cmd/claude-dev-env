@@ -229,6 +229,26 @@ PYTEST_PLUGINS_SEPARATOR: str = ","
 
 BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS: int = 120
 
+BASELINE_IMPORT_PROBE_DEGRADED_TAIL: str = (
+    "The HEAD baseline runs with its import roots un-rebased; a module that still "
+    "resolves into your working tree is reported after that run and blocks the group."
+)
+
+BASELINE_IMPORT_PROBE_TIMED_OUT_MESSAGE: str = (
+    "code_rules_gate: the import-root probe did not finish within {seconds} seconds. "
+    + BASELINE_IMPORT_PROBE_DEGRADED_TAIL
+)
+
+BASELINE_IMPORT_PROBE_UNSTARTABLE_MESSAGE: str = (
+    "code_rules_gate: the import-root probe did not start ({reason}). "
+    + BASELINE_IMPORT_PROBE_DEGRADED_TAIL
+)
+
+BASELINE_IMPORT_PROBE_REJECTED_MESSAGE: str = (
+    "code_rules_gate: the import-root probe exited with status {status}. "
+    + BASELINE_IMPORT_PROBE_DEGRADED_TAIL
+)
+
 PYTHON_INTERPRETER_COMMAND_FLAG: str = "-c"
 
 BASELINE_IMPORT_ROOT_PROBE_SOURCE: str = (

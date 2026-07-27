@@ -29,10 +29,14 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from pr_loop_shared_constants.code_rules_gate_constants import (
+    BASELINE_IMPORT_PROBE_REJECTED_MESSAGE,
+    BASELINE_IMPORT_PROBE_TIMED_OUT_MESSAGE,
     BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS,
+    BASELINE_IMPORT_PROBE_UNSTARTABLE_MESSAGE,
     BASELINE_IMPORT_ROOT_PROBE_SOURCE,
     BASELINE_LEAK_PLUGIN_MODULE_NAME,
     BASELINE_LEAK_PLUGIN_SOURCE,
@@ -105,18 +109,63 @@ def discover_import_roots(
             own working directory never reads as a repository import root.
 
     Returns:
-        The resolved import roots, or an empty list when the probe fails.
+        The resolved import roots, or an empty list when the probe times out,
+        cannot start, or exits non-zero. Each of those says so on stderr, and
+        the run continues into the baseline with its leak report still armed.
     """
-    probe = subprocess.run(
-        [python_executable, PYTHON_INTERPRETER_COMMAND_FLAG, BASELINE_IMPORT_ROOT_PROBE_SOURCE],
-        cwd=str(working_directory),
-        env=all_environment_settings,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS,
+    probe = _completed_import_root_probe(
+        python_executable, all_environment_settings, working_directory
     )
-    return _probed_roots(probe.stdout) if probe.returncode == 0 else []
+    if probe is None:
+        return []
+    if probe.returncode != 0:
+        sys.stderr.write(
+            BASELINE_IMPORT_PROBE_REJECTED_MESSAGE.format(status=probe.returncode) + "\n"
+        )
+        return []
+    return _probed_roots(probe.stdout)
+
+
+def _completed_import_root_probe(
+    python_executable: str,
+    all_environment_settings: dict[str, str],
+    working_directory: Path,
+) -> subprocess.CompletedProcess[str] | None:
+    """Run the probe interpreter to completion, or report on stderr why it produced nothing.
+
+    ::
+
+        ok:   probe exits 0        -> CompletedProcess carrying its output
+        flag: probe hangs          -> None, "did not finish within 120 seconds"
+        flag: interpreter missing  -> None, "did not start (...)"
+
+    A probe that outlives its limit is the same situation as a probe that fails:
+    no roots were learned, so the caller carries on without them rather than
+    raising a traceback out of a pre-commit hook.
+    """
+    try:
+        return subprocess.run(
+            [python_executable, PYTHON_INTERPRETER_COMMAND_FLAG, BASELINE_IMPORT_ROOT_PROBE_SOURCE],
+            cwd=str(working_directory),
+            env=all_environment_settings,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(
+            BASELINE_IMPORT_PROBE_TIMED_OUT_MESSAGE.format(
+                seconds=BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS
+            )
+            + "\n"
+        )
+        return None
+    except OSError as probe_failure:
+        sys.stderr.write(
+            BASELINE_IMPORT_PROBE_UNSTARTABLE_MESSAGE.format(reason=probe_failure) + "\n"
+        )
+        return None
 
 
 def _probed_roots(probe_text: str) -> list[Path]:

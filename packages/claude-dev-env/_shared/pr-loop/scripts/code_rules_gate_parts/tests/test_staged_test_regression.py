@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from code_rules_gate_parts import staged_test_regression
+from code_rules_gate_parts import baseline_import_isolation, staged_test_regression
 from code_rules_gate_parts.tests._repo_test_helpers import (
     init_repository,
     repository_with_root_pytest_config,
@@ -17,6 +17,8 @@ from code_rules_gate_parts.tests._repo_test_helpers import (
     write_and_stage,
     write_commit_and_stage_change,
 )
+
+UNREACHABLE_PROBE_TIMEOUT_SECONDS = 0.001
 
 CONSUMER_TEST_TEXT = (
     "import foo\n\n\ndef test_consumer_reads_head_value() -> None:\n"
@@ -64,6 +66,34 @@ def test_pythonpath_route_into_the_working_tree_does_not_hide_a_regression(
     monkeypatch.setenv("PYTHONPATH", str(repository_root / "packages"))
 
     assert staged_test_regression.run_staged_test_files(repository_root) != 0
+
+
+def test_a_probe_that_runs_out_of_time_still_reaches_a_gate_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    write_commit_and_stage_change(
+        repository_root,
+        "pkg_a/test_alpha.py",
+        (
+            "def test_already_fails() -> None:\n    assert False\n"
+            "def test_passes() -> None:\n    assert True\n"
+        ),
+        (
+            "def test_already_fails() -> None:\n    assert False\n"
+            "def test_passes() -> None:\n    assert 1 == 1\n"
+        ),
+    )
+    monkeypatch.setattr(
+        baseline_import_isolation,
+        "BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS",
+        UNREACHABLE_PROBE_TIMEOUT_SECONDS,
+    )
+
+    exit_code = staged_test_regression.run_staged_test_files(repository_root)
+
+    assert exit_code == 0
+    assert "import-root probe" in capsys.readouterr().err
 
 
 def test_import_hook_route_into_the_working_tree_is_reported_and_blocks(
