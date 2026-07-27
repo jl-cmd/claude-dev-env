@@ -41,7 +41,7 @@ Keep the first sentence — it states what the stage does. Cut the second: "run 
 
 ## Sibling rules
 
-This rule sits beside three others; each cuts a different kind of dead prose.
+This rule and three siblings each cut a different kind of dead prose.
 
 | Rule | Cuts |
 |---|---|
