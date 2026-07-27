@@ -12,6 +12,10 @@ Rules, hooks, and scripts that have no safe Codex runtime equivalent remain iner
 
 Materialization uses a compatibility manifest to identify generated files. Dry runs report the plan without writing. Apply mode uses safe link/copy fallback where linking is unavailable, writes atomically, removes only stale managed files, and rolls back managed changes on failure. A failed rollback reports that reconciliation is required.
 
+The manifest hash decides who owns a target file. A file whose hash still matches the manifest is one the tool wrote, so a later run refreshes it in place. A file whose hash differs is one you edited, so the run preserves it and reports a conflict. A file the manifest does not record at all is adopted only when its bytes already match the plan, which is what an interrupted run leaves behind; any other unrecorded file is preserved, and the error names the file to move or delete.
+
+A missing or unreadable source root is an error, and the run changes nothing. An existing source root holding no agents makes every managed file stale, so the run refuses to delete them and exits non-zero; add `--allow-prune-all` to remove them on purpose.
+
 ## Capability bridge
 
 Run `codex-compat bridge --surface <name> --payload '<json-object>'`. The bridge exposes the Python translation logic directly. `TaskCreate` and `TaskUpdate` map to `update_plan`; spawn, message, wait, and stop map to multi-agent surfaces. `ScheduleWakeup` is explicitly unsupported and requires manual review.

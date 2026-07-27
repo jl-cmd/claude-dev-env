@@ -26,6 +26,23 @@ publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
 frontmatter_required_fields = ("name", "description")
 frontmatter_unsupported_fields = ("tools", "model", "color")
+full_prune_opt_in_flag = "--allow-prune-all"
+unreadable_source_root_message = (
+    "source root is missing or is not a directory, so nothing was planned or changed; "
+    "check the source root path and re-run"
+)
+reparse_source_root_message = "source root is a reparse point, so nothing was planned or changed"
+full_prune_refusal_message = (
+    "refusing to delete every managed file: the plan is empty while the manifest still records "
+    "{count} of them, so the target root was left untouched; re-run with " + full_prune_opt_in_flag
+    + " to remove them"
+)
+unmanaged_target_message = (
+    "unmanaged file at planned target {path}: the compatibility manifest does not record it, so it "
+    "may be yours and it was not overwritten. Review it, then move or delete {path} inside the "
+    "target root and re-run. An interrupted run leaves a file whose bytes already match the plan, "
+    "and such a file is adopted automatically"
+)
 
 
 class MaterializerError(ValueError):
@@ -45,7 +62,7 @@ class MaterializerArgumentParser(argparse.ArgumentParser):
 
 
 report_categories = (
-    "written", "unchanged", "unmanaged_collision", "modified_managed",
+    "written", "unchanged", "adopted", "unmanaged_collision", "modified_managed",
     "stale_managed", "deleted", "unsupported", "conflicted", "errors",
 )
 report_categories_public_name = "REPORT_CATEGORIES"
@@ -66,6 +83,7 @@ class MaterializerConfig:
     target_root: Path
     manifest_path: Path | None = None
     should_apply: bool = False
+    should_allow_full_prune: bool = False
 
     def __post_init__(self) -> None:
         source = self.source_root.expanduser().resolve()
@@ -93,6 +111,36 @@ class ClaudeAgent:
 
 
 @dataclass(frozen=True)
+class ManifestRecord:
+    """One compatibility-manifest entry, as the publication logic reads it.
+
+    A field that failed validation is carried as ``None``, so ownership questions
+    read as attribute checks rather than repeated isinstance guards::
+
+        {"hash": "ab12..", "ownership": "codex-compat"} -> ok:   owned, refreshable
+        {"hash": "ab12.."}                              -> flag: unowned, preserved
+
+    The manifest also stores ``source`` and ``marker`` for inspection. No code path
+    reads either, so neither appears here.
+
+    Args:
+        content_hash: Hash the tool recorded when it last published the file.
+        ownership: Ownership marker the tool recorded alongside that hash.
+    """
+
+    content_hash: str | None
+    ownership: str | None
+
+    @property
+    def is_owned_by_tool(self) -> bool:
+        """Report whether this entry carries both fields that prove tool ownership."""
+        return self.content_hash is not None and self.ownership is not None
+
+
+ManifestRecordByPath = dict[str, ManifestRecord | None]
+
+
+@dataclass(frozen=True)
 class PlannedFile:
     source_identity: str
     target_relative_path: str
@@ -107,6 +155,7 @@ class PlannedFile:
 class MaterializationReport:
     written: int = 0
     unchanged: int = 0
+    adopted: int = 0
     unmanaged_collision: int = 0
     modified_managed: int = 0
     stale_managed: int = 0
@@ -343,14 +392,22 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
     Args:
         config: Materializer paths and application settings.
 
+    An unreachable source root is an error rather than an empty discovery, so a
+    mistyped path or an offline share never reads as "this tree holds no agents"::
+
+        source root missing   -> flag: MaterializerError, nothing planned
+        source root empty     -> ok:   [] , and publication asks for prune consent
+
     Returns:
         Agents discovered in deterministic relative-path order.
 
     Raises:
-        MaterializerError: If a source path is unsafe or malformed.
+        MaterializerError: If the source root is unreachable, or a source path is unsafe or malformed.
     """
-    if not config.source_root.exists() or _is_reparse_point(config.source_root):
-        return []
+    if not config.source_root.is_dir():
+        raise MaterializerError(f"{unreadable_source_root_message}: {config.source_root}")
+    if _is_reparse_point(config.source_root):
+        raise MaterializerError(f"{reparse_source_root_message}: {config.source_root}")
     all_agents: list[ClaudeAgent] = []
     for each_path in sorted(config.source_root.rglob("*.md"), key=lambda path: path.as_posix().casefold()):
         if _is_reparse_point(each_path):
@@ -359,6 +416,43 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
         _validate_containment(config.source_root, each_path)
         all_agents.append(parse_frontmatter(each_path, each_path.read_text(encoding="utf-8"), relative_source))
     return all_agents
+
+
+def _case_fold_collision_error(target_relative_path: str) -> MaterializerError:
+    """Build the error for two target names that differ only by letter case."""
+    return MaterializerError(f"case-fold collision: {target_relative_path}")
+
+
+def _validate_orphan_target_is_adoptable(
+    config: MaterializerConfig,
+    existing_path: Path | None,
+    target_relative_path: str,
+    content: ManagedContent,
+) -> None:
+    """Allow an unrecorded target file only when its bytes already match the plan.
+
+    A run interrupted between the file replacement and the manifest save leaves a
+    file the manifest does not record. Byte-identical content proves the tool wrote
+    it, so the next run adopts it instead of stopping forever::
+
+        Nova.toml bytes == planned bytes  -> ok:   adopted, publication continues
+        Nova.toml bytes != planned bytes  -> flag: MaterializerError naming the remedy
+
+    Args:
+        config: Materializer paths and application settings.
+        existing_path: Target-root path already holding the planned name, or ``None``.
+        target_relative_path: Normalized relative path the plan publishes.
+        content: Content the plan would publish at that path.
+
+    Raises:
+        MaterializerError: If the existing file differs from the plan or differs only in case.
+    """
+    if existing_path is None:
+        return
+    if existing_path.relative_to(config.target_root).as_posix() != target_relative_path:
+        raise _case_fold_collision_error(target_relative_path)
+    if not existing_path.is_file() or existing_path.read_bytes() != content_to_bytes(content):
+        raise MaterializerError(unmanaged_target_message.format(path=target_relative_path))
 
 
 def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -> tuple[list[PlannedFile], MaterializationReport]:
@@ -387,10 +481,11 @@ def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -
         source_identity = _validate_source_identity(each_agent.relative_source)
         target_relative_path = _normalize_relative_path(each_agent.name + toml_suffix)
         folded_path = target_relative_path.casefold()
-        if folded_path in target_by_name or folded_path in existing_by_name:
-            raise MaterializerError(f"case-fold collision: {target_relative_path}")
-        target_by_name[folded_path] = target_relative_path
+        if folded_path in target_by_name:
+            raise _case_fold_collision_error(target_relative_path)
         content = convert_agent(each_agent)
+        _validate_orphan_target_is_adoptable(config, existing_by_name.get(folded_path), target_relative_path, content)
+        target_by_name[folded_path] = target_relative_path
         target_path = validate_target_path(config.target_root, target_relative_path)
         if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
             raise MaterializerError("planned target collides with compatibility manifest")
@@ -556,67 +651,134 @@ def save_manifest(manifest_path: Path, all_manifest: dict[str, object], failure_
         raise
 
 
-def _manifest_record_by_path(all_previous_manifest: dict[str, object]) -> dict[str, object]:
+def _parse_manifest_record(raw_record: object) -> ManifestRecord | None:
+    """Read one manifest entry into a record, or ``None`` when it is not an object."""
+    if not isinstance(raw_record, dict):
+        return None
+    expected_hash = raw_record.get("hash")
+    ownership = raw_record.get("ownership")
+    return ManifestRecord(
+        expected_hash if isinstance(expected_hash, str) else None,
+        ownership if isinstance(ownership, str) else None,
+    )
+
+
+def _manifest_record_by_path(all_previous_manifest: dict[str, object]) -> ManifestRecordByPath:
+    """Parse the manifest's file entries once, so untyped JSON stops here.
+
+    Every path stays in the mapping even when its entry is unreadable, because the
+    case-fold checks count the names the manifest claims::
+
+        {"Luna.toml": {"hash": "ab12..", "ownership": "codex-compat"}} -> ok:   record
+        {"Luna.toml": 7}                                              -> flag: None
+
+    Args:
+        all_previous_manifest: Validated manifest mapping from ``load_manifest``.
+
+    Returns:
+        Each manifest path mapped to its record, or to ``None`` when unreadable.
+
+    Raises:
+        MaterializerError: If the manifest's file entries are not a mapping.
+    """
     records = all_previous_manifest["files"]
     if not isinstance(records, dict):
         raise MaterializerError("invalid compatibility manifest files")
-    return records
+    return {each_path: _parse_manifest_record(each_record) for each_path, each_record in records.items()}
 
 
-def _is_known_managed_path(target_root: Path, target_path: Path, all_previous_records: dict[str, object]) -> bool:
+def _find_manifest_record(all_previous_records: ManifestRecordByPath, target_relative_path: str) -> ManifestRecord | None:
+    for each_path, each_record in all_previous_records.items():
+        if each_path.casefold() == target_relative_path.casefold():
+            return each_record
+    return None
+
+
+def _is_known_managed_path(target_root: Path, target_path: Path, all_previous_records: ManifestRecordByPath) -> bool:
     relative_path = target_path.relative_to(target_root).as_posix()
-    for each_manifest_path, each_record in all_previous_records.items():
-        if not isinstance(each_manifest_path, str) or each_manifest_path.casefold() != relative_path.casefold() or not isinstance(each_record, dict):
-            continue
-        expected_hash = each_record.get("hash")
-        ownership = each_record.get("ownership")
-        if not isinstance(expected_hash, str) or not isinstance(ownership, str):
-            return False
-        return isinstance(expected_hash, str)
-    return False
+    previous_record = _find_manifest_record(all_previous_records, relative_path)
+    return previous_record is not None and previous_record.is_owned_by_tool
 
 
-def _record_target_state(config: MaterializerConfig, planned_file: PlannedFile, all_previous_records: dict[str, object], report: MaterializationReport) -> tuple[Path, bytes | None]:
-    target_path = validate_target_path(config.target_root, planned_file.target_relative_path)
-    previous_record = next((each_record for each_path, each_record in all_previous_records.items() if isinstance(each_path, str) and each_path.casefold() == planned_file.target_relative_path.casefold()), None)
-    if not target_path.exists():
-        return target_path, None
-    current_bytes = target_path.read_bytes()
-    expected_hash = previous_record.get("hash") if isinstance(previous_record, dict) else None
-    if current_bytes == content_to_bytes(planned_file.content):
-        report.unchanged += 1
-        report.add_detail("unchanged", planned_file.target_relative_path)
-    elif isinstance(expected_hash, str) and isinstance(previous_record, dict) and isinstance(previous_record.get("ownership"), str) and hash_content(current_bytes) == expected_hash:
-        report.modified_managed += 1
-        report.add_detail("modified_managed", planned_file.target_relative_path)
-        report.conflicted += 1
-        report.add_detail("conflicted", planned_file.target_relative_path)
-    else:
+def _is_pristine_managed(previous_record: ManifestRecord | None, current_bytes: bytes) -> bool:
+    """Report whether on-disk bytes are exactly what the tool last published there."""
+    if previous_record is None or not previous_record.is_owned_by_tool:
+        return False
+    return hash_content(current_bytes) == previous_record.content_hash
+
+
+def _record_target_conflict(report: MaterializationReport, target_relative_path: str, previous_record: ManifestRecord | None) -> None:
+    report.conflicted += 1
+    report.add_detail("conflicted", target_relative_path)
+    if previous_record is None:
         report.unmanaged_collision += 1
-        report.add_detail("unmanaged_collision", planned_file.target_relative_path)
-        report.conflicted += 1
-        report.add_detail("conflicted", planned_file.target_relative_path)
-    return target_path, current_bytes
+        report.add_detail("unmanaged_collision", target_relative_path)
+        return
+    report.modified_managed += 1
+    report.add_detail("modified_managed", target_relative_path)
 
 
-def _remove_stale_files(config: MaterializerConfig, all_previous_records: dict[str, object], all_planned_files: list[PlannedFile], report: MaterializationReport, all_backups: dict[Path, bytes | None]) -> None:
+def _record_target_state(config: MaterializerConfig, planned_file: PlannedFile, all_previous_records: ManifestRecordByPath, report: MaterializationReport) -> tuple[Path, bytes | None, bool]:
+    """Classify one planned target and say whether publication may overwrite it.
+
+    The manifest hash decides ownership, so a file the tool wrote is refreshed and a
+    file the user edited is preserved::
+
+        target absent                    -> ok:   publish
+        on-disk bytes == planned bytes   -> ok:   unchanged, no write
+        on-disk hash == manifest hash    -> ok:   publish, the tool owns these bytes
+        on-disk hash != manifest hash    -> flag: conflicted, preserved untouched
+
+    Args:
+        config: Materializer paths and application settings.
+        planned_file: Planned publication for this target.
+        all_previous_records: Manifest records from the last successful run.
+        report: Report object to update in place.
+
+    Returns:
+        The resolved target path, its current bytes when it exists, and whether to publish.
+    """
+    target_path = validate_target_path(config.target_root, planned_file.target_relative_path)
+    if not target_path.exists():
+        return target_path, None, True
+    current_bytes = target_path.read_bytes()
+    previous_record = _find_manifest_record(all_previous_records, planned_file.target_relative_path)
+    if current_bytes == content_to_bytes(planned_file.content):
+        _record_matching_target(report, planned_file.target_relative_path, previous_record)
+        return target_path, current_bytes, False
+    if _is_pristine_managed(previous_record, current_bytes):
+        return target_path, current_bytes, True
+    _record_target_conflict(report, planned_file.target_relative_path, previous_record)
+    return target_path, current_bytes, False
+
+
+def _record_matching_target(report: MaterializationReport, target_relative_path: str, previous_record: ManifestRecord | None) -> None:
+    report.unchanged += 1
+    report.add_detail("unchanged", target_relative_path)
+    if previous_record is not None:
+        return
+    report.adopted += 1
+    report.add_detail("adopted", target_relative_path)
+
+
+def _remove_stale_files(config: MaterializerConfig, all_previous_records: ManifestRecordByPath, all_planned_files: list[PlannedFile], report: MaterializationReport, all_backups: dict[Path, bytes | None]) -> None:
     current_names = {each_planned_file.target_relative_path.casefold() for each_planned_file in all_planned_files}
     for each_relative_path, each_record in sorted(all_previous_records.items(), key=lambda pair: pair[0].casefold()):
-        if not isinstance(each_relative_path, str) or each_relative_path.casefold() in current_names or not isinstance(each_record, dict):
+        if each_relative_path.casefold() in current_names or each_record is None:
             continue
         target_path = validate_target_path(config.target_root, each_relative_path)
         if not target_path.exists():
             report.add_error(f"missing managed path: {each_relative_path}")
             continue
         current_bytes = target_path.read_bytes()
-        expected_hash = each_record.get("hash")
-        if isinstance(expected_hash, str) and hash_content(current_bytes) == expected_hash:
+        expected_hash = each_record.content_hash
+        if expected_hash is not None and hash_content(current_bytes) == expected_hash:
             all_backups[target_path] = current_bytes
             target_path.unlink()
             report.deleted += 1
             report.add_detail("deleted", each_relative_path)
             continue
-        if isinstance(expected_hash, str):
+        if expected_hash is not None:
             report.modified_managed += 1
             report.add_detail("modified_managed", each_relative_path)
 
@@ -630,22 +792,21 @@ def _sort_report_details(report: MaterializationReport) -> None:
 
 def _validate_planned_targets(
     all_planned_files: list[PlannedFile],
-    all_previous_records: dict[str, object],
+    all_previous_records: ManifestRecordByPath,
 ) -> None:
-    folded_manifest_names = {each_key.casefold() for each_key in all_previous_records if isinstance(each_key, str)}
+    folded_manifest_names = {each_key.casefold() for each_key in all_previous_records}
     if len(folded_manifest_names) != len(all_previous_records):
         raise MaterializerError("case-fold collision in compatibility manifest")
     planned_names: set[str] = set()
     for each_file in all_planned_files:
         folded_target = each_file.target_relative_path.casefold()
         if folded_target in planned_names:
-            raise MaterializerError(f"case-fold collision: {each_file.target_relative_path}")
+            raise _case_fold_collision_error(each_file.target_relative_path)
         planned_names.add(folded_target)
         has_manifest_owner = any(
-            isinstance(each_path, str)
-            and each_path.casefold() == folded_target
-            and isinstance(each_record, dict)
-            and isinstance(each_record.get("ownership"), str)
+            each_path.casefold() == folded_target
+            and each_record is not None
+            and each_record.ownership is not None
             for each_path, each_record in all_previous_records.items()
         )
         if folded_target in folded_manifest_names and not has_manifest_owner:
@@ -655,18 +816,18 @@ def _validate_planned_targets(
 def _publish_planned_targets(
     config: MaterializerConfig,
     all_planned_files: list[PlannedFile],
-    all_previous_records: dict[str, object],
+    all_previous_records: ManifestRecordByPath,
     report: MaterializationReport,
     all_backups: dict[Path, bytes | None],
     failure_injector: Callable[[str], None] | None,
 ) -> None:
     for each_planned_file in all_planned_files:
-        target_path, current_bytes = _record_target_state(config, each_planned_file, all_previous_records, report)
+        target_path, current_bytes, is_publishable = _record_target_state(config, each_planned_file, all_previous_records, report)
         if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
             raise MaterializerError("planned target collides with compatibility manifest")
-        if current_bytes is not None:
+        if not is_publishable:
             continue
-        all_backups[target_path] = None
+        all_backups[target_path] = current_bytes
         atomic_write(target_path, each_planned_file.content, failure_injector)
         report.written += 1
         report.add_detail("written", each_planned_file.target_relative_path)
@@ -712,6 +873,34 @@ def _rollback_publication(
     _sort_report_details(report)
 
 
+def _validate_full_prune_consent(
+    config: MaterializerConfig,
+    all_planned_files: list[PlannedFile],
+    all_previous_records: ManifestRecordByPath,
+) -> None:
+    """Require an explicit opt-in before an empty plan erases every managed file.
+
+    An empty plan means every managed file is stale, so publication would delete the
+    whole set. That is a legitimate request and also what a mistyped source root
+    produces, so the caller has to ask for it by name::
+
+        empty plan, empty manifest              -> ok:   nothing to delete
+        empty plan, managed files, opt-in given -> ok:   prune proceeds
+        empty plan, managed files, no opt-in    -> flag: MaterializerError, nothing deleted
+
+    Args:
+        config: Materializer paths and application settings.
+        all_planned_files: Files the current run would publish.
+        all_previous_records: Manifest records from the last successful run.
+
+    Raises:
+        MaterializerError: If the run would delete every managed file without the opt-in.
+    """
+    if all_planned_files or not all_previous_records or config.should_allow_full_prune:
+        return
+    raise MaterializerError(full_prune_refusal_message.format(count=len(all_previous_records)))
+
+
 def _publish_plan(
     config: MaterializerConfig,
     all_planned_files: Iterable[PlannedFile],
@@ -739,6 +928,7 @@ def _publish_plan(
         return publication
     previous_manifest = load_manifest(config.manifest_path)
     previous_records = _manifest_record_by_path(previous_manifest)
+    _validate_full_prune_consent(config, all_planned_files, previous_records)
     backups: dict[Path, bytes | None] = {}
     initial_written = publication.written
     initial_deleted = publication.deleted
@@ -833,12 +1023,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
     """Create the command-line parser for compatibility materialization.
 
     Returns:
-        A parser accepting source and target roots plus the apply flag.
+        A parser accepting source and target roots, the apply flag, and the prune opt-in.
     """
     parser = MaterializerArgumentParser(description=__doc__)
     parser.add_argument("source_root", type=Path)
     parser.add_argument("target_root", type=Path)
     parser.add_argument("--apply", dest="should_apply", action="store_true")
+    parser.add_argument(full_prune_opt_in_flag, dest="should_allow_full_prune", action="store_true")
     return parser
 
 
@@ -871,7 +1062,12 @@ def main(*all_arguments: object) -> int:
         should_apply = options.should_apply
         source_root = options.source_root
         target_root = options.target_root
-        config = MaterializerConfig(source_root, target_root, should_apply=should_apply)
+        config = MaterializerConfig(
+            source_root,
+            target_root,
+            should_apply=should_apply,
+            should_allow_full_prune=options.should_allow_full_prune,
+        )
         discovered_agents = discover_agents(config)
         planned, report = build_plan(config, all_agents=discovered_agents)
         publish_plan(config, all_planned_files=planned, report=report, failure_injector=None)

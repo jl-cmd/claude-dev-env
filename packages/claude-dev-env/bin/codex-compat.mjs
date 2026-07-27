@@ -20,6 +20,7 @@ export function createHelpText() {
         "  --source-root <path>  Claude source root (required)",
         "  --target-root <path>  Codex target root (required)",
         "  --apply               Write changes; default is dry-run",
+        "  --allow-prune-all     Permit an empty plan to delete every managed file",
         "  --python <command>    Python interpreter override",
         "",
         "Bridge options:",
@@ -53,6 +54,7 @@ export function buildCommand(commandName, argumentsList, interpreter) {
         const targetRoot = requireOption(argumentsList, "--target-root");
         const materializerArguments = [materializerPath, sourceRoot, targetRoot];
         if (argumentsList.includes("--apply")) materializerArguments.push("--apply");
+        if (argumentsList.includes("--allow-prune-all")) materializerArguments.push("--allow-prune-all");
         return { executable: interpreter, arguments: materializerArguments };
     }
     if (commandName === "bridge") {

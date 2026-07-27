@@ -331,21 +331,26 @@ def test_report_contains_deterministic_category_details_and_error_count(
     target = tmp_path / "target"
     target.mkdir()
     config = MaterializerConfig(tmp_path / "source", target, should_apply=True)
+    pruning_config = MaterializerConfig(
+        tmp_path / "source", target, should_apply=True, should_allow_full_prune=True
+    )
     managed_content = "managed"
     initial = [PlannedFile("a.md", "Luna.toml", managed_content, hash_content(managed_content))]
     publish_plan(config, initial)
-    modified_report = publish_plan(
+    refreshed_report = publish_plan(
         config, [PlannedFile("a.md", "Luna.toml", "new", hash_content("new"))]
     )
-    assert modified_report.details["modified_managed"] == ["Luna.toml"]
-    assert modified_report.conflicted == 1
-    assert modified_report.details["conflicted"] == ["Luna.toml"]
+    assert refreshed_report.details["written"] == ["Luna.toml"]
+    assert refreshed_report.details["modified_managed"] == []
+    assert refreshed_report.conflicted == 0
+    assert refreshed_report.details["conflicted"] == []
+    assert (target / "Luna.toml").read_text(encoding="utf-8") == "new"
 
     (target / "Luna.toml").write_text("changed", encoding="utf-8")
     atomic_write(config.manifest_path, json.dumps({"version": 1, "files": {
         "Luna.toml": {"hash": hash_content(managed_content)}
     }}))
-    stale_report = publish_plan(config, [])
+    stale_report = publish_plan(pruning_config, [])
     assert stale_report.details["modified_managed"] == ["Luna.toml"]
     assert stale_report.details["stale_managed"] == []
 
@@ -353,7 +358,7 @@ def test_report_contains_deterministic_category_details_and_error_count(
     atomic_write(config.manifest_path, json.dumps({"version": 1, "files": {
         "Luna.toml": {"hash": hash_content(managed_content)}
     }}))
-    deleted_report = publish_plan(config, [])
+    deleted_report = publish_plan(pruning_config, [])
     assert deleted_report.details["deleted"] == ["Luna.toml"]
 
     collision_target = target / "Nova.toml"
@@ -367,9 +372,165 @@ def test_report_contains_deterministic_category_details_and_error_count(
 
     manifest = {"version": 1, "files": {"Missing.toml": {"hash": hash_content("missing")}}}
     atomic_write(config.manifest_path, json.dumps(manifest))
-    error_report = publish_plan(config, [])
+    error_report = publish_plan(pruning_config, [])
     assert error_report.errors == 1
     assert error_report.error_details == ["missing managed path: Missing.toml"]
+
+
+def _write_source_agent(source_root: Path, description: str) -> None:
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "luna.md").write_text(
+        f"---\nname: Luna\ndescription: {description}\n---\n", encoding="utf-8"
+    )
+
+
+def _apply_source_agent(source_root: Path, target_root: Path, description: str) -> Path:
+    _write_source_agent(source_root, description)
+    config = MaterializerConfig(source_root, target_root, should_apply=True)
+    planned, report = build_plan(config)
+    publish_plan(config, planned, report)
+    return target_root / "Luna.toml"
+
+
+def test_apply_with_a_missing_source_root_keeps_managed_files_and_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    published_path = _apply_source_agent(source, target, "Light")
+    published_bytes = published_path.read_bytes()
+    manifest_bytes = (target / ".codex-compat-manifest.json").read_bytes()
+    source.rename(tmp_path / "moved-source")
+    monkeypatch.setattr(
+        materializer,
+        "_remove_stale_files",
+        lambda *arguments: pytest.fail("the destructive path ran for a missing source root"),
+    )
+
+    exit_code = materializer.main([str(source), str(target), "--apply"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code != 0
+    assert report["deleted"] == 0
+    assert report["errors"] == 1
+    assert published_path.read_bytes() == published_bytes
+    assert (target / ".codex-compat-manifest.json").read_bytes() == manifest_bytes
+
+
+def test_apply_with_an_empty_source_root_keeps_managed_files_until_prune_is_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    published_path = _apply_source_agent(source, target, "Light")
+    published_bytes = published_path.read_bytes()
+    (source / "luna.md").unlink()
+    monkeypatch.setattr(
+        materializer,
+        "_remove_stale_files",
+        lambda *arguments: pytest.fail("the destructive path ran without the prune opt-in"),
+    )
+
+    refused_exit_code = materializer.main([str(source), str(target), "--apply"])
+
+    refusal_report = json.loads(capsys.readouterr().out)
+    assert refused_exit_code != 0
+    assert refusal_report["deleted"] == 0
+    assert refusal_report["error_details"][0].endswith("--allow-prune-all to remove them")
+    assert published_path.read_bytes() == published_bytes
+
+    monkeypatch.undo()
+    pruned_exit_code = materializer.main(
+        [str(source), str(target), "--apply", "--allow-prune-all"]
+    )
+
+    assert pruned_exit_code == 0
+    assert json.loads(capsys.readouterr().out)["deleted"] == 1
+    assert not published_path.exists()
+
+
+def test_reapply_rewrites_a_managed_file_whose_source_description_changed(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    published_path = _apply_source_agent(source, target, "Light")
+    assert 'description = "Light"' in published_path.read_text(encoding="utf-8")
+
+    _write_source_agent(source, "Dark")
+    config = MaterializerConfig(source, target, should_apply=True)
+    planned, report = build_plan(config)
+    refreshed_report = publish_plan(config, planned, report)
+
+    published_text = published_path.read_text(encoding="utf-8")
+    assert 'description = "Dark"' in published_text
+    assert 'description = "Light"' not in published_text
+    assert refreshed_report.written == 1
+    assert refreshed_report.conflicted == 0
+    assert load_manifest(config.manifest_path)["files"]["Luna.toml"]["hash"] == hash_content(
+        published_text
+    )
+
+
+def test_reapply_preserves_a_hand_edited_managed_file_as_a_conflict(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    published_path = _apply_source_agent(source, target, "Light")
+    published_path.write_text("hand edited\n", encoding="utf-8")
+
+    _write_source_agent(source, "Dark")
+    config = MaterializerConfig(source, target, should_apply=True)
+    planned, report = build_plan(config)
+    conflict_report = publish_plan(config, planned, report)
+
+    assert published_path.read_text(encoding="utf-8") == "hand edited\n"
+    assert conflict_report.written == 0
+    assert conflict_report.details["modified_managed"] == ["Luna.toml"]
+    assert conflict_report.details["conflicted"] == ["Luna.toml"]
+
+
+def test_crash_orphan_matching_the_plan_is_adopted_into_the_manifest(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _apply_source_agent(source, target, "Light")
+    (source / "nova.md").write_text(
+        "---\nname: Nova\ndescription: Nightfall\n---\n", encoding="utf-8"
+    )
+    config = MaterializerConfig(source, target, should_apply=True)
+    orphan_agent = next(
+        each_agent for each_agent in materializer.discover_agents(config) if each_agent.name == "Nova"
+    )
+    orphan_content = convert_agent(orphan_agent)
+    atomic_write(target / "Nova.toml", orphan_content)
+
+    planned, report = build_plan(config)
+    adoption_report = publish_plan(config, planned, report)
+
+    assert adoption_report.errors == 0
+    assert adoption_report.details["adopted"] == ["Nova.toml"]
+    assert (target / "Nova.toml").read_text(encoding="utf-8") == orphan_content
+    assert load_manifest(config.manifest_path)["files"]["Nova.toml"]["hash"] == hash_content(
+        orphan_content
+    )
+
+
+def test_unmanaged_file_at_a_planned_target_is_kept_and_the_error_names_the_remedy(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_source_agent(source, "Light")
+    target.mkdir()
+    user_bytes = b"a file the user wrote\n"
+    (target / "Luna.toml").write_bytes(user_bytes)
+
+    exit_code = materializer.main([str(source), str(target), "--apply"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code != 0
+    assert (target / "Luna.toml").read_bytes() == user_bytes
+    assert report["written"] == 0
+    assert "move or delete Luna.toml" in report["error_details"][0]
 
 
 def test_cli_reports_unmanaged_collision_as_json_without_private_paths(
