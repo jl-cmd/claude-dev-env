@@ -63,5 +63,5 @@ CORRECTIVE_MESSAGE = (
     "  diff <(cat a) <(cat b)\n"
     "becomes two separate Bash calls to `cat a` and `cat b`, with the diff "
     "performed on the captured outputs.\n\n"
-    "See `no-shell-substitution.md` in the rules directory for full guidance."
+    "See `shell-invocation.md` in the rules directory for full guidance."
 )

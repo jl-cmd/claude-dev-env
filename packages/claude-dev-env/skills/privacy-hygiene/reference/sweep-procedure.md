@@ -49,7 +49,7 @@ Review each hit. Ignore:
 ## 4. Re-check before commit / post
 
 - Stage only clean files
-- Prefer `--body-file` for `gh` posts (also required by the gh-body-file rule)
+- Prefer `--body-file` for `gh` posts (also required by the gh-cli-conventions rule)
 - Let `pii_prevention_blocker` re-run on the next Write / commit / post
 
 ## Accepted residual (do not over-scrub)

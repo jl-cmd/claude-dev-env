@@ -105,7 +105,6 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `tdd` | Red-green-refactor is non-negotiable |
 | `code-standards` | References CODE_RULES.md for all code generation |
 | `conservative-action` | Research first, act only when explicitly asked |
-| `right-sized-engineering` | Simple > clever, functions > classes, concrete > abstract |
 | `explore-thoroughly` | Read before proposing, map patterns before committing |
 | `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
 | `parallel-tools` | Independent tool calls run simultaneously |

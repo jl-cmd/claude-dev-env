@@ -1,6 +1,6 @@
 # fresh-branch
 
-Creates a new branch from fresh-fetched `origin/main` inside an isolated worktree under `Temp/<agent>/<branch-name>`. Does not push, open a PR, or run `checkout -b` in the caller tree.
+Creates a new branch from fresh-fetched `origin/main` inside an isolated worktree under `<repo-root>/.claude/worktrees/<agent>/<branch-name>`. Does not push, open a PR, or run `checkout -b` in the caller tree.
 
 ## Key files
 

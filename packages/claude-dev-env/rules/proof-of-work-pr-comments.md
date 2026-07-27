@@ -20,7 +20,3 @@ The `pr_description_enforcer` hook enforces the standard at two points:
 - **On `gh pr ready`:** the hook reads the PR's comments and blocks readying while no comment passes the audit. `gh pr ready --undo` returns a PR to draft and is never blocked.
 
 A `gh` failure (network, auth, missing executable) never blocks — the gate fails open on tooling problems, and the comment audit skips bodies it cannot read.
-
-## Why
-
-A PR body says what changed; the proof comment shows that it worked. Real command output, measured numbers, and a rendered image let a reviewer check the claim in seconds, with no need to re-run the work. Stating the gaps keeps the proof honest: the reviewer knows exactly what still rests on trust and where that is covered. Gating draft-to-ready makes the comment land before review starts, on every machine, whatever the session's habits.

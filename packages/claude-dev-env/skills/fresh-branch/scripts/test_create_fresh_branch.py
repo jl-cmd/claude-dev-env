@@ -245,28 +245,23 @@ class TestResolveAgentSlug:
 
 
 class TestResolveAgentWorktreeRoot:
-    def should_use_userprofile_scratch_on_windows(
+    def should_nest_under_the_repository_claude_worktrees_directory(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        module = load_create_fresh_branch_module()
-        monkeypatch.setattr(module.sys, "platform", "win32")
-        monkeypatch.setenv("USERPROFILE", r"C:\Users\example")
-        worktree_root = module.resolve_agent_worktree_root("grok")
-        assert worktree_root == (
-            Path(r"C:\Users\example") / "AppData" / "Local" / "Temp" / "grok"
-        )
-
-    def should_fall_back_to_gettempdir_off_windows(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
         module = load_create_fresh_branch_module()
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(module.tempfile, "gettempdir", lambda: str(tmp_path))
-        worktree_root = module.resolve_agent_worktree_root("claude")
-        assert worktree_root == tmp_path / "claude"
+        worktree_root = module.resolve_agent_worktree_root(tmp_path, "grok")
+        assert worktree_root == tmp_path / ".claude" / "worktrees" / "grok"
+
+    def should_keep_each_agent_in_its_own_subdirectory(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        grok_root = module.resolve_agent_worktree_root(tmp_path, "grok")
+        claude_root = module.resolve_agent_worktree_root(tmp_path, "claude")
+        assert grok_root != claude_root
+        assert grok_root.parent == claude_root.parent
 
 
 class TestResolveUniqueWorktreePath:
@@ -301,18 +296,9 @@ class TestAgentSlugPathSafety:
     def should_reject_parent_segment_agent_slug_without_mkdir_outside(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         module = load_create_fresh_branch_module()
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
-        escaped_agent_root = (agent_scratch_parent / ".." / "escape-agent").resolve()
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
+        escaped_agent_root = (tmp_path / "escape-agent").resolve()
         with pytest.raises(ValueError, match="agent slug"):
             module.create_fresh_branch(
                 branch_name="fix/safe-branch",
@@ -321,22 +307,13 @@ class TestAgentSlugPathSafety:
                 base_ref=DEFAULT_BASE_REF,
             )
         assert not escaped_agent_root.exists()
-        assert not (agent_scratch_parent / "claude").exists()
+        assert not (tmp_path / "unused-repo").exists()
 
     def should_reject_empty_agent_slug(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         module = load_create_fresh_branch_module()
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         with pytest.raises(ValueError, match="agent slug"):
             module.create_fresh_branch(
                 branch_name="fix/safe-branch",
@@ -344,25 +321,16 @@ class TestAgentSlugPathSafety:
                 agent_slug="",
                 base_ref=DEFAULT_BASE_REF,
             )
-        assert not any(agent_scratch_parent.iterdir())
+        assert not (tmp_path / "unused-repo").exists()
 
 
 class TestBranchNamePathSafety:
     def should_reject_parent_segments_without_mkdir_outside(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         module = load_create_fresh_branch_module()
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
-        escaped_path = agent_scratch_parent / "escape"
+        escaped_path = tmp_path / "escape"
         with pytest.raises(ValueError, match="relative path"):
             module.create_fresh_branch(
                 branch_name="fix/../../escape",
@@ -371,23 +339,14 @@ class TestBranchNamePathSafety:
                 base_ref=DEFAULT_BASE_REF,
             )
         assert not escaped_path.exists()
-        assert not (agent_scratch_parent / "claude").exists()
+        assert not (tmp_path / "unused-repo").exists()
 
     def should_reject_absolute_branch_without_mkdir_outside(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         module = load_create_fresh_branch_module()
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
         outside_target = tmp_path / "outside-evil"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         with pytest.raises(ValueError, match="relative path"):
             module.create_fresh_branch(
                 branch_name=str(outside_target),
@@ -396,7 +355,7 @@ class TestBranchNamePathSafety:
                 base_ref=DEFAULT_BASE_REF,
             )
         assert not outside_target.exists()
-        assert not (agent_scratch_parent / "claude").exists()
+        assert not (tmp_path / "unused-repo").exists()
 
 
 class TestCreateFreshBranchIntegration:
@@ -409,13 +368,6 @@ class TestCreateFreshBranchIntegration:
         repository_path = build_repo_with_origin(tmp_path / "repo")
         caller_head_before = read_head_branch(repository_path)
         caller_commit_before = read_head_commit(repository_path)
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         success_payload = module.create_fresh_branch(
             branch_name="fix/example-one",
             repo_path=repository_path,
@@ -424,7 +376,14 @@ class TestCreateFreshBranchIntegration:
         )
         worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
         assert worktree_path.is_dir()
-        assert worktree_path == agent_scratch_parent / "grok" / "fix" / "example-one"
+        assert worktree_path == (
+            repository_path.resolve()
+            / ".claude"
+            / "worktrees"
+            / "grok"
+            / "fix"
+            / "example-one"
+        )
         assert read_head_branch(worktree_path) == "fix/example-one"
         assert read_head_commit(worktree_path) == caller_commit_before
         assert success_payload[PAYLOAD_KEY_BRANCH] == "fix/example-one"
@@ -445,14 +404,10 @@ class TestCreateFreshBranchIntegration:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
+        repository_worktree_root = (
+            repository_path.resolve() / ".claude" / "worktrees" / "claude"
         )
-        occupied_path = agent_scratch_parent / "claude" / "fix" / "collision"
+        occupied_path = repository_worktree_root / "fix" / "collision"
         occupied_path.mkdir(parents=True)
         success_payload = module.create_fresh_branch(
             branch_name="fix/collision",
@@ -461,7 +416,7 @@ class TestCreateFreshBranchIntegration:
             base_ref=DEFAULT_BASE_REF,
         )
         worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
-        assert worktree_path == agent_scratch_parent / "claude" / "fix" / "collision-2"
+        assert worktree_path == repository_worktree_root / "fix" / "collision-2"
         assert worktree_path.is_dir()
         assert read_head_branch(worktree_path) == "fix/collision"
 
@@ -472,13 +427,6 @@ class TestCreateFreshBranchIntegration:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         module.create_fresh_branch(
             branch_name="fix/dup",
             repo_path=repository_path,
@@ -515,13 +463,6 @@ class TestCreateFreshBranchIntegration:
         )
         local_main_commit = read_head_commit(repository_path)
         assert local_main_commit != origin_tip_before
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         success_payload = module.create_fresh_branch(
             branch_name="fix/bare-base",
             repo_path=repository_path,
@@ -543,13 +484,6 @@ class TestWorktreeBranchTracking:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         success_payload = module.create_fresh_branch(
             branch_name="fix/no-upstream",
             repo_path=repository_path,
@@ -573,13 +507,6 @@ class TestWorktreeBranchTracking:
             ["config", "push.default", "upstream"],
             repository_path,
             empty_hooks_path=empty_hooks_path,
-        )
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
         )
         success_payload = module.create_fresh_branch(
             branch_name="feature/silent-push",
@@ -619,13 +546,6 @@ class TestMainCli:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         monkeypatch.setattr(
             sys,
             "argv",
@@ -697,15 +617,7 @@ class TestMainCli:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
-        escaped_path = agent_scratch_parent / "escape"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
+        escaped_path = tmp_path / "escape"
         monkeypatch.setattr(
             sys,
             "argv",
@@ -726,7 +638,7 @@ class TestMainCli:
         assert PAYLOAD_KEY_ERROR in error_payload
         assert "relative path" in error_payload[PAYLOAD_KEY_ERROR]
         assert not escaped_path.exists()
-        assert not (agent_scratch_parent / "claude").exists()
+        assert not (tmp_path / "unused-repo").exists()
 
     def should_print_error_json_for_absolute_branch_name(
         self,
@@ -736,15 +648,7 @@ class TestMainCli:
     ) -> None:
         module = load_create_fresh_branch_module()
         repository_path = build_repo_with_origin(tmp_path / "repo")
-        agent_scratch_parent = tmp_path / "agent-scratch"
-        agent_scratch_parent.mkdir()
         outside_target = tmp_path / "outside-evil"
-        monkeypatch.setattr(module.sys, "platform", "linux")
-        monkeypatch.setattr(
-            module.tempfile,
-            "gettempdir",
-            lambda: str(agent_scratch_parent),
-        )
         monkeypatch.setattr(
             sys,
             "argv",
@@ -765,4 +669,4 @@ class TestMainCli:
         assert PAYLOAD_KEY_ERROR in error_payload
         assert "relative path" in error_payload[PAYLOAD_KEY_ERROR]
         assert not outside_target.exists()
-        assert not (agent_scratch_parent / "claude").exists()
+        assert not (tmp_path / "unused-repo").exists()

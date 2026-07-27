@@ -18,6 +18,6 @@ When multiple tool calls have no dependencies between them, make all independent
 - Use real parameter values only. Do not guess or use placeholders to force parallelism.
 - If you are unsure whether calls are independent, run them sequentially.
 
-## Why
+## The one surface that serializes
 
-Explicit reinforcement of parallel calling boosts compliance to near 100%. Sequential calls for independent operations waste time and round-trips for the user.
+Harness tool calls — Read, Grep, Glob, and the rest — carry no shared cost and parallelize freely. A large shell filesystem walk does not: parallel full-tree searches contend for the shell and can lock the host, so issue those one at a time. See [`filesystem-search.md`](filesystem-search.md).

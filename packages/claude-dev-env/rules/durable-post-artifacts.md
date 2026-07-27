@@ -36,7 +36,3 @@ With neither anchor the text names the directory rather than something inside it
 ## Enforcement
 
 The `volatile_path_in_post_blocker` PreToolUse hook reads the body of each `gh` post command and each GitHub MCP post call, scans it for these markers, and blocks the post when it finds one. For a `--body-file`, the hook reads the file and scans its contents, so writing the body to a temp file and passing it with `--body-file` stays allowed — what the hook rejects is a volatile path inside the text that gets posted.
-
-## Why
-
-A comment that cites an artifact under a job's tmp directory reads fine the moment it is posted and breaks a few minutes later, once the job is cleaned. Embedding text inline and linking binary artifacts to a durable release keeps every post readable for as long as it exists.

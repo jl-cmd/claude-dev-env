@@ -15,13 +15,19 @@ Source: [Anthropic — Reduce file creation in agentic coding](https://platform.
 - Leave the working directory cleaner than you found it.
 - If a file was created at the user's explicit request (not as a byproduct of your process), leave it in place.
 
+## Exceptions to the removal duty
+
+Three kinds of file are already ephemeral and need no explicit removal:
+
+- A file under the OS temporary root.
+- A file under `$CLAUDE_JOB_DIR`, which the harness clears with the job.
+- A child agent's scratch file, which the parent removes at teardown.
+
+Use an allowed removal form for everything else: [`destructive-commands.md`](destructive-commands.md) names them.
+
 ## What counts as temporary
 
 - Scripts written to test a hypothesis or run a one-off check
 - Debug output files, log dumps, or intermediate data exports
 - Helper files created to work around tool limitations
 - Any file the user did not ask for and would not expect to find after the task
-
-## Why
-
-Temporary files accumulate across sessions and clutter the project root. Latest models sometimes use files as scratchpads during iteration, and these leftovers confuse both the user and future sessions if not cleaned up.
