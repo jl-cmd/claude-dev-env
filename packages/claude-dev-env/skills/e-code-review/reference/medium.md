@@ -128,11 +128,14 @@ or publish an artifact of the review — the structured call is the report.
 
 ## Applying fixes (--fix)
 
-The `--fix` flag was passed. Follow `reference\fix.md` (relative to this
-skill's folder) for the exact fix, commit-gate, and skip-handling behavior —
-it governs which agent applies each fix, how a fix gets committed, how a skip
-is logged, and how outcomes get reported. Do not repeat the findings as text;
-follow that document's reporting rules once fixes land.
+The `--fix` flag was passed without `loop`. Follow `reference\fix.md` (relative
+to this skill's folder) for the exact fix, commit-gate, and skip-handling
+behavior — it governs which agent applies each fix, how a fix gets committed,
+how a skip is logged, and how outcomes get reported. Do not repeat the findings
+as text; follow that document's reporting rules once fixes land.
+
+When `loop` is also set, skip this section. `reference\loop.md`'s gate sequence
+owns the round's fixing and loads `reference\fix.md` itself for the mechanics.
 
 ## If findings are fixed later
 
@@ -146,8 +149,11 @@ summary; the host UI's per-finding status updates only from that call.
 ## Looping (`loop`)
 
 The `loop` arg was passed. Follow `reference\loop.md` (relative to this
-skill's folder) for how to re-run Phases 0–2, Output, and (if `--fix` is also
-present) `reference\fix.md`'s fix pass, repeatedly — including its exit
-condition and re-invocation rules. Do not treat a single pass
-through this document as complete while `loop` is active; hand control to that
-document instead of stopping at Output.
+skill's folder) for how to re-run Phases 0–2 and Output repeatedly — including
+its exit condition and re-invocation rules. Schedule no fix pass of your own
+here: when `--fix` is also present, `reference\loop.md`'s gate sequence owns the
+round's fixing and loads `reference\fix.md` for the mechanics. Do not treat a
+single pass through this document as complete while `loop` is active; hand
+control to that document instead of stopping at Output.
+
+When `loop` was not passed, skip this section.

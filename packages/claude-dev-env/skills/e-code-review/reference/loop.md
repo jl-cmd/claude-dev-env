@@ -28,6 +28,8 @@ A finding is a `nit` only when that severity is `nit`. Runtime-correctness, secu
 
 If the level emits no severity (for example untagged `low` lines), consult your advisor to determine classification.
 
+A finding this document has already classed keeps that class at every level. An on-target shape-reader break is `bug` under *A shape change names its readers*; no advisor call reopens that.
+
 ## Required checks
 
 "Run required checks" means: run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against every file changed or added in the round. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
@@ -62,8 +64,21 @@ list goes in the round's progress report.
 
 The round that follows a posted list checks each reader on that list against the
 new shape and names each reader with its result in that round's progress report.
-The obligation discharges when every reader on the list has been named with a
-result — not when a reader is fixed, and not when a round merely happens.
+
+Discharge then turns on where the reader sits.
+
+- An **off-target** reader discharges once it is named with a result. This
+  branch cannot repair it.
+- An **on-target** reader that reads the new shape correctly discharges on that
+  result.
+- An **on-target** reader that reads the new shape wrong is a bug-severity
+  finding of the round that checked it. It joins that round's findings, and it
+  discharges on exactly one of three results, each of them an outcome gate 2
+  already produces: it is repaired, it is recorded as a skipped finding, or the
+  advisor refutes it. Naming the break discharges nothing on its own, and
+  neither does a further round merely happening.
+
+The list discharges once every reader on it has discharged.
 
 A broken reader outside the review target does not block the loop and does not
 widen scope. Hand it off as a reported finding. Two separate things are owed for
@@ -88,7 +103,9 @@ in order: gate 1, then gate 2, then gate 3.
 **This round's work — before the gates.** Record this round's dangerous
 classification and the dangerous-round count as `N of M`; and when a shape-change
 list is open, check each reader on that list and name each reader with its
-result. Then run the gates.
+result, adding any on-target reader that reads the new shape wrong to this
+round's findings as *A shape change names its readers* directs. Then run the
+gates.
 
 **Gate 1 — obligations.** Gate 1 is evaluated first in the sequence, and its
 answer turns on the round's open obligations alone — the findings are in hand by
