@@ -15,6 +15,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
 | `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
 | `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
+| `claims-as-quotes.md` | A claim that decides a design or gates an action travels with its quoted lines and their `path:line` reference; a claim without its quote is a lead to check, not a fact to build on |
 | `cleanup-temp-files.md` | Remove temporary files created during a task when the task is complete |
 | `code-standards.md` | Pointer to `CODE_RULES.md` as the single source of truth, including §8 (TDD) and §7 (right-sizing); BDD is the outer process and TDD the inner loop |
 | `confirm-implementation-forks.md` | Stop and ask when two or more workable implementation paths change the deliverable |
