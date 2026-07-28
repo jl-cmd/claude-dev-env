@@ -16,7 +16,7 @@ description: >-
 - **`low` stays single-pass.** Do not spawn subagents. One diff read, one findings pass.
 - **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) surface only findings a maintainer would act on. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
 - **`--fix` applies findings once.** Load `reference/fix.md` and follow it — it owns the fix agent, the commit gate, skip logging, and outcome reporting.
-- **`loop` never asks.** Each round fixes its findings and re-reviews. Load `reference/loop.md` and follow it.
+- **`loop` never asks.** Each round validates its bug findings with an advisor, fixes, and re-reviews. Load `reference/loop.md` and follow it.
 - **`--fix` and `loop` combine.** With both, each loop round runs the level file, then `reference/fix.md`, then re-reviews.
 
 ## When this skill applies

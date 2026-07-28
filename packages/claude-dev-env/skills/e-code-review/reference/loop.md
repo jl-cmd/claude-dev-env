@@ -35,18 +35,18 @@ If the level emits no severity (for example untagged `low` lines), consult your 
 ## Each round reviews new code
 
 A repair diff is new code. From the second round on, the round runs the level
-file end to end at the new head, with the review scope taken from the target's
-base so the round's repair diff sits inside it. The round applies every finder
-pass the level file names — the full angle set at that level's rigor — and the
-round's findings come from that full run.
+file end to end at the new head. The round's scope stays within the Phase 0
+target, taken against that target's base, so the repair diff sits inside it.
 
 ## Dangerous diffs take two full rounds
 
 A diff is dangerous when it touches deletion paths, locks or other concurrency
-control, or shared mutable state. Each round names whether the diff it reviewed
-is dangerous. A dangerous diff holds the loop open until two full rounds have
-reviewed it, and a clean report in the first of those two rounds sends the loop
-into the second.
+control, or shared mutable state. A deletion path is a runtime path that removes
+data or files; a dead-code cleanup is not one. Each round names whether the diff
+it reviewed is dangerous. A dangerous diff holds the loop open until two full
+rounds have reviewed it, and a clean report in the first of those two rounds
+sends the loop into the second. A repair that rewrites the dangerous surface
+restarts the two-round count from the round that made the rewrite.
 
 ## A shape change names its readers
 
@@ -59,8 +59,10 @@ named reader against the new shape.
 
 Repeat the same-level review/fix cycle until one of these holds:
 
-- **Clean.** Findings are `[]` or `(none)`, and every dangerous diff has had its two full rounds. Post the proof-of-work PR comment when the target is a PR. Run `gh pr ready` for a draft PR; otherwise state ready.
-- **Nits only.** Every surviving finding is severity `nit`. Fix all of them on the review target. Run required checks. Commit once per loop round. Push. Run the same effort level on the new head. Repeat until clean, then mark ready as in the Clean branch above.
-- **Any bug.** Validate each bug-severity finding with an advisor before touching code — confirm it's real and confirm the intended fix. Then fix all validated findings (bugs and nits) on the review target. Run required checks. Commit once per loop round. Push. Run the same effort level on the new head. Repeat until clean, then mark ready as above.
+- **Clean.** Findings are `[]` or `(none)`, every dangerous diff has had its two full rounds, and a following round has checked every reader named by a shape-change list. Post the proof-of-work PR comment when the target is a PR. Run `gh pr ready` for a draft PR; otherwise state ready.
+- **Nits only.** Every surviving finding is severity `nit`. Fix all of them on the review target, then run the round tail.
+- **Any bug.** Validate each bug-severity finding with an advisor before touching code — confirm it's real and confirm the intended fix. Fix all validated findings, bugs and nits, on the review target, then run the round tail.
+
+**The round tail.** Run required checks. Commit once per loop round. Push. Run the same effort level on the new head. Repeat until clean, then mark ready as the Clean branch names.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
