@@ -59,7 +59,7 @@ The file reads in this order — a token layer, then three numbered sections:
 
 | Section | What it holds | Edit it? |
 |---|---|---|
-| Palette and type tokens | Every colour, typeface, and spacing step, as CSS custom properties across three theme blocks | Only to change the look |
+| Palette and type tokens | Every colour, typeface, spacing step, and shadow, as CSS custom properties across three theme blocks | Only to change the look |
 | `CONFIG` | Headline, standfirst, the figures row, the footnote, the browser storage key | Yes, first |
 | `ITEMS` | One entry per tab | Yes, this is the work |
 | Engine | Rendering, keyboard handling, storage, the copy button | No |
@@ -116,7 +116,7 @@ Callout tones: `""` for a neutral recommendation, `"good"` for reassurance, `"wa
 
 A `command` block quotes text exactly, in a bordered frame that scrolls rather than wraps — a wrapped command line is one the reader mistypes. It is what the evidence rule asks for when a claim rests on something you ran.
 
-A table column whose cells all read as numbers gets right-aligned and set in tabular figures, so a reader can compare down the column. Commas, decimal points, spaces, percent signs, currency marks, and a leading sign all count as part of a number. That happens on its own — there is nothing to mark up.
+A table column reads as numeric when it carries at least one digit and every filled cell reads as a number. Such a column gets right-aligned and set in tabular figures, so a reader can compare down the column. Commas, decimal points, spaces, percent signs, currency marks, and a leading sign all count as part of a number. An empty cell counts as neutral, so one gap keeps a column of counts aligned. A column of dashes sits left, with the prose. That happens on its own — there is nothing to mark up.
 
 ### Options
 
@@ -146,9 +146,11 @@ The copy button strips the tags and entities back out, so the text a reader past
 ## What the reader gets
 
 - **Keyboard**: arrow keys move along the rail, Home and End jump to the ends, every focus state is visible.
+- **Screen readers**: the rail is announced as a vertical tab list, the decided count reads out as it changes, and the meter reports its value against its total.
+- **Motion**: a reader who asks for reduced motion gets each jump without the travel. That covers the scripted scrolls as well as the transitions.
 - **Cross-tab links**: a link carrying `data-tab="<item id>"` jumps to that tab, so a rule can point at its worked example.
 - **Storage**: choices and notes are held in the browser under `CONFIG.storageKey`. Closing the tab and coming back keeps them. Nothing is sent anywhere.
-- **Counter**: the dock reads "N of M decided", counting only the tabs that carry a choice, above a bar that fills as answers land and turns green on the last one.
+- **Counter**: the dock reads "N of M decided", counting only the tabs that carry a choice, above a bar that fills as answers land and turns green on the last one. The dock rides the bottom of the viewport through a long tab, and settles into the page at the end.
 - **Rail marks**: two channels, so colour is never the only carrier. Shape says what you owe — a ring waits for an answer, a filled disc holds one, a bar asks for nothing. Colour says which kind of attention it wants, on a four-step ramp: red today, amber this session, blue worth reading, green settled.
 
   | Mark | Meaning |
@@ -163,7 +165,7 @@ The copy button strips the tags and entities back out, so the text a reader past
 
   A legend under the rail lists the marks a docket actually uses, rendered from the same list the marks are drawn from.
 - **Themes**: light and dark, both from the token layer, following the viewer's system setting and their own toggle.
-- **Narrow screens**: below 860 pixels the rail turns into a horizontal strip along the top.
+- **Narrow screens**: the page sizes itself to the device width. Below 860 pixels the rail turns into a horizontal strip along the top. The dock holds its place at the bottom, taking about 150 pixels of a phone screen, so the panel begins below the fold.
 
 ## Filling it in
 
@@ -205,3 +207,5 @@ Fill it in by rewriting `ITEMS`, then the six panels' static text. The swimlane 
 The palette is a token layer: three blocks near the top of the file define the same set of custom properties for the default theme, for `prefers-color-scheme: dark`, and for the viewer's explicit `data-theme` toggle. Components style themselves through those tokens only.
 
 To reskin, rewrite the tokens in all three blocks and leave everything below them alone. Keep `--good`, `--warn`, and `--risk` distinct from `--accent`; they carry meaning, and a reader reads the callout tone before reading the words.
+
+`--lift` and `--lift-high` carry the depth between the rail, the panel, and the dock. Give each a value that suits its own theme's ground: a shadow tuned for a pale ground reads as a smudge on a dark one.
