@@ -6,7 +6,7 @@ paths:
 
 # Measurement Denominators
 
-**When this applies:** Any count, rate, or coverage figure you report — in a chat reply, a PR body, a review comment, a docstring, or a `.md` file.
+**When this applies:** Any Write or Edit that states a count, rate, or coverage figure in a docstring or a `.md` file.
 
 ## Rule
 
