@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 from git_hooks_constants import (
     ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES,
-    ALL_REMOTE_URL_MARKERS,
+    ALL_REJECTED_REMOTE_NAME_CHARACTERS,
     COMMIT_OBJECT_NAME_SUFFIX,
     DEFAULT_REMOTE_BASE_REFERENCE,
     DEFAULT_REMOTE_NAME,
@@ -28,6 +28,7 @@ from git_hooks_constants import (
     GIT_REV_PARSE_VERIFY_FLAG,
     GIT_SYMBOLIC_REFERENCE_SUBCOMMAND,
     REMOTE_BRANCH_SHORT_NAME_TEMPLATE,
+    REMOTE_HEAD_BRANCH_NAME,
     REMOTE_HEAD_SYMBOLIC_REFERENCE_TEMPLATE,
     REMOTE_NAME_ARGUMENT_INDEX,
     REMOTE_REFERENCE_NAME_PREFIX,
@@ -47,7 +48,8 @@ def resolve_remote_name_from_arguments(all_command_line_arguments: list[str]) ->
 
     Git passes a remote name for a named remote and a URL for an ad-hoc push.
     A URL carries a colon or a slash, which a remote name never does, so a URL
-    falls back to the default remote.
+    falls back to the default remote. A name carrying a glob character falls
+    back the same way, so no wildcard reaches the reference patterns built here.
 
     Args:
         all_command_line_arguments: The hook's own argument list.
@@ -61,7 +63,10 @@ def resolve_remote_name_from_arguments(all_command_line_arguments: list[str]) ->
     pushed_argument = all_command_line_arguments[remote_name_argument_index].strip()
     if not pushed_argument:
         return DEFAULT_REMOTE_NAME
-    if any(each_marker in pushed_argument for each_marker in ALL_REMOTE_URL_MARKERS):
+    if any(
+        each_character in pushed_argument
+        for each_character in ALL_REJECTED_REMOTE_NAME_CHARACTERS
+    ):
         return DEFAULT_REMOTE_NAME
     return pushed_argument
 
@@ -136,6 +141,7 @@ def resolve_usable_base_reference(
     ::
 
         "origin/HEAD" on a clone that has it   -> "origin/HEAD"
+        pushed to "upstream" on such a clone   -> "upstream/HEAD"
         "origin/HEAD" on a clone that lacks it -> "origin/main"
         a commit name git does not know        -> None
 
@@ -149,9 +155,12 @@ def resolve_usable_base_reference(
     """
     if base_reference != DEFAULT_REMOTE_BASE_REFERENCE:
         return base_reference
-    if _names_a_commit(base_reference, ask_git):
-        return base_reference
+    remote_head_reference = REMOTE_BRANCH_SHORT_NAME_TEMPLATE.format(
+        remote=remote_name, branch=REMOTE_HEAD_BRANCH_NAME
+    )
+    if _names_a_commit(remote_head_reference, ask_git):
+        return remote_head_reference
     default_branch_reference = _remote_default_branch_reference(remote_name, ask_git)
     if default_branch_reference is None:
-        _report_unresolvable_base(base_reference, remote_name)
+        _report_unresolvable_base(remote_head_reference, remote_name)
     return default_branch_reference

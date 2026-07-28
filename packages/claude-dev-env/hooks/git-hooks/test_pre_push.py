@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +13,8 @@ import pre_push
 
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+
+REAL_RUN_GIT_TEXT_COMMAND = pre_push.run_git_text_command
 
 
 CODE_REVIEW_ENFORCEMENT_ENV_VAR: str = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
@@ -27,6 +30,164 @@ RESOLVED_COMMIT_OBJECT_NAME: str = "c" * 40
 HOOK_INVOCATION_NAME: str = "pre-push"
 PUSHED_REMOTE_NAME: str = "upstream"
 PUSHED_REMOTE_URL: str = "https://example.invalid/owner/repository.git"
+
+
+LOCALE_INVALID_REFERENCE_LISTING_BYTES: bytes = b"origin/caf\xe9\norigin/main\n"
+EMPTY_COMMAND_STREAM_BYTES: bytes = b""
+STRICT_DECODER_NAME: str = "utf-8"
+UNDECODABLE_BYTE_START_INDEX: int = 10
+UNDECODABLE_BYTE_END_INDEX: int = 11
+UNDECODABLE_BYTE_REASON: str = "invalid continuation byte"
+TEXT_DECODING_KEYWORD: str = "text"
+GIT_MISSING_REFERENCE_EXIT_CODE: int = 1
+GIT_LAUNCH_FAILURE_DETAIL: str = "git executable not found"
+RESOLVED_REMOTE_MAIN_REFERENCE: str = "origin/main"
+UNRESOLVABLE_BASE_REPORT_MARKER: str = "no usable gate base"
+GIT_UNAVAILABLE_REPORT_MARKER: str = "could not run git"
+NEW_BRANCH_PUSH_STDIN: str = (
+    f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
+)
+
+
+def _refuse_locale_decoding() -> UnicodeDecodeError:
+    """Build the error a text-mode subprocess raises on undecodable output."""
+    return UnicodeDecodeError(
+        STRICT_DECODER_NAME,
+        LOCALE_INVALID_REFERENCE_LISTING_BYTES,
+        UNDECODABLE_BYTE_START_INDEX,
+        UNDECODABLE_BYTE_END_INDEX,
+        UNDECODABLE_BYTE_REASON,
+    )
+
+
+def _completed_git_process(
+    all_command_arguments: list[str], exit_code: int, standard_output_bytes: bytes
+) -> subprocess.CompletedProcess[bytes]:
+    """Build a completed git process carrying raw bytes on standard output."""
+    return subprocess.CompletedProcess(
+        all_command_arguments,
+        exit_code,
+        standard_output_bytes,
+        EMPTY_COMMAND_STREAM_BYTES,
+    )
+
+
+def _answer_git_with_locale_invalid_bytes(
+    all_command_arguments: list[str],
+    **all_keyword_arguments: object,
+) -> subprocess.CompletedProcess[bytes]:
+    """Stand in for a git whose output the process locale cannot decode.
+
+    ::
+
+        text=True -> UnicodeDecodeError   bytes mode -> the raw listing
+
+    Args:
+        all_command_arguments: The full git command the seam assembled.
+        all_keyword_arguments: The keyword arguments the seam passed.
+
+    Returns:
+        A completed process carrying the raw listing bytes.
+    """
+    if all_keyword_arguments.get(TEXT_DECODING_KEYWORD):
+        raise _refuse_locale_decoding()
+    if git_hooks_constants.GIT_FOR_EACH_REF_SUBCOMMAND in all_command_arguments:
+        return _completed_git_process(
+            all_command_arguments,
+            GIT_RESOLVED_EXIT_CODE,
+            LOCALE_INVALID_REFERENCE_LISTING_BYTES,
+        )
+    return _completed_git_process(
+        all_command_arguments,
+        GIT_MISSING_REFERENCE_EXIT_CODE,
+        EMPTY_COMMAND_STREAM_BYTES,
+    )
+
+
+def _write_gate_that_allows_every_push(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point both gates at stubs that allow, with a new-branch push on stdin."""
+    passing_gate_path = tmp_path / "code_rules_gate.py"
+    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(NEW_BRANCH_PUSH_STDIN))
+
+
+def test_reference_listing_with_locale_invalid_bytes_resolves_a_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess, "run", _answer_git_with_locale_invalid_bytes)
+
+    resolved_reference = pre_push.resolve_usable_base_reference(
+        git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE,
+        git_hooks_constants.DEFAULT_REMOTE_NAME,
+        REAL_RUN_GIT_TEXT_COMMAND,
+    )
+
+    assert resolved_reference == RESOLVED_REMOTE_MAIN_REFERENCE
+
+
+def test_run_git_text_command_raises_when_git_cannot_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raising_subprocess_run(
+        all_command_arguments: list[str], **all_keyword_arguments: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        raise OSError(GIT_LAUNCH_FAILURE_DETAIL)
+
+    monkeypatch.setattr(subprocess, "run", raising_subprocess_run)
+
+    with pytest.raises(pre_push.GitCommandUnavailable):
+        REAL_RUN_GIT_TEXT_COMMAND([git_hooks_constants.GIT_FOR_EACH_REF_SUBCOMMAND])
+
+
+def test_main_reports_infrastructure_failure_when_git_cannot_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_gate_that_allows_every_push(tmp_path, monkeypatch)
+
+    def unavailable_run_git_text_command(
+        all_command_arguments: list[str],
+    ) -> tuple[int, str]:
+        raise pre_push.GitCommandUnavailable(GIT_LAUNCH_FAILURE_DETAIL)
+
+    monkeypatch.setattr(
+        pre_push, "run_git_text_command", unavailable_run_git_text_command
+    )
+
+    exit_code = pre_push.main()
+
+    captured_streams = capsys.readouterr()
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert GIT_UNAVAILABLE_REPORT_MARKER in captured_streams.err
+    assert GIT_LAUNCH_FAILURE_DETAIL in captured_streams.err
+    assert UNRESOLVABLE_BASE_REPORT_MARKER not in captured_streams.err
+
+
+def test_main_reports_a_missing_default_branch_as_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_gate_that_allows_every_push(tmp_path, monkeypatch)
+
+    def empty_run_git_text_command(
+        all_command_arguments: list[str],
+    ) -> tuple[int, str]:
+        return GIT_MISSING_REFERENCE_EXIT_CODE, ""
+
+    monkeypatch.setattr(pre_push, "run_git_text_command", empty_run_git_text_command)
+
+    exit_code = pre_push.main()
+
+    captured_streams = capsys.readouterr()
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert UNRESOLVABLE_BASE_REPORT_MARKER in captured_streams.err
+    assert GIT_UNAVAILABLE_REPORT_MARKER not in captured_streams.err
 
 
 @pytest.fixture(autouse=True)

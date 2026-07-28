@@ -27,6 +27,12 @@ HOOK_INVOCATION_NAME: str = "pre-push"
 PUSHED_REMOTE_URL: str = "https://example.invalid/owner/repository.git"
 SSH_PUSHED_REMOTE_URL: str = "git@example.invalid:owner/repository.git"
 CONCRETE_REMOTE_OBJECT_NAME: str = "1" * 40
+ALL_GLOB_BEARING_REMOTE_NAMES: tuple[str, ...] = (
+    "orig*n",
+    "orig?n",
+    "orig[i]n",
+    "orig\\n",
+)
 GIT_COMMAND_SUCCESS_CODE: int = 0
 GIT_COMMAND_FAILURE_CODE: int = 1
 EMPTY_COMMAND_OUTPUT: str = ""
@@ -309,6 +315,17 @@ def test_uses_the_default_remote_when_a_url_takes_the_remote_position() -> None:
 def test_uses_the_default_remote_when_an_ssh_url_takes_the_remote_position() -> None:
     resolved_remote_name = pre_push_base_reference.resolve_remote_name_from_arguments(
         [HOOK_INVOCATION_NAME, SSH_PUSHED_REMOTE_URL, SSH_PUSHED_REMOTE_URL]
+    )
+
+    assert resolved_remote_name == git_hooks_constants.DEFAULT_REMOTE_NAME
+
+
+@pytest.mark.parametrize("glob_bearing_remote_name", ALL_GLOB_BEARING_REMOTE_NAMES)
+def test_uses_the_default_remote_when_the_remote_name_carries_a_glob_character(
+    glob_bearing_remote_name: str,
+) -> None:
+    resolved_remote_name = pre_push_base_reference.resolve_remote_name_from_arguments(
+        [HOOK_INVOCATION_NAME, glob_bearing_remote_name, PUSHED_REMOTE_URL]
     )
 
     assert resolved_remote_name == git_hooks_constants.DEFAULT_REMOTE_NAME

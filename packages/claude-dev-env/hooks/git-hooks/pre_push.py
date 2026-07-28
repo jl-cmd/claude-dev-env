@@ -51,10 +51,12 @@ from git_hooks_constants import (
     CODE_REVIEW_PUSH_GATE_SCRIPT_FILENAME,
     CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
     DEFAULT_REMOTE_BASE_REFERENCE,
-    EMPTY_GIT_COMMAND_OUTPUT,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     GIT_COMMAND_TIMEOUT_SECONDS,
+    GIT_COMMAND_UNAVAILABLE_MESSAGE,
     GIT_EXECUTABLE_NAME,
+    GIT_OUTPUT_DECODE_ERRORS_POLICY,
+    GIT_OUTPUT_ENCODING_NAME,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
     LOCAL_REFERENCE_FIELD_INDEX,
@@ -76,20 +78,38 @@ from pre_push_base_reference import (
 )
 
 
+def _report_unavailable_git(launch_error: Exception) -> int:
+    """Report a git that would not run, and hand back the exit code to use."""
+    git_command_unavailable_message = GIT_COMMAND_UNAVAILABLE_MESSAGE
+    sys.stderr.write(
+        git_command_unavailable_message.format(error=launch_error) + "\n"
+    )
+    return GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+
+
+class GitCommandUnavailable(RuntimeError):
+    """Git itself could not run: it failed to launch, or it timed out.
+
+    A git that runs and reports nothing is ordinary absence, which stays a
+    plain return. Separating the two keeps a broken toolchain from reading
+    as a repository that simply has no default branch.
+    """
+
+
 def run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
     """Ask git a question and read back its answer.
 
-    ::
-
-        ["rev-parse", "--verify", "--quiet", "origin/main^{commit}"]
-        -> (0, "1a2b3c...")   the name points at a real commit
-        -> (1, "")            git cannot find it
+    Output decodes with a replacing policy, so a reference whose bytes are
+    invalid in this encoding becomes a marked string and matches nothing.
 
     Args:
         all_command_arguments: The git arguments following the executable name.
 
     Returns:
         The exit code paired with the trimmed standard output.
+
+    Raises:
+        GitCommandUnavailable: Git failed to launch or exceeded its timeout.
     """
     git_executable_name = GIT_EXECUTABLE_NAME
     git_command_timeout_seconds = GIT_COMMAND_TIMEOUT_SECONDS
@@ -98,12 +118,14 @@ def run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
             [git_executable_name, *all_command_arguments],
             check=False,
             capture_output=True,
-            text=True,
             timeout=git_command_timeout_seconds,
         )
-    except (OSError, subprocess.SubprocessError):
-        return GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE, EMPTY_GIT_COMMAND_OUTPUT
-    return completion.returncode, completion.stdout.strip()
+    except (OSError, subprocess.SubprocessError) as launch_error:
+        raise GitCommandUnavailable(str(launch_error)) from launch_error
+    decoded_output = completion.stdout.decode(
+        GIT_OUTPUT_ENCODING_NAME, errors=GIT_OUTPUT_DECODE_ERRORS_POLICY
+    )
+    return completion.returncode, decoded_output.strip()
 
 
 def is_all_zeros_object_name(object_name: str) -> bool:
@@ -323,9 +345,12 @@ def main() -> int:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
     remote_name = resolve_remote_name_from_arguments(sys.argv)
-    usable_base_reference = resolve_usable_base_reference(
-        base_reference, remote_name, run_git_text_command
-    )
+    try:
+        usable_base_reference = resolve_usable_base_reference(
+            base_reference, remote_name, run_git_text_command
+        )
+    except GitCommandUnavailable as unavailable_error:
+        return _report_unavailable_git(unavailable_error)
     if usable_base_reference is None:
         return gate_infrastructure_failure_exit_code
     code_rules_exit_code = invoke_gate(gate_script_path, usable_base_reference)

@@ -66,7 +66,11 @@ PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE: str = (
 )
 GIT_EXECUTABLE_NAME: str = "git"
 GIT_COMMAND_SUCCESS_EXIT_CODE: int = 0
-EMPTY_GIT_COMMAND_OUTPUT: str = ""
+GIT_OUTPUT_ENCODING_NAME: str = "utf-8"
+GIT_OUTPUT_DECODE_ERRORS_POLICY: str = "replace"
+GIT_COMMAND_UNAVAILABLE_MESSAGE: str = (
+    "claude-dev-env pre-push: could not run git ({error}), aborting"
+)
 GIT_REV_PARSE_SUBCOMMAND: str = "rev-parse"
 GIT_REV_PARSE_VERIFY_FLAG: str = "--verify"
 GIT_QUIET_FLAG: str = "--quiet"
@@ -77,11 +81,18 @@ GIT_REFERENCE_SHORT_NAME_FORMAT_ARGUMENT: str = "--format=%(refname:short)"
 COMMIT_OBJECT_NAME_SUFFIX: str = "^{commit}"
 REMOTE_REFERENCE_NAME_PREFIX: str = "refs/remotes/"
 REMOTE_HEAD_SYMBOLIC_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/HEAD"
-REMOTE_BRANCH_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/{branch}"
+REMOTE_HEAD_BRANCH_NAME: str = "HEAD"
 REMOTE_BRANCH_SHORT_NAME_TEMPLATE: str = "{remote}/{branch}"
 DEFAULT_REMOTE_NAME: str = "origin"
 REMOTE_NAME_ARGUMENT_INDEX: int = 1
-ALL_REMOTE_URL_MARKERS: tuple[str, ...] = (":", "/")
+ALL_REJECTED_REMOTE_NAME_CHARACTERS: tuple[str, ...] = (
+    ":",
+    "/",
+    "*",
+    "?",
+    "[",
+    "\\",
+)
 ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES: tuple[str, ...] = (
     "main",
     "master",
