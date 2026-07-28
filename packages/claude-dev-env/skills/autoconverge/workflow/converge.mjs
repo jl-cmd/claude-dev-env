@@ -68,13 +68,15 @@ const HEADLESS_EDIT_PREAMBLE =
   '- When your run was given a result schema, your final action is always the StructuredOutput call. If the poll budget is spent before the awaited signal arrives, call StructuredOutput with the whole time-out result the step documents — for the Copilot gate, the full down result {sha, clean:false, down:true, findings:[]}, never a bare down flag — rather than ending the turn without a result.\n\n'
 
 const HEADLESS_READONLY_DESTRUCTIVE_POINTER =
-  '- Never run a destructive command (rm -rf, git reset --hard, dd, mkfs, chmod -R, a fork bomb) and never place its literal text in a Bash command: this step reads only and edits nothing, so it needs no destructive command. If a step seems to require one, report it as a blocker rather than running it.\n'
+  '- Never run a destructive command (rm -rf, git reset --hard, dd, mkfs, chmod -R, a fork bomb) and never place its literal text in a Bash command: this step makes no edit to the tree it reads, so it needs no destructive command. If a step seems to require one, report it as a blocker rather than running it.\n'
 
 /**
  * The read-only preamble a review, verify, or utility agent receives: the full
- * edit preamble with the rm-shape-rules bullet dropped, since an agent that edits
- * nothing never runs rm and the shape rules add no value to its prompt. The
- * one-line destructive pointer keeps the escape-hatch guidance in view. The
+ * edit preamble with the rm-shape-rules bullet dropped, since an agent that makes
+ * no edit in the tree it reads never runs rm against that tree, and the one file
+ * it may touch off that tree — a deliberate break at a break site outside it —
+ * is an edit rather than a delete, so the shape rules add no value to its
+ * prompt. The one-line destructive pointer keeps the escape-hatch guidance in view. The
  * derivation reads the single rm-shape bullet out of the edit preamble and swaps
  * the pointer in, so the two preambles share every other clause from one source.
  */
@@ -430,7 +432,7 @@ function runVerifierTask(task, context) {
   if (task === 'fix-verify') {
     const findingsBlock = renderFindingsBlock(context.findings)
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
         `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -444,7 +446,7 @@ function runVerifierTask(task, context) {
       ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
       : 'none reported'
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
         `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -454,7 +456,7 @@ function runVerifierTask(task, context) {
     )
   }
   return convergeReadOnlyAgent(
-    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
       `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
       `Steps:\n` +
       `1. cd into ${context.hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -468,7 +470,7 @@ function runVerifierTask(task, context) {
       "      ```verdict\n" +
       `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
       "      ```\n" +
-      `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
+      `      Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`,
     { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
   )
 }
@@ -871,7 +873,7 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
     "   ```verdict\n" +
     `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
     "   ```\n" +
-    `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
+    `   Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`
   )
 }
 
@@ -1344,13 +1346,60 @@ function renderVerifyObjectionLine(eachFinding) {
 }
 
 /**
+ * Read the prose paragraph the verifier wrote directly above its last verdict
+ * fence. A verdict that is incomplete — a check it rests on never showed red —
+ * is not a code defect, so the fence contract puts that reason here rather than
+ * in findings; this reader is how the reason survives into the re-fix step.
+ *
+ * Anchors on the same fence parseLastVerdictFence reads — the last CLOSED
+ * verdict fence, not the last bare marker — so a stray unterminated marker after
+ * the real fence can never make this read the verdict body itself as prose. A
+ * candidate paragraph carrying only markdown scaffolding (a heading, a fence
+ * delimiter) is skipped, since handing the fixer a heading is worse than the
+ * generic fallback the caller keeps.
+ *
+ * ::
+ *
+ *   'ran the gates\n\ncheck X never showed red\n\n```verdict\n{}\n```'
+ *     -> 'check X never showed red'
+ *   '```verdict\n{}\n```'  -> null
+ *
+ * @param {string|null|undefined} verifyTranscript the verifier transcript text
+ * @returns {string|null} the last prose paragraph above the final fence, or null when there is none
+ */
+function extractPreFenceProse(verifyTranscript) {
+  if (typeof verifyTranscript !== 'string') return null
+  const fenceMarker = '```verdict'
+  let lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker)
+  while (lastFenceStart !== -1 && !verifyTranscript.slice(lastFenceStart + fenceMarker.length).includes('```')) {
+    lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker, lastFenceStart - 1)
+  }
+  if (lastFenceStart === -1) return null
+  const proseParagraphs = verifyTranscript
+    .slice(0, lastFenceStart)
+    .split(/\n\s*\n/)
+    .map((eachParagraph) => eachParagraph.trim())
+    .filter((eachParagraph) =>
+      eachParagraph
+        .split('\n')
+        .some((eachLine) => {
+          const trimmedLine = eachLine.trim()
+          return trimmedLine.length > 0 && !trimmedLine.startsWith('#') && !trimmedLine.startsWith('```') && /[A-Za-z]/.test(trimmedLine)
+        }),
+    )
+  return proseParagraphs.length === 0 ? null : proseParagraphs[proseParagraphs.length - 1]
+}
+
+/**
  * Pull the verifier's stated objections out of a failed verify transcript so the
  * re-fix step knows what the verdict rejected. Reads the last fenced verdict JSON
  * (the same block verdictPassed reads) and renders each finding through
- * renderVerifyObjectionLine into a numbered list. A missing fence, a parse
- * failure, an empty findings list, or a findings list where no entry yields
- * usable text falls back to a generic re-read instruction, so the re-fix step
- * always receives actionable text.
+ * renderVerifyObjectionLine into a numbered list. When findings yields no usable
+ * line the verdict is an incomplete one rather than a code-defect one, so the
+ * prose paragraph above the fence — where the fence contract puts the unshown-red
+ * check — carries the objection instead. A missing fence, a parse failure, or an
+ * empty findings list with no prose above the fence falls back to a generic
+ * re-read instruction, so the re-fix step always receives actionable text.
  * @param {string|null|undefined} verifyTranscript the failed verifier transcript text
  * @returns {string} a human-readable block of the verifier's objections
  */
@@ -1361,7 +1410,7 @@ function extractVerifyObjection(verifyTranscript) {
   const renderedObjections = allObjections
     .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
     .filter((eachLine) => eachLine !== null)
-  if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
+  if (renderedObjections.length === 0) return extractPreFenceProse(verifyTranscript) || VERIFY_OBJECTION_FALLBACK
   return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
 }
 

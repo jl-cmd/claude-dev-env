@@ -258,6 +258,7 @@ const verifyObjectionModule = new Function(
   `${functionSource('parseLastVerdictFence')}\n` +
     `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
     `${functionSource('renderVerifyObjectionLine')}\n` +
+    `${functionSource('extractPreFenceProse')}\n` +
     `${functionSource('extractVerifyObjection')}\n` +
     'return { extractVerifyObjection, VERIFY_OBJECTION_FALLBACK };',
 )();
@@ -336,6 +337,78 @@ test('extractVerifyObjection stringifies an object whose keys it does not recogn
 test('extractVerifyObjection falls back when no finding yields usable text', () => {
   const transcript = '```verdict\n{"all_pass": false, "findings": [null, {}, ""]}\n```';
   assert.equal(extractVerifyObjection(transcript), VERIFY_OBJECTION_FALLBACK);
+});
+
+test('the prose reader anchors on the last CLOSED fence, not a stray unterminated marker', () => {
+  const transcript =
+    'check X never showed red\n\n' +
+    '```verdict\n{"all_pass": false, "findings": []}\n```\n\n' +
+    'and here I started to restate it\n\n' +
+    '```verdict';
+  const objection = extractVerifyObjection(transcript);
+  assert.equal(objection, 'check X never showed red');
+  assert.doesNotMatch(objection, /all_pass/, 'expected the verdict body never to be read back as prose');
+});
+
+test('the prose reader skips a scaffolding-only paragraph above the fence', () => {
+  const transcript =
+    'check X never showed red\n\n' + '## Verdict\n\n' + '```verdict\n{"all_pass": false, "findings": []}\n```';
+  assert.equal(extractVerifyObjection(transcript), 'check X never showed red');
+});
+
+const verifyRecoveryPromptModule = new Function(
+  `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
+    'const prCoordinates = "owner/repo#1";\n' +
+    'const PRE_COMMIT_GATE_STEP = "";\n' +
+    'const EDIT_SCHEMA = {};\n' +
+    'const TIERS = { sonnetMedium: {} };\n' +
+    'const convergeAgent = (spawnPrompt) => spawnPrompt;\n' +
+    `${functionSource('runCodeEditorTask')}\n` +
+    'return { runCodeEditorTask };',
+)();
+
+const { runCodeEditorTask: buildCodeEditorPrompt } = verifyRecoveryPromptModule;
+
+function buildVerifyRecoveryPrompt(verifyTranscript) {
+  return buildCodeEditorPrompt('verify-recover', {
+    objection: extractVerifyObjection(verifyTranscript),
+    head: 'deadbeefcafe',
+    sourceLabel: 'round-1 lens findings',
+    attempt: 1,
+  });
+}
+
+const INCOMPLETE_CHECK_SENTENCE =
+  'This verdict is incomplete: the deliberate break for check_docstring_runon_sentence never showed red, so that gate is unproven rather than failed.';
+
+test('an incomplete verdict carries its named check into the fixer prompt instead of the fallback', () => {
+  const transcript =
+    'I ran the named gates and read the diff against the task text.\n\n' +
+    `${INCOMPLETE_CHECK_SENTENCE}\n\n` +
+    '```verdict\n{"all_pass": false, "findings": [], "manifest_sha256": "0f1e2d"}\n```';
+  const fixerPrompt = buildVerifyRecoveryPrompt(transcript);
+  assert.match(fixerPrompt, /VERIFY-RECOVERY fixer/, 'expected the verify-recovery fixer prompt');
+  assert.ok(
+    fixerPrompt.includes(INCOMPLETE_CHECK_SENTENCE),
+    `expected the fixer prompt to carry the incomplete-check sentence, got:\n${fixerPrompt.slice(0, 600)}`,
+  );
+  assert.doesNotMatch(
+    fixerPrompt,
+    /without a parseable verdict/,
+    'expected the incomplete verdict never to reach the fixer as VERIFY_OBJECTION_FALLBACK',
+  );
+});
+
+test('a genuine code defect still reaches the fixer prompt from findings, unchanged by pre-fence prose', () => {
+  const transcript =
+    `${INCOMPLETE_CHECK_SENTENCE}\n\n` +
+    '```verdict\n{"all_pass": false, "findings": [{"check": "Finding 1", "detail": "boundary still over-blocks"}]}\n```';
+  const fixerPrompt = buildVerifyRecoveryPrompt(transcript);
+  assert.match(fixerPrompt, /1\. Finding 1 — boundary still over-blocks/);
+  assert.ok(
+    !fixerPrompt.includes(INCOMPLETE_CHECK_SENTENCE),
+    'expected findings to keep owning a verdict that names a code defect',
+  );
 });
 
 test('the verify-recover task in runCodeEditorTask is a clean-coder edit step bound to the verifier objection and leaves changes uncommitted', () => {
