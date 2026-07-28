@@ -10,11 +10,12 @@ Report progress while you work. Stop for the user only on a terminal outcome bel
 
 ## Where fixes come from
 
-When `--fix` is also set, each round's fix pass runs `reference\fix.md`
-(relative to this skill's folder) — it owns which agent applies each fix, the
-commit gate, skip logging, and outcome reporting. Apply the gate sequence below
-on top of it: it decides whether a round fixes, commits, pushes, and
-re-reviews.
+When `--fix` is also set, the round's fixing happens inside the gate sequence
+below. Gate 2 is the only place a round applies a fix, and there is no separate
+fix pass sitting around the round. Gate 2 loads `reference\fix.md` (relative to
+this skill's folder) for the mechanics — which agent applies each fix, agent
+resume, skip logging, and outcome reporting — while the gate sequence decides
+whether a round fixes, commits, pushes, and re-reviews.
 
 ## Scope stays narrow
 
@@ -43,6 +44,13 @@ target — the diff or path the level gathers up front, called Phase 0 in
 landing outside that target widens the next round's scope to cover it: the next
 round's review target is the original target **plus** that path, and the round
 reviews both. A later widening adds to that target the same way.
+
+The widened target is what the round hands the level file. When a round runs the
+level file end to end, it passes the current review target — the original target
+plus every path a widening has since added — as that run's target argument, in
+place of the argument the first round was given. The level file gathers what the
+round hands it, so a widened path is gathered and reviewed like any other part of
+the target.
 
 ## Dangerous diffs take two full rounds
 
@@ -119,7 +127,10 @@ Gate 1 states its answer and stops there: an obligation remains open, or none
 does. It states no re-entry, no continuation, and no routing. Gate 3 is the sole
 router — every path out of a round passes through it.
 
-**Gate 2 — findings.** Take the one case that matches the round's findings.
+**Gate 2 — findings.** When `--fix` is set, load `reference\fix.md` here and
+follow it for the mechanics of every fix this gate applies — the fix agent,
+agent resume, skip logging, and outcome reporting. Then take the one case that
+matches the round's findings.
 
 - Any bug-severity finding: validate each bug with an advisor before touching
   code — confirm it's real and confirm the intended fix — then fix every
@@ -137,12 +148,13 @@ defines that record — checked, result recorded, named in this round's progress
 report — whether or not the problem behind it is solved. Gate 2 reads the record
 and nothing else; the termination-time disclosure belongs to gate 3.
 
-A skipped finding — a real finding deliberately not applied, because fixing it
-would change intended behavior or reach beyond the review target — is resolved
-once its skip is logged in this round's progress report, naming the finding and
-the reason it was skipped. That report is the sink every run has, with or without
-`--fix`. When `--fix` is set, `fix.md`'s own skip handling applies on top of this
-log rather than in place of it.
+A skipped finding — a finding deliberately not applied, because fixing it would
+change intended behavior, would reach beyond the review target, or the finding
+itself is judged a false positive — is resolved once its skip is logged in this
+round's progress report, naming the finding and the reason it was skipped. That
+report is the sink every run has, with or without `--fix`. When `--fix` is set,
+the skip handling `fix.md` carries runs inside this gate and adds to this log
+rather than replacing it.
 
 Gate 3 reads that stated outcome, never a case label.
 
@@ -173,5 +185,14 @@ own section above.
 **The round tail.** Run required checks. When this round produced edits, commit
 them yourself, once, and push. Then start the next round under *Each round
 reviews new code*.
+
+The round tail owns the round's commit, and it is the only home that commits.
+When `--fix` is set, the *Commit gate* section of `fix.md` reads as though the
+fix agent commits its own change. It does not: the numbered steps under that
+heading are the required-checks loop and carry no commit step, and that loop is
+the whole of what gate 2 takes from the section. So gate 2 leaves its change
+uncommitted, and the tail commits it. Required checks run here, after every fix
+has landed, so the tail's single commit carries the round's fixes and the
+repairs those checks produce together.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
