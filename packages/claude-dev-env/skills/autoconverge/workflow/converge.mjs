@@ -430,7 +430,7 @@ function runVerifierTask(task, context) {
   if (task === 'fix-verify') {
     const findingsBlock = renderFindingsBlock(context.findings)
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
         `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -444,7 +444,7 @@ function runVerifierTask(task, context) {
       ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
       : 'none reported'
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
         `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -454,7 +454,7 @@ function runVerifierTask(task, context) {
     )
   }
   return convergeReadOnlyAgent(
-    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Do NO edits of any kind — verification only; any edit invalidates the verdict you are about to emit.\n\n` +
+    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
       `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
       `Steps:\n` +
       `1. cd into ${context.hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
@@ -468,7 +468,7 @@ function runVerifierTask(task, context) {
       "      ```verdict\n" +
       `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
       "      ```\n" +
-      `      When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`,
+      `      Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`,
     { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
   )
 }
@@ -871,7 +871,7 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
     "   ```verdict\n" +
     `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
     "   ```\n" +
-    `   When verification fails, set all_pass to false and list the unresolved concerns in findings; still include the manifest_sha256. The verdict fence must be the last thing in your message.`
+    `   Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`
   )
 }
 
