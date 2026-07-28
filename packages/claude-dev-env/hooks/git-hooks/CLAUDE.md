@@ -14,6 +14,8 @@ Native git hooks that run outside the Claude Code lifecycle — invoked directly
 | `test_gate_utils.py` | — | Tests for `gate_utils.py` |
 | `test_pre_commit.py` | — | Tests for `pre_commit.py` |
 | `test_pre_push.py` | — | Tests for `pre_push.py` |
+| `test_pre_push_base_reference.py` | — | Tests for the gate base resolution in `pre_push.py` |
+| `conftest.py` | — | Puts this directory on `sys.path` and clears cached `config` modules, so each test module imports the hooks at the top of the file |
 
 ## Subdirectory
 

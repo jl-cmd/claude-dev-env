@@ -65,3 +65,20 @@ PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE: str = (
     "To push the feature branch to its own ref, name the destination: "
     "git push origin {local_branch}:refs/heads/{local_branch}"
 )
+GIT_EXECUTABLE_NAME: str = "git"
+GIT_COMMAND_SUCCESS_EXIT_CODE: int = 0
+EMPTY_GIT_COMMAND_OUTPUT: str = ""
+GIT_REV_PARSE_SUBCOMMAND: str = "rev-parse"
+GIT_REV_PARSE_VERIFY_FLAG: str = "--verify"
+GIT_QUIET_FLAG: str = "--quiet"
+GIT_SYMBOLIC_REFERENCE_SUBCOMMAND: str = "symbolic-ref"
+GIT_COMMAND_TIMEOUT_SECONDS: int = 30
+COMMIT_OBJECT_NAME_SUFFIX: str = "^{commit}"
+REMOTE_HEAD_SYMBOLIC_REFERENCE_NAME: str = "refs/remotes/origin/HEAD"
+REMOTE_REFERENCE_NAME_PREFIX: str = "refs/remotes/"
+ALL_FALLBACK_REMOTE_BASE_REFERENCES: tuple[str, ...] = ("origin/main", "origin/master")
+UNRESOLVABLE_BASE_REFERENCE_MESSAGE: str = (
+    "claude-dev-env pre-push: no usable gate base -- {reference} names no commit and "
+    "the remote default branch could not be read.\n"
+    "Set the remote head so the gate has a base: git remote set-head origin --auto"
+)
