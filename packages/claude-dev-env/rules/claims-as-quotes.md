@@ -1,10 +1,12 @@
 # Claims as Quotes
 
-**When this applies:** Agent reports and hand-offs, review verdicts, and PR or commit prose that states what existing code does.
+**When this applies:** Agent reports, hand-off artifacts, review verdicts, and PR or commit prose that state what existing code does.
 
 ## Rule
 
-A claim that decides a design or gates an action travels with the exact lines it rests on and their `path:line` reference. The consumer reads those lines before acting on the claim.
+Under `research-mode.md`, a factual claim carries its source. This rule sets the shape a claim takes when it decides a design or gates an action: the `path:line` reference, the quoted lines, and the claim sentence travel together. The consumer reads those lines before acting on the claim.
+
+In a chat reply, research-mode's compact citation stands — a linked source name or a `file:line` reference. The three-piece shape binds agent reports, hand-off artifacts, review verdicts, and PR or commit prose.
 
 Claims of this shape:
 
@@ -13,8 +15,6 @@ Claims of this shape:
 - "this caller handles the new shape"
 
 Each one settles a design question for whoever reads it, so each one carries its quote. A claim without its quote decides nothing: it is a lead to check, not a fact to build on.
-
-The quote is of the deciding lines themselves. A retelling of what those lines do is the claim; the lines are the evidence behind it.
 
 ## The failure shape
 
@@ -59,6 +59,7 @@ The AI review lane and audit skills carry this rule: an agent applies it to the 
 | Rule | Role |
 |---|---|
 | `research-mode.md` | Names what counts as a citation and grounds a factual claim in word-for-word quotes |
+| `hedging-claims.md` | Catches a hedge word standing in for evidence on a claim; this rule catches a claim missing its quote |
 | `verify-runtime-state.md` | A verdict about what runs rests on a live probe from this session |
 | `falsify-before-green.md` | A check's green counts once the check has been shown red |
 | `measurement-denominators.md` | Every count names what it scanned |
