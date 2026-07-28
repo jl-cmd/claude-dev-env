@@ -148,6 +148,6 @@ summary; the host UI's per-finding status updates only from that call.
 The `loop` arg was passed. Follow `reference\loop.md` (relative to this
 skill's folder) for how to re-run Phases 0–2, Output, and (if `--fix` is also
 present) `reference\fix.md`'s fix pass, repeatedly — including its exit
-condition, iteration cap, and re-invocation rules. Do not treat a single pass
+condition and re-invocation rules. Do not treat a single pass
 through this document as complete while `loop` is active; hand control to that
 document instead of stopping at Output.
