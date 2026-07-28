@@ -96,21 +96,19 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ## What's Included
 
-### Rules (13)
+### Rules (10)
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
 | Rule | What it does |
 |------|-------------|
-| `tdd` | Red-green-refactor is non-negotiable |
 | `code-standards` | References CODE_RULES.md for all code generation |
 | `conservative-action` | Research first, act only when explicitly asked |
 | `explore-thoroughly` | Read before proposing, map patterns before committing |
 | `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
 | `parallel-tools` | Independent tool calls run simultaneously |
 | `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
-| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns |
-| `code-reviews` | Systematic PR review response protocol |
+| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns, review-response protocol |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |

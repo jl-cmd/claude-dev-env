@@ -53,6 +53,8 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 4. Reply to each comment inline.
 5. Create one review-fix commit. Do not squash it with the original.
 
+Repair only reported findings, then re-verify after every repair.
+
 ## See also
 
 | Rule | Covers |

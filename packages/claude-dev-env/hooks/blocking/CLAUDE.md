@@ -113,7 +113,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |
-| `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, or bare home |
+| `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, bare home, or a network share root |
 | `verdict_directory_write_blocker.py` | PreToolUse (Bash/PowerShell) | Shell writes into `~/.claude/verification/` |
 | `verified_commit_gate.py` | PreToolUse (Bash/PowerShell) | `git commit`/`git push` without a passing verifier verdict |
 | `verified_commit_message_accuracy_blocker.py` | PreToolUse | Commit messages that misstate what the diff has |

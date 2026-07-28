@@ -1,8 +1,9 @@
 """Constants for the unscoped-search PreToolUse Bash/PowerShell blocker.
 
-Holds tool names, program basenames, Get-ChildItem option sets, unscoped root
-patterns, the shared flag/value token stride, and the deny message. Find global
-option flags reuse ``destructive_command_segment_constants`` so both find
+Holds tool names, program basenames, Get-ChildItem option sets, the clustered
+short-option pattern, unscoped root patterns (drive root, posix root alias, UNC
+share root), the shared flag/value token stride, and the deny message. Find
+global option flags reuse ``destructive_command_segment_constants`` so both find
 parsers stay on one set.
 """
 
@@ -31,17 +32,19 @@ __all__ = [
     "ALL_FIND_EXPRESSION_INTRODUCER_TOKENS",
     "ALL_POWERSHELL_RECURSE_FLAGS",
     "ALL_UNIX_LS_RECURSE_FLAGS",
+    "UNIX_LS_RECURSE_SHORT_OPTION_LETTER",
+    "CLUSTERED_SHORT_OPTION_PATTERN",
     "ALL_POWERSHELL_RECURSE_FLAG_PREFIXES",
     "ALL_POWERSHELL_PATH_FLAGS",
     "ALL_POWERSHELL_PATH_FLAG_PREFIXES",
     "ALL_TRUTHY_RECURSE_COLON_VALUES",
     "ALL_STRING_EXECUTING_SHELL_BASENAMES",
     "ALL_STRING_EXEC_COMMAND_FLAGS",
-    "ALL_UNSCOPED_HOME_LITERALS",
     "ALL_UNSCOPED_HOME_LITERALS_CASEFOLD",
     "GIT_BASH_DRIVE_ROOT_PATTERN",
     "WINDOWS_DRIVE_ROOT_PATTERN",
     "POSIX_ROOT_ALIAS_PATTERN",
+    "UNC_SHARE_ROOT_PATTERN",
     "HOOK_EVENT_NAME",
     "DENY_DECISION",
     "CALLING_HOOK_NAME",
@@ -70,6 +73,8 @@ ALL_POWERSHELL_RECURSE_FLAGS: frozenset[str] = frozenset(
     {"-recurse", "-r", "-rec", "/s"}
 )
 ALL_UNIX_LS_RECURSE_FLAGS: frozenset[str] = frozenset({"-R", "--recursive"})
+UNIX_LS_RECURSE_SHORT_OPTION_LETTER = "R"
+CLUSTERED_SHORT_OPTION_PATTERN = re.compile(r"^-[A-Za-z]+$")
 ALL_POWERSHELL_RECURSE_FLAG_PREFIXES: tuple[str, ...] = (
     "-recurse:",
     "-r:",
@@ -102,7 +107,7 @@ ALL_STRING_EXEC_COMMAND_FLAGS: frozenset[str] = frozenset(
     {"-c", "-lc", "-command", "-encodedcommand"}
 )
 
-ALL_UNSCOPED_HOME_LITERALS: frozenset[str] = frozenset(
+_ALL_UNSCOPED_HOME_LITERALS: frozenset[str] = frozenset(
     {
         "~",
         "~/",
@@ -125,12 +130,13 @@ ALL_UNSCOPED_HOME_LITERALS: frozenset[str] = frozenset(
     }
 )
 ALL_UNSCOPED_HOME_LITERALS_CASEFOLD: frozenset[str] = frozenset(
-    each_literal.casefold() for each_literal in ALL_UNSCOPED_HOME_LITERALS
+    each_literal.casefold() for each_literal in _ALL_UNSCOPED_HOME_LITERALS
 )
 
 GIT_BASH_DRIVE_ROOT_PATTERN = re.compile(r"^/[a-zA-Z]/?$")
 WINDOWS_DRIVE_ROOT_PATTERN = re.compile(r"^[a-zA-Z]:[\\/]*$")
 POSIX_ROOT_ALIAS_PATTERN = re.compile(r"^/(?:\.|/)*$")
+UNC_SHARE_ROOT_PATTERN = re.compile(r"^//[^/]+/[^/]+/*$")
 
 HOOK_EVENT_NAME = "PreToolUse"
 DENY_DECISION = "deny"
@@ -138,8 +144,9 @@ CALLING_HOOK_NAME = "unscoped_search_blocker.py"
 
 CORRECTIVE_MESSAGE = (
     "Unscoped filesystem search blocked. Never start find/Get-ChildItem at `/`, "
-    "a drive root (`/c`, `C:\\`), or bare home (`~`, `$HOME`). Scope the walk to a "
-    "project or worktree path (for example `find . -name '*.py'` or "
+    "a drive root (`/c`, `C:\\`), bare home (`~`, `$HOME`), or a network share "
+    "root (`\\\\server\\share`). Scope the walk to a project or worktree path "
+    "(for example `find . -name '*.py'` or "
     "`find packages/claude-dev-env -iname code_rules_gate.py`). On Windows prefer "
     "es.exe with a path scope, or the Grep/Glob tools. Batch shell work; avoid "
     "parallel full-tree searches that contend for the shell and lock the host."

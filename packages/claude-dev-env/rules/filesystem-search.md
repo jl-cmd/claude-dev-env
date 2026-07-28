@@ -39,6 +39,7 @@ When `es.exe` fails or returns nothing, fall back to `Glob` or `Grep` without pa
 | Git Bash drive root | `find /c -name '*.py'` |
 | Windows drive root | `find C:\ -name foo` / `Get-ChildItem C:\ -Recurse` |
 | Bare home | `find ~ -name README.md` / `find $HOME -type f` |
+| Network share root | `find //server/share -name x` — a path under the share (`//server/share/project/src`) is allowed |
 
 ## Shell batching
 

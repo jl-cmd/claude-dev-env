@@ -18,6 +18,8 @@ When the `advisor()` tool is available, read `~/.claude/docs/references/advisor-
 
 Put all work in an isolated worktree under the repo's `.claude/worktrees/`.
 
+Default to Edit for existing files; reach for Write only when the path is genuinely new.
+
 ## Code and tests
 
 Tests must exercise real behavior, real data, and production paths.

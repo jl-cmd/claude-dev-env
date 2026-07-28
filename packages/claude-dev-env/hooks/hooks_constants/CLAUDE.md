@@ -45,7 +45,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
 | `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
-| `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
+| `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, and the batch-mode pattern for the NAS ssh binary enforcer; segment helpers come from `shell_command_segments.py` |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |

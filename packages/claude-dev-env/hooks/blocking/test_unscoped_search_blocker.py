@@ -16,14 +16,20 @@ ALL_DENIED_COMMANDS = [
     "find ~ -name README.md",
     "find $HOME -type f",
     "ls -R /",
+    "ls -laR /",
+    "ls -Rl /",
+    "find //server/share -name x",
+    "find \\\\server\\share -name x",
     "bash -c 'find / -name x'",
 ]
 
 ALL_ALLOWED_COMMANDS = [
     "find . -iname '*.py'",
     "find packages/claude-dev-env -name code_rules_gate.py",
-    "find /c/Users/jon/repo -iname SKILL.md",
+    "find /c/Users/example/repo -iname SKILL.md",
     "ls -r /",
+    "ls -la /tmp/x",
+    "find //server/share/project/src -name x",
     "es.exe path:C:\\dev\\repo ext:py gate",
     "git status --short",
 ]

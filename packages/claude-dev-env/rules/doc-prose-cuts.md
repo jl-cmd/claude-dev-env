@@ -1,14 +1,3 @@
----
-paths:
-  - "**/*.md"
-  - "**/*.py"
-  - "**/*.mjs"
-  - "**/*.js"
-  - "**/*.ts"
-  - "**/*.ps1"
-  - "**/*.sh"
----
-
 # Documentation Prose Cuts
 
 Prose a reader acts on states settled facts, decisions, and behavior directly. Four sentence shapes carry no fact the reader can act on. Cut each on sight, in `.md` files, in code comments, and in docstrings alike.

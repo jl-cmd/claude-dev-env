@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: deny whole-drive and bare-home filesystem searches.
+"""PreToolUse hook: deny drive-root, bare-home, and share-root filesystem searches.
 
 Blocks Bash/PowerShell commands that walk from an unscoped root — ``find /``,
-``find C:\\``, ``find ~``, recursive ``Get-ChildItem`` on a drive root — so a
-session cannot thrash the host with millions of handles. Scoped walks under a
-project path stay allowed. Parallel shell storms are out of scope for this
-detector; the deny message still steers agents to batch shell work.
+``find C:\\``, ``find ~``, ``find //server/share``, recursive ``Get-ChildItem``
+on a drive root — so a session cannot thrash the host with millions of handles.
+Scoped walks under a project path stay allowed. Parallel shell storms are out of
+scope for this detector; the deny message still steers agents to batch shell work.
 
 ::
 
     find / -iname code_rules_gate.py          flag: unscoped root
     find . -iname code_rules_gate.py          ok:   cwd scope
+    find //server/share -name x               flag: network share root
+    find //server/share/project -name x       ok:   scoped under the share
     Get-ChildItem -Path C:\\ -Recurse         flag: recursive drive root
     Get-ChildItem -Path .\\src -Recurse       ok:   project scope
     ls -r /                                   ok:   reverse sort, not recurse
     ls -R /                                   flag: recursive root listing
+    ls -laR /                                 flag: clustered short options
     bash -c 'find / -name x'                  flag: string-exec unwrap
 """
 
@@ -53,6 +56,7 @@ from hooks_constants.unscoped_search_blocker_constants import (  # noqa: E402
     ALL_UNIX_LS_RECURSE_FLAGS,
     ALL_UNSCOPED_HOME_LITERALS_CASEFOLD,
     CALLING_HOOK_NAME,
+    CLUSTERED_SHORT_OPTION_PATTERN,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
     FIND_OPTIMIZATION_LEVEL_OPTION_PREFIX,
@@ -60,22 +64,26 @@ from hooks_constants.unscoped_search_blocker_constants import (  # noqa: E402
     GIT_BASH_DRIVE_ROOT_PATTERN,
     HOOK_EVENT_NAME,
     POSIX_ROOT_ALIAS_PATTERN,
+    UNC_SHARE_ROOT_PATTERN,
+    UNIX_LS_RECURSE_SHORT_OPTION_LETTER,
     WINDOWS_DRIVE_ROOT_PATTERN,
 )
 
 
 def is_unscoped_search_root(path_token: str) -> bool:
-    """Return True when a path token is a whole-drive or bare-home root.
+    """Return True when a path token is a drive, home, or network-share root.
 
     ::
 
-        /          flag
-        /.         flag  (posix root alias)
-        /c/        flag  (Git Bash drive root)
-        C:\\        flag
-        ~          flag
-        ./src      ok
-        /c/Users/x ok
+        /                     flag
+        /.                    flag  (posix root alias)
+        /c/                   flag  (Git Bash drive root)
+        C:\\                   flag
+        ~                     flag
+        //server/share        flag  (UNC share root)
+        //server/share/src    ok    (scoped under the share)
+        ./src                 ok
+        /c/Users/x            ok
 
     Args:
         path_token: One shell token treated as a search start path.
@@ -92,6 +100,8 @@ def is_unscoped_search_root(path_token: str) -> bool:
     if POSIX_ROOT_ALIAS_PATTERN.fullmatch(forward_slash_path):
         return True
     if GIT_BASH_DRIVE_ROOT_PATTERN.fullmatch(forward_slash_path):
+        return True
+    if UNC_SHARE_ROOT_PATTERN.fullmatch(forward_slash_path):
         return True
     if WINDOWS_DRIVE_ROOT_PATTERN.fullmatch(stripped_path):
         return True
@@ -162,9 +172,34 @@ def _segment_has_unscoped_find(all_segment_tokens: list[str]) -> bool:
     )
 
 
+def _token_is_unix_ls_recurse_flag(token: str) -> bool:
+    """Return True for an ls token that turns the listing recursive.
+
+    ::
+
+        -R           flag
+        -laR         flag  (clustered short options)
+        -Rl          flag
+        --recursive  flag
+        -r           ok    (reverse sort, not recurse)
+        -la          ok
+
+    Args:
+        token: One argument token from an ``ls`` segment.
+
+    Returns:
+        True when the token carries the recursive option.
+    """
+    if token in ALL_UNIX_LS_RECURSE_FLAGS:
+        return True
+    if not CLUSTERED_SHORT_OPTION_PATTERN.fullmatch(token):
+        return False
+    return UNIX_LS_RECURSE_SHORT_OPTION_LETTER in token
+
+
 def _token_is_recurse_flag(token: str, program_basename: str) -> bool:
     if program_basename in ALL_UNIX_LS_PROGRAM_BASENAMES:
-        return token in ALL_UNIX_LS_RECURSE_FLAGS
+        return _token_is_unix_ls_recurse_flag(token)
     lowered_token = token.lower()
     if lowered_token in ALL_POWERSHELL_RECURSE_FLAGS:
         return True
@@ -279,17 +314,20 @@ def find_unscoped_search_violation(command: str) -> str | None:
         find packages -iname x.py              ok
         Get-ChildItem -Path C:\\ -Recurse       flag
         Get-ChildItem -Path .\\src -Recurse     ok
+        find //server/share -name x            flag
+        find //server/share/project -name x    ok
         bash -c 'find / -name x'               flag
         ls -r /                                ok
         ls -R /                                flag
+        ls -laR /                              flag
 
     Tokenizes the command under POSIX and non-POSIX shlex modes, splits on shell
     control operators, and evaluates each simple-command segment. A ``find``
     segment with an unscoped starting point denies. A recursive listing segment
-    (PowerShell ``Get-ChildItem``/``gci``/``dir`` or Unix ``ls -R``) with an
-    unscoped path denies. A ``bash -c`` / ``pwsh -Command`` wrapper re-runs the
-    check on its string argument. Returns None when neither tokenization yields
-    tokens.
+    (PowerShell ``Get-ChildItem``/``gci``/``dir`` or Unix ``ls -R``, including a
+    clustered short-option token such as ``-laR``) with an unscoped path denies.
+    A ``bash -c`` / ``pwsh -Command`` wrapper re-runs the check on its string
+    argument. Returns None when neither tokenization yields tokens.
 
     Args:
         command: The raw Bash or PowerShell command string from the tool input.
