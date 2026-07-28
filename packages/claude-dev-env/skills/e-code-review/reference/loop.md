@@ -50,15 +50,26 @@ rounds have reviewed it. A repair that rewrites the dangerous surface restarts
 the two-round count at the first round that reviews the rewritten surface.
 
 The round's progress report is where both facts are recorded: the dangerous
-classification, and the dangerous-round count written as `N of M` — the same
-report that already carries the shape-change reader list.
+classification, and the dangerous-round count written as `N of M`.
 
 ## A shape change names its readers
 
 When a repair changes a key, an identifier format, or a data shape, list every
 reader of the shape it changed and state how each one reads the new shape. The
-list goes in the round's progress report. The next round's review checks each
-named reader against the new shape.
+list goes in the round's progress report.
+
+The round that follows a posted list checks each reader on that list against the
+new shape and names each reader with its result in that round's progress report.
+The obligation discharges when every reader on the list has been named with a
+result — not when a reader is fixed, and not when a round merely happens.
+
+A broken reader outside the review target does not block the loop and does not
+widen scope. Check it, record its result, and hand it off as a reported finding:
+name it in the round report, and carry it into the ready-for-review message and
+the pull request body.
+
+A round may not mark ready while a broken off-target reader exists unless the
+ready message names it.
 
 ## Terminal outcomes
 
@@ -71,11 +82,11 @@ now, and no content they carry changes it. Ask only: does any obligation remain
 open? Two kinds exist.
 
 - A dangerous diff that has had fewer than two full rounds.
-- A posted shape-change list whose readers no round has checked.
+- A posted shape-change list that no round has discharged.
 
-If either is open, this round cannot terminate, whatever the findings say.
-Evaluation carries on to gate 2 and the loop re-enters afterwards; no round
-exits at gate 1.
+Gate 1 states its answer and stops there: an obligation remains open, or none
+does. It states no re-entry, no continuation, and no routing. Gate 3 is the sole
+router — every path out of a round passes through it.
 
 **Gate 2 — findings.** Take the one case that matches the round's findings.
 
@@ -86,17 +97,30 @@ exits at gate 1.
   target.
 - No findings at all: make no edits.
 
-**Gate 3 — exit test.** Terminate only when gate 1 shows no open obligation and
-gate 2 found nothing. On termination, post the proof-of-work PR comment when the
-target is a PR, then run `gh pr ready` for a draft PR, or state ready otherwise.
-In every other case, run the round tail and re-enter the loop.
+Gate 2 then ends by stating one of exactly two outcomes: unresolved findings
+remain, or none remain. A refuted bug is resolved. A fixed nit is resolved. A
+fixed validated bug is resolved. A handed-off off-target finding is resolved once
+its hand-off is complete — checked, its result recorded, and named in the round
+report — whether or not the problem behind it is solved. Gate 3 reads that stated
+outcome, never a case label.
+
+**Gate 3 — exit test.** Terminate only when all three of these hold:
+
+- gate 1 shows no open obligation;
+- gate 2 states no unresolved findings remain;
+- this round produced no edits.
+
+Any other combination runs the round tail and re-enters the loop. On termination,
+post the proof-of-work PR comment when the target is a PR, then run `gh pr ready`
+for a draft PR, or state ready otherwise.
 
 Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
 own section above.
 
-**The round tail.** Run required checks. Commit once, and push, only when this
-round produced edits. Then start the next round under *Each round reviews new
-code*.
+**The round tail.** Run required checks. When this round produced edits, confirm
+those edits are committed and pushed; make the commit yourself, once, only when
+no `--fix` path has already made one. Then start the next round under *Each round
+reviews new code*.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
