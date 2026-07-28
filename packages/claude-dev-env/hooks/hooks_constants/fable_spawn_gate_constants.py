@@ -1,7 +1,9 @@
 """Constants for the fable-tier subagent spawn gate.
 
 The gate denies an ``Agent`` or ``Task`` spawn at the fable tier whose
-``prompt`` lacks ``FABLE_SPAWN_AUTHORIZATION_MARKER``.
+``prompt`` lacks ``FABLE_SPAWN_AUTHORIZATION_MARKER``. ``DENY_REASON`` points
+at the protocol document rather than quoting the token, so pasting a denial
+into a retry prompt authorizes nothing.
 ``MODEL_SEGMENT_SPLIT_PATTERN`` finds that tier in a full model id too::
 
     fable           -> ['fable']                  flag: fable tier
@@ -37,13 +39,11 @@ HOOK_EVENT_NAME: str = "PreToolUse"
 
 DENY_REASON: str = (
     "BLOCKED [fable-spawn-gate]: this subagent spawn names the fable tier in "
-    "its model field and carries no authorization marker. An authorized fable "
-    f"spawn carries the exact token {FABLE_SPAWN_AUTHORIZATION_MARKER} in its "
-    "spawn prompt. Send this spawn at a lower tier — set model to opus, "
-    "sonnet, or haiku — or carry the token when the spawn is authorized. "
-    f"{ADVISOR_PROTOCOL_DOCUMENT_PATH} names who authorizes one."
+    "its model field and carries no authorization marker. Send this spawn at "
+    "a lower tier — set model to opus, sonnet, or haiku. When the spawn is an "
+    f"authorized fable bind, read {ADVISOR_PROTOCOL_DOCUMENT_PATH}: it names "
+    "the authorization token and who may carry it."
 )
 
-DENY_PREVIEW_TEMPLATE: str = "model={model_text} marker_present={is_marker_present}"
-ABSENT_MODEL_PREVIEW_TEXT: str = "(absent)"
+DENY_PREVIEW_TEMPLATE: str = "model={model_text} marker_present=False"
 MAXIMUM_PREVIEW_MODEL_LENGTH: int = 40

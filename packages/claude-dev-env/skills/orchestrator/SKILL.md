@@ -119,7 +119,10 @@ pending, or when the tool is `CronCreate`.
    whole lifecycle (its Lifecycle ownership section); executors only ever
    message the warm agent or report here, and an executor that finds the
    advisor unreachable reports that upward — it never spawns a
-   replacement itself.
+   replacement itself. A **Fable**-tier attempt carries the exact token
+   `FABLE-SPAWN-AUTHORIZED` in its spawn prompt, as the protocol's
+   warm-up rule states; `hooks/blocking/fable_spawn_gate.py` denies a
+   fable spawn whose prompt lacks it.
 3. **Write the run artifacts** (next section) before the first spawn.
 4. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.

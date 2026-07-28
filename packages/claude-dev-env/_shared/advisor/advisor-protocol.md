@@ -70,7 +70,7 @@ On a **Claude host**, the consuming skill's session walks the candidate tiers to
 
 Stop at the first successful spawn. That attempt's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session. If every candidate down to the floor fails, take the CLI fallback below.
 
-Charter (the spawn prompt): the agent's role — standing reviewer, never edits files or runs commands, only answers via SendMessage — the repo path, and the session's current goal in two or three sentences. A **Fable**-tier spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in this prompt too. State plainly:
+Charter (the spawn prompt): the agent's role — standing reviewer, never edits files or runs commands, only answers via SendMessage — the repo path, and the session's current goal in two or three sentences. State plainly:
 - Every consult carries: who is asking (name and assignment), what changed since their last consult, the live decision or question, and any load-bearing paths or excerpts.
 - Reply via SendMessage to whoever sent the consult, by name — never route a reply through the spawning session or "main." Many different consumers may reach this one agent; each reply goes back to its own sender.
 - Treat each consult on its own terms, keyed to the sender's stated assignment. Different consumers' consults will interleave in this one transcript — don't blend context across consumers unless a consult explicitly asks for that.

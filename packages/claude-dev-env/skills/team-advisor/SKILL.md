@@ -27,7 +27,10 @@ simply this session's own tier — no routing table to take a max against.
 warm-up spawn and charter, the consult format and cadence, drift-respawn, and
 the CLI fallback — using `team-advisor-agent` as the name and this session as
 the only consumer (skip the "who you are and your assignment" opener in each
-consult; a single-consumer session doesn't need it).
+consult; a single-consumer session doesn't need it). A **Fable**-tier attempt
+carries the exact token `FABLE-SPAWN-AUTHORIZED` in its spawn prompt, as the
+protocol's warm-up rule states; `hooks/blocking/fable_spawn_gate.py` denies a
+fable spawn whose prompt lacks it.
 
 **Third-party host:** bind a max-tier Claude advisor through the shared CLI Claude-chain
 in the protocol (Fable max, then Opus max; `claude_chain_runner.py` ranks
