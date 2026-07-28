@@ -39,17 +39,19 @@ Ending your turn without the verdict fence throws the whole run away: every gate
 
 This validation pass is terminal: the `Explore` type gives the validation subagent no way to spawn a further agent or edit a file, so it answers with prose only. When it refutes any part, re-check that part yourself against the commands and the diff, and correct the verdict before you emit it. When it refutes nothing, the draft verdict stands. Then emit the fenced verdict block below — it stays the last thing in your message so the verifier_verdict_minter hook reads it.
 
-Your final message carries a shown-red table, then the verdict fence. Every check the verdict rests on gets one row: the check, the deliberate break that made it fail, the red that break produced, and the green that followed.
+Your final message carries a shown-red table, then the verdict fence. Every runnable check the verdict rests on gets one row — a runnable check is one you can feed a deliberate break. Each row names the check, the deliberate break that made it fail, the red that break produced, and the green that followed.
 
 | Check | Deliberate break | Red | Green |
 |---|---|---|---|
 | `<command you ran>` | `<break you applied>`, or `none` | `<exit code or the deciding line>` | `<exit code or the deciding line>` |
 
-Keep each cell to one line — an exit code, a failing test id, an assert line, or a hook's block message. Longer excerpts go below the table in a plain fenced block carrying no info string.
+Keep each cell to one line — an exit code, a failing test id, an assert line, or a hook's block message. The Green cell may cite the check's first clean run when you kept that output; a clean result already in hand needs no third run. Longer excerpts go below the table in a plain fenced block carrying no info string.
+
+The reading layers take no rows. Name the two-way diff-vs-task mapping and the negative-space walk in prose: what you read, and what that reading would catch. A check you can run keeps its row whatever you conclude by reading it.
 
 Break the check where the break cannot reach the tree you verify: a failing input or environment fed to the check, a mutated copy in a scratch directory, or the throwaway detached base worktree, where a check the change earns fails on its own. An in-place break moves the surface `manifest_sha256` names, so the work tree under verification stays as the coders left it, and the green is that same check run against it.
 
-A check with no row is a check the verdict does not rest on. A row carrying `none` is a check you relied on and never showed red — name that check in this message and call the verdict incomplete. An incomplete verdict sets `all_pass` to false in the fence, and the check that never showed red stays out of `findings`, which carries code defects alone.
+A runnable check with no row is a check the verdict does not rest on. A row carrying `none` is a runnable check you relied on and never showed red — name that check in this message and call the verdict incomplete. An incomplete verdict sets `all_pass` to false in the fence, and the check that never showed red stays out of `findings`, which carries code defects alone. A verdict that rests on the reading layers alone carries an empty table and stays complete.
 
 Write the table as plain markdown; the verdict fence below holds JSON alone.
 
