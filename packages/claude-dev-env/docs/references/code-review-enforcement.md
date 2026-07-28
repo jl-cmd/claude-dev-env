@@ -16,11 +16,13 @@ variable `CLAUDE_CODE_REVIEW_ENFORCEMENT` to `1`, `true`, `yes`, or `on`
 (case and surrounding spaces are ignored). Any other value, and an unset
 variable, leave enforcement off.
 
-Set the variable where every gate can read it: the `env` block in
-`settings.json`, or the machine's own user environment. Each hook process
-inherits the environment of the Claude Code session that spawns it and reads
-the variable as it starts, so a session already running keeps its current
-setting until it restarts.
+Set the variable in the machine's own user environment so every gate reads it,
+including the native git pre-push backstop, which git runs in the shell's
+environment. An `env` block in `settings.json` reaches the three Claude Code
+hook gates alone. Each gate process reads the variable as it starts, so a
+Claude Code session already running keeps its current setting until it
+restarts, while the git pre-push backstop picks up the current shell
+environment on each push.
 
 The variable feeds the master flag `CODE_REVIEW_ENFORCEMENT_ENABLED` in
 `hooks/blocking/config/code_review_enforcement_constants.py`, which every gate
@@ -29,10 +31,9 @@ pre-push backstop (via the shared deny decision), and the stamp-directory write
 blocker all enforce. When it is off, every gate allows the action and the
 write-blocker allows stamp-directory access.
 
-The switch lives in the environment rather than in this file because
-`npx claude-dev-env` copies the shipped `hooks/` tree over `~/.claude/`, so an
-edit to the constant is overwritten on the next install while an environment
-setting stands.
+`npx claude-dev-env` copies the shipped `hooks/` tree over `~/.claude/` on each
+install, so the environment setting survives an install and an edit to the
+constant does not.
 
 ## How a stamp works
 

@@ -54,14 +54,17 @@ It never pauses, cancels, or waits on a running executor. Reconcile the
 ledger, re-assert the routing, re-arm once, and hand control straight back
 to the work in progress.
 
-In the re-arm protocol (step 6), every "stop" ends the *re-arm* and nothing
-else. A `should-reschedule` or `claim-rearm` exit 1 means no schedule is
-created this firing; the session keeps orchestrating in the same turn.
+Inside the re-arm protocol (step 6), every "stop" ends the *re-arm* and
+nothing else. A `should-reschedule` exit 1 means no schedule is created this
+firing, and a `claim-rearm` exit 1 means the schedule just created is
+cancelled; either way the session keeps orchestrating in the same turn.
 
-Two terminations end the whole firing, and both leave running executors
-alone: `begin-firing` exit 1 (step 0a) and the done branch (step 0b). Each
-means the run is inactive or finished, so the refresh reports and adds
-nothing further.
+Two stops end the whole firing, and both leave running executors alone:
+`begin-firing` exit 1 (step 0a) and the done branch (step 0b). Each means the
+run is finished, not active, or has no readable status file, so the refresh
+reports and adds nothing further. A fail-closed advisor bind (step 3) stops
+advisor consultation alone; the firing still reconciles the ledger, re-arms
+once, and reports the unreachable advisor.
 
 ## Discipline steps
 

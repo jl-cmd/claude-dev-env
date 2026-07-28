@@ -71,7 +71,8 @@ reminder; it neither ends the turn nor pauses in-flight executors, and
 the session never waits for the refresh to fire before it carries on.
 When a create fails, keep orchestrating and re-arm at the next natural
 break. When the denial is `rearm_already_pending`, a refresh is already
-queued — keep orchestrating and arm nothing further this run.
+queued — keep orchestrating and arm nothing further this turn; the next
+refresh firing clears the latch and arms again.
 
 Exactly one delayed refresh may be outstanding. **Create then claim**
 (order matters on Claude: PreToolUse denies `ScheduleWakeup` when the
@@ -114,8 +115,8 @@ pending, or when the tool is `CronCreate`.
 1. **Invocation guard.** One `/orchestrator` per session. When a refresh
    one-shot is already queued (`should-reschedule` exits 1 with
    `rearm_already_pending`), do not stack a second: reuse the live
-   advisor bind and go to step 6 (Orchestrate). Skip step 4 and the
-   re-arm half of step 5 — status is already active and a re-arm is
+   advisor bind, skip step 4 and the re-arm half of step 5, and carry on
+   from step 5's dispatch — status is already active and a re-arm is
    already latched, so a second registration would stack a duplicate
    host schedule. (Re-asserting `set --status active` preserves
    `rearm_pending` when already active, but still do not re-arm.)
