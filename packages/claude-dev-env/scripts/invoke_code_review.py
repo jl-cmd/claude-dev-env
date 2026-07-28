@@ -8,7 +8,8 @@ Mode decision::
     host=ThirdParty, any model        -> mode chain
 
 Chain mode runs ``run_claude`` with argv from ``build_code_review_arguments``
-(single-turn prompt, model opus, json output, bypassPermissions).
+(single-turn prompt, model opus, json output, and the permission mode this
+caller is allowed to ask the review binary for).
 
 cwd is the PR working tree and stdin is redirected from the empty stream so
 the spawn does not wait for interactive input. Result JSON on stdout only::
@@ -80,7 +81,7 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     MAXIMUM_STAMP_MINT_PASSES,
     MODE_CHAIN,
     MODE_IN_SESSION,
-    PERMISSION_MODE_BYPASS,
+    REVIEW_PERMISSION_MODE as PERMISSION_MODE_BYPASS,
     PERMISSION_MODE_FLAG,
     RECORD_STAMP_FLAG,
     RESULT_KEY_BOUND_HASH,
@@ -418,6 +419,7 @@ def is_code_review_clean_stamp_allowed(review_outcome: CodeReviewOutcome) -> boo
         return False
     return True
 
+
 def _run_claude_with_empty_stdin(
     all_claude_arguments: list[str],
     *,
@@ -495,6 +497,7 @@ def _failure_code_review_outcome(returncode: int) -> CodeReviewOutcome:
         is_dirty_tree=False,
     )
 
+
 def _run_chain_review(
     *,
     working_directory: Path,
@@ -507,6 +510,8 @@ def _run_chain_review(
         timeout_seconds=timeout_seconds,
         working_directory=working_directory,
     )
+    if chain_outcome.returncode != SUCCESSFUL_REVIEW_RETURNCODE and chain_outcome.stderr:
+        sys.stderr.write(chain_outcome.stderr.strip() + "\n")
     return _chain_outcome(chain_outcome, working_directory=working_directory)
 
 

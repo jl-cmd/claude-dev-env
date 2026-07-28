@@ -13,9 +13,32 @@ from pathlib import Path
 import pytest
 
 import invoke_code_review as invoker
-from claude_chain_runner import ChainConfigurationError
+from claude_chain_runner import ChainConfigurationError, ChainInvocationOutcome
 from _code_review_test_support import FIXTURE_SESSION_OPUS
-from dev_env_scripts_constants.code_review_constants import DEFAULT_CODE_REVIEW_EFFORT
+from dev_env_scripts_constants.code_review_constants import (
+    DEFAULT_CODE_REVIEW_EFFORT,
+    PERMISSION_MODE_ACCEPT_EDITS,
+    PERMISSION_MODE_BYPASS,
+    REVIEW_PERMISSION_MODE,
+)
+
+
+def test_review_arguments_carry_the_permission_mode_this_caller_resolves() -> None:
+    """The review command asks for a permission mode the binary accepts here.
+
+    The binary refuses the bypass mode outright for a root caller, so asking
+    for it there means no review runs and no stamp is ever minted.
+    """
+    all_arguments = invoker.build_code_review_arguments(DEFAULT_CODE_REVIEW_EFFORT)
+
+    assert REVIEW_PERMISSION_MODE in all_arguments
+
+
+def test_the_resolved_permission_mode_is_one_the_binary_knows() -> None:
+    assert REVIEW_PERMISSION_MODE in (
+        PERMISSION_MODE_ACCEPT_EDITS,
+        PERMISSION_MODE_BYPASS,
+    )
 
 
 CHAIN_CONFIG_REMEDY_TEXT: str = (
@@ -24,6 +47,52 @@ CHAIN_CONFIG_REMEDY_TEXT: str = (
 )
 HOST_PROFILE_FAILURE_TEXT: str = "session model alias carries no host profile"
 MINT_TIMEOUT_SECONDS: int = 1
+SERVED_COMMAND_NAME: str = "claude"
+REVIEW_BINARY_REFUSAL_TEXT: str = (
+    "--dangerously-skip-permissions cannot be used with root privileges"
+)
+REVIEW_FAILURE_RETURNCODE: int = 1
+EMPTY_REVIEW_STDOUT: str = ""
+ROOT_USER_ID: int = 0
+UNPRIVILEGED_USER_ID: int = 1000
+
+
+def _serve_a_refusing_binary(
+    *_all_positional: object, **_all_keyword: object
+) -> ChainInvocationOutcome:
+    return ChainInvocationOutcome(
+        served_command=SERVED_COMMAND_NAME,
+        returncode=REVIEW_FAILURE_RETURNCODE,
+        stdout=EMPTY_REVIEW_STDOUT,
+        stderr=REVIEW_BINARY_REFUSAL_TEXT,
+        attempts=(),
+    )
+
+
+def test_failed_review_reports_what_the_served_binary_wrote(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A review that a served binary refused names the refusal.
+
+    The binary can decline for reasons the caller must act on, such as a
+    permission mode it will not accept. Dropping its words leaves a bare
+    exit code, and no stamp is minted either way.
+    """
+    monkeypatch.setattr(
+        invoker, "_run_claude_with_empty_stdin", _serve_a_refusing_binary
+    )
+
+    outcome = invoker._run_chain_review(
+        working_directory=tmp_path,
+        timeout_seconds=MINT_TIMEOUT_SECONDS,
+        effort=DEFAULT_CODE_REVIEW_EFFORT,
+    )
+
+    captured_streams = capsys.readouterr()
+    assert outcome.returncode == REVIEW_FAILURE_RETURNCODE
+    assert REVIEW_BINARY_REFUSAL_TEXT in captured_streams.err
 
 
 def test_missing_chain_config_reports_its_remedy_on_stderr(
