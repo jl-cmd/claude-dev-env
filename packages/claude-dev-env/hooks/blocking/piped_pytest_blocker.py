@@ -13,6 +13,8 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     C:\\Python313\\python.exe -m pytest | cat   flag: interpreter path
     (python -m pytest tests) | tee run.log      flag: subshell feeds a pipe
     bash -c 'pytest | tee run.log'              flag: pipeline inside a wrapper
+    bash -c 'pytest tests' | tee run.log        flag: wrapper piped from outside
+    python -m coverage run -m pytest | cat      flag: a later -m names pytest
     time pytest tests | tee run.log             flag: launcher wrapper
     pytest tests \\<newline>| tee run.log       flag: one continued line
     pytest tests > run.log 2>&1                 ok:   redirection keeps the code
@@ -20,6 +22,7 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     git status | head                           ok:   segment carries no pytest
     cat ids.txt | pytest --stdin                ok:   the pipe feeds into pytest
     pytest tests -q<newline>git status | head   ok:   the pipe sits on a later line
+    cat > run.sh <<'EOF'<newline>pytest | tee x<newline>EOF   ok: a heredoc body
 
 Tokenizing is local to this module. ``shell_command_segments.split_into_segments``
 cuts a token on an operator character the token carries, so ``pytest -k "a|b"``
@@ -50,6 +53,8 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     COMMAND_LINE_SPLIT_PATTERN,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
+    HEREDOC_OPENER_PATTERN,
+    HEREDOC_TERMINATOR_GROUP,
     HOOK_EVENT_NAME,
     LINE_CONTINUATION_JOIN,
     LINE_CONTINUATION_PATTERN,
@@ -107,17 +112,35 @@ def _glued_module_name(token: str) -> str | None:
 
 
 def _runs_pytest_as_a_module(all_segment_tokens: list[str]) -> bool:
-    """Return True when the segment carries ``-m pytest`` or ``-mpytest``."""
+    """Return True when any ``-m`` in the segment names pytest.
+
+    ::
+
+        ['python', '-m', 'pytest']                            flag
+        ['python', '-mpytest']                                flag
+        ['python', '-m', 'coverage', 'run', '-m', 'pytest']   flag: a later -m
+        ['python', '-m', 'mypy']                              ok
+        ['python', '-m']                                      ok
+
+    A runner module such as coverage or debugpy takes its own ``-m``, so the
+    scan reads every one rather than stopping at the first.
+
+    Args:
+        all_segment_tokens: The tokens of one simple command, operators removed.
+
+    Returns:
+        True when some ``-m pytest`` or ``-mpytest`` appears in the segment.
+    """
     for each_index, each_token in enumerate(all_segment_tokens):
-        glued_module_name = _glued_module_name(each_token)
-        if glued_module_name is not None:
-            return glued_module_name == PYTEST_MODULE_NAME
+        if _glued_module_name(each_token) == PYTEST_MODULE_NAME:
+            return True
         if each_token != MODULE_RUN_FLAG:
             continue
         module_index = each_index + 1
         if module_index >= len(all_segment_tokens):
-            return False
-        return _unquoted(all_segment_tokens[module_index]) == PYTEST_MODULE_NAME
+            continue
+        if _unquoted(all_segment_tokens[module_index]) == PYTEST_MODULE_NAME:
+            return True
     return False
 
 
@@ -201,10 +224,45 @@ def _all_segments_with_following_operator(
     return all_segments
 
 
+def _wrapped_command_runs_pytest(inner_command: str) -> bool:
+    """Return True when the command string a shell wrapper runs invokes pytest.
+
+    ::
+
+        pytest tests            flag
+        python -m pytest -q     flag
+        git status              ok
+    """
+    for each_tokenization in _all_operator_aware_tokenizations(inner_command):
+        for each_segment, _ in _all_segments_with_following_operator(each_tokenization):
+            if segment_runs_pytest(each_segment):
+                return True
+    return False
+
+
+def _segment_reports_a_pytest_exit_code(all_segment_tokens: list[str]) -> bool:
+    """Return True when the segment's exit code is pytest's, directly or through a wrapper.
+
+    ::
+
+        ['pytest', 'tests']                  flag
+        ['bash', '-c', 'pytest tests']       flag: bash exits with pytest's code
+        ['bash', 'script.sh']                ok
+    """
+    if segment_runs_pytest(all_segment_tokens):
+        return True
+    inner_command = _string_exec_inner_command(all_segment_tokens)
+    if inner_command is None:
+        return False
+    return _wrapped_command_runs_pytest(inner_command)
+
+
 def _tokenization_pipes_pytest(all_command_tokens: list[str]) -> bool:
     """Return True when a pytest segment feeds a pipe, at this level or inside a wrapper."""
     for each_segment, each_operator in _all_segments_with_following_operator(all_command_tokens):
-        if each_operator in ALL_PIPE_OPERATOR_TOKENS and segment_runs_pytest(each_segment):
+        if each_operator in ALL_PIPE_OPERATOR_TOKENS and _segment_reports_a_pytest_exit_code(
+            each_segment
+        ):
             return True
         inner_command = _string_exec_inner_command(each_segment)
         if inner_command is None:
@@ -212,6 +270,39 @@ def _tokenization_pipes_pytest(all_command_tokens: list[str]) -> bool:
         if find_piped_pytest_violation(inner_command) is not None:
             return True
     return False
+
+
+def _all_live_command_lines(all_command_lines: list[str]) -> list[str]:
+    """Return the lines the call runs, dropping every heredoc body and its terminator.
+
+    ::
+
+        cat > run.sh <<'EOF'          kept:    the redirection line runs
+        pytest tests | tee out.log    dropped: script text, nothing runs
+        EOF                           dropped: the terminator
+        pytest tests | tee out.log    kept:    a live line below the heredoc
+
+    A heredoc opener names the word that closes its body, so the lines between
+    the two are text this call writes rather than commands it runs.
+
+    Args:
+        all_command_lines: The physical lines of one Bash command, in order.
+
+    Returns:
+        The lines outside every heredoc body, in their original order.
+    """
+    all_live_lines: list[str] = []
+    pending_terminator: str | None = None
+    for each_line in all_command_lines:
+        if pending_terminator is not None:
+            if each_line.strip() == pending_terminator:
+                pending_terminator = None
+            continue
+        all_live_lines.append(each_line)
+        heredoc_opener = HEREDOC_OPENER_PATTERN.search(each_line)
+        if heredoc_opener is not None:
+            pending_terminator = heredoc_opener.group(HEREDOC_TERMINATOR_GROUP)
+    return all_live_lines
 
 
 def find_piped_pytest_violation(command: str) -> str | None:
@@ -231,7 +322,8 @@ def find_piped_pytest_violation(command: str) -> str | None:
         pytest -k "a|b"                        ok
 
     Joins each backslash-newline continuation into one logical line, splits the
-    result on the newline and carriage-return terminators, then tokenizes each
+    result on the newline and carriage-return terminators, drops every heredoc
+    body, then tokenizes each remaining
     line so shell operators stand alone and quoted text stays whole. A pipe operator tests the segment that feeds it; a command separator
     starts a fresh segment; a redirection and a close paren stay inside the
     segment they belong to. A shell wrapper running a quoted string re-enters
@@ -245,7 +337,8 @@ def find_piped_pytest_violation(command: str) -> str | None:
         None.
     """
     joined_command = LINE_CONTINUATION_PATTERN.sub(LINE_CONTINUATION_JOIN, command)
-    for each_command_line in COMMAND_LINE_SPLIT_PATTERN.split(joined_command):
+    all_command_lines = COMMAND_LINE_SPLIT_PATTERN.split(joined_command)
+    for each_command_line in _all_live_command_lines(all_command_lines):
         for each_tokenization in _all_operator_aware_tokenizations(each_command_line):
             if _tokenization_pipes_pytest(each_tokenization):
                 return CORRECTIVE_MESSAGE

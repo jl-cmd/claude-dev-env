@@ -50,6 +50,20 @@ ALL_PIPED_PYTEST_COMMANDS = [
     "time pytest tests | tee run.log",
 ]
 
+ALL_NESTED_MODULE_PYTEST_COMMANDS = [
+    "python -m coverage run -m pytest tests | tee run.log",
+    "python -m debugpy -m pytest tests | tee out.log",
+]
+
+ALL_WRAPPED_PYTEST_COMMANDS_PIPED_FROM_OUTSIDE = [
+    "bash -c 'pytest tests' | tee run.log",
+    "pwsh -Command 'pytest tests' | tee run.log",
+]
+
+ALL_HEREDOC_OPENER_SPELLINGS = ["<<EOF", "<<'EOF'", '<<"EOF"', "<<-EOF"]
+HEREDOC_SCRIPT_TEMPLATE = "cat > run.sh {opener}\npytest tests | tee out.log\nEOF"
+COMMAND_AFTER_A_HEREDOC = "cat > run.sh <<'EOF'\necho hi\nEOF\npytest tests | tee out.log"
+
 ALL_LINE_CONTINUATION_TERMINATORS = ["\r\n", "\r", "\n"]
 
 ALL_EXIT_CODE_PRESERVING_COMMANDS = [
@@ -95,6 +109,30 @@ def test_denies_a_pytest_run_feeding_a_pipe(each_command: str) -> None:
 def test_allows_a_command_that_keeps_the_pytest_exit_code(each_command: str) -> None:
     """Bare pytest, redirection-only pytest, and unrelated pipes stay allowed."""
     assert find_piped_pytest_violation(each_command) is None
+
+
+@pytest.mark.parametrize("each_command", ALL_NESTED_MODULE_PYTEST_COMMANDS)
+def test_denies_pytest_named_by_a_later_module_flag(each_command: str) -> None:
+    """A runner module ahead of ``-m pytest`` still leaves pytest as the run."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_WRAPPED_PYTEST_COMMANDS_PIPED_FROM_OUTSIDE)
+def test_denies_a_wrapped_pytest_run_piped_from_outside(each_command: str) -> None:
+    """A shell wrapper exits with pytest's code, so a pipe after it hides a failure."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_opener", ALL_HEREDOC_OPENER_SPELLINGS)
+def test_allows_a_heredoc_that_writes_a_piped_pytest_line(each_opener: str) -> None:
+    """A heredoc body is script text this call writes, not a command it runs."""
+    script_writing_command = HEREDOC_SCRIPT_TEMPLATE.format(opener=each_opener)
+    assert find_piped_pytest_violation(script_writing_command) is None
+
+
+def test_denies_a_piped_pytest_run_placed_after_a_heredoc_body() -> None:
+    """Scanning resumes at the terminator, so a live pipe below it still denies."""
+    assert find_piped_pytest_violation(COMMAND_AFTER_A_HEREDOC) == CORRECTIVE_MESSAGE
 
 
 @pytest.mark.parametrize("each_terminator", ALL_LINE_CONTINUATION_TERMINATORS)

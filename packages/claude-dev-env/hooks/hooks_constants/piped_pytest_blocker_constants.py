@@ -3,8 +3,8 @@
 Holds the tool names, the pytest program basenames and the python-interpreter
 basename pattern, the module-run flag and module name, the pipe and
 segment-reset operator token sets, the line-continuation and physical-line
-patterns, the quote characters stripped before a basename read, and the deny
-message. Segment
+patterns, the heredoc-opener pattern that marks a script body, the quote
+characters stripped before a basename read, and the deny message. Segment
 helpers come from ``shell_command_segments.py``; the string-executing shell
 basenames and command flags come from ``unscoped_search_blocker_constants.py``,
 so both re-entering blockers read one set.
@@ -38,6 +38,8 @@ __all__ = [
     "LINE_CONTINUATION_PATTERN",
     "LINE_CONTINUATION_JOIN",
     "COMMAND_LINE_SPLIT_PATTERN",
+    "HEREDOC_OPENER_PATTERN",
+    "HEREDOC_TERMINATOR_GROUP",
     "NO_FOLLOWING_OPERATOR",
     "ALL_QUOTE_CHARACTERS",
     "HOOK_EVENT_NAME",
@@ -69,6 +71,8 @@ ALL_SEGMENT_RESET_OPERATOR_TOKENS: frozenset[str] = (
 LINE_CONTINUATION_PATTERN = re.compile(r"\\(?:\r\n|[\r\n])")
 LINE_CONTINUATION_JOIN = ""
 COMMAND_LINE_SPLIT_PATTERN = re.compile(r"[\n\r]+")
+HEREDOC_OPENER_PATTERN = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+HEREDOC_TERMINATOR_GROUP = 2
 NO_FOLLOWING_OPERATOR = ""
 ALL_QUOTE_CHARACTERS = "\"'"
 
