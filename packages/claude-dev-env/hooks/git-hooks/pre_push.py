@@ -18,7 +18,9 @@ installed; deletions and same-name pushes pass.
 Gate base: the first non-zero remote-sha is used as the gate `--base`, so
 violations are scoped to commits that are not already on the remote. When
 every remote object name is zero (new branch) or stdin is empty, the gate
-falls back to the remote's default branch symbolic ref.
+falls back to the default branch of the remote git names in argv: its
+symbolic ref first, then the first candidate default branch that exists
+under that remote.
 
 Exit codes:
   0 - the push destination is allowed and its commits pass the gate (or
@@ -37,8 +39,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gate_utils import is_safe_regular_file, resolve_gate_script_path
 from git_hooks_constants import (
-    ALL_FALLBACK_REMOTE_BASE_REFERENCES,
     ALL_PROTECTED_BRANCH_PUSH_NAMES,
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
@@ -48,17 +50,11 @@ from git_hooks_constants import (
     CODE_REVIEW_PUSH_GATE_PATH_OVERRIDE_ENV_VAR,
     CODE_REVIEW_PUSH_GATE_SCRIPT_FILENAME,
     CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
-    COMMIT_OBJECT_NAME_SUFFIX,
     DEFAULT_REMOTE_BASE_REFERENCE,
     EMPTY_GIT_COMMAND_OUTPUT,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
-    GIT_COMMAND_SUCCESS_EXIT_CODE,
     GIT_COMMAND_TIMEOUT_SECONDS,
     GIT_EXECUTABLE_NAME,
-    GIT_QUIET_FLAG,
-    GIT_REV_PARSE_SUBCOMMAND,
-    GIT_REV_PARSE_VERIFY_FLAG,
-    GIT_SYMBOLIC_REFERENCE_SUBCOMMAND,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
     LOCAL_REFERENCE_FIELD_INDEX,
@@ -69,15 +65,15 @@ from git_hooks_constants import (
     PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE,
     PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE,
     PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE,
-    REMOTE_HEAD_SYMBOLIC_REFERENCE_NAME,
     REMOTE_REFERENCE_FIELD_INDEX,
-    REMOTE_REFERENCE_NAME_PREFIX,
     STDIN_LINE_FIELD_COUNT,
     STDIN_READ_FAILURE_MESSAGE,
     STDIN_REMOTE_OBJECT_FIELD_INDEX,
-    UNRESOLVABLE_BASE_REFERENCE_MESSAGE,
 )
-from gate_utils import is_safe_regular_file, resolve_gate_script_path
+from pre_push_base_reference import (
+    resolve_remote_name_from_arguments,
+    resolve_usable_base_reference,
+)
 
 
 def run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
@@ -108,62 +104,6 @@ def run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
     except (OSError, subprocess.SubprocessError):
         return GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE, EMPTY_GIT_COMMAND_OUTPUT
     return completion.returncode, completion.stdout.strip()
-
-
-def _reference_names_a_commit(reference_name: str) -> bool:
-    """Report whether git resolves a reference name to a commit."""
-    verification_arguments = [
-        GIT_REV_PARSE_SUBCOMMAND,
-        GIT_REV_PARSE_VERIFY_FLAG,
-        GIT_QUIET_FLAG,
-        reference_name + COMMIT_OBJECT_NAME_SUFFIX,
-    ]
-    exit_code, _ = run_git_text_command(verification_arguments)
-    return exit_code == GIT_COMMAND_SUCCESS_EXIT_CODE
-
-
-def _resolve_remote_default_branch_reference() -> str | None:
-    """Name the remote's default branch from its symbolic ref, then candidates."""
-    symbolic_reference_arguments = [
-        GIT_SYMBOLIC_REFERENCE_SUBCOMMAND,
-        GIT_QUIET_FLAG,
-        REMOTE_HEAD_SYMBOLIC_REFERENCE_NAME,
-    ]
-    exit_code, symbolic_target = run_git_text_command(symbolic_reference_arguments)
-    if exit_code == GIT_COMMAND_SUCCESS_EXIT_CODE and symbolic_target:
-        return symbolic_target.removeprefix(REMOTE_REFERENCE_NAME_PREFIX)
-    for each_candidate_reference in ALL_FALLBACK_REMOTE_BASE_REFERENCES:
-        if _reference_names_a_commit(each_candidate_reference):
-            return each_candidate_reference
-    return None
-
-
-def resolve_usable_base_reference(base_reference: str) -> str | None:
-    """Turn the gate base into a name git can actually resolve.
-
-    ::
-
-        "origin/HEAD" on a clone that has it   -> "origin/HEAD"
-        "origin/HEAD" on a fresh clone         -> "origin/main"
-        a commit name git does not know        -> None
-
-    Args:
-        base_reference: The gate base drawn from the push's stdin lines.
-
-    Returns:
-        A reference git resolves, or None when no such reference is found.
-    """
-    default_remote_base_reference = DEFAULT_REMOTE_BASE_REFERENCE
-    unresolvable_message = UNRESOLVABLE_BASE_REFERENCE_MESSAGE
-    if base_reference != default_remote_base_reference:
-        return base_reference
-    if _reference_names_a_commit(base_reference):
-        return base_reference
-    remote_default_branch_reference = _resolve_remote_default_branch_reference()
-    if remote_default_branch_reference is not None:
-        return remote_default_branch_reference
-    sys.stderr.write(unresolvable_message.format(reference=base_reference) + "\n")
-    return None
 
 
 def is_all_zeros_object_name(object_name: str) -> bool:
@@ -382,7 +322,10 @@ def main() -> int:
     if base_reference == no_parseable_stdin_lines_sentinel:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
-    usable_base_reference = resolve_usable_base_reference(base_reference)
+    remote_name = resolve_remote_name_from_arguments(sys.argv)
+    usable_base_reference = resolve_usable_base_reference(
+        base_reference, remote_name, run_git_text_command
+    )
     if usable_base_reference is None:
         return gate_infrastructure_failure_exit_code
     code_rules_exit_code = invoke_gate(gate_script_path, usable_base_reference)

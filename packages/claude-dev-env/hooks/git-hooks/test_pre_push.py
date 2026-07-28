@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,9 @@ NON_ZERO_REMOTE_SHA_TWO: str = "2" * 40
 
 GIT_RESOLVED_EXIT_CODE: int = 0
 RESOLVED_COMMIT_OBJECT_NAME: str = "c" * 40
+HOOK_INVOCATION_NAME: str = "pre-push"
+PUSHED_REMOTE_NAME: str = "upstream"
+PUSHED_REMOTE_URL: str = "https://example.invalid/owner/repository.git"
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +52,7 @@ def _isolate_code_review_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     )
 
 
-def test_resolve_base_reference_uses_remote_object_when_non_zero() -> None:
+def test_resolve_base_reference_from_stdin_uses_remote_object_when_non_zero() -> None:
     stdin_text = (
         f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
     )
@@ -58,7 +62,7 @@ def test_resolve_base_reference_uses_remote_object_when_non_zero() -> None:
     assert base_reference == NON_ZERO_REMOTE_SHA_ONE
 
 
-def test_resolve_base_reference_falls_back_when_remote_is_all_zeros() -> None:
+def test_resolve_base_reference_from_stdin_falls_back_when_remote_is_all_zeros() -> None:
     stdin_text = f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
@@ -66,13 +70,13 @@ def test_resolve_base_reference_falls_back_when_remote_is_all_zeros() -> None:
     assert base_reference == pre_push.DEFAULT_REMOTE_BASE_REFERENCE
 
 
-def test_resolve_base_reference_falls_back_when_stdin_empty() -> None:
+def test_resolve_base_reference_from_stdin_falls_back_when_stdin_is_empty() -> None:
     base_reference = pre_push.resolve_base_reference_from_stdin("")
 
     assert base_reference == pre_push.DEFAULT_REMOTE_BASE_REFERENCE
 
 
-def test_resolve_base_reference_prefers_first_non_zero_remote_object_among_many() -> (
+def test_resolve_base_reference_from_stdin_prefers_first_non_zero_remote_object() -> (
     None
 ):
     stdin_text = (
@@ -133,6 +137,37 @@ def test_main_invokes_gate_with_resolved_base_reference(
         encoding="utf-8"
     ).splitlines()
     assert recorded_arguments == ["--base", remote_sha]
+
+
+def test_main_passes_the_pushed_remote_name_to_base_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    all_recorded_remote_names: list[str] = []
+
+    def recording_resolve_usable_base_reference(
+        base_reference: str,
+        remote_name: str,
+        ask_git: Callable[[list[str]], tuple[int, str]],
+    ) -> str:
+        all_recorded_remote_names.append(remote_name)
+        return base_reference
+
+    monkeypatch.setattr(
+        pre_push,
+        "resolve_usable_base_reference",
+        recording_resolve_usable_base_reference,
+    )
+    monkeypatch.setattr(
+        sys, "argv", [HOOK_INVOCATION_NAME, PUSHED_REMOTE_NAME, PUSHED_REMOTE_URL]
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+    assert all_recorded_remote_names == [PUSHED_REMOTE_NAME]
 
 
 def test_main_propagates_blocking_exit_code_from_gate(
@@ -207,7 +242,7 @@ def test_main_exits_two_when_invoke_gate_raises_oserror(
     assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
 
 
-def test_resolve_base_reference_emits_warning_for_malformed_line(
+def test_resolve_base_reference_from_stdin_emits_warning_for_malformed_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     malformed_stdin_text = "only_one_field\n"
@@ -218,7 +253,7 @@ def test_resolve_base_reference_emits_warning_for_malformed_line(
     assert "malformed" in captured.err
 
 
-def test_resolve_base_reference_returns_none_when_local_sha_is_all_zeros() -> None:
+def test_resolve_base_reference_from_stdin_returns_none_when_local_sha_is_all_zeros() -> None:
     stdin_text = f"refs/heads/feature {ALL_ZEROS_OBJECT_NAME} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
@@ -241,9 +276,7 @@ def test_main_exits_zero_immediately_when_push_is_deletion(
     assert exit_code == 0
 
 
-def test_resolve_base_reference_returns_sentinel_when_only_malformed_lines_present(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_resolve_base_reference_from_stdin_returns_sentinel_for_malformed_lines() -> None:
     malformed_only_stdin = "one_field_only\nalso_malformed\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)
@@ -268,9 +301,7 @@ def test_main_prints_stderr_when_gate_script_missing(
     assert captured.err != ""
 
 
-def test_resolve_base_reference_exits_two_when_only_malformed_lines_and_no_valid_lines(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_resolve_base_reference_from_stdin_reports_sentinel_with_no_valid_lines() -> None:
     malformed_only_stdin = "one_field_only\nalso_malformed\n"
 
     result = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)

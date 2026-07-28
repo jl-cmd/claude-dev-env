@@ -9,7 +9,6 @@ import ...`` resolve against this file both inside the repo and under
 
 from __future__ import annotations
 
-
 STAGED_SCOPE_ARGUMENT: str = "--staged"
 BASE_REFERENCE_ARGUMENT: str = "--base"
 DEFAULT_REMOTE_BASE_REFERENCE: str = "origin/HEAD"
@@ -21,7 +20,7 @@ REMOTE_REFERENCE_FIELD_INDEX: int = 2
 GATE_PATH_OVERRIDE_ENV_VAR: str = "CODE_RULES_GATE_PATH"
 CLAUDE_HOME_ENV_VAR: str = "CLAUDE_HOME"
 CLAUDE_HOME_DEFAULT_SUBDIRECTORY: str = ".claude"
-GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
+ALL_GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
     "_shared",
     "pr-loop",
     "scripts",
@@ -73,12 +72,24 @@ GIT_REV_PARSE_VERIFY_FLAG: str = "--verify"
 GIT_QUIET_FLAG: str = "--quiet"
 GIT_SYMBOLIC_REFERENCE_SUBCOMMAND: str = "symbolic-ref"
 GIT_COMMAND_TIMEOUT_SECONDS: int = 30
+GIT_FOR_EACH_REF_SUBCOMMAND: str = "for-each-ref"
+GIT_REFERENCE_SHORT_NAME_FORMAT_ARGUMENT: str = "--format=%(refname:short)"
 COMMIT_OBJECT_NAME_SUFFIX: str = "^{commit}"
-REMOTE_HEAD_SYMBOLIC_REFERENCE_NAME: str = "refs/remotes/origin/HEAD"
 REMOTE_REFERENCE_NAME_PREFIX: str = "refs/remotes/"
-ALL_FALLBACK_REMOTE_BASE_REFERENCES: tuple[str, ...] = ("origin/main", "origin/master")
+REMOTE_HEAD_SYMBOLIC_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/HEAD"
+REMOTE_BRANCH_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/{branch}"
+REMOTE_BRANCH_SHORT_NAME_TEMPLATE: str = "{remote}/{branch}"
+DEFAULT_REMOTE_NAME: str = "origin"
+REMOTE_NAME_ARGUMENT_INDEX: int = 1
+ALL_REMOTE_URL_MARKERS: tuple[str, ...] = (":", "/")
+ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES: tuple[str, ...] = (
+    "main",
+    "master",
+    "trunk",
+    "develop",
+)
 UNRESOLVABLE_BASE_REFERENCE_MESSAGE: str = (
     "claude-dev-env pre-push: no usable gate base -- {reference} names no commit and "
-    "the remote default branch could not be read.\n"
-    "Set the remote head so the gate has a base: git remote set-head origin --auto"
+    "the default branch of remote {remote!r} could not be read.\n"
+    "Set the remote head so the gate has a base: git remote set-head {remote} --auto"
 )
