@@ -38,7 +38,9 @@ A repair diff is new code. From the second round on, the round runs the level
 file end to end at the new head. The round's scope is the level's own review
 target — the diff or path the level gathers up front, called Phase 0 in
 `medium.md` and `xhigh.md` — taken against that target's base. A repair edit
-landing outside that target widens the next round's scope to cover it.
+landing outside that target widens the next round's scope to cover it: the next
+round's review target is the original target **plus** that path, and the round
+reviews both. A later widening adds to that target the same way.
 
 ## Dangerous diffs take two full rounds
 
@@ -64,12 +66,17 @@ The obligation discharges when every reader on the list has been named with a
 result — not when a reader is fixed, and not when a round merely happens.
 
 A broken reader outside the review target does not block the loop and does not
-widen scope. Check it, record its result, and hand it off as a reported finding:
-name it in the round report, and carry it into the ready-for-review message and
-the pull request body.
+widen scope. Hand it off as a reported finding. Two separate things are owed for
+that hand-off, and they land at different times:
 
-A round may not mark ready while a broken off-target reader exists unless the
-ready message names it.
+- **The round-scoped record** — what a round produces. Check the reader, record
+  its result, and name it in that round's progress report. All three are done
+  inside the round that checks the reader, and nothing outside that round is
+  needed to complete them. This is the record gate 2 reads.
+- **The termination-time disclosure** — what terminating requires. The
+  ready-for-review message and the pull request body each name every broken
+  off-target reader that still exists. Gate 3 enforces this at the moment the
+  loop terminates; no earlier round owes it.
 
 ## Terminal outcomes
 
@@ -106,12 +113,19 @@ router — every path out of a round passes through it.
 Gate 2 then ends by stating one of exactly two outcomes: unresolved findings
 remain, or none remain. A refuted bug is resolved. A fixed nit is resolved. A
 fixed validated bug is resolved. A handed-off off-target finding is resolved once
-its hand-off is complete as *A shape change names its readers* defines complete,
-whether or not the problem behind it is solved. A skipped finding — a real
-finding deliberately not applied, because fixing it would change intended
-behavior or reach beyond the review target — is resolved once its skip is logged,
-and a round may not mark ready while a skipped finding exists unless the ready
-message names it. Gate 3 reads that stated outcome, never a case label.
+this round has made its round-scoped record as *A shape change names its readers*
+defines that record — checked, result recorded, named in this round's progress
+report — whether or not the problem behind it is solved. Gate 2 reads the record
+and nothing else; the termination-time disclosure belongs to gate 3.
+
+A skipped finding — a real finding deliberately not applied, because fixing it
+would change intended behavior or reach beyond the review target — is resolved
+once its skip is logged in this round's progress report, naming the finding and
+the reason it was skipped. That report is the sink every run has, with or without
+`--fix`. When `--fix` is set, `fix.md`'s own skip handling applies on top of this
+log rather than in place of it.
+
+Gate 3 reads that stated outcome, never a case label.
 
 **Gate 3 — exit test.** Terminate only when all three of these hold:
 
@@ -121,12 +135,14 @@ message names it. Gate 3 reads that stated outcome, never a case label.
 
 Any other combination runs the round tail and re-enters the loop.
 
-Terminating carries one further condition: the ready message names every broken
-off-target reader and every skipped finding that still exists. A round that
-cannot name them does not terminate; it runs the round tail and re-enters the
-loop, the same as any other non-terminating round. With that condition met, post
-the proof-of-work PR comment when the target is a PR, then run `gh pr ready` for
-a draft PR, or state ready otherwise.
+Terminating carries one further condition — the termination-time disclosure: the
+ready-for-review message and the pull request body each name every broken
+off-target reader and every skipped finding that still exists. Both surfaces are
+written at termination, so both are always available to the terminating round. A
+round that cannot name them does not terminate; it runs the round tail and
+re-enters the loop, the same as any other non-terminating round. With that
+condition met, post the proof-of-work PR comment when the target is a PR, then
+run `gh pr ready` for a draft PR, or state ready otherwise.
 
 Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
