@@ -901,6 +901,28 @@ test('convergeReadOnlyAgent prepends HEADLESS_READONLY_PREAMBLE and the worktree
   );
 });
 
+test('the read-only destructive pointer scopes its no-edit clause to the tree it reads', () => {
+  const destructivePointer = convergeSource
+    .split('\n')
+    .find((eachLine) => eachLine.includes('Never run a destructive command'));
+  assert.ok(destructivePointer, 'expected the read-only destructive pointer to be declared');
+  assert.match(
+    destructivePointer,
+    /Never run a destructive command/,
+    'expected the destructive-command prohibition to stay absolute',
+  );
+  assert.match(
+    destructivePointer,
+    /no edit to the tree it reads/,
+    'expected the no-edit clause to be scoped to the tree under verification',
+  );
+  assert.doesNotMatch(
+    destructivePointer,
+    /edits nothing/,
+    'expected no blanket edits-nothing wording, which forbids the deliberate break off that tree',
+  );
+});
+
 const taskDispatchers = [
   { name: 'runGitTask', isAsync: false },
   { name: 'runFixerTask', isAsync: false },

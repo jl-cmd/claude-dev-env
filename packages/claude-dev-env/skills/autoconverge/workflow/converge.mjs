@@ -68,13 +68,15 @@ const HEADLESS_EDIT_PREAMBLE =
   '- When your run was given a result schema, your final action is always the StructuredOutput call. If the poll budget is spent before the awaited signal arrives, call StructuredOutput with the whole time-out result the step documents — for the Copilot gate, the full down result {sha, clean:false, down:true, findings:[]}, never a bare down flag — rather than ending the turn without a result.\n\n'
 
 const HEADLESS_READONLY_DESTRUCTIVE_POINTER =
-  '- Never run a destructive command (rm -rf, git reset --hard, dd, mkfs, chmod -R, a fork bomb) and never place its literal text in a Bash command: this step reads only and edits nothing, so it needs no destructive command. If a step seems to require one, report it as a blocker rather than running it.\n'
+  '- Never run a destructive command (rm -rf, git reset --hard, dd, mkfs, chmod -R, a fork bomb) and never place its literal text in a Bash command: this step makes no edit to the tree it reads, so it needs no destructive command. If a step seems to require one, report it as a blocker rather than running it.\n'
 
 /**
  * The read-only preamble a review, verify, or utility agent receives: the full
- * edit preamble with the rm-shape-rules bullet dropped, since an agent that edits
- * nothing never runs rm and the shape rules add no value to its prompt. The
- * one-line destructive pointer keeps the escape-hatch guidance in view. The
+ * edit preamble with the rm-shape-rules bullet dropped, since an agent that makes
+ * no edit in the tree it reads never runs rm against that tree, and the one file
+ * it may touch off that tree — a deliberate break at a break site outside it —
+ * is an edit rather than a delete, so the shape rules add no value to its
+ * prompt. The one-line destructive pointer keeps the escape-hatch guidance in view. The
  * derivation reads the single rm-shape bullet out of the edit preamble and swaps
  * the pointer in, so the two preambles share every other clause from one source.
  */
@@ -1344,13 +1346,60 @@ function renderVerifyObjectionLine(eachFinding) {
 }
 
 /**
+ * Read the prose paragraph the verifier wrote directly above its last verdict
+ * fence. A verdict that is incomplete — a check it rests on never showed red —
+ * is not a code defect, so the fence contract puts that reason here rather than
+ * in findings; this reader is how the reason survives into the re-fix step.
+ *
+ * Anchors on the same fence parseLastVerdictFence reads — the last CLOSED
+ * verdict fence, not the last bare marker — so a stray unterminated marker after
+ * the real fence can never make this read the verdict body itself as prose. A
+ * candidate paragraph carrying only markdown scaffolding (a heading, a fence
+ * delimiter) is skipped, since handing the fixer a heading is worse than the
+ * generic fallback the caller keeps.
+ *
+ * ::
+ *
+ *   'ran the gates\n\ncheck X never showed red\n\n```verdict\n{}\n```'
+ *     -> 'check X never showed red'
+ *   '```verdict\n{}\n```'  -> null
+ *
+ * @param {string|null|undefined} verifyTranscript the verifier transcript text
+ * @returns {string|null} the last prose paragraph above the final fence, or null when there is none
+ */
+function extractPreFenceProse(verifyTranscript) {
+  if (typeof verifyTranscript !== 'string') return null
+  const fenceMarker = '```verdict'
+  let lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker)
+  while (lastFenceStart !== -1 && !verifyTranscript.slice(lastFenceStart + fenceMarker.length).includes('```')) {
+    lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker, lastFenceStart - 1)
+  }
+  if (lastFenceStart === -1) return null
+  const proseParagraphs = verifyTranscript
+    .slice(0, lastFenceStart)
+    .split(/\n\s*\n/)
+    .map((eachParagraph) => eachParagraph.trim())
+    .filter((eachParagraph) =>
+      eachParagraph
+        .split('\n')
+        .some((eachLine) => {
+          const trimmedLine = eachLine.trim()
+          return trimmedLine.length > 0 && !trimmedLine.startsWith('#') && !trimmedLine.startsWith('```') && /[A-Za-z]/.test(trimmedLine)
+        }),
+    )
+  return proseParagraphs.length === 0 ? null : proseParagraphs[proseParagraphs.length - 1]
+}
+
+/**
  * Pull the verifier's stated objections out of a failed verify transcript so the
  * re-fix step knows what the verdict rejected. Reads the last fenced verdict JSON
  * (the same block verdictPassed reads) and renders each finding through
- * renderVerifyObjectionLine into a numbered list. A missing fence, a parse
- * failure, an empty findings list, or a findings list where no entry yields
- * usable text falls back to a generic re-read instruction, so the re-fix step
- * always receives actionable text.
+ * renderVerifyObjectionLine into a numbered list. When findings yields no usable
+ * line the verdict is an incomplete one rather than a code-defect one, so the
+ * prose paragraph above the fence — where the fence contract puts the unshown-red
+ * check — carries the objection instead. A missing fence, a parse failure, or an
+ * empty findings list with no prose above the fence falls back to a generic
+ * re-read instruction, so the re-fix step always receives actionable text.
  * @param {string|null|undefined} verifyTranscript the failed verifier transcript text
  * @returns {string} a human-readable block of the verifier's objections
  */
@@ -1361,7 +1410,7 @@ function extractVerifyObjection(verifyTranscript) {
   const renderedObjections = allObjections
     .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
     .filter((eachLine) => eachLine !== null)
-  if (renderedObjections.length === 0) return VERIFY_OBJECTION_FALLBACK
+  if (renderedObjections.length === 0) return extractPreFenceProse(verifyTranscript) || VERIFY_OBJECTION_FALLBACK
   return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
 }
 
