@@ -24,6 +24,11 @@ Claude Code session already running keeps its current setting until it
 restarts, while the git pre-push backstop picks up the current shell
 environment on each push.
 
+A user-environment setting arms the gates machine-wide. The backstop installs
+through the shared `core.hooksPath`, so it runs for every repository on the
+machine, and the gates carry no per-repository allowlist. Each repository then
+needs its own clean stamp before a push lands there.
+
 The variable feeds the master flag `CODE_REVIEW_ENFORCEMENT_ENABLED` in
 `hooks/blocking/config/code_review_enforcement_constants.py`, which every gate
 reads at start-up. When it is on, the push gate, the PR-create gate, the native
@@ -104,6 +109,10 @@ anchor a forgery-proof mint. The stamp reaches the same posture the
   create-PR gate.
 - **`git push --no-verify`.** This flag tells git to skip the native pre-push
   hook, so the native backstop does not run.
+- **A push that clears the enable variable.** The backstop reads
+  `CLAUDE_CODE_REVIEW_ENFORCEMENT` from the shell that runs the push, so
+  `CLAUDE_CODE_REVIEW_ENFORCEMENT=0 git push` reads as enforcement off and the
+  backstop allows the push with no flag and no bypass marker.
 - **A rebuilt store.** A script that re-implements the stamp store in memory
   and writes a matching file can mint a stamp the gates accept.
 
