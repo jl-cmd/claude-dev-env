@@ -13,8 +13,9 @@ renders as one plain text block, so the question text and each option
 description stay short and unformatted: a fenced block, a heading, a table row,
 a bullet or numbered list marker, a second paragraph, or prose past the
 sentence and word caps all belong in chat text before the call. Structure is
-read at block level, and an inline code span naming a path, a flag, or a
-command is exempt and weighs one word against the caps.
+read at block level on the raw text, with line endings folded to one spelling
+first; an inline code span naming a path, a flag, or a command weighs one word
+against the length caps.
 
 See the plain-language and ask-user-question-required rules for the full
 guidance this hook enforces.
@@ -33,6 +34,7 @@ from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     ALL_CHAT_DETAIL_MARKERS,
+    ALL_LINE_ENDING_REPLACEMENTS,
     ALL_SOFTWARE_TERMS,
     ALL_TERM_PATTERNS,
     ALL_WRITE_EDIT_TOOL_NAMES,
@@ -244,6 +246,29 @@ def build_block_reason(all_matches: list[tuple[str, str]]) -> str:
     )
 
 
+def _normalize_line_endings(prose_text: str) -> str:
+    """Return the prose with every line ending spelled as a bare line feed.
+
+    ::
+
+        in:  "Which gate?\\r\\n\\r\\nThe write gate reads it."
+        out: "Which gate?\\n\\nThe write gate reads it."
+
+    The structure markers read line boundaries, so a payload carrying carriage
+    returns is normalized once here rather than at each pattern.
+
+    Args:
+        prose_text: One question text or one option description.
+
+    Returns:
+        The prose with carriage returns folded into line feeds.
+    """
+    normalized_text = prose_text
+    for each_line_ending, each_replacement in ALL_LINE_ENDING_REPLACEMENTS:
+        normalized_text = normalized_text.replace(each_line_ending, each_replacement)
+    return normalized_text
+
+
 def _mask_inline_code(prose_text: str) -> str:
     """Return the prose with each inline code span collapsed to a single word.
 
@@ -253,9 +278,9 @@ def _mask_inline_code(prose_text: str) -> str:
         out: "Does code list it?"
 
     A span names a path, a flag, or a command the reader needs verbatim, so it
-    is exempt from the block-level structure checks and weighs one word against
-    the length caps. Triple backticks carry no closing backtick on their own
-    line, so a fenced block survives the mask and still reads as a fence.
+    weighs one word against the length caps. Only the length counts read the
+    masked prose: the structure markers read the raw text, so a one-line closed
+    fence still reads as a fence rather than as a span.
 
     Args:
         prose_text: One question text or one option description.
@@ -336,11 +361,15 @@ def _find_lean_block_violations(
 
     Returns:
         One violation text per broken rule, empty when the prose is lean.
+
+    The structure markers read the line-ending-normalized prose; the sentence
+    and word counts read that prose with its inline code spans masked.
     """
-    masked_text = _mask_inline_code(prose_text)
+    normalized_text = _normalize_line_endings(prose_text)
+    masked_text = _mask_inline_code(normalized_text)
     all_violations = [
         f"{surface_name} carries {each_marker_name}"
-        for each_marker_name in _find_chat_detail_markers(masked_text)
+        for each_marker_name in _find_chat_detail_markers(normalized_text)
     ]
     sentence_count = _count_prose_sentences(masked_text)
     if sentence_count > maximum_sentence_count:
@@ -544,17 +573,19 @@ def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
 
 
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
-    """Decide whether a payload's prose carries heavy words to block.
+    """Decide whether a payload carries a question block or heavy words to block.
 
-    Collects the prose for the payload's tool, scans it for banned terms, and
-    returns the deny-reason text when any heavy word is found, or None to allow.
+    An AskUserQuestion payload meets the lean-block check first, so a question
+    text or an option description carrying chat detail returns a LEAN_QUESTION
+    deny reason. Every guarded payload then meets the word scan, which returns a
+    PLAIN_LANGUAGE deny reason for the first heavy word it finds.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
 
     Returns:
-        The permissionDecisionReason text when the prose is denied, or None when
-        the prose is allowed.
+        The permissionDecisionReason text when the payload is denied, or None
+        when it is allowed.
     """
     raw_tool_name = payload_by_key.get("tool_name", "")
     raw_tool_input = payload_by_key.get("tool_input", {})

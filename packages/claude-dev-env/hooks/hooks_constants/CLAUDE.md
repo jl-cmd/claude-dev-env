@@ -53,7 +53,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `paired_test_coverage_constants.py` | Test-directory name, stem-test filename affixes, test-file globs, exempt public-function names, scan budget, coverage threshold, and guidance text for the public-function paired-test coverage check |
 | `path_rewriter_constants.py` | Path rewriting patterns for the Everything-search path rewriter |
 | `pii_prevention_constants.py` | Patterns, allowlists, path exemptions, and deny-message text for `pii_prevention_blocker` |
-| `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements, plus the lean-question-block tunables: the block-level chat-detail markers, the inline-code span each check collapses to one word, and the sentence and word caps for the question text and for each choice description |
+| `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements, plus the lean-question-block tunables: the block-level chat-detail markers, the line-ending spellings folded before those markers run, the inline-code span the length counts collapse to one word, and the sentence and word caps for the question text and for each choice description |
 | `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
 | `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |
 | `pr_description_enforcer_constants.py` | PR-description shape rules and command patterns |

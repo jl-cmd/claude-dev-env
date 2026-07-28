@@ -389,6 +389,24 @@ def test_question_carrying_a_second_paragraph_is_denied() -> None:
     assert "more than one paragraph" in deny_reason
 
 
+def test_question_carrying_a_one_line_fence_is_denied() -> None:
+    one_line_fence_question = f"{LEAN_QUESTION}\n```print(1)```"
+
+    deny_reason = evaluate(_ask_payload(one_line_fence_question, [LEAN_DESCRIPTION]))
+
+    assert deny_reason is not None
+    assert "a fenced code block" in deny_reason
+
+
+def test_question_carrying_a_carriage_return_paragraph_break_is_denied() -> None:
+    crlf_question = f"{LEAN_QUESTION}\r\n\r\nThe write gate reads every file."
+
+    deny_reason = evaluate(_ask_payload(crlf_question, [LEAN_DESCRIPTION]))
+
+    assert deny_reason is not None
+    assert "more than one paragraph" in deny_reason
+
+
 def test_question_carrying_a_heading_is_denied() -> None:
     headed_question = f"{LEAN_QUESTION}\n## The write gate\nIt reads every file."
 

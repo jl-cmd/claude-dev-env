@@ -6,16 +6,19 @@
         ok:   "Which gate should run first?"
         flag: "Which gate should run first?\\n- write\\n- commit"
     INLINE_CODE_SPAN_PATTERN
-        ok:   "Should we pass `--dry-run` here?" -> one word, no marker
+        ok:   "Should we pass `--dry-run` here?" -> one word toward the caps
+    ALL_LINE_ENDING_REPLACEMENTS
+        flag: a blank line spelled "\\r\\n\\r\\n" reads as a paragraph break
     MAXIMUM_OPTION_DESCRIPTION_WORD_COUNT
         ok:   "Runs on every write."
         flag: a 30-word paragraph of tradeoffs
 
 Holds the heavy words and their everyday replacements, the prose-region
 strippers the word scan runs first, and the lean-question-block tunables: the
-block-level chat-detail markers that belong in chat text, the inline-code span
-each check collapses to one word, and the sentence and word caps a question and
-an option description each answer to.
+block-level chat-detail markers that belong in chat text, the line-ending
+spellings normalized before those markers run, the inline-code span the length
+counts collapse to one word, and the sentence and word caps a question and an
+option description each answer to.
 """
 
 from __future__ import annotations
@@ -330,6 +333,11 @@ ALL_CHAT_DETAIL_MARKERS: tuple[tuple[re.Pattern[str], str], ...] = (
 
 INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`\n]+`")
 INLINE_CODE_PLACEHOLDER: str = "code"
+
+ALL_LINE_ENDING_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("\r\n", "\n"),
+    ("\r", "\n"),
+)
 
 SENTENCE_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"[.!?]+(?=\s+[A-Z]|\s*$)")
 COUNTABLE_WORD_PATTERN: re.Pattern[str] = re.compile(r"\S*[A-Za-z0-9]\S*")

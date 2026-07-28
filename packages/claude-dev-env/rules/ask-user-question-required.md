@@ -24,6 +24,8 @@ The `plain_language_blocker` PreToolUse hook denies an `AskUserQuestion` call wh
 
 Two fields are counted, and each one gets the same treatment: the `question` text, and the `description` under every entry of `options`. The four structure markers apply to both. The paragraph cap applies to both. The sentence and word caps differ by field, as the table shows.
 
-Structure is read at block level: a marker counts when it opens a line. An inline code span — a path, a flag, a command the reader needs verbatim — is exempt from every structure check on both fields and weighs one word against either word cap, so a question naming `--dry-run` and a choice naming `C:\dev\gate.py` both pass.
+Structure is read at block level on the raw text: a marker counts when it opens a line, so a fence written on a single line still reads as a fence. Line endings fold to one spelling first, so a blank line counts whichever way it is written.
+
+An inline code span — a path, a flag, a command the reader needs verbatim — weighs one word against either word cap on both fields, so a question naming `--dry-run` and a choice naming `C:\dev\gate.py` both pass. A span sits inside a line, so it never opens one with a marker.
 
 A sentence closes on `.`, `!`, or `?` followed by a capitalized word or by the end of the text. A word is any whitespace-separated token carrying a letter or a digit. The denial names each cap the block broke and sends the detail back to chat text.
