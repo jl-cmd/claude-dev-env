@@ -27,6 +27,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
 | `eli11-replies.md` | Every chat reply the user reads follows one shape: action first, detail last, few words; `plain-language.md` governs word choice, this rule governs reply length and shape |
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
+| `falsify-before-green.md` | A check's green counts as evidence only after that same check ran red on a named break, with a passing control beside it |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
 | `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
 | `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
