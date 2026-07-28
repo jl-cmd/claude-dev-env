@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import io
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ import pre_push
 import git_hooks_constants
 
 
+CODE_REVIEW_ENFORCEMENT_ENV_VAR: str = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
 ALL_ZEROS_OBJECT_NAME: str = "0" * 40
 NON_ZERO_LOCAL_SHA: str = "a" * 40
 NON_ZERO_REMOTE_SHA_ONE: str = "1" * 40
@@ -550,11 +552,16 @@ def test_main_allows_when_code_review_enforcement_flag_is_off(
 ) -> None:
     """Native pre-push honors the real gate with enforcement off.
 
-    Points at the production push gate (not a reason stub). With the shipped
-    default `CODE_REVIEW_ENFORCEMENT_ENABLED = False`, the gate returns no
-    deny reason and the backstop allows the push — one path covering flag,
-    real gate load, and pre-push exit together.
+    Points at the production push gate (not a reason stub). The gate resolves
+    its flag when its config module first executes, so this test clears the
+    environment variable and evicts any config module a sibling suite cached
+    earlier in the same session. The gate then returns no deny reason and the
+    backstop allows the push.
     """
+    monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    for each_cached_module_name in list(sys.modules):
+        if each_cached_module_name == "config" or each_cached_module_name.startswith("config."):
+            monkeypatch.delitem(sys.modules, each_cached_module_name, raising=False)
     _write_passing_code_rules_gate(tmp_path, monkeypatch)
     real_gate_path = (
         Path(__file__).resolve().parent.parent

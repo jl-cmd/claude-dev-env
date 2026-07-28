@@ -50,13 +50,18 @@ Cancel matching host schedules; stop without re-arming.
 ## The refresh never interrupts the run
 
 A refresh firing reinforces discipline alongside work already in flight.
-It never pauses, cancels, or waits on a running executor, and it never
-ends the turn on its own. Reconcile the ledger, re-assert the routing,
-re-arm once, and hand control straight back to the work in progress.
+It never pauses, cancels, or waits on a running executor. Reconcile the
+ledger, re-assert the routing, re-arm once, and hand control straight back
+to the work in progress.
 
-Every "stop" below ends the *re-arm* and nothing else. A `should-reschedule`
-or `claim-rearm` exit 1 means no schedule is created this firing; the
-session keeps orchestrating in the same turn.
+In the re-arm protocol (step 6), every "stop" ends the *re-arm* and nothing
+else. A `should-reschedule` or `claim-rearm` exit 1 means no schedule is
+created this firing; the session keeps orchestrating in the same turn.
+
+Two terminations end the whole firing, and both leave running executors
+alone: `begin-firing` exit 1 (step 0a) and the done branch (step 0b). Each
+means the run is inactive or finished, so the refresh reports and adds
+nothing further.
 
 ## Discipline steps
 

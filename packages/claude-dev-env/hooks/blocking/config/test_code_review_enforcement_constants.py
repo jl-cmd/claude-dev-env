@@ -25,7 +25,6 @@ _constants_module = importlib.util.module_from_spec(_constants_spec)
 _constants_spec.loader.exec_module(_constants_module)
 
 effort_meets_threshold = _constants_module.effort_meets_threshold
-CODE_REVIEW_ENFORCEMENT_ENABLED = _constants_module.CODE_REVIEW_ENFORCEMENT_ENABLED
 CODE_REVIEW_ENFORCEMENT_ENV_VAR = _constants_module.CODE_REVIEW_ENFORCEMENT_ENV_VAR
 code_review_enforcement_enabled_in_environment = (
     _constants_module.code_review_enforcement_enabled_in_environment
@@ -136,5 +135,32 @@ def test_enforcement_stays_off_for_a_non_enabling_environment_value(
     assert code_review_enforcement_enabled_in_environment() is False
 
 
-def test_module_flag_matches_the_environment_reader_at_import() -> None:
-    assert isinstance(CODE_REVIEW_ENFORCEMENT_ENABLED, bool)
+def _module_flag_after_a_fresh_import(
+    monkeypatch: pytest.MonkeyPatch, environment_value: str | None
+) -> bool:
+    if environment_value is None:
+        monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    else:
+        monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, environment_value)
+    fresh_spec = importlib.util.spec_from_file_location(
+        "code_review_enforcement_constants_fresh_import",
+        _CONFIG_DIR / "code_review_enforcement_constants.py",
+    )
+    assert fresh_spec is not None
+    assert fresh_spec.loader is not None
+    fresh_module = importlib.util.module_from_spec(fresh_spec)
+    fresh_spec.loader.exec_module(fresh_module)
+    flag_value: bool = fresh_module.CODE_REVIEW_ENFORCEMENT_ENABLED
+    return flag_value
+
+
+def test_module_flag_turns_on_when_the_environment_asks_for_enforcement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _module_flag_after_a_fresh_import(monkeypatch, "true") is True
+
+
+def test_module_flag_stays_off_when_the_environment_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _module_flag_after_a_fresh_import(monkeypatch, None) is False

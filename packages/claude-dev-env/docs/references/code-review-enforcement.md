@@ -16,6 +16,12 @@ variable `CLAUDE_CODE_REVIEW_ENFORCEMENT` to `1`, `true`, `yes`, or `on`
 (case and surrounding spaces are ignored). Any other value, and an unset
 variable, leave enforcement off.
 
+Set the variable where every gate can read it: the `env` block in
+`settings.json`, or the machine's own user environment. Each hook process
+inherits the environment of the Claude Code session that spawns it and reads
+the variable as it starts, so a session already running keeps its current
+setting until it restarts.
+
 The variable feeds the master flag `CODE_REVIEW_ENFORCEMENT_ENABLED` in
 `hooks/blocking/config/code_review_enforcement_constants.py`, which every gate
 reads at start-up. When it is on, the push gate, the PR-create gate, the native
