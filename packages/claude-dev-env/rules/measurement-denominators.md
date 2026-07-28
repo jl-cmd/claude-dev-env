@@ -6,13 +6,13 @@
 
 Every count names what it scanned. "Read 10 of 10 changed files" states the scan and the whole set it was drawn from. "Swept the files" states neither, and a reader takes it as full coverage of a scan that touched a fraction.
 
-Three parts travel with each figure:
+Three parts travel with each figure — the report author writes the first two, the consumer runs the third:
 
 1. **A count carries its denominator.** Name both numbers: files read of files changed, rounds fired of rounds available, tests reached of tests collected, entries compared of entries present.
 2. **A rate needs two runs and a stated denominator.** One run yields a count. Written down as a rate — "fires 40% of the time" — it claims a spread across runs that one run cannot back. Report the count and the run that produced it until a second run exists.
 3. **The consumer cross-checks the denominator against known scope.** A sweep reporting 3 files read against a 10-file change fails arithmetic, and that arithmetic settles the sweep before anyone reads its result.
 
-A number written into a docstring or a doc carries the same two facts: its denominator and its run count sit beside it.
+A number written into a docstring or a doc carries its denominator beside it. A number written there as a rate carries its run count too.
 
 ## Shapes
 
