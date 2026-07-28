@@ -14,7 +14,7 @@ Claims of this shape:
 - "the gate covers that path"
 - "this caller handles the new shape"
 
-Each one settles a design question for whoever reads it, so each one carries its quote. A claim without its quote decides nothing: it is a lead to check, not a fact to build on.
+On the surfaces the three-piece shape binds, each one settles a design question for whoever reads it and carries its quote; a claim without its quote decides nothing: it is a lead to check, not a fact to build on.
 
 ## The failure shape
 
@@ -47,12 +47,12 @@ def build_refund(order, requested_amount):
 ## What the consumer does
 
 - Read the quoted lines before the sentence that summarizes them.
-- Treat a claim that arrives without its quote as a lead: pull the lines yourself, or ask the sender for them, before any design rests on it.
+- On the surfaces the three-piece shape binds, treat a claim that arrives without its quote as a lead: pull the lines yourself, or ask the sender for them, before any design rests on it.
 - When the quoted lines say something other than the claim, the lines win.
 
 ## Enforcement
 
-The AI review lane and audit skills carry this rule: an agent applies it to the claims a report, a verdict, or a PR body makes about existing code. No blocking hook backs it, because telling a design-deciding claim from background prose needs meaning a regex cannot read.
+This rule binds as prose discipline: a reviewer applies it to the claims a report, a verdict, or a PR body makes about existing code. No hook backs it, because telling a design-deciding claim from background prose needs meaning a regex cannot read.
 
 ## Sibling rules
 
