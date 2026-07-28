@@ -45,8 +45,8 @@ so a running cloud session sees the same files under `/root/.claude/`.
 | Raw REST through the proxy | `GET https://api.github.com/user` returns 200 as `example-org-2`. `GET /repos/example-org/example-repo` returns 200. `GET /repos/example-org-2/claude-dev-env` returns 403 with body `{"message":"GitHub access is not enabled for this session. An org admin must connect the Claude GitHub App for this organization."}`. So REST works for owners the Claude GitHub App connection covers (`example-org` today, not `example-org-2`). |
 | Raw GraphQL through the proxy | Pinned. Any query outside the pinned PR-review set returns `{"message":"This GraphQL query is not enabled for this session — only the pinned set of PR-review operations is served. Use REST via 'gh api repos/{owner}/{repo}/...' instead."}`. Custom `gh api graphql` queries fail even with transport fixed. |
 | Installing the `gh` binary | Blocked. `GET /repos/cli/cli/releases/latest` returns 403 (out-of-scope repo); `https://github.com/...` release downloads return 403. |
-| Git push identity | `user.name=Claude`, `user.email=noreply@anthropic.com`. Remotes are plain https; the proxy injects credentials. Push dry-runs succeed for both in-scope repos after the origin/HEAD fix below. |
-| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook resolves `git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE = "origin/HEAD"`. Cloud clones do not set `origin/HEAD`, so every `git push` fails with `fatal: Not a valid object name origin/HEAD` until `git remote set-head origin -a` runs in that repo. |
+| Git push identity | `user.name=Claude`, `user.email=noreply@anthropic.com`. Remotes are plain https; the proxy injects credentials. Push dry-runs succeed for both in-scope repos. |
+| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook starts from `git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE = "origin/HEAD"`. Cloud clones leave `origin/HEAD` unset, so the hook resolves the gate base itself: it reads the pushed remote name from git's arguments, then names that remote's default branch from its symbolic ref or from the first candidate branch (`main`, `master`, `trunk`, `develop`) that exists under it. A push proceeds on that resolved base. |
 | `BUGTEAM_REVIEWER_ACCOUNT`, `CLAUDE_REVIEWS_DISABLED` | Both unset. |
 | `ScheduleWakeup` | Available to the main session (verified by use). Subagents do not see it. |
 | `EnterWorktree`, `Monitor` | Available. `Monitor` is deferred (load its schema with ToolSearch first). |
@@ -75,12 +75,13 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Evidence:** Verified against `mcp__github__get_me` and `mcp__github__pull_request_read` before a `ToolSearch` load.
 - **Fix summary:** Phase B adds a `ToolSearch` load line to the shared cloud-transport doc and to every SKILL.md that names an MCP tool.
 
-### RC3 — `origin/HEAD` missing in cloud clones
+### RC3 — `origin/HEAD` unset in cloud clones
 
-- **Symptom:** Every `git push` fails with `fatal: Not a valid object name origin/HEAD`.
-- **Cause:** The global `core.hooksPath` pre-push hook resolves the base ref as `origin/HEAD`, which a cloud clone does not set.
-- **Evidence:** A push dry-run fails before `git remote set-head origin -a` and succeeds after it. `--no-verify` also gets past the hook (avoid this routine bypass).
-- **Fix summary:** Phase D ships a session-start step that runs `git remote set-head origin -a` in each repo root.
+- **Symptom:** A cloud clone carries no `origin/HEAD`, so the gate base the pre-push hook starts from names no object.
+- **Cause:** A cloud clone sets no symbolic head for its remote.
+- **Handling:** The global `core.hooksPath` pre-push hook resolves the base on its own. It reads the pushed remote name from git's arguments (falling back to `origin` when git passes a URL), asks that remote for its symbolic head, then lists the candidate default branches `main`, `master`, `trunk`, and `develop` under the same remote and takes the first that exists. A push proceeds on the resolved base.
+- **When nothing resolves:** The hook blocks the push with exit code 2 and prints the one-command fix, naming the remote it tried: `git remote set-head <remote> --auto`.
+- **Evidence:** `packages/claude-dev-env/hooks/git-hooks/pre_push_base_reference.py` holds the resolution; `test_pre_push_base_reference.py` pins each path, including a non-`origin` remote name and a `trunk` default branch.
 
 ### RC4 — Single reviewer identity
 
@@ -188,16 +189,15 @@ loads returns `InputValidationError` (RC2). The select list mixes servers:
 the `mcp__github__*` tools plus `mcp__Claude_Code_Remote__add_repo` for
 cross-repo checkout (5.3).
 
-### 5.2 Fix `origin/HEAD` before any push
+### 5.2 Set `origin/HEAD` when the pre-push hook asks for it
 
-For each repo root the run touches:
+The pre-push hook resolves the gate base on its own (RC3), so a push works in
+a clone that carries no `origin/HEAD`. When the hook blocks a push and asks
+for a remote head, run its one-command fix in that repo root:
 
 ```
 git -C <repo-root> remote set-head origin -a
 ```
-
-Without this, `git push` fails with `fatal: Not a valid object name
-origin/HEAD` (RC3). Run it once per repo per session.
 
 ### 5.3 Transport rules
 
@@ -447,12 +447,12 @@ and a hook test covers them.
 
 ### Phase D — Session bootstrap
 
-**D1. SessionStart hook or environment setup step — origin/HEAD and cloud marker.**
-Ship a step that runs `git remote set-head origin -a` in each repo root and
-exports a cloud marker env var (for example `CLAUDE_CLOUD_SESSION=1`) that
-skills read for cloud detection. The installer ships it.
-*Acceptance:* a fresh cloud session can push without the manual origin/HEAD
-fix, and the marker env var is set; a test drives the hook and checks both.
+**D1. SessionStart hook or environment setup step — cloud marker.**
+Ship a step that exports a cloud marker env var (for example
+`CLAUDE_CLOUD_SESSION=1`) that skills read for cloud detection. The installer
+ships it.
+*Acceptance:* a fresh cloud session carries the marker env var; a test drives
+the hook and checks it.
 
 ### Phase E — Verification
 

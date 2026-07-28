@@ -15,9 +15,34 @@ Scalar flags, JSON keys, and mint-loop messages live here for the invoker.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
+
+ROOT_EFFECTIVE_USER_ID: int = 0
+"""Effective user id the review binary treats as root."""
+
+NON_ROOT_EFFECTIVE_USER_ID: int = 1000
+"""Effective user id stood in for a platform that reports no user id."""
+
+
+def _read_effective_user_id() -> int:
+    """Read this process's effective user id, or a non-root stand-in.
+
+    Windows exposes no ``os.geteuid``, so reading it there raises and the
+    whole constants module fails to import — taking the review invoker with
+    it. A caller on such a platform is never the root the review binary
+    refuses, so it reads as an ordinary caller.
+    """
+    read_effective_user_id = getattr(os, "geteuid", None)
+    if read_effective_user_id is None:
+        return NON_ROOT_EFFECTIVE_USER_ID
+    return int(read_effective_user_id())
+
+
+IS_ROOT_CALLER: bool = _read_effective_user_id() == ROOT_EFFECTIVE_USER_ID
+"""Whether this process runs as root, which limits the permission modes."""
 
 
 def _load_enforcement_constants_module() -> ModuleType:
@@ -79,6 +104,18 @@ PERMISSION_MODE_FLAG: str = "--permission-mode"
 
 PERMISSION_MODE_BYPASS: str = "bypassPermissions"
 """Permission-mode value that auto-approves tools for unattended chain runs."""
+
+PERMISSION_MODE_ACCEPT_EDITS: str = "acceptEdits"
+"""Permission mode asked for when the caller is root.
+
+The review binary refuses ``bypassPermissions`` outright for a root caller,
+so asking for it there means no review runs and no stamp is ever minted.
+"""
+
+REVIEW_PERMISSION_MODE: str = (
+    PERMISSION_MODE_ACCEPT_EDITS if IS_ROOT_CALLER else PERMISSION_MODE_BYPASS
+)
+"""Permission mode this caller asks the review binary for."""
 
 MODE_IN_SESSION: str = "in_session"
 """Result mode when the host is Claude and the session already runs opus."""

@@ -7,10 +7,10 @@ import stat
 from pathlib import Path
 
 from git_hooks_constants import (
+    ALL_GATE_SCRIPT_RELATIVE_PATH,
     CLAUDE_HOME_DEFAULT_SUBDIRECTORY,
     CLAUDE_HOME_ENV_VAR,
     GATE_PATH_OVERRIDE_ENV_VAR,
-    GATE_SCRIPT_RELATIVE_PATH,
 )
 
 
@@ -34,7 +34,7 @@ def resolve_gate_script_path() -> tuple[Path, Path | None]:
         claude_home_directory = Path(claude_home_override).resolve()
     else:
         claude_home_directory = Path.home() / CLAUDE_HOME_DEFAULT_SUBDIRECTORY
-    gate_path = claude_home_directory.joinpath(*GATE_SCRIPT_RELATIVE_PATH)
+    gate_path = claude_home_directory.joinpath(*ALL_GATE_SCRIPT_RELATIVE_PATH)
     return gate_path, None
 
 

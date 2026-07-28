@@ -19,7 +19,7 @@ from _code_review_test_support import (
 from dev_env_scripts_constants.code_review_constants import (
     CODE_REVIEW_MODEL_ALIAS,
     DEFAULT_CODE_REVIEW_EFFORT,
-    PERMISSION_MODE_BYPASS,
+    REVIEW_PERMISSION_MODE as PERMISSION_MODE_BYPASS,
     PERMISSION_MODE_FLAG,
 )
 from dev_env_scripts_constants.grok_worker_constants import (

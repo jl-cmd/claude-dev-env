@@ -33,7 +33,7 @@ python <status_gate.py> begin-firing [--run-slug SLUG]
 
 | Exit | Action |
 |---|---|
-| **1** | Stop. Cancel matching host schedules for `/orchestrator-refresh` if the host allows. Report inactive/done. **Do not** re-arm. Do not spawn. |
+| **1** | End the refresh. Cancel matching host schedules for `/orchestrator-refresh` if the host allows. Report inactive/done. **Do not** re-arm. Do not spawn. Any work already in flight keeps running. |
 | **0** | Latch cleared. Continue with steps 1–6. |
 
 ### 0b. Done after ledger (step 1)
@@ -46,6 +46,25 @@ python <status_gate.py> set --status done [--run-slug SLUG]
 ```
 
 Cancel matching host schedules; stop without re-arming.
+
+## The refresh never interrupts the run
+
+A refresh firing reinforces discipline alongside work already in flight.
+It never pauses, cancels, or waits on a running executor. Reconcile the
+ledger, re-assert the routing, re-arm once, and hand control straight back
+to the work in progress.
+
+Inside the re-arm protocol (step 6), every "stop" ends the *re-arm* and
+nothing else. A `should-reschedule` exit 1 means no schedule is created this
+firing, and a `claim-rearm` exit 1 means the schedule just created is
+cancelled; either way the session keeps orchestrating in the same turn.
+
+Two stops end the whole firing, and both leave running executors alone:
+`begin-firing` exit 1 (step 0a) and the done branch (step 0b). Each means the
+run is finished, not active, or has no readable status file, so the refresh
+reports and adds nothing further. A fail-closed advisor bind (step 3) stops
+advisor consultation alone; the firing still reconciles the ledger, re-arms
+once, and reports the unreachable advisor.
 
 ## Discipline steps
 
