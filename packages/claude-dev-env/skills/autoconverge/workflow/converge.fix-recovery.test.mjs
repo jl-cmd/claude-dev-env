@@ -255,7 +255,8 @@ test('the round-loop fix-stalled blockers survive the recovery wiring', () => {
 });
 
 const verifyObjectionModule = new Function(
-  `${functionSource('parseLastVerdictFence')}\n` +
+  `${functionSource('findLastVerdictFence')}\n` +
+    `${functionSource('parseLastVerdictFence')}\n` +
     `${constantLine('VERIFY_OBJECTION_FALLBACK')}\n` +
     `${functionSource('renderVerifyObjectionLine')}\n` +
     `${functionSource('extractPreFenceProse')}\n` +
@@ -348,6 +349,38 @@ test('the prose reader anchors on the last CLOSED fence, not a stray unterminate
   const objection = extractVerifyObjection(transcript);
   assert.equal(objection, 'check X never showed red');
   assert.doesNotMatch(objection, /all_pass/, 'expected the verdict body never to be read back as prose');
+});
+
+test('both fence readers locate the fence through the one shared locator', () => {
+  assert.match(
+    functionSource('parseLastVerdictFence'),
+    /findLastVerdictFence\(/,
+    'expected the verdict parser to locate its fence through findLastVerdictFence',
+  );
+  assert.match(
+    functionSource('extractPreFenceProse'),
+    /findLastVerdictFence\(/,
+    'expected the prose reader to locate its fence through findLastVerdictFence, not a second search',
+  );
+  assert.doesNotMatch(
+    functionSource('extractPreFenceProse'),
+    /lastIndexOf\(/,
+    'expected no second fence-search procedure in the prose reader to drift from the parser',
+  );
+});
+
+test('the prose reader and the verdict parser land on the same fence when a later marker carries no newline', () => {
+  const transcript =
+    'check X never showed red\n\n' +
+    '```verdict\n{"all_pass": false, "findings": []}\n```\n\n' +
+    '```verdict {"all_pass": true, "findings": []}```';
+  const objection = extractVerifyObjection(transcript);
+  assert.doesNotMatch(
+    objection,
+    /all_pass/,
+    'expected the prose reader to anchor on the fence the parser read, never to slice a verdict body in as prose',
+  );
+  assert.equal(objection, 'check X never showed red');
 });
 
 test('the prose reader skips a scaffolding-only paragraph above the fence', () => {

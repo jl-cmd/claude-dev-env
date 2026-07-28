@@ -425,6 +425,27 @@ test('the shared verdict-fence builder names the binding-hash command and the ve
   );
 });
 
+test('the incomplete-verdict contract sentence is written once and used by both verify paths', () => {
+  const sentenceOccurrences = convergeSource.split(
+    'name that check in prose directly above the fence rather than in findings',
+  ).length - 1;
+  assert.equal(
+    sentenceOccurrences,
+    1,
+    'expected the incomplete-verdict contract sentence to be written exactly once so the two verify paths cannot drift',
+  );
+  assert.match(
+    lensPromptBody('buildVerdictFenceSteps'),
+    /VERDICT_FENCE_CONTRACT_SENTENCE/,
+    'expected the shared fence builder to use the one contract sentence',
+  );
+  assert.match(
+    lensPromptBody('runVerifierTask'),
+    /VERDICT_FENCE_CONTRACT_SENTENCE/,
+    'expected the hardening-verify prompt to use the one contract sentence',
+  );
+});
+
 test('the verdict-fence binding does not self-resolve a cwd via git rev-parse for the manifest hash', () => {
   const fenceBuilder = lensPromptBody('buildVerdictFenceSteps');
   assert.doesNotMatch(
@@ -1006,6 +1027,7 @@ test('the whole priming spawn-agent family is removed — every dispatcher spawn
 
 test('parseLastVerdictFence returns non-null for a verdict fence with valid JSON', () => {
   const parseModule = new Function(
+    `${functionSource('findLastVerdictFence')}\n` +
     `${functionSource('parseLastVerdictFence')}\n` +
     'return { parseLastVerdictFence };',
   )();
@@ -1016,6 +1038,7 @@ test('parseLastVerdictFence returns non-null for a verdict fence with valid JSON
 
 test('parseLastVerdictFence returns null for non-string input', () => {
   const parseModule = new Function(
+    `${functionSource('findLastVerdictFence')}\n` +
     `${functionSource('parseLastVerdictFence')}\n` +
     'return { parseLastVerdictFence };',
   )();
@@ -1025,6 +1048,7 @@ test('parseLastVerdictFence returns null for non-string input', () => {
 
 test('parseLastVerdictFence returns null when no verdict fence is present', () => {
   const parseModule = new Function(
+    `${functionSource('findLastVerdictFence')}\n` +
     `${functionSource('parseLastVerdictFence')}\n` +
     'return { parseLastVerdictFence };',
   )();
@@ -1033,6 +1057,7 @@ test('parseLastVerdictFence returns null when no verdict fence is present', () =
 
 test('parseLastVerdictFence returns null for malformed JSON in the fence', () => {
   const parseModule = new Function(
+    `${functionSource('findLastVerdictFence')}\n` +
     `${functionSource('parseLastVerdictFence')}\n` +
     'return { parseLastVerdictFence };',
   )();
