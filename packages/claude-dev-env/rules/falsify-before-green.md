@@ -1,3 +1,14 @@
+---
+paths:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/conftest.py"
+  - "**/tests/**"
+  - "**/scripts/**"
+---
+
 # Falsify Before Green
 
 **When this applies:** Any new test, probe, concurrency harness, sweep, mutation check, or measurement script, before its green counts as evidence.
