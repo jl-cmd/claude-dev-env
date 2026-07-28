@@ -40,8 +40,6 @@ _EXPECTED_BASH_ORDER = (
     "blocking/convergence_gate_blocker.py",
     "blocking/windows_rmtree_blocker.py",
     "blocking/gh_pr_author_enforcer.py",
-    "blocking/verified_commit_gate.py",
-    "blocking/verdict_directory_write_blocker.py",
     "blocking/code_review_push_gate.py",
     "blocking/code_review_pr_create_gate.py",
     "blocking/code_review_stamp_directory_write_blocker.py",
@@ -50,8 +48,6 @@ _EXPECTED_BASH_ORDER = (
 _POWERSHELL_APPLICABLE = (
     "blocking/unscoped_search_blocker.py",
     "blocking/pii_prevention_blocker.py",
-    "blocking/verified_commit_gate.py",
-    "blocking/verdict_directory_write_blocker.py",
     "blocking/code_review_push_gate.py",
     "blocking/code_review_pr_create_gate.py",
     "blocking/code_review_stamp_directory_write_blocker.py",
