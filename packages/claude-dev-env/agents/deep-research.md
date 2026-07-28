@@ -1,24 +1,25 @@
 ---
 name: deep-research
-description: Use this agent for iterative, multi-source deep research that produces comprehensive Obsidian reports with full citations. Official-docs-first methodology with anti-hallucination constraints. Examples:
+description: |
+  Use this agent for iterative, multi-source deep research that produces comprehensive Obsidian reports with full citations. Official-docs-first methodology with anti-hallucination constraints. Examples:
 
-  <example>
-  Context: User wants thorough research on a technical topic
-  user: "Research the current state of WebSocket authentication best practices"
-  assistant: "I'll use the deep-research agent to conduct iterative multi-source research and produce a cited report."
-  <commentary>
-  Multi-source research requiring iteration and synthesis — exactly what deep-research handles.
-  </commentary>
-  </example>
+    <example>
+    Context: User wants thorough research on a technical topic
+    user: "Research the current state of WebSocket authentication best practices"
+    assistant: "I'll use the deep-research agent to conduct iterative multi-source research and produce a cited report."
+    <commentary>
+    Multi-source research requiring iteration and synthesis — exactly what deep-research handles.
+    </commentary>
+    </example>
 
-  <example>
-  Context: User needs a landscape survey with citations
-  user: "Compare the major vector database options for production RAG systems in 2026"
-  assistant: "I'll launch the deep-research agent to survey the landscape across multiple sources."
-  <commentary>
-  Broad survey requiring many sources, comparison, and synthesis — deep-research with exhaustive depth.
-  </commentary>
-  </example>
+    <example>
+    Context: User needs a landscape survey with citations
+    user: "Compare the major vector database options for production RAG systems in 2026"
+    assistant: "I'll launch the deep-research agent to survey the landscape across multiple sources."
+    <commentary>
+    Broad survey requiring many sources, comparison, and synthesis — deep-research with exhaustive depth.
+    </commentary>
+    </example>
 
 color: cyan
 ---

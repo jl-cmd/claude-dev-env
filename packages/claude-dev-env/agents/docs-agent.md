@@ -1,32 +1,33 @@
 ---
 name: docs-agent
-description: Use this agent for all documentation tasks — managing/consolidating project docs, analyzing existing documentation to prevent code duplication, and writing user-facing guides for non-technical audiences. Trigger with requests like 'update our docs', 'check if we already have this documented', 'write a user guide', or 'consolidate documentation'.
+description: |
+  Use this agent for all documentation tasks — managing/consolidating project docs, analyzing existing documentation to prevent code duplication, and writing user-facing guides for non-technical audiences. Trigger with requests like 'update our docs', 'check if we already have this documented', 'write a user guide', or 'consolidate documentation'.
 
-Examples:
-- <example>
-  Context: User wants comprehensive documentation management
-  user: "call the doc manager"
-  assistant: "I'll use the docs-agent to analyze and update the documentation"
-  <commentary>
-  Documentation management request — use docs-agent in orchestration mode.
-  </commentary>
-</example>
-- <example>
-  Context: User is implementing a new feature and wants to avoid duplicating existing functionality
-  user: "I need to add a function that validates user input"
-  assistant: "Let me consult the docs-agent to check if we already have validation methods documented"
-  <commentary>
-  Before implementing new functionality, use docs-agent in analysis mode to check for existing documented methods.
-  </commentary>
-</example>
-- <example>
-  Context: User needs documentation for non-technical staff
-  user: "Write documentation for the new export feature so our office staff can use it"
-  assistant: "I'll use the docs-agent to create clear, step-by-step documentation that anyone can follow"
-  <commentary>
-  Non-technical audience — use docs-agent in user-docs writing mode.
-  </commentary>
-</example>
+  Examples:
+  - <example>
+    Context: User wants comprehensive documentation management
+    user: "call the doc manager"
+    assistant: "I'll use the docs-agent to analyze and update the documentation"
+    <commentary>
+    Documentation management request — use docs-agent in orchestration mode.
+    </commentary>
+  </example>
+  - <example>
+    Context: User is implementing a new feature and wants to avoid duplicating existing functionality
+    user: "I need to add a function that validates user input"
+    assistant: "Let me consult the docs-agent to check if we already have validation methods documented"
+    <commentary>
+    Before implementing new functionality, use docs-agent in analysis mode to check for existing documented methods.
+    </commentary>
+  </example>
+  - <example>
+    Context: User needs documentation for non-technical staff
+    user: "Write documentation for the new export feature so our office staff can use it"
+    assistant: "I'll use the docs-agent to create clear, step-by-step documentation that anyone can follow"
+    <commentary>
+    Non-technical audience — use docs-agent in user-docs writing mode.
+    </commentary>
+  </example>
 color: cyan
 ---
 

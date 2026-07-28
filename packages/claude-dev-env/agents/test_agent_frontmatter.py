@@ -16,6 +16,12 @@ model on every spawn, so no agent definition names one, concrete or
     flag: model: inherit    <- caller can no longer choose the model
     flag: model: opus       <- pinned concrete model, caller can't override
 
+Every block must also load through `yaml.safe_load`. An unquoted colon inside
+a plain scalar reads as a mapping key and makes the whole block unloadable::
+
+    ok:   description: ... constraints. Examples are below.
+    flag: description: ... constraints. Examples:   <- block no longer loads
+
 Frontmatter parsing is self-contained here (stdlib only): the block is the
 text between the file's opening and closing `---` fence lines, and top-level
 keys are read with a line scan so an agent whose `description` embeds
@@ -100,14 +106,40 @@ def test_agent_frontmatter_uses_only_accepted_keys(
     )
 
 
-def test_code_verifier_frontmatter_parses_and_names_the_agent() -> None:
+@pytest.mark.parametrize(
+    "agent_definition_path",
+    _agent_definition_paths(),
+    ids=lambda each_path: each_path.name,
+)
+def test_agent_frontmatter_loads_as_a_yaml_mapping(
+    agent_definition_path: Path,
+) -> None:
+    frontmatter_block = _frontmatter_block(agent_definition_path)
+    try:
+        parsed_frontmatter = yaml.safe_load(frontmatter_block)
+    except yaml.YAMLError as yaml_error:
+        pytest.fail(
+            f"{agent_definition_path.name} frontmatter is not loadable YAML, so "
+            f"the subagent loader cannot read the definition: {yaml_error}"
+        )
+    assert isinstance(parsed_frontmatter, dict), (
+        f"{agent_definition_path.name} frontmatter loads as "
+        f"{type(parsed_frontmatter).__name__} rather than a key/value mapping"
+    )
+    unaccepted_keys = set(parsed_frontmatter) - ACCEPTED_FRONTMATTER_KEYS
+    assert not unaccepted_keys, (
+        f"{agent_definition_path.name} loads frontmatter keys the subagent "
+        f"loader does not accept: {sorted(unaccepted_keys)}"
+    )
+
+
+def test_code_verifier_frontmatter_names_the_agent() -> None:
     agents_directory = Path(__file__).parent
     code_verifier_block = _frontmatter_block(
         agents_directory / f"{CODE_VERIFIER_AGENT_NAME}.md"
     )
     parsed_frontmatter = yaml.safe_load(code_verifier_block)
     assert parsed_frontmatter["name"] == CODE_VERIFIER_AGENT_NAME
-    assert set(parsed_frontmatter) <= ACCEPTED_FRONTMATTER_KEYS
 
 
 @pytest.mark.parametrize(
