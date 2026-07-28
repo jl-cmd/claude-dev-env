@@ -547,10 +547,15 @@ def test_main_allows_deletion_push_even_when_code_review_gate_would_block(
 
 DEFAULT_BRANCH_NAME: str = "main"
 FEATURE_BRANCH_NAME: str = "feature/example"
-ORIGIN_DEFAULT_BRANCH_REFERENCE: str = "refs/remotes/origin/main"
-ORIGIN_HEAD_REFERENCE: str = "refs/remotes/origin/HEAD"
 UNPROTECTED_DEFAULT_BRANCH_NAME: str = "develop"
-ORIGIN_UNPROTECTED_DEFAULT_BRANCH_REFERENCE: str = "refs/remotes/origin/develop"
+ORIGIN_DEFAULT_BRANCH_REFERENCE: str = (
+    git_hooks_constants.ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX + DEFAULT_BRANCH_NAME
+)
+ORIGIN_UNPROTECTED_DEFAULT_BRANCH_REFERENCE: str = (
+    git_hooks_constants.ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX
+    + UNPROTECTED_DEFAULT_BRANCH_NAME
+)
+ORIGIN_HEAD_REFERENCE: str = git_hooks_constants.ORIGIN_HEAD_SYMBOLIC_REFERENCE
 LOCAL_ALIAS_BRANCH_NAME: str = "release-candidate"
 TOPIC_REMOTE_BRANCH_NAME: str = "topic-x"
 BASE_FILE_NAME: str = "README.md"

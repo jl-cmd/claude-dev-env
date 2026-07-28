@@ -137,9 +137,24 @@ def is_branch_update(push_line: PushLine) -> bool:
     return not is_all_zeros_object_name(push_line.remote_object_name)
 
 
-def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
-    has_seen_any_valid_line = False
-    is_all_valid_lines_deletions = True
+class ParsedPushStdin(NamedTuple):
+    """Every well-formed push line from one stdin payload, and whether text arrived."""
+
+    all_push_lines: tuple[PushLine, ...]
+    has_stdin_content: bool
+
+
+def _parse_push_stdin(stdin_text: str) -> ParsedPushStdin:
+    """Parse the whole stdin payload once, warning on each malformed line.
+
+    Args:
+        stdin_text: The pre-push stdin payload.
+
+    Returns:
+        Every well-formed line in stdin order, paired with whether stdin
+        carried any non-blank text at all.
+    """
+    all_push_lines: list[PushLine] = []
     has_stdin_content = False
     for each_line in stdin_text.splitlines():
         stripped_line = each_line.strip()
@@ -153,17 +168,37 @@ def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
                 file=sys.stderr,
             )
             continue
-        has_seen_any_valid_line = True
-        if is_all_zeros_object_name(push_line.local_object_name):
+        all_push_lines.append(push_line)
+    return ParsedPushStdin(tuple(all_push_lines), has_stdin_content)
+
+
+def _resolve_base_reference_from_lines(parsed_stdin: ParsedPushStdin) -> str | None:
+    """Return the stdin-derived base reference for already-parsed lines.
+
+    Args:
+        parsed_stdin: The parsed stdin payload.
+
+    Returns:
+        The first branch update's remote object name, the no-parseable-lines
+        sentinel, None for a deletion-only push, or the remote default branch
+        reference.
+    """
+    is_all_valid_lines_deletions = True
+    for each_push_line in parsed_stdin.all_push_lines:
+        if is_all_zeros_object_name(each_push_line.local_object_name):
             continue
         is_all_valid_lines_deletions = False
-        if is_branch_update(push_line):
-            return push_line.remote_object_name
-    if has_stdin_content and not has_seen_any_valid_line:
+        if is_branch_update(each_push_line):
+            return each_push_line.remote_object_name
+    if parsed_stdin.has_stdin_content and not parsed_stdin.all_push_lines:
         return NO_PARSEABLE_STDIN_LINES_SENTINEL
-    if has_seen_any_valid_line and is_all_valid_lines_deletions:
+    if parsed_stdin.all_push_lines and is_all_valid_lines_deletions:
         return None
     return DEFAULT_REMOTE_BASE_REFERENCE
+
+
+def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
+    return _resolve_base_reference_from_lines(_parse_push_stdin(stdin_text))
 
 
 def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
@@ -197,6 +232,12 @@ def resolve_default_branch_reference() -> str | None:
     The remote's HEAD symbolic ref answers first. When it is unset, each
     candidate default-branch remote-tracking ref answers in turn.
 
+    Resolution reads ``origin`` alone and never the remote name git passes as
+    argv[1], and its unset-``origin/HEAD`` fallback prefers ``origin/main``
+    over ``origin/master``, so a repo whose default is another branch beside a
+    legacy ``main`` resolves the wrong base — the assumption set tracked at
+    ~/.claude/orchestrator-runs/falsify-first/parked-items.md row 3.
+
     Returns:
         A remote-tracking ref name, or None when no default-branch ref
         resolves.
@@ -215,6 +256,24 @@ def resolve_default_branch_reference() -> str | None:
     return None
 
 
+def _find_branch_update_in_lines(
+    all_push_lines: tuple[PushLine, ...],
+) -> PushLine | None:
+    """Return the first already-parsed line that moves an existing remote branch.
+
+    Args:
+        all_push_lines: Well-formed push lines in stdin order.
+
+    Returns:
+        The first branch-update line, or None when no line updates a branch
+        the remote already holds.
+    """
+    for each_push_line in all_push_lines:
+        if is_branch_update(each_push_line):
+            return each_push_line
+    return None
+
+
 def find_branch_update_push(stdin_text: str) -> PushLine | None:
     """Return the first stdin line that moves a branch the remote already holds.
 
@@ -225,13 +284,7 @@ def find_branch_update_push(stdin_text: str) -> PushLine | None:
         The parsed branch-update line, or None when no line updates a branch
         the remote already holds.
     """
-    for each_line in stdin_text.splitlines():
-        push_line = parse_push_line(each_line.strip())
-        if push_line is None:
-            continue
-        if is_branch_update(push_line):
-            return push_line
-    return None
+    return _find_branch_update_in_lines(_parse_push_stdin(stdin_text).all_push_lines)
 
 
 def resolve_default_branch_merge_base(
@@ -260,6 +313,7 @@ def resolve_default_branch_merge_base(
     )
     if remote_branch_name == default_branch_name:
         return None
+    # Anchors to the pushed object; deferring to the gate's HEAD-based merge-base would change behavior on non-HEAD pushes.
     return run_git_reference_query(
         (
             *ALL_GIT_MERGE_BASE_COMMAND_PREFIX,
@@ -288,37 +342,59 @@ def resolve_gate_base_reference(stdin_text: str) -> str | None:
         The gate's base reference, the no-parseable-lines sentinel, or None
         when the push only deletes remote branches.
     """
-    stdin_base_reference = resolve_base_reference_from_stdin(stdin_text)
-    if stdin_base_reference is None:
-        return None
-    if stdin_base_reference == NO_PARSEABLE_STDIN_LINES_SENTINEL:
-        return stdin_base_reference
-    if stdin_base_reference == DEFAULT_REMOTE_BASE_REFERENCE:
-        return stdin_base_reference
-    branch_update = find_branch_update_push(stdin_text)
+    return _resolve_gate_base_from_parsed(_parse_push_stdin(stdin_text))
+
+
+def _resolve_gate_base_from_parsed(parsed_stdin: ParsedPushStdin) -> str | None:
+    """Return the gate's base reference for an already-parsed stdin payload.
+
+    Args:
+        parsed_stdin: The parsed stdin payload.
+
+    Returns:
+        The merge base with the remote default branch for a branch update, the
+        branch update's remote object name when no merge base resolves, and
+        otherwise whatever the stdin-derived base reference reports.
+    """
+    branch_update = _find_branch_update_in_lines(parsed_stdin.all_push_lines)
     if branch_update is None:
-        return stdin_base_reference
+        return _resolve_base_reference_from_lines(parsed_stdin)
     merge_base_object_name = resolve_default_branch_merge_base(
         branch_update.remote_branch_name, branch_update.local_object_name
     )
     if merge_base_object_name is None:
-        return stdin_base_reference
+        return branch_update.remote_object_name
     return merge_base_object_name
 
 
-def find_protected_branch_push_violation(stdin_text: str) -> tuple[str, str] | None:
-    for each_line in stdin_text.splitlines():
-        push_line = parse_push_line(each_line.strip())
-        if push_line is None:
-            continue
-        if is_all_zeros_object_name(push_line.local_object_name):
+def _find_protected_violation_in_lines(
+    all_push_lines: tuple[PushLine, ...],
+) -> tuple[str, str] | None:
+    """Return the first already-parsed line that pushes onto a protected branch.
+
+    Args:
+        all_push_lines: Well-formed push lines in stdin order.
+
+    Returns:
+        The local and protected remote branch names, or None when no line
+        lands a differently named branch on a protected one.
+    """
+    for each_push_line in all_push_lines:
+        if is_all_zeros_object_name(each_push_line.local_object_name):
             continue
         if (
-            push_line.remote_branch_name in ALL_PROTECTED_BRANCH_PUSH_NAMES
-            and push_line.local_branch_name != push_line.remote_branch_name
+            each_push_line.remote_branch_name in ALL_PROTECTED_BRANCH_PUSH_NAMES
+            and each_push_line.local_branch_name != each_push_line.remote_branch_name
         ):
-            return (push_line.local_branch_name, push_line.remote_branch_name)
+            return (
+                each_push_line.local_branch_name,
+                each_push_line.remote_branch_name,
+            )
     return None
+
+
+def find_protected_branch_push_violation(stdin_text: str) -> tuple[str, str] | None:
+    return _find_protected_violation_in_lines(_parse_push_stdin(stdin_text).all_push_lines)
 
 
 def invoke_gate(gate_script_path: Path, base_reference: str) -> int:
@@ -437,7 +513,10 @@ def main() -> int:
             file=sys.stderr,
         )
         return gate_infrastructure_failure_exit_code
-    protected_branch_push_violation = find_protected_branch_push_violation(stdin_text)
+    parsed_stdin = _parse_push_stdin(stdin_text)
+    protected_branch_push_violation = _find_protected_violation_in_lines(
+        parsed_stdin.all_push_lines
+    )
     if protected_branch_push_violation is not None:
         local_branch_name, remote_branch_name = protected_branch_push_violation
         print(
@@ -455,7 +534,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return code_review_stamp_block_exit_code()
-    base_reference = resolve_gate_base_reference(stdin_text)
+    base_reference = _resolve_gate_base_from_parsed(parsed_stdin)
     if base_reference is None:
         return 0
     if base_reference == no_parseable_stdin_lines_sentinel:
