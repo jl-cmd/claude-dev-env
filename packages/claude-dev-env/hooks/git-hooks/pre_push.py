@@ -15,10 +15,14 @@ branch is blocked before the gate runs. This catches a branch that tracks
 resolves to `main`. The guard runs whether or not the CODE_RULES gate is
 installed; deletions and same-name pushes pass.
 
-Gate base: the first non-zero remote-sha is used as the gate `--base`, so
-violations are scoped to commits that are not already on the remote. When
-every remote object name is zero (new branch) or stdin is empty, the gate
-falls back to the remote's default branch symbolic ref.
+Gate base: a branch push takes its `--base` from the merge base between the
+pushed object and the remote default branch, so violations are scoped to the
+commits the branch itself carries and a rebase onto the default branch leaves
+the gate reading only the branch's own work. The stdin remote object name is
+the base when no default-branch ref resolves and when the pushed branch is
+the default branch. When every remote object name is zero (new branch) or
+stdin is empty, the gate falls back to the remote's default branch symbolic
+ref.
 
 Exit codes:
   0 - the push destination is allowed and its commits pass the gate (or
@@ -35,8 +39,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 from git_hooks_constants import (
+    ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES,
+    ALL_GIT_MERGE_BASE_COMMAND_PREFIX,
+    ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX,
+    ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX,
     ALL_PROTECTED_BRANCH_PUSH_NAMES,
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
@@ -48,6 +57,7 @@ from git_hooks_constants import (
     CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
     DEFAULT_REMOTE_BASE_REFERENCE,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
+    GIT_REFERENCE_QUERY_TIMEOUT_SECONDS,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
     LOCAL_REFERENCE_FIELD_INDEX,
@@ -55,6 +65,8 @@ from git_hooks_constants import (
     MALFORMED_STDIN_LINE_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_SENTINEL,
+    ORIGIN_HEAD_SYMBOLIC_REFERENCE,
+    ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX,
     PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE,
     PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE,
     PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE,
@@ -77,12 +89,55 @@ def is_all_zeros_object_name(object_name: str) -> bool:
     )
 
 
+class PushLine(NamedTuple):
+    """One parsed ``<local-ref> <local-sha> <remote-ref> <remote-sha>`` stdin line."""
+
+    local_branch_name: str
+    local_object_name: str
+    remote_branch_name: str
+    remote_object_name: str
+
+
+def parse_push_line(stripped_line: str) -> PushLine | None:
+    """Return the four fields of one push line, or None when the line is malformed.
+
+    Args:
+        stripped_line: One whitespace-stripped stdin line.
+
+    Returns:
+        The parsed line with both ref names reduced to branch names, or None
+        when the line carries fewer than the four fields git writes.
+    """
+    fields = stripped_line.split()
+    if len(fields) < STDIN_LINE_FIELD_COUNT:
+        return None
+    return PushLine(
+        local_branch_name=fields[LOCAL_REFERENCE_FIELD_INDEX].removeprefix(
+            LOCAL_BRANCH_REFERENCE_PREFIX
+        ),
+        local_object_name=fields[LOCAL_SHA_FIELD_INDEX],
+        remote_branch_name=fields[REMOTE_REFERENCE_FIELD_INDEX].removeprefix(
+            LOCAL_BRANCH_REFERENCE_PREFIX
+        ),
+        remote_object_name=fields[STDIN_REMOTE_OBJECT_FIELD_INDEX],
+    )
+
+
+def is_branch_update(push_line: PushLine) -> bool:
+    """Report whether a push line moves a branch the remote already holds.
+
+    Args:
+        push_line: One parsed push line.
+
+    Returns:
+        True when the local and the remote object names are both non-zero.
+    """
+    if is_all_zeros_object_name(push_line.local_object_name):
+        return False
+    return not is_all_zeros_object_name(push_line.remote_object_name)
+
+
 def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
-    stdin_line_field_count = STDIN_LINE_FIELD_COUNT
-    stdin_remote_object_field_index = STDIN_REMOTE_OBJECT_FIELD_INDEX
-    local_sha_field_index = LOCAL_SHA_FIELD_INDEX
-    default_remote_base_reference = DEFAULT_REMOTE_BASE_REFERENCE
-    malformed_stdin_line_message = MALFORMED_STDIN_LINE_MESSAGE
     has_seen_any_valid_line = False
     is_all_valid_lines_deletions = True
     has_stdin_content = False
@@ -91,54 +146,178 @@ def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
         if not stripped_line:
             continue
         has_stdin_content = True
-        fields = stripped_line.split()
-        if len(fields) < stdin_line_field_count:
+        push_line = parse_push_line(stripped_line)
+        if push_line is None:
             print(
-                malformed_stdin_line_message.format(line=stripped_line),
+                MALFORMED_STDIN_LINE_MESSAGE.format(line=stripped_line),
                 file=sys.stderr,
             )
             continue
         has_seen_any_valid_line = True
-        if is_all_zeros_object_name(fields[local_sha_field_index]):
+        if is_all_zeros_object_name(push_line.local_object_name):
             continue
         is_all_valid_lines_deletions = False
-        remote_object_name = fields[stdin_remote_object_field_index]
-        if not is_all_zeros_object_name(remote_object_name):
-            return remote_object_name
+        if is_branch_update(push_line):
+            return push_line.remote_object_name
     if has_stdin_content and not has_seen_any_valid_line:
         return NO_PARSEABLE_STDIN_LINES_SENTINEL
     if has_seen_any_valid_line and is_all_valid_lines_deletions:
         return None
-    return default_remote_base_reference
+    return DEFAULT_REMOTE_BASE_REFERENCE
+
+
+def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
+    """Return the stripped stdout of a read-only git query.
+
+    Args:
+        all_git_arguments: The full git argv, including the ``git`` word.
+
+    Returns:
+        The stripped stdout, or None when git exits non-zero, prints nothing,
+        or cannot run.
+    """
+    try:
+        completion = subprocess.run(
+            list(all_git_arguments),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_REFERENCE_QUERY_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completion.returncode != 0:
+        return None
+    return completion.stdout.strip() or None
+
+
+def resolve_default_branch_reference() -> str | None:
+    """Return the remote-tracking ref name of the remote's default branch.
+
+    The remote's HEAD symbolic ref answers first. When it is unset, each
+    candidate default-branch remote-tracking ref answers in turn.
+
+    Returns:
+        A remote-tracking ref name, or None when no default-branch ref
+        resolves.
+    """
+    symbolic_reference = run_git_reference_query(
+        (*ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX, ORIGIN_HEAD_SYMBOLIC_REFERENCE)
+    )
+    if symbolic_reference is not None:
+        return symbolic_reference
+    for each_candidate_reference in ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES:
+        verified_reference = run_git_reference_query(
+            (*ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX, each_candidate_reference)
+        )
+        if verified_reference is not None:
+            return each_candidate_reference
+    return None
+
+
+def find_branch_update_push(stdin_text: str) -> PushLine | None:
+    """Return the first stdin line that moves a branch the remote already holds.
+
+    Args:
+        stdin_text: The pre-push stdin payload.
+
+    Returns:
+        The parsed branch-update line, or None when no line updates a branch
+        the remote already holds.
+    """
+    for each_line in stdin_text.splitlines():
+        push_line = parse_push_line(each_line.strip())
+        if push_line is None:
+            continue
+        if is_branch_update(push_line):
+            return push_line
+    return None
+
+
+def resolve_default_branch_merge_base(
+    remote_branch_name: str, pushed_object_name: str
+) -> str | None:
+    """Return the merge base of the pushed object and the default branch.
+
+    The remote branch the push updates decides whether a merge base applies,
+    so ``git push origin release-candidate:develop`` reads as an update of
+    ``develop`` whatever the local branch is called.
+
+    Args:
+        remote_branch_name: The remote branch the push updates.
+        pushed_object_name: The object name the push carries.
+
+    Returns:
+        The merge-base object name, or None when no default-branch ref
+        resolves, when the push updates the default branch, or when git
+        reports no merge base.
+    """
+    default_branch_reference = resolve_default_branch_reference()
+    if default_branch_reference is None:
+        return None
+    default_branch_name = default_branch_reference.removeprefix(
+        ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX
+    )
+    if remote_branch_name == default_branch_name:
+        return None
+    return run_git_reference_query(
+        (
+            *ALL_GIT_MERGE_BASE_COMMAND_PREFIX,
+            pushed_object_name,
+            default_branch_reference,
+        )
+    )
+
+
+def resolve_gate_base_reference(stdin_text: str) -> str | None:
+    """Return the reference the gate scopes its changed lines to.
+
+    A branch update reads from the merge base with the remote default branch,
+    and every other push reads from the stdin remote object name::
+
+        branch update, default branch resolved -> merge-base(pushed, default)
+        branch update, no default branch ref   -> stdin remote object name
+        default-branch push                    -> stdin remote object name
+        new branch or empty stdin              -> remote default branch ref
+        deletion                               -> None
+
+    Args:
+        stdin_text: The pre-push stdin payload.
+
+    Returns:
+        The gate's base reference, the no-parseable-lines sentinel, or None
+        when the push only deletes remote branches.
+    """
+    stdin_base_reference = resolve_base_reference_from_stdin(stdin_text)
+    if stdin_base_reference is None:
+        return None
+    if stdin_base_reference == NO_PARSEABLE_STDIN_LINES_SENTINEL:
+        return stdin_base_reference
+    if stdin_base_reference == DEFAULT_REMOTE_BASE_REFERENCE:
+        return stdin_base_reference
+    branch_update = find_branch_update_push(stdin_text)
+    if branch_update is None:
+        return stdin_base_reference
+    merge_base_object_name = resolve_default_branch_merge_base(
+        branch_update.remote_branch_name, branch_update.local_object_name
+    )
+    if merge_base_object_name is None:
+        return stdin_base_reference
+    return merge_base_object_name
 
 
 def find_protected_branch_push_violation(stdin_text: str) -> tuple[str, str] | None:
-    stdin_line_field_count = STDIN_LINE_FIELD_COUNT
-    local_reference_field_index = LOCAL_REFERENCE_FIELD_INDEX
-    local_sha_field_index = LOCAL_SHA_FIELD_INDEX
-    remote_reference_field_index = REMOTE_REFERENCE_FIELD_INDEX
-    local_branch_reference_prefix = LOCAL_BRANCH_REFERENCE_PREFIX
-    protected_branch_push_names = ALL_PROTECTED_BRANCH_PUSH_NAMES
     for each_line in stdin_text.splitlines():
-        stripped_line = each_line.strip()
-        if not stripped_line:
+        push_line = parse_push_line(each_line.strip())
+        if push_line is None:
             continue
-        fields = stripped_line.split()
-        if len(fields) < stdin_line_field_count:
+        if is_all_zeros_object_name(push_line.local_object_name):
             continue
-        if is_all_zeros_object_name(fields[local_sha_field_index]):
-            continue
-        local_branch_name = fields[local_reference_field_index].removeprefix(
-            local_branch_reference_prefix
-        )
-        remote_branch_name = fields[remote_reference_field_index].removeprefix(
-            local_branch_reference_prefix
-        )
         if (
-            remote_branch_name in protected_branch_push_names
-            and local_branch_name != remote_branch_name
+            push_line.remote_branch_name in ALL_PROTECTED_BRANCH_PUSH_NAMES
+            and push_line.local_branch_name != push_line.remote_branch_name
         ):
-            return (local_branch_name, remote_branch_name)
+            return (push_line.local_branch_name, push_line.remote_branch_name)
     return None
 
 
@@ -276,7 +455,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return code_review_stamp_block_exit_code()
-    base_reference = resolve_base_reference_from_stdin(stdin_text)
+    base_reference = resolve_gate_base_reference(stdin_text)
     if base_reference is None:
         return 0
     if base_reference == no_parseable_stdin_lines_sentinel:

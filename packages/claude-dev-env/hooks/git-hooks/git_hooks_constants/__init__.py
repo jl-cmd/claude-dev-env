@@ -49,6 +49,25 @@ NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
 )
 NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
 LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
+ORIGIN_HEAD_SYMBOLIC_REFERENCE: str = "refs/remotes/origin/HEAD"
+ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX: str = "refs/remotes/origin/"
+ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES: tuple[str, ...] = (
+    "refs/remotes/origin/main",
+    "refs/remotes/origin/master",
+)
+ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "symbolic-ref",
+    "--quiet",
+)
+ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX: tuple[str, ...] = (
+    "git",
+    "rev-parse",
+    "--verify",
+    "--quiet",
+)
+ALL_GIT_MERGE_BASE_COMMAND_PREFIX: tuple[str, ...] = ("git", "merge-base")
+GIT_REFERENCE_QUERY_TIMEOUT_SECONDS: int = 15
 CODE_REVIEW_PUSH_GATE_PATH_OVERRIDE_ENV_VAR: str = "CODE_REVIEW_PUSH_GATE_PATH"
 CODE_REVIEW_PUSH_GATE_MODULE_NAME: str = "code_review_push_gate"
 CODE_REVIEW_PUSH_GATE_SCRIPT_FILENAME: str = "code_review_push_gate.py"
