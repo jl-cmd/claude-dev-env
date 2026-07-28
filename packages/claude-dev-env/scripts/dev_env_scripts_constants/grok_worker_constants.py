@@ -216,10 +216,11 @@ KILL_GRACE_TIMEOUT_SECONDS: int = 10
 """Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
 
 MAXIMUM_WORKER_TIMEOUT_SECONDS: int = 5400
-"""Ceiling on one worker's ``timeout_seconds``, in seconds (90 minutes).
+"""Ceiling the batch launcher puts on a worker's ``timeout_seconds`` (90 minutes).
 
 The batch launcher rejects a specification asking for more. A worker that
 reaches this ceiling is killed and classified ``CLASSIFICATION_TIMEOUT``.
+The runner and the dispatcher take the timeout their caller names.
 """
 
 MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (

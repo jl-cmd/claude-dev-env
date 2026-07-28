@@ -40,6 +40,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CWD_FLAG,
     DEFAULT_ROLE,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
+    MIN_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROMPT_FILE_FLAG,
@@ -59,7 +60,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TIER_CLAUDE_HEADLESS,
     TIER_GROK,
 )
-from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
+from grok_headless_runner import GrokRunnerOutcome, run_headless_worker  # noqa: E402
 from grok_worker_preflight import PreflightOutcome  # noqa: E402
 
 HOST_PROFILE_CLAUDE = "Claude"
@@ -72,6 +73,7 @@ FIXTURE_GROK_RETURNCODE = 0
 FIXTURE_CLAUDE_RETURNCODE = 0
 FIXTURE_FAILED_RETURNCODE = 1
 FIXTURE_ROLE = "code-quality-agent"
+MIN_WORKER_TIMEOUT_SECONDS_CONSTANT_NAME = "MIN_WORKER_TIMEOUT_SECONDS"
 LARGE_PROMPT_CHARACTER_COUNT = 40000
 WINDOWS_SAFE_ARGV_ELEMENT_CEILING = 8192
 EXPECTED_PRIMARY_AGENT_FOR_DEFAULT_ROLE = Path(
@@ -451,6 +453,40 @@ def test_config_error_returns_exit_three(
     parsed_payload = json.loads(captured.out)
     assert parsed_payload[RESULT_KEY_OK] is False
     assert parsed_payload[RESULT_KEY_RETURNCODE] == SPAWN_CONFIG_ERROR_EXIT_CODE
+
+
+def test_below_floor_timeout_returns_json_config_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A below-floor timeout reads as a config error, not an escaping traceback."""
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    _install_seams(monkeypatch, grok_outcome=_grok_ok())
+    monkeypatch.setattr(dispatcher, "spawn_grok_runner", run_headless_worker)
+    below_floor_timeout_seconds = MIN_WORKER_TIMEOUT_SECONDS - 1
+
+    exit_code = dispatcher.main(
+        [
+            CLI_ROLE_FLAG,
+            FIXTURE_ROLE,
+            PROMPT_FILE_FLAG,
+            str(prompt_file),
+            CWD_FLAG,
+            str(working_directory),
+            CLI_TIMEOUT_FLAG,
+            str(below_floor_timeout_seconds),
+            CLI_RUN_STATE_DIR_FLAG,
+            str(run_state_directory),
+        ]
+    )
+
+    assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed_payload = json.loads(captured.out)
+    assert parsed_payload[RESULT_KEY_OK] is False
+    assert parsed_payload[RESULT_KEY_TIER_USED] is None
+    assert parsed_payload[RESULT_KEY_RETURNCODE] == SPAWN_CONFIG_ERROR_EXIT_CODE
+    assert MIN_WORKER_TIMEOUT_SECONDS_CONSTANT_NAME in parsed_payload[RESULT_KEY_OUTPUT]
 
 
 def test_attempts_array_ordering_across_tiers(

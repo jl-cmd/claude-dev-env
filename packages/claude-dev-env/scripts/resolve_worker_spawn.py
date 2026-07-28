@@ -430,6 +430,11 @@ def resolve_worker_spawn(
 
     Returns:
         The dispatcher outcome including the ordered attempts trail.
+
+    Raises:
+        ValueError: When the headless runner refuses ``timeout_seconds`` as
+            missing or below its accepted floor. The CLI maps this to the
+            config-error exit code.
     """
     preflight_outcome: PreflightOutcome = spawn_preflight_runner(
         role=role,
@@ -548,7 +553,7 @@ def _exit_code_for_outcome(
     return SPAWN_SERVED_EXIT_CODE
 
 
-def _config_error_outcome(configuration_error: ChainConfigurationError) -> SpawnOutcome:
+def _config_error_outcome(configuration_error: Exception) -> SpawnOutcome:
     return SpawnOutcome(
         tier_used=None,
         is_ok=False,
@@ -609,7 +614,7 @@ def main(all_command_arguments: list[str]) -> int:
             is_claude_tier_enabled=parsed_arguments.is_claude_tier_enabled,
             run_state_directory=run_state_directory,
         )
-    except ChainConfigurationError as configuration_error:
+    except (ChainConfigurationError, ValueError) as configuration_error:
         is_config_error = True
         spawn_outcome = _config_error_outcome(configuration_error)
     return _write_spawn_outcome_and_exit_code(

@@ -123,7 +123,7 @@ Shape:
       ],
       "cwd": "/abs/path/to/worktree",
       "tool_profile": "readonly",
-      "timeout_seconds": 5400,
+      "timeout_seconds": 600,
       "is_repo_only": true,
       "agent_name": null
     }

@@ -31,6 +31,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
+    MAX_TURNS_FLAG,
     MAXIMUM_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FILENAME_PREFIX,
     PROMPT_FILENAME_PREFIX,
@@ -61,6 +62,7 @@ from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS  # noqa: E40
 from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
 from grok_worker_preflight import PreflightOutcome  # noqa: E402
 
+RETIRED_MAX_TURNS_KEYWORD = "max_turns"
 FIXTURE_REPORT_TEXT = '{"status":"done","role":"investigator"}'
 FIXTURE_USAGE_LIMIT_TEXT = "rate limit exceeded (HTTP 429): quota exceeded"
 FIXTURE_TIMEOUT_KILL_TEXT = "worker exceeded its timeout and was killed"
@@ -973,7 +975,6 @@ def test_timeout_over_the_ceiling_is_refused_and_at_the_ceiling_passes(
     )
     at_ceiling_spec = batch.load_batch_spec(at_ceiling_path)
 
-    assert MAXIMUM_WORKER_TIMEOUT_SECONDS == 5400
     assert at_ceiling_spec.all_workers[0].timeout_seconds == (
         MAXIMUM_WORKER_TIMEOUT_SECONDS
     )
@@ -1052,9 +1053,9 @@ def test_worker_invocations_carry_no_turn_cap(
 
     launched_keyword_arguments = recorder.all_keyword_arguments[0]
     all_extra_arguments = launched_keyword_arguments["all_extra_arguments"]
-    assert "max_turns" not in launched_keyword_arguments
+    assert RETIRED_MAX_TURNS_KEYWORD not in launched_keyword_arguments
     assert isinstance(all_extra_arguments, tuple)
-    assert "--max-turns" not in all_extra_arguments
+    assert MAX_TURNS_FLAG not in all_extra_arguments
 
 
 def test_timed_out_worker_reads_as_timeout_beside_a_completed_worker(

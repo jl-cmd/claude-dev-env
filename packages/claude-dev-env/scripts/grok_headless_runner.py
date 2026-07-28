@@ -218,7 +218,11 @@ def _kill_posix_process_group(process_identifier: int) -> None:
     """End a POSIX process group so no grandchild keeps the capture pipe open.
 
     The platform guard is what lets the process-group calls resolve: they exist
-    only off Windows.
+    only off Windows. It is written as a ``sys.platform`` literal because that
+    is the form the type checker reads to narrow the platform.
+
+    A process id that is already reaped raises ``OSError``; this swallows it and
+    returns, so the caller falls back to ``Popen.kill()``.
     """
     if sys.platform == "win32":
         return
