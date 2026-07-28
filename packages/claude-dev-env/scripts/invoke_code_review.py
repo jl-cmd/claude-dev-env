@@ -869,9 +869,11 @@ def _mint_or_config_outcome(
             timeout_seconds=timeout_seconds,
             effort=effort,
         )
-    except ChainConfigurationError:
+    except ChainConfigurationError as configuration_error:
+        sys.stderr.write(str(configuration_error) + "\n")
         return _no_mint_outcome(CHAIN_CONFIG_ERROR_EXIT_CODE)
-    except ValueError:
+    except ValueError as host_profile_error:
+        sys.stderr.write(str(host_profile_error) + "\n")
         return _no_mint_outcome(HOST_PROFILE_ERROR_RETURNCODE)
 
 
