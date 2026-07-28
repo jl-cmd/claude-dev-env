@@ -4,7 +4,7 @@
 
 ## Rule
 
-A check's green counts as evidence only after that same check ran red on a deliberate break, with a paired control that passes beside it. The break is named: a mutation applied to the code, a stubbed-out target, or a control input built to trip the check.
+A check's green counts as evidence only after that same check ran red on a deliberate break, with a paired control that passes beside it. The break is named: a mutation applied to the code, a stubbed-out target, or a trip input built to fire the check.
 
 A green with no shown red is an unmeasured result, not a pass. Apply the break, watch the check fail, then trust the green. A check that stays green under its own break reads nothing about the code, and its number carries no weight.
 
@@ -38,7 +38,7 @@ The harness writes the row, file, or event the assertion counts, so the assertio
 
 | Part | What it names |
 |---|---|
-| The break | The mutation, stub, or control input applied, named by file and line or by the exact input text |
+| The break | The mutation, stub, or trip input applied, named by file and line or by the exact input text |
 | The red | The failing output the check printed under that break |
 | The control | The case that passes beside the red, run on the same command |
 
