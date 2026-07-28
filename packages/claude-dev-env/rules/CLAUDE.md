@@ -33,7 +33,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol and a See-also block for its seven siblings |
 | `hedging-claims.md` | State the evidence or name the claim unverified; the `hedging_language_blocker` Stop hook sends a hedged response back for a re-check |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
-| `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the denominator against known scope |
+| `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the count against the scope its denominator names |
 | `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |
 | `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
