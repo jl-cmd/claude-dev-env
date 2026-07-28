@@ -54,4 +54,4 @@ All three land together. A record carrying the red alone shows a check that fail
 
 ## Enforcement
 
-The AI review lane and audit skills carry this rule: an agent reads the shown-red record beside each new check a PR adds. No blocking hook backs it, because a green that measured the code and a green that measured nothing look the same to a regex — the difference sits in what the check reached at run time.
+This rule binds as prose discipline: a reviewer reads the shown-red record beside each new check a PR adds. No hook backs it, because a green that measured the code and a green that measured nothing look the same to a regex — the difference sits in what the check reached at run time.
