@@ -1,5 +1,53 @@
 # Changelog
 
+## [2.6.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.5.0...claude-dev-env-v2.6.0) (2026-07-28)
+
+
+### Features
+
+* **codex-compat:** add the Codex compatibility bridge ([20e4ee2](https://github.com/jl-cmd/claude-dev-env/commit/20e4ee2c41b729c6e32780ebe75792fb36137941))
+* **codex-compat:** add the Codex compatibility bridge ([62ca712](https://github.com/jl-cmd/claude-dev-env/commit/62ca712ea7357de3e8a4241a66f4e003807493e9))
+* **hooks:** add eli11_reply_enforcer Stop hook for short action-first replies ([4af780f](https://github.com/jl-cmd/claude-dev-env/commit/4af780f74633b9790ee094f289d16f97ed183ece))
+* **hooks:** add eli11_reply_enforcer Stop hook for short action-first replies ([9a66b80](https://github.com/jl-cmd/claude-dev-env/commit/9a66b803ed34d2f0789fd959219d77e3a5c04b33))
+* **hooks:** retune eli11 caps and add a one-idea-per-line check ([9b5fd31](https://github.com/jl-cmd/claude-dev-env/commit/9b5fd31ac8f677ae6810ef955e0494394868a291))
+* **hooks:** wire the unscoped-search and shell-substitution blockers ([06f8764](https://github.com/jl-cmd/claude-dev-env/commit/06f87643951016e986952f7f9ef99c643324881f))
+
+
+### Bug Fixes
+
+* **code_rules_gate:** baseline in a throwaway worktree, never the user's tree ([97d8c67](https://github.com/jl-cmd/claude-dev-env/commit/97d8c67f004d087f190e0aa5bd6dc567b1b43b10))
+* **code_rules_gate:** baseline in a throwaway worktree, never the user's tree ([9a192f3](https://github.com/jl-cmd/claude-dev-env/commit/9a192f3e16b3e54795c38bd4f9bf845a2b6d2125))
+* **code_rules_gate:** keep the baseline run out of the user's working tree ([a251f51](https://github.com/jl-cmd/claude-dev-env/commit/a251f5116184e5001de810a41090bb24aee956bf))
+* **code_rules_gate:** let a failed import-root probe degrade instead of crash ([1c31480](https://github.com/jl-cmd/claude-dev-env/commit/1c31480427b59d909bb31f175f19aa2e483e2316))
+* **code-verifier:** always emit the verdict fence, and never use git stash ([9068049](https://github.com/jl-cmd/claude-dev-env/commit/906804971cf72032800ca8732f200b865c6e4da2))
+* **codex-compat:** stop the materializer destroying and staling managed files ([5eeedae](https://github.com/jl-cmd/claude-dev-env/commit/5eeedae2adb65d8c60604476884eee0d5d77e67b))
+* **hooks:** tighten eli11 reply-shape detection from review round 1 ([56fcfa0](https://github.com/jl-cmd/claude-dev-env/commit/56fcfa033b7f358214d798e944004aa0814b4123))
+* **pr-loop:** group config-less staged tests by top-level directory ([2a988c8](https://github.com/jl-cmd/claude-dev-env/commit/2a988c8c67dc81a677861f65054595774051128a))
+* **pr-loop:** group config-less staged tests by top-level directory ([2efe16f](https://github.com/jl-cmd/claude-dev-env/commit/2efe16f6f09e3e5be648ffb1367964a01901ee8f))
+* **pr-loop:** review round 1 - single-walk grouping, OSError degrade, boundary docs ([c247f50](https://github.com/jl-cmd/claude-dev-env/commit/c247f50ef5eb04f2f17678bc7cb3d196c14135e8))
+* restore a dropped security line and close three inventory gaps ([2307a1a](https://github.com/jl-cmd/claude-dev-env/commit/2307a1a2c21b36e5d9236e6fa57c77c29f1dc5cd))
+* **review:** apply review-round-1 findings on rules, hooks, and inventories ([325891b](https://github.com/jl-cmd/claude-dev-env/commit/325891bbee5c52c7d5094960fdd169010812bc74))
+* **tests:** drop four duplicate regression tests the merge appended ([66cce1a](https://github.com/jl-cmd/claude-dev-env/commit/66cce1a2245ef0d78ba1dafd52b51cce94805012))
+
+
+### Documentation
+
+* **code_rules_gate:** name the regression module and the shared test helper ([858e03f](https://github.com/jl-cmd/claude-dev-env/commit/858e03fb2ea200836448d6d419621b2e835c9763))
+* consolidate rules, wire two dark hooks, and shrink CLAUDE.md ([d501300](https://github.com/jl-cmd/claude-dev-env/commit/d501300bc2ead639259ee988ebd0af68262f9cf0))
+* **nas:** point the NAS policy at the paramiko runner, and move host specifics out ([2075901](https://github.com/jl-cmd/claude-dev-env/commit/207590193a2e9b160f42e36f2b245b8a96ca405f))
+* **nas:** point the NAS policy at the paramiko runner, and move host specifics out ([d6a3f0c](https://github.com/jl-cmd/claude-dev-env/commit/d6a3f0cfb33cc1483afec64e4ff94c0df03f179f))
+* **rules:** add eli11-replies rule for short action-first chat replies ([cb38f43](https://github.com/jl-cmd/claude-dev-env/commit/cb38f430efd674de6d768e89ea26ff99baa77e3f))
+* **rules:** add eli11-replies rule for short action-first chat replies ([b90f4ca](https://github.com/jl-cmd/claude-dev-env/commit/b90f4cac90b17ab41ba809898987dfa6ec2f0003))
+* **rules:** consolidate 56 rules to 42 and repoint the worktree root ([5d8a67a](https://github.com/jl-cmd/claude-dev-env/commit/5d8a67afa48dd683ae9dbd9e4c17b24f7c795871))
+* **rules:** fix dead references and index rows that misstate their rule ([f21f0b6](https://github.com/jl-cmd/claude-dev-env/commit/f21f0b62cee7a2ae6fec3546d11bc65baa2d03b2))
+* **rules:** fix five findings from the rules overlap audit ([8caf3e0](https://github.com/jl-cmd/claude-dev-env/commit/8caf3e0e019c609ecfe66ba30470e8ad233b1d79))
+* **rules:** fix five findings from the rules overlap audit ([5215706](https://github.com/jl-cmd/claude-dev-env/commit/5215706c655322a2768bbbb90ce4df950fecb0be))
+* **rules:** rewrite eli11-replies around 4 NN/g skim mechanics ([3e6b16a](https://github.com/jl-cmd/claude-dev-env/commit/3e6b16acbdb31553a7b2011bcc66b21fa77d862d))
+* **rules:** rewrite eli11-replies around 4 NN/g skim mechanics ([e81ffcc](https://github.com/jl-cmd/claude-dev-env/commit/e81ffccd7494fdc96c9113d2d463f796535b3d32))
+* shrink the package CLAUDE.md to what no rule owns ([1b3958d](https://github.com/jl-cmd/claude-dev-env/commit/1b3958d8240462206ebaa3dee8425b513c82be5f))
+* **skills:** rebase condensing-instructions on Claude 5 context engineering ([23df0e3](https://github.com/jl-cmd/claude-dev-env/commit/23df0e3e9649646bc65d5068083b6b3f07d304ab))
+* **skills:** rebase condensing-instructions on Claude 5 context engineering ([8e7ae8c](https://github.com/jl-cmd/claude-dev-env/commit/8e7ae8c09bede806fd91d206063e2db138db4f57))
+
 ## [2.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.4.0...claude-dev-env-v2.5.0) (2026-07-26)
 
 
