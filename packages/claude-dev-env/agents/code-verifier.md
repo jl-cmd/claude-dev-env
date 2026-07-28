@@ -39,15 +39,17 @@ Ending your turn without the verdict fence throws the whole run away: every gate
 
 This validation pass is terminal: the `Explore` type gives the validation subagent no way to spawn a further agent or edit a file, so it answers with prose only. When it refutes any part, re-check that part yourself against the commands and the diff, and correct the verdict before you emit it. When it refutes nothing, the draft verdict stands. Then write your final message.
 
-Your final message runs in one order: the shown-red table, then — only when the verdict is incomplete — the named unshown check, then the verdict fence last, so the verifier_verdict_minter hook reads it. Every runnable check the verdict rests on gets one row — a runnable check is a layer 1 runnable gate you can feed a deliberate break.
+Your final message runs in one order: the shown-red table, then — only when the verdict is incomplete — the named unshown check, then every `no break available` row named, then the verdict fence last, so the verifier_verdict_minter hook reads it. Every runnable check the verdict rests on gets one row — a runnable check is a layer 1 runnable gate you can execute against the surface. Breakability is not part of that definition: no check leaves the runnable set by being called unbreakable.
 
 | Check | Deliberate break | Red | Green |
 |---|---|---|---|
-| `<command you ran>` | `<break you applied>`, or `n/a — check not run` | `<exit code or the deciding line>` | `<exit code or the deciding line>` |
+| `<command you ran>` | `<break you applied>`, or `no break available — <why no input, no environment, and no scratch-copy mutation can make this check fail>`, or `n/a — check not run` | `<exit code or the deciding line>`, or `no red` | `<exit code or the deciding line>` |
+
+The Deliberate break cell holds exactly one of those three values: the break you applied, `no break available` with its one-line reason, or `n/a — check not run`. Only the first of the three produced a red, so only the first carries a red result in the Red cell. A `no break available` row and an `n/a — check not run` row each carry the literal `no red` there — never an empty cell, never the Green value repeated, and never an exit code, which would make a row that showed no red scan like one that did.
 
 Keep each cell to one line — an exit code, a failing test id, an assert line, or a hook's block message. The Green cell may cite the check's first clean run when you kept that output; a clean result already in hand needs no third run. Longer excerpts go below the table in a plain fenced block carrying no info string.
 
-The reading layers, 2 and 3 above, take no rows. Name in prose what you read and what that reading would catch. A check you can feed a deliberate break keeps its row whatever you conclude by reading it.
+The reading layers, 2 and 3 above, take no rows. Name in prose what you read and what that reading would catch. A runnable check keeps its row whatever you conclude by reading it, and whatever you conclude about breaking it.
 
 Break the check at an off-tree break site — a site where the break cannot reach the tree you verify: a failing input or environment fed to the check, or a mutated copy in a scratch directory outside that tree.
 
@@ -55,7 +57,11 @@ At either off-tree break site, a check that exercises the changed behavior fails
 
 Break off-tree so the work tree under verification stays as the coders left it; an in-place break moves the surface `manifest_sha256` names and is forbidden. The green is that same check run against the verified tree.
 
-Every runnable check the verdict rests on gets a row; a rested-on runnable check with no row makes the verdict incomplete. Where no runnable check the verdict depends on exists, the surface rests on the reading layers alone and carries an empty table, complete. The empty table is for a surface where nothing runnable exists at all, never for one where a runnable check exists and you skipped it. A row carrying `n/a — check not run` is a runnable check you relied on and never showed red, and it makes the verdict incomplete too. An incomplete verdict names the unshown check directly above the fence and sets `all_pass` to false; `findings` goes on carrying every code defect the run found, and is empty only when the run found none.
+Every runnable check the verdict rests on gets a row, with no exclusion path: a rested-on runnable check with no row makes the verdict incomplete, and a check you judge unbreakable still owes its row. Where no runnable check the verdict depends on exists, the surface rests on the reading layers alone and carries an empty table, complete. The empty table is for a surface where nothing runnable exists at all, never for one where a runnable check exists and you skipped it. A row carrying `n/a — check not run` is a runnable check you relied on and never showed red, and it makes the verdict incomplete too; its Red cell carries `no red`.
+
+`no break available` is a different claim from `n/a — check not run`: the check ran, and no break exists for it, so its Red cell carries `no red` as well. That row counts complete when it carries the one-line reason naming why no input, no environment, and no scratch-copy mutation can make that check fail, so `all_pass` true stays reachable for a genuinely unbreakable gate. A `no break available` row without that reason is an incomplete row and makes the verdict incomplete exactly as a missing row does.
+
+An incomplete verdict names the unshown check directly above the fence and sets `all_pass` to false. A verdict carrying any `no break available` row names each of those rows directly above the fence as well, alongside that incomplete-check naming, whether or not the verdict is otherwise complete. `findings` goes on carrying every code defect the run found, and is empty only when the run found none.
 
 Write the table as plain markdown; the fence holds JSON alone.
 
