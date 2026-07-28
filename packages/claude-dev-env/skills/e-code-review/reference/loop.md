@@ -74,9 +74,11 @@ that hand-off, and they land at different times:
   inside the round that checks the reader, and nothing outside that round is
   needed to complete them. This is the record gate 2 reads.
 - **The termination-time disclosure** — what terminating requires. The
-  ready-for-review message and the pull request body each name every broken
-  off-target reader that still exists. Gate 3 enforces this at the moment the
-  loop terminates; no earlier round owes it.
+  ready-for-review message names every broken off-target reader and every
+  skipped finding that still exists, and the pull request body carries the same
+  names when the target is a pull request. A target with no pull request owes
+  the ready message alone. Gate 3 enforces this at the moment the loop
+  terminates; no earlier round owes it.
 
 ## Terminal outcomes
 
@@ -136,9 +138,12 @@ Gate 3 reads that stated outcome, never a case label.
 Any other combination runs the round tail and re-enters the loop.
 
 Terminating carries one further condition — the termination-time disclosure: the
-ready-for-review message and the pull request body each name every broken
-off-target reader and every skipped finding that still exists. Both surfaces are
-written at termination, so both are always available to the terminating round. A
+ready-for-review message names every broken off-target reader and every skipped
+finding that still exists. When the target is a pull request, the pull request
+body carries the same names; a target with no pull request owes the ready message
+alone. Every surface this condition names is written at termination — the ready
+message always, the pull request body too when the target is a pull request — so
+each one is available to the terminating round. A
 round that cannot name them does not terminate; it runs the round tail and
 re-enters the loop, the same as any other non-terminating round. With that
 condition met, post the proof-of-work PR comment when the target is a PR, then
