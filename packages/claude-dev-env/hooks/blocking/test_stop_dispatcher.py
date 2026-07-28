@@ -173,6 +173,29 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
 
 
+def test_dispatcher_blocks_overlong_reply_matching_standalone() -> None:
+    """An overlong last_assistant_message blocks through the dispatcher."""
+    overlong_message = "\n".join(
+        " ".join(f"finding{each_index}" for each_index in range(10))
+        for _ in range(30)
+    )
+    payload_text = json.dumps(
+        {"stop_hook_active": False, "last_assistant_message": overlong_message}
+    )
+    completed = subprocess.run(
+        [sys.executable, _DISPATCHER_SCRIPT],
+        check=False,
+        input=payload_text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert completed.returncode == 0
+    parsed = json.loads(completed.stdout)
+    assert parsed["decision"] == "block"
+    assert "ELI11 REPLY SHAPE" in parsed["reason"]
+
+
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:
     """The dispatcher's bootstrap resolves hooks_constants without hooks/ on PYTHONPATH."""
     subprocess_environment = {**os.environ, "PYTHONPATH": str(_BLOCKING_DIR)}

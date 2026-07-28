@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop-hook dispatcher that hosts the five Stop-chain hooks in one process.
+"""Stop-hook dispatcher that hosts the six Stop-chain hooks in one process.
 
 Reads the Stop payload from stdin once, runs each hosted hook in registration
 order via the shared hosted-hook runner, and emits the first block decision the
