@@ -21,6 +21,27 @@ NON_ZERO_REMOTE_SHA_ONE: str = "1" * 40
 NON_ZERO_REMOTE_SHA_TWO: str = "2" * 40
 
 
+GIT_RESOLVED_EXIT_CODE: int = 0
+RESOLVED_COMMIT_OBJECT_NAME: str = "c" * 40
+
+
+@pytest.fixture(autouse=True)
+def resolve_remote_head_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every reference resolve, so these tests ignore the clone's remote state.
+
+    ``main`` resolves the gate base through git before it invokes the gate. A
+    clone with no ``origin/HEAD`` would send these tests down the unresolvable
+    path and change what ``main`` returns. Stubbing the seam keeps each test
+    about the flow it names. Base resolution itself is covered by
+    ``test_pre_push_base_reference.py``.
+    """
+
+    def fake_run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
+        return GIT_RESOLVED_EXIT_CODE, RESOLVED_COMMIT_OBJECT_NAME
+
+    monkeypatch.setattr(pre_push, "run_git_text_command", fake_run_git_text_command)
+
+
 def _isolate_code_review_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "CODE_REVIEW_PUSH_GATE_PATH", str(tmp_path / "no_code_review_gate.py")
