@@ -6,6 +6,13 @@ the advisor-protocol document. The same spawn carrying the marker is allowed.
 A spawn at any other model tier, and a spawn with no ``model`` field, pass
 whether or not the marker is present. One test reads ``hooks.json`` and
 asserts the gate is registered on a matcher covering both spawn tool names.
+
+One token pin reads the warm-up section. One doc-gate agreement test
+assembles a spawn prompt out of the advisor-protocol paragraphs a drift
+re-spawn follows and runs it through the gate, so a re-spawn paragraph that
+stops naming the marker fails here. Two deny-path tests read the preview the
+gate hands the block logger and hold it bounded and scoped to the model
+field.
 """
 
 from __future__ import annotations
@@ -51,6 +58,12 @@ _FULL_SONNET_MODEL_ID = "claude-sonnet-4-5"
 _ADVISOR_PROTOCOL_PATH = _HOOKS_TREE.parent / "_shared" / "advisor" / "advisor-protocol.md"
 _BIND_SECTION_HEADING = "## Warm-up (once per session)"
 _MARKDOWN_SECTION_HEADING_PREFIX = "\n## "
+_RESPAWN_PARAGRAPH_MARKER = "**Re-spawn on drift.**"
+_PARAGRAPH_SEPARATOR = "\n\n"
+_MULTI_KILOBYTE_PROMPT = "Audit the changed lines and report each finding. " * 200
+_MAXIMUM_DENY_PREVIEW_LENGTH = 120
+_MARKER_STATE_FIELD_NAME = "marker_present"
+_PROMPT_BODY_SAMPLE = "Audit the changed lines"
 _UNMARKED_PROMPT = "Audit the changed lines and report each finding with its path and line."
 _ADVISOR_BIND_PROMPT = (
     "You are the standing session advisor for this run. "
@@ -186,6 +199,32 @@ def test_should_allow_when_the_payload_is_malformed_json() -> None:
     assert _run_main_with_io("not valid json {{{") == ""
 
 
+def _denial_preview_for(payload: dict[str, Any]) -> str:
+    """Return the offending-input preview the gate hands the block logger.
+
+    Args:
+        payload: The PreToolUse payload the gate denies.
+
+    Returns:
+        The ``offending_input_preview`` argument of the logged block.
+    """
+    with mock.patch.object(hook_module, "log_hook_block") as recorded_block:
+        _run_main_with_io(json.dumps(payload))
+    return str(recorded_block.call_args.kwargs["offending_input_preview"])
+
+
+def test_deny_preview_stays_bounded_on_a_multi_kilobyte_prompt() -> None:
+    preview = _denial_preview_for(_spawn_payload(prompt=_MULTI_KILOBYTE_PROMPT))
+    assert len(preview) <= _MAXIMUM_DENY_PREVIEW_LENGTH
+
+
+def test_deny_preview_carries_the_model_and_marker_state_without_the_prompt() -> None:
+    preview = _denial_preview_for(_spawn_payload(prompt=_MULTI_KILOBYTE_PROMPT))
+    assert FABLE_MODEL_ALIAS in preview
+    assert _MARKER_STATE_FIELD_NAME in preview
+    assert _PROMPT_BODY_SAMPLE not in preview
+
+
 def _matchers_registering_the_gate() -> list[str]:
     """Return every PreToolUse matcher whose group runs this gate.
 
@@ -227,3 +266,38 @@ def _bind_section_text() -> str:
 
 def test_advisor_protocol_bind_section_names_the_marker_token() -> None:
     assert FABLE_SPAWN_AUTHORIZATION_MARKER in _bind_section_text()
+
+
+def _paragraph_starting_at(paragraph_marker: str) -> str:
+    """Return the advisor-protocol paragraph that opens with a marker.
+
+    Args:
+        paragraph_marker: The literal text opening the paragraph.
+
+    Returns:
+        The paragraph text, running from that marker to the blank line that
+        closes it.
+    """
+    document_text = _ADVISOR_PROTOCOL_PATH.read_text(encoding="utf-8")
+    paragraph_body = document_text[document_text.index(paragraph_marker) :]
+    paragraph_end = paragraph_body.find(_PARAGRAPH_SEPARATOR)
+    if paragraph_end < 0:
+        return paragraph_body
+    return paragraph_body[:paragraph_end]
+
+
+def _respawn_spawn_prompt() -> str:
+    """Assemble the spawn prompt a drift re-spawn writes from the protocol.
+
+    The prompt comes from the re-spawn paragraph alone, so the gate reads
+    what that one paragraph tells a session to send.
+
+    Returns:
+        The spawn prompt text a session following that paragraph sends.
+    """
+    return _paragraph_starting_at(_RESPAWN_PARAGRAPH_MARKER)
+
+
+def test_respawn_paragraph_prompt_passes_the_gate_at_the_fable_tier() -> None:
+    payload = _spawn_payload(prompt=_respawn_spawn_prompt())
+    assert _run_main_with_io(json.dumps(payload)) == ""

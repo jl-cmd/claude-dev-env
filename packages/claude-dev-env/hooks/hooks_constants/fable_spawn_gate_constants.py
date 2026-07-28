@@ -37,9 +37,13 @@ HOOK_EVENT_NAME: str = "PreToolUse"
 
 DENY_REASON: str = (
     "BLOCKED [fable-spawn-gate]: this subagent spawn names the fable tier in "
-    "its model field and carries no authorization marker. The one sanctioned "
-    "fable spawn is the advisor bind, and it puts the exact token "
-    f"{FABLE_SPAWN_AUTHORIZATION_MARKER} in its spawn prompt. Send this spawn "
-    "at a lower tier instead — set model to opus, sonnet, or haiku. The bind "
-    f"rule lives in {ADVISOR_PROTOCOL_DOCUMENT_PATH}."
+    "its model field and carries no authorization marker. An authorized fable "
+    f"spawn carries the exact token {FABLE_SPAWN_AUTHORIZATION_MARKER} in its "
+    "spawn prompt. Send this spawn at a lower tier — set model to opus, "
+    "sonnet, or haiku — or carry the token when the spawn is authorized. "
+    f"{ADVISOR_PROTOCOL_DOCUMENT_PATH} names who authorizes one."
 )
+
+DENY_PREVIEW_TEMPLATE: str = "model={model_text} marker_present={is_marker_present}"
+ABSENT_MODEL_PREVIEW_TEXT: str = "(absent)"
+MAXIMUM_PREVIEW_MODEL_LENGTH: int = 40

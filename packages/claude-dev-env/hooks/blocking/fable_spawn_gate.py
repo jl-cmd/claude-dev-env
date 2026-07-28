@@ -12,7 +12,7 @@ One exact token in the spawn prompt authorizes a spawn at the fable tier::
 The gate reads an ``Agent`` or ``Task`` call and finds the tier in the model
 field whether that field carries the bare alias or a full model id, in any
 letter case. Its deny reason names the token and the advisor-protocol
-document that holds the bind rule.
+document that names who authorizes a fable spawn.
 """
 
 from __future__ import annotations
@@ -27,12 +27,15 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from hooks_constants.fable_spawn_gate_constants import (  # noqa: E402
+    ABSENT_MODEL_PREVIEW_TEXT,
     ALL_SPAWN_TOOL_NAMES,
     CALLING_HOOK_NAME,
+    DENY_PREVIEW_TEMPLATE,
     DENY_REASON,
     FABLE_MODEL_ALIAS,
     FABLE_SPAWN_AUTHORIZATION_MARKER,
     HOOK_EVENT_NAME,
+    MAXIMUM_PREVIEW_MODEL_LENGTH,
     MODEL_FIELD_NAME,
     MODEL_SEGMENT_SPLIT_PATTERN,
     PROMPT_FIELD_NAME,
@@ -108,6 +111,34 @@ def _should_block(all_payload_by_field: Mapping[str, object]) -> bool:
     return not _prompt_carries_authorization_marker(tool_input)
 
 
+def _build_denial_preview(all_tool_input: Mapping[str, object]) -> str:
+    """Build the bounded preview the hook-blocks log records for a denial.
+
+    The preview names the model field that tripped the gate and whether the
+    prompt held the marker, so its length holds steady whatever the spawn
+    prompt carries::
+
+        model=fable          marker absent  -> model=fable marker_present=False
+        model=claude-fable-5 marker absent  -> model=claude-fable-5 marker_present=False
+
+    Args:
+        all_tool_input: The spawn's ``tool_input`` mapping.
+
+    Returns:
+        One preview line naming the model text and the marker state.
+    """
+    model_identifier = all_tool_input.get(MODEL_FIELD_NAME)
+    model_text = (
+        model_identifier[:MAXIMUM_PREVIEW_MODEL_LENGTH]
+        if isinstance(model_identifier, str)
+        else ABSENT_MODEL_PREVIEW_TEXT
+    )
+    return DENY_PREVIEW_TEMPLATE.format(
+        model_text=model_text,
+        is_marker_present=_prompt_carries_authorization_marker(all_tool_input),
+    )
+
+
 def _emit_denial(
     decision_stream: TextIO,
     all_payload_by_field: Mapping[str, object],
@@ -118,7 +149,7 @@ def _emit_denial(
         decision_stream: Writable text stream — production code passes
             ``sys.stdout``; tests pass a ``StringIO`` to capture the JSON.
         all_payload_by_field: The parsed PreToolUse payload, whose tool name
-            and spawn input name the denied spawn in the hook-blocks log.
+            and model field name the denied spawn in the hook-blocks log.
     """
     denial = {
         "hookSpecificOutput": {
@@ -127,12 +158,15 @@ def _emit_denial(
             "permissionDecisionReason": DENY_REASON,
         }
     }
+    tool_input = all_payload_by_field.get(TOOL_INPUT_FIELD_NAME, {})
     log_hook_block(
         calling_hook_name=CALLING_HOOK_NAME,
         hook_event=HOOK_EVENT_NAME,
         block_reason=DENY_REASON,
         tool_name=str(all_payload_by_field.get(TOOL_NAME_FIELD_NAME, "")),
-        offending_input_preview=str(all_payload_by_field.get(TOOL_INPUT_FIELD_NAME, {})),
+        offending_input_preview=_build_denial_preview(
+            tool_input if isinstance(tool_input, dict) else {}
+        ),
     )
     decision_stream.write(json.dumps(denial) + "\n")
     decision_stream.flush()
