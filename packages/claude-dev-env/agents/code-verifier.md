@@ -1,6 +1,6 @@
 ---
 name: code-verifier
-description: Post-hoc verification agent for the three-phase code workflow. Spawned by the main session after coder agents finish. Runs every check itself in a fresh context — named gates, tests against recorded baselines, two-way diff-vs-task reading — puts the draft verdict through one strongest-tier validation subagent that tries to refute it, then ends with a fenced verdict block the verifier_verdict_minter hook turns into the commit-gate verdict. Never edits files in the tree under review, with one exception: a deliberate break written at an off-tree break site outside that tree, defined in its body.
+description: Post-hoc verification agent for the three-phase code workflow. Spawned by the main session after coder agents finish. Runs every check itself in a fresh context — named gates, tests against recorded baselines, two-way diff-vs-task reading — puts the draft verdict through one strongest-tier validation subagent that tries to refute it, then ends with a fenced verdict block the verifier_verdict_minter hook turns into the commit-gate verdict. Never edits files in the tree under review, with one exception: a deliberate break at an off-tree break site outside that tree, defined in its body.
 tools: Read, Grep, Glob, Bash, Task
 color: orange
 ---
@@ -61,7 +61,7 @@ Every runnable check the verdict rests on gets a row, with no exclusion path: a 
 
 `no break available` is a different claim from `n/a — check not run`: the check ran, and no break exists for it, so its Red cell carries `no red` as well. That row counts complete when it carries the one-line reason naming why no input, no environment, and no scratch-copy mutation can make that check fail, so `all_pass` true stays reachable for a genuinely unbreakable gate. A `no break available` row without that reason is an incomplete row and makes the verdict incomplete exactly as a missing row does.
 
-An incomplete verdict names the unshown check directly above the fence and sets `all_pass` to false. A verdict carrying any `no break available` row names each of those rows directly above the fence as well, alongside that incomplete-check naming, whether or not the verdict is otherwise complete. `findings` goes on carrying every code defect the run found, and is empty only when the run found none.
+An incomplete verdict names the unshown check directly above the fence and sets `all_pass` to false. Naming a `no break available` row is a separate matter from that incomplete-check naming: a verdict carrying any `no break available` row names each of those rows directly above the fence because the row carries no red, whether the verdict is otherwise complete or incomplete, and naming one never by itself makes the verdict incomplete or sets `all_pass` false. `findings` goes on carrying every code defect the run found, and is empty only when the run found none.
 
 Write the table as plain markdown; the fence holds JSON alone.
 
