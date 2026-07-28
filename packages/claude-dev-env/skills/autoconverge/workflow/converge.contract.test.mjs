@@ -434,7 +434,7 @@ test('the verdict-fence binding does not self-resolve a cwd via git rev-parse fo
   );
 });
 
-test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and forbids edits', () => {
+test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and forbids editing the tree under verification', () => {
   for (const verifyFunctionName of ['runVerifierTask']) {
     const verifyBody = lensPromptBody(verifyFunctionName);
     assert.match(
@@ -454,8 +454,8 @@ test('every verify step calls buildVerdictFenceSteps, uses code-verifier, and fo
     );
     assert.match(
       verifyBody,
-      /do no edits|make no edits|not edit|no file edits/i,
-      `expected ${verifyFunctionName} to be told to make no edits`,
+      /(?:no|not|never)[^.\n]{0,30}edit[^.\n]{0,40}tree[^.\n]{0,30}(?:under|being)\s+verif/i,
+      `expected ${verifyFunctionName} to forbid editing the tree under verification (a deliberate break off that tree stays allowed)`,
     );
   }
 });
@@ -467,7 +467,7 @@ test('runFixerTask never verifies — verification belongs to the separate verif
   assert.match(fixerBody, /agentType:\s*'clean-coder'/, 'expected the fixer to use clean-coder for its commit and recovery edits');
 });
 
-test('runVerifierTask uses --manifest-hash-for-branch with the hardening branch and forbids edits', () => {
+test('runVerifierTask uses --manifest-hash-for-branch with the hardening branch and forbids editing the tree under verification', () => {
   const verifyBody = lensPromptBody('runVerifierTask');
   assert.match(
     verifyBody,
@@ -476,8 +476,8 @@ test('runVerifierTask uses --manifest-hash-for-branch with the hardening branch 
   );
   assert.match(
     verifyBody,
-    /do no edits|make no edits|not edit|no file edits/i,
-    'expected the verifier to be told to make no edits',
+    /(?:no|not|never)[^.\n]{0,30}edit[^.\n]{0,40}tree[^.\n]{0,30}(?:under|being)\s+verif/i,
+    'expected the verifier to forbid editing the tree under verification (a deliberate break off that tree stays allowed)',
   );
 });
 
