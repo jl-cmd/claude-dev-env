@@ -44,7 +44,13 @@ ALL_PIPED_PYTEST_COMMANDS = [
     r"C:\Python313\python.exe -m pytest tests | tee run.log",
     "python -m pytest tests 2>&1 | tee run.log",
     "cd packages/claude-dev-env && pytest | cat",
+    "(python -m pytest tests) | tee run.log",
+    "bash -c 'pytest | tee run.log'",
+    "python -mpytest tests | tee run.log",
+    "time pytest tests | tee run.log",
 ]
+
+ALL_LINE_CONTINUATION_TERMINATORS = ["\r\n", "\r", "\n"]
 
 ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "pytest tests",
@@ -53,6 +59,8 @@ ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "cat ids.txt | pytest --stdin",
     "pytest tests && echo done | tee run.log",
     "python -m mypy . | tee types.log",
+    "pytest tests -q\ngit status | head",
+    """bash -c 'pytest -k "a|b"'""",
 ]
 
 
@@ -87,6 +95,13 @@ def test_denies_a_pytest_run_feeding_a_pipe(each_command: str) -> None:
 def test_allows_a_command_that_keeps_the_pytest_exit_code(each_command: str) -> None:
     """Bare pytest, redirection-only pytest, and unrelated pipes stay allowed."""
     assert find_piped_pytest_violation(each_command) is None
+
+
+@pytest.mark.parametrize("each_terminator", ALL_LINE_CONTINUATION_TERMINATORS)
+def test_denies_a_continued_pytest_line_for_every_terminator(each_terminator: str) -> None:
+    """A backslash continuation reads as one logical line for each line ending."""
+    continued_command = f"python -m pytest tests \\{each_terminator}| tee run.log"
+    assert find_piped_pytest_violation(continued_command) == CORRECTIVE_MESSAGE
 
 
 def test_quoted_pipe_reads_as_unpiped_here_and_as_a_cut_by_the_shared_splitter() -> None:
