@@ -123,9 +123,8 @@ Shape:
       ],
       "cwd": "/abs/path/to/worktree",
       "tool_profile": "readonly",
-      "timeout_seconds": 600,
+      "timeout_seconds": 5400,
       "is_repo_only": true,
-      "max_turns": 8,
       "agent_name": null
     }
   ]
@@ -141,10 +140,13 @@ Shape:
 | `prompt_parts` | Ordered absolute paths to part files |
 | `cwd` | Working directory for that worker |
 | `tool_profile` | `readonly` or `build` |
-| `timeout_seconds` | Per-worker timeout (default 600) |
+| `timeout_seconds` | Per-worker timeout (default 600, ceiling 5400). A spec asking for more is refused |
 | `is_repo_only` | Readonly only: when true, also pass `--disable-web-search` |
-| `max_turns` | Turn cap (default 8) |
 | `agent_name` | Optional `--agent` name, or `null` |
+
+Workers run with no turn cap. The timeout is the only bound on a worker's
+length, and a worker that hits it is killed with its whole process tree and
+reported as `timeout`.
 
 Put the spec file under the run state directory (or any path you pass to
 `--spec`).

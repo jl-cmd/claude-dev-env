@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -36,13 +37,19 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
     MAX_TURNS_FLAG,
+    MIN_WORKER_TIMEOUT_SECONDS,
     MISSING_BINARY_RETURN_CODE,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
+    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
     UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_FORCE_FLAG,
+    WINDOWS_TASKKILL_PID_FLAG,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 FIXTURE_GROK_BINARY_VERSION = "0.2.99 (b1b49ccb71) [stable]"
@@ -61,8 +68,35 @@ FIXTURE_GENERIC_FAILURE_STDERR = (
     f"grok {FIXTURE_GROK_BINARY_VERSION}: Error: internal failure"
 )
 
-DEFAULT_MAX_TURNS = 8
+FIXTURE_TURN_CAP_CANCELLED_STDERR = (
+    f"grok {FIXTURE_GROK_BINARY_VERSION}: run ended with stopReason Cancelled "
+    "after the turn cap was reached"
+)
+
+FIXTURE_MULTI_TURN_REPORT = '{"turns_used":16,"status":"done"}'
+
 DEFAULT_TIMEOUT_SECONDS = 30
+TINY_TURN_CAP = 8
+FAKE_PROCESS_IDENTIFIER = 424242
+TINY_TIMEOUT_SECONDS = 1
+NON_POSITIVE_TIMEOUT_SECONDS = 0
+GRANDCHILD_SETTLE_SECONDS = 1.0
+GRANDCHILD_OBSERVATION_SECONDS = 2.0
+
+GRANDCHILD_HEARTBEAT_SOURCE = (
+    "import sys, time\n"
+    "heartbeat_path = sys.argv[1]\n"
+    "for each_beat in range(600):\n"
+    "    with open(heartbeat_path, 'a', encoding='utf-8') as heartbeat_handle:\n"
+    "        heartbeat_handle.write('beat\\n')\n"
+    "    time.sleep(0.1)\n"
+)
+
+PARENT_SPAWNS_GRANDCHILD_SOURCE = (
+    "import subprocess, sys, time\n"
+    "subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2]])\n"
+    "time.sleep(600)\n"
+)
 
 
 class _FakeProcess:
@@ -76,6 +110,7 @@ class _FakeProcess:
         returncode_after_kill: int | None = None,
     ) -> None:
         self.returncode = returncode
+        self.pid = FAKE_PROCESS_IDENTIFIER
         self._stdout = stdout
         self._stderr = stderr
         self._should_timeout = should_timeout
@@ -93,12 +128,50 @@ class _FakeProcess:
             )
         return self._stdout, self._stderr
 
+    def poll(self) -> int | None:
+        if not self.was_killed:
+            return None
+        return self.returncode
+
     def kill(self) -> None:
         self.was_killed = True
         if self._returncode_after_kill is not None:
             self.returncode = self._returncode_after_kill
             return
         self.returncode = -9
+
+
+class _TreeKillRecorder:
+    """Stands in for ``subprocess.run`` so no real taskkill leaves the test."""
+
+    def __init__(self) -> None:
+        self.all_invocations: list[list[str]] = []
+        self.all_keyword_arguments: list[dict[str, object]] = []
+
+    def __call__(
+        self, invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        self.all_invocations.append(list(invocation))
+        self.all_keyword_arguments.append(dict(keyword_arguments))
+        return subprocess.CompletedProcess(args=invocation, returncode=0)
+
+
+class _TurnCapSensitiveLauncher:
+    """Fake grok: cancels when argv carries a turn cap, completes without one."""
+
+    def __init__(self) -> None:
+        self.all_invocations: list[list[str]] = []
+
+    def __call__(
+        self, invocation: list[str], **keyword_arguments: object
+    ) -> _FakeProcess:
+        del keyword_arguments
+        self.all_invocations.append(list(invocation))
+        if MAX_TURNS_FLAG in invocation:
+            return _FakeProcess(
+                returncode=1, stderr=FIXTURE_TURN_CAP_CANCELLED_STDERR
+            )
+        return _FakeProcess(returncode=0, stdout=FIXTURE_MULTI_TURN_REPORT)
 
 
 class _PopenRecorder:
@@ -125,7 +198,6 @@ def _run_once(
     fake_process: _FakeProcess,
     *,
     agent_name: str | None = None,
-    max_turns: int = DEFAULT_MAX_TURNS,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> tuple[runner.GrokRunnerOutcome, _PopenRecorder, Path, Path, Path]:
     prompt_file = tmp_path / "prompt.txt"
@@ -136,11 +208,11 @@ def _run_once(
     run_state_directory.mkdir()
     recorder = _PopenRecorder([fake_process])
     monkeypatch.setattr(runner, "runner_popen", recorder)
+    monkeypatch.setattr(runner, "runner_subprocess_run", _TreeKillRecorder())
     outcome = runner.run_headless_worker(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=max_turns,
         timeout_seconds=timeout_seconds,
         agent_name=agent_name,
     )
@@ -166,8 +238,7 @@ def test_argv_assembly_includes_required_flags(
     assert OUTPUT_FORMAT_FLAG in invocation
     assert OUTPUT_FORMAT_JSON in invocation
     assert ALWAYS_APPROVE_FLAG in invocation
-    assert MAX_TURNS_FLAG in invocation
-    assert str(DEFAULT_MAX_TURNS) in invocation
+    assert MAX_TURNS_FLAG not in invocation
     assert LEADER_SOCKET_FLAG in invocation
     leader_socket_path = Path(invocation[invocation.index(LEADER_SOCKET_FLAG) + 1])
     assert leader_socket_path.parent == run_state_directory
@@ -209,14 +280,12 @@ def test_unique_leader_socket_path_per_call(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
     runner.run_headless_worker(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -439,7 +508,6 @@ def test_missing_binary_returns_dedicated_error(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -553,7 +621,6 @@ def test_permission_error_on_launch_returns_structured_error(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -593,7 +660,6 @@ def test_invalid_utf8_child_stdout_is_replace_decoded(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -623,3 +689,159 @@ def test_timeout_race_successful_exit_classifies_ok(
     assert outcome.classification == CLASSIFICATION_OK
     assert outcome.returncode == 0
     assert outcome.stdout == '{"done":true}'
+
+
+def test_turn_capped_worker_cancels_and_uncapped_worker_completes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A turn cap cancels the multi-turn task; the same task completes without one.
+
+    ::
+
+        argv carries --max-turns 8   flag: stopReason Cancelled, is_ok False
+        argv carries no turn cap     ok:   completes in 16 turns, is_ok True
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    launcher = _TurnCapSensitiveLauncher()
+    monkeypatch.setattr(runner, "runner_popen", launcher)
+
+    capped_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        all_extra_arguments=(MAX_TURNS_FLAG, str(TINY_TURN_CAP)),
+    )
+    uncapped_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert capped_outcome.is_ok is False
+    assert capped_outcome.classification == CLASSIFICATION_ERROR
+    assert "cancelled" in capped_outcome.stderr.lower()
+    assert uncapped_outcome.is_ok is True
+    assert uncapped_outcome.classification == CLASSIFICATION_OK
+    assert uncapped_outcome.stdout == FIXTURE_MULTI_TURN_REPORT
+    assert MAX_TURNS_FLAG not in launcher.all_invocations[1]
+
+
+def test_windows_timeout_kill_issues_the_taskkill_tree_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tree_kill_recorder = _TreeKillRecorder()
+    monkeypatch.setattr(runner, "runner_subprocess_run", tree_kill_recorder)
+
+    runner._kill_windows_process_tree(FAKE_PROCESS_IDENTIFIER)
+
+    assert tree_kill_recorder.all_invocations == [
+        [
+            WINDOWS_TASKKILL_COMMAND,
+            WINDOWS_TASKKILL_TREE_FLAG,
+            WINDOWS_TASKKILL_FORCE_FLAG,
+            WINDOWS_TASKKILL_PID_FLAG,
+            str(FAKE_PROCESS_IDENTIFIER),
+        ]
+    ]
+    assert (
+        tree_kill_recorder.all_keyword_arguments[0].get("timeout")
+        == PROCESS_TREE_KILL_TIMEOUT_SECONDS
+    )
+
+
+def test_timed_out_worker_leaves_no_surviving_grandchild(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A timed-out worker takes its whole process tree, not just the direct child.
+
+    ::
+
+        parent spawns grandchild, runner times out
+        ok:   heartbeat file stops growing after the kill
+        flag: grandchild keeps writing, orphaned by a direct-child-only kill
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    heartbeat_path = tmp_path / "grandchild-heartbeat.txt"
+    heartbeat_path.write_text("", encoding=UTF8_ENCODING)
+
+    def _spawn_parent_with_grandchild(
+        invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.Popen[str]:
+        del invocation
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                PARENT_SPAWNS_GRANDCHILD_SOURCE,
+                GRANDCHILD_HEARTBEAT_SOURCE,
+                str(heartbeat_path),
+            ],
+            **keyword_arguments,
+        )
+
+    monkeypatch.setattr(runner, "runner_popen", _spawn_parent_with_grandchild)
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=TINY_TIMEOUT_SECONDS,
+    )
+    time.sleep(GRANDCHILD_SETTLE_SECONDS)
+    beats_after_kill = heartbeat_path.read_bytes()
+    time.sleep(GRANDCHILD_OBSERVATION_SECONDS)
+    beats_after_observation = heartbeat_path.read_bytes()
+
+    assert outcome.classification == CLASSIFICATION_TIMEOUT
+    assert beats_after_kill != b""
+    assert beats_after_observation == beats_after_kill
+
+
+def test_non_positive_timeout_is_refused_before_any_launch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    recorder = _PopenRecorder([_FakeProcess(returncode=0, stdout="ok")])
+    monkeypatch.setattr(runner, "runner_popen", recorder)
+
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
+        runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=NON_POSITIVE_TIMEOUT_SECONDS,
+        )
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
+        runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=None,  # type: ignore[arg-type] # a JSON null timeout must be refused
+        )
+    assert recorder.invocations == []
+
+    surviving_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=MIN_WORKER_TIMEOUT_SECONDS,
+    )
+
+    assert surviving_outcome.is_ok is True
+    assert len(recorder.invocations) == 1

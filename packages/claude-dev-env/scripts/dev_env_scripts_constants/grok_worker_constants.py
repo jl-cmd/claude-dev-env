@@ -203,9 +203,6 @@ CLASSIFICATION_STREAM_JOIN_SEPARATOR: str = "\n"
 DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 """Default timeout applied to one headless worker invocation, in seconds."""
 
-DEFAULT_WORKER_MAX_TURNS: int = 8
-"""Default max-turns value applied to one headless worker invocation."""
-
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
@@ -218,11 +215,45 @@ LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
 KILL_GRACE_TIMEOUT_SECONDS: int = 10
 """Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
 
-MIN_WORKER_TIMEOUT_SECONDS: int = 1
-"""Minimum accepted worker timeout_seconds in a batch specification."""
+MAXIMUM_WORKER_TIMEOUT_SECONDS: int = 5400
+"""Ceiling on one worker's ``timeout_seconds``, in seconds (90 minutes).
 
-MIN_WORKER_MAX_TURNS: int = 1
-"""Minimum accepted worker max_turns in a batch specification."""
+The batch launcher rejects a specification asking for more. A worker that
+reaches this ceiling is killed and classified ``CLASSIFICATION_TIMEOUT``.
+"""
+
+MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (
+    "worker {field_name} {requested_seconds} exceeds "
+    "MAXIMUM_WORKER_TIMEOUT_SECONDS ({maximum_seconds})"
+)
+"""Rejection message for an over-ceiling ``timeout_seconds``; names the constant."""
+
+WINDOWS_OS_NAME: str = "nt"
+"""``os.name`` value that selects the Windows branch of the process-tree kill."""
+
+WINDOWS_TASKKILL_COMMAND: str = "taskkill"
+"""Windows command that ends a process by id."""
+
+WINDOWS_TASKKILL_TREE_FLAG: str = "/T"
+"""``taskkill`` flag that extends the kill to every descendant process."""
+
+WINDOWS_TASKKILL_FORCE_FLAG: str = "/F"
+"""``taskkill`` flag that forces termination rather than requesting it."""
+
+WINDOWS_TASKKILL_PID_FLAG: str = "/PID"
+"""``taskkill`` flag that names the target process id."""
+
+PROCESS_TREE_KILL_TIMEOUT_SECONDS: int = 10
+"""Seconds allowed for the tree-kill command itself before it is abandoned."""
+
+MIN_WORKER_TIMEOUT_SECONDS: int = 1
+"""Minimum accepted worker timeout_seconds, in seconds."""
+
+MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (
+    "timeout_seconds {requested_seconds} is below "
+    "MIN_WORKER_TIMEOUT_SECONDS ({minimum_seconds})"
+)
+"""Rejection message for a missing or non-positive timeout; names the constant."""
 
 WORKER_EXCEPTION_RETURN_CODE: int = -3
 """Return code recorded on a WorkerReport when the worker body raises before a process runs.
@@ -321,9 +352,6 @@ WORKER_SPEC_TIMEOUT_KEY: str = "timeout_seconds"
 WORKER_SPEC_IS_REPO_ONLY_KEY: str = "is_repo_only"
 """JSON key for whether a readonly worker also disables web search."""
 
-WORKER_SPEC_MAX_TURNS_KEY: str = "max_turns"
-"""JSON key for one worker's max-turns cap."""
-
 WORKER_SPEC_AGENT_NAME_KEY: str = "agent_name"
 """JSON key for one worker's optional agent definition name."""
 
@@ -388,9 +416,6 @@ REASON_CLAUDE_AGENT_REQUIRED: str = "claude_agent_required"
 
 REASON_PROMPT_FILE_MISSING: str = "prompt_file_missing"
 """Config reason when the dispatcher CLI prompt file path is absent or unreadable."""
-
-DEFAULT_SPAWN_MAX_TURNS: int = 8
-"""Default max-turns applied to the headless grok worker when the caller names none."""
 
 SPAWN_SERVED_EXIT_CODE: int = 0
 """CLI exit code when a dispatcher tier served the call."""

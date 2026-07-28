@@ -35,10 +35,10 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLI_TIMEOUT_FLAG,
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_OK,
+    CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     DEFAULT_ROLE,
-    DEFAULT_SPAWN_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
@@ -261,7 +261,6 @@ def test_grok_ok_serves_tier_one(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.is_ok is True
@@ -297,7 +296,6 @@ def test_grok_usage_limited_on_claude_host_requires_agent(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.is_ok is False
@@ -311,6 +309,39 @@ def test_grok_usage_limited_on_claude_host_requires_agent(
     assert spawn_outcome.all_attempts[0].reason == CLASSIFICATION_USAGE_LIMIT
     assert spawn_outcome.all_attempts[1].tier == TIER_CLAUDE_AGENT
     assert spawn_outcome.all_attempts[1].reason == REASON_CLAUDE_AGENT_REQUIRED
+
+
+def test_timed_out_grok_worker_is_recorded_as_timeout_not_served(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A killed worker reaches the dispatcher's trail as timeout, never as served.
+
+    ::
+
+        grok tier times out  ok: attempt reason timeout, tier_used moves on
+    """
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    call_log = _install_seams(
+        monkeypatch,
+        grok_outcome=_grok_failure(CLASSIFICATION_TIMEOUT),
+        claude_outcome=_claude_served(),
+        host_profile=HOST_PROFILE_THIRD_PARTY,
+    )
+
+    spawn_outcome = dispatcher.resolve_worker_spawn(
+        role=FIXTURE_ROLE,
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
+        is_claude_tier_enabled=False,
+        run_state_directory=run_state_directory,
+    )
+
+    assert call_log.grok_calls == 1
+    assert spawn_outcome.all_attempts[0].tier == TIER_GROK
+    assert spawn_outcome.all_attempts[0].is_ok is False
+    assert spawn_outcome.all_attempts[0].reason == CLASSIFICATION_TIMEOUT
+    assert spawn_outcome.tier_used != TIER_GROK
 
 
 def test_grok_auth_failed_on_third_party_runs_tier_three(
@@ -331,7 +362,6 @@ def test_grok_auth_failed_on_third_party_runs_tier_three(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.is_ok is True
@@ -441,7 +471,6 @@ def test_attempts_array_ordering_across_tiers(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=True,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     all_tiers = [each_attempt.tier for each_attempt in spawn_outcome.all_attempts]
@@ -515,7 +544,6 @@ def test_preflight_fallthrough_skips_grok_runner(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert call_log.grok_calls == 0
@@ -533,9 +561,15 @@ def test_detect_host_profile_is_consumed_not_reimplemented() -> None:
     assert "THIRD_PARTY" not in source_text
 
 
-def test_default_max_turns_reaches_grok_kwargs(
+def test_dispatcher_grok_invocation_carries_no_turn_cap(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The dispatcher hands the runner no turn cap; the timeout is the only bound.
+
+    ::
+
+        grok tier kwargs  ok: timeout_seconds present, max_turns absent
+    """
     prompt_file, working_directory, run_state_directory = _paths(tmp_path)
     call_log = _install_seams(
         monkeypatch,
@@ -559,7 +593,10 @@ def test_default_max_turns_reaches_grok_kwargs(
 
     assert exit_code == SPAWN_SERVED_EXIT_CODE
     assert call_log.grok_keyword_arguments is not None
-    assert call_log.grok_keyword_arguments["max_turns"] == DEFAULT_SPAWN_MAX_TURNS
+    assert "max_turns" not in call_log.grok_keyword_arguments
+    assert call_log.grok_keyword_arguments["timeout_seconds"] == (
+        DEFAULT_WORKER_TIMEOUT_SECONDS
+    )
     parsed_payload = json.loads(capsys.readouterr().out)
     assert parsed_payload[RESULT_KEY_OK] is True
 
@@ -645,7 +682,6 @@ def test_default_role_maps_to_primary_agent_stem(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.is_ok is True
@@ -674,7 +710,6 @@ def test_tier_three_argv_includes_agent_for_default_role(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.tier_used == TIER_CLAUDE_HEADLESS
@@ -708,7 +743,6 @@ def test_large_prompt_stays_out_of_claude_argv(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert spawn_outcome.tier_used == TIER_CLAUDE_HEADLESS
@@ -926,8 +960,7 @@ def test_headless_chain_runner_lock_serializes_distinct_cwds(
                 timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
                 is_claude_tier_enabled=False,
                 run_state_directory=run_state_directory,
-                max_turns=DEFAULT_SPAWN_MAX_TURNS,
-            )
+                    )
         except (OSError, RuntimeError, ValueError, AssertionError) as raised_error:
             all_errors.append(raised_error)
 
@@ -1005,7 +1038,6 @@ def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
         timeout_seconds=DEFAULT_WORKER_TIMEOUT_SECONDS,
         is_claude_tier_enabled=False,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_SPAWN_MAX_TURNS,
     )
 
     assert prompt_text_by_command["claude"] == FIXTURE_PROMPT_TEXT

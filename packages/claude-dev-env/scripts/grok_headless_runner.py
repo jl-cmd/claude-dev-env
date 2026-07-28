@@ -3,8 +3,11 @@
 
 Builds a headless argv, mints a unique ``--leader-socket`` path under the
 caller-supplied run state directory, captures stdout/stderr/returncode, kills
-the process on timeout, and classifies failures via signature lists in
+the process tree on timeout, and classifies failures via signature lists in
 ``dev_env_scripts_constants.grok_worker_constants``.
+
+The timeout is the only bound on a worker's length; the argv carries no turn
+cap.
 
 Dual-match policy matches preflight: when both usage and auth signatures appear
 in the same streams, auth wins (``CLASSIFICATION_AUTH_FAILURE``).
@@ -15,15 +18,17 @@ Import ``run_headless_worker`` for the outcome object::
         prompt_file=path,
         working_directory=cwd,
         run_state_directory=run_dir,
-        max_turns=8,
-        timeout_seconds=600,
+        timeout_seconds=5400,
         agent_name="code-quality-agent",
     )
 """
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,18 +54,26 @@ from dev_env_scripts_constants.grok_worker_constants import (
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
-    MAX_TURNS_FLAG,
+    MIN_WORKER_TIMEOUT_SECONDS,
+    MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
     MISSING_BINARY_RETURN_CODE,
     MODEL_FLAG,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
+    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
     UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
+    WINDOWS_OS_NAME,
+    WINDOWS_TASKKILL_COMMAND,
+    WINDOWS_TASKKILL_FORCE_FLAG,
+    WINDOWS_TASKKILL_PID_FLAG,
+    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 runner_popen = subprocess.Popen
+runner_subprocess_run = subprocess.run
 
 
 @dataclass(frozen=True)
@@ -90,7 +103,6 @@ def _build_invocation(
     *,
     prompt_file: Path,
     working_directory: Path,
-    max_turns: int,
     leader_socket_path: Path,
     agent_name: str | None,
     all_extra_arguments: tuple[str, ...] = (),
@@ -104,8 +116,6 @@ def _build_invocation(
         OUTPUT_FORMAT_FLAG,
         OUTPUT_FORMAT_JSON,
         ALWAYS_APPROVE_FLAG,
-        MAX_TURNS_FLAG,
-        str(max_turns),
         LEADER_SOCKET_FLAG,
         str(leader_socket_path),
     ]
@@ -180,8 +190,82 @@ def _resolve_returncode(process: subprocess.Popen[str]) -> int:
     return TIMEOUT_RETURN_CODE
 
 
+def _kill_windows_process_tree(process_identifier: int) -> None:
+    """End a Windows process and every descendant it started, by process id.
+
+    Swallows taskkill failures so the caller still falls back to
+    ``Popen.kill()`` and a timed drain.
+    """
+    try:
+        runner_subprocess_run(
+            [
+                WINDOWS_TASKKILL_COMMAND,
+                WINDOWS_TASKKILL_TREE_FLAG,
+                WINDOWS_TASKKILL_FORCE_FLAG,
+                WINDOWS_TASKKILL_PID_FLAG,
+                str(process_identifier),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return
+
+
+def _kill_posix_process_group(process_identifier: int) -> None:
+    """End a POSIX process group so no grandchild keeps the capture pipe open.
+
+    The platform guard is what lets the process-group calls resolve: they exist
+    only off Windows.
+    """
+    if sys.platform == "win32":
+        return
+    try:
+        process_group_identifier = os.getpgid(process_identifier)
+        os.killpg(process_group_identifier, signal.SIGKILL)
+    except OSError:
+        return
+
+
+def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """End the worker process and every descendant it spawned.
+
+    ::
+
+        tree kill (taskkill /T or killpg)  ok:   grandchildren die, pipes close
+        Popen.kill() alone                 flag: grandchildren outlive the worker
+
+    Falls back to ``Popen.kill()`` when the direct child survives the tree kill,
+    so the caller never waits on a live process.
+    """
+    if process.poll() is not None:
+        return
+    if os.name == WINDOWS_OS_NAME:
+        _kill_windows_process_tree(process.pid)
+    else:
+        _kill_posix_process_group(process.pid)
+    if process.poll() is not None:
+        return
+    try:
+        process.kill()
+    except ProcessLookupError:
+        return
+
+
+def _require_live_timeout(timeout_seconds: int | None) -> None:
+    if timeout_seconds is None or timeout_seconds < MIN_WORKER_TIMEOUT_SECONDS:
+        raise ValueError(
+            MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                requested_seconds=timeout_seconds,
+                minimum_seconds=MIN_WORKER_TIMEOUT_SECONDS,
+            )
+        )
+
+
 def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
-    process.kill()
+    _terminate_process_tree(process)
     try:
         captured_stdout, captured_stderr = process.communicate(
             timeout=KILL_GRACE_TIMEOUT_SECONDS
@@ -234,6 +318,7 @@ def _invoke_process(
             text=True,
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
+            start_new_session=os.name != WINDOWS_OS_NAME,
         )
     except FileNotFoundError:
         return _missing_binary_outcome()
@@ -254,7 +339,6 @@ def run_headless_worker(
     prompt_file: Path,
     working_directory: Path,
     run_state_directory: Path,
-    max_turns: int,
     timeout_seconds: int,
     agent_name: str | None = None,
     leader_socket_path: Path | None = None,
@@ -262,13 +346,14 @@ def run_headless_worker(
 ) -> GrokRunnerOutcome:
     """Run one headless grok worker and classify the process outcome.
 
+    The timeout is the worker's only bound; the argv carries no turn cap.
+
     Args:
         prompt_file: Path to the prompt file passed via ``--prompt-file``.
         working_directory: Working directory passed via ``--cwd``.
         run_state_directory: Run-scoped directory the leader socket is minted
             under. Read only when ``leader_socket_path`` is omitted.
-        max_turns: Maximum agent turns passed via ``--max-turns``.
-        timeout_seconds: Seconds before the process is killed on expiry.
+        timeout_seconds: Seconds before the process tree is killed on expiry.
         agent_name: Optional role agent name passed via ``--agent``.
         leader_socket_path: Optional pre-minted leader socket path. When omitted,
             a unique path is minted under ``run_state_directory``.
@@ -277,7 +362,12 @@ def run_headless_worker(
 
     Returns:
         The classified outcome including return code and captured streams.
+
+    Raises:
+        ValueError: When ``timeout_seconds`` is missing or below
+            ``MIN_WORKER_TIMEOUT_SECONDS``.
     """
+    _require_live_timeout(timeout_seconds)
     resolved_leader_socket_path = (
         leader_socket_path
         if leader_socket_path is not None
@@ -286,7 +376,6 @@ def run_headless_worker(
     all_arguments = _build_invocation(
         prompt_file=prompt_file,
         working_directory=working_directory,
-        max_turns=max_turns,
         leader_socket_path=resolved_leader_socket_path,
         agent_name=agent_name,
         all_extra_arguments=all_extra_arguments,

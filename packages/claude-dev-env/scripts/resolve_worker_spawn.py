@@ -65,7 +65,6 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLI_TIMEOUT_FLAG,
     CWD_FLAG,
     DEFAULT_ROLE,
-    DEFAULT_SPAWN_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
     EMPTY_OUTPUT,
     OUTPUT_FORMAT_FLAG,
@@ -336,7 +335,6 @@ def _run_tier_grok(
     prompt_file: Path,
     working_directory: Path,
     run_state_directory: Path,
-    max_turns: int,
     timeout_seconds: int,
 ) -> GrokRunnerOutcome:
     agent_name = _primary_agent_name_for_role(role)
@@ -344,7 +342,6 @@ def _run_tier_grok(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=max_turns,
         timeout_seconds=timeout_seconds,
         agent_name=agent_name,
     )
@@ -418,9 +415,10 @@ def resolve_worker_spawn(
     timeout_seconds: int,
     is_claude_tier_enabled: bool,
     run_state_directory: Path,
-    max_turns: int,
 ) -> SpawnOutcome:
     """Walk the worker-spawn tiers and return the structured outcome.
+
+    The timeout bounds each tier; no turn cap reaches the headless grok worker.
 
     Args:
         role: Worker role name for preflight; mapped to a primary agent stem.
@@ -429,7 +427,6 @@ def resolve_worker_spawn(
         timeout_seconds: Timeout applied to each tier invocation.
         is_claude_tier_enabled: When True, allow tier 3 on a Claude host.
         run_state_directory: Run-scoped directory for leader sockets and cache.
-        max_turns: Maximum agent turns for the headless grok worker.
 
     Returns:
         The dispatcher outcome including the ordered attempts trail.
@@ -454,7 +451,6 @@ def resolve_worker_spawn(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=max_turns,
         timeout_seconds=timeout_seconds,
     )
     if grok_outcome.is_ok:
@@ -612,7 +608,6 @@ def main(all_command_arguments: list[str]) -> int:
             timeout_seconds=parsed_arguments.timeout_seconds,
             is_claude_tier_enabled=parsed_arguments.is_claude_tier_enabled,
             run_state_directory=run_state_directory,
-            max_turns=DEFAULT_SPAWN_MAX_TURNS,
         )
     except ChainConfigurationError as configuration_error:
         is_config_error = True
