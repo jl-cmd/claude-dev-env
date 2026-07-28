@@ -73,8 +73,13 @@ ready message names it.
 
 ## Terminal outcomes
 
-Every round ends by running the three gates below, in order: gate 1, then gate
-2, then gate 3.
+Every round does this round's own work first, then runs the three gates below,
+in order: gate 1, then gate 2, then gate 3.
+
+**This round's work — before the gates.** Record this round's dangerous
+classification and the dangerous-round count as `N of M`; and when a shape-change
+list is open, check each reader on that list and name each reader with its
+result. Then run the gates.
 
 **Gate 1 — obligations.** Gate 1 is evaluated first in the sequence, and its
 answer turns on the round's open obligations alone — the findings are in hand by
@@ -90,9 +95,10 @@ router — every path out of a round passes through it.
 
 **Gate 2 — findings.** Take the one case that matches the round's findings.
 
-- Any bug-severity finding: validate each one with an advisor before touching
-  code — confirm it's real and confirm the intended fix — then fix all
-  validated findings, bugs and nits, on the review target.
+- Any bug-severity finding: validate each bug with an advisor before touching
+  code — confirm it's real and confirm the intended fix — then fix every
+  validated bug and every nit on the review target. A refuted bug removes only
+  itself from the round's work; the nits are fixed either way.
 - Nits only, with at least one nit present: fix all of them on the review
   target.
 - No findings at all: make no edits.
@@ -100,9 +106,12 @@ router — every path out of a round passes through it.
 Gate 2 then ends by stating one of exactly two outcomes: unresolved findings
 remain, or none remain. A refuted bug is resolved. A fixed nit is resolved. A
 fixed validated bug is resolved. A handed-off off-target finding is resolved once
-its hand-off is complete — checked, its result recorded, and named in the round
-report — whether or not the problem behind it is solved. Gate 3 reads that stated
-outcome, never a case label.
+its hand-off is complete as *A shape change names its readers* defines complete,
+whether or not the problem behind it is solved. A skipped finding — a real
+finding deliberately not applied, because fixing it would change intended
+behavior or reach beyond the review target — is resolved once its skip is logged,
+and a round may not mark ready while a skipped finding exists unless the ready
+message names it. Gate 3 reads that stated outcome, never a case label.
 
 **Gate 3 — exit test.** Terminate only when all three of these hold:
 
@@ -110,17 +119,21 @@ outcome, never a case label.
 - gate 2 states no unresolved findings remain;
 - this round produced no edits.
 
-Any other combination runs the round tail and re-enters the loop. On termination,
-post the proof-of-work PR comment when the target is a PR, then run `gh pr ready`
-for a draft PR, or state ready otherwise.
+Any other combination runs the round tail and re-enters the loop.
+
+Terminating carries one further condition: the ready message names every broken
+off-target reader and every skipped finding that still exists. A round that
+cannot name them does not terminate; it runs the round tail and re-enters the
+loop, the same as any other non-terminating round. With that condition met, post
+the proof-of-work PR comment when the target is a PR, then run `gh pr ready` for
+a draft PR, or state ready otherwise.
 
 Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
 own section above.
 
-**The round tail.** Run required checks. When this round produced edits, confirm
-those edits are committed and pushed; make the commit yourself, once, only when
-no `--fix` path has already made one. Then start the next round under *Each round
+**The round tail.** Run required checks. When this round produced edits, commit
+them yourself, once, and push. Then start the next round under *Each round
 reviews new code*.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
