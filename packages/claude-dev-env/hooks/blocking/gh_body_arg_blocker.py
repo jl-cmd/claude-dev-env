@@ -68,7 +68,7 @@ _CORRECTIVE_MESSAGE = (
     "  '@\n"
     "  [IO.File]::WriteAllText($bodyPath, $body, [Text.UTF8Encoding]::new($false))\n"
     "  gh ... --body-file $bodyPath\n\n"
-    "See ~/.claude/rules/gh-body-file.md for full guidance."
+    "See ~/.claude/rules/gh-cli-conventions.md for full guidance."
 )
 
 

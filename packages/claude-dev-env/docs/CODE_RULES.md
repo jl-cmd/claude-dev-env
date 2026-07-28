@@ -60,6 +60,8 @@ Advisory only, never blocking: soft advisory at >= 400 lines, strong nudge at >=
 Never: ABC for single impl, DI frameworks, factory for single type. Always: functions when no state, concrete classes, simple imports.
 Parameters follow YAGNI: add an optional parameter when a caller varies the value; when every call site passes the same value, make it required or inline the constant. Remove parameters no caller passes and no body reads.
 
+**Complexity budget — state it BEFORE implementation:** files (target 1-2, max 3), lines (~50-300). Checkpoints: Is this the MINIMUM? Can it be fewer files? Functions instead of classes?
+
 ## 7.5 SOLID PRINCIPLES
 
 **SRP always applies** — one reason to change per function/class/module. **OCP, LSP, ISP, DIP apply only where two or more concrete implementations already share a contract**; with a single concretion §7 wins (concrete classes, direct imports, YAGNI — introduce the abstraction at the commit that adds the second concretion). Misapplication signals: interface/ABC with exactly one implementation, SRP-splitting a cohesive class by size alone, abstract factories for one product, DI containers where every injected type has one concretion.

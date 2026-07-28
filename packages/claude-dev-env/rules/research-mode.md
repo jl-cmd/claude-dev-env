@@ -25,3 +25,9 @@ The grounding requirement above never relaxes: state no claim you cannot source.
 
 ## Exceptions
 Creative thinking, brainstorming, and novel ideas don't require citation. You can synthesize across sources to reach new conclusions, but the inputs must be grounded.
+
+## Sibling rules
+
+- [`explore-thoroughly.md`](explore-thoroughly.md) — grounds an implementation plan in the codebase, as this rule grounds a factual claim in a source.
+- [`verify-runtime-state.md`](verify-runtime-state.md) — a runtime verdict needs a live probe from this session, not a citation.
+- [`hedging-claims.md`](hedging-claims.md) — the Stop hook that catches an unverified claim wearing a hedge word.

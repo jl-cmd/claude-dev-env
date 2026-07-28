@@ -49,7 +49,7 @@ That rule shapes the writing:
 - Reach for a table, chart, image, or diagram whenever the reader would otherwise hold several numbers in their head.
 - Draw the thing to scale when a decision turns on position, size, or layout. Two drawings side by side with the gap labelled between them carry a spatial disagreement that a pair of numbers leaves each reader to picture differently. Plain markup and styling draw this.
 - Put the measurements in a table beside any drawing, and name the command or measurement that produced them.
-- State a claim by naming what the thing is, and state guidance as the action to take. Reserve naming what to avoid for behaviour you can pin down only by its failure — the source rule is `state-what-is`.
+- State a claim by naming what the thing is, and state guidance as the action to take. Reserve naming what to avoid for behaviour you can pin down only by its failure — the source rule is `doc-prose-cuts`.
 
 The template's own tabs state these rules and follow them, so the fastest way to learn the format is to open it and read.
 

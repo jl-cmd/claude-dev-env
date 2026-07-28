@@ -37,7 +37,3 @@ Terse shorthand between tool calls is fine — that is you thinking. The final m
 ## Keep going on context
 
 A remaining-context or token count is not a reason to stop. Do not pause, summarize, or float a fresh session on account of context limits; keep working. When the user must see content word-for-word (a partial deliverable, a direct answer to a mid-run question), surface it through the channel the harness gives for that, not by ending the turn.
-
-## Why
-
-A capable model under-delivers on long runs for predictable reasons: it overplans when it could act, stops on a promise, blocks on subagents, skips its own verification, fabricates progress, buries the result in working shorthand, or quits early over a context count. Each section above removes one of those failure modes so the run finishes.

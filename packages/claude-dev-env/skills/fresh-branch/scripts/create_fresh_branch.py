@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a fresh branch in an isolated git worktree under the agent scratch root.
+"""Create a fresh branch in an isolated git worktree under the repository.
 
 ::
 
@@ -8,9 +8,9 @@
      "base_commit": "abc...", "agent": "claude", "repo_root": "..."}
 
 Never runs ``git checkout -b`` in the caller's working tree. Fetches the base
-ref, then ``git worktree add -b --no-track`` into ``Temp/<agent>/<branch>``
-(Windows) or ``gettempdir()/<agent>/<branch>`` elsewhere. Exit 0 prints success
-JSON; any failure prints ``{"error": ...}`` and exits non-zero.
+ref, then ``git worktree add -b --no-track`` into
+``<repo-root>/.claude/worktrees/<agent>/<branch>``. Exit 0 prints success JSON;
+any failure prints ``{"error": ...}`` and exits non-zero.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 from fresh_branch_git_commands import (
@@ -33,7 +32,7 @@ from fresh_branch_git_commands import (
 from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     AGENT_SLUG_PATTERN,
     ALL_AGENT_DETECTION_MARKERS,
-    ALL_WINDOWS_USER_SCRATCH_PARTS,
+    ALL_REPOSITORY_WORKTREE_ROOT_PARTS,
     DEFAULT_AGENT_SLUG,
     DEFAULT_BASE_REF,
     ERROR_AGENT_SLUG_INVALID,
@@ -57,8 +56,6 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     PAYLOAD_KEY_REPO_ROOT,
     PAYLOAD_KEY_WORKTREE_PATH,
     UNIQUE_PATH_SUFFIX_START,
-    USERPROFILE_ENV_VAR,
-    WINDOWS_PLATFORM_PREFIX,
 )
 
 
@@ -94,28 +91,26 @@ def _detect_agent_slug_from_environment() -> str:
     return DEFAULT_AGENT_SLUG
 
 
-def resolve_agent_worktree_root(agent_slug: str) -> Path:
-    """Return ``Temp/<agent>`` on Windows USERPROFILE, else gettempdir root.
+def resolve_agent_worktree_root(repo_root: Path, agent_slug: str) -> Path:
+    """Return the repository's per-agent worktree root.
 
     ::
 
-        # win32 + USERPROFILE=C:/Users/x -> C:/Users/x/AppData/Local/Temp/grok
-        resolve_agent_worktree_root("grok")
+        # repo_root=/srv/app, agent_slug=grok
+        resolve_agent_worktree_root(Path("/srv/app"), "grok")
+        # -> /srv/app/.claude/worktrees/grok
+
+    Every worktree sits under the repository it branches from, so a worktree
+    travels with its repository and each agent keeps its own subdirectory.
 
     Args:
+        repo_root: Absolute path of the repository the branch comes from.
         agent_slug: Short host label (one path segment).
 
     Returns:
         Directory that should hold per-branch worktree folders.
     """
-    if sys.platform.startswith(WINDOWS_PLATFORM_PREFIX):
-        user_profile = os.environ.get(USERPROFILE_ENV_VAR)
-        if user_profile:
-            return Path(user_profile).joinpath(
-                *ALL_WINDOWS_USER_SCRATCH_PARTS,
-                agent_slug,
-            )
-    return Path(tempfile.gettempdir()) / agent_slug
+    return repo_root.joinpath(*ALL_REPOSITORY_WORKTREE_ROOT_PARTS, agent_slug)
 
 
 def resolve_unique_worktree_path(preferred_path: Path) -> Path:
@@ -181,13 +176,33 @@ def create_fresh_branch(
     ::
 
         create_fresh_branch("fix/x", Path("."), "grok", "origin/main")
+
+    The caller's working tree is never checked out. The worktree lands under
+    the repository's ``.claude/worktrees/<agent>/<branch>``, suffixed ``-2``,
+    ``-3``, … when that path is already taken.
+
+    Args:
+        branch_name: Branch to create; must be a safe relative path.
+        repo_path: Any path inside the repository the branch comes from.
+        agent_slug: Short host label naming the worktree-root subdirectory.
+        base_ref: Ref the branch starts from, such as ``origin/main``.
+
+    Returns:
+        The success payload: branch, worktree_path, base_ref, base_commit,
+        agent, and repo_root.
+
+    Raises:
+        ValueError: When the branch name or the agent slug is unsafe.
+        RuntimeError: When git refuses the fetch or the worktree add.
     """
     cleaned_branch = _require_safe_branch_name(branch_name)
     normalized_agent_slug = _normalize_agent_slug(agent_slug)
     resolved_base_ref, repo_root, base_commit = _resolve_branch_base(
         repo_path, base_ref,
     )
-    worktree_path = _allocate_worktree_path(cleaned_branch, normalized_agent_slug)
+    worktree_path = _allocate_worktree_path(
+        cleaned_branch, normalized_agent_slug, repo_root,
+    )
     create_worktree_branch(
         repo_root,
         branch_name=cleaned_branch,
@@ -241,8 +256,11 @@ def _require_safe_branch_name(branch_name: str) -> str:
     return cleaned_branch
 
 
-def _allocate_worktree_path(branch_name: str, agent_slug: str) -> Path:
-    agent_worktree_root = resolve_agent_worktree_root(agent_slug)
+def _allocate_worktree_path(
+    branch_name: str, agent_slug: str, repo_root: Path,
+) -> Path:
+    agent_worktree_root = resolve_agent_worktree_root(repo_root, agent_slug)
+    agent_worktree_root.mkdir(parents=True, exist_ok=True)
     preferred_path = agent_worktree_root / branch_name
     _assert_path_is_under_agent_root(
         candidate_path=preferred_path,
@@ -324,7 +342,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--agent",
         default=None,
-        help="Host label for Temp/<agent>/ (default: detect from environment).",
+        help="Host label for .claude/worktrees/<agent>/ (default: detect from environment).",
     )
     parser.add_argument(
         "--base",

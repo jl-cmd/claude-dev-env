@@ -4,6 +4,8 @@ Stage the files you edited this session right before you commit them. A plain `g
 
 `session_edit_stage_gate` (PreToolUse on Bash `git commit`) denies a commit that would drop tracked session edits and names the fix: `git add <paths>`, `git commit -a`, or a `# partial-commit` marker.
 
+Staging covers tracked files you edited. Do not commit untracked files unless the user explicitly instructs it — an untracked file in the working tree is outside the change until they say otherwise.
+
 ## Escapes the denial does not restate
 
 - **A pathspec** — `git commit -- <paths>` or `git commit <paths>` commits only the named paths on purpose and steps the gate aside.

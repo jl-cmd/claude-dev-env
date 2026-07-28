@@ -59,7 +59,6 @@ def _strip_code_standards_blockquote(markdown: str) -> str:
 _merged_mapping_key_order = (
     "code-standards",
     "tasklings-preferences",
-    "right-sized-engineering",
     "bdd",
     "test-quality",
     "research-mode",
@@ -349,15 +348,6 @@ def _always_apply_mappings(rules_directory: Path, docs_directory: Path) -> tuple
             None,
             "Core code standards: naming, types, config, hook-enforced rules",
             "merge_code_standards",
-        ),
-        RuleMapping(
-            "right-sized-engineering",
-            (rules_directory / "right-sized-engineering.md",),
-            "right-sized-engineering.mdc",
-            True,
-            None,
-            "Right-sized engineering and complexity budget",
-            "verbatim",
         ),
         RuleMapping(
             "bdd",

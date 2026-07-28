@@ -1,14 +1,14 @@
 ---
 name: fresh-branch
 description: >-
-  Fresh git branch from origin/main in an isolated temp worktree (never checkout -b in the caller tree).
+  Fresh git branch from origin/main in an isolated worktree under the repo's .claude/worktrees/ (never checkout -b in the caller tree).
   Triggers: fresh branch, new branch from main, /fresh-branch, start fresh, clean branch off main,
   worktree branch, branch in temp.
 ---
 
 # fresh-branch
 
-Creates a new branch from a fresh-fetched `origin/main` inside an isolated git worktree under the agent temp root. Shared primitive: other skills invoke `/fresh-branch` when they need a clean branch without touching the caller's dirty tree.
+Creates a new branch from a fresh-fetched `origin/main` inside an isolated git worktree under the repository's `.claude/worktrees/<agent>/` root. Shared primitive: other skills invoke `/fresh-branch` when they need a clean branch without touching the caller's dirty tree.
 
 **Announce at start:** "Creating a fresh branch from origin/main."
 
@@ -62,15 +62,14 @@ Optional flags:
 | Flag | Role |
 |------|------|
 | `--repo <path>` | Source repo (default: current directory) |
-| `--agent <slug>` | Temp segment: `claude`, `grok`, `cursor`, `codex`, … |
+| `--agent <slug>` | Worktree-root segment: `claude`, `grok`, `cursor`, `codex`, … |
 | `--base <ref>` | Base ref (default: `origin/main`) |
 
 Agent resolution inside the script: `--agent` → `FRESH_BRANCH_AGENT` env → host markers → `claude`.
 
 Worktree path:
 
-- Windows: `${USERPROFILE}/AppData/Local/Temp/<agent>/<branch-name>`
-- Else: `${tmpdir}/<agent>/<branch-name>`
+- `<repo-root>/.claude/worktrees/<agent>/<branch-name>`, on every platform
 - If the path exists, the script suffixes `-2`, `-3`, …
 
 On exit 0, stdout is one JSON object:
@@ -101,7 +100,7 @@ Further edits for the new branch belong in `worktree_path`, not in the caller's 
 
 ## Gotchas
 
-- **Dirty caller cwd blocks `checkout -b` and pollutes the tree.** Phase 3 always uses `git worktree add -b` into `Temp/<agent>/…`. If you reconstruct Phase 3 by hand with `checkout -b` in the session cwd, local modifications block the checkout and leave the user on a half-switched branch.
+- **Dirty caller cwd blocks `checkout -b` and pollutes the tree.** Phase 3 always uses `git worktree add -b` into `<repo-root>/.claude/worktrees/<agent>/…`. If you reconstruct Phase 3 by hand with `checkout -b` in the session cwd, local modifications block the checkout and leave the user on a half-switched branch.
 - **Caller HEAD must stay put.** After success, the original repo's checked-out branch and dirty files are unchanged; only the new worktree has the new branch.
 - **Branch name collision.** If the branch already exists, the script exits non-zero with `{"error":...}`. Pick a new name; do not delete remote branches unless the user asks.
 - **Path already occupied.** A leftover folder at the preferred worktree path gets a numeric suffix (`-2`, …); report the path from JSON, not the path you assumed.

@@ -45,7 +45,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `multi_edit_reconstruction.py` | `apply_edits()` / `edits_for_tool()` — shared helpers that reconstruct the post-edit content of an Edit or MultiEdit, imported by the blockers that judge post-edit content |
 | `mypy_integration_constants.py` | Path markers (``.git``, ``.py``, ``pyproject.toml``) for mypy project-root resolution |
 | `mypy_validator_cache_constants.py` | Cache paths and tunables for the mypy_validator per-session caches |
-| `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, launcher-wrapper set, shell control-operator tokens and split pattern, leading-assignment and duration patterns, and the batch-mode pattern for the NAS ssh binary enforcer |
+| `nas_ssh_binary_enforcer_constants.py` | Bash tool name, ssh-family basenames, OpenSSH binary path suffixes, and the batch-mode pattern for the NAS ssh binary enforcer; segment helpers come from `shell_command_segments.py` |
 | `open_questions_in_plans_blocker_constants.py` | Patterns for detecting unresolved open questions in plan documents |
 | `orphan_css_class_constants.py` | Scan radius and selector patterns for the orphan-CSS-class check |
 | `package_inventory_stale_blocker_constants.py` | Inventory document names, production code extensions, backtick token pattern, smallest inventory size, exempt names, scan budget, and block-message text for the package-inventory stale-entry blocker |
@@ -71,6 +71,8 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
+| `shell_command_segments.py` | Shell tokenization helpers shared by the segment-walking blockers: segment splitting on control operators, a segment's effective leading program, and a token's basename |
+| `shell_substitution_blocker_constants.py` | Tool name, payload keys, the four substitution-detection patterns, the deny decision shape, and the corrective message for the shell-substitution blocker |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
 | `stop_dispatcher_constants.py` | Ordered hosted-hook roster and Stop block payload field names for the Stop-chain dispatcher |
@@ -81,6 +83,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `task_list_loop_starter_constants.py` | The one-line task-list instruction and the full session-start directive text for the task-list loop starter hook |
 | `test_layout_constants.py` | The named constants for the test-layout write-time checks |
 | `text_stripping.py` | `strip_code_and_quotes()` — shared helper that removes fenced code blocks, inline code, and blockquotes from prose, imported by the Stop-hook prose blockers |
+| `unscoped_search_blocker_constants.py` | Tool names, `find` and listing program basenames, Get-ChildItem option sets, unscoped-root patterns, the flag/value token stride, and the deny message for the unscoped-search blocker |
 | `unused_module_import_constants.py` | Patterns for detecting unused module-level imports |
 | `volatile_path_in_post_blocker_constants.py` | Volatile path markers, affected `gh` post subcommands, MCP body param names, and the corrective message for the volatile-path post blocker |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |

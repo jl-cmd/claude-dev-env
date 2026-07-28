@@ -38,7 +38,6 @@ def _minimal_rule_files(claude_rules: Path) -> None:
         "---\npaths:\n  - \"Y:/x/**\"\n---\n\n# Tasklings\n",
         encoding="utf-8",
     )
-    (claude_rules / "right-sized-engineering.md").write_text("# RSE\n", encoding="utf-8")
     (claude_rules / "bdd.md").write_text("# BDD\n", encoding="utf-8")
     (claude_rules / "testing.md").write_text(
         "---\npaths:\n  - \"**/test_*.py\"\n---\n\n# Testing\n",
