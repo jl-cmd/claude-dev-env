@@ -11,13 +11,22 @@ The gates follow the same shape as the `verified_commit` gate family.
 
 ## Opt-in (default off)
 
-Enforcement is **off by default**. The master flag is
-`CODE_REVIEW_ENFORCEMENT_ENABLED` in
-`hooks/blocking/config/code_review_enforcement_constants.py`. Set it to
-`True` to enable the push gate, the PR-create gate, the native pre-push
-backstop (via the shared deny decision), and the stamp-directory write
-blocker. When the flag is `False`, every gate allows the action and the
+Enforcement is **off by default**. Turn it on by setting the environment
+variable `CLAUDE_CODE_REVIEW_ENFORCEMENT` to `1`, `true`, `yes`, or `on`
+(case and surrounding spaces are ignored). Any other value, and an unset
+variable, leave enforcement off.
+
+The variable feeds the master flag `CODE_REVIEW_ENFORCEMENT_ENABLED` in
+`hooks/blocking/config/code_review_enforcement_constants.py`, which every gate
+reads at start-up. When it is on, the push gate, the PR-create gate, the native
+pre-push backstop (via the shared deny decision), and the stamp-directory write
+blocker all enforce. When it is off, every gate allows the action and the
 write-blocker allows stamp-directory access.
+
+The switch lives in the environment rather than in this file because
+`npx claude-dev-env` copies the shipped `hooks/` tree over `~/.claude/`, so an
+edit to the constant is overwritten on the next install while an environment
+setting stands.
 
 ## How a stamp works
 

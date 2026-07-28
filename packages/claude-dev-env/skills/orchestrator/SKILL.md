@@ -64,6 +64,14 @@ schedule prompt must carry it: `/orchestrator-refresh --run-slug SLUG`.
 
 ### Single-pending re-arm protocol (all hosts)
 
+**The re-arm never interrupts the run.** Every "stop" in the five steps
+below ends the *re-arm* and nothing else: the session returns to
+orchestrating in the same turn. Arming a delayed wake schedules a later
+reminder; it neither ends the turn nor pauses in-flight executors, and
+the session never waits for the refresh to fire before it carries on.
+When a re-arm fails or is denied, keep orchestrating and re-arm at the
+next natural break.
+
 Exactly one delayed refresh may be outstanding. **Create then claim**
 (order matters on Claude: PreToolUse denies `ScheduleWakeup` when the
 slot is already pending).
@@ -123,9 +131,12 @@ pending, or when the tool is `CronCreate`.
 3. **Write the run artifacts** (next section) before the first spawn.
 4. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.
-5. **Register the discipline reminder** via the single-pending re-arm
-   protocol (cancel matching → `should-reschedule` → one non-recurring
-   delayed wake → `claim-rearm`; default delay about 2700s).
+5. **Dispatch the first task, then register the discipline reminder** via
+   the single-pending re-arm protocol (cancel matching →
+   `should-reschedule` → one non-recurring delayed wake → `claim-rearm`;
+   default delay about 2700s). Spawn before you arm, so the run is
+   already moving, and go straight on to step 6 in the same turn — the
+   armed wake is a later reminder, not the next thing to wait for.
 6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
    task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger

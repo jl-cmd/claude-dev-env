@@ -9,11 +9,43 @@ tool name, and the effort comparison every gate and the stamp store share so
 the thresholds never drift between them, and the master enable flag
 (``CODE_REVIEW_ENFORCEMENT_ENABLED``, default off) that every gate and
 the stamp-directory write-blocker read before they enforce anything.
+
+The master flag reads the ``CLAUDE_CODE_REVIEW_ENFORCEMENT`` environment
+variable, so a machine turns enforcement on through its own environment and
+the choice outlives every reinstall that rewrites this shipped file.
 """
 
 from __future__ import annotations
 
-CODE_REVIEW_ENFORCEMENT_ENABLED = False
+import os
+
+CODE_REVIEW_ENFORCEMENT_ENV_VAR = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
+ALL_ENFORCEMENT_ENABLED_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def code_review_enforcement_enabled_in_environment() -> bool:
+    """Read whether this machine turns the code-review gates on.
+
+    ::
+
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=1      -> True
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=" On " -> True
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=0      -> False
+        (variable unset)                      -> False
+
+    A machine opts in through its own environment, so an install that rewrites
+    this shipped file leaves the choice standing. Any value outside the enabled
+    set, and an unset variable, read as off, so the gate family stays quiet
+    until someone asks for it.
+
+    Returns:
+        True when the variable holds an enabled value, False otherwise.
+    """
+    raw_environment_setting = os.environ.get(CODE_REVIEW_ENFORCEMENT_ENV_VAR, "")
+    return raw_environment_setting.strip().lower() in ALL_ENFORCEMENT_ENABLED_ENV_VALUES
+
+
+CODE_REVIEW_ENFORCEMENT_ENABLED = code_review_enforcement_enabled_in_environment()
 STAMP_DIRECTORY_NAME = "code-review-stamps"
 ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER = ("low", "medium", "high", "xhigh", "max")
 PUSH_REQUIRED_EFFORT = "low"

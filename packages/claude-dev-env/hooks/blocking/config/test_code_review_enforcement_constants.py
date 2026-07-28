@@ -9,6 +9,8 @@ import importlib.util
 import pathlib
 import re
 
+import pytest
+
 _CONFIG_DIR = pathlib.Path(__file__).parent
 
 SAMPLE_ROOT_KEY_HEX_LENGTH = 16
@@ -24,6 +26,10 @@ _constants_spec.loader.exec_module(_constants_module)
 
 effort_meets_threshold = _constants_module.effort_meets_threshold
 CODE_REVIEW_ENFORCEMENT_ENABLED = _constants_module.CODE_REVIEW_ENFORCEMENT_ENABLED
+CODE_REVIEW_ENFORCEMENT_ENV_VAR = _constants_module.CODE_REVIEW_ENFORCEMENT_ENV_VAR
+code_review_enforcement_enabled_in_environment = (
+    _constants_module.code_review_enforcement_enabled_in_environment
+)
 PUSH_REQUIRED_EFFORT = _constants_module.PUSH_REQUIRED_EFFORT
 PR_CREATE_REQUIRED_EFFORT = _constants_module.PR_CREATE_REQUIRED_EFFORT
 GATED_PUSH_SUBCOMMANDS = _constants_module.GATED_PUSH_SUBCOMMANDS
@@ -109,5 +115,26 @@ def test_guard_message_directs_users_to_the_sanctioned_minter_flag() -> None:
     assert SANCTIONED_STAMP_MINTER_FLAG in STAMP_DIRECTORY_GUARD_MESSAGE
 
 
-def test_enforcement_defaults_to_off() -> None:
-    assert CODE_REVIEW_ENFORCEMENT_ENABLED is False
+def test_enforcement_defaults_to_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    assert code_review_enforcement_enabled_in_environment() is False
+
+
+@pytest.mark.parametrize("enabling_value", ["1", "true", "TRUE", " yes ", "on"])
+def test_enforcement_turns_on_for_each_enabling_environment_value(
+    monkeypatch: pytest.MonkeyPatch, enabling_value: str
+) -> None:
+    monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, enabling_value)
+    assert code_review_enforcement_enabled_in_environment() is True
+
+
+@pytest.mark.parametrize("non_enabling_value", ["0", "false", "off", "", "maybe"])
+def test_enforcement_stays_off_for_a_non_enabling_environment_value(
+    monkeypatch: pytest.MonkeyPatch, non_enabling_value: str
+) -> None:
+    monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, non_enabling_value)
+    assert code_review_enforcement_enabled_in_environment() is False
+
+
+def test_module_flag_matches_the_environment_reader_at_import() -> None:
+    assert isinstance(CODE_REVIEW_ENFORCEMENT_ENABLED, bool)
