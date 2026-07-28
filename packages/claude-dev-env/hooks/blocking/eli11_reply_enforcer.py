@@ -23,12 +23,15 @@ if _hooks_dir not in sys.path:
 from hooks_constants.eli11_reply_enforcer_constants import (  # noqa: E402
     ACTION_FIRST_LEAD_LINE_COUNT,
     ALL_IMPERATIVE_INSTRUCTION_VERBS,
+    ALL_IMPERATIVE_OBJECT_LEAD_WORDS,
     ALPHABETIC_WORD_PATTERN,
     BULLET_LINE_PATTERN,
     COUNTABLE_WORD_PATTERN,
+    IMPERATIVE_OBJECT_TOKEN_PATTERN,
     LINK_TARGET_PATTERN,
     LIST_MARKER_PREFIX_PATTERN,
     LONG_FORM_ESCAPE_PREFIX,
+    MARKDOWN_LEAD_MARKER_PATTERN,
     MAXIMUM_BULLET_LINE_COUNT,
     MAXIMUM_OVERPACKED_LINE_COUNT,
     MAXIMUM_REPLY_WORD_COUNT,
@@ -114,6 +117,77 @@ def leading_word_of(prose_line: str) -> str:
     return all_leading_words[0].lower()
 
 
+def object_word_after_leading_verb(prose_line: str) -> str:
+    """Return the word a line puts right after its opening verb.
+
+    ::
+
+        in:  "Run the migration script."
+        out: "the"
+
+    Args:
+        prose_line: One non-empty line of reply prose.
+
+    Returns:
+        The lowercased token following the first alphabetic word, or an empty
+        string when the line carries no such token.
+    """
+    unmarked_line = LIST_MARKER_PREFIX_PATTERN.sub("", prose_line, count=1)
+    leading_word_match = ALPHABETIC_WORD_PATTERN.search(unmarked_line)
+    if leading_word_match is None:
+        return ""
+    all_trailing_tokens = COUNTABLE_WORD_PATTERN.findall(
+        unmarked_line[leading_word_match.end():]
+    )
+    if not all_trailing_tokens:
+        return ""
+    return all_trailing_tokens[0].lower()
+
+
+def names_imperative_object(object_word: str) -> bool:
+    """Return True when a word reads as the thing an imperative acts on.
+
+    ::
+
+        ok:   "the" (Run the script), "3" (Do 3 things), "scripts/run.py"
+        flag: "questions" (Open questions remain), "is" (Merge is complete)
+
+    An imperative names its object through a determiner, a count, a path, or a
+    filename; a narrative sentence puts a bare subject noun there instead.
+
+    Args:
+        object_word: The lowercased word following a line's opening verb.
+
+    Returns:
+        True when the word marks the opening verb as a real imperative.
+    """
+    if not object_word:
+        return False
+    if object_word in ALL_IMPERATIVE_OBJECT_LEAD_WORDS:
+        return True
+    return IMPERATIVE_OBJECT_TOKEN_PATTERN.search(object_word) is not None
+
+
+def is_imperative_instruction_line(prose_line: str) -> bool:
+    """Return True when a line tells the user to act.
+
+    ::
+
+        ok:   "Open questions remain about the stripper." -> False
+        flag: "Open the pull request."                    -> True
+
+    Args:
+        prose_line: One non-empty line of reply prose.
+
+    Returns:
+        True when the line opens with a tracked instruction verb naming an
+        object an imperative acts on.
+    """
+    if leading_word_of(prose_line) not in ALL_IMPERATIVE_INSTRUCTION_VERBS:
+        return False
+    return names_imperative_object(object_word_after_leading_verb(prose_line))
+
+
 def has_imperative_instruction_line(all_prose_lines: list[str]) -> bool:
     """Return True when any line opens with a verb telling the user to act.
 
@@ -121,11 +195,10 @@ def has_imperative_instruction_line(all_prose_lines: list[str]) -> bool:
         all_prose_lines: The non-empty lines of reply prose.
 
     Returns:
-        True when a line starts with one of the tracked instruction verbs.
+        True when a line reads as an imperative instruction.
     """
     return any(
-        leading_word_of(each_line) in ALL_IMPERATIVE_INSTRUCTION_VERBS
-        for each_line in all_prose_lines
+        is_imperative_instruction_line(each_line) for each_line in all_prose_lines
     )
 
 
@@ -192,8 +265,32 @@ def count_overpacked_lines(all_prose_lines: list[str]) -> int:
     )
 
 
+def strip_markdown_lead_markers(prose_line: str) -> str:
+    """Return a line with its opening blockquote, heading, and bold markers off.
+
+    ::
+
+        in:  "> **Long form:** the report follows"
+        out: "Long form:** the report follows"
+
+    Args:
+        prose_line: One line of raw reply text.
+
+    Returns:
+        The line with every leading markdown marker and its padding removed.
+    """
+    return MARKDOWN_LEAD_MARKER_PATTERN.sub("", prose_line.strip(), count=1)
+
+
 def opens_with_long_form_escape(assistant_message: str) -> bool:
     """Return True when the reply opts out through the Long form prefix.
+
+    ::
+
+        ok:   "**Long form:** the report follows" -> True
+        flag: "The report follows"                -> False
+
+    A bold, blockquote, or heading wrapper around the prefix still opts out.
 
     Args:
         assistant_message: The raw final assistant message.
@@ -204,7 +301,8 @@ def opens_with_long_form_escape(assistant_message: str) -> bool:
     for each_line in assistant_message.splitlines():
         if not each_line.strip():
             continue
-        return each_line.strip().lower().startswith(LONG_FORM_ESCAPE_PREFIX)
+        unwrapped_line = strip_markdown_lead_markers(each_line)
+        return unwrapped_line.lower().startswith(LONG_FORM_ESCAPE_PREFIX)
     return False
 
 
@@ -252,7 +350,7 @@ def is_action_first_violation(
         True when the reply is long, carries instruction lines, and shows no
         numbered step among its lead lines.
     """
-    if reply_word_count <= MINIMUM_ENFORCED_WORD_COUNT:
+    if reply_word_count < MINIMUM_ENFORCED_WORD_COUNT:
         return False
     if not has_imperative_instruction_line(all_prose_lines):
         return False

@@ -1,9 +1,15 @@
 """Tunables for the eli11_reply_enforcer Stop hook.
 
-Holds the reply-shape thresholds the `eli11-replies` rule names, including the
-whole-reply word cap and the per-line word cap behind one idea per line, the compiled
-patterns that find bullets, numbered steps, table rows, link targets, and
-words in a reply, and the user-facing notice the hook emits when it blocks.
+::
+
+    NUMBERED_STEP_PATTERN
+        ok:   "1. Run the script"      flag: "1.5% of hosts still fail."
+    ALL_IMPERATIVE_OBJECT_LEAD_WORDS
+        ok:   "Run the migration"      flag: "Run time stays under a second"
+
+Holds the reply-shape thresholds the `eli11-replies` rule names, the compiled
+patterns that read a reply's structure, the closed sets naming an instruction
+verb and its object, and the notice the hook shows when it blocks.
 """
 
 import re
@@ -11,12 +17,15 @@ import re
 __all__ = [
     "ACTION_FIRST_LEAD_LINE_COUNT",
     "ALL_IMPERATIVE_INSTRUCTION_VERBS",
+    "ALL_IMPERATIVE_OBJECT_LEAD_WORDS",
     "ALPHABETIC_WORD_PATTERN",
     "BULLET_LINE_PATTERN",
     "COUNTABLE_WORD_PATTERN",
+    "IMPERATIVE_OBJECT_TOKEN_PATTERN",
     "LINK_TARGET_PATTERN",
     "LIST_MARKER_PREFIX_PATTERN",
     "LONG_FORM_ESCAPE_PREFIX",
+    "MARKDOWN_LEAD_MARKER_PATTERN",
     "MAXIMUM_BULLET_LINE_COUNT",
     "MAXIMUM_OVERPACKED_LINE_COUNT",
     "MAXIMUM_REPLY_WORD_COUNT",
@@ -46,9 +55,47 @@ LINK_TARGET_PATTERN = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 COUNTABLE_WORD_PATTERN = re.compile(r"\S*[A-Za-z0-9]\S*")
 ALPHABETIC_WORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 BULLET_LINE_PATTERN = re.compile(r"^[ \t]*[-*+][ \t]+\S")
-NUMBERED_STEP_PATTERN = re.compile(r"^[ \t]*(?:\*\*)?\d+[.)]")
+NUMBERED_STEP_PATTERN = re.compile(r"^[ \t]*(?:\*\*)?\d{1,2}[.)](?:\*\*)?[ \t]+\S")
 LIST_MARKER_PREFIX_PATTERN = re.compile(
-    r"^[ \t]*(?:[-*+][ \t]+|(?:\*\*)?\d+[.)][ \t]*)?(?:\*\*)?"
+    r"^[ \t]*(?:[-*+][ \t]+|(?:\*\*)?\d{1,2}[.)][ \t]*)?(?:\*\*)?"
+)
+MARKDOWN_LEAD_MARKER_PATTERN = re.compile(r"^(?:[ \t]*(?:>+|#{1,6}|\*\*|__|\*|_))+[ \t]*")
+
+ALL_IMPERATIVE_INSTRUCTION_VERBS = (
+    "click",
+    "copy",
+    "delete",
+    "do",
+    "download",
+    "install",
+    "merge",
+    "open",
+    "paste",
+    "restart",
+    "run",
+    "save",
 )
 
-ALL_IMPERATIVE_INSTRUCTION_VERBS = ("run", "click", "merge", "open")
+ALL_IMPERATIVE_OBJECT_LEAD_WORDS = (
+    "a",
+    "all",
+    "an",
+    "any",
+    "both",
+    "each",
+    "every",
+    "into",
+    "it",
+    "my",
+    "our",
+    "that",
+    "the",
+    "them",
+    "these",
+    "this",
+    "those",
+    "to",
+    "your",
+)
+
+IMPERATIVE_OBJECT_TOKEN_PATTERN = re.compile(r"^\d|[`/\\]|\.[A-Za-z]{1,4}$")
