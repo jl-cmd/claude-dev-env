@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/*.md"
+  - "**/*.py"
+---
+
 # Measurement Denominators
 
 **When this applies:** Any count, rate, or coverage figure you report — in a chat reply, a PR body, a review comment, a docstring, or a `.md` file.
@@ -9,8 +15,8 @@ Every count names what it scanned. "Read 10 of 10 changed files" states the scan
 Three parts travel with each figure. The report author writes part 1 for every figure and part 2 when the figure is a rate; the consumer runs part 3:
 
 1. **A count carries its denominator.** Name both numbers: files read of files changed, rounds fired of rounds available, tests reached of tests collected, entries compared of entries present.
-2. **A rate needs two runs and a stated denominator.** One run yields a count. Written down as a rate — "fires 40% of the time" — it claims a spread across runs that one run cannot back. Report the count and the run that produced it until a second run exists.
-3. **The consumer cross-checks the count against the scope its denominator names.** A sweep reporting 3 files read of 10 changed fails arithmetic; a sweep reporting 3 of 3 security-sensitive files states its own scope and passes. That arithmetic settles the sweep before anyone reads its result.
+2. **A rate needs two runs and a stated denominator.** One run yields a count. Written down as a rate — "fires 40% of the time" — it claims a spread across runs that one run cannot back. Report the count and the run that produced it until a second run exists; once it does, the rate stays counts across runs — "failed twice across 5 runs on this branch" — never a percentage.
+3. **The consumer cross-checks the count against the scope its denominator names.** A sweep reporting 3 files read of 10 changed fails coverage: its verdict reaches 3 of the 10 files its own denominator names. A sweep reporting 3 of 3 security-sensitive files states its own scope and covers all of it, so it passes. That comparison settles the sweep before anyone reads its result.
 
 A number written into a docstring or a doc carries its denominator beside it. A number written there as a rate carries its run count too.
 
