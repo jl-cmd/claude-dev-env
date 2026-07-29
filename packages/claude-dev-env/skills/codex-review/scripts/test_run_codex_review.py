@@ -890,38 +890,6 @@ def test_run_command_kills_grandchild_tree_on_timeout_without_hanging(
     assert _wait_until_process_stops(grandchild_identifier, wall_clock_ceiling_seconds)
 
 
-def test_windows_process_tree_kill_builds_taskkill_argv(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The Windows kill path issues taskkill /T /F /PID for the given process id."""
-    target_process_identifier = 4242
-    recorded_argv: list[list[str]] = []
-
-    def record_argv(all_arguments: list[str], **_keywords: object) -> None:
-        recorded_argv.append(all_arguments)
-
-    monkeypatch.setattr(wrapper.subprocess, "run", record_argv)
-    wrapper._kill_windows_process_tree(target_process_identifier)
-
-    assert recorded_argv == [
-        ["taskkill", "/T", "/F", "/PID", str(target_process_identifier)]
-    ]
-
-
-def test_windows_process_tree_kill_swallows_taskkill_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A hung taskkill must not raise — caller falls back to Popen.kill + drain."""
-
-    def raise_taskkill_timeout(
-        _all_arguments: list[str], **_keywords: object
-    ) -> None:
-        raise subprocess.TimeoutExpired(cmd="taskkill", timeout=1)
-
-    monkeypatch.setattr(wrapper.subprocess, "run", raise_taskkill_timeout)
-    wrapper._kill_windows_process_tree(4242)
-
-
 def test_drain_joins_pipes_when_direct_kill_raises_process_lookup_error() -> None:
     """Even when the process is already gone, drain still joins pipe readers."""
     all_communicate_timeouts: list[float | None] = []
@@ -990,7 +958,7 @@ def test_run_command_surfaces_timeout_when_tree_kill_is_noop(
     def leave_process_alive(_review_process: object) -> None:
         return None
 
-    monkeypatch.setattr(wrapper, "_terminate_process_tree", leave_process_alive)
+    monkeypatch.setattr(wrapper, "terminate_process_tree", leave_process_alive)
     start_time = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
         wrapper._run_command(

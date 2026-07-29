@@ -40,9 +40,21 @@ import sys
 import threading
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import IO, Protocol
 
-from codex_review_scripts_constants.codex_usage_probe_constants import (
+_shared_process_tree_scripts_directory = (
+    Path(__file__).resolve().parents[3] / "_shared" / "process-tree" / "scripts"
+)
+if str(_shared_process_tree_scripts_directory) not in sys.path:
+    sys.path.insert(0, str(_shared_process_tree_scripts_directory))
+
+from process_tree_kill import (  # noqa: E402
+    should_start_new_session,
+    terminate_process_tree,
+)
+
+from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa: E402
     ALL_APP_SERVER_COMMAND_PARTS,
     ALL_WINDOWS_SCRIPT_SUFFIXES,
     APP_SERVER_TIMEOUT_SECONDS,
@@ -94,10 +106,6 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     WINDOWS_COMMAND_SHELL,
     WINDOWS_COMMAND_SHELL_RUN_FLAG,
     WINDOWS_OS_NAME,
-    WINDOWS_TASKKILL_COMMAND,
-    WINDOWS_TASKKILL_FORCE_FLAG,
-    WINDOWS_TASKKILL_PID_FLAG,
-    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 
@@ -387,41 +395,19 @@ def _collect_server_lines(
 
 
 def _terminate_process_tree(server_process: subprocess.Popen[str]) -> None:
-    """Stop the app-server process and any children it launched.
+    """Stop the app-server process and any children it launched, then reap it.
 
     On Windows the probe may wrap a ``.cmd``/``.bat`` shim as ``cmd /c``, so
     ``Popen.pid`` is ``cmd.exe``. Killing only that process leaves the real
-    Codex app-server grandchild alive and holding stdout. ``taskkill /T``
-    tears down the whole tree; other platforms use ``kill()``.
+    Codex app-server grandchild alive and holding stdout. The shared tree kill
+    ends the whole tree on either platform; the timed wait that follows reaps
+    the direct child so the enclosing ``with`` block exits without a long wait.
     """
-    if server_process.poll() is not None:
-        return
-    process_id = server_process.pid
-    if process_id is None:
-        return
-    if os.name == WINDOWS_OS_NAME:
-        subprocess.run(
-            [
-                WINDOWS_TASKKILL_COMMAND,
-                WINDOWS_TASKKILL_FORCE_FLAG,
-                WINDOWS_TASKKILL_TREE_FLAG,
-                WINDOWS_TASKKILL_PID_FLAG,
-                str(process_id),
-            ],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        try:
-            server_process.wait(timeout=PROCESS_TREE_WAIT_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            server_process.kill()
-        return
-    server_process.kill()
+    terminate_process_tree(server_process)
     try:
         server_process.wait(timeout=PROCESS_TREE_WAIT_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
-        pass
+        return
 
 
 def _teardown_app_server_exchange(
@@ -467,6 +453,7 @@ def _exchange_app_server_messages_via_subprocess(
         text=True,
         encoding=UTF8_ENCODING,
         shell=False,
+        start_new_session=should_start_new_session(),
     ) as server_process:
         server_stdin = server_process.stdin
         server_stdout = server_process.stdout

@@ -8,6 +8,7 @@ Cross-cutting runtime assets shared by multiple skills. The PR-loop skills (`bug
 |---|---|
 | `pr-loop/` | Docs, scripts, and constants for the PR-loop workflow suite |
 | `advisor/` | Warm-advisor spawn-and-consult protocol for `team-advisor` and `orchestrator` |
+| `process-tree/` | One process-tree kill helper for every script that captures a spawned CLI's output |
 
 ## Install path
 
