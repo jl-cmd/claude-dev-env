@@ -466,11 +466,7 @@ function runVerifierTask(task, context) {
       `   Run exactly:\n` +
       `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${context.hardeningBranch}"\n` +
       `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
-      `   Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-      "      ```verdict\n" +
-      `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-      "      ```\n" +
-      `      Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`,
+      buildVerdictFenceTail('   '),
     { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
   )
 }
@@ -849,6 +845,29 @@ const HARDENING_COMMIT_SCHEMA = {
   required: ['hardeningPrUrl', 'summary'],
 }
 
+const VERDICT_FENCE_CONTRACT_SENTENCE =
+  'Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.'
+
+/**
+ * Build the closing fence recipe every verify prompt ends with: the lead-in
+ * sentence, the ```verdict block shape carrying the binding hash, and the
+ * contract sentence. Each verify path resolves the binding hash its own way
+ * and sits at its own nesting depth, so the caller passes the indent its
+ * surrounding prose uses; the fence body itself sits one level deeper.
+ * @param {string} indent leading whitespace the caller's prose sits at
+ * @returns {string} the fence recipe tail for a verify prompt
+ */
+function buildVerdictFenceTail(indent) {
+  const fenceIndent = `${indent}   `
+  return (
+    `${indent}Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+    `${fenceIndent}` + "```verdict\n" +
+    `${fenceIndent}{"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+    `${fenceIndent}` + "```\n" +
+    `${fenceIndent}${VERDICT_FENCE_CONTRACT_SENTENCE}`
+  )
+}
+
 /**
  * Build the verdict-fence step instructions for a verify agent, binding the
  * surface hash by branch name rather than by a self-resolved cwd. Resolving
@@ -869,11 +888,7 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
     `   b. Run exactly:\n` +
     `         "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "<that branch>"\n` +
     `      (substitute the REPO path you resolved for the script path, and the branch name for <that branch>). That prints a single 64-char hex hash on stdout — capture it.\n` +
-    `Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-    "   ```verdict\n" +
-    `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-    "   ```\n" +
-    `   Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.`
+    buildVerdictFenceTail('')
   )
 }
 
@@ -1282,23 +1297,45 @@ function normalizeShaForComparison(sha) {
 }
 
 /**
+ * Locate the LAST ```verdict ...``` fence in a transcript: the marker, optional
+ * whitespace, a required newline, then a body closed by ```. This is the ONE
+ * definition of "the verdict fence" — the verdict parser and the pre-fence prose
+ * reader both anchor here, so they cannot land on different fences.
+ *
+ * ::
+ *
+ *   ok:   'note\n\n```verdict\n{}\n```'  -> body '{}\n' starting at index 6
+ *   flag: 'note\n\n```verdict {}```'     -> null (no newline after the marker)
+ *
+ * A marker with no newline after it is not a fence, so a later one cannot pull
+ * either reader off the fence the other reads.
+ *
+ * @param {string|null|undefined} transcript the agent transcript text
+ * @returns {{bodyText: string, startIndex: number}|null} the last fence, or null when there is none
+ */
+function findLastVerdictFence(transcript) {
+  if (typeof transcript !== 'string') return null
+  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
+  let lastFence = null
+  let eachMatch
+  while ((eachMatch = fencePattern.exec(transcript)) !== null) {
+    lastFence = { bodyText: eachMatch[1], startIndex: eachMatch.index }
+  }
+  return lastFence
+}
+
+/**
  * Parse the LAST ```verdict ...``` fenced JSON block from a transcript.
- * Guards against non-string input, iterates all fence matches for the last one,
+ * Guards against non-string input, takes the fence findLastVerdictFence locates,
  * parses the JSON, and returns the object or null on any failure.
  * @param {string|null|undefined} transcript the agent transcript text
  * @returns {object|null} the parsed verdict object, or null when absent or malformed
  */
 function parseLastVerdictFence(transcript) {
-  if (typeof transcript !== 'string') return null
-  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
-  let lastFenceBody = null
-  let eachMatch
-  while ((eachMatch = fencePattern.exec(transcript)) !== null) {
-    lastFenceBody = eachMatch[1]
-  }
-  if (lastFenceBody === null) return null
+  const lastFence = findLastVerdictFence(transcript)
+  if (lastFence === null) return null
   try {
-    return JSON.parse(lastFenceBody)
+    return JSON.parse(lastFence.bodyText)
   } catch {
     return null
   }
@@ -1351,12 +1388,13 @@ function renderVerifyObjectionLine(eachFinding) {
  * is not a code defect, so the fence contract puts that reason here rather than
  * in findings; this reader is how the reason survives into the re-fix step.
  *
- * Anchors on the same fence parseLastVerdictFence reads — the last CLOSED
- * verdict fence, not the last bare marker — so a stray unterminated marker after
- * the real fence can never make this read the verdict body itself as prose. A
- * candidate paragraph carrying only markdown scaffolding (a heading, a fence
- * delimiter) is skipped, since handing the fixer a heading is worse than the
- * generic fallback the caller keeps.
+ * Anchors through findLastVerdictFence, the single locator parseLastVerdictFence
+ * reads its JSON from, so both readers see the same fence by construction rather
+ * than by two searches that happen to agree: a stray marker after the real fence
+ * — unterminated, or closed but carrying no newline after the marker — moves
+ * neither reader. A candidate paragraph carrying only markdown scaffolding (a
+ * heading, a fence delimiter) is skipped, since handing the fixer a heading is
+ * worse than the generic fallback the caller keeps.
  *
  * ::
  *
@@ -1368,15 +1406,10 @@ function renderVerifyObjectionLine(eachFinding) {
  * @returns {string|null} the last prose paragraph above the final fence, or null when there is none
  */
 function extractPreFenceProse(verifyTranscript) {
-  if (typeof verifyTranscript !== 'string') return null
-  const fenceMarker = '```verdict'
-  let lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker)
-  while (lastFenceStart !== -1 && !verifyTranscript.slice(lastFenceStart + fenceMarker.length).includes('```')) {
-    lastFenceStart = verifyTranscript.lastIndexOf(fenceMarker, lastFenceStart - 1)
-  }
-  if (lastFenceStart === -1) return null
+  const lastFence = findLastVerdictFence(verifyTranscript)
+  if (lastFence === null) return null
   const proseParagraphs = verifyTranscript
-    .slice(0, lastFenceStart)
+    .slice(0, lastFence.startIndex)
     .split(/\n\s*\n/)
     .map((eachParagraph) => eachParagraph.trim())
     .filter((eachParagraph) =>
