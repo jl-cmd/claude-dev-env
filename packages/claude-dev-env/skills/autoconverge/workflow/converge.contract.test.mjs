@@ -411,8 +411,13 @@ test('the shared verdict-fence builder names the binding-hash command and the ve
     /verification_verdict_store\.py/,
     'expected the verdict-store script that computes the binding hash to be named',
   );
-  assert.match(fenceBuilder, /```verdict/, 'expected the verdict fence to be specified');
-  assert.match(fenceBuilder, /manifest_sha256/, 'expected the verdict fence to carry manifest_sha256');
+  assert.match(fenceBuilder, /buildVerdictFenceTail\(/, 'expected the fence builder to close with the shared fence tail');
+  const renderedFenceTail = loadVerdictFenceTailBuilder()('');
+  assert.match(renderedFenceTail, /```verdict/, 'expected the verdict fence to be specified');
+  assert.ok(
+    renderedFenceTail.includes(VERDICT_FENCE_JSON_LINE),
+    'expected the verdict fence to carry manifest_sha256',
+  );
   assert.match(
     fenceBuilder,
     /gh pr view/,
@@ -435,14 +440,87 @@ test('the incomplete-verdict contract sentence is written once and used by both 
     'expected the incomplete-verdict contract sentence to be written exactly once so the two verify paths cannot drift',
   );
   assert.match(
-    lensPromptBody('buildVerdictFenceSteps'),
+    lensPromptBody('buildVerdictFenceTail'),
     /VERDICT_FENCE_CONTRACT_SENTENCE/,
-    'expected the shared fence builder to use the one contract sentence',
+    'expected the shared fence tail to use the one contract sentence',
+  );
+  assert.match(
+    lensPromptBody('buildVerdictFenceSteps'),
+    /buildVerdictFenceTail\(/,
+    'expected the gh-lookup fence builder to reach the contract sentence through the shared fence tail',
   );
   assert.match(
     lensPromptBody('runVerifierTask'),
-    /VERDICT_FENCE_CONTRACT_SENTENCE/,
-    'expected the hardening-verify prompt to use the one contract sentence',
+    /buildVerdictFenceTail\(/,
+    'expected the hardening-verify prompt to reach the contract sentence through the shared fence tail',
+  );
+});
+
+const VERDICT_FENCE_JSON_LINE = '{"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}';
+const VERDICT_FENCE_LEAD_IN = 'END your message with a fenced verdict block exactly in this shape';
+
+function countOccurrences(haystack, needle) {
+  return haystack.split(needle).length - 1;
+}
+
+function loadVerdictFenceTailBuilder() {
+  const sentenceMatch = /const VERDICT_FENCE_CONTRACT_SENTENCE =\s*\n?\s*'[^']*'/.exec(convergeSource);
+  assert.notEqual(sentenceMatch, null, 'expected VERDICT_FENCE_CONTRACT_SENTENCE to be declared as one string literal');
+  const builderSource = lensPromptBody('buildVerdictFenceTail');
+  return new Function(
+    `${sentenceMatch[0]}\n${builderSource}\nreturn buildVerdictFenceTail;`,
+  )();
+}
+
+test('the verdict fence recipe is written once — no verify path re-inlines its own copy', () => {
+  assert.equal(
+    countOccurrences(convergeSource, VERDICT_FENCE_JSON_LINE),
+    1,
+    'expected the verdict fence JSON skeleton to be written exactly once so no verify path can drift from the shared recipe',
+  );
+  assert.equal(
+    countOccurrences(convergeSource, VERDICT_FENCE_LEAD_IN),
+    1,
+    'expected the fence lead-in sentence to be written exactly once so no verify path can drift from the shared recipe',
+  );
+  assert.match(
+    lensPromptBody('buildVerdictFenceSteps'),
+    /buildVerdictFenceTail\(/,
+    'expected the gh-lookup binding path to render its fence through the shared tail builder',
+  );
+  assert.match(
+    lensPromptBody('runVerifierTask'),
+    /buildVerdictFenceTail\(/,
+    'expected the hardening-verify path to render its fence through the shared tail builder',
+  );
+});
+
+test('the shared fence tail renders the same fence JSON and contract sentence at every indent', () => {
+  const buildVerdictFenceTail = loadVerdictFenceTailBuilder();
+  const topLevelTail = buildVerdictFenceTail('');
+  const nestedTail = buildVerdictFenceTail('   ');
+  for (const [siteName, renderedTail] of [['top-level', topLevelTail], ['nested', nestedTail]]) {
+    assert.ok(
+      renderedTail.includes(VERDICT_FENCE_JSON_LINE),
+      `expected the ${siteName} fence tail to carry the verdict JSON skeleton`,
+    );
+    assert.ok(
+      renderedTail.includes(VERDICT_FENCE_LEAD_IN),
+      `expected the ${siteName} fence tail to carry the fence lead-in sentence`,
+    );
+    assert.ok(
+      renderedTail.includes('```verdict'),
+      `expected the ${siteName} fence tail to open a verdict fence`,
+    );
+    assert.ok(
+      renderedTail.includes('name that check in prose directly above the fence rather than in findings'),
+      `expected the ${siteName} fence tail to carry the one incomplete-verdict contract sentence`,
+    );
+  }
+  assert.equal(
+    nestedTail,
+    topLevelTail.split('\n').map((eachLine) => `   ${eachLine}`).join('\n'),
+    'expected indent to be the only difference between the two rendered fence tails',
   );
 });
 

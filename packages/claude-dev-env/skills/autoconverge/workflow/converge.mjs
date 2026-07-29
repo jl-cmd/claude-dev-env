@@ -466,11 +466,7 @@ function runVerifierTask(task, context) {
       `   Run exactly:\n` +
       `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${context.hardeningBranch}"\n` +
       `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
-      `   Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-      "      ```verdict\n" +
-      `      {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-      "      ```\n" +
-      `      ${VERDICT_FENCE_CONTRACT_SENTENCE}`,
+      buildVerdictFenceTail('   '),
     { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
   )
 }
@@ -853,6 +849,26 @@ const VERDICT_FENCE_CONTRACT_SENTENCE =
   'Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.'
 
 /**
+ * Build the closing fence recipe every verify prompt ends with: the lead-in
+ * sentence, the ```verdict block shape carrying the binding hash, and the
+ * contract sentence. Each verify path resolves the binding hash its own way
+ * and sits at its own nesting depth, so the caller passes the indent its
+ * surrounding prose uses; the fence body itself sits one level deeper.
+ * @param {string} indent leading whitespace the caller's prose sits at
+ * @returns {string} the fence recipe tail for a verify prompt
+ */
+function buildVerdictFenceTail(indent) {
+  const fenceIndent = `${indent}   `
+  return (
+    `${indent}Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
+    `${fenceIndent}` + "```verdict\n" +
+    `${fenceIndent}{"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
+    `${fenceIndent}` + "```\n" +
+    `${fenceIndent}${VERDICT_FENCE_CONTRACT_SENTENCE}`
+  )
+}
+
+/**
  * Build the verdict-fence step instructions for a verify agent, binding the
  * surface hash by branch name rather than by a self-resolved cwd. Resolving
  * the branch via `gh pr view` is cwd-immune: it does not matter which worktree
@@ -872,11 +888,7 @@ function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
     `   b. Run exactly:\n` +
     `         "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "<that branch>"\n` +
     `      (substitute the REPO path you resolved for the script path, and the branch name for <that branch>). That prints a single 64-char hex hash on stdout — capture it.\n` +
-    `Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-    "   ```verdict\n" +
-    `   {"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-    "   ```\n" +
-    `   ${VERDICT_FENCE_CONTRACT_SENTENCE}`
+    buildVerdictFenceTail('')
   )
 }
 
