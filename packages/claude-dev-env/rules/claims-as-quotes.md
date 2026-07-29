@@ -1,12 +1,12 @@
 # Claims as Quotes
 
-**When this applies:** Agent reports, hand-off artifacts, review verdicts, and PR or commit prose that state what existing code does. Always-on like `research-mode.md` — those surfaces are not bound to one file glob (a commit message, a `gh` PR body, and a chat verdict have no shared path match).
+**When this applies:** Agent reports, hand-off artifacts, review verdicts, and PR or commit prose that state what existing code does. Always-on like `research-mode.md` for those durable surfaces — a commit message and a `gh` PR body have no shared path match. Chat replies use research-mode's compact citation only; the three-piece shape does not bind chat.
 
 ## Rule
 
 Under `research-mode.md`, a factual claim carries its source. This rule sets the shape a claim takes when it decides a design or gates an action: the `path:line` reference, the quoted lines, and the claim sentence travel together. The consumer reads those lines before acting on the claim.
 
-In a chat reply, research-mode's compact citation stands — a linked source name or a `file:line` reference. The three-piece shape binds agent reports, hand-off artifacts, review verdicts, and PR or commit prose.
+In a chat reply, research-mode's compact citation stands — a linked source name or a `file:line` reference. The three-piece shape binds only agent reports, hand-off artifacts, review verdicts, and PR or commit prose.
 
 Claims of this shape:
 
