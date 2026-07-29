@@ -46,9 +46,11 @@ round already owns, fix it and re-run the exact same command until clean. A
 violation outside the review target is reported or skipped — not force-fixed into
 unrelated files — and the skip is logged with path and reason.
 
-That bare call gates the git diff since the merge-base joined with the untracked
-files, and it scores each file against that file's own added lines. The round's
-edits sit inside that diff, so they are covered.
+That bare call gates the git diff since the merge-base (and any staged added
+lines the gate already includes). Working-tree lines that are neither staged
+nor committed sit outside that scope until they are staged or committed. Gate 2
+leaves its edits uncommitted, so the round tail stages those edits before
+required checks when this round produced edits.
 
 Two failure scenarios keep the call bare. A file path named on the command line
 puts the gate in whole-file scope on that file: a CODE_RULES violation on a line
@@ -214,15 +216,17 @@ own section above.
 
 **The round tail.** Every round runs required checks here, in the one form
 *Required checks* gives: the bare command, no file paths. When this round
-produced edits, run those checks and then commit them yourself, once, and push.
-When this round produced no edits, run the same checks and commit nothing.
-Should those checks produce repairs, this round has produced edits — commit them
-here, once, and push. Either way, start the next round under *Each round reviews
+produced edits, stage those edits first so they enter the bare gate's scope,
+run the checks, then commit once and push. When this round produced no edits,
+run the same checks and commit nothing. Should those checks produce repairs,
+this round has produced edits — stage them, re-run the checks, then commit
+once and push. Either way, start the next round under *Each round reviews
 new code*.
 
 The round tail owns the round's commit, and it is the only home that commits.
-Gate 2 leaves its change uncommitted, and the tail commits it. Required checks
-run here, after every fix has landed, so the tail's single commit carries the
-round's fixes and the repairs those checks produce together.
+Gate 2 leaves its change uncommitted, and the tail stages then commits it.
+Required checks run here after every fix has landed and been staged, so the
+tail's single commit carries the round's fixes and the repairs those checks
+produce together.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
