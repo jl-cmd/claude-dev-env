@@ -24,11 +24,13 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     ATTEMPT_STATUS_USAGE_LIMITED,
     ATTEMPT_SUMMARY_ENTRY_TEMPLATE,
     ATTEMPT_SUMMARY_JOIN_SEPARATOR,
+    CHAIN_ADVISOR_BLOCKED_EXIT_CODE,
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     CHAIN_EXHAUSTED_EXIT_CODE,
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
+    CLI_ROUTING_MODE_FLAG,
     CLI_TIMEOUT_FLAG,
     CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
@@ -48,6 +50,10 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
     NO_COMPLETED_PROCESS_RETURN_CODE,
+    ROUTING_MODE_ORDERED_ACCOUNT,
+    SESSION_ID_JSON_KEY,
+    TERMINAL_STATUS_ADVISOR_BLOCKED,
+    TERMINAL_STATUS_SERVED,
     UTF8_ENCODING,
 )
 
@@ -65,6 +71,15 @@ _EQUAL_WEEKLY_REMAINING_PERCENT = 50.0
 _HIGH_WEEKLY_REMAINING_PERCENT = 90.0
 _MID_WEEKLY_REMAINING_PERCENT = 50.0
 _LOW_WEEKLY_REMAINING_PERCENT = 10.0
+_PRIMARY_LAUNCHER = "primary-launcher"
+_SECONDARY_LAUNCHER = "secondary-launcher"
+_BOUND_SESSION_ID = "session-bound-abc-123"
+_AUTHENTICATION_ERROR_STDERR = "authentication_error: invalid API key"
+_GENERIC_PROCESS_ERROR_STDERR = "unknown flag: --not-a-real-flag"
+_JSON_BIND_STDOUT_WITH_SESSION = (
+    f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+    f'"result":"ENDORSE"}}\n'
+)
 
 
 def _completed(command, returncode, stdout="", stderr=""):
@@ -1119,3 +1134,344 @@ def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
     assert completed.returncode == 0
     assert b"Traceback" not in completed.stderr
     assert "report ✅" in completed.stdout.decode(UTF8_ENCODING)
+
+
+def test_usage_limit_classifier_keys_on_exact_signature_constants() -> None:
+    assert ALL_USAGE_LIMIT_SIGNATURES == (
+        "hit your session limit",
+        "usage limit reached",
+        "out of usage",
+        "usage quota exceeded",
+    )
+    assert _A_SIGNATURE in ALL_USAGE_LIMIT_SIGNATURES
+    assert runner._is_usage_limit_failure(
+        _completed("primary-launcher", 1, stderr=_A_SIGNATURE)
+    )
+    assert not runner._is_usage_limit_failure(
+        _completed("primary-launcher", 1, stderr=_GENERIC_PROCESS_ERROR_STDERR)
+    )
+
+
+def test_extract_session_id_from_stdout_reads_json_object_and_ndjson() -> None:
+    single_object = (
+        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+        f'"result":"ENDORSE"}}'
+    )
+    assert runner.extract_session_id_from_stdout(single_object) == _BOUND_SESSION_ID
+    ndjson_stream = (
+        f'{{"type":"system","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}"}}\n'
+        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+        f'"result":"ok"}}\n'
+    )
+    assert runner.extract_session_id_from_stdout(ndjson_stream) == _BOUND_SESSION_ID
+    assert runner.extract_session_id_from_stdout("not json at all") is None
+    assert runner.extract_session_id_from_stdout("") is None
+
+
+def test_ordered_account_mode_tries_primary_launcher_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert recorder.invocations[0][0] == _PRIMARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 0
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        _PRIMARY_LAUNCHER
+    ]
+
+
+def test_ordered_account_mode_usage_limit_falls_over_to_secondary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 1, stderr=_A_SIGNATURE
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _SECONDARY_LAUNCHER
+    assert chain_result.returncode == 0
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_USAGE_LIMITED
+    assert chain_result.attempts[1].status == ATTEMPT_STATUS_SERVED
+
+
+def test_ordered_account_mode_authentication_error_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 1, stderr=_AUTHENTICATION_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == 1
+    assert _AUTHENTICATION_ERROR_STDERR in chain_result.stderr
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
+
+
+def test_ordered_account_mode_timeout_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: subprocess.TimeoutExpired(
+                cmd=[_PRIMARY_LAUNCHER], timeout=5
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
+
+
+def test_ordered_account_mode_generic_process_error_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 2, stderr=_GENERIC_PROCESS_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == 2
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
+
+
+def test_ordered_account_mode_configuration_error_does_not_fall_over(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing_config = tmp_path / CONFIG_FILENAME
+    monkeypatch.setattr(runner, "chain_config_path", lambda: missing_config)
+    _install_tty_stdin(monkeypatch)
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == CHAIN_CONFIG_ERROR_EXIT_CODE
+    assert EXAMPLE_CONFIG_FILENAME in captured.err
+
+
+def test_ordered_account_mode_preserves_session_id_on_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert chain_result.session_id == _BOUND_SESSION_ID
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+
+
+def test_default_routing_mode_remains_usage_ranked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout="from-primary"
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="from-secondary"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == _SECONDARY_LAUNCHER
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert recorder.invocations[0][0] == _SECONDARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 1
+
+
+def test_cli_ordered_account_routing_mode_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    assert exit_code == 0
+    assert recorder.invocations[0][0] == _PRIMARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 0
+
+
+def test_cli_ordered_account_advisor_blocked_exit_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 2, stderr=_GENERIC_PROCESS_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    assert exit_code == CHAIN_ADVISOR_BLOCKED_EXIT_CODE
+
+

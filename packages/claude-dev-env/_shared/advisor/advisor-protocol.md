@@ -20,19 +20,19 @@ Use the **Model floor** ladder below (Fable → Opus → Sonnet → Haiku). Warm
 
 ### Third-party host
 
-A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` through the Agent tool. Bind a **max-tier Claude advisor** through the shared CLI Claude-chain (account usage failover). Do **not** treat this third-party session as the advisor.
+A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` through the Agent tool. Bind a **max-tier Claude advisor** through the shared CLI Claude-chain. Do **not** treat this third-party session as the advisor.
 
 1. Detect host profile first (this section).
 2. Set the advisor floor to **Opus** so the walk is `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. The walk never drops to Sonnet or Haiku on a third-party host.
 3. **CLI bind (primary path):** for each candidate top-down, pipe a charter file into:
 
    ```
-   python "$HOME/.claude/scripts/claude_chain_runner.py" -- -p --model <alias> --effort <effort> --output-format json
+   python "$HOME/.claude/scripts/claude_chain_runner.py" --routing-mode ordered_account -- -p --model <alias> --effort <effort> --output-format json
    ```
 
-   Use `--model fable --effort high` on Fable; use `--model opus --effort max` on Opus. The chain runner probes weekly remaining via `claude_chain_usage` / the usage-pause OAuth probe, ranks accounts in `~/.claude/claude-chain.json` highest remaining first, and fails over only on a usage-limit signature.
-4. Stop at the first successful bind. Record `{tier, result: "cli"}` and set `selected_tier` to that tier. Persist `session_id` from the JSON events (any event carries it; reply text is the `type == "result"` event's `.result` field). Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
-5. **Fail closed:** when every candidate fails (chain exhausted or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
+   Use `--model fable --effort high` on Fable; use `--model opus --effort max` on Opus. **Root advisor bind** uses `--routing-mode ordered_account`: the runner walks `~/.claude/claude-chain.json` in **config order** (primary launcher first, secondary next), and fails over to the next entry **only** on a usage-limit signature. Authentication, timeout, configuration, and other non-usage process errors stop immediately with `terminal_status=advisor_blocked` (exit code 4 on the CLI) — they do **not** fall through to the next launcher. General (non-root) chain calls keep the default `--routing-mode usage_ranked`, which probes weekly remaining via `claude_chain_usage` / the usage-pause OAuth probe and ranks highest remaining first.
+4. Stop at the first successful bind. Record `{tier, result: "cli"}` and set `selected_tier` to that tier. Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field). Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
+5. **Fail closed:** when every candidate fails (chain exhausted, `advisor_blocked`, or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
 6. Paste the **Third-party host** Advisor block into every executor spawn prompt — never the Claude SendMessage block. Executors report to the orchestrating session; that session consults the bound Claude CLI advisor and relays the four-signal reply.
 
 Resolve a third-party session's own model field with `resolve_cli_model_id("ThirdParty")` → `third-party` when a host model alias is required. The **advisor** bind uses Fable/Opus aliases only.
@@ -123,9 +123,18 @@ The orchestrating session owns the Claude CLI advisor bind for the whole run —
 
 ## CLI chain
 
-The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" -- <claude args...>`. It ranks accounts in `~/.claude/claude-chain.json` by weekly remaining (via `claude_chain_usage` / the usage-pause OAuth probe) and fails over to the next ranked binary only on a usage-limit signature, so a usage-limited first try still gets served.
+The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" [--routing-mode usage_ranked|ordered_account] -- <claude args...>`.
 
-**Third-party host:** this runner is the **primary** advisor bind and consult path (see **Host profiles → Third-party host**). Map each walk attempt to `--model <alias>` and the effort flags there. When the walk exhausts, fail closed.
+| Mode | Flag | Walk order | Fallover |
+|---|---|---|---|
+| Usage-ranked (default) | `--routing-mode usage_ranked` or omit the flag | Highest weekly remaining first (`claude_chain_usage` / usage-pause OAuth probe) | Usage-limit signature only |
+| Ordered-account | `--routing-mode ordered_account` | Config list order in `~/.claude/claude-chain.json` | Usage-limit signature only; auth / timeout / config / other process errors → `advisor_blocked` |
+
+**Third-party host root advisor bind and consult:** use **ordered-account** mode (see **Host profiles → Third-party host**). Primary launcher from the chain config is tried first; a usage-limit result advances to the next config entry; any non-usage failure terminates as `advisor_blocked`. Persist `session_id` from a successful bind and pass it to `-p --resume <session_id> --output-format json` on later consults.
+
+**General chain calls** (non-root automation): keep the default usage-ranked mode so spare capacity on other accounts is preferred.
+
+**Third-party host:** this runner is the **primary** advisor bind and consult path. Map each walk attempt to `--model <alias>` and the effort flags there. When the walk exhausts or returns `advisor_blocked`, fail closed.
 
 **Claude host:** fall back to this runner when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.

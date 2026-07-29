@@ -126,8 +126,43 @@ CHAIN_CONFIG_ERROR_EXIT_CODE: int = 3
 CLI_TIMEOUT_FLAG: str = "--timeout-seconds"
 """CLI flag that overrides the per-invocation timeout in seconds."""
 
+CLI_ROUTING_MODE_FLAG: str = "--routing-mode"
+"""CLI flag that selects usage-ranked or ordered-account chain routing."""
+
 CLI_ARGUMENTS_SEPARATOR: str = "--"
 """CLI token separating runner flags from the passthrough claude arguments."""
+
+ROUTING_MODE_USAGE_RANKED: str = "usage_ranked"
+"""Default routing: probe weekly remaining and try highest remaining first."""
+
+ROUTING_MODE_ORDERED_ACCOUNT: str = "ordered_account"
+"""Explicit routing: walk chain entries in config order; usage-limit-only fallover."""
+
+DEFAULT_ROUTING_MODE: str = ROUTING_MODE_USAGE_RANKED
+"""Routing mode applied when the caller does not name one."""
+
+ALL_ROUTING_MODES: frozenset[str] = frozenset(
+    {
+        ROUTING_MODE_USAGE_RANKED,
+        ROUTING_MODE_ORDERED_ACCOUNT,
+    }
+)
+"""Accepted values for the routing-mode parameter and CLI flag."""
+
+TERMINAL_STATUS_SERVED: str = "served"
+"""Outcome status when a binary served the call (zero or non-usage nonzero)."""
+
+TERMINAL_STATUS_ADVISOR_BLOCKED: str = "advisor_blocked"
+"""Outcome status when ordered-account mode stops on a non-usage failure."""
+
+TERMINAL_STATUS_CHAIN_EXHAUSTED: str = "chain_exhausted"
+"""Outcome status when every chain entry was usage-limited or missing."""
+
+SESSION_ID_JSON_KEY: str = "session_id"
+"""JSON key read from Claude ``--output-format json`` events for resume."""
+
+CHAIN_ADVISOR_BLOCKED_EXIT_CODE: int = 4
+"""CLI exit code when ordered-account mode stops with advisor_blocked."""
 
 CONFIG_NOT_OBJECT_REASON: str = "the top-level value is not a JSON object"
 """Reason detail when the config root is not an object."""
