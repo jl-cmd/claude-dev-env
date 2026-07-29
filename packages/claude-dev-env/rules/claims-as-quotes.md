@@ -1,6 +1,11 @@
+---
+paths:
+  - "**/*.md"
+---
+
 # Claims as Quotes
 
-**When this applies:** Agent reports, hand-off artifacts, review verdicts, and PR or commit prose that state what existing code does.
+**When this applies:** Agent reports, hand-off artifacts, review verdicts, and PR or commit prose that state what existing code does. Loads only when the session works with a markdown file.
 
 ## Rule
 
