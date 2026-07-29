@@ -30,6 +30,8 @@ packages = [
     "advisor_scripts_constants",
     "process_tree_scripts_constants",
     "fresh_branch_scripts_constants",
+    "split_pr_scripts_constants",
+    "split_pr_scripts_constants.config",
 ]
 
 [tool.setuptools.package-dir]
@@ -48,3 +50,4 @@ dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
 process_tree_scripts_constants = "_shared/process-tree/scripts/config/process_tree_scripts_constants"
 fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"
+split_pr_scripts_constants = "skills/split-pr/scripts/split_pr_scripts_constants"
