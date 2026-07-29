@@ -73,9 +73,11 @@ plus the process exit code.
 
 `resolve_worker_spawn(...)` takes keyword-only arguments:
 `role`, `prompt_file`, `working_directory`, `timeout_seconds`,
-`is_claude_tier_enabled`, `run_state_directory`, `max_turns`.
+`is_claude_tier_enabled`, `run_state_directory`.
 `encode_spawn_outcome` turns a `SpawnOutcome` into the same JSON shape the CLI
 prints.
+
+The grok tier runs with no turn cap; `timeout_seconds` is its only bound.
 
 ## JSON result shape
 
