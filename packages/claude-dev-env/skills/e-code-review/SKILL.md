@@ -31,8 +31,8 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 
 1. Read `<level>` and the optional `--fix` and `loop` flags. Apply the refusal first.
 2. Load `reference/low.md`, `reference/medium.md`, or `reference/xhigh.md`. Run that file as one review cycle, ending in its structured findings report.
-3. If `--fix` is set and `loop` is not set, load `reference/fix.md` and apply it to that cycle's findings.
-4. If `loop` is set, load `reference/loop.md` and follow it with that cycle's findings still unfixed. Round 1's findings are the ones step 2 already produced; from the second round on, the round re-runs that same level file end to end. `loop.md`'s gate sequence owns when the round fixes.
+3. If `--fix` is set and `loop` is not set, load `reference/fix.md` and apply it to that cycle's findings. This path has no commit step: the fixes stay uncommitted in the working tree for the user to review and commit.
+4. If `loop` is set, load `reference/loop.md` and follow it with that cycle's findings still unfixed. Round 1's findings are the ones step 2 already produced; from the second round on, the round re-runs that same level file end to end. End to end means the level file's review phases, up to and including its findings report — not its *Looping* section, which hands control to `loop.md` and would re-enter the loop the round is already inside. `loop.md`'s gate sequence owns when the round fixes.
 5. Without `--fix` or `loop`, return the cycle findings and stop.
 
 ## File index

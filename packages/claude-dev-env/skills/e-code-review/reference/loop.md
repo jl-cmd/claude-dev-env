@@ -10,6 +10,12 @@ Report progress while you work. Stop for the user only on a terminal outcome bel
 
 ## Where fixes come from
 
+A round fixes whether or not `--fix` is set. Gate 2 below applies the round's
+fixes on every run, and its three cases read the same way with the flag and
+without it. What `--fix` adds is `fix.md`'s mechanics, not permission to fix:
+the flag decides where the mechanics come from, never whether a round fixes at
+all.
+
 When `--fix` is also set, the round's fixing happens inside the gate sequence
 below. Gate 2 is the only place a round applies a fix, and there is no separate
 fix pass sitting around the round. Gate 2 loads `reference\fix.md` (relative to
@@ -33,12 +39,22 @@ A finding this document has already classed keeps that class at every level. An 
 
 ## Required checks
 
-"Run required checks" means: run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against every file changed or added in the round. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
+"Run required checks" means: run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against the changed and added file paths the round tail names. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
+
+Always name those file paths on the command line. Given none, the gate falls
+back to its default file set — the git diff since the merge-base joined with
+untracked files — and gates the whole range instead of this round, so
+pre-existing violations from outside the round read as this round's failure. A
+call with zero file paths is never the right call.
 
 ## Each round reviews new code
 
 A repair diff is new code. From the second round on, the round runs the level
-file end to end at the new head. The round's scope is the level's own review
+file end to end at the new head. End to end means that file's review phases, up
+to and including its findings report; the round stops there and brings those
+findings back to the gate sequence below. It does not run the level file's
+*Looping* section — that section hands control to this document, and the round
+is already inside it. The round's scope is the level's own review
 target — the diff or path the level gathers up front, called Phase 0 in
 `medium.md` and `xhigh.md` — taken against that target's base. A repair edit
 landing outside that target widens the next round's scope to cover it: the next
@@ -185,9 +201,15 @@ Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
 own section above.
 
-**The round tail.** Run required checks. When this round produced edits, commit
-them yourself, once, and push. Then start the next round under *Each round
-reviews new code*.
+**The round tail.** When this round produced edits, run required checks scoped
+to this round's own changed and added files — pass exactly those paths to the
+command under *Required checks*, and no others — then commit them yourself,
+once, and push. When this round produced no edits, commit nothing and scope the
+checks to the review target's own changed and added files instead: the round
+edited nothing, but the target it reviewed still has files, and naming them
+keeps the call off the whole merge-base range. Should those checks produce
+repairs, this round has produced edits — commit them here, once, and push.
+Either way, start the next round under *Each round reviews new code*.
 
 The round tail owns the round's commit, and it is the only home that commits.
 Gate 2 leaves its change uncommitted, and the tail commits it. Required checks

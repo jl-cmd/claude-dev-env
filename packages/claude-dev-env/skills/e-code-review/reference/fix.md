@@ -27,6 +27,12 @@ change:
 This gate commits nothing. The fix lands in the working tree and stays
 uncommitted; committing belongs to whatever invoked this document.
 
+Under a bare `--fix` — this document invoked without `loop` — nothing
+downstream commits either, and that is the intended outcome: a one-shot fix
+pass leaves its fixes uncommitted in the working tree for the user to review
+and commit. Under `loop`, the round tail in `reference\loop.md` commits the
+round's fixes.
+
 ## Skip candidates
 
 Skip a finding when fixing it would change intended behavior, require changes

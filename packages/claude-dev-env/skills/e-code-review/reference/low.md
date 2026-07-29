@@ -66,4 +66,10 @@ gate sequence owns the round's fixing and loads `reference\fix.md` for the
 mechanics. Do not treat a single pass through this document as complete while
 `loop` is active; hand control to that document instead of stopping at Turn 2.
 
+That hand-off applies when this document is entered directly. When a loop round
+is already running and has handed this document its target, the round owns the
+loop: end at Turn 2 with the findings report and return those findings to
+`reference\loop.md`'s gate sequence, rather than handing control to that
+document again from here.
+
 When `loop` was not passed, skip this section.
