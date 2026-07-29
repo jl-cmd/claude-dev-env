@@ -971,7 +971,7 @@ def test_resolve_gate_base_reference_treats_a_dangling_origin_head_as_no_default
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A symbolic origin/HEAD whose target is missing falls through to no default.
+    """A symbolic origin/HEAD whose target is missing falls through to no default branch ref.
 
     The gate base then uses the stdin remote object, the same path as when no
     default-branch ref resolves at all.
