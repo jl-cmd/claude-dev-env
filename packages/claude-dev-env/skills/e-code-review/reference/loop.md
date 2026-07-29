@@ -41,8 +41,10 @@ A finding this document has already classed keeps that class at every level. An 
 
 "Run required checks" means: run
 `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root>`
-with no file paths and no `--only-under` prefix. On any violation, fix it and
-re-run the exact same command again — repeat until it reports clean.
+with no file paths and no `--only-under` prefix. On a violation on lines this
+round already owns, fix it and re-run the exact same command until clean. A
+violation outside the review target is reported or skipped — not force-fixed into
+unrelated files — and the skip is logged with path and reason.
 
 That bare call gates the git diff since the merge-base joined with the untracked
 files, and it scores each file against that file's own added lines. The round's
