@@ -3,11 +3,19 @@
 Holds the tool names, the pytest program basenames and the python-interpreter
 basename pattern, the module-run flag and module name, the pipe and
 segment-reset operator token sets, the line-continuation and physical-line
-patterns, the heredoc-opener pattern that marks a script body, the quote
-characters stripped before a basename read, and the deny message. Segment
-helpers come from ``shell_command_segments.py``; the string-executing shell
-basenames and command flags come from ``unscoped_search_blocker_constants.py``,
-so both re-entering blockers read one set.
+patterns, the heredoc-opener pattern that marks a script body, the
+comment-start pattern that ends a line early, the parenthesis-group counters
+that join a multi-line subshell, the separator that rejoins a wrapper's
+argument tokens, the empty commenter set that leaves ``#`` to the
+comment-start pattern, the quote characters stripped before a basename read,
+and the deny message. Segment helpers come from ``shell_command_segments.py``.
+
+The string-executing shell basenames and command flags start from the shared
+``unscoped_search_blocker_constants.py`` sets and add the Windows command shell
+(``cmd /c "…"``) on top, locally. Widening the shared sets themselves would hand
+``cmd`` unwrapping to ``unscoped_search_blocker`` as a side effect of a
+piped-pytest fix, so the addition stays in this module and that blocker keeps
+its current behavior.
 
 The operator sets partition ``ALL_SHELL_CONTROL_OPERATOR_TOKENS``. That
 derivation covers the operator inventory only; quote-awareness stays local to
@@ -20,8 +28,10 @@ import re
 
 from hooks_constants.shell_command_segments import ALL_SHELL_CONTROL_OPERATOR_TOKENS
 from hooks_constants.unscoped_search_blocker_constants import (
-    ALL_STRING_EXEC_COMMAND_FLAGS,
-    ALL_STRING_EXECUTING_SHELL_BASENAMES,
+    ALL_STRING_EXEC_COMMAND_FLAGS as _ALL_SHARED_STRING_EXEC_COMMAND_FLAGS,
+)
+from hooks_constants.unscoped_search_blocker_constants import (
+    ALL_STRING_EXECUTING_SHELL_BASENAMES as _ALL_SHARED_STRING_EXECUTING_SHELL_BASENAMES,
 )
 
 __all__ = [
@@ -33,11 +43,24 @@ __all__ = [
     "PYTEST_MODULE_NAME",
     "ALL_PIPE_OPERATOR_TOKENS",
     "ALL_SEGMENT_RESET_OPERATOR_TOKENS",
+    "ALL_OPERATOR_TOKENS_LONGEST_FIRST",
+    "PUNCTUATION_ONLY_TOKEN_PATTERN",
+    "ALL_REDIRECTION_SUFFIX_CHARACTERS",
     "ALL_STRING_EXECUTING_SHELL_BASENAMES",
     "ALL_STRING_EXEC_COMMAND_FLAGS",
+    "WRAPPED_COMMAND_TOKEN_JOIN",
+    "DISABLED_LEXER_COMMENTERS",
     "LINE_CONTINUATION_PATTERN",
     "LINE_CONTINUATION_JOIN",
     "COMMAND_LINE_SPLIT_PATTERN",
+    "QUOTED_REGION_PATTERN",
+    "QUOTED_REGION_REPLACEMENT",
+    "COMMENT_START_SCAN_PATTERN",
+    "COMMENT_START_GROUP",
+    "GROUP_OPEN_CHARACTER",
+    "GROUP_CLOSE_CHARACTER",
+    "PAREN_GROUP_LINE_JOIN",
+    "CLOSED_GROUP_DEPTH",
     "HEREDOC_OPENER_PATTERN",
     "HEREDOC_TERMINATOR_GROUP",
     "NO_FOLLOWING_OPERATOR",
@@ -68,9 +91,40 @@ ALL_SEGMENT_RESET_OPERATOR_TOKENS: frozenset[str] = (
     ALL_SHELL_CONTROL_OPERATOR_TOKENS - ALL_PIPE_OPERATOR_TOKENS
 ) | _ALL_LOCAL_SEGMENT_RESET_EXTRAS
 
+ALL_OPERATOR_TOKENS_LONGEST_FIRST: tuple[str, ...] = tuple(
+    sorted(
+        ALL_PIPE_OPERATOR_TOKENS | ALL_SEGMENT_RESET_OPERATOR_TOKENS,
+        key=len,
+        reverse=True,
+    )
+)
+PUNCTUATION_ONLY_TOKEN_PATTERN = re.compile(r"[();<>|&]+")
+ALL_REDIRECTION_SUFFIX_CHARACTERS: tuple[str, ...] = ("<", ">")
+
+_ALL_WINDOWS_COMMAND_SHELL_BASENAMES: frozenset[str] = frozenset({"cmd", "cmd.exe"})
+_ALL_WINDOWS_COMMAND_SHELL_FLAGS: frozenset[str] = frozenset({"/c", "/k"})
+ALL_STRING_EXECUTING_SHELL_BASENAMES: frozenset[str] = (
+    _ALL_SHARED_STRING_EXECUTING_SHELL_BASENAMES | _ALL_WINDOWS_COMMAND_SHELL_BASENAMES
+)
+ALL_STRING_EXEC_COMMAND_FLAGS: frozenset[str] = (
+    _ALL_SHARED_STRING_EXEC_COMMAND_FLAGS | _ALL_WINDOWS_COMMAND_SHELL_FLAGS
+)
+WRAPPED_COMMAND_TOKEN_JOIN = " "
+DISABLED_LEXER_COMMENTERS = ""
+
 LINE_CONTINUATION_PATTERN = re.compile(r"\\(?:\r\n|[\r\n])")
 LINE_CONTINUATION_JOIN = ""
 COMMAND_LINE_SPLIT_PATTERN = re.compile(r"[\n\r]+")
+QUOTED_REGION_PATTERN = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"|\\.")
+QUOTED_REGION_REPLACEMENT = ""
+COMMENT_START_GROUP = "comment_start"
+COMMENT_START_SCAN_PATTERN = re.compile(
+    rf"'[^']*'|\"(?:\\.|[^\"\\])*\"|\\.|(?P<{COMMENT_START_GROUP}>(?<![^\s])#)"
+)
+GROUP_OPEN_CHARACTER = "("
+GROUP_CLOSE_CHARACTER = ")"
+PAREN_GROUP_LINE_JOIN = " "
+CLOSED_GROUP_DEPTH = 0
 HEREDOC_OPENER_PATTERN = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 HEREDOC_TERMINATOR_GROUP = 2
 NO_FOLLOWING_OPERATOR = ""

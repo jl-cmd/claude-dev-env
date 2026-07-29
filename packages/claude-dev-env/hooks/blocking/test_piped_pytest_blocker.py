@@ -45,10 +45,35 @@ ALL_PIPED_PYTEST_COMMANDS = [
     "python -m pytest tests 2>&1 | tee run.log",
     "cd packages/claude-dev-env && pytest | cat",
     "(python -m pytest tests) | tee run.log",
+    "(python -m pytest tests)|tee run.log",
+    "(python -m pytest tests)|&tee run.log",
+    "(python -m pytest tests)|(tee run.log)",
+    "(python -m pytest tests)|&(tee run.log)",
+    "((python -m pytest tests))|(tee run.log)",
+    'cmd /c "python -m pytest tests | tee run.log"',
+    'cmd.exe /C "pytest tests | tee run.log"',
+    "cmd /c python -m pytest tests | tee run.log",
+    "cmd.exe /c python -m pytest | cat",
+    "bash -c python -m pytest tests | tee run.log",
+    "pwsh -Command python -m pytest tests | tee run.log",
+    "pytest tests#tag | tee run.log",
+    "python -m pytest tests --junitxml=r#1.xml | tee run.log",
     "bash -c 'pytest | tee run.log'",
     "python -mpytest tests | tee run.log",
     "time pytest tests | tee run.log",
 ]
+
+MULTI_LINE_SUBSHELL_PYTEST_COMMAND = "(\npython -m pytest tests\n) | tee run.log"
+SUBSHELL_WRITING_A_PIPED_PYTEST_HEREDOC = (
+    "(\ncat > run.sh <<'EOF'\npytest tests | tee out.log\nEOF\n) | tee wrote.log"
+)
+SUBSHELL_CARRYING_A_COMMENT_LINE = "(\n# the fast run\npython -m pytest tests\n) | tee run.log"
+SUBSHELL_CARRYING_A_TRAILING_COMMENT = "(\npython -m pytest tests  # fast\n) | tee run.log"
+COMMENT_CARRYING_A_STRAY_OPEN_PAREN = "# rerun the failing case (see the note\npytest | tee run.log"
+COMMENT_NAMING_A_HEREDOC_OPENER = "# write it with <<EOF next time\npytest tests | tee run.log"
+TRAILING_COMMENT_NAMING_A_HEREDOC_OPENER = (
+    "echo hi  # cat <<EOF\npython -m pytest tests | tee run.log"
+)
 
 ALL_NESTED_MODULE_PYTEST_COMMANDS = [
     "python -m coverage run -m pytest tests | tee run.log",
@@ -75,6 +100,12 @@ ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "python -m mypy . | tee types.log",
     "pytest tests -q\ngit status | head",
     """bash -c 'pytest -k "a|b"'""",
+    "pytest tests >| run.log",
+    "(pytest tests)||echo failed",
+    "pytest tests  # | tee run.log",
+    "cmd /c python -m mypy . | tee types.log",
+    "cmd /c python -m pytest tests > run.log 2>&1",
+    "bash -c 'git status' | tee status.log",
 ]
 
 
@@ -133,6 +164,43 @@ def test_allows_a_heredoc_that_writes_a_piped_pytest_line(each_opener: str) -> N
 def test_denies_a_piped_pytest_run_placed_after_a_heredoc_body() -> None:
     """Scanning resumes at the terminator, so a live pipe below it still denies."""
     assert find_piped_pytest_violation(COMMAND_AFTER_A_HEREDOC) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_subshell_opened_and_closed_on_different_lines() -> None:
+    """A parenthesis group spanning lines is one command, so the pipe after it denies."""
+    assert find_piped_pytest_violation(MULTI_LINE_SUBSHELL_PYTEST_COMMAND) == CORRECTIVE_MESSAGE
+
+
+def test_allows_a_subshell_whose_heredoc_body_carries_a_piped_pytest_line() -> None:
+    """Body lines inside a grouped heredoc stay script text, so the group writes only."""
+    assert find_piped_pytest_violation(SUBSHELL_WRITING_A_PIPED_PYTEST_HEREDOC) is None
+
+
+def test_denies_a_subshell_whose_own_line_is_a_comment() -> None:
+    """A comment line inside a group ends at its own newline, so the pipe after it denies."""
+    assert find_piped_pytest_violation(SUBSHELL_CARRYING_A_COMMENT_LINE) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_subshell_whose_pytest_line_ends_in_a_comment() -> None:
+    """A trailing comment hides only the rest of its own line, not the lines below it."""
+    assert find_piped_pytest_violation(SUBSHELL_CARRYING_A_TRAILING_COMMENT) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_piped_pytest_line_below_a_comment_holding_an_open_paren() -> None:
+    """A parenthesis inside a comment opens no group, so the next line still denies."""
+    assert find_piped_pytest_violation(COMMENT_CARRYING_A_STRAY_OPEN_PAREN) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_piped_pytest_line_below_a_comment_naming_a_heredoc_opener() -> None:
+    """A ``<<WORD`` inside a comment opens no heredoc, so the line below stays live."""
+    assert find_piped_pytest_violation(COMMENT_NAMING_A_HEREDOC_OPENER) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_piped_pytest_line_below_a_trailing_comment_naming_a_heredoc_opener() -> None:
+    """A ``<<WORD`` in a line's trailing comment opens no heredoc either."""
+    assert (
+        find_piped_pytest_violation(TRAILING_COMMENT_NAMING_A_HEREDOC_OPENER) == CORRECTIVE_MESSAGE
+    )
 
 
 @pytest.mark.parametrize("each_terminator", ALL_LINE_CONTINUATION_TERMINATORS)

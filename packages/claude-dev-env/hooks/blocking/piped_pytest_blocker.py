@@ -12,12 +12,20 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     python -m pytest tests | head -50           flag: module spelling
     C:\\Python313\\python.exe -m pytest | cat   flag: interpreter path
     (python -m pytest tests) | tee run.log      flag: subshell feeds a pipe
+    (python -m pytest tests)|tee run.log        flag: no space before the pipe
+    (pytest tests)|(tee run.log)                flag: one subshell into another
+    (<newline>pytest tests<newline>) | tee x    flag: subshell across lines
     bash -c 'pytest | tee run.log'              flag: pipeline inside a wrapper
+    cmd /c "pytest tests | tee run.log"         flag: Windows shell wrapper
+    cmd /c python -m pytest tests | tee x       flag: unquoted wrapper argument
+    pytest tests#tag | tee run.log              flag: a hash inside a word
+    # note <<EOF<newline>pytest | tee x         flag: a heredoc named in a comment
     bash -c 'pytest tests' | tee run.log        flag: wrapper piped from outside
     python -m coverage run -m pytest | cat      flag: a later -m names pytest
     time pytest tests | tee run.log             flag: launcher wrapper
     pytest tests \\<newline>| tee run.log       flag: one continued line
     pytest tests > run.log 2>&1                 ok:   redirection keeps the code
+    pytest tests  # | tee run.log               ok:   the pipe sits in a comment
     pytest tests                                ok:   pytest alone
     git status | head                           ok:   segment carries no pytest
     cat ids.txt | pytest --stdin                ok:   the pipe feeds into pytest
@@ -42,17 +50,25 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
+    ALL_OPERATOR_TOKENS_LONGEST_FIRST,
     ALL_PIPE_OPERATOR_TOKENS,
     ALL_PYTEST_PROGRAM_BASENAMES,
     ALL_QUOTE_CHARACTERS,
+    ALL_REDIRECTION_SUFFIX_CHARACTERS,
     ALL_SEGMENT_RESET_OPERATOR_TOKENS,
     ALL_STRING_EXEC_COMMAND_FLAGS,
     ALL_STRING_EXECUTING_SHELL_BASENAMES,
     ALL_SUPPORTED_TOOL_NAMES,
     CALLING_HOOK_NAME,
+    CLOSED_GROUP_DEPTH,
     COMMAND_LINE_SPLIT_PATTERN,
+    COMMENT_START_GROUP,
+    COMMENT_START_SCAN_PATTERN,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
+    DISABLED_LEXER_COMMENTERS,
+    GROUP_CLOSE_CHARACTER,
+    GROUP_OPEN_CHARACTER,
     HEREDOC_OPENER_PATTERN,
     HEREDOC_TERMINATOR_GROUP,
     HOOK_EVENT_NAME,
@@ -60,8 +76,13 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     LINE_CONTINUATION_PATTERN,
     MODULE_RUN_FLAG,
     NO_FOLLOWING_OPERATOR,
+    PAREN_GROUP_LINE_JOIN,
+    PUNCTUATION_ONLY_TOKEN_PATTERN,
     PYTEST_MODULE_NAME,
     PYTHON_INTERPRETER_BASENAME_PATTERN,
+    QUOTED_REGION_PATTERN,
+    QUOTED_REGION_REPLACEMENT,
+    WRAPPED_COMMAND_TOKEN_JOIN,
 )
 from hooks_constants.shell_command_segments import (  # noqa: E402
     effective_leading_program,
@@ -81,11 +102,18 @@ def _all_operator_aware_tokenizations(command: str) -> list[list[str]]:
     interpreter path such as ``C:\\Python313\\python.exe`` whole, since POSIX
     mode reads its backslashes as escapes. Both are returned so a violation in
     either spelling is visible.
+
+    The lexer's own commenters are cleared, because it cuts at a ``#`` anywhere
+    in a word while a shell starts a comment only at a word's start. Leaving the
+    default in place drops the rest of ``pytest tests#tag | tee run.log`` and
+    hides the pipe. ``_command_line_without_comment`` owns comment removal and
+    applies the shell's rule.
     """
     all_tokenizations: list[list[str]] = []
     for each_posix_mode in (True, False):
         lexer = shlex.shlex(command, posix=each_posix_mode, punctuation_chars=True)
         lexer.whitespace_split = True
+        lexer.commenters = DISABLED_LEXER_COMMENTERS
         try:
             all_tokens = list(lexer)
         except ValueError:
@@ -183,8 +211,15 @@ def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
 
         bash -c 'pytest | tee run.log'      pytest | tee run.log
         pwsh -Command 'pytest'              pytest
+        cmd /c python -m pytest tests       python -m pytest tests
         bash script.sh                      None
         pytest tests                        None
+
+    Every token after the flag joins back into one string. A quoted inner
+    command is one token already, so the join returns it unchanged; an unquoted
+    one such as ``cmd /c python -m pytest tests`` spans several tokens, and
+    reading only the first would see ``python`` alone and miss the pytest the
+    ``-m`` names.
     """
     leading_program = effective_leading_program(all_segment_tokens)
     if leading_program is None:
@@ -199,8 +234,66 @@ def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
         inner_index = each_index + 1
         if inner_index >= len(all_argument_tokens):
             return None
-        return all_argument_tokens[inner_index]
+        return WRAPPED_COMMAND_TOKEN_JOIN.join(all_argument_tokens[inner_index:])
     return None
+
+
+def _trailing_operator_token(token: str) -> str | None:
+    """Return the longest control operator the token ends with, or None for any other token."""
+    for each_operator in ALL_OPERATOR_TOKENS_LONGEST_FIRST:
+        if token.endswith(each_operator):
+            return each_operator
+    return None
+
+
+def _all_punctuation_token_parts(token: str) -> list[str]:
+    """Split a punctuation-only token into its leading text and every trailing operator.
+
+    ::
+
+        )|      [')', '|']         a subshell closed right against a pipe
+        )|&     [')', '|&']        the same against the stderr pipe
+        )|(     [')', '|', '(']    one subshell piped straight into the next
+        )||     [')', '||']        the longest operator wins, so this is no pipe
+        >|      ['>|']             a clobber-override redirection, not a pipe
+        |       ['|']              the whole token is already the operator
+        tests   ['tests']          not punctuation only
+
+    ``shlex`` with ``punctuation_chars=True`` glues consecutive punctuation into
+    one token, so ``(pytest tests)|(tee x)`` arrives with ``)|(`` unsplit and the
+    pipe invisible to the segment pairing. Peeling repeats until the leading text
+    ends in no operator, so a token gluing several operators comes apart whole
+    rather than surrendering its last one only.
+
+    Args:
+        token: One token from an operator-aware tokenization.
+
+    Returns:
+        The token's parts in their original order — a one-item list holding the
+        token itself when it needs no splitting.
+    """
+    if PUNCTUATION_ONLY_TOKEN_PATTERN.fullmatch(token) is None:
+        return [token]
+    all_peeled_operators: list[str] = []
+    remaining_text = token
+    while True:
+        trailing_operator = _trailing_operator_token(remaining_text)
+        if trailing_operator is None or trailing_operator == remaining_text:
+            break
+        leading_text = remaining_text[: -len(trailing_operator)]
+        if leading_text.endswith(ALL_REDIRECTION_SUFFIX_CHARACTERS):
+            break
+        all_peeled_operators.append(trailing_operator)
+        remaining_text = leading_text
+    return [remaining_text, *reversed(all_peeled_operators)]
+
+
+def _all_operator_split_tokens(all_command_tokens: list[str]) -> list[str]:
+    """Return the tokens with every glued punctuation-and-operator token split apart."""
+    all_split_tokens: list[str] = []
+    for each_token in all_command_tokens:
+        all_split_tokens.extend(_all_punctuation_token_parts(each_token))
+    return all_split_tokens
 
 
 def _all_segments_with_following_operator(
@@ -210,11 +303,12 @@ def _all_segments_with_following_operator(
 
     A redirection token stays inside its segment, so ``pytest 2>&1 | tee x``
     keeps the pytest evidence the pipe check reads. A close paren stays inside
-    too, so a subshell's pytest survives to the pipe that follows it.
+    too, so a subshell's pytest survives to the pipe that follows it — whether a
+    space separates the two (``) | tee x``) or not (``)|tee x``).
     """
     all_segments: list[tuple[list[str], str]] = []
     current_segment: list[str] = []
-    for each_token in all_command_tokens:
+    for each_token in _all_operator_split_tokens(all_command_tokens):
         if each_token in ALL_PIPE_OPERATOR_TOKENS or each_token in ALL_SEGMENT_RESET_OPERATOR_TOKENS:
             all_segments.append((current_segment, each_token))
             current_segment = []
@@ -305,6 +399,102 @@ def _all_live_command_lines(all_command_lines: list[str]) -> list[str]:
     return all_live_lines
 
 
+def _command_line_without_comment(command_line: str) -> str:
+    """Return the line with a shell comment and everything after it removed.
+
+    ::
+
+        python -m pytest tests  # fast   python -m pytest tests
+        # the fast run                   (nothing runs on this line)
+        pytest -k "a#b"                  unchanged: the hash sits inside quotes
+        tee run#1.log                    unchanged: the hash sits inside a word
+
+    A comment ends at its own newline. Removing it here keeps the lines under it
+    live once a parenthesis group joins them into one logical line, where a
+    surviving hash would comment the joined pipe out instead.
+
+    Args:
+        command_line: One physical command line.
+
+    Returns:
+        The line up to its comment, or the whole line when it carries none.
+    """
+    for each_match in COMMENT_START_SCAN_PATTERN.finditer(command_line):
+        if each_match.group(COMMENT_START_GROUP) is not None:
+            return command_line[: each_match.start(COMMENT_START_GROUP)]
+    return command_line
+
+
+def _all_comment_free_lines(all_command_lines: list[str]) -> list[str]:
+    """Return every line with its shell comment removed.
+
+    ::
+
+        # note the <<EOF form   (nothing runs on this line)
+        pytest tests  # fast    pytest tests
+
+    This runs before the heredoc scan, so a ``<<WORD`` written inside a comment
+    opens no heredoc and cannot drop the live lines beneath it.
+
+    Args:
+        all_command_lines: The physical lines of one Bash command, in order.
+
+    Returns:
+        The comment-free lines, in their original order and count.
+    """
+    return [_command_line_without_comment(each_line) for each_line in all_command_lines]
+
+
+def _paren_depth_change(command_line: str) -> int:
+    """Return how many parenthesis groups the line opens, minus the ones it closes.
+
+    Quoted text and backslash-escaped characters drop out first, so
+    ``pytest -k "(a)"`` counts as no group at all.
+    """
+    unquoted_line = QUOTED_REGION_PATTERN.sub(QUOTED_REGION_REPLACEMENT, command_line)
+    return unquoted_line.count(GROUP_OPEN_CHARACTER) - unquoted_line.count(GROUP_CLOSE_CHARACTER)
+
+
+def _all_paren_group_joined_lines(all_command_lines: list[str]) -> list[str]:
+    """Return the lines with each open parenthesis group joined into one logical line.
+
+    ::
+
+        (                            joined: the group is still open
+        # the fast run               joined: a comment ends at its own newline
+        python -m pytest tests       joined: the group is still open
+        ) | tee run.log              ( python -m pytest tests ) | tee run.log
+        pytest tests                 pytest tests
+
+    A subshell opened on one line and closed on a later one is one command, so
+    the pipe after the close paren belongs to the pytest run inside it. Comments
+    are already gone by this point, so a parenthesis inside a comment opens no
+    group and a comment never reaches across the newline that ends it.
+
+    Args:
+        all_command_lines: The live command lines, comments removed and heredoc
+            bodies already dropped.
+
+    Returns:
+        One line per parenthesis group, and the unchanged line for every other.
+    """
+    all_joined_lines: list[str] = []
+    all_pending_lines: list[str] = []
+    open_group_depth = CLOSED_GROUP_DEPTH
+    for each_line in all_command_lines:
+        all_pending_lines.append(each_line)
+        open_group_depth = max(
+            open_group_depth + _paren_depth_change(each_line), CLOSED_GROUP_DEPTH
+        )
+        if open_group_depth > CLOSED_GROUP_DEPTH:
+            continue
+        all_joined_lines.append(PAREN_GROUP_LINE_JOIN.join(all_pending_lines))
+        all_pending_lines = []
+    if all_pending_lines:
+        all_joined_lines.append(PAREN_GROUP_LINE_JOIN.join(all_pending_lines))
+    return all_joined_lines
+
+
 def find_piped_pytest_violation(command: str) -> str | None:
     """Return the deny message for a piped pytest run, or None to allow.
 
@@ -322,9 +512,14 @@ def find_piped_pytest_violation(command: str) -> str | None:
         pytest -k "a|b"                        ok
 
     Joins each backslash-newline continuation into one logical line, splits the
-    result on the newline and carriage-return terminators, drops every heredoc
-    body, then tokenizes each remaining
-    line so shell operators stand alone and quoted text stays whole. A pipe operator tests the segment that feeds it; a command separator
+    result on the newline and carriage-return terminators, drops each line's
+    comment, drops every heredoc body, joins the lines of each still-open
+    parenthesis group, then tokenizes each remaining line so shell operators
+    stand alone and quoted text stays whole. Comments go first, so a ``<<WORD``
+    written inside one opens no heredoc; heredoc bodies go next, so a body
+    inside a subshell is gone before the group join reads it and a ``(`` written
+    into a heredoc opens no group. A
+    pipe operator tests the segment that feeds it; a command separator
     starts a fresh segment; a redirection and a close paren stay inside the
     segment they belong to. A shell wrapper running a quoted string re-enters
     this check on that string.
@@ -338,7 +533,8 @@ def find_piped_pytest_violation(command: str) -> str | None:
     """
     joined_command = LINE_CONTINUATION_PATTERN.sub(LINE_CONTINUATION_JOIN, command)
     all_command_lines = COMMAND_LINE_SPLIT_PATTERN.split(joined_command)
-    for each_command_line in _all_live_command_lines(all_command_lines):
+    all_live_lines = _all_live_command_lines(_all_comment_free_lines(all_command_lines))
+    for each_command_line in _all_paren_group_joined_lines(all_live_lines):
         for each_tokenization in _all_operator_aware_tokenizations(each_command_line):
             if _tokenization_pipes_pytest(each_tokenization):
                 return CORRECTIVE_MESSAGE
