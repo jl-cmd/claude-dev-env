@@ -16,7 +16,7 @@ description: >-
 - **`low` stays single-pass.** No subagents, no full-file reads: one read pass per target item, one findings pass.
 - **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) surface only findings a maintainer would act on. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
 - **`--fix` applies findings once.** Load `reference/fix.md` and follow it — it owns the fix agent, the code-rules gate, skip logging, and outcome reporting.
-- **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. A round that has no findings left, no obligation open, and no edits of its own makes no fixes and terminates. Load `reference/loop.md` and follow it.
+- **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. A round that has no findings left, no obligation open, and no edits of its own makes no fixes and terminates, and terminating also names every broken off-target reader and every skipped finding in the ready message, and in the PR body when the target is a PR. Load `reference/loop.md` and follow it.
 - **`--fix` and `loop` combine.** With both, each loop round runs the level file, and the round's fixing happens inside `reference/loop.md`'s gate sequence, which loads `reference/fix.md` for the mechanics. There is no separate fix pass around the round.
 
 ## When this skill applies

@@ -39,13 +39,20 @@ A finding this document has already classed keeps that class at every level. An 
 
 ## Required checks
 
-"Run required checks" means: run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root> <changed/added files>` against the changed and added file paths the round tail names. On any violation, fix it and re-run the exact same command again — repeat until it reports clean.
+"Run required checks" means: run
+`~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root>`
+with no file paths and no `--only-under` prefix. On any violation, fix it and
+re-run the exact same command again — repeat until it reports clean.
 
-Always name those file paths on the command line. Given none, the gate falls
-back to its default file set — the git diff since the merge-base joined with
-untracked files — and gates the whole range instead of this round, so
-pre-existing violations from outside the round read as this round's failure. A
-call with zero file paths is never the right call.
+That bare call gates the git diff since the merge-base joined with the untracked
+files, and it scores each file against that file's own added lines. The round's
+edits sit inside that diff, so they are covered.
+
+Two failure scenarios keep the call bare. A file path named on the command line
+puts the gate in whole-file scope on that file: a CODE_RULES violation on a line
+this round never touched fails the round and churns the loop. An `--only-under`
+prefix that matches nothing in the diff leaves the gate zero files to inspect and
+exits clean, so a run that inspected nothing reads as a pass.
 
 ## Each round reviews new code
 
@@ -148,8 +155,10 @@ router — every path out of a round passes through it.
 
 **Gate 2 — findings.** When `--fix` is set, load `reference\fix.md` here and
 follow it for the mechanics of every fix this gate applies — the fix agent,
-agent resume, the code-rules gate, skip logging, and outcome reporting. Then
-take the one case that matches the round's findings.
+agent resume, the code-rules gate, skip logging, and outcome reporting. When `--fix` is
+absent, apply each fix in this session yourself, and log each skip in this
+round's progress report. Then take the one case that matches the round's
+findings.
 
 - Any bug-severity finding: validate each bug with an advisor before touching
   code — confirm it's real and confirm the intended fix — then fix every
@@ -201,15 +210,13 @@ Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
 own section above.
 
-**The round tail.** When this round produced edits, run required checks scoped
-to this round's own changed and added files — pass exactly those paths to the
-command under *Required checks*, and no others — then commit them yourself,
-once, and push. When this round produced no edits, commit nothing and scope the
-checks to the review target's own changed and added files instead: the round
-edited nothing, but the target it reviewed still has files, and naming them
-keeps the call off the whole merge-base range. Should those checks produce
-repairs, this round has produced edits — commit them here, once, and push.
-Either way, start the next round under *Each round reviews new code*.
+**The round tail.** Every round runs required checks here, in the one form
+*Required checks* gives: the bare command, no file paths. When this round
+produced edits, run those checks and then commit them yourself, once, and push.
+When this round produced no edits, run the same checks and commit nothing.
+Should those checks produce repairs, this round has produced edits — commit them
+here, once, and push. Either way, start the next round under *Each round reviews
+new code*.
 
 The round tail owns the round's commit, and it is the only home that commits.
 Gate 2 leaves its change uncommitted, and the tail commits it. Required checks

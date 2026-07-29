@@ -64,7 +64,7 @@ repeatedly — including its exit condition and re-invocation rules. Schedule no
 fix pass of your own here: when `--fix` is also present, `reference\loop.md`'s
 gate sequence owns the round's fixing and loads `reference\fix.md` for the
 mechanics. Do not treat a single pass through this document as complete while
-`loop` is active; hand control to that document instead of stopping at Turn 2.
+`loop` is active; hand control to that document, and do not stop at Turn 2.
 
 That hand-off applies when this document is entered directly. When a loop round
 is already running and has handed this document its target, the round owns the
