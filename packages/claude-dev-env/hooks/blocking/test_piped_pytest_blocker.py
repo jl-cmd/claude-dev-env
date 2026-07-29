@@ -59,8 +59,43 @@ ALL_PIPED_PYTEST_COMMANDS = [
     "pytest tests#tag | tee run.log",
     "python -m pytest tests --junitxml=r#1.xml | tee run.log",
     "bash -c 'pytest | tee run.log'",
+    "bash -c 'pytest tests | tee x'",
     "python -mpytest tests | tee run.log",
     "time pytest tests | tee run.log",
+]
+
+ALL_BRACE_GROUP_PYTEST_COMMANDS = [
+    "{ pytest tests; } | tee run.log",
+    "{ python -m pytest tests; }|tee run.log",
+    "{ echo start; pytest tests; } | tee run.log",
+]
+
+ALL_WINDOWS_SHIM_PYTEST_COMMANDS = [
+    "pytest.bat tests | tee run.log",
+    "pytest.cmd tests | tee run.log",
+    "py.test.bat tests | tee run.log",
+    "py.test.cmd tests | tee run.log",
+    "python.bat -m pytest tests | tee run.log",
+    "python.cmd -m pytest tests | tee run.log",
+]
+
+ALL_PASS_THROUGH_WRAPPER_PYTEST_COMMANDS = [
+    "sudo pytest tests | tee run.log",
+    "uv run pytest tests | tee run.log",
+    "poetry run pytest tests | tee run.log",
+    "pipenv run pytest tests | tee run.log",
+    "uv run python -m pytest tests | tee run.log",
+]
+
+ALL_FLAGGED_WRAPPER_PYTEST_COMMANDS = [
+    "uv run --frozen pytest tests | tee run.log",
+    "uv run --no-sync pytest tests | tee run.log",
+    "poetry run --no-plugins pytest tests | tee run.log",
+    "uv run --python 3.13 pytest tests | tee run.log",
+    "uv run -- pytest tests | tee run.log",
+    "sudo -n pytest tests | tee run.log",
+    "sudo -u ci pytest tests | tee run.log",
+    "sudo -- pytest tests | tee run.log",
 ]
 
 MULTI_LINE_SUBSHELL_PYTEST_COMMAND = "(\npython -m pytest tests\n) | tee run.log"
@@ -87,6 +122,16 @@ ALL_WRAPPED_PYTEST_COMMANDS_PIPED_FROM_OUTSIDE = [
 
 ALL_HEREDOC_OPENER_SPELLINGS = ["<<EOF", "<<'EOF'", '<<"EOF"', "<<-EOF"]
 HEREDOC_SCRIPT_TEMPLATE = "cat > run.sh {opener}\npytest tests | tee out.log\nEOF"
+
+ALL_WIDE_HEREDOC_DELIMITERS = ["END-OF-TEST", "EOF-2.1", "run.sh-1", "EOF2"]
+ALL_WIDE_HEREDOC_SCRIPT_TEMPLATES = [
+    "cat > run.sh <<{delimiter}\npytest tests | tee out.log\n{delimiter}",
+    "cat > run.sh <<'{delimiter}'\npytest tests | tee out.log\n{delimiter}",
+    'cat > run.sh <<"{delimiter}"\npytest tests | tee out.log\n{delimiter}',
+    "cat > run.sh <<-{delimiter}\npytest tests | tee out.log\n{delimiter}",
+    "cat > run.sh <<\\{delimiter}\npytest tests | tee out.log\n{delimiter}",
+]
+HERE_STRING_ABOVE_A_PIPED_PYTEST_RUN = "cat file <<<word\npytest tests | tee run.log"
 COMMAND_AFTER_A_HEREDOC = "cat > run.sh <<'EOF'\necho hi\nEOF\npytest tests | tee out.log"
 
 ALL_LINE_CONTINUATION_TERMINATORS = ["\r\n", "\r", "\n"]
@@ -106,6 +151,17 @@ ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "cmd /c python -m mypy . | tee types.log",
     "cmd /c python -m pytest tests > run.log 2>&1",
     "bash -c 'git status' | tee status.log",
+    "bash scripts/ci.sh -c 'pytest tests' | tee run.log",
+    "sh scripts/ci.sh -lc 'pytest tests' | tee run.log",
+    "cp file{a,b}.txt dst | tee log",
+    "{ git status; } | tee run.log",
+    "sudo apt update | tee log",
+    "uv sync | tee build.log",
+    "poetry run mypy . | tee types.log",
+    "uv run --with pytest mypy . | tee types.log",
+    "uv run --directory sub mypy . | tee types.log",
+    "sudo -u pytest apt update | tee log",
+    "bash -- -c 'pytest tests' | tee run.log",
 ]
 
 
@@ -159,6 +215,45 @@ def test_allows_a_heredoc_that_writes_a_piped_pytest_line(each_opener: str) -> N
     """A heredoc body is script text this call writes, not a command it runs."""
     script_writing_command = HEREDOC_SCRIPT_TEMPLATE.format(opener=each_opener)
     assert find_piped_pytest_violation(script_writing_command) is None
+
+
+@pytest.mark.parametrize("each_template", ALL_WIDE_HEREDOC_SCRIPT_TEMPLATES)
+@pytest.mark.parametrize("each_delimiter", ALL_WIDE_HEREDOC_DELIMITERS)
+def test_allows_a_heredoc_whose_delimiter_carries_a_hyphen_digit_or_dot(
+    each_delimiter: str, each_template: str
+) -> None:
+    """A shell takes any word as a delimiter, so the body below one stays script text."""
+    script_writing_command = each_template.format(delimiter=each_delimiter)
+    assert find_piped_pytest_violation(script_writing_command) is None
+
+
+@pytest.mark.parametrize("each_command", ALL_BRACE_GROUP_PYTEST_COMMANDS)
+def test_denies_a_brace_group_whose_last_command_is_pytest(each_command: str) -> None:
+    """A brace group exits with its last command's code, so the pipe after it hides it."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_FLAGGED_WRAPPER_PYTEST_COMMANDS)
+def test_denies_a_pytest_run_behind_a_wrapper_carrying_its_own_flags(each_command: str) -> None:
+    """A wrapper's own flags sit before the program, so the run behind them still counts."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_piped_pytest_run_placed_below_a_here_string() -> None:
+    """``<<<`` feeds one line rather than opening a body, so the lines under it run."""
+    assert find_piped_pytest_violation(HERE_STRING_ABOVE_A_PIPED_PYTEST_RUN) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_WINDOWS_SHIM_PYTEST_COMMANDS)
+def test_denies_a_windows_shim_spelling_of_a_pytest_run(each_command: str) -> None:
+    """A ``.bat`` or ``.cmd`` shim runs the same suite as the bare spelling."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_PASS_THROUGH_WRAPPER_PYTEST_COMMANDS)
+def test_denies_a_pytest_run_behind_a_pass_through_wrapper(each_command: str) -> None:
+    """A wrapper exits with the program's code, so the pytest behind it still counts."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
 
 
 def test_denies_a_piped_pytest_run_placed_after_a_heredoc_body() -> None:

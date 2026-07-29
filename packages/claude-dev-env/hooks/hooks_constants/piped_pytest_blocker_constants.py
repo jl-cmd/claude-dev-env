@@ -5,10 +5,33 @@ basename pattern, the module-run flag and module name, the pipe and
 segment-reset operator token sets, the line-continuation and physical-line
 patterns, the heredoc-opener pattern that marks a script body, the
 comment-start pattern that ends a line early, the parenthesis-group counters
-that join a multi-line subshell, the separator that rejoins a wrapper's
-argument tokens, the empty commenter set that leaves ``#`` to the
-comment-start pattern, the quote characters stripped before a basename read,
-and the deny message. Segment helpers come from ``shell_command_segments.py``.
+that join a multi-line subshell, the group-closing reserved words a pipe reads
+a group's status through, the option-token pattern that separates a wrapper's
+flags from its first operand, the wrapper commands whose run passes through to
+the program behind them, the separator that rejoins a wrapper's argument
+tokens, the empty commenter set that leaves ``#`` to the comment-start pattern,
+the quote characters stripped before a basename read, and the deny message.
+Segment helpers come from ``shell_command_segments.py``.
+
+Two wrapper shapes reach the program behind them differently. ``sudo`` takes
+its own option flags and then the command, so the step-over drops the flags.
+``uv``, ``poetry``, and ``pipenv`` take the literal ``run`` subcommand first, so
+the step-over reads that word and passes only when it is there — ``uv sync``
+keeps ``uv`` as its own program. A ``run`` subcommand takes its own flags too,
+so the step-over drops those before it reads the program.
+
+An option that takes a separate value swallows the token after it, so
+``sudo -u someone pytest`` runs pytest while ``uv run --with pytest mypy .``
+runs mypy. ``ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS`` names those flags so the
+operand scan reads past the value rather than mistaking it for the program.
+``--`` ends an option list outright: every token after it is an operand however
+it is spelled, so ``bash -- -c script`` runs a script named ``-c`` rather than a
+command string.
+
+A heredoc delimiter is any shell word, so the opener pattern takes one written
+bare, quoted, or backslash-escaped (``<<\\EOF`` quotes the delimiter the way
+``<<'EOF'`` does). ``<<<`` is a here-string rather than a heredoc, so the
+pattern refuses to read one as an opener and leave the lines below it unread.
 
 The string-executing shell basenames and command flags start from the shared
 ``unscoped_search_blocker_constants.py`` sets and add the Windows command shell
@@ -48,6 +71,12 @@ __all__ = [
     "ALL_REDIRECTION_SUFFIX_CHARACTERS",
     "ALL_STRING_EXECUTING_SHELL_BASENAMES",
     "ALL_STRING_EXEC_COMMAND_FLAGS",
+    "COMMAND_OPTION_TOKEN_PATTERN",
+    "END_OF_OPTIONS_TOKEN",
+    "ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS",
+    "ALL_FLAG_TAKING_WRAPPER_COMMANDS",
+    "ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS",
+    "RUN_SUBCOMMAND_NAME",
     "WRAPPED_COMMAND_TOKEN_JOIN",
     "DISABLED_LEXER_COMMENTERS",
     "LINE_CONTINUATION_PATTERN",
@@ -59,6 +88,7 @@ __all__ = [
     "COMMENT_START_GROUP",
     "GROUP_OPEN_CHARACTER",
     "GROUP_CLOSE_CHARACTER",
+    "ALL_GROUP_CLOSE_TOKENS",
     "PAREN_GROUP_LINE_JOIN",
     "CLOSED_GROUP_DEPTH",
     "HEREDOC_OPENER_PATTERN",
@@ -75,14 +105,23 @@ BASH_TOOL_NAME = "Bash"
 ALL_SUPPORTED_TOOL_NAMES: frozenset[str] = frozenset({BASH_TOOL_NAME})
 
 ALL_PYTEST_PROGRAM_BASENAMES: frozenset[str] = frozenset(
-    {"pytest", "pytest.exe", "py.test", "py.test.exe"}
+    {
+        "pytest",
+        "pytest.exe",
+        "pytest.bat",
+        "pytest.cmd",
+        "py.test",
+        "py.test.exe",
+        "py.test.bat",
+        "py.test.cmd",
+    }
 )
-PYTHON_INTERPRETER_BASENAME_PATTERN = re.compile(r"^(?:python[0-9._]*|py)(?:\.exe)?$")
+PYTHON_INTERPRETER_BASENAME_PATTERN = re.compile(r"^(?:python[0-9._]*|py)(?:\.exe|\.bat|\.cmd)?$")
 MODULE_RUN_FLAG = "-m"
 PYTEST_MODULE_NAME = "pytest"
 
 _ALL_PIPE_OPERATOR_SPELLINGS: frozenset[str] = frozenset({"|", "|&"})
-_ALL_LOCAL_SEGMENT_RESET_EXTRAS: frozenset[str] = frozenset({";;", "("})
+_ALL_LOCAL_SEGMENT_RESET_EXTRAS: frozenset[str] = frozenset({";;", "(", "{"})
 
 ALL_PIPE_OPERATOR_TOKENS: frozenset[str] = (
     ALL_SHELL_CONTROL_OPERATOR_TOKENS & _ALL_PIPE_OPERATOR_SPELLINGS
@@ -109,6 +148,38 @@ ALL_STRING_EXECUTING_SHELL_BASENAMES: frozenset[str] = (
 ALL_STRING_EXEC_COMMAND_FLAGS: frozenset[str] = (
     _ALL_SHARED_STRING_EXEC_COMMAND_FLAGS | _ALL_WINDOWS_COMMAND_SHELL_FLAGS
 )
+COMMAND_OPTION_TOKEN_PATTERN = re.compile(r"^(?:-.*|/[A-Za-z])$")
+END_OF_OPTIONS_TOKEN = "--"
+ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS: frozenset[str] = frozenset(
+    {
+        "-C",
+        "-D",
+        "-R",
+        "-T",
+        "-U",
+        "-g",
+        "-h",
+        "-p",
+        "-r",
+        "-t",
+        "-u",
+        "--directory",
+        "--env-file",
+        "--extra",
+        "--group",
+        "--package",
+        "--project",
+        "--python",
+        "--user",
+        "--with",
+    }
+)
+
+ALL_FLAG_TAKING_WRAPPER_COMMANDS: frozenset[str] = frozenset({"sudo", "sudo.exe"})
+ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS: frozenset[str] = frozenset(
+    {"uv", "uv.exe", "poetry", "poetry.exe", "pipenv", "pipenv.exe"}
+)
+RUN_SUBCOMMAND_NAME = "run"
 WRAPPED_COMMAND_TOKEN_JOIN = " "
 DISABLED_LEXER_COMMENTERS = ""
 
@@ -123,9 +194,16 @@ COMMENT_START_SCAN_PATTERN = re.compile(
 )
 GROUP_OPEN_CHARACTER = "("
 GROUP_CLOSE_CHARACTER = ")"
+_BRACE_GROUP_CLOSE_TOKEN = "}"
+ALL_GROUP_CLOSE_TOKENS: frozenset[str] = frozenset(
+    {GROUP_CLOSE_CHARACTER, _BRACE_GROUP_CLOSE_TOKEN}
+)
 PAREN_GROUP_LINE_JOIN = " "
 CLOSED_GROUP_DEPTH = 0
-HEREDOC_OPENER_PATTERN = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+_HEREDOC_DELIMITER_CHARACTER_CLASS = r"[^\s'\"<>|&;()`$\\]"
+HEREDOC_OPENER_PATTERN = re.compile(
+    rf"(?<!<)<<(?!<)-?\s*(['\"]?)\\?({_HEREDOC_DELIMITER_CHARACTER_CLASS}+)\1"
+)
 HEREDOC_TERMINATOR_GROUP = 2
 NO_FOLLOWING_OPERATOR = ""
 ALL_QUOTE_CHARACTERS = "\"'"

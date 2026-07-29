@@ -24,13 +24,25 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     python -m coverage run -m pytest | cat      flag: a later -m names pytest
     time pytest tests | tee run.log             flag: launcher wrapper
     pytest tests \\<newline>| tee run.log       flag: one continued line
+    { pytest tests; } | tee run.log             flag: brace group feeds a pipe
+    pytest.bat tests | tee run.log              flag: Windows shim
+    sudo pytest tests | tee run.log             flag: sudo passes the run through
+    uv run pytest tests | tee run.log           flag: a run subcommand wrapper
+    uv run --frozen pytest tests | tee x        flag: a flag before the program
+    sudo -u ci pytest tests | tee run.log       flag: -u takes the name after it
     pytest tests > run.log 2>&1                 ok:   redirection keeps the code
     pytest tests  # | tee run.log               ok:   the pipe sits in a comment
     pytest tests                                ok:   pytest alone
     git status | head                           ok:   segment carries no pytest
     cat ids.txt | pytest --stdin                ok:   the pipe feeds into pytest
     pytest tests -q<newline>git status | head   ok:   the pipe sits on a later line
+    cp file{a,b}.txt dst | tee log              ok:   a brace expansion, no group
+    sudo apt update | tee log                   ok:   sudo runs another program
+    bash ci.sh -c 'pytest tests' | tee run.log  ok:   the -c belongs to the script
+    bash -- -c 'pytest tests' | tee run.log     ok:   -- makes -c a script name
+    uv run --with pytest mypy . | tee log       ok:   --with takes the name after
     cat > run.sh <<'EOF'<newline>pytest | tee x<newline>EOF   ok: a heredoc body
+    cat > run.sh <<\\EOF<newline>pytest | tee x<newline>EOF   ok: escaped delimiter
 
 Tokenizing is local to this module. ``shell_command_segments.split_into_segments``
 cuts a token on an operator character the token carries, so ``pytest -k "a|b"``
@@ -50,23 +62,29 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
+    ALL_FLAG_TAKING_WRAPPER_COMMANDS,
+    ALL_GROUP_CLOSE_TOKENS,
     ALL_OPERATOR_TOKENS_LONGEST_FIRST,
     ALL_PIPE_OPERATOR_TOKENS,
     ALL_PYTEST_PROGRAM_BASENAMES,
     ALL_QUOTE_CHARACTERS,
     ALL_REDIRECTION_SUFFIX_CHARACTERS,
+    ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS,
     ALL_SEGMENT_RESET_OPERATOR_TOKENS,
     ALL_STRING_EXEC_COMMAND_FLAGS,
     ALL_STRING_EXECUTING_SHELL_BASENAMES,
     ALL_SUPPORTED_TOOL_NAMES,
+    ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS,
     CALLING_HOOK_NAME,
     CLOSED_GROUP_DEPTH,
     COMMAND_LINE_SPLIT_PATTERN,
+    COMMAND_OPTION_TOKEN_PATTERN,
     COMMENT_START_GROUP,
     COMMENT_START_SCAN_PATTERN,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
     DISABLED_LEXER_COMMENTERS,
+    END_OF_OPTIONS_TOKEN,
     GROUP_CLOSE_CHARACTER,
     GROUP_OPEN_CHARACTER,
     HEREDOC_OPENER_PATTERN,
@@ -82,6 +100,7 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     PYTHON_INTERPRETER_BASENAME_PATTERN,
     QUOTED_REGION_PATTERN,
     QUOTED_REGION_REPLACEMENT,
+    RUN_SUBCOMMAND_NAME,
     WRAPPED_COMMAND_TOKEN_JOIN,
 )
 from hooks_constants.shell_command_segments import (  # noqa: E402
@@ -172,6 +191,94 @@ def _runs_pytest_as_a_module(all_segment_tokens: list[str]) -> bool:
     return False
 
 
+def _all_tokens_from_the_first_operand(all_tokens: list[str]) -> list[str]:
+    """Return the tokens from the first non-option one on, dropping the option flags.
+
+    ::
+
+        ['-n', 'pytest', 'tests']            ['pytest', 'tests']
+        ['-u', 'someone', 'pytest']          ['pytest']   -u takes the name
+        ['--with', 'pytest', 'mypy', '.']    ['mypy', '.']   --with takes a name
+        ['--', '-c', 'run.sh']               ['-c', 'run.sh']   -- ends the flags
+        ['run', 'pytest']                    ['run', 'pytest']
+        ['-n']                               []
+
+    A flag that takes a separate value swallows the token after it, so the
+    operand the wrapper runs is the token past that value rather than the value
+    itself. ``--`` ends the option list outright, and every token after it is an
+    operand however it is spelled.
+
+    Args:
+        all_tokens: The tokens following a wrapper command, in order.
+
+    Returns:
+        The tokens from the wrapper's first operand on, empty when it has none.
+    """
+    all_remaining_tokens = all_tokens
+    while all_remaining_tokens:
+        unquoted_token = _unquoted(all_remaining_tokens[0])
+        if unquoted_token == END_OF_OPTIONS_TOKEN:
+            return all_remaining_tokens[1:]
+        if COMMAND_OPTION_TOKEN_PATTERN.match(unquoted_token) is None:
+            return all_remaining_tokens
+        flag_value_token_count = int(unquoted_token in ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS)
+        all_remaining_tokens = all_remaining_tokens[1 + flag_value_token_count :]
+    return []
+
+
+def _all_tokens_after_one_wrapper(all_segment_tokens: list[str]) -> list[str] | None:
+    """Return the tokens a single leading pass-through wrapper runs, else None.
+
+    ::
+
+        ['sudo', 'pytest', 'tests']                 ['pytest', 'tests']
+        ['uv', 'run', 'pytest', 'tests']            ['pytest', 'tests']
+        ['uv', 'run', '--frozen', 'pytest']         ['pytest']
+        ['sudo', 'apt', 'update']                   ['apt', 'update']
+        ['uv', 'sync']                              None   no ``run`` subcommand
+        ['pytest', 'tests']                         None   no wrapper leads
+
+    ``sudo`` runs whatever follows its own flags, so the step-over drops the
+    flags and keeps the rest. ``uv``, ``poetry``, and ``pipenv`` run a program
+    only behind the literal ``run`` subcommand, so any other subcommand leaves
+    the wrapper as the program it already is. That subcommand takes flags of its
+    own, so the step-over drops those too before it reads the program.
+    """
+    leading_program = effective_leading_program(all_segment_tokens)
+    if leading_program is None:
+        return None
+    program_basename = token_basename(_unquoted(leading_program))
+    leading_index = all_segment_tokens.index(leading_program)
+    all_argument_tokens = _all_tokens_from_the_first_operand(
+        all_segment_tokens[leading_index + 1 :]
+    )
+    if program_basename in ALL_FLAG_TAKING_WRAPPER_COMMANDS:
+        return all_argument_tokens
+    if program_basename not in ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS:
+        return None
+    if not all_argument_tokens or _unquoted(all_argument_tokens[0]) != RUN_SUBCOMMAND_NAME:
+        return None
+    return _all_tokens_from_the_first_operand(all_argument_tokens[1:])
+
+
+def _all_tokens_after_wrappers(all_segment_tokens: list[str]) -> list[str]:
+    """Return the segment tokens with every leading pass-through wrapper stepped over.
+
+    ::
+
+        ['sudo', 'uv', 'run', 'pytest']   ['pytest']
+        ['git', 'status']                 ['git', 'status']
+
+    Each step returns a strictly shorter token list, so the walk ends.
+    """
+    all_remaining_tokens = all_segment_tokens
+    while True:
+        all_stepped_tokens = _all_tokens_after_one_wrapper(all_remaining_tokens)
+        if all_stepped_tokens is None:
+            return all_remaining_tokens
+        all_remaining_tokens = all_stepped_tokens
+
+
 def segment_runs_pytest(all_segment_tokens: list[str]) -> bool:
     """Return True when a simple-command segment invokes pytest.
 
@@ -181,6 +288,8 @@ def segment_runs_pytest(all_segment_tokens: list[str]) -> bool:
         ['python', '-m', 'pytest']                  flag
         ['python', '-mpytest']                      flag
         ['time', 'pytest', 'tests']                 flag
+        ['sudo', 'pytest', 'tests']                 flag
+        ['uv', 'run', 'pytest', 'tests']            flag
         ['C:\\\\Python313\\\\python.exe', '-m', 'pytest']  flag
         ['python', '-m', 'mypy']                    ok
         ['git', 'status']                           ok
@@ -193,7 +302,8 @@ def segment_runs_pytest(all_segment_tokens: list[str]) -> bool:
         True when the segment's program is pytest or a python interpreter
         running the pytest module.
     """
-    leading_program = effective_leading_program(all_segment_tokens)
+    all_unwrapped_tokens = _all_tokens_after_wrappers(all_segment_tokens)
+    leading_program = effective_leading_program(all_unwrapped_tokens)
     if leading_program is None:
         return False
     program_basename = token_basename(_unquoted(leading_program))
@@ -201,7 +311,36 @@ def segment_runs_pytest(all_segment_tokens: list[str]) -> bool:
         return True
     if not PYTHON_INTERPRETER_BASENAME_PATTERN.fullmatch(program_basename):
         return False
-    return _runs_pytest_as_a_module(all_segment_tokens)
+    return _runs_pytest_as_a_module(all_unwrapped_tokens)
+
+
+def _string_exec_flag_index(all_argument_tokens: list[str]) -> int | None:
+    """Return the index of a wrapper's string-exec flag, or None when it takes none.
+
+    ::
+
+        ['-c', 'pytest tests']                 0
+        ['-x', '-c', 'pytest tests']           1
+        ['/c', 'python', '-m', 'pytest']       0
+        ['scripts/ci.sh', '-c', 'pytest x']    None: the script is the operand
+        ['--', '-c', 'pytest tests']           None: -- makes -c the script
+        ['script.sh']                          None
+
+    A string-exec flag counts only while it is still an option — that is, before
+    the first operand. Once a script path appears the shell is running that
+    script, and every later flag is the script's own argument rather than a
+    command string the shell reads. ``--`` ends the options outright, so the
+    ``-c`` behind one names a script file too.
+    """
+    for each_index, each_token in enumerate(all_argument_tokens):
+        unquoted_token = _unquoted(each_token)
+        if unquoted_token == END_OF_OPTIONS_TOKEN:
+            return None
+        if unquoted_token.lower() in ALL_STRING_EXEC_COMMAND_FLAGS:
+            return each_index
+        if COMMAND_OPTION_TOKEN_PATTERN.match(unquoted_token) is None:
+            return None
+    return None
 
 
 def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
@@ -209,11 +348,12 @@ def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
 
     ::
 
-        bash -c 'pytest | tee run.log'      pytest | tee run.log
-        pwsh -Command 'pytest'              pytest
-        cmd /c python -m pytest tests       python -m pytest tests
-        bash script.sh                      None
-        pytest tests                        None
+        bash -c 'pytest | tee run.log'         pytest | tee run.log
+        pwsh -Command 'pytest'                 pytest
+        cmd /c python -m pytest tests          python -m pytest tests
+        bash scripts/ci.sh -c 'pytest tests'   None: the script takes the -c
+        bash script.sh                         None
+        pytest tests                           None
 
     Every token after the flag joins back into one string. A quoted inner
     command is one token already, so the join returns it unchanged; an unquoted
@@ -221,21 +361,21 @@ def _string_exec_inner_command(all_segment_tokens: list[str]) -> str | None:
     reading only the first would see ``python`` alone and miss the pytest the
     ``-m`` names.
     """
-    leading_program = effective_leading_program(all_segment_tokens)
+    all_unwrapped_tokens = _all_tokens_after_wrappers(all_segment_tokens)
+    leading_program = effective_leading_program(all_unwrapped_tokens)
     if leading_program is None:
         return None
     if token_basename(_unquoted(leading_program)) not in ALL_STRING_EXECUTING_SHELL_BASENAMES:
         return None
-    leading_index = all_segment_tokens.index(leading_program)
-    all_argument_tokens = all_segment_tokens[leading_index + 1 :]
-    for each_index, each_token in enumerate(all_argument_tokens):
-        if each_token.lower() not in ALL_STRING_EXEC_COMMAND_FLAGS:
-            continue
-        inner_index = each_index + 1
-        if inner_index >= len(all_argument_tokens):
-            return None
-        return WRAPPED_COMMAND_TOKEN_JOIN.join(all_argument_tokens[inner_index:])
-    return None
+    leading_index = all_unwrapped_tokens.index(leading_program)
+    all_argument_tokens = all_unwrapped_tokens[leading_index + 1 :]
+    flag_index = _string_exec_flag_index(all_argument_tokens)
+    if flag_index is None:
+        return None
+    inner_index = flag_index + 1
+    if inner_index >= len(all_argument_tokens):
+        return None
+    return WRAPPED_COMMAND_TOKEN_JOIN.join(all_argument_tokens[inner_index:])
 
 
 def _trailing_operator_token(token: str) -> str | None:
@@ -351,11 +491,57 @@ def _segment_reports_a_pytest_exit_code(all_segment_tokens: list[str]) -> bool:
     return _wrapped_command_runs_pytest(inner_command)
 
 
+def _holds_group_closers_only(all_segment_tokens: list[str]) -> bool:
+    """Return True when the segment holds nothing but group-closing reserved words.
+
+    ::
+
+        ['}']                  True
+        [')']                  True
+        ['pytest', 'tests']    False
+        []                     False
+    """
+    return bool(all_segment_tokens) and all(
+        each_token in ALL_GROUP_CLOSE_TOKENS for each_token in all_segment_tokens
+    )
+
+
+def _all_status_reporting_tokens(
+    all_segments: list[tuple[list[str], str]], segment_index: int
+) -> list[str]:
+    """Return the tokens whose exit code the segment at the index reports.
+
+    ::
+
+        { pytest tests; } | tee x   pytest tests   the group's last command
+        pytest tests | tee x        pytest tests   the segment reports its own
+
+    A brace group needs a terminator before its ``}``, so the closer lands in a
+    segment of its own and a pipe after it reads the status of the command
+    before it. Any segment carrying real words reports its own exit code.
+
+    Args:
+        all_segments: Every segment of one tokenization, paired with the
+            operator that ends it.
+        segment_index: The index of the segment the pipe follows.
+
+    Returns:
+        The tokens the pipe reads the exit code of, empty when only group
+        closers precede it.
+    """
+    for each_index in range(segment_index, -1, -1):
+        all_candidate_tokens = all_segments[each_index][0]
+        if not _holds_group_closers_only(all_candidate_tokens):
+            return all_candidate_tokens
+    return []
+
+
 def _tokenization_pipes_pytest(all_command_tokens: list[str]) -> bool:
     """Return True when a pytest segment feeds a pipe, at this level or inside a wrapper."""
-    for each_segment, each_operator in _all_segments_with_following_operator(all_command_tokens):
+    all_segments = _all_segments_with_following_operator(all_command_tokens)
+    for each_index, (each_segment, each_operator) in enumerate(all_segments):
         if each_operator in ALL_PIPE_OPERATOR_TOKENS and _segment_reports_a_pytest_exit_code(
-            each_segment
+            _all_status_reporting_tokens(all_segments, each_index)
         ):
             return True
         inner_command = _string_exec_inner_command(each_segment)
