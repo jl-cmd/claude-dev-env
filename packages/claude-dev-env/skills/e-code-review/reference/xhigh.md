@@ -157,14 +157,13 @@ or publish an artifact of the review — the structured call is the report.
 
 ## Applying fixes (--fix)
 
-The `--fix` flag was passed without `loop`. Follow `reference\fix.md` (relative
+The `--fix` flag was passed. Follow `reference\fix.md` (relative
 to this skill's folder) for the exact fix, commit-gate, and skip-handling
 behavior — it governs which agent applies each fix, how a fix gets committed,
 how a skip is logged, and how outcomes get reported. Do not repeat the findings
 as text; follow that document's reporting rules once fixes land.
 
-When `loop` is also set, skip this section. `reference\loop.md`'s gate sequence
-owns the round's fixing and loads `reference\fix.md` itself for the mechanics.
+When `loop` is also set, skip this section.
 
 ## If findings are fixed later
 
