@@ -99,6 +99,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_verifier_spawn_preflight_gate.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/route_review_spawn_permit.py",
+            "timeout": 20
           }
         ]
       },
