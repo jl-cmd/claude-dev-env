@@ -14,8 +14,8 @@ When `--fix` is also set, the round's fixing happens inside the gate sequence
 below. Gate 2 is the only place a round applies a fix, and there is no separate
 fix pass sitting around the round. Gate 2 loads `reference\fix.md` (relative to
 this skill's folder) for the mechanics — which agent applies each fix, agent
-resume, skip logging, and outcome reporting — while the gate sequence decides
-whether a round fixes, commits, pushes, and re-reviews.
+resume, the code-rules gate, skip logging, and outcome reporting — while the
+gate sequence decides whether a round fixes, commits, pushes, and re-reviews.
 
 ## Scope stays narrow
 
@@ -48,9 +48,12 @@ reviews both. A later widening adds to that target the same way.
 The widened target is what the round hands the level file. When a round runs the
 level file end to end, it passes the current review target — the original target
 plus every path a widening has since added — as that run's target argument, in
-place of the argument the first round was given. The level file gathers what the
-round hands it, so a widened path is gathered and reviewed like any other part of
-the target.
+place of the argument the first round was given. When the first round was given
+no target argument, the original target is the item `default-range` — the level
+file's own default gather — so the widened target is `default-range` plus every
+added path, and the range the first round reviewed stays in scope. The level
+file gathers what the round hands it, so a widened path is gathered and reviewed
+like any other part of the target.
 
 ## Dangerous diffs take two full rounds
 
@@ -129,8 +132,8 @@ router — every path out of a round passes through it.
 
 **Gate 2 — findings.** When `--fix` is set, load `reference\fix.md` here and
 follow it for the mechanics of every fix this gate applies — the fix agent,
-agent resume, skip logging, and outcome reporting. Then take the one case that
-matches the round's findings.
+agent resume, the code-rules gate, skip logging, and outcome reporting. Then
+take the one case that matches the round's findings.
 
 - Any bug-severity finding: validate each bug with an advisor before touching
   code — confirm it's real and confirm the intended fix — then fix every
@@ -187,12 +190,8 @@ them yourself, once, and push. Then start the next round under *Each round
 reviews new code*.
 
 The round tail owns the round's commit, and it is the only home that commits.
-When `--fix` is set, the *Commit gate* section of `fix.md` reads as though the
-fix agent commits its own change. It does not: the numbered steps under that
-heading are the required-checks loop and carry no commit step, and that loop is
-the whole of what gate 2 takes from the section. So gate 2 leaves its change
-uncommitted, and the tail commits it. Required checks run here, after every fix
-has landed, so the tail's single commit carries the round's fixes and the
-repairs those checks produce together.
+Gate 2 leaves its change uncommitted, and the tail commits it. Required checks
+run here, after every fix has landed, so the tail's single commit carries the
+round's fixes and the repairs those checks produce together.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.

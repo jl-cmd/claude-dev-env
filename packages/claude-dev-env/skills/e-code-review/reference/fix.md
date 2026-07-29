@@ -12,9 +12,10 @@ At `low` — and any time the Agent tool is unavailable — no finder agent exis
 to resume. Apply the fixes yourself, sequentially, in this context, holding to
 every rule below.
 
-## Commit gate
+## Code-rules gate
 
-Before returning, the resumed agent attempts a commit on its own change:
+Before returning, the resumed agent runs the code-rules gate over its own
+change:
 
 1. Run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo
    root> <changed/added files>` against every file it changed or added.
@@ -22,6 +23,9 @@ Before returning, the resumed agent attempts a commit on its own change:
 3. Repeat until the gate returns clean.
 4. Only after a clean gate result does the agent return control and report
    its outcome.
+
+This gate commits nothing. The fix lands in the working tree and stays
+uncommitted; committing belongs to whatever invoked this document.
 
 ## Skip candidates
 
