@@ -656,8 +656,11 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 22, (
-        f"expected 22 Edit entries, got {len(all_edit_entries)}"
+    assert "advisory/refactor_guard.py" in all_edit_script_paths, (
+        "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
+    )
+    assert len(all_edit_entries) == 24, (
+        f"expected 24 Edit entries, got {len(all_edit_entries)}"
     )
 
 
@@ -842,6 +845,35 @@ def test_runpy_hosted_hook_sees_its_own_argv_not_the_dispatchers(tmp_path: Path)
         "A runpy-hosted hook must see its own script path as sys.argv, "
         f"not the dispatcher's argv. Observed: {observed_argv!r}"
     )
+
+
+def test_folded_write_edit_hooks_have_no_standalone_hooks_json_entry() -> None:
+    """A hook the dispatcher hosts must not also run as its own process.
+
+    Each folded hook spawns an interpreter of its own when hooks.json still
+    registers it, so the fold only pays off once the standalone entry is gone.
+    """
+    hooks_json_text = (_HOOKS_ROOT / "hooks.json").read_text(encoding="utf-8")
+    hooks_configuration = json.loads(hooks_json_text)
+    all_pre_tool_use_commands = [
+        each_hook["command"]
+        for each_group in hooks_configuration["hooks"]["PreToolUse"]
+        for each_hook in each_group["hooks"]
+    ]
+    folded_script_relative_paths = (
+        "advisory/refactor_guard.py",
+        "advisory/migration_safety_advisor.py",
+    )
+    for each_script_path in folded_script_relative_paths:
+        matching_commands = [
+            each_command
+            for each_command in all_pre_tool_use_commands
+            if each_script_path in each_command
+        ]
+        assert not matching_commands, (
+            f"{each_script_path} is hosted by the dispatcher, so its standalone "
+            f"hooks.json entry must be gone. Found: {matching_commands!r}"
+        )
 
 
 def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:

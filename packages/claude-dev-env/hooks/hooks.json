@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "python3 -c \"import sys; sys.path.insert(0, r'${CLAUDE_PLUGIN_ROOT}/hooks'); from validators.run_all_validators import main; sys.exit(main())\" --pre-tool-use",
-            "timeout": 15
+            "timeout": 60
           }
         ]
       },
@@ -19,21 +19,6 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py",
             "timeout": 60
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/refactor_guard.py",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/migration_safety_advisor.py",
-            "timeout": 15
           }
         ]
       },
@@ -253,7 +238,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/session_file_edit_tracker.py",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       },
@@ -263,7 +248,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       },
@@ -273,7 +258,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_restore.py",
-            "timeout": 20
+            "timeout": 60
           }
         ]
       }
