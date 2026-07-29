@@ -70,6 +70,50 @@ ALL_BRACE_GROUP_PYTEST_COMMANDS = [
     "{ echo start; pytest tests; } | tee run.log",
 ]
 
+ALL_KEYWORD_COMPOUND_PYTEST_COMMANDS = [
+    "if true; then pytest tests; fi | tee run.log",
+    "while true; do pytest tests; done | tee run.log",
+    "for x in a; do pytest tests; done | tee run.log",
+    "if false; then echo skip; else pytest tests; fi | tee run.log",
+]
+
+ALL_EARLIER_BRANCH_PYTEST_COMMANDS = [
+    "if true; then pytest tests; else echo skip; fi | tee run.log",
+    "if true; then pytest tests; elif false; then echo b; fi | tee run.log",
+    "if true; then echo start; pytest tests; else echo skip; fi | tee run.log",
+    "if a; then echo x; elif b; then pytest tests; else echo y; fi | tee run.log",
+]
+
+ALL_REDIRECTED_CLOSER_PYTEST_COMMANDS = [
+    "if true; then pytest tests; fi 2>&1 | tee run.log",
+    "if true; then pytest tests; fi > out.log | tee run.log",
+    "while read x; do pytest $x; done < list | tee run.log",
+    "{ pytest tests; } 2>&1 | tee run.log",
+    "{ pytest tests; } >> out.log | tee run.log",
+]
+
+SCRIPT_OPERAND_CARRYING_A_MODULE_FLAG = "python myscript.py -m pytest | tee run.log"
+ALL_INTERPRETER_MODULE_RUN_PYTEST_COMMANDS = [
+    "python -m pytest tests | tee run.log",
+    "python -mpytest tests | tee run.log",
+    "python -m pytest tests --junitxml=r#1.xml | tee run.log",
+    "python -X dev -m pytest tests | tee run.log",
+    "python -W ignore -m pytest tests | tee run.log",
+    "python -Xdev -m pytest tests | tee run.log",
+    "python -u -m pytest tests | tee run.log",
+    "python -B -m pytest tests | tee run.log",
+    "python -OO -m pytest tests | tee run.log",
+    "python --check-hash-based-pycs always -m pytest tests | tee run.log",
+    "pypy3 --jit off -m pytest tests | tee run.log",
+    "sudo python -m pytest tests | tee run.log",
+    "uv run python -m pytest tests | tee run.log",
+    "uvx python -m pytest tests | tee run.log",
+    "coverage run -m pytest tests | tee run.log",
+    "poetry run python -m pytest tests | tee run.log",
+]
+
+WRAPPER_CARRYING_THE_ONLY_PIPE = "bash -c 'python -m pytest tests | tee wrapped.log'"
+
 ALL_WINDOWS_SHIM_PYTEST_COMMANDS = [
     "pytest.bat tests | tee run.log",
     "pytest.cmd tests | tee run.log",
@@ -228,6 +272,23 @@ ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "uvx mypy . | tee types.log",
     "uv tool install pytest | tee install.log",
     "pdm run mypy . | tee types.log",
+    "ls done | tee log",
+    "tar -cf out.tar done | tee log",
+    "echo fi | tee log",
+    "echo esac | tee log",
+    "ls do | tee log",
+    "ls else | tee log",
+    "if pytest tests; then echo ok; fi | tee run.log",
+    "if cd repo && pytest tests; then echo ok; fi | tee run.log",
+    "until pytest tests; do echo retry; done | tee run.log",
+    "while pytest tests; do echo again; done | tee run.log",
+    "if a; then echo x; elif pytest tests; then echo b; fi | tee run.log",
+    "if true; then pytest tests; echo after; else echo skip; fi | tee run.log",
+    "if a; then pytest tests; fi; if b; then echo c; fi | tee run.log",
+    "{ pytest tests; }; if b; then echo c; else echo d; fi | tee run.log",
+    "pytest tests; { echo a; } | tee run.log",
+    "python -c 'import os' -m pytest tests | tee run.log",
+    "python -Wu ignore -m pytest tests | tee run.log",
 ]
 
 
@@ -297,6 +358,40 @@ def test_allows_a_heredoc_whose_delimiter_carries_a_hyphen_digit_or_dot(
 def test_denies_a_brace_group_whose_last_command_is_pytest(each_command: str) -> None:
     """A brace group exits with its last command's code, so the pipe after it hides it."""
     assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_KEYWORD_COMPOUND_PYTEST_COMMANDS)
+def test_denies_a_keyword_compound_whose_last_command_is_pytest(each_command: str) -> None:
+    """``fi`` and ``done`` end a compound, so the pipe after one reads pytest's code."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_EARLIER_BRANCH_PYTEST_COMMANDS)
+def test_denies_a_compound_whose_earlier_branch_runs_pytest(each_command: str) -> None:
+    """A branch other than the last one still runs, so its exit code reaches the pipe."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_REDIRECTED_CLOSER_PYTEST_COMMANDS)
+def test_denies_a_compound_whose_closer_carries_a_redirection(each_command: str) -> None:
+    """A redirection binds to the compound, so the closer before it still closes it."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+def test_allows_a_module_flag_that_belongs_to_a_script_operand() -> None:
+    """A script path ends the interpreter's options, so its own ``-m pytest`` runs nothing."""
+    assert find_piped_pytest_violation(SCRIPT_OPERAND_CARRYING_A_MODULE_FLAG) is None
+
+
+@pytest.mark.parametrize("each_command", ALL_INTERPRETER_MODULE_RUN_PYTEST_COMMANDS)
+def test_denies_an_interpreter_module_run_of_pytest(each_command: str) -> None:
+    """An interpreter's own ``-m pytest`` still denies, glued or behind a valued option."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+def test_denies_a_pipe_carried_only_inside_a_wrapper_command_string() -> None:
+    """The pipe prefilter reads the whole command, so a wrapper's inner pipe still counts."""
+    assert find_piped_pytest_violation(WRAPPER_CARRYING_THE_ONLY_PIPE) == CORRECTIVE_MESSAGE
 
 
 @pytest.mark.parametrize("each_command", ALL_FLAGGED_WRAPPER_PYTEST_COMMANDS)

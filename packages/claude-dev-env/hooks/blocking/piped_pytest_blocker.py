@@ -25,6 +25,12 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     time pytest tests | tee run.log             flag: launcher wrapper
     pytest tests \\<newline>| tee run.log       flag: one continued line
     { pytest tests; } | tee run.log             flag: brace group feeds a pipe
+    if x; then pytest tests; fi | tee run.log   flag: ``fi`` closes the compound
+    while x; do pytest tests; done | tee x      flag: ``done`` closes it too
+    if x; then pytest; else echo s; fi | tee x  flag: an earlier branch runs it
+    if x; then pytest; fi 2>&1 | tee run.log    flag: the closer's own redirection
+    while x; do pytest; done < in | tee x       flag: the same reading ``done``
+    pypy3 --jit off -m pytest | tee run.log     flag: --jit takes the word after
     pytest.bat tests | tee run.log              flag: Windows shim
     sudo pytest tests | tee run.log             flag: sudo passes the run through
     uv run pytest tests | tee run.log           flag: a run subcommand wrapper
@@ -55,6 +61,10 @@ pipe: bare ``pytest``, ``python -m pytest``, and an interpreter path such as
     bash -Cu script.sh | tee run.log            ok:   -C is noclobber, not -c
     pwsh -NonInteractive -File a.ps1 | tee x    ok:   a word option, no cluster
     uv tool install pytest | tee run.log        ok:   install runs no program
+    python myscript.py -m pytest | tee run.log  ok:   the script owns the -m
+    ls done | tee run.log                       ok:   a path named like a closer
+    if pytest; then echo ok; fi | tee run.log   ok:   ``if`` consumes the code
+    if a; then x; elif pytest; then y; fi | z   ok:   an elif condition too
     <<EOF<newline>  EOF  <newline>pytest | tee x   ok: a spaced lookalike is body
     cat > run.sh <<'EOF'<newline>pytest | tee x<newline>EOF   ok: a heredoc body
     cat > run.sh <<\\EOF<newline>pytest | tee x<newline>EOF   ok: escaped delimiter
@@ -78,7 +88,9 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
+    ALL_BRANCH_CONTINUATION_TOKENS,
     ALL_CLUSTERED_STRING_EXEC_OPTION_LETTERS,
+    ALL_COMPOUND_BODY_INTRODUCER_TOKENS,
     ALL_FLAG_TAKING_WRAPPER_COMMANDS,
     ALL_GROUP_CLOSE_TOKENS,
     ALL_OPERATOR_TOKENS_LONGEST_FIRST,
@@ -92,20 +104,24 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     ALL_STRING_EXEC_COMMAND_FLAGS,
     ALL_STRING_EXECUTING_SHELL_BASENAMES,
     ALL_SUPPORTED_TOOL_NAMES,
+    ALL_VALUE_TAKING_INTERPRETER_OPTION_FLAGS,
     ALL_VALUE_TAKING_SHELL_OPTION_FLAGS,
     ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS,
     CALLING_HOOK_NAME,
     CLOSED_GROUP_DEPTH,
     COMMAND_LINE_SPLIT_PATTERN,
     COMMAND_OPTION_TOKEN_PATTERN,
+    COMMENT_START_CHARACTER,
     COMMENT_START_GROUP,
     COMMENT_START_SCAN_PATTERN,
     CORRECTIVE_MESSAGE,
     DENY_DECISION,
     DISABLED_LEXER_COMMENTERS,
     END_OF_OPTIONS_TOKEN,
+    FILE_DESCRIPTOR_TOKEN_PATTERN,
     GROUP_CLOSE_CHARACTER,
     GROUP_OPEN_CHARACTER,
+    HEREDOC_OPENER_OPERATOR,
     HEREDOC_OPENER_PATTERN,
     HEREDOC_STRIPPED_INDENT_CHARACTERS,
     HEREDOC_TAB_STRIP_GROUP,
@@ -117,6 +133,7 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     MODULE_RUN_FLAG,
     NO_FOLLOWING_OPERATOR,
     PAREN_GROUP_LINE_JOIN,
+    PIPE_CHARACTER,
     PUNCTUATION_ONLY_TOKEN_PATTERN,
     PYTEST_MODULE_NAME,
     PYTHON_INTERPRETER_BASENAME_PATTERN,
@@ -183,37 +200,107 @@ def _glued_module_name(token: str) -> str | None:
     return unquoted_token[len(MODULE_RUN_FLAG) :] or None
 
 
-def _runs_pytest_as_a_module(all_segment_tokens: list[str]) -> bool:
-    """Return True when any ``-m`` in the segment names pytest.
+def _some_module_run_flag_names_pytest(all_tokens: list[str]) -> bool:
+    """Return True when any ``-m`` among the tokens names pytest.
 
     ::
 
-        ['python', '-m', 'pytest']                            flag
-        ['python', '-mpytest']                                flag
-        ['python', '-m', 'coverage', 'run', '-m', 'pytest']   flag: a later -m
-        ['python', '-m', 'mypy']                              ok
-        ['python', '-m']                                      ok
+        ['-m', 'pytest']                            flag
+        ['-mpytest']                                flag
+        ['-m', 'coverage', 'run', '-m', 'pytest']   flag: a later -m
+        ['-m', 'mypy']                              ok
+        ['-m']                                      ok
 
     A runner module such as coverage or debugpy takes its own ``-m``, so the
     scan reads every one rather than stopping at the first.
 
     Args:
-        all_segment_tokens: The tokens of one simple command, operators removed.
+        all_tokens: The interpreter's ``-m`` and every token after it.
 
     Returns:
-        True when some ``-m pytest`` or ``-mpytest`` appears in the segment.
+        True when some ``-m pytest`` or ``-mpytest`` appears among them.
     """
-    for each_index, each_token in enumerate(all_segment_tokens):
+    for each_index, each_token in enumerate(all_tokens):
         if _glued_module_name(each_token) == PYTEST_MODULE_NAME:
             return True
         if each_token != MODULE_RUN_FLAG:
             continue
         module_index = each_index + 1
-        if module_index >= len(all_segment_tokens):
+        if module_index >= len(all_tokens):
             continue
-        if _unquoted(all_segment_tokens[module_index]) == PYTEST_MODULE_NAME:
+        if _unquoted(all_tokens[module_index]) == PYTEST_MODULE_NAME:
             return True
     return False
+
+
+def _all_tokens_from_the_interpreter_module_flag(
+    all_interpreter_argument_tokens: list[str],
+) -> list[str] | None:
+    """Return the tokens from the interpreter's own ``-m`` on, or None when it has none.
+
+    ::
+
+        ['-m', 'pytest']                 ['-m', 'pytest']
+        ['-mpytest', 'tests']            ['-mpytest', 'tests']
+        ['-X', 'dev', '-m', 'pytest']    ['-m', 'pytest']   -X takes a value
+        ['-Xdev', '-m', 'pytest']        ['-m', 'pytest']   a glued value
+        ['myscript.py', '-m', 'pytest']  None: the script ends the options
+        ['tests']                        None
+
+    A flag counts only while it is still an option. A script path is an operand,
+    and every token after it is that script's own argument — ``python
+    myscript.py -m pytest`` runs the script and may never reach pytest at all.
+    An interpreter option carrying a separate value is followed by that value
+    rather than by an operand, so the scan steps over it and keeps reading.
+
+    Args:
+        all_interpreter_argument_tokens: The tokens following the interpreter.
+
+    Returns:
+        The tokens from the interpreter's ``-m`` on, or None when an operand
+        ends the option list first.
+    """
+    scan_index = 0
+    while scan_index < len(all_interpreter_argument_tokens):
+        each_token = all_interpreter_argument_tokens[scan_index]
+        unquoted_token = _unquoted(each_token)
+        if unquoted_token == MODULE_RUN_FLAG or _glued_module_name(each_token) is not None:
+            return all_interpreter_argument_tokens[scan_index:]
+        if COMMAND_OPTION_TOKEN_PATTERN.match(unquoted_token) is None:
+            return None
+        scan_index += 1 + _option_value_token_count(
+            unquoted_token, ALL_VALUE_TAKING_INTERPRETER_OPTION_FLAGS
+        )
+    return None
+
+
+def _runs_pytest_as_a_module(all_interpreter_argument_tokens: list[str]) -> bool:
+    """Return True when the interpreter's own ``-m`` reaches a pytest run.
+
+    ::
+
+        ['-m', 'pytest']                            flag
+        ['-m', 'coverage', 'run', '-m', 'pytest']   flag: the module runs pytest
+        ['myscript.py', '-m', 'pytest']             ok:   the script owns the -m
+        ['-m', 'mypy']                              ok
+
+    Everything after the interpreter's own ``-m`` is the module's argument list,
+    and a module runner such as coverage names pytest with an ``-m`` of its own,
+    so the scan reads the whole tail from that flag on.
+
+    Args:
+        all_interpreter_argument_tokens: The tokens following the interpreter.
+
+    Returns:
+        True when the interpreter runs pytest as a module, directly or through
+        a module runner.
+    """
+    all_module_tokens = _all_tokens_from_the_interpreter_module_flag(
+        all_interpreter_argument_tokens
+    )
+    if all_module_tokens is None:
+        return False
+    return _some_module_run_flag_names_pytest(all_module_tokens)
 
 
 def _clustered_option_value_token_count(
@@ -394,7 +481,8 @@ def segment_runs_pytest(all_segment_tokens: list[str]) -> bool:
         return True
     if not PYTHON_INTERPRETER_BASENAME_PATTERN.fullmatch(program_basename):
         return False
-    return _runs_pytest_as_a_module(all_unwrapped_tokens)
+    interpreter_index = all_unwrapped_tokens.index(leading_program)
+    return _runs_pytest_as_a_module(all_unwrapped_tokens[interpreter_index + 1 :])
 
 
 def _clustered_string_exec_flag_offset(unquoted_token: str) -> int | None:
@@ -646,34 +734,153 @@ def _segment_reports_a_pytest_exit_code(all_segment_tokens: list[str]) -> bool:
     return _wrapped_command_runs_pytest(inner_command)
 
 
+def _is_a_redirection_operator(token: str) -> bool:
+    """Return True when the token is a redirection operator rather than a word.
+
+    ::
+
+        >      True
+        >>     True
+        >&     True
+        <      True
+        >|     True    a clobber-override redirection
+        )      False   punctuation, but not a redirection
+        out    False
+    """
+    if PUNCTUATION_ONLY_TOKEN_PATTERN.fullmatch(token) is None:
+        return False
+    return any(
+        each_character in token for each_character in ALL_REDIRECTION_SUFFIX_CHARACTERS
+    )
+
+
+def _all_tokens_before_the_first_redirection(all_segment_tokens: list[str]) -> list[str]:
+    """Return the segment tokens ahead of its first redirection, file descriptor included.
+
+    ::
+
+        ['fi', '>', 'out.log']      ['fi']
+        ['fi', '2', '>&', '1']      ['fi']    the ``2`` names the descriptor
+        ['done', '<', 'list']       ['done']
+        ['ls', 'done', '>', 'x']    ['ls', 'done']
+        ['pytest', 'tests']         ['pytest', 'tests']
+
+    A redirection binds to the command it follows rather than being part of it,
+    so the tokens ahead of the first one are the command itself. ``2>&1`` lexes
+    as three tokens, so a bare file-descriptor number written right before the
+    operator goes with it.
+
+    Args:
+        all_segment_tokens: The tokens of one simple command.
+
+    Returns:
+        The command's own tokens, the whole segment when it redirects nothing.
+    """
+    for each_index, each_token in enumerate(all_segment_tokens):
+        if not _is_a_redirection_operator(each_token):
+            continue
+        descriptor_index = each_index - 1
+        if descriptor_index >= 0 and FILE_DESCRIPTOR_TOKEN_PATTERN.fullmatch(
+            all_segment_tokens[descriptor_index]
+        ):
+            return all_segment_tokens[:descriptor_index]
+        return all_segment_tokens[:each_index]
+    return all_segment_tokens
+
+
 def _holds_group_closers_only(all_segment_tokens: list[str]) -> bool:
     """Return True when the segment holds nothing but group-closing reserved words.
 
     ::
 
-        ['}']                  True
-        [')']                  True
-        ['pytest', 'tests']    False
-        []                     False
+        ['}']                    True
+        [')']                    True
+        ['fi']                   True
+        ['done']                 True
+        ['esac']                 True
+        ['fi', '2', '>&', '1']   True    the redirection is not part of it
+        ['done', '<', 'list']    True
+        ['pytest', 'tests']      False
+        ['ls', 'done']           False   a path named like a keyword
+        []                       False
+
+    A closing keyword counts as one only when it stands as its own whole token,
+    so ``ls done`` reads as a command operating on a path and ``echo fi`` as a
+    word being printed. A compound may carry a redirection of its own past the
+    closer, and that redirection belongs to the compound rather than making the
+    closer part of some other command.
     """
-    return bool(all_segment_tokens) and all(
-        each_token in ALL_GROUP_CLOSE_TOKENS for each_token in all_segment_tokens
+    all_command_tokens = _all_tokens_before_the_first_redirection(all_segment_tokens)
+    return bool(all_command_tokens) and all(
+        each_token in ALL_GROUP_CLOSE_TOKENS for each_token in all_command_tokens
     )
 
 
-def _all_status_reporting_tokens(
-    all_segments: list[tuple[list[str], str]], segment_index: int
-) -> list[str]:
-    """Return the tokens whose exit code the segment at the index reports.
+def _all_tokens_after_body_introducers(all_segment_tokens: list[str]) -> list[str]:
+    """Return the segment tokens with each leading body-introducing reserved word dropped.
 
     ::
 
-        { pytest tests; } | tee x   pytest tests   the group's last command
-        pytest tests | tee x        pytest tests   the segment reports its own
+        ['then', 'pytest', 'tests']   ['pytest', 'tests']
+        ['do', 'pytest', 'tests']     ['pytest', 'tests']
+        ['else', 'pytest', 'tests']   ['pytest', 'tests']
+        ['ls', 'do']                  ['ls', 'do']   a path, not a keyword
+        ['pytest', 'tests']           ['pytest', 'tests']
 
-    A brace group needs a terminator before its ``}``, so the closer lands in a
-    segment of its own and a pipe after it reads the status of the command
-    before it. Any segment carrying real words reports its own exit code.
+    ``then``, ``do``, and ``else`` open the body of a compound command and stand
+    ahead of the first command in it, so the program whose exit status the
+    compound reports is the token past them. Only a leading run is dropped, so
+    the same word later in the segment stays the operand it is.
+    """
+    scan_index = 0
+    while (
+        scan_index < len(all_segment_tokens)
+        and all_segment_tokens[scan_index] in ALL_COMPOUND_BODY_INTRODUCER_TOKENS
+    ):
+        scan_index += 1
+    return all_segment_tokens[scan_index:]
+
+
+def _opens_a_later_branch(all_segment_tokens: list[str]) -> bool:
+    """Return True when the segment opens the next branch of a compound command.
+
+    ::
+
+        ['else', 'echo', 'skip']   True
+        ['elif', 'false']          True
+        ['then', 'echo', 'skip']   False
+        ['fi']                     False
+        []                         False
+    """
+    return bool(all_segment_tokens) and all_segment_tokens[0] in ALL_BRANCH_CONTINUATION_TOKENS
+
+
+def _all_status_reporting_token_lists(
+    all_segments: list[tuple[list[str], str]], segment_index: int
+) -> list[list[str]]:
+    """Return every command whose exit code the segment at the index can report.
+
+    ::
+
+        pytest tests | tee x                    [pytest tests]   its own
+        { pytest tests; } | tee x               [pytest tests]   the group's last
+        if x; then pytest; fi | y               [pytest]         the body's last
+        while x; do pytest; done | y            [pytest]         the same via ``done``
+        if x; then pytest; else echo s; fi | y  [echo s, pytest] either branch ran
+
+    A compound command ends with a closer of its own — ``}``, ``)``, ``fi``,
+    ``done``, or ``esac`` — which lands in a segment by itself, so a pipe after
+    it reads the status of the command before it. That command opens with the
+    body-introducing keyword of its compound, which the read drops off the front.
+    Any segment carrying real words of its own reports its own exit code, and no
+    branch scan runs for it.
+
+    A compound with several branches runs whichever one its condition picks, so
+    the status can come from any of them rather than from the last alone. The
+    scan walks back over the earlier branches and takes the command each one
+    ends on — the one written right before an ``else`` or ``elif``. It stops at
+    the first closer it meets going back, because that closer ends a compound of
+    its own and everything past it belongs to that earlier command.
 
     Args:
         all_segments: Every segment of one tokenization, paired with the
@@ -681,22 +888,33 @@ def _all_status_reporting_tokens(
         segment_index: The index of the segment the pipe follows.
 
     Returns:
-        The tokens the pipe reads the exit code of, empty when only group
-        closers precede it.
+        Every candidate command's tokens, empty when only group closers precede
+        the pipe.
     """
-    for each_index in range(segment_index, -1, -1):
+    close_index = segment_index
+    while close_index >= 0 and _holds_group_closers_only(all_segments[close_index][0]):
+        close_index -= 1
+    if close_index < 0:
+        return []
+    all_token_lists = [_all_tokens_after_body_introducers(all_segments[close_index][0])]
+    if close_index == segment_index:
+        return all_token_lists
+    for each_index in range(close_index - 1, -1, -1):
         all_candidate_tokens = all_segments[each_index][0]
-        if not _holds_group_closers_only(all_candidate_tokens):
-            return all_candidate_tokens
-    return []
+        if _holds_group_closers_only(all_candidate_tokens):
+            break
+        if _opens_a_later_branch(all_segments[each_index + 1][0]):
+            all_token_lists.append(_all_tokens_after_body_introducers(all_candidate_tokens))
+    return all_token_lists
 
 
 def _tokenization_pipes_pytest(all_command_tokens: list[str]) -> bool:
     """Return True when a pytest segment feeds a pipe, at this level or inside a wrapper."""
     all_segments = _all_segments_with_following_operator(all_command_tokens)
     for each_index, (each_segment, each_operator) in enumerate(all_segments):
-        if each_operator in ALL_PIPE_OPERATOR_TOKENS and _segment_reports_a_pytest_exit_code(
-            _all_status_reporting_tokens(all_segments, each_index)
+        if each_operator in ALL_PIPE_OPERATOR_TOKENS and any(
+            _segment_reports_a_pytest_exit_code(each_token_list)
+            for each_token_list in _all_status_reporting_token_lists(all_segments, each_index)
         ):
             return True
         inner_command = _string_exec_inner_command(each_segment)
@@ -880,6 +1098,38 @@ def _all_paren_group_joined_lines(all_command_lines: list[str]) -> list[str]:
     return all_joined_lines
 
 
+def _all_scannable_command_lines(joined_command: str) -> list[str]:
+    """Return the lines to tokenize, running only the passes the command's text calls for.
+
+    ::
+
+        pytest tests | tee x            split only: no #, no <<, no (
+        pytest tests  # | tee x         the comment pass runs
+        (pytest tests) | tee x          the parenthesis-group join runs
+        cat <<EOF … EOF                 the heredoc pass runs
+
+    Each pass leaves the lines unchanged when its own character is absent, so
+    testing for that character first drops the work without moving a verdict.
+    Comments go first, so a ``<<WORD`` or a ``(`` written inside one is already
+    gone; the tests read the whole command, which still carries both, so a
+    needless pass is possible while a skipped one is not.
+
+    Args:
+        joined_command: One Bash command, its line continuations already joined.
+
+    Returns:
+        The command lines ready for tokenization.
+    """
+    all_command_lines = COMMAND_LINE_SPLIT_PATTERN.split(joined_command)
+    if COMMENT_START_CHARACTER in joined_command:
+        all_command_lines = _all_comment_free_lines(all_command_lines)
+    if HEREDOC_OPENER_OPERATOR in joined_command:
+        all_command_lines = _all_live_command_lines(all_command_lines)
+    if GROUP_OPEN_CHARACTER not in joined_command:
+        return all_command_lines
+    return _all_paren_group_joined_lines(all_command_lines)
+
+
 def find_piped_pytest_violation(command: str) -> str | None:
     """Return the deny message for a piped pytest run, or None to allow.
 
@@ -896,18 +1146,24 @@ def find_piped_pytest_violation(command: str) -> str | None:
         cat ids.txt | pytest --stdin           ok
         pytest -k "a|b"                        ok
 
-    Joins each backslash-newline continuation into one logical line, splits the
-    result on the newline and carriage-return terminators, drops each line's
-    comment, drops every heredoc body, joins the lines of each still-open
-    parenthesis group, then tokenizes each remaining line so shell operators
-    stand alone and quoted text stays whole. Comments go first, so a ``<<WORD``
-    written inside one opens no heredoc; heredoc bodies go next, so a body
-    inside a subshell is gone before the group join reads it and a ``(`` written
-    into a heredoc opens no group. A
+    A pipe operator carries a ``|`` in every spelling it has, and no step below
+    inserts one, so a command holding no ``|`` at all can hold no violation and
+    returns before any parsing. This runs on every Bash call in a session, and
+    the check is one membership test.
+
+    Past that gate: joins each backslash-newline continuation into one logical
+    line, splits the result on the newline and carriage-return terminators,
+    drops each line's comment, drops every heredoc body, joins the lines of each
+    still-open parenthesis group, then tokenizes each remaining line so shell
+    operators stand alone and quoted text stays whole. Comments go first, so a
+    ``<<WORD`` written inside one opens no heredoc; heredoc bodies go next, so a
+    body inside a subshell is gone before the group join reads it and a ``(``
+    written into a heredoc opens no group. A
     pipe operator tests the segment that feeds it; a command separator
     starts a fresh segment; a redirection and a close paren stay inside the
     segment they belong to. A shell wrapper running a quoted string re-enters
-    this check on that string.
+    this check on that string, and re-enters at this gate, so a short inner
+    command carrying no pipe costs one membership test too.
 
     Args:
         command: The raw Bash command string from the tool input.
@@ -916,10 +1172,10 @@ def find_piped_pytest_violation(command: str) -> str | None:
         The corrective deny message when a pytest segment feeds a pipe, else
         None.
     """
+    if PIPE_CHARACTER not in command:
+        return None
     joined_command = LINE_CONTINUATION_PATTERN.sub(LINE_CONTINUATION_JOIN, command)
-    all_command_lines = COMMAND_LINE_SPLIT_PATTERN.split(joined_command)
-    all_live_lines = _all_live_command_lines(_all_comment_free_lines(all_command_lines))
-    for each_command_line in _all_paren_group_joined_lines(all_live_lines):
+    for each_command_line in _all_scannable_command_lines(joined_command):
         for each_tokenization in _all_operator_aware_tokenizations(each_command_line):
             if _tokenization_pipes_pytest(each_tokenization):
                 return CORRECTIVE_MESSAGE
