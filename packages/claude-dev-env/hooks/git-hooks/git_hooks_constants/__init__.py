@@ -48,6 +48,14 @@ NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
     "claude-dev-env pre-push: no parseable stdin lines; aborting"
 )
 NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
+UNRESOLVABLE_MERGE_BASE_SENTINEL: str = "__unresolvable_merge_base__"
+UNRESOLVABLE_MERGE_BASE_MESSAGE: str = (
+    "claude-dev-env pre-push: git found no merge base between the pushed object "
+    "and the default branch, so the gate scope is unknown and "
+    "enforcement is skipped. Two states reach here: the pushed branch and the "
+    "default branch hold unrelated histories, or origin/HEAD names a ref the "
+    "remote no longer has (git remote set-head origin -a refreshes it)."
+)
 LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
 ORIGIN_HEAD_SYMBOLIC_REFERENCE: str = "refs/remotes/origin/HEAD"
 ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX: str = "refs/remotes/origin/"

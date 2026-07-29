@@ -16,20 +16,28 @@ resolves to `main`. The guard runs whether or not the CODE_RULES gate is
 installed; deletions and same-name pushes pass.
 
 Gate base: a branch push takes its `--base` from the merge base between the
-pushed object and the remote default branch, so violations are scoped to the
-commits the branch itself carries and a rebase onto the default branch leaves
-the gate reading only the branch's own work. The stdin remote object name is
-the base when no default-branch ref resolves and when the pushed branch is
-the default branch. When every remote object name is zero (new branch) or
-stdin is empty, the gate falls back to the remote's default branch symbolic
-ref.
+pushed object and the remote default branch, so a rebase onto the default
+branch leaves the gate reading only the branch's own work. The stdin remote
+object name is the base when no default-branch ref resolves and when the
+pushed branch is the default branch. When every remote object name is zero
+(new branch) or stdin is empty, the gate falls back to the remote's default
+branch symbolic ref. When a default-branch ref resolves and git still reports
+no merge base, the base is unknown, so CODE_RULES enforcement is skipped with
+a printed reason rather than scoped to the stdin remote object name, which on
+a rebased tip would re-flag replayed commits.
+
+Gate scope: the gate process this hook launches diffs its `--base` against the
+current checkout's HEAD, so the surface is the commits between that base and
+HEAD. A push whose pushed object is HEAD reads as the branch's own work; a
+push of any other object is still scoped to HEAD.
 
 Exit codes:
   0 - the push destination is allowed and its commits pass the gate (or
-      the gate is not installed).
+      the gate is not installed, or the gate base could not be resolved).
   1 - the push would land a non-protected local branch onto a protected
       remote branch, or a commit introduces a blocking violation.
-  2 - unexpected invocation failure (e.g., subprocess could not launch).
+  2 - unexpected invocation failure (e.g., subprocess could not launch), or
+      stdin carried no parseable line.
 """
 
 from __future__ import annotations
@@ -74,6 +82,8 @@ from git_hooks_constants import (
     STDIN_LINE_FIELD_COUNT,
     STDIN_READ_FAILURE_MESSAGE,
     STDIN_REMOTE_OBJECT_FIELD_INDEX,
+    UNRESOLVABLE_MERGE_BASE_MESSAGE,
+    UNRESOLVABLE_MERGE_BASE_SENTINEL,
 )
 from gate_utils import is_safe_regular_file, resolve_gate_script_path
 
@@ -301,9 +311,10 @@ def resolve_default_branch_merge_base(
         pushed_object_name: The object name the push carries.
 
     Returns:
-        The merge-base object name, or None when no default-branch ref
-        resolves, when the push updates the default branch, or when git
-        reports no merge base.
+        The merge-base object name; None when no default-branch ref resolves or
+        when the push updates the default branch, which are the two cases where
+        no merge base applies; or the unresolvable-merge-base sentinel when a
+        default-branch ref resolves and git still reports no merge base.
     """
     default_branch_reference = resolve_default_branch_reference()
     if default_branch_reference is None:
@@ -314,13 +325,16 @@ def resolve_default_branch_merge_base(
     if remote_branch_name == default_branch_name:
         return None
     # Anchors to the pushed object; deferring to the gate's HEAD-based merge-base would change behavior on non-HEAD pushes.
-    return run_git_reference_query(
+    merge_base_object_name = run_git_reference_query(
         (
             *ALL_GIT_MERGE_BASE_COMMAND_PREFIX,
             pushed_object_name,
             default_branch_reference,
         )
     )
+    if merge_base_object_name is None:
+        return UNRESOLVABLE_MERGE_BASE_SENTINEL
+    return merge_base_object_name
 
 
 def resolve_gate_base_reference(stdin_text: str) -> str | None:
@@ -330,6 +344,7 @@ def resolve_gate_base_reference(stdin_text: str) -> str | None:
     and every other push reads from the stdin remote object name::
 
         branch update, default branch resolved -> merge-base(pushed, default)
+        branch update, no merge base found     -> unresolvable-merge-base sentinel
         branch update, no default branch ref   -> stdin remote object name
         default-branch push                    -> stdin remote object name
         new branch or empty stdin              -> remote default branch ref
@@ -339,8 +354,9 @@ def resolve_gate_base_reference(stdin_text: str) -> str | None:
         stdin_text: The pre-push stdin payload.
 
     Returns:
-        The gate's base reference, the no-parseable-lines sentinel, or None
-        when the push only deletes remote branches.
+        The gate's base reference, the no-parseable-lines sentinel, the
+        unresolvable-merge-base sentinel, or None when the push only deletes
+        remote branches.
     """
     return _resolve_gate_base_from_parsed(_parse_push_stdin(stdin_text))
 
@@ -353,8 +369,10 @@ def _resolve_gate_base_from_parsed(parsed_stdin: ParsedPushStdin) -> str | None:
 
     Returns:
         The merge base with the remote default branch for a branch update, the
-        branch update's remote object name when no merge base resolves, and
-        otherwise whatever the stdin-derived base reference reports.
+        branch update's remote object name when no merge base applies, the
+        unresolvable-merge-base sentinel when a default-branch ref resolves and
+        git reports no merge base anyway, and otherwise whatever the
+        stdin-derived base reference reports.
     """
     branch_update = _find_branch_update_in_lines(parsed_stdin.all_push_lines)
     if branch_update is None:
@@ -503,6 +521,8 @@ def main() -> int:
     pre_push_gate_script_not_found_message = PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE
     no_parseable_stdin_lines_message = NO_PARSEABLE_STDIN_LINES_MESSAGE
     no_parseable_stdin_lines_sentinel = NO_PARSEABLE_STDIN_LINES_SENTINEL
+    unresolvable_merge_base_message = UNRESOLVABLE_MERGE_BASE_MESSAGE
+    unresolvable_merge_base_sentinel = UNRESOLVABLE_MERGE_BASE_SENTINEL
     protected_branch_push_block_message = PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE
     protected_branch_push_block_exit_code = PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE
     try:
@@ -540,6 +560,9 @@ def main() -> int:
     if base_reference == no_parseable_stdin_lines_sentinel:
         print(no_parseable_stdin_lines_message, file=sys.stderr)
         return gate_infrastructure_failure_exit_code
+    if base_reference == unresolvable_merge_base_sentinel:
+        print(unresolvable_merge_base_message, file=sys.stderr)
+        return code_review_stamp_block_exit_code()
     code_rules_exit_code = invoke_gate(gate_script_path, base_reference)
     if code_rules_exit_code != 0:
         return code_rules_exit_code

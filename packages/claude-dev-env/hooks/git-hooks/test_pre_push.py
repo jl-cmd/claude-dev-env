@@ -103,6 +103,7 @@ def test_main_invokes_gate_with_resolved_base_reference(
     )
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
     _isolate_code_review_gate(tmp_path, monkeypatch)
+    _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     remote_sha = "9" * 40
     monkeypatch.setattr(
         sys,
@@ -322,6 +323,7 @@ def test_invoke_gate_uses_resolved_path(
     resolved_path = symlink_gate_path.resolve()
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(symlink_gate_path))
     _isolate_code_review_gate(tmp_path, monkeypatch)
+    _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "stdin", io.StringIO(
         f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
     ))
@@ -455,7 +457,11 @@ def test_main_allows_main_onto_main_push(
 CODE_REVIEW_STUB_BLOCK_REASON: str = "CODE_REVIEW_STUB_BLOCK_REASON"
 
 
-def _write_passing_code_rules_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _isolate_repository_and_write_passing_code_rules_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Move into a repository without origin refs, then install a passing gate."""
+    _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     passing_gate_path = tmp_path / "code_rules_gate.py"
     passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
@@ -483,7 +489,7 @@ def test_main_blocks_when_code_review_gate_returns_reason(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
     stub_gate_path = _write_code_review_gate_stub(
         tmp_path, repr(CODE_REVIEW_STUB_BLOCK_REASON)
     )
@@ -500,7 +506,7 @@ def test_main_allows_when_code_review_gate_returns_none(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
     stub_gate_path = _write_code_review_gate_stub(tmp_path, "None")
     monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
 
@@ -513,7 +519,7 @@ def test_main_code_review_check_fails_open_when_gate_module_absent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
     monkeypatch.setenv(
         "CODE_REVIEW_PUSH_GATE_PATH", str(tmp_path / "does_not_exist.py")
     )
@@ -698,6 +704,49 @@ def _build_default_branch_repository(tmp_path: Path) -> tuple[Path, str, str]:
     )
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
     return repository, default_branch_tip, topic_branch_tip
+
+
+def _isolate_from_default_branch_refs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Move the test into a fresh repository that holds no origin default branch.
+
+    Tests that feed synthetic object names need a working directory where no
+    default-branch ref resolves, so the hook takes its stdin remote-object
+    fallback rather than reading the ambient repository's origin refs.
+    """
+    isolated_repository = tmp_path / "repository_without_origin_refs"
+    isolated_repository.mkdir()
+    _run_fixture_git(isolated_repository, "init", "-b", DEFAULT_BRANCH_NAME)
+    monkeypatch.chdir(isolated_repository)
+
+
+def _build_unrelated_history_repository(tmp_path: Path) -> tuple[Path, str]:
+    """Build a repository whose feature branch shares no history with the default.
+
+    The origin default-branch ref and the origin HEAD symbolic ref both resolve,
+    so ``git merge-base`` runs and reports no merge base rather than the hook
+    failing to find a default branch at all.
+
+    Args:
+        tmp_path: The pytest temporary directory the repository is built in.
+
+    Returns:
+        The repository path and the orphan feature branch tip.
+    """
+    repository = tmp_path / "unrelated_history_repository"
+    repository.mkdir()
+    _run_fixture_git(repository, "init", "-b", DEFAULT_BRANCH_NAME)
+    _commit_file(repository, BASE_FILE_NAME)
+    default_branch_tip = _commit_file(repository, DEFAULT_BRANCH_FILE_NAME)
+    _run_fixture_git(repository, "checkout", "--orphan", FEATURE_BRANCH_NAME)
+    _run_fixture_git(repository, "reset")
+    orphan_branch_tip = _commit_file(repository, BRANCH_FILE_NAME)
+    _set_origin_default_branch_tip(
+        repository, ORIGIN_DEFAULT_BRANCH_REFERENCE, default_branch_tip
+    )
+    _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
+    return repository, orphan_branch_tip
 
 
 def _same_branch_push_line(
@@ -892,6 +941,122 @@ def test_resolve_gate_base_reference_returns_none_for_a_deletion_only_push() -> 
     )
 
     assert pre_push.resolve_gate_base_reference(deletion_only_stdin) is None
+
+
+def test_resolve_gate_base_reference_flags_an_unresolvable_merge_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, orphan_branch_tip = _build_unrelated_history_repository(tmp_path)
+    monkeypatch.chdir(repository)
+    assert (
+        pre_push.run_git_reference_query(
+            ("git", "merge-base", orphan_branch_tip, ORIGIN_DEFAULT_BRANCH_REFERENCE)
+        )
+        is None
+    ), "fixture branch shares history with the default branch"
+    stdin_text = _push_stdin_line(
+        FEATURE_BRANCH_NAME,
+        orphan_branch_tip,
+        FEATURE_BRANCH_NAME,
+        NON_ZERO_REMOTE_SHA_ONE,
+    )
+
+    base_reference = pre_push.resolve_gate_base_reference(stdin_text)
+
+    assert base_reference == git_hooks_constants.UNRESOLVABLE_MERGE_BASE_SENTINEL
+
+
+def test_resolve_gate_base_reference_flags_a_dangling_origin_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "dangling_origin_head_repository"
+    repository.mkdir()
+    _run_fixture_git(repository, "init", "-b", DEFAULT_BRANCH_NAME)
+    pushed_object_name = _commit_file(repository, BASE_FILE_NAME)
+    _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
+    monkeypatch.chdir(repository)
+    stdin_text = _push_stdin_line(
+        FEATURE_BRANCH_NAME,
+        pushed_object_name,
+        FEATURE_BRANCH_NAME,
+        NON_ZERO_REMOTE_SHA_ONE,
+    )
+
+    base_reference = pre_push.resolve_gate_base_reference(stdin_text)
+
+    assert base_reference == git_hooks_constants.UNRESOLVABLE_MERGE_BASE_SENTINEL
+
+
+def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "dangling_origin_head_push_repository"
+    repository.mkdir()
+    _run_fixture_git(repository, "init", "-b", DEFAULT_BRANCH_NAME)
+    pushed_object_name = _commit_file(repository, BASE_FILE_NAME)
+    _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
+    _write_diff_scoped_gate(tmp_path, monkeypatch)
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            _push_stdin_line(
+                FEATURE_BRANCH_NAME,
+                pushed_object_name,
+                FEATURE_BRANCH_NAME,
+                NON_ZERO_REMOTE_SHA_ONE,
+            )
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+
+
+def test_main_skips_the_gate_when_no_merge_base_resolves(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository, orphan_branch_tip = _build_unrelated_history_repository(tmp_path)
+    recorded_arguments_path = tmp_path / "unreached_gate_arguments.txt"
+    recording_gate_script_path = tmp_path / "unreached_recording_gate.py"
+    recording_gate_script_path.write_text(
+        "import sys, pathlib\n"
+        f'pathlib.Path(r"{recorded_arguments_path}").write_text('
+        "'\\n'.join(sys.argv[1:]), encoding='utf-8')\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            _push_stdin_line(
+                FEATURE_BRANCH_NAME,
+                orphan_branch_tip,
+                FEATURE_BRANCH_NAME,
+                NON_ZERO_REMOTE_SHA_ONE,
+            )
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+    assert not recorded_arguments_path.exists(), (
+        "the gate ran on a base the hook could not verify"
+    )
+    assert git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE in capsys.readouterr().err
 
 
 def test_main_allows_default_branch_file_the_rebase_replayed_onto(
@@ -1170,7 +1335,7 @@ def test_main_allows_when_code_review_enforcement_flag_is_off(
     deny reason and the backstop allows the push — one path covering flag,
     real gate load, and pre-push exit together.
     """
-    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
     real_gate_path = (
         Path(__file__).resolve().parent.parent
         / "blocking"
