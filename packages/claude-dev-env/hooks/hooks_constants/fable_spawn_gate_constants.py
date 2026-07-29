@@ -46,5 +46,17 @@ DENY_REASON: str = (
     "party that may place that token."
 )
 
+DENY_ADDITIONAL_CONTEXT: str = (
+    "[fable-spawn-gate] This Agent/Task spawn was denied: the model field "
+    "names the fable tier and the spawn prompt carries no authorization "
+    "marker. Preferred recovery: re-spawn at model opus, or an "
+    "opus-equivalent tier (sonnet/haiku when opus is unavailable) — those "
+    "tiers need no marker. Authorized fable bind only: put the token named "
+    f"in {ADVISOR_PROTOCOL_DOCUMENT_PATH} into the spawn prompt (segment "
+    "match), then retry. Only the orchestrating session that holds the "
+    "advisor bind may place that token. Do not paste this denial into a "
+    "retry prompt — it does not authorize the spawn."
+)
+
 DENY_PREVIEW_TEMPLATE: str = "model={model_text} marker_present=False"
 MAXIMUM_PREVIEW_MODEL_LENGTH: int = 40

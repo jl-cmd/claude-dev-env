@@ -13,6 +13,8 @@ The gate reads an ``Agent`` or ``Task`` call and finds the tier in the model
 field whether that field carries the bare alias or a full model id, in any
 letter case. Its deny reason points at the advisor-protocol document rather
 than quoting the token, so a denial pasted into a retry authorizes nothing.
+A deny also sets ``additionalContext`` so the spawner sees the recovery path
+(re-spawn at opus / an opus-equivalent tier, or authorize a fable bind).
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ if _hooks_dir not in sys.path:
 from hooks_constants.fable_spawn_gate_constants import (  # noqa: E402
     ALL_SPAWN_TOOL_NAMES,
     CALLING_HOOK_NAME,
+    DENY_ADDITIONAL_CONTEXT,
     DENY_PREVIEW_TEMPLATE,
     DENY_REASON,
     FABLE_MODEL_ALIAS,
@@ -154,6 +157,7 @@ def _emit_denial(
             "hookEventName": HOOK_EVENT_NAME,
             "permissionDecision": "deny",
             "permissionDecisionReason": DENY_REASON,
+            "additionalContext": DENY_ADDITIONAL_CONTEXT,
         }
     }
     log_hook_block(

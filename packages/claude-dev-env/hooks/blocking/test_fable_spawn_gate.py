@@ -49,6 +49,7 @@ from hooks_constants.fable_spawn_gate_constants import (
     ADVISOR_PROTOCOL_DOCUMENT_PATH,
     AGENT_TOOL_NAME,
     CALLING_HOOK_NAME,
+    DENY_ADDITIONAL_CONTEXT,
     FABLE_MODEL_ALIAS,
     FABLE_SPAWN_AUTHORIZATION_MARKER,
     TASK_TOOL_NAME,
@@ -219,6 +220,23 @@ def test_deny_reason_names_the_document_without_the_token() -> None:
     deny_reason = _deny_reason_for(_spawn_payload())
     assert ADVISOR_PROTOCOL_DOCUMENT_PATH in deny_reason
     assert FABLE_SPAWN_AUTHORIZATION_MARKER not in deny_reason
+
+
+def _additional_context_for(payload: dict[str, Any]) -> str:
+    """Return hookSpecificOutput.additionalContext for a denied spawn."""
+    captured_output = _run_main_with_io(json.dumps(payload))
+    return str(json.loads(captured_output)["hookSpecificOutput"]["additionalContext"])
+
+
+def test_deny_payload_carries_additional_context_for_the_spawner() -> None:
+    """A denial injects recovery steps into additionalContext for the spawner."""
+    additional_context = _additional_context_for(_spawn_payload())
+    assert additional_context == DENY_ADDITIONAL_CONTEXT
+    assert "fable-spawn-gate" in additional_context
+    assert "opus" in additional_context.lower()
+    assert "opus-equivalent" in additional_context.lower()
+    assert ADVISOR_PROTOCOL_DOCUMENT_PATH in additional_context
+    assert FABLE_SPAWN_AUTHORIZATION_MARKER not in additional_context
 
 
 def test_spawn_prompt_carrying_the_deny_text_still_denies() -> None:
