@@ -28,7 +28,7 @@ const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics', 'output-styles'];
 
 /**
  * Every top-level directory under ~/.claude the installer writes into: the
@@ -52,7 +52,7 @@ const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
 
 export const CORE_INCLUDE_DIRECTORIES = [
-    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
+    'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts', 'output-styles',
 ];
 
 export const CORE_SKILLS = [

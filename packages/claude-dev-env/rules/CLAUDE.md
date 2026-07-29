@@ -13,7 +13,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 |---|---|
 | `agent-spawn-protocol.md` | Check context sufficiency before a spawn and ask subagents for file-and-line answers; `/prompt-generator` is recommended for a complex or user-facing spawn |
 | `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
-| `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
+| `ask-user-question-required.md` | Route user questions through `AskUserQuestion`; lead with context; write plain-brief option prose |
 | `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
 | `cleanup-temp-files.md` | Remove temporary files created during a task when the task is complete |
 | `code-standards.md` | Pointer to `CODE_RULES.md` as the single source of truth, including §8 (TDD) and §7 (right-sizing); BDD is the outer process and TDD the inner loop |

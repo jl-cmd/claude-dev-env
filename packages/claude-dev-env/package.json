@@ -23,6 +23,7 @@
         "codex-capability-map.json",
         "_shared/",
         "audit-rubrics/",
+        "output-styles/",
         "CLAUDE.md",
         "!**/__pycache__/**",
         "!**/*.py[cod]",
