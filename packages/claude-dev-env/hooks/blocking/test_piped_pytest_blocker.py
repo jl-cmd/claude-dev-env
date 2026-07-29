@@ -98,6 +98,49 @@ ALL_FLAGGED_WRAPPER_PYTEST_COMMANDS = [
     "sudo -- pytest tests | tee run.log",
 ]
 
+ALL_CLUSTERED_SHORT_OPTION_PYTEST_COMMANDS = [
+    "sudo -nu ci pytest tests | tee run.log",
+    "sudo -nuci pytest tests | tee run.log",
+]
+
+ALL_SHELL_OPTION_VALUE_PYTEST_COMMANDS = [
+    "bash -o pipefail -c 'pytest tests | tee run.log'",
+    "bash -euo pipefail -c 'pytest tests | tee run.log'",
+    "pwsh -ExecutionPolicy Bypass -Command 'pytest tests | tee run.log'",
+]
+
+ALL_CLUSTERED_STRING_EXEC_PYTEST_COMMANDS = [
+    "bash -euc 'pytest tests | tee run.log'",
+    "bash -ec 'pytest tests | tee run.log'",
+    "bash -xc 'pytest tests | tee run.log'",
+    "bash -ceu 'pytest tests | tee run.log'",
+    "sh -ec 'pytest tests | tee run.log'",
+    "bash -euoc pipefail 'pytest tests | tee run.log'",
+]
+
+ALL_COVERAGE_RUN_PYTEST_COMMANDS = [
+    "coverage run -m pytest tests | tee run.log",
+    "coverage run pytest tests | tee run.log",
+]
+
+ALL_TOOL_RUNNER_WRAPPER_PYTEST_COMMANDS = [
+    "uvx pytest tests | tee run.log",
+    "uvx --from pytest-xdist pytest tests | tee run.log",
+    "uv tool run pytest tests | tee run.log",
+    "uv tool run --from pytest-xdist pytest tests | tee run.log",
+    "pdm run pytest tests | tee run.log",
+    "hatch run pytest tests | tee run.log",
+    "rye run pytest tests | tee run.log",
+]
+
+ALL_ALTERNATE_INTERPRETER_PYTEST_COMMANDS = [
+    "python3.13t -m pytest tests | tee run.log",
+    "pypy3 -m pytest tests | tee run.log",
+    "pythonw -m pytest tests | tee run.log",
+    "pyw -m pytest tests | tee run.log",
+    "pythonw3.13.exe -m pytest tests | tee run.log",
+]
+
 MULTI_LINE_SUBSHELL_PYTEST_COMMAND = "(\npython -m pytest tests\n) | tee run.log"
 SUBSHELL_WRITING_A_PIPED_PYTEST_HEREDOC = (
     "(\ncat > run.sh <<'EOF'\npytest tests | tee out.log\nEOF\n) | tee wrote.log"
@@ -134,6 +177,16 @@ ALL_WIDE_HEREDOC_SCRIPT_TEMPLATES = [
 HERE_STRING_ABOVE_A_PIPED_PYTEST_RUN = "cat file <<<word\npytest tests | tee run.log"
 COMMAND_AFTER_A_HEREDOC = "cat > run.sh <<'EOF'\necho hi\nEOF\npytest tests | tee out.log"
 
+HEREDOC_BODY_LINE_SPACED_LIKE_ITS_TERMINATOR = (
+    "cat > run.sh <<EOF\n  EOF  \npytest tests | tee out.log\nEOF"
+)
+LIVE_RUN_BELOW_A_SPACED_TERMINATOR_LOOKALIKE = (
+    f"{HEREDOC_BODY_LINE_SPACED_LIKE_ITS_TERMINATOR}\npytest tests | tee live.log"
+)
+LIVE_RUN_BELOW_A_TAB_INDENTED_TERMINATOR = (
+    "cat > run.sh <<-EOF\npytest tests | tee out.log\n\tEOF\npytest tests | tee live.log"
+)
+
 ALL_LINE_CONTINUATION_TERMINATORS = ["\r\n", "\r", "\n"]
 
 ALL_EXIT_CODE_PRESERVING_COMMANDS = [
@@ -162,6 +215,19 @@ ALL_EXIT_CODE_PRESERVING_COMMANDS = [
     "uv run --directory sub mypy . | tee types.log",
     "sudo -u pytest apt update | tee log",
     "bash -- -c 'pytest tests' | tee run.log",
+    "bash scripts/ci.sh -c 'pytest tests'",
+    "pwsh -File run.ps1 -c 'pytest tests' | tee run.log",
+    "sudo -nu ci apt update | tee log",
+    "sudo -nuci apt update | tee log",
+    "coverage run -m mypy . | tee types.log",
+    "coverage run --source pytest -m mypy . | tee types.log",
+    "pyright -m pytest . | tee out.log",
+    "bash -Cu scripts/ci.sh | tee run.log",
+    "bash -eux scripts/ci.sh | tee run.log",
+    "pwsh -NonInteractive -File run.ps1 | tee run.log",
+    "uvx mypy . | tee types.log",
+    "uv tool install pytest | tee install.log",
+    "pdm run mypy . | tee types.log",
 ]
 
 
@@ -237,6 +303,66 @@ def test_denies_a_brace_group_whose_last_command_is_pytest(each_command: str) ->
 def test_denies_a_pytest_run_behind_a_wrapper_carrying_its_own_flags(each_command: str) -> None:
     """A wrapper's own flags sit before the program, so the run behind them still counts."""
     assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_CLUSTERED_SHORT_OPTION_PYTEST_COMMANDS)
+def test_denies_a_pytest_run_behind_a_clustered_short_option_wrapper(each_command: str) -> None:
+    """A cluster ending in a value-taking flag takes the token after it, not the program."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_SHELL_OPTION_VALUE_PYTEST_COMMANDS)
+def test_denies_a_wrapped_pytest_run_behind_a_shell_option_carrying_a_value(
+    each_command: str,
+) -> None:
+    """A shell option's value is not the operand, so the string-exec flag behind it counts."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_CLUSTERED_STRING_EXEC_PYTEST_COMMANDS)
+def test_denies_a_wrapped_pytest_run_behind_a_clustered_string_exec_flag(
+    each_command: str,
+) -> None:
+    """A POSIX shell reads the ``-c`` inside ``-euc``, so the string behind it is a command."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_COVERAGE_RUN_PYTEST_COMMANDS)
+def test_denies_a_pytest_run_behind_a_coverage_run_wrapper(each_command: str) -> None:
+    """``coverage run`` exits with the program's code, so the pytest behind it counts."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_TOOL_RUNNER_WRAPPER_PYTEST_COMMANDS)
+def test_denies_a_pytest_run_behind_a_tool_runner_wrapper(each_command: str) -> None:
+    """Each tool runner exits with the program's code, so the pytest behind it counts."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+@pytest.mark.parametrize("each_command", ALL_ALTERNATE_INTERPRETER_PYTEST_COMMANDS)
+def test_denies_a_pytest_module_run_under_an_alternate_interpreter(each_command: str) -> None:
+    """A free-threaded build and PyPy run the module the same way CPython does."""
+    assert find_piped_pytest_violation(each_command) == CORRECTIVE_MESSAGE
+
+
+def test_allows_a_heredoc_whose_body_line_is_its_terminator_with_surrounding_spaces() -> None:
+    """Bash closes a ``<<`` heredoc on the exact word only, so a spaced lookalike is body text."""
+    assert find_piped_pytest_violation(HEREDOC_BODY_LINE_SPACED_LIKE_ITS_TERMINATOR) is None
+
+
+def test_denies_a_live_run_below_a_heredoc_a_spaced_lookalike_did_not_close() -> None:
+    """Scanning resumes at the exact terminator, so the run under it is live and denies."""
+    assert (
+        find_piped_pytest_violation(LIVE_RUN_BELOW_A_SPACED_TERMINATOR_LOOKALIKE)
+        == CORRECTIVE_MESSAGE
+    )
+
+
+def test_denies_a_live_run_below_a_tab_indented_terminator_that_closes_its_heredoc() -> None:
+    """``<<-`` strips leading tabs, so a tab-indented terminator still closes the body."""
+    assert (
+        find_piped_pytest_violation(LIVE_RUN_BELOW_A_TAB_INDENTED_TERMINATOR) == CORRECTIVE_MESSAGE
+    )
 
 
 def test_denies_a_piped_pytest_run_placed_below_a_here_string() -> None:

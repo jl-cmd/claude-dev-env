@@ -13,25 +13,45 @@ tokens, the empty commenter set that leaves ``#`` to the comment-start pattern,
 the quote characters stripped before a basename read, and the deny message.
 Segment helpers come from ``shell_command_segments.py``.
 
-Two wrapper shapes reach the program behind them differently. ``sudo`` takes
-its own option flags and then the command, so the step-over drops the flags.
-``uv``, ``poetry``, and ``pipenv`` take the literal ``run`` subcommand first, so
-the step-over reads that word and passes only when it is there — ``uv sync``
-keeps ``uv`` as its own program. A ``run`` subcommand takes its own flags too,
+Two wrapper shapes reach the program behind them differently. ``sudo`` and
+``uvx`` take their own option flags and then the command, so the step-over drops
+the flags. ``uv``, ``poetry``, ``pipenv``, ``pdm``, ``hatch``, ``rye``, and
+``coverage`` take the literal ``run`` subcommand first, so the step-over reads
+that word and passes only when it is there — ``uv sync`` and ``coverage report``
+keep the wrapper as its own program. ``uv`` spells the same pass-through as
+``uv tool run`` too, so ``TOOL_SUBCOMMAND_NAME`` names the word the step-over
+reads before it looks for ``run``. A ``run`` subcommand takes its own flags too,
 so the step-over drops those before it reads the program.
 
 An option that takes a separate value swallows the token after it, so
 ``sudo -u someone pytest`` runs pytest while ``uv run --with pytest mypy .``
 runs mypy. ``ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS`` names those flags so the
-operand scan reads past the value rather than mistaking it for the program.
+operand scan reads past the value rather than mistaking it for the program, and
+``ALL_VALUE_TAKING_SHELL_OPTION_FLAGS`` does the same for the shells that run a
+command string, so the ``-c`` behind ``bash -o pipefail`` stays visible. POSIX
+lets short options cluster, and a cluster's value is the next token only when
+the value-taking letter ends the cluster — ``sudo -nu ci`` takes ``ci`` while
+``sudo -nuci`` carries the value glued on. ``SHORT_OPTION_CLUSTER_PATTERN``
+marks the tokens that walk letter by letter for that reading.
 ``--`` ends an option list outright: every token after it is an operand however
 it is spelled, so ``bash -- -c script`` runs a script named ``-c`` rather than a
 command string.
+
+A POSIX shell reads ``-c`` inside a cluster as well, so ``bash -euc 'pytest'``
+runs the command string the same way ``bash -c 'pytest'`` does.
+``ALL_CLUSTERED_STRING_EXEC_OPTION_LETTERS`` names the letters that carry that
+reading, and ``ALL_SHORT_OPTION_CLUSTERING_SHELL_BASENAMES`` limits it to the
+shells that cluster: PowerShell spells its options as words, where the ``c`` in
+``-NonInteractive`` is a letter of a name rather than an option of its own. The
+letter check reads the token in its own case, because ``-C`` is bash's noclobber
+switch while ``-c`` takes the command string.
 
 A heredoc delimiter is any shell word, so the opener pattern takes one written
 bare, quoted, or backslash-escaped (``<<\\EOF`` quotes the delimiter the way
 ``<<'EOF'`` does). ``<<<`` is a here-string rather than a heredoc, so the
 pattern refuses to read one as an opener and leave the lines below it unread.
+The opener also reports its own ``-``, because ``<<`` closes on a line spelling
+the delimiter exactly while ``<<-`` closes on one carrying leading tabs.
 
 The string-executing shell basenames and command flags start from the shared
 ``unscoped_search_blocker_constants.py`` sets and add the Windows command shell
@@ -71,12 +91,18 @@ __all__ = [
     "ALL_REDIRECTION_SUFFIX_CHARACTERS",
     "ALL_STRING_EXECUTING_SHELL_BASENAMES",
     "ALL_STRING_EXEC_COMMAND_FLAGS",
+    "ALL_CLUSTERED_STRING_EXEC_OPTION_LETTERS",
+    "ALL_SHORT_OPTION_CLUSTERING_SHELL_BASENAMES",
     "COMMAND_OPTION_TOKEN_PATTERN",
+    "SHORT_OPTION_CLUSTER_PATTERN",
+    "SHORT_OPTION_PREFIX",
     "END_OF_OPTIONS_TOKEN",
     "ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS",
+    "ALL_VALUE_TAKING_SHELL_OPTION_FLAGS",
     "ALL_FLAG_TAKING_WRAPPER_COMMANDS",
     "ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS",
     "RUN_SUBCOMMAND_NAME",
+    "TOOL_SUBCOMMAND_NAME",
     "WRAPPED_COMMAND_TOKEN_JOIN",
     "DISABLED_LEXER_COMMENTERS",
     "LINE_CONTINUATION_PATTERN",
@@ -92,7 +118,11 @@ __all__ = [
     "PAREN_GROUP_LINE_JOIN",
     "CLOSED_GROUP_DEPTH",
     "HEREDOC_OPENER_PATTERN",
+    "HEREDOC_TAB_STRIP_GROUP",
+    "HEREDOC_QUOTE_GROUP",
     "HEREDOC_TERMINATOR_GROUP",
+    "HEREDOC_TAB_STRIP_MARKER",
+    "HEREDOC_STRIPPED_INDENT_CHARACTERS",
     "NO_FOLLOWING_OPERATOR",
     "ALL_QUOTE_CHARACTERS",
     "HOOK_EVENT_NAME",
@@ -116,7 +146,9 @@ ALL_PYTEST_PROGRAM_BASENAMES: frozenset[str] = frozenset(
         "py.test.cmd",
     }
 )
-PYTHON_INTERPRETER_BASENAME_PATTERN = re.compile(r"^(?:python[0-9._]*|py)(?:\.exe|\.bat|\.cmd)?$")
+PYTHON_INTERPRETER_BASENAME_PATTERN = re.compile(
+    r"^(?:(?:python|pypy)w?[0-9._]*t?|pyw?)(?:\.exe|\.bat|\.cmd)?$"
+)
 MODULE_RUN_FLAG = "-m"
 PYTEST_MODULE_NAME = "pytest"
 
@@ -148,7 +180,13 @@ ALL_STRING_EXECUTING_SHELL_BASENAMES: frozenset[str] = (
 ALL_STRING_EXEC_COMMAND_FLAGS: frozenset[str] = (
     _ALL_SHARED_STRING_EXEC_COMMAND_FLAGS | _ALL_WINDOWS_COMMAND_SHELL_FLAGS
 )
+ALL_CLUSTERED_STRING_EXEC_OPTION_LETTERS: frozenset[str] = frozenset({"c"})
+ALL_SHORT_OPTION_CLUSTERING_SHELL_BASENAMES: frozenset[str] = frozenset(
+    {"bash", "bash.exe", "sh", "sh.exe"}
+)
 COMMAND_OPTION_TOKEN_PATTERN = re.compile(r"^(?:-.*|/[A-Za-z])$")
+SHORT_OPTION_CLUSTER_PATTERN = re.compile(r"-[A-Za-z]{2,}")
+SHORT_OPTION_PREFIX = "-"
 END_OF_OPTIONS_TOKEN = "--"
 ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS: frozenset[str] = frozenset(
     {
@@ -163,23 +201,65 @@ ALL_VALUE_TAKING_WRAPPER_OPTION_FLAGS: frozenset[str] = frozenset(
         "-r",
         "-t",
         "-u",
+        "--concurrency",
+        "--context",
+        "--data-file",
         "--directory",
         "--env-file",
         "--extra",
+        "--from",
         "--group",
+        "--include",
+        "--omit",
         "--package",
         "--project",
         "--python",
+        "--rcfile",
+        "--source",
         "--user",
         "--with",
     }
 )
+ALL_VALUE_TAKING_SHELL_OPTION_FLAGS: frozenset[str] = frozenset(
+    {
+        "-o",
+        "--rcfile",
+        "--init-file",
+        "-configurationname",
+        "-custompipename",
+        "-executionpolicy",
+        "-inputformat",
+        "-outputformat",
+        "-settingsfile",
+        "-version",
+        "-windowstyle",
+        "-workingdirectory",
+    }
+)
 
-ALL_FLAG_TAKING_WRAPPER_COMMANDS: frozenset[str] = frozenset({"sudo", "sudo.exe"})
+ALL_FLAG_TAKING_WRAPPER_COMMANDS: frozenset[str] = frozenset(
+    {"sudo", "sudo.exe", "uvx", "uvx.exe"}
+)
 ALL_RUN_SUBCOMMAND_WRAPPER_COMMANDS: frozenset[str] = frozenset(
-    {"uv", "uv.exe", "poetry", "poetry.exe", "pipenv", "pipenv.exe"}
+    {
+        "uv",
+        "uv.exe",
+        "poetry",
+        "poetry.exe",
+        "pipenv",
+        "pipenv.exe",
+        "pdm",
+        "pdm.exe",
+        "hatch",
+        "hatch.exe",
+        "rye",
+        "rye.exe",
+        "coverage",
+        "coverage.exe",
+    }
 )
 RUN_SUBCOMMAND_NAME = "run"
+TOOL_SUBCOMMAND_NAME = "tool"
 WRAPPED_COMMAND_TOKEN_JOIN = " "
 DISABLED_LEXER_COMMENTERS = ""
 
@@ -201,10 +281,16 @@ ALL_GROUP_CLOSE_TOKENS: frozenset[str] = frozenset(
 PAREN_GROUP_LINE_JOIN = " "
 CLOSED_GROUP_DEPTH = 0
 _HEREDOC_DELIMITER_CHARACTER_CLASS = r"[^\s'\"<>|&;()`$\\]"
+HEREDOC_TAB_STRIP_GROUP = "heredoc_tab_strip"
+HEREDOC_QUOTE_GROUP = "heredoc_quote"
+HEREDOC_TERMINATOR_GROUP = "heredoc_terminator"
 HEREDOC_OPENER_PATTERN = re.compile(
-    rf"(?<!<)<<(?!<)-?\s*(['\"]?)\\?({_HEREDOC_DELIMITER_CHARACTER_CLASS}+)\1"
+    rf"(?<!<)<<(?!<)(?P<{HEREDOC_TAB_STRIP_GROUP}>-?)\s*(?P<{HEREDOC_QUOTE_GROUP}>['\"]?)\\?"
+    rf"(?P<{HEREDOC_TERMINATOR_GROUP}>{_HEREDOC_DELIMITER_CHARACTER_CLASS}+)"
+    rf"(?P={HEREDOC_QUOTE_GROUP})"
 )
-HEREDOC_TERMINATOR_GROUP = 2
+HEREDOC_TAB_STRIP_MARKER = "-"
+HEREDOC_STRIPPED_INDENT_CHARACTERS = "\t"
 NO_FOLLOWING_OPERATOR = ""
 ALL_QUOTE_CHARACTERS = "\"'"
 
