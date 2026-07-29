@@ -129,6 +129,43 @@ def test_reference_listing_with_locale_invalid_bytes_resolves_a_base(
     assert resolved_reference == RESOLVED_REMOTE_MAIN_REFERENCE
 
 
+def test_run_git_reference_query_returns_replaced_text_on_locale_invalid_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """text=True would raise; bytes mode returns the replacing-policy decode."""
+    locale_invalid_reference_bytes = b"refs/remotes/origin/caf\xe9"
+    expected_replaced_reference = locale_invalid_reference_bytes.decode(
+        git_hooks_constants.GIT_OUTPUT_ENCODING_NAME,
+        errors=git_hooks_constants.GIT_OUTPUT_DECODE_ERRORS_POLICY,
+    )
+
+    def answer_with_locale_invalid_reference(
+        all_command_arguments: list[str], **all_keyword_arguments: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        if all_keyword_arguments.get(TEXT_DECODING_KEYWORD):
+            raise _refuse_locale_decoding()
+        return _completed_git_process(
+            all_command_arguments,
+            GIT_RESOLVED_EXIT_CODE,
+            locale_invalid_reference_bytes,
+        )
+
+    monkeypatch.setattr(subprocess, "run", answer_with_locale_invalid_reference)
+
+    resolved_output = pre_push.run_git_reference_query(
+        ("git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/HEAD")
+    )
+
+    assert resolved_output == expected_replaced_reference
+
+
+def test_unresolvable_merge_base_message_does_not_claim_dangling_origin_head() -> None:
+    skip_message = git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE
+    assert "origin/HEAD names a ref" not in skip_message
+    assert "unrelated histories" in skip_message
+    assert "merge-base still could not name a shared commit" in skip_message
+
+
 def test_run_git_text_command_raises_when_git_cannot_launch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

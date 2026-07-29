@@ -33,11 +33,13 @@ push of any other object is still scoped to HEAD.
 
 Exit codes:
   0 - the push destination is allowed and its commits pass the gate (or
-      the gate is not installed, or the gate base could not be resolved).
+      the gate is not installed, or CODE_RULES is skipped because a
+      default-branch ref resolved and git still reported no merge base).
   1 - the push would land a non-protected local branch onto a protected
       remote branch, or a commit introduces a blocking violation.
-  2 - unexpected invocation failure (e.g., subprocess could not launch), or
-      stdin carried no parseable line.
+  2 - unexpected invocation failure (e.g., subprocess could not launch),
+      stdin carried no parseable line, or a new-branch/empty-stdin base
+      could not be turned into a usable commit name.
 """
 
 from __future__ import annotations
@@ -273,6 +275,9 @@ def resolve_base_reference_from_stdin(stdin_text: str) -> str | None:
 def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
     """Return the stripped stdout of a read-only git query.
 
+    Output decodes with the same replacing policy as ``run_git_text_command``,
+    so locale-invalid bytes become a marked string instead of crashing the hook.
+
     Args:
         all_git_arguments: The full git argv, including the ``git`` word.
 
@@ -284,7 +289,6 @@ def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
         completion = subprocess.run(
             list(all_git_arguments),
             capture_output=True,
-            text=True,
             check=False,
             timeout=GIT_REFERENCE_QUERY_TIMEOUT_SECONDS,
         )
@@ -292,7 +296,10 @@ def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
         return None
     if completion.returncode != 0:
         return None
-    return completion.stdout.strip() or None
+    decoded_output = completion.stdout.decode(
+        GIT_OUTPUT_ENCODING_NAME, errors=GIT_OUTPUT_DECODE_ERRORS_POLICY
+    )
+    return decoded_output.strip() or None
 
 
 def resolve_default_branch_reference() -> str | None:
