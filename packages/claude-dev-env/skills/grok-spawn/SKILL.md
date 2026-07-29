@@ -146,6 +146,11 @@ Shape:
 | `max_turns` | Turn cap (default 8) |
 | `agent_name` | Optional `--agent` name, or `null` |
 
+A worker entry accepts these fields and no others. Any other key fails the
+load with an error naming the stray key and listing the accepted set, so a
+misspelled field shows up at startup rather than passing for a setting that
+took effect.
+
 Put the spec file under the run state directory (or any path you pass to
 `--spec`).
 

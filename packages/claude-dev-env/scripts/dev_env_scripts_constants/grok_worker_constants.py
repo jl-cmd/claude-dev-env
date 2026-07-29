@@ -327,6 +327,33 @@ WORKER_SPEC_MAX_TURNS_KEY: str = "max_turns"
 WORKER_SPEC_AGENT_NAME_KEY: str = "agent_name"
 """JSON key for one worker's optional agent definition name."""
 
+ALL_KNOWN_WORKER_SPEC_KEYS: frozenset[str] = frozenset(
+    {
+        WORKER_SPEC_ROLE_NAME_KEY,
+        WORKER_SPEC_PROMPT_PARTS_KEY,
+        WORKER_SPEC_CWD_KEY,
+        WORKER_SPEC_TOOL_PROFILE_KEY,
+        WORKER_SPEC_TIMEOUT_KEY,
+        WORKER_SPEC_IS_REPO_ONLY_KEY,
+        WORKER_SPEC_MAX_TURNS_KEY,
+        WORKER_SPEC_AGENT_NAME_KEY,
+    }
+)
+"""Every JSON key a batch worker entry accepts.
+
+A worker entry carrying any other key fails to load, so a key the launcher
+would drop is named to the operator rather than passing for a setting that
+took effect.
+"""
+
+WORKER_SPEC_KEY_JOIN_SEPARATOR: str = ", "
+"""Separator between key names listed in an unknown-worker-key error message."""
+
+UNKNOWN_WORKER_KEY_ERROR_TEMPLATE: str = (
+    "unknown worker key(s): {unknown_keys}; accepted keys: {accepted_keys}"
+)
+"""Message raised when a worker entry carries a key outside the accepted set."""
+
 CLI_BATCH_SPEC_FLAG: str = "--spec"
 """CLI flag that points the batch launcher at a JSON batch specification file."""
 
