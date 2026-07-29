@@ -162,4 +162,14 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
         native_module_name=PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
     ),
+    HostedHookEntry(
+        script_relative_path="advisory/refactor_guard.py",
+        applicable_tool_names=frozenset({EDIT_TOOL_NAME}),
+        is_blocking=False,
+    ),
+    HostedHookEntry(
+        script_relative_path="advisory/migration_safety_advisor.py",
+        applicable_tool_names=frozenset({EDIT_TOOL_NAME}),
+        is_blocking=False,
+    ),
 )

@@ -87,6 +87,33 @@ def test_blocking_hook_crash_deny_reason_surfaces_the_constant() -> None:
     assert BLOCKING_CRASH_DENY_REASON in decision.all_deny_reasons
 
 
+def test_refactor_guard_is_hosted_as_an_edit_only_advisory_hook() -> None:
+    entry = _entry_for("advisory/refactor_guard.py")
+    assert entry is not None, (
+        "refactor_guard must be hosted by the dispatcher rather than spawning its own process"
+    )
+    assert entry.applicable_tool_names == frozenset({EDIT_TOOL_NAME})
+    assert entry.is_blocking is False
+
+
+def test_migration_safety_advisor_is_hosted_as_an_edit_only_advisory_hook() -> None:
+    entry = _entry_for("advisory/migration_safety_advisor.py")
+    assert entry is not None, (
+        "migration_safety_advisor must be hosted by the dispatcher rather than "
+        "spawning its own process"
+    )
+    assert entry.applicable_tool_names == frozenset({EDIT_TOOL_NAME})
+    assert entry.is_blocking is False
+
+
+def test_every_hosted_script_path_exists_under_the_hooks_root() -> None:
+    for each_entry in ALL_HOSTED_HOOK_ENTRIES:
+        hosted_script_path = _HOOKS_ROOT / each_entry.script_relative_path
+        assert hosted_script_path.is_file(), (
+            f"{each_entry.script_relative_path} is on the roster but missing from the hooks tree"
+        )
+
+
 def test_every_native_module_exposes_a_callable_evaluate() -> None:
     nativized_entries = [
         each_entry
