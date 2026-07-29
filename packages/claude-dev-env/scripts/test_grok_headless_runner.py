@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -18,17 +19,20 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import grok_headless_runner as runner  # noqa: E402
+import process_tree_kill  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALWAYS_APPROVE_FLAG,
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
+    CLASSIFICATION_KILL_FAILED,
     CLASSIFICATION_OK,
     CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     CWD_FLAG,
     GROK_BINARY_NAME,
     GROK_BINARY_NOT_FOUND_STDERR,
+    KILL_FAILED_RETURN_CODE,
     KILL_GRACE_TIMEOUT_SECONDS,
     LAUNCH_FAILURE_RETURN_CODE,
     LAUNCH_FAILURE_STDERR_PREFIX,
@@ -36,9 +40,12 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
     MAX_TURNS_FLAG,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
+    MIN_WORKER_TIMEOUT_SECONDS,
     MISSING_BINARY_RETURN_CODE,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
+    PROCESS_TREE_KILL_ATTEMPT_LIMIT,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
     UTF8_DECODE_ERRORS,
@@ -61,8 +68,37 @@ FIXTURE_GENERIC_FAILURE_STDERR = (
     f"grok {FIXTURE_GROK_BINARY_VERSION}: Error: internal failure"
 )
 
-DEFAULT_MAX_TURNS = 8
+FIXTURE_TURN_CAP_CANCELLED_STDERR = (
+    f"grok {FIXTURE_GROK_BINARY_VERSION}: run ended with stopReason Cancelled "
+    "after the turn cap was reached"
+)
+
+FIXTURE_MULTI_TURN_REPORT = '{"turns_used":16,"status":"done"}'
+
 DEFAULT_TIMEOUT_SECONDS = 30
+TINY_TURN_CAP = 8
+FAKE_PROCESS_IDENTIFIER = 424242
+TINY_TIMEOUT_SECONDS = 1
+NON_POSITIVE_TIMEOUT_SECONDS = 0
+SHORT_KILL_GRACE_SECONDS = 2
+GRANDCHILD_QUIET_DEADLINE_SECONDS = 15.0
+GRANDCHILD_QUIET_REQUIRED_SECONDS = 1.5
+GRANDCHILD_POLL_INTERVAL_SECONDS = 0.1
+
+GRANDCHILD_HEARTBEAT_SOURCE = (
+    "import sys, time\n"
+    "heartbeat_path = sys.argv[1]\n"
+    "for each_beat in range(600):\n"
+    "    with open(heartbeat_path, 'a', encoding='utf-8') as heartbeat_handle:\n"
+    "        heartbeat_handle.write('beat\\n')\n"
+    "    time.sleep(0.1)\n"
+)
+
+PARENT_SPAWNS_GRANDCHILD_SOURCE = (
+    "import subprocess, sys, time\n"
+    "subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2]])\n"
+    "time.sleep(600)\n"
+)
 
 
 class _FakeProcess:
@@ -76,6 +112,7 @@ class _FakeProcess:
         returncode_after_kill: int | None = None,
     ) -> None:
         self.returncode = returncode
+        self.pid = FAKE_PROCESS_IDENTIFIER
         self._stdout = stdout
         self._stderr = stderr
         self._should_timeout = should_timeout
@@ -93,12 +130,129 @@ class _FakeProcess:
             )
         return self._stdout, self._stderr
 
+    def poll(self) -> int | None:
+        if not self.was_killed:
+            return None
+        return self.returncode
+
     def kill(self) -> None:
         self.was_killed = True
         if self._returncode_after_kill is not None:
             self.returncode = self._returncode_after_kill
             return
         self.returncode = -9
+
+
+class _TreeKillRecorder:
+    """Stands in for ``subprocess.run`` so no real taskkill leaves the test."""
+
+    def __init__(self) -> None:
+        self.all_invocations: list[list[str]] = []
+        self.all_keyword_arguments: list[dict[str, object]] = []
+
+    def __call__(
+        self, invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        self.all_invocations.append(list(invocation))
+        self.all_keyword_arguments.append(dict(keyword_arguments))
+        return subprocess.CompletedProcess(args=invocation, returncode=0)
+
+
+class _KillResistantProcess:
+    """Wraps a real process so a chosen number of ``kill()`` calls are dropped.
+
+    Models a kill that does not take: the call returns, the process lives on.
+    """
+
+    def __init__(
+        self,
+        real_process: subprocess.Popen[str],
+        *,
+        should_drop_every_kill: bool,
+    ) -> None:
+        self._real_process = real_process
+        self._should_drop_every_kill = should_drop_every_kill
+        self.kill_calls = 0
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        if self._should_drop_every_kill or self.kill_calls == 1:
+            return
+        self._real_process.kill()
+
+    def kill_for_real(self) -> None:
+        self._real_process.kill()
+
+    def __getattr__(self, attribute_name: str) -> object:
+        return getattr(self._real_process, attribute_name)
+
+
+class _TreeKillAttemptRecorder:
+    """Drops the first tree-kill attempt, or every attempt, and counts them."""
+
+    def __init__(
+        self,
+        real_tree_kill: object,
+        *,
+        should_drop_every_attempt: bool,
+    ) -> None:
+        self._real_tree_kill = real_tree_kill
+        self._should_drop_every_attempt = should_drop_every_attempt
+        self.attempt_count = 0
+
+    def __call__(self, process_identifier: int) -> None:
+        self.attempt_count += 1
+        if self._should_drop_every_attempt or self.attempt_count == 1:
+            return
+        assert callable(self._real_tree_kill)
+        self._real_tree_kill(process_identifier)
+
+
+def _wait_for_quiet_heartbeat(heartbeat_path: Path) -> bool:
+    """Poll until the heartbeat file stops growing, bounded by a hard deadline.
+
+    ::
+
+        file stops growing for the required quiet span  ok:   True
+        deadline passes while it still grows            flag: False
+
+    Args:
+        heartbeat_path: File the grandchild appends to while it lives.
+
+    Returns:
+        True when the file went quiet before the deadline.
+    """
+    hard_deadline = time.monotonic() + GRANDCHILD_QUIET_DEADLINE_SECONDS
+    last_observed_size = heartbeat_path.stat().st_size
+    last_growth_at = time.monotonic()
+    while time.monotonic() < hard_deadline:
+        time.sleep(GRANDCHILD_POLL_INTERVAL_SECONDS)
+        current_size = heartbeat_path.stat().st_size
+        if current_size != last_observed_size:
+            last_observed_size = current_size
+            last_growth_at = time.monotonic()
+            continue
+        if time.monotonic() - last_growth_at >= GRANDCHILD_QUIET_REQUIRED_SECONDS:
+            return True
+    return False
+
+
+class _TurnCapSensitiveLauncher:
+    """Fake grok: cancels when argv carries a turn cap, completes without one."""
+
+    def __init__(self) -> None:
+        self.all_invocations: list[list[str]] = []
+
+    def __call__(
+        self, invocation: list[str], **keyword_arguments: object
+    ) -> _FakeProcess:
+        del keyword_arguments
+        self.all_invocations.append(list(invocation))
+        if MAX_TURNS_FLAG in invocation:
+            return _FakeProcess(
+                returncode=1, stderr=FIXTURE_TURN_CAP_CANCELLED_STDERR
+            )
+        return _FakeProcess(returncode=0, stdout=FIXTURE_MULTI_TURN_REPORT)
 
 
 class _PopenRecorder:
@@ -125,8 +279,8 @@ def _run_once(
     fake_process: _FakeProcess,
     *,
     agent_name: str | None = None,
-    max_turns: int = DEFAULT_MAX_TURNS,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    should_install_tree_kill_recorder: bool = True,
 ) -> tuple[runner.GrokRunnerOutcome, _PopenRecorder, Path, Path, Path]:
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("do the work", encoding="utf-8")
@@ -136,11 +290,14 @@ def _run_once(
     run_state_directory.mkdir()
     recorder = _PopenRecorder([fake_process])
     monkeypatch.setattr(runner, "runner_popen", recorder)
+    if should_install_tree_kill_recorder:
+        monkeypatch.setattr(
+            process_tree_kill, "process_tree_subprocess_run", _TreeKillRecorder()
+        )
     outcome = runner.run_headless_worker(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=max_turns,
         timeout_seconds=timeout_seconds,
         agent_name=agent_name,
     )
@@ -166,8 +323,7 @@ def test_argv_assembly_includes_required_flags(
     assert OUTPUT_FORMAT_FLAG in invocation
     assert OUTPUT_FORMAT_JSON in invocation
     assert ALWAYS_APPROVE_FLAG in invocation
-    assert MAX_TURNS_FLAG in invocation
-    assert str(DEFAULT_MAX_TURNS) in invocation
+    assert MAX_TURNS_FLAG not in invocation
     assert LEADER_SOCKET_FLAG in invocation
     leader_socket_path = Path(invocation[invocation.index(LEADER_SOCKET_FLAG) + 1])
     assert leader_socket_path.parent == run_state_directory
@@ -209,14 +365,12 @@ def test_unique_leader_socket_path_per_call(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
     runner.run_headless_worker(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -248,6 +402,9 @@ def test_timeout_kills_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert recorder.all_keyword_arguments[0].get("stderr") is subprocess.PIPE
     assert recorder.all_keyword_arguments[0].get("encoding") == UTF8_ENCODING
     assert recorder.all_keyword_arguments[0].get("errors") == UTF8_DECODE_ERRORS
+    assert recorder.all_keyword_arguments[0].get("start_new_session") is (
+        process_tree_kill.should_start_new_session()
+    )
 
 
 def test_classifies_usage_limit_from_fixture(
@@ -439,7 +596,6 @@ def test_missing_binary_returns_dedicated_error(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -553,7 +709,6 @@ def test_permission_error_on_launch_returns_structured_error(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -593,7 +748,6 @@ def test_invalid_utf8_child_stdout_is_replace_decoded(
         prompt_file=prompt_file,
         working_directory=working_directory,
         run_state_directory=run_state_directory,
-        max_turns=DEFAULT_MAX_TURNS,
         timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
     )
 
@@ -623,3 +777,386 @@ def test_timeout_race_successful_exit_classifies_ok(
     assert outcome.classification == CLASSIFICATION_OK
     assert outcome.returncode == 0
     assert outcome.stdout == '{"done":true}'
+
+
+def test_turn_capped_worker_cancels_and_uncapped_worker_completes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A turn cap cancels the multi-turn task; the same task completes without one.
+
+    ::
+
+        argv carries --max-turns 8   flag: stopReason Cancelled, is_ok False
+        argv carries no turn cap     ok:   completes in 16 turns, is_ok True
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    launcher = _TurnCapSensitiveLauncher()
+    monkeypatch.setattr(runner, "runner_popen", launcher)
+
+    capped_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        all_extra_arguments=(MAX_TURNS_FLAG, str(TINY_TURN_CAP)),
+    )
+    uncapped_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+
+    assert capped_outcome.is_ok is False
+    assert capped_outcome.classification == CLASSIFICATION_ERROR
+    assert "cancelled" in capped_outcome.stderr.lower()
+    assert uncapped_outcome.is_ok is True
+    assert uncapped_outcome.classification == CLASSIFICATION_OK
+    assert uncapped_outcome.stdout == FIXTURE_MULTI_TURN_REPORT
+    assert MAX_TURNS_FLAG not in launcher.all_invocations[1]
+
+
+def test_tree_kill_falls_back_to_direct_kill_when_taskkill_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A failed tree kill still ends the direct child, so no caller waits on it.
+
+    The platform is pinned to Windows so the taskkill seam is the branch under
+    test on every host. Left unpinned on POSIX, the kill would reach the
+    process group of the fake process id, which names an unrelated process.
+    """
+    monkeypatch.setattr(process_tree_kill.sys, "platform", "win32")
+
+    def raise_on_tree_kill(
+        invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        del invocation, keyword_arguments
+        raise OSError("taskkill is not on PATH")
+
+    fake_process = _FakeProcess(
+        returncode=0, stderr="still running", should_timeout=True
+    )
+    monkeypatch.setattr(
+        process_tree_kill, "process_tree_subprocess_run", raise_on_tree_kill
+    )
+    outcome, _, _, _, _ = _run_once(
+        monkeypatch,
+        tmp_path,
+        fake_process,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        should_install_tree_kill_recorder=False,
+    )
+
+    assert fake_process.was_killed is True
+    assert outcome.classification == CLASSIFICATION_TIMEOUT
+
+
+def test_timed_out_worker_leaves_no_surviving_grandchild(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A timed-out worker takes its whole process tree, not just the direct child.
+
+    ::
+
+        parent spawns grandchild, runner times out
+        ok:   heartbeat file stops growing after the kill
+        flag: grandchild keeps writing, orphaned by a direct-child-only kill
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    heartbeat_path = tmp_path / "grandchild-heartbeat.txt"
+    heartbeat_path.write_text("", encoding=UTF8_ENCODING)
+
+    def _spawn_parent_with_grandchild(
+        invocation: list[str], **keyword_arguments: object
+    ) -> subprocess.Popen[str]:
+        del invocation
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                PARENT_SPAWNS_GRANDCHILD_SOURCE,
+                GRANDCHILD_HEARTBEAT_SOURCE,
+                str(heartbeat_path),
+            ],
+            **keyword_arguments,
+        )
+
+    monkeypatch.setattr(runner, "runner_popen", _spawn_parent_with_grandchild)
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=TINY_TIMEOUT_SECONDS,
+    )
+    size_at_kill = heartbeat_path.stat().st_size
+    has_gone_quiet = _wait_for_quiet_heartbeat(heartbeat_path)
+    size_at_deadline = heartbeat_path.stat().st_size
+
+    assert outcome.classification == CLASSIFICATION_TIMEOUT
+    assert size_at_kill > 0, "grandchild never started; the test proves nothing"
+    assert has_gone_quiet, (
+        "heartbeat still growing "
+        f"{GRANDCHILD_QUIET_DEADLINE_SECONDS}s after the kill: "
+        f"{size_at_kill} -> {size_at_deadline} bytes"
+    )
+
+
+def test_non_positive_timeout_is_refused_before_any_launch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    recorder = _PopenRecorder([_FakeProcess(returncode=0, stdout="ok")])
+    monkeypatch.setattr(runner, "runner_popen", recorder)
+
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
+        runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=NON_POSITIVE_TIMEOUT_SECONDS,
+        )
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
+        runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=None,  # type: ignore[arg-type] # a JSON null timeout must be refused
+        )
+    assert recorder.invocations == []
+
+    surviving_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=MIN_WORKER_TIMEOUT_SECONDS,
+    )
+
+    assert surviving_outcome.is_ok is True
+    assert len(recorder.invocations) == 1
+
+
+def test_runner_refuses_over_ceiling_timeout_and_accepts_the_ceiling(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The runner is the shared choke point, so the ceiling is enforced here too.
+
+    ::
+
+        5401  flag: WorkerTimeoutOutOfBoundsError, nothing launched
+        5400  ok:   launches
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    recorder = _PopenRecorder([_FakeProcess(returncode=0, stdout="ok")])
+    monkeypatch.setattr(runner, "runner_popen", recorder)
+
+    with pytest.raises(
+        runner.WorkerTimeoutOutOfBoundsError, match="MAXIMUM_WORKER_TIMEOUT_SECONDS"
+    ):
+        runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS + 1,
+        )
+    assert recorder.invocations == []
+
+    at_ceiling_outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+    )
+
+    assert at_ceiling_outcome.is_ok is True
+    assert len(recorder.invocations) == 1
+
+
+def test_below_floor_timeout_is_refused_and_the_floor_is_accepted() -> None:
+    """The bound check refuses a sub-floor timeout and passes the floor itself.
+
+    ::
+
+        0  flag: WorkerTimeoutOutOfBoundsError naming MIN_WORKER_TIMEOUT_SECONDS
+        1  ok:   returns None
+    """
+    with pytest.raises(runner.WorkerTimeoutOutOfBoundsError) as raised_below_floor:
+        runner.require_timeout_within_bounds(MIN_WORKER_TIMEOUT_SECONDS - 1)
+
+    assert "MIN_WORKER_TIMEOUT_SECONDS" in str(raised_below_floor.value)
+    assert str(MIN_WORKER_TIMEOUT_SECONDS) in str(raised_below_floor.value)
+    assert runner.require_timeout_within_bounds(MIN_WORKER_TIMEOUT_SECONDS) is None
+
+
+def test_missing_timeout_is_refused_by_the_floor_bound() -> None:
+    """A JSON null timeout is refused by the same floor bound as a sub-floor value.
+
+    ::
+
+        None  flag: WorkerTimeoutOutOfBoundsError naming MIN_WORKER_TIMEOUT_SECONDS
+    """
+    with pytest.raises(runner.WorkerTimeoutOutOfBoundsError) as raised_on_missing:
+        runner.require_timeout_within_bounds(None)
+
+    assert "MIN_WORKER_TIMEOUT_SECONDS" in str(raised_on_missing.value)
+
+
+def test_above_ceiling_timeout_is_refused_and_the_ceiling_is_accepted() -> None:
+    """The bound check refuses an over-ceiling timeout and passes the ceiling itself.
+
+    ::
+
+        5401  flag: WorkerTimeoutOutOfBoundsError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
+        5400  ok:   returns None
+    """
+    with pytest.raises(runner.WorkerTimeoutOutOfBoundsError) as raised_above_ceiling:
+        runner.require_timeout_within_bounds(MAXIMUM_WORKER_TIMEOUT_SECONDS + 1)
+
+    assert "MAXIMUM_WORKER_TIMEOUT_SECONDS" in str(raised_above_ceiling.value)
+    assert str(MAXIMUM_WORKER_TIMEOUT_SECONDS) in str(raised_above_ceiling.value)
+    assert runner.require_timeout_within_bounds(MAXIMUM_WORKER_TIMEOUT_SECONDS) is None
+
+
+def _launch_kill_resistant_tree(
+    monkeypatch: pytest.MonkeyPatch,
+    heartbeat_path: Path,
+    *,
+    should_drop_every_kill: bool,
+) -> tuple[_TreeKillAttemptRecorder, list[_KillResistantProcess]]:
+    """Wire a real parent-and-grandchild launch whose kills are dropped."""
+    all_launched_processes: list[_KillResistantProcess] = []
+    tree_kill_recorder = _TreeKillAttemptRecorder(
+        process_tree_kill.kill_process_tree_by_identifier,
+        should_drop_every_attempt=should_drop_every_kill,
+    )
+
+    def _spawn_kill_resistant_tree(
+        invocation: list[str], **keyword_arguments: object
+    ) -> _KillResistantProcess:
+        del invocation
+        real_process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                PARENT_SPAWNS_GRANDCHILD_SOURCE,
+                GRANDCHILD_HEARTBEAT_SOURCE,
+                str(heartbeat_path),
+            ],
+            **keyword_arguments,
+        )
+        wrapped_process = _KillResistantProcess(
+            real_process, should_drop_every_kill=should_drop_every_kill
+        )
+        all_launched_processes.append(wrapped_process)
+        return wrapped_process
+
+    monkeypatch.setattr(runner, "runner_popen", _spawn_kill_resistant_tree)
+    monkeypatch.setattr(
+        process_tree_kill, "kill_process_tree_by_identifier", tree_kill_recorder
+    )
+    monkeypatch.setattr(
+        runner, "KILL_GRACE_TIMEOUT_SECONDS", SHORT_KILL_GRACE_SECONDS
+    )
+    return tree_kill_recorder, all_launched_processes
+
+
+def test_second_tree_kill_attempt_clears_a_tree_the_first_attempt_missed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A first kill that does not take is retried once before the runner gives up.
+
+    ::
+
+        attempt 1 drops, drain times out
+        attempt 2 lands  ok: classification timeout, heartbeat goes quiet
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    heartbeat_path = tmp_path / "grandchild-heartbeat.txt"
+    heartbeat_path.write_text("", encoding=UTF8_ENCODING)
+    tree_kill_recorder, _ = _launch_kill_resistant_tree(
+        monkeypatch, heartbeat_path, should_drop_every_kill=False
+    )
+
+    outcome = runner.run_headless_worker(
+        prompt_file=prompt_file,
+        working_directory=working_directory,
+        run_state_directory=run_state_directory,
+        timeout_seconds=TINY_TIMEOUT_SECONDS,
+    )
+    size_at_kill = heartbeat_path.stat().st_size
+    has_gone_quiet = _wait_for_quiet_heartbeat(heartbeat_path)
+    size_at_deadline = heartbeat_path.stat().st_size
+
+    assert size_at_kill > 0, "grandchild never started; the test proves nothing"
+    assert has_gone_quiet, (
+        "the tree outlived the runner: "
+        f"{size_at_kill} -> {size_at_deadline} bytes"
+    )
+    assert outcome.classification == CLASSIFICATION_TIMEOUT
+    assert tree_kill_recorder.attempt_count == PROCESS_TREE_KILL_ATTEMPT_LIMIT
+
+
+def test_worker_surviving_both_kill_attempts_is_reported_kill_failed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A tree that survives both attempts is ledger-distinct from one that died.
+
+    ::
+
+        both attempts drop  ok: classification kill_failed, pid in stderr
+    """
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("do the work", encoding=UTF8_ENCODING)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    run_state_directory.mkdir()
+    heartbeat_path = tmp_path / "grandchild-heartbeat.txt"
+    heartbeat_path.write_text("", encoding=UTF8_ENCODING)
+    real_tree_kill = process_tree_kill.kill_process_tree_by_identifier
+    tree_kill_recorder, all_launched_processes = _launch_kill_resistant_tree(
+        monkeypatch, heartbeat_path, should_drop_every_kill=True
+    )
+
+    try:
+        outcome = runner.run_headless_worker(
+            prompt_file=prompt_file,
+            working_directory=working_directory,
+            run_state_directory=run_state_directory,
+            timeout_seconds=TINY_TIMEOUT_SECONDS,
+        )
+    finally:
+        for each_process in all_launched_processes:
+            real_tree_kill(int(each_process.pid))
+            each_process.kill_for_real()
+
+    assert outcome.classification == CLASSIFICATION_KILL_FAILED
+    assert outcome.classification != CLASSIFICATION_TIMEOUT
+    assert outcome.is_ok is False
+    assert outcome.returncode == KILL_FAILED_RETURN_CODE
+    assert str(all_launched_processes[0].pid) in outcome.stderr
+    assert tree_kill_recorder.attempt_count == PROCESS_TREE_KILL_ATTEMPT_LIMIT

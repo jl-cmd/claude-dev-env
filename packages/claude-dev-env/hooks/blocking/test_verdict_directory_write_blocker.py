@@ -741,20 +741,16 @@ def _assert_bash_dispatcher_registered_for_matcher(matcher_substring: str) -> No
     )
 
 
-def test_guard_is_registered_on_bash() -> None:
+def test_guard_is_not_registered_on_bash() -> None:
     _assert_bash_dispatcher_registered_for_matcher("Bash")
     matching_entries = _verdict_guard_hosted_entries()
-    assert len(matching_entries) == 1
-    assert matching_entries[0].applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    assert BASH_TOOL_NAME in matching_entries[0].applicable_tool_names
+    assert matching_entries == []
 
 
-def test_guard_is_registered_on_powershell() -> None:
+def test_guard_is_not_registered_on_powershell() -> None:
     _assert_bash_dispatcher_registered_for_matcher("PowerShell")
     matching_entries = _verdict_guard_hosted_entries()
-    assert len(matching_entries) == 1
-    assert matching_entries[0].applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    assert POWERSHELL_TOOL_NAME in matching_entries[0].applicable_tool_names
+    assert matching_entries == []
 
 
 def test_hook_subprocess_imports_real_config_when_parent_holds_shadowing_config(

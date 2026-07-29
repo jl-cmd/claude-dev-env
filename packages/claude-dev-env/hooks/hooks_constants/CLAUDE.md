@@ -32,6 +32,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
 | `eli11_reply_enforcer_constants.py` | Reply-shape thresholds (word cap, enforced word floor, bullet cap, lead-line window, per-line word cap, over-packed line cap), the `Long form:` escape prefix, the bullet / numbered-step / table-row / link-target / word patterns, the imperative instruction verbs, and the user-facing notice for the ELI11 reply-shape Stop hook |
+| `fable_spawn_gate_constants.py` | The spawn tool-name set, the fable model alias and the model-id segment split pattern, the `FABLE-SPAWN-AUTHORIZED` authorization token, the advisor-protocol document path, payload field names, the deny message, and the deny `additionalContext` recovery text for the fable-tier spawn gate |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
@@ -53,6 +54,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `paired_test_coverage_constants.py` | Test-directory name, stem-test filename affixes, test-file globs, exempt public-function names, scan budget, coverage threshold, and guidance text for the public-function paired-test coverage check |
 | `path_rewriter_constants.py` | Path rewriting patterns for the Everything-search path rewriter |
 | `pii_prevention_constants.py` | Patterns, allowlists, path exemptions, and deny-message text for `pii_prevention_blocker` |
+| `piped_pytest_blocker_constants.py` | Bash tool name, pytest program basenames and the python-interpreter basename pattern, the pipe and segment-reset operator token sets, and the deny message for the piped-pytest blocker |
 | `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements |
 | `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
 | `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |

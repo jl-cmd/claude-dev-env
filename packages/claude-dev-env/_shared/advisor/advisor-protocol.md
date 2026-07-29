@@ -66,6 +66,7 @@ On a **Claude host**, the consuming skill's session walks the candidate tiers to
 - `model`: the short alias for that attempt's candidate tier via `resolve_cli_model_id` (or the alias table under CLI chain) — for example `opus`, not Title Case `Opus`. The floor is only the lower bound of the walk; the walk still tries stronger tiers first.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
+- `prompt`: the charter below. A **Fable**-tier attempt carries the exact token `FABLE-SPAWN-AUTHORIZED` in that prompt — `hooks/blocking/fable_spawn_gate.py` denies every `Agent` or `Task` spawn at `model: fable` whose prompt lacks that token. An attempt at any other tier needs no token.
 
 Stop at the first successful spawn. That attempt's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session. If every candidate down to the floor fails, take the CLI fallback below.
 
@@ -112,7 +113,7 @@ Each paragraph is self-contained — the executor receives only this text, not t
 
 The session that spawns the shared advisor owns its whole lifecycle — spawn, drift-respawn, and shutdown. Every other consumer (executors, or any other consulting session) only ever sends it messages; none of them spawn, respawn, or shut it down themselves. One shared advisor exists per orchestrated session, owned by the session that spawned it.
 
-**Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter, rather than forcing the old context to stretch across two different jobs.
+**Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter, rather than forcing the old context to stretch across two different jobs. A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in that fresh prompt, as a Fable-tier warm-up attempt does.
 
 ### Third-party host
 

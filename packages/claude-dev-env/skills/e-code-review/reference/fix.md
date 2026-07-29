@@ -12,16 +12,33 @@ At `low` — and any time the Agent tool is unavailable — no finder agent exis
 to resume. Apply the fixes yourself, sequentially, in this context, holding to
 every rule below.
 
-## Commit gate
+## Code-rules gate
 
-Before returning, the resumed agent attempts a commit on its own change:
+Before returning, the resumed agent runs the code-rules gate with the same bare
+call every other surface in this skill uses:
 
 1. Run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo
-   root> <changed/added files>` against every file it changed or added.
-2. If the gate reports violations, fix them and re-run the exact same command.
-3. Repeat until the gate returns clean.
-4. Only after a clean gate result does the agent return control and report
-   its outcome.
+   root>` with no file paths and no `--only-under` prefix.
+2. If the gate reports violations **on lines this fix already owns** (the files
+   and added lines the fix changed), fix them and re-run the exact same command.
+3. A violation on a path or added line outside this fix's own work is reported
+   or skipped — it is not force-fixed into unrelated files. Log each skip with
+   the path and reason, then continue.
+4. Repeat until every violation on this fix's own work is clean (or skipped with
+   a logged reason for out-of-scope hits).
+5. Only after that result does the agent return control and report its outcome.
+
+A file path named on the command line puts the gate in whole-file scope and can
+churn on untouched lines; keep the call bare.
+
+This gate commits nothing. The fix lands in the working tree and stays
+uncommitted; committing belongs to whatever invoked this document.
+
+Under a bare `--fix` — this document invoked without `loop` — nothing
+downstream commits either, and that is the intended outcome: a one-shot fix
+pass leaves its fixes uncommitted in the working tree for the user to review
+and commit. Under `loop`, the round tail in `reference\loop.md` commits the
+round's fixes.
 
 ## Skip candidates
 

@@ -62,7 +62,7 @@ Repair only reported findings, then re-verify after every repair.
 | [`gh-cli-conventions.md`](gh-cli-conventions.md) | `--body-file` for post bodies; `--paginate --slurp` for list reads |
 | [`proof-of-work-pr-comments.md`](proof-of-work-pr-comments.md) | The five-part proof comment every PR carries before leaving draft |
 | [`re-stage-before-commit.md`](re-stage-before-commit.md) | Staging session edits so a commit does not drop them |
-| [`verified-commit-gate-skip.md`](verified-commit-gate-skip.md) | When the `# verify-skip` marker is allowed |
+| [`verified-commit-gate-skip.md`](verified-commit-gate-skip.md) | Optional code-verifier review guidance |
 | [`durable-post-artifacts.md`](durable-post-artifacts.md) | Keeping volatile scratch paths out of a post body |
 | [`destructive-commands.md`](destructive-commands.md) | Allowed removal forms; destructive literals in commit and post bodies |
 | [`code-standards.md`](code-standards.md) | The code standards a PR's diff is reviewed against |

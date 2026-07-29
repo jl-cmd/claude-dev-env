@@ -9,6 +9,8 @@ import importlib.util
 import pathlib
 import re
 
+import pytest
+
 _CONFIG_DIR = pathlib.Path(__file__).parent
 
 SAMPLE_ROOT_KEY_HEX_LENGTH = 16
@@ -23,7 +25,10 @@ _constants_module = importlib.util.module_from_spec(_constants_spec)
 _constants_spec.loader.exec_module(_constants_module)
 
 effort_meets_threshold = _constants_module.effort_meets_threshold
-CODE_REVIEW_ENFORCEMENT_ENABLED = _constants_module.CODE_REVIEW_ENFORCEMENT_ENABLED
+CODE_REVIEW_ENFORCEMENT_ENV_VAR = _constants_module.CODE_REVIEW_ENFORCEMENT_ENV_VAR
+code_review_enforcement_enabled_in_environment = (
+    _constants_module.code_review_enforcement_enabled_in_environment
+)
 PUSH_REQUIRED_EFFORT = _constants_module.PUSH_REQUIRED_EFFORT
 PR_CREATE_REQUIRED_EFFORT = _constants_module.PR_CREATE_REQUIRED_EFFORT
 GATED_PUSH_SUBCOMMANDS = _constants_module.GATED_PUSH_SUBCOMMANDS
@@ -109,5 +114,53 @@ def test_guard_message_directs_users_to_the_sanctioned_minter_flag() -> None:
     assert SANCTIONED_STAMP_MINTER_FLAG in STAMP_DIRECTORY_GUARD_MESSAGE
 
 
-def test_enforcement_defaults_to_off() -> None:
-    assert CODE_REVIEW_ENFORCEMENT_ENABLED is False
+def test_enforcement_defaults_to_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    assert code_review_enforcement_enabled_in_environment() is False
+
+
+@pytest.mark.parametrize("enabling_value", ["1", "true", "TRUE", " yes ", "on"])
+def test_enforcement_turns_on_for_each_enabling_environment_value(
+    monkeypatch: pytest.MonkeyPatch, enabling_value: str
+) -> None:
+    monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, enabling_value)
+    assert code_review_enforcement_enabled_in_environment() is True
+
+
+@pytest.mark.parametrize("non_enabling_value", ["0", "false", "off", "", "maybe"])
+def test_enforcement_stays_off_for_a_non_enabling_environment_value(
+    monkeypatch: pytest.MonkeyPatch, non_enabling_value: str
+) -> None:
+    monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, non_enabling_value)
+    assert code_review_enforcement_enabled_in_environment() is False
+
+
+def _module_flag_after_a_fresh_import(
+    monkeypatch: pytest.MonkeyPatch, environment_value: str | None
+) -> bool:
+    if environment_value is None:
+        monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    else:
+        monkeypatch.setenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, environment_value)
+    fresh_spec = importlib.util.spec_from_file_location(
+        "code_review_enforcement_constants_fresh_import",
+        _CONFIG_DIR / "code_review_enforcement_constants.py",
+    )
+    assert fresh_spec is not None
+    assert fresh_spec.loader is not None
+    fresh_module = importlib.util.module_from_spec(fresh_spec)
+    fresh_spec.loader.exec_module(fresh_module)
+    flag_value: bool = fresh_module.CODE_REVIEW_ENFORCEMENT_ENABLED
+    return flag_value
+
+
+def test_module_flag_turns_on_when_the_environment_asks_for_enforcement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _module_flag_after_a_fresh_import(monkeypatch, "true") is True
+
+
+def test_module_flag_stays_off_when_the_environment_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _module_flag_after_a_fresh_import(monkeypatch, None) is False

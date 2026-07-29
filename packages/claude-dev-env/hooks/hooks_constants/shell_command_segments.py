@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 ALL_LAUNCHER_WRAPPER_COMMANDS: frozenset[str] = frozenset(
-    {"timeout", "nohup", "nice", "stdbuf", "setsid", "env"}
+    {"timeout", "nohup", "nice", "stdbuf", "setsid", "env", "time"}
 )
 ALL_SHELL_CONTROL_OPERATOR_TOKENS: frozenset[str] = frozenset(
     {"&&", "||", ";", "|", "&", "|&"}

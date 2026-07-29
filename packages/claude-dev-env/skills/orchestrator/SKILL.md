@@ -64,6 +64,16 @@ schedule prompt must carry it: `/orchestrator-refresh --run-slug SLUG`.
 
 ### Single-pending re-arm protocol (all hosts)
 
+**The re-arm never interrupts the run.** Every "stop" in the five steps
+below ends the *re-arm* and nothing else: the session returns to
+orchestrating in the same turn. Arming a delayed wake schedules a later
+reminder; it neither ends the turn nor pauses in-flight executors, and
+the session never waits for the refresh to fire before it carries on.
+When a create fails, keep orchestrating and re-arm at the next natural
+break. When the denial is `rearm_already_pending`, a refresh is already
+queued — keep orchestrating and arm nothing further this turn; the next
+refresh firing clears the latch and arms again.
+
 Exactly one delayed refresh may be outstanding. **Create then claim**
 (order matters on Claude: PreToolUse denies `ScheduleWakeup` when the
 slot is already pending).
@@ -105,11 +115,11 @@ pending, or when the tool is `CronCreate`.
 1. **Invocation guard.** One `/orchestrator` per session. When a refresh
    one-shot is already queued (`should-reschedule` exits 1 with
    `rearm_already_pending`), do not stack a second: reuse the live
-   advisor bind and go to step 6 (Orchestrate). Skip steps 4–5 — status
-   is already active and a re-arm is already latched; re-registering
-   would attempt a redundant host schedule. (Re-asserting
-   `set --status active` preserves `rearm_pending` when already active,
-   but still do not run step 5.)
+   advisor bind, skip step 4 and the re-arm half of step 5, and carry on
+   from step 5's dispatch — status is already active and a re-arm is
+   already latched, so a second registration would stack a duplicate
+   host schedule. (Re-asserting `set --status active` preserves
+   `rearm_pending` when already active, but still do not re-arm.)
 2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
@@ -119,15 +129,22 @@ pending, or when the tool is `CronCreate`.
    whole lifecycle (its Lifecycle ownership section); executors only ever
    message the warm agent or report here, and an executor that finds the
    advisor unreachable reports that upward — it never spawns a
-   replacement itself.
+   replacement itself. A **Fable**-tier attempt carries the exact token
+   `FABLE-SPAWN-AUTHORIZED` in its spawn prompt, as the protocol's
+   warm-up rule states; `hooks/blocking/fable_spawn_gate.py` denies a
+   fable spawn whose prompt lacks it.
 3. **Write the run artifacts** (next section) before the first spawn.
 4. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.
-5. **Register the discipline reminder** via the single-pending re-arm
-   protocol (cancel matching → `should-reschedule` → one non-recurring
-   delayed wake → `claim-rearm`; default delay about 2700s).
+5. **Dispatch the first task with its ticket** (Spawn ticket section),
+   **then register the discipline reminder** via the single-pending
+   re-arm protocol (cancel matching → `should-reschedule` → one
+   non-recurring delayed wake → `claim-rearm`; default delay about
+   2700s). Spawn before you arm, so the run is already moving, and go
+   straight on to step 6 in the same turn — the armed wake is a later
+   reminder, not the next thing to wait for.
 6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
-   task with a ticket (Spawn ticket section), keep driving while
+   remaining task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
    discipline).
 7. **Consult the advisor at hard decisions.** The trigger list, consult

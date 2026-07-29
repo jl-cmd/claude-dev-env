@@ -11,7 +11,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 | `clean-coder.md` | Clean Coder | Primary code-writing agent; internalizes CODE_RULES.md and targets zero `/check` findings |
 | `code-advisor.md` | Code Advisor | Single-executor mid-run advisor (PLAN/CORRECTION/STOP as final text); distinct from session-advisor |
 | `code-quality-agent.md` | Code Quality Agent | Multi-file code quality review across an entire diff or set of files |
-| `code-verifier.md` | Code Verifier | Post-hoc verification after coder agents finish; read-only, fresh context, puts the draft verdict through one strongest-tier validation subagent, ends with a fenced verdict |
+| `code-verifier.md` | Code Verifier | Post-hoc verification after coder agents finish; never edits files in the verified tree, with one exception, a deliberate break at an off-tree break site outside it, defined in the agent body; fresh context, puts the draft verdict through one strongest-tier validation subagent, ends with a fenced verdict; `all_pass` true needs a complete shown-red table as well as clean layers |
 | `deep-research.md` | Deep Research | Citation-grounded research with web search |
 | `docs-agent.md` | Docs Agent | Documentation authoring and maintenance |
 | `git-commit-crafter.md` | Git Commit Crafter | Stages changes, writes conventional commit messages, creates commits |

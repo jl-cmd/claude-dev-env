@@ -85,6 +85,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `eli11_reply_enforcer.py` | Stop | Final replies breaking the `eli11-replies` shape — more than 120 reader-visible words, more than 6 bullet lines, more than 2 lines carrying over 20 words each, or instruction lines telling the user to act with no numbered step among the lead lines. Code fences, inline code, blockquotes, table rows, and link targets come off before the reply is judged, replies under 60 words always pass, and a reply opening with `Long form:` opts out entirely |
 | `env_var_table_code_drift_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A markdown env-var summary table row attributing an environment variable to a code file whose source never references that variable name |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
+| `fable_spawn_gate.py` | PreToolUse (Agent/Task) | An `Agent` or `Task` spawn whose prompt carries no `FABLE-SPAWN-AUTHORIZED` token and whose model field reads `fable` in any letter case — the bare alias, or a delimiter segment of a full model id, so `claude-fable-5` is denied too |
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
 | `gh_pr_author_restore.py` | PostToolUse | Restores PR author after a tool call |
@@ -98,6 +99,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_payload_scan.py` | library | Write/Edit and durable post-body PII evaluation reused by `pii_prevention_blocker.py` |
 | `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
+| `piped_pytest_blocker.py` | PreToolUse (Bash) | A pytest run whose output feeds a pipe, where the pipeline reports the exit code of the command on the right |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
 | `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |

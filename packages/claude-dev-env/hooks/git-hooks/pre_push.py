@@ -65,6 +65,11 @@ from git_hooks_constants import (
     CODE_REVIEW_STAMP_BLOCK_EXIT_CODE,
     DEFAULT_REMOTE_BASE_REFERENCE,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
+    GIT_COMMAND_TIMEOUT_SECONDS,
+    GIT_COMMAND_UNAVAILABLE_MESSAGE,
+    GIT_EXECUTABLE_NAME,
+    GIT_OUTPUT_DECODE_ERRORS_POLICY,
+    GIT_OUTPUT_ENCODING_NAME,
     GIT_REFERENCE_QUERY_TIMEOUT_SECONDS,
     INVOKE_GATE_FAILURE_MESSAGE,
     LOCAL_BRANCH_REFERENCE_PREFIX,
@@ -86,6 +91,60 @@ from git_hooks_constants import (
     UNRESOLVABLE_MERGE_BASE_SENTINEL,
 )
 from gate_utils import is_safe_regular_file, resolve_gate_script_path
+from pre_push_base_reference import (
+    resolve_remote_name_from_arguments,
+    resolve_usable_base_reference,
+)
+
+
+def _report_unavailable_git(launch_error: Exception) -> int:
+    """Report a git that would not run, and hand back the exit code to use."""
+    git_command_unavailable_message = GIT_COMMAND_UNAVAILABLE_MESSAGE
+    sys.stderr.write(
+        git_command_unavailable_message.format(error=launch_error) + "\n"
+    )
+    return GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+
+
+class GitCommandUnavailable(RuntimeError):
+    """Git itself could not run: it failed to launch, or it timed out.
+
+    A git that runs and reports nothing is ordinary absence, which stays a
+    plain return. Separating the two keeps a broken toolchain from reading
+    as a repository that simply has no default branch.
+    """
+
+
+def run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
+    """Ask git a question and read back its answer.
+
+    Output decodes with a replacing policy, so a reference whose bytes are
+    invalid in this encoding becomes a marked string and matches nothing.
+
+    Args:
+        all_command_arguments: The git arguments following the executable name.
+
+    Returns:
+        The exit code paired with the trimmed standard output.
+
+    Raises:
+        GitCommandUnavailable: Git failed to launch or exceeded its timeout.
+    """
+    git_executable_name = GIT_EXECUTABLE_NAME
+    git_command_timeout_seconds = GIT_COMMAND_TIMEOUT_SECONDS
+    try:
+        completion = subprocess.run(
+            [git_executable_name, *all_command_arguments],
+            check=False,
+            capture_output=True,
+            timeout=git_command_timeout_seconds,
+        )
+    except (OSError, subprocess.SubprocessError) as launch_error:
+        raise GitCommandUnavailable(str(launch_error)) from launch_error
+    decoded_output = completion.stdout.decode(
+        GIT_OUTPUT_ENCODING_NAME, errors=GIT_OUTPUT_DECODE_ERRORS_POLICY
+    )
+    return completion.returncode, decoded_output.strip()
 
 
 def is_all_zeros_object_name(object_name: str) -> bool:
@@ -245,7 +304,7 @@ def resolve_default_branch_reference() -> str | None:
     Resolution reads ``origin`` alone and never the remote name git passes as
     argv[1], and its unset-``origin/HEAD`` fallback prefers ``origin/main``
     over ``origin/master``, so a repo whose default is another branch beside a
-    legacy ``main`` resolves the wrong base — the assumption set tracked at
+    legacy ``main`` resolves the wrong base ΓÇö the assumption set tracked at
     ~/.claude/orchestrator-runs/falsify-first/parked-items.md row 3.
 
     Returns:
@@ -567,7 +626,16 @@ def main() -> int:
     if base_reference == unresolvable_merge_base_sentinel:
         print(unresolvable_merge_base_message, file=sys.stderr)
         return code_review_stamp_block_exit_code()
-    code_rules_exit_code = invoke_gate(gate_script_path, base_reference)
+    remote_name = resolve_remote_name_from_arguments(sys.argv)
+    try:
+        usable_base_reference = resolve_usable_base_reference(
+            base_reference, remote_name, run_git_text_command
+        )
+    except GitCommandUnavailable as unavailable_error:
+        return _report_unavailable_git(unavailable_error)
+    if usable_base_reference is None:
+        return gate_infrastructure_failure_exit_code
+    code_rules_exit_code = invoke_gate(gate_script_path, usable_base_reference)
     if code_rules_exit_code != 0:
         return code_rules_exit_code
     return code_review_stamp_block_exit_code()

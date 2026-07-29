@@ -9,8 +9,15 @@ Run `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`
 if there's no upstream) to get the unified diff under review. If there are
 uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
 include the working-tree changes in scope — the review often runs before the
-commit. If a PR number, branch name, or file path was passed as an argument,
-review that target instead. Treat this diff as the review scope.
+commit. If a target was passed as an argument, review that target instead. A
+target names one or more items, each a PR number, a branch name, a file path, or
+`default-range` — the diff this phase gathers when no target is passed — and it
+may mix those forms. A loop round widens a target by adding a path to whatever
+it started as, and it names `default-range` as an item whenever the round it
+widened was given no target argument, so the original scope stays under review.
+When a target names more than one item, gather each item's diff and take their
+union — a shared hunk counted once, an empty one adding nothing — as the
+target's diff. Treat this diff as the review scope.
 
 ## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle)
 
@@ -128,11 +135,13 @@ or publish an artifact of the review — the structured call is the report.
 
 ## Applying fixes (--fix)
 
-The `--fix` flag was passed. Follow `reference\fix.md` (relative to this
-skill's folder) for the exact fix, commit-gate, and skip-handling behavior —
-it governs which agent applies each fix, how a fix gets committed, how a skip
-is logged, and how outcomes get reported. Do not repeat the findings as text;
-follow that document's reporting rules once fixes land.
+The `--fix` flag was passed. Follow `reference\fix.md` (relative
+to this skill's folder) for the exact fix, code-rules-gate, and skip-handling
+behavior — it governs which agent applies each fix, how the code-rules gate
+runs, how a skip is logged, and how outcomes get reported. Do not repeat the
+findings as text; follow that document's reporting rules once fixes land.
+
+When `loop` is also set, skip this section.
 
 ## If findings are fixed later
 
@@ -146,8 +155,17 @@ summary; the host UI's per-finding status updates only from that call.
 ## Looping (`loop`)
 
 The `loop` arg was passed. Follow `reference\loop.md` (relative to this
-skill's folder) for how to re-run Phases 0–2, Output, and (if `--fix` is also
-present) `reference\fix.md`'s fix pass, repeatedly — including its exit
-condition, iteration cap, and re-invocation rules. Do not treat a single pass
-through this document as complete while `loop` is active; hand control to that
-document instead of stopping at Output.
+skill's folder) for how to re-run Phases 0–2 and Output repeatedly — including
+its exit condition and re-invocation rules. Schedule no fix pass of your own
+here: when `--fix` is also present, `reference\loop.md`'s gate sequence owns the
+round's fixing and loads `reference\fix.md` for the mechanics. Do not treat a
+single pass through this document as complete while `loop` is active; hand
+control to that document, and do not stop at Output.
+
+That hand-off applies when this document is entered directly. When a loop round
+is already running and has handed this document its target, the round owns the
+loop: end at Output with the findings report and return those findings to
+`reference\loop.md`'s gate sequence, rather than handing control to that
+document again from here.
+
+When `loop` was not passed, skip this section.

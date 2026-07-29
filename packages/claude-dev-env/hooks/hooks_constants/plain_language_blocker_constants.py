@@ -1,4 +1,25 @@
-"""Configuration constants for the plain_language_blocker PreToolUse hook."""
+"""Configuration constants for the plain_language_blocker PreToolUse hook.
+
+::
+
+    ALL_CHAT_DETAIL_MARKERS
+        ok:   "Which gate should run first?"
+        flag: "Which gate should run first?\\n- write\\n- commit"
+    INLINE_CODE_SPAN_PATTERN
+        ok:   "Should we pass `--dry-run` here?" -> one word toward the caps
+    ALL_LINE_ENDING_REPLACEMENTS
+        flag: a blank line spelled "\\r\\n\\r\\n" reads as a paragraph break
+    MAXIMUM_OPTION_DESCRIPTION_WORD_COUNT
+        ok:   "Runs on every write."
+        flag: a 30-word paragraph of tradeoffs
+
+Holds the heavy words and their everyday replacements, the prose-region
+strippers the word scan runs first, and the lean-question-block tunables: the
+block-level chat-detail markers that belong in chat text, the line-ending
+spellings normalized before those markers run, the inline-code span the length
+counts collapse to one word, and the sentence and word caps a question and an
+option description each answer to.
+"""
 
 from __future__ import annotations
 
@@ -297,4 +318,46 @@ REPOSITORY_MARKER_NAME: str = ".git"
 USER_FACING_PLAIN_LANGUAGE_NOTICE: str = (
     "Plain-language check: replace each flagged formal word with the simpler "
     "word named in the reason."
+)
+
+ALL_CHAT_DETAIL_MARKERS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^[ \t]*```", re.MULTILINE), "a fenced code block"),
+    (re.compile(r"^[ \t]*#{1,6}[ \t]+\S", re.MULTILINE), "a heading"),
+    (re.compile(r"^[ \t]*\|.*\|[ \t]*$", re.MULTILINE), "a table row"),
+    (
+        re.compile(r"^[ \t]*(?:[-*+][ \t]+|\d{1,2}[.)][ \t]+)\S", re.MULTILINE),
+        "a bullet or numbered list marker",
+    ),
+    (re.compile(r"\n[ \t]*\n"), "more than one paragraph"),
+)
+
+INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`\n]+`")
+INLINE_CODE_PLACEHOLDER: str = "code"
+
+ALL_LINE_ENDING_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("\r\n", "\n"),
+    ("\r", "\n"),
+)
+
+SENTENCE_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"[.!?]+(?=\s+[A-Z]|\s*$)")
+COUNTABLE_WORD_PATTERN: re.Pattern[str] = re.compile(r"\S*[A-Za-z0-9]\S*")
+
+MAXIMUM_QUESTION_SENTENCE_COUNT: int = 2
+MAXIMUM_QUESTION_WORD_COUNT: int = 40
+MAXIMUM_OPTION_DESCRIPTION_SENTENCE_COUNT: int = 1
+MAXIMUM_OPTION_DESCRIPTION_WORD_COUNT: int = 15
+
+QUESTION_SURFACE_NAME: str = "the question"
+OPTION_DESCRIPTION_SURFACE_NAME: str = "an option description"
+
+LEAN_QUESTION_BLOCK_PREFIX: str = "BLOCKED: [LEAN_QUESTION] Question block carries chat detail -- "
+LEAN_QUESTION_VIOLATION_SEPARATOR: str = "; "
+LEAN_QUESTION_BLOCK_GUIDANCE: str = (
+    "AskUserQuestion renders as one plain text block. Print the plan, the counts, "
+    "and the tradeoffs in chat text before the call, keep the question block to a "
+    "lean question and short options, and reach for an inline visualizer tool when "
+    "a choice needs formatting."
+)
+USER_FACING_LEAN_QUESTION_NOTICE: str = (
+    "Question-block check: move the detail into chat and ask a short question."
 )

@@ -1,8 +1,8 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    One-shot quality gate — runs ruff, hooks mypy, pr-loop mypy, and the
-    blocking pytest suite from a single entry point.
+    One-shot quality gate — runs ruff, hooks mypy, pr-loop mypy,
+    process-tree mypy, and the blocking pytest suite from a single entry point.
 
 .DESCRIPTION
     Resolves paths relative to $PSScriptRoot so the script works from any CWD
@@ -10,7 +10,8 @@
     and the installed runtime (~/.claude/scripts/check.ps1, after install.mjs
     propagates this file). Tools: ruff over hooks/, mypy over hooks blocking
     and validators, mypy-pr-loop over _shared/pr-loop/scripts production
-    modules, and optional pytest over the blocking enforcer suite. Each tool
+    modules, mypy-process-tree over the shared process-tree kill helper and
+    its constants, and optional pytest over the blocking enforcer suite. Each tool
     runs sequentially; the first non-zero exit code is preserved as the
     script's exit code so CI/pre-commit can short-circuit on the first failure.
 
@@ -19,7 +20,7 @@
     static-analysis gates.
 
 .PARAMETER SkipMypy
-    Skip both mypy runs (hooks mypy and mypy-pr-loop).
+    Skip every mypy run (hooks mypy, mypy-pr-loop, and mypy-process-tree).
 
 .PARAMETER SkipRuff
     Skip the ruff run.
@@ -27,7 +28,7 @@
 .OUTPUTS
     Per-tool status lines on stdout. Final summary line:
         CHECK: OK
-        CHECK: FAILED tools=ruff,mypy,mypy-pr-loop,pytest
+        CHECK: FAILED tools=ruff,mypy,mypy-pr-loop,mypy-process-tree,pytest
 #>
 [CmdletBinding()]
 param(
@@ -41,6 +42,7 @@ $ErrorActionPreference = 'Stop'
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
 $prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
+$processTreeScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'process-tree' 'scripts')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0
@@ -104,6 +106,17 @@ if (-not $SkipMypy) {
                 terminology_sweep.py `
                 code_rules_gate_parts `
                 pr_loop_shared_constants
+        } finally {
+            Pop-Location
+        }
+    }
+
+    Invoke-Tool -Label 'mypy-process-tree' -Action {
+        Push-Location $processTreeScriptsRoot
+        try {
+            mypy --config-file (Join-Path $processTreeScriptsRoot 'pyproject.toml') `
+                process_tree_kill.py `
+                config/process_tree_scripts_constants
         } finally {
             Pop-Location
         }

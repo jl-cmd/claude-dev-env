@@ -7,13 +7,16 @@ Native git hooks that run outside the Claude Code lifecycle — invoked directly
 | File | Git hook | What it does |
 |---|---|---|
 | `pre_commit.py` | `pre-commit` | Runs the CODE_RULES gate (`precommit_code_rules_gate.py`) over staged changes; exits 1 when any staged file has a blocking violation |
-| `pre_push.py` | `pre-push` | Blocks a push that would land a non-`main` local branch onto remote `main` (or `master`), then runs the CODE_RULES gate. An existing branch's gate scope is its merge base with the default branch, so the whole unmerged surface is checked, not just the pushed commits. |
+| `pre_push.py` | `pre-push` | Blocks a push that would land a non-`main` local branch onto remote `main` (or `master`), then runs the CODE_RULES gate. An existing branch's gate base is the merge base with the remote default branch, so the whole unmerged surface is checked, not just the pushed commits. |
+| `pre_push_base_reference.py` | — | Resolves a usable gate base for `pre_push.py`: reads the pushed remote name from git's arguments, then turns a symbolic default-branch head into a reference that git can resolve |
 | `post_commit.py` | `post-commit` | Runs after a commit lands; performs any post-commit bookkeeping |
 | `gate_utils.py` | — | Shared helpers: resolves the gate script path, checks that the path is a safe regular file |
 | `test_config.py` | — | Test configuration helpers |
 | `test_gate_utils.py` | — | Tests for `gate_utils.py` |
 | `test_pre_commit.py` | — | Tests for `pre_commit.py` |
 | `test_pre_push.py` | — | Tests for `pre_push.py` |
+| `test_pre_push_base_reference.py` | — | Tests for the gate base resolution in `pre_push.py` |
+| `conftest.py` | — | Puts this directory on `sys.path` and clears cached `config` modules, so each test module imports the hooks at the top of the file |
 
 ## Subdirectory
 

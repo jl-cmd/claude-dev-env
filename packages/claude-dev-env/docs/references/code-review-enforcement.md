@@ -11,13 +11,34 @@ The gates follow the same shape as the `verified_commit` gate family.
 
 ## Opt-in (default off)
 
-Enforcement is **off by default**. The master flag is
-`CODE_REVIEW_ENFORCEMENT_ENABLED` in
-`hooks/blocking/config/code_review_enforcement_constants.py`. Set it to
-`True` to enable the push gate, the PR-create gate, the native pre-push
-backstop (via the shared deny decision), and the stamp-directory write
-blocker. When the flag is `False`, every gate allows the action and the
+Enforcement is **off by default**. Turn it on by setting the environment
+variable `CLAUDE_CODE_REVIEW_ENFORCEMENT` to `1`, `true`, `yes`, or `on`
+(case and surrounding spaces are ignored). Any other value, and an unset
+variable, leave enforcement off.
+
+Set the variable in the machine's own user environment so every gate reads it,
+including the native git pre-push backstop, which git runs in the shell's
+environment. An `env` block in `settings.json` reaches the three Claude Code
+hook gates alone. Each gate process reads the variable as it starts, so a
+Claude Code session already running keeps its current setting until it
+restarts, while the git pre-push backstop picks up the current shell
+environment on each push.
+
+A user-environment setting arms the gates machine-wide. The backstop installs
+through the shared `core.hooksPath`, so it runs for every repository on the
+machine, and the gates carry no per-repository allowlist. Each repository then
+needs its own clean stamp before a push lands there.
+
+The variable feeds the master flag `CODE_REVIEW_ENFORCEMENT_ENABLED` in
+`hooks/blocking/config/code_review_enforcement_constants.py`, which every gate
+reads at start-up. When it is on, the push gate, the PR-create gate, the native
+pre-push backstop (via the shared deny decision), and the stamp-directory write
+blocker all enforce. When it is off, every gate allows the action and the
 write-blocker allows stamp-directory access.
+
+`npx claude-dev-env` copies the shipped `hooks/` tree over `~/.claude/` on each
+install, so the environment setting survives an install and an edit to the
+constant does not.
 
 ## How a stamp works
 
@@ -88,6 +109,10 @@ anchor a forgery-proof mint. The stamp reaches the same posture the
   create-PR gate.
 - **`git push --no-verify`.** This flag tells git to skip the native pre-push
   hook, so the native backstop does not run.
+- **A push that clears the enable variable.** The backstop reads
+  `CLAUDE_CODE_REVIEW_ENFORCEMENT` from the shell that runs the push, so
+  `CLAUDE_CODE_REVIEW_ENFORCEMENT=0 git push` reads as enforcement off and the
+  backstop allows the push with no flag and no bypass marker.
 - **A rebuilt store.** A script that re-implements the stamp store in memory
   and writes a matching file can mint a stamp the gates accept.
 
