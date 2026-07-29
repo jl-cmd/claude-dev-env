@@ -215,8 +215,8 @@ LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
 KILL_GRACE_TIMEOUT_SECONDS: int = 10
 """Seconds to wait for a killed process to reap its pipes before giving up on its streams.
 
-Gates the drain that follows a kill. ``PROCESS_TREE_KILL_TIMEOUT_SECONDS``
-gates the kill command itself, so the two bound different operations.
+Gates the drain that follows a kill. The shared process-tree helper carries its
+own bound on the kill command, so the two bound different operations.
 """
 
 MAXIMUM_WORKER_TIMEOUT_SECONDS: int = 5400
@@ -234,28 +234,6 @@ MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (
     "MAXIMUM_WORKER_TIMEOUT_SECONDS ({maximum_seconds})"
 )
 """Rejection message for an over-ceiling timeout, shared by the batch parse and the runner."""
-
-WINDOWS_OS_NAME: str = "nt"
-"""``os.name`` value that selects the Windows branch of the process-tree kill."""
-
-WINDOWS_TASKKILL_COMMAND: str = "taskkill"
-"""Windows command that ends a process by id."""
-
-WINDOWS_TASKKILL_TREE_FLAG: str = "/T"
-"""``taskkill`` flag that extends the kill to every descendant process."""
-
-WINDOWS_TASKKILL_FORCE_FLAG: str = "/F"
-"""``taskkill`` flag that forces termination rather than requesting it."""
-
-WINDOWS_TASKKILL_PID_FLAG: str = "/PID"
-"""``taskkill`` flag that names the target process id."""
-
-PROCESS_TREE_KILL_TIMEOUT_SECONDS: int = 10
-"""Seconds allowed for the tree-kill command itself before it is abandoned.
-
-Gates the kill command. ``KILL_GRACE_TIMEOUT_SECONDS`` gates the drain that
-follows a kill, so the two bound different operations.
-"""
 
 MIN_WORKER_TIMEOUT_SECONDS: int = 1
 """Minimum accepted worker timeout_seconds, in seconds.

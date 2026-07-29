@@ -25,14 +25,24 @@ Import ``run_headless_worker`` for the outcome object::
 
 from __future__ import annotations
 
-import os
-import signal
 import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from dev_env_scripts_constants.grok_worker_constants import (
+_shared_process_tree_scripts_directory = (
+    Path(__file__).resolve().parents[1] / "_shared" / "process-tree" / "scripts"
+)
+if str(_shared_process_tree_scripts_directory) not in sys.path:
+    sys.path.insert(0, str(_shared_process_tree_scripts_directory))
+
+from process_tree_kill import (  # noqa: E402
+    should_start_new_session,
+    terminate_process_tree,
+)
+
+from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALL_AUTH_FAILURE_SIGNATURES,
     ALL_USAGE_LIMIT_SIGNATURES,
@@ -65,21 +75,14 @@ from dev_env_scripts_constants.grok_worker_constants import (
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROCESS_TREE_KILL_ATTEMPT_LIMIT,
-    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
     UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
-    WINDOWS_OS_NAME,
-    WINDOWS_TASKKILL_COMMAND,
-    WINDOWS_TASKKILL_FORCE_FLAG,
-    WINDOWS_TASKKILL_PID_FLAG,
-    WINDOWS_TASKKILL_TREE_FLAG,
     WORKER_SPEC_TIMEOUT_KEY,
 )
 
 runner_popen = subprocess.Popen
-runner_subprocess_run = subprocess.run
 
 
 class WorkerTimeoutOutOfBoundsError(ValueError):
@@ -204,76 +207,6 @@ def _resolve_returncode(process: subprocess.Popen[str]) -> int:
     return TIMEOUT_RETURN_CODE
 
 
-def _kill_windows_process_tree(process_identifier: int) -> None:
-    """End a Windows process and every descendant it started, by process id.
-
-    Swallows taskkill failures so the caller still falls back to
-    ``Popen.kill()`` and a timed drain.
-    """
-    try:
-        runner_subprocess_run(
-            [
-                WINDOWS_TASKKILL_COMMAND,
-                WINDOWS_TASKKILL_TREE_FLAG,
-                WINDOWS_TASKKILL_FORCE_FLAG,
-                WINDOWS_TASKKILL_PID_FLAG,
-                str(process_identifier),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return
-
-
-def _kill_posix_process_group(process_identifier: int) -> None:
-    """End a POSIX process group so no grandchild keeps the capture pipe open.
-
-    Reached only through the caller's ``os.name`` branch, so the process-group
-    calls run on the platforms that define them.
-
-    A process id that is already reaped raises ``OSError``; this swallows it and
-    returns, so the caller falls back to ``Popen.kill()``.
-    """
-    try:
-        process_group_identifier = os.getpgid(process_identifier)  # type: ignore[attr-defined] # POSIX-only, reached via the caller's os.name branch
-        os.killpg(process_group_identifier, signal.SIGKILL)  # type: ignore[attr-defined] # POSIX-only, reached via the caller's os.name branch
-    except OSError:
-        return
-
-
-def _kill_process_tree_by_identifier(process_identifier: int) -> None:
-    """Issue the platform's tree kill for one process id, with no liveness check."""
-    if os.name == WINDOWS_OS_NAME:
-        _kill_windows_process_tree(process_identifier)
-        return
-    _kill_posix_process_group(process_identifier)
-
-
-def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
-    """End the worker process and every descendant it spawned.
-
-    ::
-
-        tree kill (taskkill /T or killpg)  ok:   grandchildren die, pipes close
-        Popen.kill() alone                 flag: grandchildren outlive the worker
-
-    Falls back to ``Popen.kill()`` when the direct child survives the tree kill,
-    so the caller never waits on a live process.
-    """
-    if process.poll() is not None:
-        return
-    _kill_process_tree_by_identifier(process.pid)
-    if process.poll() is not None:
-        return
-    try:
-        process.kill()
-    except ProcessLookupError:
-        return
-
-
 def require_timeout_within_bounds(timeout_seconds: int | None) -> None:
     """Refuse a timeout that is missing, below the floor, or above the ceiling.
 
@@ -332,7 +265,7 @@ def _kill_and_drain_within_attempt_limit(
 
     A tree kill that returns without taking leaves the drain waiting on a live
     pipe, so a timed-out drain is followed by another kill-and-drain round.
-    ``_terminate_process_tree`` re-issues the kill only while the worker
+    ``terminate_process_tree`` re-issues the kill only while the worker
     process is still alive; once it has exited, the next round is a second
     drain window for the descendants still holding the pipe open.
 
@@ -344,7 +277,7 @@ def _kill_and_drain_within_attempt_limit(
     """
     attempts_made = 0
     while attempts_made < PROCESS_TREE_KILL_ATTEMPT_LIMIT:
-        _terminate_process_tree(process)
+        terminate_process_tree(process)
         all_captured_streams = _drain_after_kill(process)
         if all_captured_streams is not None:
             return all_captured_streams
@@ -424,7 +357,7 @@ def _invoke_process(
             text=True,
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
-            start_new_session=os.name != WINDOWS_OS_NAME,
+            start_new_session=should_start_new_session(),
         )
     except FileNotFoundError:
         return _missing_binary_outcome()

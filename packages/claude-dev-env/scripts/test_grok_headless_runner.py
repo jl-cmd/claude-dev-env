@@ -7,7 +7,6 @@ include the signature substrings the constants module lists.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import time
@@ -20,6 +19,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import grok_headless_runner as runner  # noqa: E402
+import process_tree_kill  # noqa: E402
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALWAYS_APPROVE_FLAG,
@@ -46,16 +46,10 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
     PROCESS_TREE_KILL_ATTEMPT_LIMIT,
-    PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
     UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
-    WINDOWS_OS_NAME,
-    WINDOWS_TASKKILL_COMMAND,
-    WINDOWS_TASKKILL_FORCE_FLAG,
-    WINDOWS_TASKKILL_PID_FLAG,
-    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 FIXTURE_GROK_BINARY_VERSION = "0.2.99 (b1b49ccb71) [stable]"
@@ -297,7 +291,9 @@ def _run_once(
     recorder = _PopenRecorder([fake_process])
     monkeypatch.setattr(runner, "runner_popen", recorder)
     if should_install_tree_kill_recorder:
-        monkeypatch.setattr(runner, "runner_subprocess_run", _TreeKillRecorder())
+        monkeypatch.setattr(
+            process_tree_kill, "process_tree_subprocess_run", _TreeKillRecorder()
+        )
     outcome = runner.run_headless_worker(
         prompt_file=prompt_file,
         working_directory=working_directory,
@@ -407,7 +403,7 @@ def test_timeout_kills_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert recorder.all_keyword_arguments[0].get("encoding") == UTF8_ENCODING
     assert recorder.all_keyword_arguments[0].get("errors") == UTF8_DECODE_ERRORS
     assert recorder.all_keyword_arguments[0].get("start_new_session") is (
-        os.name != WINDOWS_OS_NAME
+        process_tree_kill.should_start_new_session()
     )
 
 
@@ -825,59 +821,16 @@ def test_turn_capped_worker_cancels_and_uncapped_worker_completes(
     assert MAX_TURNS_FLAG not in launcher.all_invocations[1]
 
 
-def test_windows_timeout_kill_issues_the_taskkill_tree_argv(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    tree_kill_recorder = _TreeKillRecorder()
-    monkeypatch.setattr(runner, "runner_subprocess_run", tree_kill_recorder)
-
-    runner._kill_windows_process_tree(FAKE_PROCESS_IDENTIFIER)
-
-    assert tree_kill_recorder.all_invocations == [
-        [
-            WINDOWS_TASKKILL_COMMAND,
-            WINDOWS_TASKKILL_TREE_FLAG,
-            WINDOWS_TASKKILL_FORCE_FLAG,
-            WINDOWS_TASKKILL_PID_FLAG,
-            str(FAKE_PROCESS_IDENTIFIER),
-        ]
-    ]
-    assert (
-        tree_kill_recorder.all_keyword_arguments[0].get("timeout")
-        == PROCESS_TREE_KILL_TIMEOUT_SECONDS
-    )
-
-
-@pytest.mark.parametrize(
-    "raised_error",
-    [
-        subprocess.TimeoutExpired(
-            cmd=[WINDOWS_TASKKILL_COMMAND], timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS
-        ),
-        OSError("taskkill is not on PATH"),
-    ],
-    ids=["taskkill_times_out", "taskkill_cannot_launch"],
-)
-def test_windows_tree_kill_absorbs_a_failing_taskkill(
-    monkeypatch: pytest.MonkeyPatch, raised_error: Exception
-) -> None:
-    """A taskkill that never completes leaves the caller free to fall back."""
-
-    def raise_on_tree_kill(
-        invocation: list[str], **keyword_arguments: object
-    ) -> subprocess.CompletedProcess[str]:
-        del invocation, keyword_arguments
-        raise raised_error
-
-    monkeypatch.setattr(runner, "runner_subprocess_run", raise_on_tree_kill)
-
-    runner._kill_windows_process_tree(FAKE_PROCESS_IDENTIFIER)
-
-
 def test_tree_kill_falls_back_to_direct_kill_when_taskkill_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """A failed tree kill still ends the direct child, so no caller waits on it."""
+    """A failed tree kill still ends the direct child, so no caller waits on it.
+
+    The platform is pinned to Windows so the taskkill seam is the branch under
+    test on every host. Left unpinned on POSIX, the kill would reach the
+    process group of the fake process id, which names an unrelated process.
+    """
+    monkeypatch.setattr(process_tree_kill.sys, "platform", "win32")
 
     def raise_on_tree_kill(
         invocation: list[str], **keyword_arguments: object
@@ -888,7 +841,9 @@ def test_tree_kill_falls_back_to_direct_kill_when_taskkill_fails(
     fake_process = _FakeProcess(
         returncode=0, stderr="still running", should_timeout=True
     )
-    monkeypatch.setattr(runner, "runner_subprocess_run", raise_on_tree_kill)
+    monkeypatch.setattr(
+        process_tree_kill, "process_tree_subprocess_run", raise_on_tree_kill
+    )
     outcome, _, _, _, _ = _run_once(
         monkeypatch,
         tmp_path,
@@ -1090,7 +1045,7 @@ def _launch_kill_resistant_tree(
     """Wire a real parent-and-grandchild launch whose kills are dropped."""
     all_launched_processes: list[_KillResistantProcess] = []
     tree_kill_recorder = _TreeKillAttemptRecorder(
-        runner._kill_process_tree_by_identifier,
+        process_tree_kill.kill_process_tree_by_identifier,
         should_drop_every_attempt=should_drop_every_kill,
     )
 
@@ -1116,7 +1071,7 @@ def _launch_kill_resistant_tree(
 
     monkeypatch.setattr(runner, "runner_popen", _spawn_kill_resistant_tree)
     monkeypatch.setattr(
-        runner, "_kill_process_tree_by_identifier", tree_kill_recorder
+        process_tree_kill, "kill_process_tree_by_identifier", tree_kill_recorder
     )
     monkeypatch.setattr(
         runner, "KILL_GRACE_TIMEOUT_SECONDS", SHORT_KILL_GRACE_SECONDS
@@ -1182,7 +1137,7 @@ def test_worker_surviving_both_kill_attempts_is_reported_kill_failed(
     run_state_directory.mkdir()
     heartbeat_path = tmp_path / "grandchild-heartbeat.txt"
     heartbeat_path.write_text("", encoding=UTF8_ENCODING)
-    real_tree_kill = runner._kill_process_tree_by_identifier
+    real_tree_kill = process_tree_kill.kill_process_tree_by_identifier
     tree_kill_recorder, all_launched_processes = _launch_kill_resistant_tree(
         monkeypatch, heartbeat_path, should_drop_every_kill=True
     )
