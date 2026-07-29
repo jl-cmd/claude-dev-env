@@ -57,6 +57,7 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/destructive_command_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/shell_substitution_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry("blocking/piped_pytest_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry(
         "blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
     ),
@@ -75,10 +76,6 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/convergence_gate_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/windows_rmtree_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_pr_author_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/verified_commit_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/verdict_directory_write_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
     BashHostedHookEntry("blocking/code_review_push_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
     BashHostedHookEntry(
         "blocking/code_review_pr_create_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES

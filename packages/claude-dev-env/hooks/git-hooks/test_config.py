@@ -1,20 +1,5 @@
 from __future__ import annotations
 
-import importlib
-import sys
-from pathlib import Path
-
-
-SCRIPT_DIRECTORY = Path(__file__).resolve().parent
-_git_hooks_directory_string = str(SCRIPT_DIRECTORY)
-while _git_hooks_directory_string in sys.path:
-    sys.path.remove(_git_hooks_directory_string)
-sys.path.insert(0, _git_hooks_directory_string)
-for each_module_name in list(sys.modules):
-    if each_module_name == "config" or each_module_name.startswith("config."):
-        del sys.modules[each_module_name]
-importlib.invalidate_caches()
-
 import git_hooks_constants
 
 

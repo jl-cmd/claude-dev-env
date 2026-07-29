@@ -1,19 +1,49 @@
 """Single source of truth for the code-review enforcement gate family.
 
-Holds the stamp directory name, the ordered effort tokens (``low`` under
-``medium`` under ``high`` under ``xhigh`` under ``max``, with ``ultra`` kept
-out because it needs an interactive terminal), the effort a push and a
-pull-request creation each require, the stamp record keys, the gate and
-write-blocker messages, the store-forge shell patterns, the MCP create-PR
-tool name, and the effort comparison every gate and the stamp store share so
-the thresholds never drift between them, and the master enable flag
-(``CODE_REVIEW_ENFORCEMENT_ENABLED``, default off) that every gate and
-the stamp-directory write-blocker read before they enforce anything.
+::
+
+    CLAUDE_CODE_REVIEW_ENFORCEMENT=1  ->  CODE_REVIEW_ENFORCEMENT_ENABLED True
+    (unset)                           ->  CODE_REVIEW_ENFORCEMENT_ENABLED False
+    effort_meets_threshold("xhigh", PUSH_REQUIRED_EFFORT)       -> True
+    effort_meets_threshold("high", PR_CREATE_REQUIRED_EFFORT)   -> False
+
+Every gate reads its thresholds and messages from here, so the effort a push
+needs and the effort a pull request needs never drift apart. The master flag
+tracks the environment, so a machine opts in through its own environment and
+the choice outlives a reinstall that rewrites this shipped file.
 """
 
 from __future__ import annotations
 
-CODE_REVIEW_ENFORCEMENT_ENABLED = False
+import os
+
+CODE_REVIEW_ENFORCEMENT_ENV_VAR = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
+ALL_ENFORCEMENT_ENABLED_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def code_review_enforcement_enabled_in_environment() -> bool:
+    """Read whether this machine turns the code-review gates on.
+
+    ::
+
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=1      -> True
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=" On " -> True
+        CLAUDE_CODE_REVIEW_ENFORCEMENT=0      -> False
+        (variable unset)                      -> False
+
+    A machine opts in through its own environment, so an install that rewrites
+    this shipped file leaves the choice standing. Any value outside the enabled
+    set, and an unset variable, read as off, so the gate family stays quiet
+    until someone asks for it.
+
+    Returns:
+        True when the variable holds an enabled value, False otherwise.
+    """
+    raw_environment_setting = os.environ.get(CODE_REVIEW_ENFORCEMENT_ENV_VAR, "")
+    return raw_environment_setting.strip().lower() in ALL_ENFORCEMENT_ENABLED_ENV_VALUES
+
+
+CODE_REVIEW_ENFORCEMENT_ENABLED = code_review_enforcement_enabled_in_environment()
 STAMP_DIRECTORY_NAME = "code-review-stamps"
 ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER = ("low", "medium", "high", "xhigh", "max")
 PUSH_REQUIRED_EFFORT = "low"

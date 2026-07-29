@@ -1,12 +1,6 @@
 ---
 name: issue-tracker
-description: >-
-  Primary handler for one GitHub issue action per spawn on a work-stream:
-  open an epic, file a sub-issue, update status in place, refresh the epic
-  checklist, or close a sub-issue. Spawn with one action plus the issue-candidate
-  or issue number it needs; loads the issue-tracker skill; returns affected
-  issue numbers and URLs. Prefer the same warm agent for follow-ups on the same
-  issue or the same epic work-stream.
+description: "Primary handler for one GitHub issue action per spawn on a work-stream: open an epic, file a sub-issue, update status in place, refresh the epic checklist, or close a sub-issue. Spawn with one action plus the issue-candidate or issue number it needs; loads the issue-tracker skill; returns affected issue numbers and URLs. Prefer the same warm agent for follow-ups on the same issue or the same epic work-stream."
 tools: Read, Bash, Skill, mcp__github__search_issues, mcp__github__issue_read, mcp__github__issue_write, mcp__github__sub_issue_write, mcp__github__add_issue_comment
 color: green
 ---

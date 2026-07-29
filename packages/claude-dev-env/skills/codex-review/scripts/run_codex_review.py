@@ -18,22 +18,29 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from codex_review_scripts_constants.codex_usage_probe_constants import (
+_shared_process_tree_scripts_directory = (
+    Path(__file__).resolve().parents[3] / "_shared" / "process-tree" / "scripts"
+)
+if str(_shared_process_tree_scripts_directory) not in sys.path:
+    sys.path.insert(0, str(_shared_process_tree_scripts_directory))
+
+from process_tree_kill import (  # noqa: E402
+    should_start_new_session,
+    terminate_process_tree,
+)
+
+from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa: E402
     ALL_WINDOWS_SCRIPT_SUFFIXES,
     WINDOWS_COMMAND_SHELL,
     WINDOWS_COMMAND_SHELL_RUN_FLAG,
     WINDOWS_OS_NAME,
-    WINDOWS_TASKKILL_COMMAND,
-    WINDOWS_TASKKILL_FORCE_FLAG,
-    WINDOWS_TASKKILL_PID_FLAG,
-    WINDOWS_TASKKILL_TREE_FLAG,
 )
-from codex_review_scripts_constants.run_constants import (
+from codex_review_scripts_constants.run_constants import (  # noqa: E402
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
     BASE_TARGET_FLAG,
     CAPTURE_STREAMS_KEYWORD,
@@ -74,61 +81,6 @@ from codex_review_scripts_constants.run_constants import (
 )
 
 
-def _kill_windows_process_tree(process_identifier: int) -> None:
-    """Kill a Windows process and every descendant it started, by PID.
-
-    Swallows taskkill failures so the caller can fall back to ``Popen.kill()``
-    and a timed drain. A raised ``TimeoutExpired`` here would replace the
-    original review-timeout exception and skip that drain path.
-    """
-    try:
-        subprocess.run(
-            [
-                WINDOWS_TASKKILL_COMMAND,
-                WINDOWS_TASKKILL_TREE_FLAG,
-                WINDOWS_TASKKILL_FORCE_FLAG,
-                WINDOWS_TASKKILL_PID_FLAG,
-                str(process_identifier),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return
-
-
-def _kill_posix_process_group(process_identifier: int) -> None:
-    """Kill a POSIX process group so no grandchild keeps the capture pipe open."""
-    try:
-        process_group_identifier = os.getpgid(process_identifier)
-        os.killpg(process_group_identifier, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        return
-
-
-def _terminate_process_tree(review_process: subprocess.Popen[str]) -> None:
-    """Kill the review process and every descendant it spawned.
-
-    Tree kill first (taskkill /T or killpg). When the direct child is still
-    alive after that, fall back to ``Popen.kill()`` so ``Popen.__exit__`` never
-    hits an unbounded wait on a surviving process.
-    """
-    if review_process.poll() is not None:
-        return
-    if os.name == WINDOWS_OS_NAME:
-        _kill_windows_process_tree(review_process.pid)
-    else:
-        _kill_posix_process_group(review_process.pid)
-    if review_process.poll() is not None:
-        return
-    try:
-        review_process.kill()
-    except ProcessLookupError:
-        return
-
-
 def _open_codex_popen(
     all_arguments: list[str],
     all_keyword_arguments: dict[str, object],
@@ -147,7 +99,7 @@ def _open_codex_popen(
         text=bool(all_keyword_arguments.get(TEXT_MODE_KEYWORD, False)),
         encoding=stream_encoding if isinstance(stream_encoding, str) else None,
         env=process_environment if isinstance(process_environment, dict) else None,
-        start_new_session=os.name != WINDOWS_OS_NAME,
+        start_new_session=should_start_new_session(),
     )
 
 
@@ -198,7 +150,7 @@ def _communicate_with_tree_kill_on_timeout(
     try:
         return review_process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
-        _terminate_process_tree(review_process)
+        terminate_process_tree(review_process)
         _drain_process_after_tree_kill(review_process)
         raise
 

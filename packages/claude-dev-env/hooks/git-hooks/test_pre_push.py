@@ -1,31 +1,210 @@
 from __future__ import annotations
 
-import importlib
 import io
+import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+import git_hooks_constants
+import pre_push
+
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
-_git_hooks_directory_string = str(SCRIPT_DIRECTORY)
-while _git_hooks_directory_string in sys.path:
-    sys.path.remove(_git_hooks_directory_string)
-sys.path.insert(0, _git_hooks_directory_string)
-for each_module_name in list(sys.modules):
-    if each_module_name == "config" or each_module_name.startswith("config."):
-        del sys.modules[each_module_name]
-importlib.invalidate_caches()
 
-import pre_push
-import git_hooks_constants
+REAL_RUN_GIT_TEXT_COMMAND = pre_push.run_git_text_command
 
 
+CODE_REVIEW_ENFORCEMENT_ENV_VAR: str = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
+ENFORCEMENT_CONSTANTS_MODULE_NAME: str = "config.code_review_enforcement_constants"
 ALL_ZEROS_OBJECT_NAME: str = "0" * 40
 NON_ZERO_LOCAL_SHA: str = "a" * 40
 NON_ZERO_REMOTE_SHA_ONE: str = "1" * 40
 NON_ZERO_REMOTE_SHA_TWO: str = "2" * 40
+
+
+GIT_RESOLVED_EXIT_CODE: int = 0
+RESOLVED_COMMIT_OBJECT_NAME: str = "c" * 40
+HOOK_INVOCATION_NAME: str = "pre-push"
+PUSHED_REMOTE_NAME: str = "upstream"
+PUSHED_REMOTE_URL: str = "https://example.invalid/owner/repository.git"
+
+
+LOCALE_INVALID_REFERENCE_LISTING_BYTES: bytes = b"origin/caf\xe9\norigin/main\n"
+EMPTY_COMMAND_STREAM_BYTES: bytes = b""
+STRICT_DECODER_NAME: str = "utf-8"
+UNDECODABLE_BYTE_START_INDEX: int = 10
+UNDECODABLE_BYTE_END_INDEX: int = 11
+UNDECODABLE_BYTE_REASON: str = "invalid continuation byte"
+TEXT_DECODING_KEYWORD: str = "text"
+GIT_MISSING_REFERENCE_EXIT_CODE: int = 1
+GIT_LAUNCH_FAILURE_DETAIL: str = "git executable not found"
+RESOLVED_REMOTE_MAIN_REFERENCE: str = "origin/main"
+UNRESOLVABLE_BASE_REPORT_MARKER: str = "no usable gate base"
+GIT_UNAVAILABLE_REPORT_MARKER: str = "could not run git"
+NEW_BRANCH_PUSH_STDIN: str = (
+    f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
+)
+
+
+def _refuse_locale_decoding() -> UnicodeDecodeError:
+    """Build the error a text-mode subprocess raises on undecodable output."""
+    return UnicodeDecodeError(
+        STRICT_DECODER_NAME,
+        LOCALE_INVALID_REFERENCE_LISTING_BYTES,
+        UNDECODABLE_BYTE_START_INDEX,
+        UNDECODABLE_BYTE_END_INDEX,
+        UNDECODABLE_BYTE_REASON,
+    )
+
+
+def _completed_git_process(
+    all_command_arguments: list[str], exit_code: int, standard_output_bytes: bytes
+) -> subprocess.CompletedProcess[bytes]:
+    """Build a completed git process carrying raw bytes on standard output."""
+    return subprocess.CompletedProcess(
+        all_command_arguments,
+        exit_code,
+        standard_output_bytes,
+        EMPTY_COMMAND_STREAM_BYTES,
+    )
+
+
+def _answer_git_with_locale_invalid_bytes(
+    all_command_arguments: list[str],
+    **all_keyword_arguments: object,
+) -> subprocess.CompletedProcess[bytes]:
+    """Stand in for a git whose output the process locale cannot decode.
+
+    ::
+
+        text=True -> UnicodeDecodeError   bytes mode -> the raw listing
+
+    Args:
+        all_command_arguments: The full git command the seam assembled.
+        all_keyword_arguments: The keyword arguments the seam passed.
+
+    Returns:
+        A completed process carrying the raw listing bytes.
+    """
+    if all_keyword_arguments.get(TEXT_DECODING_KEYWORD):
+        raise _refuse_locale_decoding()
+    if git_hooks_constants.GIT_FOR_EACH_REF_SUBCOMMAND in all_command_arguments:
+        return _completed_git_process(
+            all_command_arguments,
+            GIT_RESOLVED_EXIT_CODE,
+            LOCALE_INVALID_REFERENCE_LISTING_BYTES,
+        )
+    return _completed_git_process(
+        all_command_arguments,
+        GIT_MISSING_REFERENCE_EXIT_CODE,
+        EMPTY_COMMAND_STREAM_BYTES,
+    )
+
+
+def _write_gate_that_allows_every_push(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point both gates at stubs that allow, with a new-branch push on stdin."""
+    passing_gate_path = tmp_path / "code_rules_gate.py"
+    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(NEW_BRANCH_PUSH_STDIN))
+
+
+def test_reference_listing_with_locale_invalid_bytes_resolves_a_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess, "run", _answer_git_with_locale_invalid_bytes)
+
+    resolved_reference = pre_push.resolve_usable_base_reference(
+        git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE,
+        git_hooks_constants.DEFAULT_REMOTE_NAME,
+        REAL_RUN_GIT_TEXT_COMMAND,
+    )
+
+    assert resolved_reference == RESOLVED_REMOTE_MAIN_REFERENCE
+
+
+def test_run_git_text_command_raises_when_git_cannot_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raising_subprocess_run(
+        all_command_arguments: list[str], **all_keyword_arguments: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        raise OSError(GIT_LAUNCH_FAILURE_DETAIL)
+
+    monkeypatch.setattr(subprocess, "run", raising_subprocess_run)
+
+    with pytest.raises(pre_push.GitCommandUnavailable):
+        REAL_RUN_GIT_TEXT_COMMAND([git_hooks_constants.GIT_FOR_EACH_REF_SUBCOMMAND])
+
+
+def test_main_reports_infrastructure_failure_when_git_cannot_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_gate_that_allows_every_push(tmp_path, monkeypatch)
+
+    def unavailable_run_git_text_command(
+        all_command_arguments: list[str],
+    ) -> tuple[int, str]:
+        raise pre_push.GitCommandUnavailable(GIT_LAUNCH_FAILURE_DETAIL)
+
+    monkeypatch.setattr(
+        pre_push, "run_git_text_command", unavailable_run_git_text_command
+    )
+
+    exit_code = pre_push.main()
+
+    captured_streams = capsys.readouterr()
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert GIT_UNAVAILABLE_REPORT_MARKER in captured_streams.err
+    assert GIT_LAUNCH_FAILURE_DETAIL in captured_streams.err
+    assert UNRESOLVABLE_BASE_REPORT_MARKER not in captured_streams.err
+
+
+def test_main_reports_a_missing_default_branch_as_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_gate_that_allows_every_push(tmp_path, monkeypatch)
+
+    def empty_run_git_text_command(
+        all_command_arguments: list[str],
+    ) -> tuple[int, str]:
+        return GIT_MISSING_REFERENCE_EXIT_CODE, ""
+
+    monkeypatch.setattr(pre_push, "run_git_text_command", empty_run_git_text_command)
+
+    exit_code = pre_push.main()
+
+    captured_streams = capsys.readouterr()
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
+    assert UNRESOLVABLE_BASE_REPORT_MARKER in captured_streams.err
+    assert GIT_UNAVAILABLE_REPORT_MARKER not in captured_streams.err
+
+
+@pytest.fixture(autouse=True)
+def resolve_remote_head_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every reference resolve, so these tests ignore the clone's remote state.
+
+    ``main`` resolves the gate base through git before it invokes the gate. A
+    clone with no ``origin/HEAD`` would send these tests down the unresolvable
+    path and change what ``main`` returns. Stubbing the seam keeps each test
+    about the flow it names. Base resolution itself is covered by
+    ``test_pre_push_base_reference.py``.
+    """
+
+    def fake_run_git_text_command(all_command_arguments: list[str]) -> tuple[int, str]:
+        return GIT_RESOLVED_EXIT_CODE, RESOLVED_COMMIT_OBJECT_NAME
+
+    monkeypatch.setattr(pre_push, "run_git_text_command", fake_run_git_text_command)
 
 
 def _isolate_code_review_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +213,7 @@ def _isolate_code_review_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     )
 
 
-def test_resolve_base_reference_uses_remote_object_when_non_zero() -> None:
+def test_resolve_base_reference_from_stdin_uses_remote_object_when_non_zero() -> None:
     stdin_text = (
         f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
     )
@@ -44,7 +223,7 @@ def test_resolve_base_reference_uses_remote_object_when_non_zero() -> None:
     assert base_reference == NON_ZERO_REMOTE_SHA_ONE
 
 
-def test_resolve_base_reference_falls_back_when_remote_is_all_zeros() -> None:
+def test_resolve_base_reference_from_stdin_falls_back_when_remote_is_all_zeros() -> None:
     stdin_text = f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
@@ -52,13 +231,13 @@ def test_resolve_base_reference_falls_back_when_remote_is_all_zeros() -> None:
     assert base_reference == pre_push.DEFAULT_REMOTE_BASE_REFERENCE
 
 
-def test_resolve_base_reference_falls_back_when_stdin_empty() -> None:
+def test_resolve_base_reference_from_stdin_falls_back_when_stdin_is_empty() -> None:
     base_reference = pre_push.resolve_base_reference_from_stdin("")
 
     assert base_reference == pre_push.DEFAULT_REMOTE_BASE_REFERENCE
 
 
-def test_resolve_base_reference_prefers_first_non_zero_remote_object_among_many() -> (
+def test_resolve_base_reference_from_stdin_prefers_first_non_zero_remote_object() -> (
     None
 ):
     stdin_text = (
@@ -119,6 +298,37 @@ def test_main_invokes_gate_with_resolved_base_reference(
         encoding="utf-8"
     ).splitlines()
     assert recorded_arguments == ["--base", remote_sha]
+
+
+def test_main_passes_the_pushed_remote_name_to_base_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_passing_code_rules_gate(tmp_path, monkeypatch)
+    _isolate_code_review_gate(tmp_path, monkeypatch)
+    all_recorded_remote_names: list[str] = []
+
+    def recording_resolve_usable_base_reference(
+        base_reference: str,
+        remote_name: str,
+        ask_git: Callable[[list[str]], tuple[int, str]],
+    ) -> str:
+        all_recorded_remote_names.append(remote_name)
+        return base_reference
+
+    monkeypatch.setattr(
+        pre_push,
+        "resolve_usable_base_reference",
+        recording_resolve_usable_base_reference,
+    )
+    monkeypatch.setattr(
+        sys, "argv", [HOOK_INVOCATION_NAME, PUSHED_REMOTE_NAME, PUSHED_REMOTE_URL]
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+    assert all_recorded_remote_names == [PUSHED_REMOTE_NAME]
 
 
 def test_main_propagates_blocking_exit_code_from_gate(
@@ -193,7 +403,7 @@ def test_main_exits_two_when_invoke_gate_raises_oserror(
     assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
 
 
-def test_resolve_base_reference_emits_warning_for_malformed_line(
+def test_resolve_base_reference_from_stdin_emits_warning_for_malformed_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     malformed_stdin_text = "only_one_field\n"
@@ -204,7 +414,7 @@ def test_resolve_base_reference_emits_warning_for_malformed_line(
     assert "malformed" in captured.err
 
 
-def test_resolve_base_reference_returns_none_when_local_sha_is_all_zeros() -> None:
+def test_resolve_base_reference_from_stdin_returns_none_when_local_sha_is_all_zeros() -> None:
     stdin_text = f"refs/heads/feature {ALL_ZEROS_OBJECT_NAME} refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(stdin_text)
@@ -227,9 +437,7 @@ def test_main_exits_zero_immediately_when_push_is_deletion(
     assert exit_code == 0
 
 
-def test_resolve_base_reference_returns_sentinel_when_only_malformed_lines_present(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_resolve_base_reference_from_stdin_returns_sentinel_for_malformed_lines() -> None:
     malformed_only_stdin = "one_field_only\nalso_malformed\n"
 
     base_reference = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)
@@ -254,9 +462,7 @@ def test_main_prints_stderr_when_gate_script_missing(
     assert captured.err != ""
 
 
-def test_resolve_base_reference_exits_two_when_only_malformed_lines_and_no_valid_lines(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_resolve_base_reference_from_stdin_reports_sentinel_with_no_valid_lines() -> None:
     malformed_only_stdin = "one_field_only\nalso_malformed\n"
 
     result = pre_push.resolve_base_reference_from_stdin(malformed_only_stdin)
@@ -550,11 +756,14 @@ def test_main_allows_when_code_review_enforcement_flag_is_off(
 ) -> None:
     """Native pre-push honors the real gate with enforcement off.
 
-    Points at the production push gate (not a reason stub). With the shipped
-    default `CODE_REVIEW_ENFORCEMENT_ENABLED = False`, the gate returns no
-    deny reason and the backstop allows the push — one path covering flag,
-    real gate load, and pre-push exit together.
+    Points at the production push gate (not a reason stub). The gate resolves
+    its flag when its config module first executes, so this test clears the
+    environment variable and evicts that one module if a sibling suite cached
+    it earlier in the same session. The gate then returns no deny reason and
+    the backstop allows the push.
     """
+    monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
+    monkeypatch.delitem(sys.modules, ENFORCEMENT_CONSTANTS_MODULE_NAME, raising=False)
     _write_passing_code_rules_gate(tmp_path, monkeypatch)
     real_gate_path = (
         Path(__file__).resolve().parent.parent

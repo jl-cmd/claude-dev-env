@@ -34,9 +34,6 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (
     USAGE_REPORT_KEY_WINDOW_RESET,
     WEEKLY_USAGE_GATE_THRESHOLD_PERCENT,
     WEEKLY_WINDOW_DURATION_MINUTES,
-    WINDOWS_OS_NAME,
-    WINDOWS_TASKKILL_COMMAND,
-    WINDOWS_TASKKILL_TREE_FLAG,
 )
 
 PROBE_PATH = SCRIPTS_DIRECTORY / "codex_usage_probe.py"
@@ -300,58 +297,66 @@ class TestParseTextStatus:
 
 
 class TestProcessTreeTeardown:
-    def should_run_taskkill_tree_when_os_name_is_windows(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def should_end_a_running_app_server_and_reap_it(self) -> None:
+        """A real sleeping child is gone once teardown returns, on any platform."""
         probe = load_probe_module()
-        all_taskkill_commands: list[list[str]] = []
-        fake_process = subprocess.Popen(
+        sleeping_process = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            start_new_session=probe.should_start_new_session(),
         )
         try:
-            monkeypatch.setattr(probe.os, "name", WINDOWS_OS_NAME)
-
-            def capture_run(
-                command: list[str],
-                **_kwargs: object,
-            ) -> subprocess.CompletedProcess[str]:
-                all_taskkill_commands.append(list(command))
-                fake_process.kill()
-                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
-                return subprocess.CompletedProcess(command, 0)
-
-            monkeypatch.setattr(probe.subprocess, "run", capture_run)
-            probe._terminate_process_tree(fake_process)
+            probe._terminate_process_tree(sleeping_process)
+            assert sleeping_process.poll() is not None
         finally:
-            if fake_process.poll() is None:
-                fake_process.kill()
-                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
-        assert len(all_taskkill_commands) == 1
-        assert all_taskkill_commands[0][0] == WINDOWS_TASKKILL_COMMAND
-        assert WINDOWS_TASKKILL_TREE_FLAG in all_taskkill_commands[0]
-        assert str(fake_process.pid) in all_taskkill_commands[0]
+            if sleeping_process.poll() is None:
+                sleeping_process.kill()
+                sleeping_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
 
-    def should_kill_process_directly_when_os_name_is_not_windows(
+    def should_hand_the_whole_tree_to_the_shared_kill(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """Teardown routes the server process through the shared tree kill.
+
+        ::
+
+            shared tree kill  ok:   the cmd.exe shim's app-server child dies too
+            Popen.kill()      flag: the app-server grandchild holds stdout open
+        """
         probe = load_probe_module()
-        fake_process = subprocess.Popen(
-            [sys.executable, "-c", "import time; time.sleep(30)"],
+        all_killed_processes: list[object] = []
+        finished_process = subprocess.Popen(
+            [sys.executable, "-c", ""],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        try:
-            monkeypatch.setattr(probe.os, "name", "posix")
-            probe._terminate_process_tree(fake_process)
-            assert fake_process.poll() is not None
-        finally:
-            if fake_process.poll() is None:
-                fake_process.kill()
-                fake_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+        finished_process.wait(timeout=PROCESS_TREE_WAIT_SECONDS)
+        monkeypatch.setattr(
+            probe,
+            "terminate_process_tree",
+            lambda target_process: all_killed_processes.append(target_process),
+        )
+
+        probe._terminate_process_tree(finished_process)
+
+        assert all_killed_processes == [finished_process]
+
+    def should_return_when_a_killed_child_never_reaps(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A child that outlives its grace window ends teardown, never hangs it."""
+        probe = load_probe_module()
+
+        class _UnreapableProcess:
+            def wait(self, timeout: float | None = None) -> int:
+                raise subprocess.TimeoutExpired(cmd="codex", timeout=timeout or 0)
+
+        monkeypatch.setattr(probe, "terminate_process_tree", lambda _process: None)
+
+        probe._terminate_process_tree(_UnreapableProcess())
 
 
 class TestReaderThreadLifecycle:

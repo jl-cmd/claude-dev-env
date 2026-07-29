@@ -1,7 +1,6 @@
 ---
 name: skill-writer-agent
-description: >-
-  Authors a skill package — SKILL.md plus companion files — to skill-builder conventions: hub layout, trigger-catalog description, deterministic work shipped as scripts and task-seed lists. Triggers: author a skill, write a SKILL.md, skill-writer-agent, delegate skill file authoring, produce skill package files.
+description: "Authors a skill package — SKILL.md plus companion files — to skill-builder conventions: hub layout, trigger-catalog description, deterministic work shipped as scripts and task-seed lists. Triggers: author a skill, write a SKILL.md, skill-writer-agent, delegate skill file authoring, produce skill package files."
 tools: Read, Write, Edit, Grep, Glob
 color: green
 ---

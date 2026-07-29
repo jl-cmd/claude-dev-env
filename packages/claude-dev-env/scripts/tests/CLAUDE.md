@@ -10,6 +10,7 @@ pytest suite for the Python scripts and Pester suite for the PowerShell scripts 
 | `test_setup_project_paths_config.py` | Configuration constants used by `setup_project_paths.py` |
 | `test_sweep_empty_dirs.py` | `sweep_empty_dirs.py` — age check, one-shot mode, and continuous-watch behavior |
 | `test_sync_to_cursor.py` | `sync_to_cursor/` package — mapping, hashing, manifest, and path resolution |
+| `test_grok_worker_constants.py` | `grok_worker_constants.py` — the accepted batch worker-key set stays in step with the worker key constants, and the unknown-key message names both its placeholders |
 
 ## PowerShell test files
 

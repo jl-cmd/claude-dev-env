@@ -1,4 +1,5 @@
 <title>Decision docket — tabbed artifact template</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
   /* ============================================================
@@ -27,6 +28,11 @@
     --accent-wash:#DAE4EA;
     --calm:       #4A6B80;
     --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
+    /* Depth separates the three planes the page stacks: the rail behind,
+       the panel the reader is in, the dock over both. A hairline alone
+       leaves all three sitting on the same level. */
+    --lift:      0 1px 2px rgba(20, 26, 31, 0.05);
+    --lift-high: 0 -2px 12px rgba(20, 26, 31, 0.09);
 
     --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
@@ -47,6 +53,8 @@
       --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
       --accent-wash: #16272F; --calm: #7E97A8;
       --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
+      --lift: 0 1px 2px rgba(0, 0, 0, 0.34);
+      --lift-high: 0 -2px 14px rgba(0, 0, 0, 0.46);
     }
   }
   :root[data-theme="dark"] {
@@ -58,6 +66,8 @@
     --good-wash: #1C2A21; --warn-wash: #2B2417; --risk-wash: #2E1E18;
     --accent-wash: #16272F; --calm: #7E97A8;
     --seam: linear-gradient(90deg, transparent, #2D3740 14%, #2D3740 86%, transparent);
+    --lift: 0 1px 2px rgba(0, 0, 0, 0.34);
+    --lift-high: 0 -2px 14px rgba(0, 0, 0, 0.46);
   }
   :root[data-theme="light"] {
     --ink: #141A1F; --ink-soft: #30383F; --ink-faint: #42484E;
@@ -68,6 +78,8 @@
     --good-wash: #DEE9E0; --warn-wash: #F2E7D1; --risk-wash: #F2DED7;
     --accent-wash: #DAE4EA; --calm: #4A6B80;
     --seam: linear-gradient(90deg, transparent, #C7CBC4 14%, #C7CBC4 86%, transparent);
+    --lift: 0 1px 2px rgba(20, 26, 31, 0.05);
+    --lift-high: 0 -2px 12px rgba(20, 26, 31, 0.09);
   }
 
   body {
@@ -79,14 +91,26 @@
   .shell { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
 
   /* ---------- masthead ---------- */
-  .masthead { display: flex; flex-direction: column; gap: var(--s3); margin-bottom: var(--s5); }
+  .masthead {
+    display: flex; flex-direction: column; gap: var(--s3);
+    margin-bottom: var(--s5); padding-bottom: var(--s5);
+    border-bottom: 1px solid var(--rule);
+  }
+  /* A short accent rule leads the eyebrow, so the line reads as part of the
+     masthead rather than as a stray bold sentence above the headline. */
   .topline {
     font-family: var(--sans); font-size: 13.5px; font-weight: 600;
     letter-spacing: 0; text-transform: none; color: var(--accent-ink);
+    display: flex; align-items: center; gap: var(--s2);
+  }
+  .topline::before {
+    content: ""; width: 18px; height: 2px; background: var(--accent);
+    flex: 0 0 18px;
   }
   h1 {
     font-family: var(--serif); font-size: clamp(27px, 4vw, 38px); line-height: 1.1;
     font-weight: 600; letter-spacing: -0.015em; margin: 0; text-wrap: balance;
+    font-optical-sizing: auto;
   }
   .intro {
     font-family: var(--serif); font-size: 17px; color: var(--ink);
@@ -144,6 +168,7 @@
     display: flex; flex-direction: column;
     background: var(--rail); border: 1px solid var(--rule-soft);
     max-height: calc(100vh - 190px); overflow-y: auto;
+    box-shadow: var(--lift);
   }
 
   /* A rail group heading names a section of the docket, so it is set as a
@@ -225,6 +250,7 @@
     background: var(--surface); border: 1px solid var(--rule-soft);
     padding: var(--s5) var(--s6) var(--s6);
     display: flex; flex-direction: column; gap: var(--s5);
+    box-shadow: var(--lift);
   }
   .panel[hidden] { display: none; }
 
@@ -385,11 +411,16 @@
   button.ghost { background: transparent; color: var(--accent-ink); border-color: var(--rule); }
   button:disabled { opacity: 0.4; cursor: default; }
 
+  /* The dock carries the page's payoff: the count and the copy button. It
+     rides the bottom of the viewport so a reader deep in a long tab can see
+     what they have answered and copy it out without scrolling to find it.
+     It settles into the flow once the end of the page is reached. */
   .dock {
     margin-top: var(--s5); background: var(--surface);
     border: 1px solid var(--rule-soft); border-top: 2px solid var(--ink);
     padding: var(--s3) var(--s5); display: flex; flex-wrap: wrap;
     align-items: center; gap: var(--s4);
+    position: sticky; bottom: 0; z-index: 5; box-shadow: var(--lift-high);
   }
   .dock-status { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
@@ -436,7 +467,7 @@
 
   <div class="board">
     <div class="rail-column">
-      <nav class="tabs" role="tablist" aria-label="Decisions"></nav>
+      <nav class="tabs" role="tablist" aria-label="Decisions" aria-orientation="vertical"></nav>
       <div class="legend" id="legend"></div>
     </div>
     <div id="panels"></div>
@@ -444,15 +475,18 @@
 
   <div class="dock">
     <div class="meter">
-      <span class="dock-status" id="status"></span>
-      <div class="meter-track"><div class="meter-fill" id="meter"></div></div>
+      <span class="dock-status" id="status" aria-live="polite"></span>
+      <div class="meter-track" id="meter-track" role="progressbar"
+           aria-label="Decisions answered" aria-valuemin="0" aria-valuenow="0">
+        <div class="meter-fill" id="meter"></div>
+      </div>
     </div>
     <div class="dock-actions">
       <button class="ghost" id="clear">Clear all</button>
       <button id="copy">Copy my decisions</button>
     </div>
   </div>
-  <div class="out hidden" id="out"></div>
+  <div class="out hidden" id="out" role="region" aria-label="Your decisions as text" tabindex="-1"></div>
 
   <footer id="footnote"></footer>
 </div>
@@ -961,6 +995,13 @@ var ITEMS = [
   var tabsEl = document.querySelector(".tabs");
   var panelsEl = document.getElementById("panels");
 
+  /* A reader who asks for reduced motion gets the same jump without the
+     travel. The CSS covers transitions; a scripted scroll needs asking too. */
+  var stillMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function scrollBehaviour() {
+    return stillMotion.matches ? "auto" : "smooth";
+  }
+
   /* ---------- masthead ---------- */
   (function renderMasthead() {
     var html = '<div class="topline">' + CONFIG.topline + "</div>" +
@@ -1005,11 +1046,19 @@ var ITEMS = [
 
   /* ---------- body blocks ---------- */
   function renderTable(t) {
-    /* A column is numeric when every cell in it is digits, spaces, commas,
-       percent signs, or currency. Numeric columns align right in tabular
-       figures so they can be compared down the column. */
+    /* A column is numeric when it carries at least one digit and every
+       filled cell reads as a number: digits, spaces, commas, decimal
+       points, percent signs, currency marks, or a leading sign. An empty
+       cell is neutral, so one gap in a column of counts keeps the column
+       numeric. Requiring a digit keeps a column of dashes left-aligned.
+       Numeric columns align right in tabular figures, so a reader can
+       compare down the column. */
+    var NUMBER_CELL = /^[\d,.\s%£$€+-]+$/;
     var numeric = t.head.map(function (h, col) {
-      return t.rows.every(function (r) { return /^[\d,.\s%£$€+-]+$/.test(String(r[col] || "")); });
+      var cells = t.rows.map(function (r) { return String(r[col] === undefined || r[col] === null ? "" : r[col]).trim(); });
+      var filled = cells.filter(function (c) { return c !== ""; });
+      return filled.length > 0 &&
+        filled.every(function (c) { return NUMBER_CELL.test(c) && /\d/.test(c); });
     });
     var html = '<div class="scroller"><table>';
     if (t.caption) { html += "<caption>" + t.caption + "</caption>"; }
@@ -1130,7 +1179,7 @@ var ITEMS = [
       panels[j].hidden = j !== i;
     });
     tabs[i].focus();
-    if (window.scrollY > 220) { window.scrollTo({ top: 220, behavior: "smooth" }); }
+    if (window.scrollY > 220) { window.scrollTo({ top: 220, behavior: scrollBehaviour() }); }
   }
 
   tabs.forEach(function (t, i) {
@@ -1180,6 +1229,11 @@ var ITEMS = [
     var share = decidable.length ? Math.round((n / decidable.length) * 100) : 0;
     meter.style.width = share + "%";
     meter.setAttribute("data-full", String(n > 0 && n === decidable.length));
+
+    var track = document.getElementById("meter-track");
+    track.setAttribute("aria-valuemax", String(decidable.length));
+    track.setAttribute("aria-valuenow", String(n));
+    track.setAttribute("aria-valuetext", n + " of " + decidable.length + " decided");
   }
 
   panelsEl.querySelectorAll('input[type="radio"]').forEach(function (el) {
@@ -1307,7 +1361,7 @@ var ITEMS = [
     out.textContent = text;
     out.classList.remove("hidden");
     copyToClipboard(text, out);
-    out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    out.scrollIntoView({ behavior: scrollBehaviour(), block: "nearest" });
   });
 
   document.getElementById("clear").addEventListener("click", function () {
