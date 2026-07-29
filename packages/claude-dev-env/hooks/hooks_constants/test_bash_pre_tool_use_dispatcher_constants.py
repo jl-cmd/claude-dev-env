@@ -26,6 +26,7 @@ _EXPECTED_BASH_ORDER = (
     "blocking/destructive_command_blocker.py",
     "blocking/gh_body_arg_blocker.py",
     "blocking/shell_substitution_blocker.py",
+    "blocking/piped_pytest_blocker.py",
     "blocking/unscoped_search_blocker.py",
     "blocking/nas_ssh_binary_enforcer.py",
     "blocking/volatile_path_in_post_blocker.py",
