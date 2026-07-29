@@ -874,6 +874,107 @@ def test_load_batch_spec_missing_worker_keys_raise_value_error(
     ).lower() or "must be" in str(raised_error.value).lower()
 
 
+def test_load_batch_spec_rejects_an_unknown_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="stray-key-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload["timeout_second"] = 30
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert "timeout_second" in error_text
+    assert WORKER_SPEC_TIMEOUT_KEY in error_text
+
+
+def test_load_batch_spec_names_every_unknown_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="two-stray-keys",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload["stray_cap"] = 5
+    worker_payload["notes"] = "operator scratch"
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert "stray_cap" in error_text
+    assert "notes" in error_text
+
+
+def test_load_batch_spec_rejects_the_retired_turn_cap_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="retired-cap-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[RETIRED_MAX_TURNS_KEYWORD] = 5
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert RETIRED_MAX_TURNS_KEYWORD in error_text
+    assert WORKER_SPEC_TIMEOUT_KEY in error_text
+
+
+def test_load_batch_spec_accepts_every_documented_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload: dict[str, object] = {
+        "role_name": "every-key-worker",
+        "prompt_parts": [str(header_part), str(body_part)],
+        "cwd": str(working_directory),
+        "tool_profile": TOOL_PROFILE_READONLY,
+        "timeout_seconds": 30,
+        "is_repo_only": True,
+        "agent_name": None,
+    }
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    batch_spec = batch.load_batch_spec(specification_path)
+
+    assert batch_spec.all_workers[0].role_name == "every-key-worker"
+    assert batch_spec.all_workers[0].is_repo_only is True
+
+
 def test_load_batch_spec_rejects_non_positive_timeout(
     tmp_path: Path,
 ) -> None:

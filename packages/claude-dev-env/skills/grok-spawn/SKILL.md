@@ -148,6 +148,11 @@ Workers run with no turn cap. The timeout is the only bound on a worker's
 length, and a worker that hits it is killed with its whole process tree and
 reported as `timeout`.
 
+A worker entry accepts these fields and no others. Any other key fails the
+load with an error naming the stray key and listing the accepted set, so a
+misspelled field shows up at startup rather than passing for a setting that
+took effect.
+
 Put the spec file under the run state directory (or any path you pass to
 `--spec`).
 

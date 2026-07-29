@@ -26,6 +26,7 @@ from pathlib import Path
 
 from dev_env_scripts_constants.grok_worker_constants import (
     ALL_KNOWN_TOOL_PROFILES,
+    ALL_KNOWN_WORKER_SPEC_KEYS,
     BATCH_LAUNCH_ERROR_STDERR_PREFIX,
     BATCH_SPEC_ROLE_KEY,
     BATCH_SPEC_SHOULD_PING_KEY,
@@ -70,11 +71,13 @@ from dev_env_scripts_constants.grok_worker_constants import (
     SUMMARY_WORKERS_KEY,
     TOOL_PROFILE_BUILD,
     TOOL_PROFILE_READONLY,
+    UNKNOWN_WORKER_KEY_ERROR_TEMPLATE,
     UTF8_ENCODING,
     WORKER_EXCEPTION_RETURN_CODE,
     WORKER_SPEC_AGENT_NAME_KEY,
     WORKER_SPEC_CWD_KEY,
     WORKER_SPEC_IS_REPO_ONLY_KEY,
+    WORKER_SPEC_KEY_JOIN_SEPARATOR,
     WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_ROLE_NAME_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
@@ -87,6 +90,38 @@ from grok_worker_preflight import PreflightOutcome, run_preflight
 batch_sleep = time.sleep
 batch_headless_runner = run_headless_worker
 batch_preflight = run_preflight
+
+
+def _require_known_worker_keys(all_worker_fields: dict[str, object]) -> None:
+    """Reject a worker entry carrying a key the launcher does not accept.
+
+    ::
+
+        {"role_name": "lens", ..., "timeout_second": <seconds>}
+        flag: unknown worker key(s): timeout_second; accepted keys: agent_name, ...
+
+    A dropped key reads as a setting that took effect. Naming it here makes
+    that a startup error rather than a silent gap.
+
+    Args:
+        all_worker_fields: One raw worker entry straight from the JSON spec.
+
+    Raises:
+        ValueError: When the entry carries any key outside the accepted set.
+    """
+    all_unknown_keys = set(all_worker_fields) - ALL_KNOWN_WORKER_SPEC_KEYS
+    if not all_unknown_keys:
+        return
+    joined_unknown = WORKER_SPEC_KEY_JOIN_SEPARATOR.join(sorted(all_unknown_keys))
+    joined_accepted = WORKER_SPEC_KEY_JOIN_SEPARATOR.join(
+        sorted(ALL_KNOWN_WORKER_SPEC_KEYS)
+    )
+    raise ValueError(
+        UNKNOWN_WORKER_KEY_ERROR_TEMPLATE.format(
+            unknown_keys=joined_unknown,
+            accepted_keys=joined_accepted,
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -290,6 +325,7 @@ def _require_timeout_within_bounds(raw_field: object) -> int:
 
 
 def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
+    _require_known_worker_keys(all_worker_fields)
     role_name = _require_string(
         _require_worker_field(all_worker_fields, WORKER_SPEC_ROLE_NAME_KEY),
         WORKER_SPEC_ROLE_NAME_KEY,
@@ -348,7 +384,8 @@ def load_batch_spec(specification_path: Path) -> BatchSpec:
         The validated batch specification.
 
     Raises:
-        ValueError: When the JSON shape is invalid or a required field is wrong.
+        ValueError: When the JSON shape is invalid, a required field is wrong,
+            or a worker entry carries a key outside the accepted set.
         OSError: When the specification file cannot be read.
         json.JSONDecodeError: When the file is not valid JSON.
     """
