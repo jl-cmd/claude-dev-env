@@ -4,7 +4,11 @@
 
 One tool call: read the unified diff (`git diff @{upstream}...HEAD; git diff HEAD`
 to cover both committed and uncommitted changes, or `git diff main...HEAD` /
-the target passed as an argument). Skip test/fixture
+the target passed as an argument). A target names one or more items, each a PR
+number, a branch name, or a file path, and it may mix those forms — a loop round
+widens a target by adding a path to whatever it started as. When a target names
+more than one item, read each item's diff and review their union — a shared hunk
+counted once, an empty one adding nothing. Skip test/fixture
 hunks (`test/`, `spec/`, `__tests__/`, `*_test.*`, `*.test.*`,
 `fixtures/`, `testdata/`) — test-file changes are not reviewed at this level.
 No subagents, no full-file reads.

@@ -10,8 +10,12 @@ Run `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`
 if there's no upstream) to get the unified diff under review. If there are
 uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
 include the working-tree changes in scope — the review often runs before the
-commit. If a PR number, branch name, or file path was passed as an argument,
-review that target instead. Treat this diff as the review scope.
+commit. If a target was passed as an argument, review that target instead. A
+target names one or more items, each a PR number, a branch name, or a file path,
+and it may mix those forms — a loop round widens a target by adding a path to
+whatever it started as. When a target names more than one item, gather each
+item's diff and take their union — a shared hunk counted once, an empty one
+adding nothing — as the target's diff. Treat this diff as the review scope.
 
 ## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle)
 
