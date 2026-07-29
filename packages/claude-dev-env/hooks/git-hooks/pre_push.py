@@ -256,7 +256,11 @@ def resolve_default_branch_reference() -> str | None:
         (*ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX, ORIGIN_HEAD_SYMBOLIC_REFERENCE)
     )
     if symbolic_reference is not None:
-        return symbolic_reference
+        verified_symbolic_target = run_git_reference_query(
+            (*ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX, symbolic_reference)
+        )
+        if verified_symbolic_target is not None:
+            return symbolic_reference
     for each_candidate_reference in ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES:
         verified_reference = run_git_reference_query(
             (*ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX, each_candidate_reference)

@@ -967,10 +967,15 @@ def test_resolve_gate_base_reference_flags_an_unresolvable_merge_base(
     assert base_reference == git_hooks_constants.UNRESOLVABLE_MERGE_BASE_SENTINEL
 
 
-def test_resolve_gate_base_reference_flags_a_dangling_origin_head(
+def test_resolve_gate_base_reference_treats_a_dangling_origin_head_as_no_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A symbolic origin/HEAD whose target is missing falls through to no default.
+
+    The gate base then uses the stdin remote object, the same path as when no
+    default-branch ref resolves at all.
+    """
     repository = tmp_path / "dangling_origin_head_repository"
     repository.mkdir()
     _run_fixture_git(repository, "init", "-b", DEFAULT_BRANCH_NAME)
@@ -986,19 +991,31 @@ def test_resolve_gate_base_reference_flags_a_dangling_origin_head(
 
     base_reference = pre_push.resolve_gate_base_reference(stdin_text)
 
-    assert base_reference == git_hooks_constants.UNRESOLVABLE_MERGE_BASE_SENTINEL
+    assert base_reference == NON_ZERO_REMOTE_SHA_ONE
 
 
 def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Dangling origin/HEAD does not skip the gate; it uses the remote object base."""
     repository = tmp_path / "dangling_origin_head_push_repository"
     repository.mkdir()
     _run_fixture_git(repository, "init", "-b", DEFAULT_BRANCH_NAME)
-    pushed_object_name = _commit_file(repository, BASE_FILE_NAME)
+    remote_object_name = _commit_file(repository, BASE_FILE_NAME)
+    _run_fixture_git(repository, "checkout", "-b", FEATURE_BRANCH_NAME)
+    pushed_object_name = _commit_file(repository, BRANCH_FILE_NAME)
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
-    _write_diff_scoped_gate(tmp_path, monkeypatch)
+    recorded_arguments_path = tmp_path / "recorded_arguments_dangling.txt"
+    recording_gate_script_path = tmp_path / "recording_gate_dangling.py"
+    recording_gate_script_path.write_text(
+        "import sys, pathlib\n"
+        f'pathlib.Path(r"{recorded_arguments_path}").write_text('
+        "'\\n'.join(sys.argv[1:]), encoding='utf-8')\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
     _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
@@ -1009,7 +1026,7 @@ def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
                 FEATURE_BRANCH_NAME,
                 pushed_object_name,
                 FEATURE_BRANCH_NAME,
-                NON_ZERO_REMOTE_SHA_ONE,
+                remote_object_name,
             )
         ),
     )
@@ -1017,6 +1034,10 @@ def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
     exit_code = pre_push.main()
 
     assert exit_code == 0
+    recorded_arguments = recorded_arguments_path.read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert recorded_arguments == ["--base", remote_object_name]
 
 
 def test_main_skips_the_gate_when_no_merge_base_resolves(
