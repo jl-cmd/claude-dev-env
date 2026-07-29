@@ -894,7 +894,7 @@ def test_load_batch_spec_rejects_non_positive_timeout(
         zero_timeout_dir,
         all_worker_payloads=[zero_timeout_payload],
     )
-    with pytest.raises(ValueError, match=WORKER_SPEC_TIMEOUT_KEY):
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
         batch.load_batch_spec(zero_timeout_path)
 
 

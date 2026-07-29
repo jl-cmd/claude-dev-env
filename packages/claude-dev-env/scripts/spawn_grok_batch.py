@@ -46,6 +46,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
     MAXIMUM_WORKER_TIMEOUT_SECONDS,
     MIN_WORKER_TIMEOUT_SECONDS,
+    MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
     OUTPUT_FILENAME_PREFIX,
     OUTPUT_FILENAME_SUFFIX,
     PROMPT_FILENAME_PREFIX,
@@ -246,25 +247,18 @@ def _require_worker_field(
     return all_worker_fields[field_name]
 
 
-def _require_int_at_least(
-    raw_field: object, field_name: str, minimum_accepted: int
-) -> int:
-    parsed_integer = _require_int(raw_field, field_name)
-    if parsed_integer < minimum_accepted:
-        raise ValueError(
-            f"worker {field_name} must be >= {minimum_accepted}"
-        )
-    return parsed_integer
-
-
-def _require_timeout_within_ceiling(raw_field: object) -> int:
-    """Accept a worker timeout at or under the ceiling; refuse anything past it.
+def _require_timeout_within_bounds(raw_field: object) -> int:
+    """Accept a worker timeout inside the bounds; refuse anything outside them.
 
     ::
 
+        0     flag: ValueError naming MIN_WORKER_TIMEOUT_SECONDS
         5401  flag: ValueError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
         5400  ok:   returned untouched
         30    ok:   returned untouched
+
+    Rejecting here rather than clamping keeps the fault where the operator
+    wrote it. The runner repeats the check for callers that skip the parse.
 
     Args:
         raw_field: The parsed ``timeout_seconds`` value from the specification.
@@ -273,11 +267,17 @@ def _require_timeout_within_ceiling(raw_field: object) -> int:
         The accepted timeout in seconds, unchanged.
 
     Raises:
-        ValueError: When the value is not a positive int, or exceeds the ceiling.
+        ValueError: When the value is not an int, or falls outside the bounds.
     """
-    timeout_seconds = _require_int_at_least(
-        raw_field, WORKER_SPEC_TIMEOUT_KEY, MIN_WORKER_TIMEOUT_SECONDS
-    )
+    timeout_seconds = _require_int(raw_field, WORKER_SPEC_TIMEOUT_KEY)
+    if timeout_seconds < MIN_WORKER_TIMEOUT_SECONDS:
+        raise ValueError(
+            MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                field_name=WORKER_SPEC_TIMEOUT_KEY,
+                requested_seconds=timeout_seconds,
+                minimum_seconds=MIN_WORKER_TIMEOUT_SECONDS,
+            )
+        )
     if timeout_seconds > MAXIMUM_WORKER_TIMEOUT_SECONDS:
         raise ValueError(
             MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
@@ -305,7 +305,7 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         _require_worker_field(all_worker_fields, WORKER_SPEC_TOOL_PROFILE_KEY),
         WORKER_SPEC_TOOL_PROFILE_KEY,
     )
-    timeout_seconds = _require_timeout_within_ceiling(
+    timeout_seconds = _require_timeout_within_bounds(
         all_worker_fields.get(
             WORKER_SPEC_TIMEOUT_KEY, DEFAULT_WORKER_TIMEOUT_SECONDS
         )

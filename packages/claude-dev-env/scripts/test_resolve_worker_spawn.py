@@ -40,6 +40,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CWD_FLAG,
     DEFAULT_ROLE,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
     MIN_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
@@ -47,6 +48,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     REASON_CLAUDE_AGENT_REQUIRED,
     REASON_GROK_AUTH_FAILED,
     REASON_PROMPT_FILE_MISSING,
+    REASON_TIMEOUT_OUT_OF_BOUNDS,
     RESULT_KEY_ATTEMPTS,
     RESULT_KEY_OK,
     RESULT_KEY_OUTPUT,
@@ -60,11 +62,16 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TIER_CLAUDE_HEADLESS,
     TIER_GROK,
 )
-from grok_headless_runner import GrokRunnerOutcome, run_headless_worker  # noqa: E402
+import grok_headless_runner  # noqa: E402
+from grok_headless_runner import (  # noqa: E402
+    GrokRunnerOutcome,
+    run_headless_worker,
+)
 from grok_worker_preflight import PreflightOutcome  # noqa: E402
 
 HOST_PROFILE_CLAUDE = "Claude"
 HOST_PROFILE_THIRD_PARTY = "ThirdParty"
+NON_POSITIVE_TIMEOUT_SECONDS = 0
 
 FIXTURE_GROK_STDOUT = '{"tier":"grok","status":"done"}'
 FIXTURE_CLAUDE_STDOUT = '{"tier":"claude","status":"done"}'
@@ -311,6 +318,95 @@ def test_grok_usage_limited_on_claude_host_requires_agent(
     assert spawn_outcome.all_attempts[0].reason == CLASSIFICATION_USAGE_LIMIT
     assert spawn_outcome.all_attempts[1].tier == TIER_CLAUDE_AGENT
     assert spawn_outcome.all_attempts[1].reason == REASON_CLAUDE_AGENT_REQUIRED
+
+
+def test_out_of_bounds_timeout_is_reported_as_config_not_worker_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A refused timeout prints a structured outcome and exits 3, never a traceback.
+
+    ::
+
+        --timeout-seconds 0     ok: reason timeout_out_of_bounds, exit 3
+        --timeout-seconds 5401  ok: reason timeout_out_of_bounds, exit 3
+    """
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    _install_seams(monkeypatch, grok_outcome=_grok_ok())
+    monkeypatch.setattr(
+        dispatcher, "spawn_grok_runner", grok_headless_runner.run_headless_worker
+    )
+
+    for each_refused_timeout in (
+        NON_POSITIVE_TIMEOUT_SECONDS,
+        MAXIMUM_WORKER_TIMEOUT_SECONDS + 1,
+    ):
+        exit_code = dispatcher.main(
+            [
+                CLI_ROLE_FLAG,
+                FIXTURE_ROLE,
+                PROMPT_FILE_FLAG,
+                str(prompt_file),
+                CWD_FLAG,
+                str(working_directory),
+                CLI_TIMEOUT_FLAG,
+                str(each_refused_timeout),
+                CLI_RUN_STATE_DIR_FLAG,
+                str(run_state_directory),
+            ]
+        )
+        parsed_payload = json.loads(capsys.readouterr().out)
+        all_attempt_reasons = [
+            each_attempt[ATTEMPT_KEY_REASON]
+            for each_attempt in parsed_payload[RESULT_KEY_ATTEMPTS]
+        ]
+
+        assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE, each_refused_timeout
+        assert parsed_payload[RESULT_KEY_OK] is False, each_refused_timeout
+        assert parsed_payload[RESULT_KEY_TIER_USED] is None, each_refused_timeout
+        assert REASON_TIMEOUT_OUT_OF_BOUNDS in all_attempt_reasons, each_refused_timeout
+
+
+def test_out_of_bounds_timeout_is_refused_when_the_grok_tier_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The bounds hold on a host whose preflight never reaches the grok runner.
+
+    ::
+
+        preflight unusable, --timeout-seconds 5401
+            ok: reason timeout_out_of_bounds, exit 3, no tier invoked
+    """
+    prompt_file, working_directory, run_state_directory = _paths(tmp_path)
+    call_log = _install_seams(
+        monkeypatch,
+        preflight_outcome=_fallthrough_preflight(REASON_GROK_AUTH_FAILED),
+        claude_outcome=_claude_served(),
+    )
+
+    exit_code = dispatcher.main(
+        [
+            CLI_ROLE_FLAG,
+            FIXTURE_ROLE,
+            PROMPT_FILE_FLAG,
+            str(prompt_file),
+            CWD_FLAG,
+            str(working_directory),
+            CLI_TIMEOUT_FLAG,
+            str(MAXIMUM_WORKER_TIMEOUT_SECONDS + 1),
+            CLI_RUN_STATE_DIR_FLAG,
+            str(run_state_directory),
+        ]
+    )
+    parsed_payload = json.loads(capsys.readouterr().out)
+    all_attempt_reasons = [
+        each_attempt[ATTEMPT_KEY_REASON]
+        for each_attempt in parsed_payload[RESULT_KEY_ATTEMPTS]
+    ]
+
+    assert exit_code == SPAWN_CONFIG_ERROR_EXIT_CODE
+    assert REASON_TIMEOUT_OUT_OF_BOUNDS in all_attempt_reasons
+    assert call_log.preflight_calls == 0
+    assert call_log.claude_calls == 0
 
 
 def test_timed_out_grok_worker_is_recorded_as_timeout_not_served(

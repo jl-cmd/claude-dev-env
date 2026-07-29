@@ -72,6 +72,7 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     PROMPT_FILE_FLAG,
     REASON_CLAUDE_AGENT_REQUIRED,
     REASON_PROMPT_FILE_MISSING,
+    REASON_TIMEOUT_OUT_OF_BOUNDS,
     RESULT_KEY_ATTEMPTS,
     RESULT_KEY_OK,
     RESULT_KEY_OUTPUT,
@@ -86,7 +87,12 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TIER_GROK,
     UTF8_ENCODING,
 )
-from grok_headless_runner import GrokRunnerOutcome, run_headless_worker  # noqa: E402
+from grok_headless_runner import (  # noqa: E402
+    GrokRunnerOutcome,
+    WorkerTimeoutOutOfBoundsError,
+    require_timeout_within_bounds,
+    run_headless_worker,
+)
 from grok_worker_preflight import PreflightOutcome, run_preflight  # noqa: E402
 from tier_model_ids import detect_host_profile  # noqa: E402
 
@@ -419,6 +425,8 @@ def resolve_worker_spawn(
     """Walk the worker-spawn tiers and return the structured outcome.
 
     The timeout bounds each tier; no turn cap reaches the headless grok worker.
+    The bounds check runs before the preflight, so a refused timeout is refused
+    on the claude tier too, not only on the path that reaches the grok runner.
 
     Args:
         role: Worker role name for preflight; mapped to a primary agent stem.
@@ -432,10 +440,11 @@ def resolve_worker_spawn(
         The dispatcher outcome including the ordered attempts trail.
 
     Raises:
-        ValueError: When the headless runner refuses ``timeout_seconds`` as
-            missing or below its accepted floor. The CLI maps this to the
+        WorkerTimeoutOutOfBoundsError: When ``timeout_seconds`` is missing,
+            below the floor, or above the ceiling. The CLI maps this to the
             config-error exit code.
     """
+    require_timeout_within_bounds(timeout_seconds)
     preflight_outcome: PreflightOutcome = spawn_preflight_runner(
         role=role,
         should_ping=False,
@@ -575,6 +584,34 @@ def _missing_prompt_file_outcome() -> SpawnOutcome:
     )
 
 
+def _timeout_out_of_bounds_outcome(
+    bounds_error: WorkerTimeoutOutOfBoundsError,
+) -> SpawnOutcome:
+    """Report a refused timeout as a config fault rather than a worker failure.
+
+    ::
+
+        --timeout-seconds 0     ok: attempts[0].reason timeout_out_of_bounds
+        --timeout-seconds 5401  ok: attempts[0].reason timeout_out_of_bounds
+
+    Args:
+        bounds_error: The refusal raised by the headless runner.
+
+    Returns:
+        A config-error outcome whose attempt reason names the violation.
+    """
+    return SpawnOutcome(
+        tier_used=None,
+        is_ok=False,
+        all_attempts=(
+            _attempt(TIER_GROK, is_ok=False, reason=REASON_TIMEOUT_OUT_OF_BOUNDS),
+        ),
+        captured_stdout=str(bounds_error),
+        returncode=SPAWN_CONFIG_ERROR_EXIT_CODE,
+        is_config_error=True,
+    )
+
+
 def _write_spawn_outcome_and_exit_code(
     spawn_outcome: SpawnOutcome, *, is_config_error: bool
 ) -> int:
@@ -588,6 +625,12 @@ def _write_spawn_outcome_and_exit_code(
 
 def main(all_command_arguments: list[str]) -> int:
     """Run the dispatcher for CLI arguments and print the JSON outcome.
+
+    A timeout outside the accepted bounds is a config fault: the run prints a
+    structured outcome whose attempt reason is ``timeout_out_of_bounds`` and
+    exits ``3``, rather than raising out of the CLI. A chain misconfiguration,
+    or an unknown host profile refused by ``detect_host_profile``, prints the
+    same exit code with the refusal text as its output.
 
     Args:
         all_command_arguments: The argument vector after the program name.
@@ -614,6 +657,9 @@ def main(all_command_arguments: list[str]) -> int:
             is_claude_tier_enabled=parsed_arguments.is_claude_tier_enabled,
             run_state_directory=run_state_directory,
         )
+    except WorkerTimeoutOutOfBoundsError as bounds_error:
+        is_config_error = True
+        spawn_outcome = _timeout_out_of_bounds_outcome(bounds_error)
     except (ChainConfigurationError, ValueError) as configuration_error:
         is_config_error = True
         spawn_outcome = _config_error_outcome(configuration_error)

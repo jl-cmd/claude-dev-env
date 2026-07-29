@@ -28,7 +28,6 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
-import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +39,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     ALWAYS_APPROVE_FLAG,
     CLASSIFICATION_AUTH_FAILURE,
     CLASSIFICATION_ERROR,
+    CLASSIFICATION_KILL_FAILED,
     CLASSIFICATION_OK,
     CLASSIFICATION_STREAM_JOIN_SEPARATOR,
     CLASSIFICATION_TIMEOUT,
@@ -48,18 +48,23 @@ from dev_env_scripts_constants.grok_worker_constants import (
     GROK_BINARY_NAME,
     GROK_BINARY_NOT_FOUND_STDERR,
     GROK_MODEL_PIN,
+    KILL_FAILED_RETURN_CODE,
+    KILL_FAILED_STDERR_TEMPLATE,
     KILL_GRACE_TIMEOUT_SECONDS,
     LAUNCH_FAILURE_RETURN_CODE,
     LAUNCH_FAILURE_STDERR_PREFIX,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
     LEADER_SOCKET_FLAG,
+    MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
     MIN_WORKER_TIMEOUT_SECONDS,
     MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
     MISSING_BINARY_RETURN_CODE,
     MODEL_FLAG,
     OUTPUT_FORMAT_FLAG,
     OUTPUT_FORMAT_JSON,
+    PROCESS_TREE_KILL_ATTEMPT_LIMIT,
     PROCESS_TREE_KILL_TIMEOUT_SECONDS,
     PROMPT_FILE_FLAG,
     TIMEOUT_RETURN_CODE,
@@ -70,10 +75,19 @@ from dev_env_scripts_constants.grok_worker_constants import (
     WINDOWS_TASKKILL_FORCE_FLAG,
     WINDOWS_TASKKILL_PID_FLAG,
     WINDOWS_TASKKILL_TREE_FLAG,
+    WORKER_SPEC_TIMEOUT_KEY,
 )
 
 runner_popen = subprocess.Popen
 runner_subprocess_run = subprocess.run
+
+
+class WorkerTimeoutOutOfBoundsError(ValueError):
+    """Raised when a requested worker timeout falls outside the accepted bounds.
+
+    A ``ValueError`` subclass so existing callers that catch ``ValueError``
+    keep working, while a caller that wants only this fault can name it.
+    """
 
 
 @dataclass(frozen=True)
@@ -217,20 +231,25 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
 def _kill_posix_process_group(process_identifier: int) -> None:
     """End a POSIX process group so no grandchild keeps the capture pipe open.
 
-    The platform guard is what lets the process-group calls resolve: they exist
-    only off Windows. It is written as a ``sys.platform`` literal because that
-    is the form the type checker reads to narrow the platform.
+    Reached only through the caller's ``os.name`` branch, so the process-group
+    calls run on the platforms that define them.
 
     A process id that is already reaped raises ``OSError``; this swallows it and
     returns, so the caller falls back to ``Popen.kill()``.
     """
-    if sys.platform == "win32":
-        return
     try:
-        process_group_identifier = os.getpgid(process_identifier)
-        os.killpg(process_group_identifier, signal.SIGKILL)
+        process_group_identifier = os.getpgid(process_identifier)  # type: ignore[attr-defined] # POSIX-only, reached via the caller's os.name branch
+        os.killpg(process_group_identifier, signal.SIGKILL)  # type: ignore[attr-defined] # POSIX-only, reached via the caller's os.name branch
     except OSError:
         return
+
+
+def _kill_process_tree_by_identifier(process_identifier: int) -> None:
+    """Issue the platform's tree kill for one process id, with no liveness check."""
+    if os.name == WINDOWS_OS_NAME:
+        _kill_windows_process_tree(process_identifier)
+        return
+    _kill_posix_process_group(process_identifier)
 
 
 def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
@@ -246,10 +265,7 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
     """
     if process.poll() is not None:
         return
-    if os.name == WINDOWS_OS_NAME:
-        _kill_windows_process_tree(process.pid)
-    else:
-        _kill_posix_process_group(process.pid)
+    _kill_process_tree_by_identifier(process.pid)
     if process.poll() is not None:
         return
     try:
@@ -258,24 +274,110 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
         return
 
 
-def _require_live_timeout(timeout_seconds: int | None) -> None:
+def require_timeout_within_bounds(timeout_seconds: int | None) -> None:
+    """Refuse a timeout that is missing, below the floor, or above the ceiling.
+
+    ::
+
+        None or 0  flag: ValueError naming MIN_WORKER_TIMEOUT_SECONDS
+        5401       flag: ValueError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
+        1 .. 5400  ok:   returns
+
+    Public so a dispatcher can apply the same bounds on a path that never
+    reaches ``run_headless_worker``.
+
+    Args:
+        timeout_seconds: The requested per-worker timeout in seconds.
+
+    Raises:
+        WorkerTimeoutOutOfBoundsError: When the value falls outside the bounds.
+    """
     if timeout_seconds is None or timeout_seconds < MIN_WORKER_TIMEOUT_SECONDS:
-        raise ValueError(
+        raise WorkerTimeoutOutOfBoundsError(
             MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                field_name=WORKER_SPEC_TIMEOUT_KEY,
                 requested_seconds=timeout_seconds,
                 minimum_seconds=MIN_WORKER_TIMEOUT_SECONDS,
             )
         )
+    if timeout_seconds > MAXIMUM_WORKER_TIMEOUT_SECONDS:
+        raise WorkerTimeoutOutOfBoundsError(
+            MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                field_name=WORKER_SPEC_TIMEOUT_KEY,
+                requested_seconds=timeout_seconds,
+                maximum_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+            )
+        )
+
+
+def _drain_after_kill(process: subprocess.Popen[str]) -> tuple[str, str] | None:
+    """Read the killed process's streams, or None when the grace window expires."""
+    try:
+        return process.communicate(timeout=KILL_GRACE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _kill_and_drain_within_attempt_limit(
+    process: subprocess.Popen[str],
+) -> tuple[str, str] | None:
+    """Kill the process tree and drain it, retrying up to the attempt limit.
+
+    ::
+
+        attempt 1 drains         ok:   streams, one attempt made
+        attempt 1 times out,
+        attempt 2 drains         ok:   streams, two attempts made
+        every attempt times out  flag: None
+
+    A tree kill that returns without taking leaves the drain waiting on a live
+    pipe, so a timed-out drain is followed by another kill-and-drain round.
+    ``_terminate_process_tree`` re-issues the kill only while the worker
+    process is still alive; once it has exited, the next round is a second
+    drain window for the descendants still holding the pipe open.
+
+    Args:
+        process: The timed-out worker process to kill and read.
+
+    Returns:
+        The captured stdout and stderr, or None when every attempt timed out.
+    """
+    attempts_made = 0
+    while attempts_made < PROCESS_TREE_KILL_ATTEMPT_LIMIT:
+        _terminate_process_tree(process)
+        all_captured_streams = _drain_after_kill(process)
+        if all_captured_streams is not None:
+            return all_captured_streams
+        attempts_made += 1
+    return None
+
+
+def _kill_failed_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
+    diagnostic_text = KILL_FAILED_STDERR_TEMPLATE.format(
+        attempt_count=PROCESS_TREE_KILL_ATTEMPT_LIMIT,
+        process_identifier=process.pid,
+    )
+    return GrokRunnerOutcome(
+        is_ok=False,
+        returncode=KILL_FAILED_RETURN_CODE,
+        classification=CLASSIFICATION_KILL_FAILED,
+        stdout="",
+        stderr=diagnostic_text,
+    )
 
 
 def _timeout_outcome(process: subprocess.Popen[str]) -> GrokRunnerOutcome:
-    _terminate_process_tree(process)
-    try:
-        captured_stdout, captured_stderr = process.communicate(
-            timeout=KILL_GRACE_TIMEOUT_SECONDS
-        )
-    except subprocess.TimeoutExpired:
-        captured_stdout, captured_stderr = "", ""
+    """Kill a timed-out worker's tree, then classify what the kill achieved.
+
+    ::
+
+        drain clears on attempt 1 or 2  ok:   classification timeout
+        both attempts leave it draining flag: classification kill_failed
+    """
+    all_captured_streams = _kill_and_drain_within_attempt_limit(process)
+    if all_captured_streams is None:
+        return _kill_failed_outcome(process)
+    captured_stdout, captured_stderr = all_captured_streams
     stdout_text = _normalize_stream(captured_stdout)
     stderr_text = _normalize_stream(captured_stderr)
     returncode = _resolve_returncode(process)
@@ -358,6 +460,8 @@ def run_headless_worker(
         run_state_directory: Run-scoped directory the leader socket is minted
             under. Read only when ``leader_socket_path`` is omitted.
         timeout_seconds: Seconds before the process tree is killed on expiry.
+            Must sit between ``MIN_WORKER_TIMEOUT_SECONDS`` and
+            ``MAXIMUM_WORKER_TIMEOUT_SECONDS`` inclusive.
         agent_name: Optional role agent name passed via ``--agent``.
         leader_socket_path: Optional pre-minted leader socket path. When omitted,
             a unique path is minted under ``run_state_directory``.
@@ -368,10 +472,10 @@ def run_headless_worker(
         The classified outcome including return code and captured streams.
 
     Raises:
-        ValueError: When ``timeout_seconds`` is missing or below
-            ``MIN_WORKER_TIMEOUT_SECONDS``.
+        WorkerTimeoutOutOfBoundsError: When ``timeout_seconds`` is missing,
+            below the floor, or above the ceiling.
     """
-    _require_live_timeout(timeout_seconds)
+    require_timeout_within_bounds(timeout_seconds)
     resolved_leader_socket_path = (
         leader_socket_path
         if leader_socket_path is not None
