@@ -1,26 +1,6 @@
 ---
 name: deep-research
-description: |
-  Use this agent for iterative, multi-source deep research that produces comprehensive Obsidian reports with full citations. Official-docs-first methodology with anti-hallucination constraints. Examples:
-
-    <example>
-    Context: User wants thorough research on a technical topic
-    user: "Research the current state of WebSocket authentication best practices"
-    assistant: "I'll use the deep-research agent to conduct iterative multi-source research and produce a cited report."
-    <commentary>
-    Multi-source research requiring iteration and synthesis — exactly what deep-research handles.
-    </commentary>
-    </example>
-
-    <example>
-    Context: User needs a landscape survey with citations
-    user: "Compare the major vector database options for production RAG systems in 2026"
-    assistant: "I'll launch the deep-research agent to survey the landscape across multiple sources."
-    <commentary>
-    Broad survey requiring many sources, comparison, and synthesis — deep-research with exhaustive depth.
-    </commentary>
-    </example>
-
+description: "Use this agent for iterative, multi-source deep research that produces comprehensive Obsidian reports with full citations. Official-docs-first methodology with anti-hallucination constraints. Examples:\n\n  <example>\n  Context: User wants thorough research on a technical topic\n  user: \"Research the current state of WebSocket authentication best practices\"\n  assistant: \"I'll use the deep-research agent to conduct iterative multi-source research and produce a cited report.\"\n  <commentary>\n  Multi-source research requiring iteration and synthesis — exactly what deep-research handles.\n  </commentary>\n  </example>\n\n  <example>\n  Context: User needs a landscape survey with citations\n  user: \"Compare the major vector database options for production RAG systems in 2026\"\n  assistant: \"I'll launch the deep-research agent to survey the landscape across multiple sources.\"\n  <commentary>\n  Broad survey requiring many sources, comparison, and synthesis — deep-research with exhaustive depth.\n  </commentary>\n  </example>"
 color: cyan
 ---
 
@@ -32,10 +12,9 @@ You receive a `<research_brief>` from the orchestrating skill. Your job is to ex
 
 On receiving the research brief, write the state file:
 
-`.deep-research-state.md`:
+`.deep-research-state.md` opens with a YAML frontmatter block — a three-hyphen fence line, these fields, then a closing three-hyphen fence line:
 
-```markdown
----
+```yaml
 topic: "[from brief]"
 brief: "[one-line summary from brief]"
 iteration: 0
@@ -43,8 +22,11 @@ max_iterations: [from brief]
 status: researching
 source_count: 0
 official_docs_found: false
----
+```
 
+The rest of the file holds the tracking sections:
+
+```markdown
 ## Sources Found
 
 (none yet)
