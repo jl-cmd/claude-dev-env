@@ -20,9 +20,11 @@ The headless runner always passes:
 | `--cwd` | Worker `cwd` from the batch spec |
 | `--output-format` | `json` |
 | `--always-approve` | present (auto-approve tool runs) |
-| `--max-turns` | Worker `max_turns` (default `8`) |
 | `--leader-socket` | Unique per-worker socket path under the run state dir |
 | `--debug-file` | Unique per-worker debug log (batch launcher adds this) |
+
+The runner passes no `--max-turns`. Worker length is bounded by the per-worker
+timeout alone. The preflight ping keeps its own single-turn cap.
 
 Optional:
 

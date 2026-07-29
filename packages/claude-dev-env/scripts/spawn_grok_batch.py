@@ -39,14 +39,15 @@ from dev_env_scripts_constants.grok_worker_constants import (
     DEBUG_FILENAME_PREFIX,
     DEBUG_FILENAME_SUFFIX,
     DEFAULT_ROLE,
-    DEFAULT_WORKER_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
     DISABLE_WEB_SEARCH_FLAG,
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
-    MIN_WORKER_MAX_TURNS,
+    MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
     MIN_WORKER_TIMEOUT_SECONDS,
+    MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE,
     OUTPUT_FILENAME_PREFIX,
     OUTPUT_FILENAME_SUFFIX,
     PROMPT_FILENAME_PREFIX,
@@ -77,7 +78,6 @@ from dev_env_scripts_constants.grok_worker_constants import (
     WORKER_SPEC_CWD_KEY,
     WORKER_SPEC_IS_REPO_ONLY_KEY,
     WORKER_SPEC_KEY_JOIN_SEPARATOR,
-    WORKER_SPEC_MAX_TURNS_KEY,
     WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_ROLE_NAME_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
@@ -134,7 +134,6 @@ class WorkerSpec:
     tool_profile: str
     timeout_seconds: int
     is_repo_only: bool = False
-    max_turns: int = DEFAULT_WORKER_MAX_TURNS
     agent_name: str | None = None
 
 
@@ -283,15 +282,46 @@ def _require_worker_field(
     return all_worker_fields[field_name]
 
 
-def _require_int_at_least(
-    raw_field: object, field_name: str, minimum_accepted: int
-) -> int:
-    parsed_integer = _require_int(raw_field, field_name)
-    if parsed_integer < minimum_accepted:
+def _require_timeout_within_bounds(raw_field: object) -> int:
+    """Accept a worker timeout inside the bounds; refuse anything outside them.
+
+    ::
+
+        0     flag: ValueError naming MIN_WORKER_TIMEOUT_SECONDS
+        5401  flag: ValueError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
+        5400  ok:   returned untouched
+        30    ok:   returned untouched
+
+    Rejecting here rather than clamping keeps the fault where the operator
+    wrote it. The runner repeats the check for callers that skip the parse.
+
+    Args:
+        raw_field: The parsed ``timeout_seconds`` value from the specification.
+
+    Returns:
+        The accepted timeout in seconds, unchanged.
+
+    Raises:
+        ValueError: When the value is not an int, or falls outside the bounds.
+    """
+    timeout_seconds = _require_int(raw_field, WORKER_SPEC_TIMEOUT_KEY)
+    if timeout_seconds < MIN_WORKER_TIMEOUT_SECONDS:
         raise ValueError(
-            f"worker {field_name} must be >= {minimum_accepted}"
+            MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                field_name=WORKER_SPEC_TIMEOUT_KEY,
+                requested_seconds=timeout_seconds,
+                minimum_seconds=MIN_WORKER_TIMEOUT_SECONDS,
+            )
         )
-    return parsed_integer
+    if timeout_seconds > MAXIMUM_WORKER_TIMEOUT_SECONDS:
+        raise ValueError(
+            MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE.format(
+                field_name=WORKER_SPEC_TIMEOUT_KEY,
+                requested_seconds=timeout_seconds,
+                maximum_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+            )
+        )
+    return timeout_seconds
 
 
 def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
@@ -311,21 +341,14 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         _require_worker_field(all_worker_fields, WORKER_SPEC_TOOL_PROFILE_KEY),
         WORKER_SPEC_TOOL_PROFILE_KEY,
     )
-    timeout_seconds = _require_int_at_least(
+    timeout_seconds = _require_timeout_within_bounds(
         all_worker_fields.get(
             WORKER_SPEC_TIMEOUT_KEY, DEFAULT_WORKER_TIMEOUT_SECONDS
-        ),
-        WORKER_SPEC_TIMEOUT_KEY,
-        MIN_WORKER_TIMEOUT_SECONDS,
+        )
     )
     is_repo_only = _require_bool(
         all_worker_fields.get(WORKER_SPEC_IS_REPO_ONLY_KEY, False),
         WORKER_SPEC_IS_REPO_ONLY_KEY,
-    )
-    max_turns = _require_int_at_least(
-        all_worker_fields.get(WORKER_SPEC_MAX_TURNS_KEY, DEFAULT_WORKER_MAX_TURNS),
-        WORKER_SPEC_MAX_TURNS_KEY,
-        MIN_WORKER_MAX_TURNS,
     )
     agent_name = all_worker_fields.get(WORKER_SPEC_AGENT_NAME_KEY)
     if not isinstance(all_prompt_parts, list) or not all_prompt_parts:
@@ -347,7 +370,6 @@ def _parse_worker_entry(all_worker_fields: dict[str, object]) -> WorkerSpec:
         tool_profile=tool_profile,
         timeout_seconds=timeout_seconds,
         is_repo_only=is_repo_only,
-        max_turns=max_turns,
         agent_name=agent_name,
     )
 
@@ -460,7 +482,6 @@ def _invoke_worker(
         prompt_file=scratch_paths.prompt_path,
         working_directory=worker_spec.working_directory,
         run_state_directory=run_state_directory,
-        max_turns=worker_spec.max_turns,
         timeout_seconds=worker_spec.timeout_seconds,
         agent_name=worker_spec.agent_name,
         leader_socket_path=scratch_paths.leader_socket_path,

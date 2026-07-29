@@ -22,15 +22,17 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     BUILD_PROFILE_PROMPT_HEADER,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
+    CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     DEBUG_FILE_FLAG,
     DEFAULT_ROLE,
-    DEFAULT_WORKER_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
     DISABLE_WEB_SEARCH_FLAG,
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
+    MAX_TURNS_FLAG,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FILENAME_PREFIX,
     PROMPT_FILENAME_PREFIX,
     READONLY_DISALLOWED_TOOLS_VALUE,
@@ -53,7 +55,6 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
     WORKER_SPEC_AGENT_NAME_KEY,
-    WORKER_SPEC_MAX_TURNS_KEY,
     WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
 )
@@ -61,8 +62,10 @@ from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS  # noqa: E40
 from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
 from grok_worker_preflight import PreflightOutcome  # noqa: E402
 
+RETIRED_MAX_TURNS_KEYWORD = "max_turns"
 FIXTURE_REPORT_TEXT = '{"status":"done","role":"investigator"}'
 FIXTURE_USAGE_LIMIT_TEXT = "rate limit exceeded (HTTP 429): quota exceeded"
+FIXTURE_TIMEOUT_KILL_TEXT = "worker exceeded its timeout and was killed"
 
 
 def _write_prompt_parts(
@@ -908,7 +911,7 @@ def test_load_batch_spec_names_every_unknown_worker_key(
         working_directory=working_directory,
         tool_profile=TOOL_PROFILE_BUILD,
     )
-    worker_payload["retired_cap"] = 5
+    worker_payload["stray_cap"] = 5
     worker_payload["notes"] = "operator scratch"
     specification_path = _write_batch_spec(
         tmp_path, all_worker_payloads=[worker_payload]
@@ -918,8 +921,33 @@ def test_load_batch_spec_names_every_unknown_worker_key(
         batch.load_batch_spec(specification_path)
 
     error_text = str(raised_error.value)
-    assert "retired_cap" in error_text
+    assert "stray_cap" in error_text
     assert "notes" in error_text
+
+
+def test_load_batch_spec_rejects_the_retired_turn_cap_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="retired-cap-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[RETIRED_MAX_TURNS_KEYWORD] = 5
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert RETIRED_MAX_TURNS_KEYWORD in error_text
+    assert WORKER_SPEC_TIMEOUT_KEY in error_text
 
 
 def test_load_batch_spec_accepts_every_documented_worker_key(
@@ -935,7 +963,6 @@ def test_load_batch_spec_accepts_every_documented_worker_key(
         "tool_profile": TOOL_PROFILE_READONLY,
         "timeout_seconds": 30,
         "is_repo_only": True,
-        "max_turns": 3,
         "agent_name": None,
     }
     specification_path = _write_batch_spec(
@@ -945,11 +972,10 @@ def test_load_batch_spec_accepts_every_documented_worker_key(
     batch_spec = batch.load_batch_spec(specification_path)
 
     assert batch_spec.all_workers[0].role_name == "every-key-worker"
-    assert batch_spec.all_workers[0].max_turns == 3
     assert batch_spec.all_workers[0].is_repo_only is True
 
 
-def test_load_batch_spec_rejects_non_positive_timeout_and_max_turns(
+def test_load_batch_spec_rejects_non_positive_timeout(
     tmp_path: Path,
 ) -> None:
     header_part, body_part = _write_prompt_parts(tmp_path)
@@ -969,27 +995,11 @@ def test_load_batch_spec_rejects_non_positive_timeout_and_max_turns(
         zero_timeout_dir,
         all_worker_payloads=[zero_timeout_payload],
     )
-    with pytest.raises(ValueError, match=WORKER_SPEC_TIMEOUT_KEY):
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
         batch.load_batch_spec(zero_timeout_path)
 
-    negative_turns_dir = tmp_path / "negative-turns"
-    negative_turns_dir.mkdir()
-    negative_turns_payload = _worker_payload(
-        role_name="negative-turns",
-        all_prompt_parts=[str(header_part), str(body_part)],
-        working_directory=working_directory,
-        tool_profile=TOOL_PROFILE_BUILD,
-    )
-    negative_turns_payload[WORKER_SPEC_MAX_TURNS_KEY] = -1
-    negative_turns_path = _write_batch_spec(
-        negative_turns_dir,
-        all_worker_payloads=[negative_turns_payload],
-    )
-    with pytest.raises(ValueError, match=WORKER_SPEC_MAX_TURNS_KEY):
-        batch.load_batch_spec(negative_turns_path)
 
-
-def test_load_batch_spec_accepts_default_timeout_and_max_turns(
+def test_load_batch_spec_accepts_the_default_timeout(
     tmp_path: Path,
 ) -> None:
     header_part, body_part = _write_prompt_parts(tmp_path)
@@ -1009,7 +1019,223 @@ def test_load_batch_spec_accepts_default_timeout_and_max_turns(
 
     assert len(batch_spec.all_workers) == 1
     assert batch_spec.all_workers[0].timeout_seconds == DEFAULT_WORKER_TIMEOUT_SECONDS
-    assert batch_spec.all_workers[0].max_turns == DEFAULT_WORKER_MAX_TURNS
+
+
+def test_timeout_over_the_ceiling_is_refused_and_at_the_ceiling_passes(
+    tmp_path: Path,
+) -> None:
+    """The launcher refuses a spec past the 90-minute ceiling; it never clamps.
+
+    ::
+
+        timeout_seconds 5401  flag: ValueError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
+        timeout_seconds 5400  ok:   loads, value untouched
+        timeout_seconds 30    ok:   loads, value untouched
+    """
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+
+    over_ceiling_directory = tmp_path / "over-ceiling"
+    over_ceiling_directory.mkdir()
+    over_ceiling_path = _write_batch_spec(
+        over_ceiling_directory,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="over-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS + 1,
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="MAXIMUM_WORKER_TIMEOUT_SECONDS"):
+        batch.load_batch_spec(over_ceiling_path)
+
+    at_ceiling_directory = tmp_path / "at-ceiling"
+    at_ceiling_directory.mkdir()
+    at_ceiling_path = _write_batch_spec(
+        at_ceiling_directory,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="at-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+            ),
+            _worker_payload(
+                role_name="well-under-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=30,
+            ),
+        ],
+    )
+    at_ceiling_spec = batch.load_batch_spec(at_ceiling_path)
+
+    assert at_ceiling_spec.all_workers[0].timeout_seconds == (
+        MAXIMUM_WORKER_TIMEOUT_SECONDS
+    )
+    assert at_ceiling_spec.all_workers[1].timeout_seconds == 30
+
+
+def test_ceiling_timeout_reaches_the_runner_untouched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="long-worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="long-worker",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_READONLY,
+                    timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder({"long-worker": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    assert recorder.all_keyword_arguments[0]["timeout_seconds"] == (
+        MAXIMUM_WORKER_TIMEOUT_SECONDS
+    )
+
+
+def test_worker_invocations_carry_no_turn_cap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="uncapped")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="uncapped",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_READONLY,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder({"uncapped": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    launched_keyword_arguments = recorder.all_keyword_arguments[0]
+    all_extra_arguments = launched_keyword_arguments["all_extra_arguments"]
+    assert RETIRED_MAX_TURNS_KEYWORD not in launched_keyword_arguments
+    assert isinstance(all_extra_arguments, tuple)
+    assert MAX_TURNS_FLAG not in all_extra_arguments
+
+
+def test_timed_out_worker_reads_as_timeout_beside_a_completed_worker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A killed worker stays distinguishable from a completed one in the summary.
+
+    ::
+
+        killed worker    ok: classification timeout, is_ok False, exit code 1
+        completed worker ok: classification ok, is_ok True
+    """
+    header_done, body_done = _write_prompt_parts(tmp_path, role_marker="done-worker")
+    header_killed, body_killed = _write_prompt_parts(
+        tmp_path, role_marker="killed-worker"
+    )
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    specification_path = _write_batch_spec(
+        tmp_path,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="done-worker",
+                all_prompt_parts=[str(header_done), str(body_done)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+            _worker_payload(
+                role_name="killed-worker",
+                all_prompt_parts=[str(header_killed), str(body_killed)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+        ],
+    )
+    recorder = _RunnerRecorder(
+        {
+            "done-worker": _ok_outcome(),
+            "killed-worker": GrokRunnerOutcome(
+                is_ok=False,
+                returncode=-9,
+                classification=CLASSIFICATION_TIMEOUT,
+                stdout="",
+                stderr=FIXTURE_TIMEOUT_KILL_TEXT,
+            ),
+        }
+    )
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    exit_code = batch.main(
+        [
+            "--spec",
+            str(specification_path),
+            "--run-temp-dir",
+            str(run_state_directory),
+        ]
+    )
+
+    summary_payload = json.loads(capsys.readouterr().out)
+    payload_by_role_name = {
+        each_payload[SUMMARY_ROLE_NAME_KEY]: each_payload
+        for each_payload in summary_payload[SUMMARY_WORKERS_KEY]
+    }
+    killed_payload = payload_by_role_name["killed-worker"]
+    done_payload = payload_by_role_name["done-worker"]
+
+    assert exit_code == 1
+    assert killed_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_TIMEOUT
+    assert killed_payload[SUMMARY_IS_OK_KEY] is False
+    assert killed_payload[SUMMARY_CLASSIFICATION_KEY] != CLASSIFICATION_OK
+    assert done_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_OK
+    assert done_payload[SUMMARY_IS_OK_KEY] is True
 
 
 def test_unwritable_report_file_keeps_the_worker_outcome(
