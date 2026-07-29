@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.7.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.7.0...claude-dev-env-v2.7.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **autoconverge:** carry an incomplete verdict's named check into recovery ([6a8587f](https://github.com/jl-cmd/claude-dev-env/commit/6a8587fb0c67c1049e19ab83fb8a2becf42f3f98))
+* **autoconverge:** stop the verify spawns contradicting the verifier ([9971b62](https://github.com/jl-cmd/claude-dev-env/commit/9971b62927d6071f84e56017ed8c79b1d76c8c78))
+* **grok:** apply review-round-1 findings on timeout errors and kill coverage ([825b62a](https://github.com/jl-cmd/claude-dev-env/commit/825b62a9d306b52ba19b0b75f0f539f1d006f1d6))
+* **grok:** remove the worker turn cap and bound run lifetime ([3e8d7db](https://github.com/jl-cmd/claude-dev-env/commit/3e8d7dbda27d7d21baffc47050849233efbdacfb))
+* **scripts:** bound every spawn's timeout, and retry a drain that timed out ([b8af774](https://github.com/jl-cmd/claude-dev-env/commit/b8af77441f07510e7c461d0b50b3f2acff7bd353))
+
 ## [2.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.6.0...claude-dev-env-v2.7.0) (2026-07-28)
 
 
