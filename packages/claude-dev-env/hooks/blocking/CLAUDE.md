@@ -85,6 +85,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `eli11_reply_enforcer.py` | Stop | Final replies breaking the `eli11-replies` shape — more than 120 reader-visible words, more than 6 bullet lines, more than 2 lines carrying over 20 words each, or instruction lines telling the user to act with no numbered step among the lead lines. Code fences, inline code, blockquotes, table rows, and link targets come off before the reply is judged, replies under 60 words always pass, and a reply opening with `Long form:` opts out entirely |
 | `env_var_table_code_drift_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A markdown env-var summary table row attributing an environment variable to a code file whose source never references that variable name |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
+| `fable_spawn_gate.py` | PreToolUse (Agent/Task) | An `Agent` or `Task` spawn whose prompt carries no `FABLE-SPAWN-AUTHORIZED` token and whose model field reads `fable` in any letter case — the bare alias, or a delimiter segment of a full model id, so `claude-fable-5` is denied too |
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
 | `gh_pr_author_restore.py` | PostToolUse | Restores PR author after a tool call |

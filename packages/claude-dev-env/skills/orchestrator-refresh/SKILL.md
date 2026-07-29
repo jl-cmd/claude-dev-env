@@ -89,7 +89,11 @@ once, and reports the unreachable advisor.
    - **Claude host:** executors consult the warm `session-advisor` via
      `SendMessage` (ENDORSE / CORRECTION / PLAN / STOP). This session
      routes the same way; keep tool use to orchestration and light
-     verification reads.
+     verification reads. A drift re-spawn at the **Fable** tier carries
+     the exact token `FABLE-SPAWN-AUTHORIZED` in its fresh prompt, as
+     the protocol's warm-up rule states;
+     `hooks/blocking/fable_spawn_gate.py` denies a fable spawn whose
+     prompt lacks it.
    - **Third-party host:** advisor is a max-tier Claude CLI bind owned
      by this session (`claude_chain_runner.py`, Fable high then Opus
      max). Do **not** spawn `session-advisor` via Agent. Executors
