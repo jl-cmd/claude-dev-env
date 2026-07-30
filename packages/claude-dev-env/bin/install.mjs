@@ -11,6 +11,11 @@ import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
+    managedDenyEntriesFromPackageSettings,
+    mergeManagedPermissionsIntoSettings,
+    pruneManagedPermissionsFromSettings,
+} from './merge_managed_permissions.mjs';
+import {
     SKIPPED_SOURCE_ENTRY_NAMES,
     SKIPPED_SOURCE_FILE_EXTENSIONS,
     RUN_BACKUP_DIRECTORY_NAME_PATTERN,
@@ -50,6 +55,7 @@ const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
 const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
+const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -1390,7 +1396,7 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
     return groupCount;
 }
 
-function writeManifest(installedFiles, skillNames) {
+function writeManifest(installedFiles, skillNames, managedPermissions = null) {
     const manifest = {
         package: PACKAGE_NAME,
         version: PACKAGE_VERSION,
@@ -1400,7 +1406,65 @@ function writeManifest(installedFiles, skillNames) {
     if (skillNames) {
         manifest[MANIFEST_SKILLS_KEY] = skillNames;
     }
+    if (managedPermissions && Array.isArray(managedPermissions.deny) && managedPermissions.deny.length > 0) {
+        manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] = {
+            deny: [...managedPermissions.deny],
+        };
+    }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
+}
+
+/**
+ * Load package-owned deny entries from the package settings.json source.
+ *
+ * @returns {string[]}
+ */
+function loadPackageManagedDenyEntries() {
+    const packageSettingsPath = join(PACKAGE_ROOT, SETTINGS_FILE_NAME);
+    if (!existsSync(packageSettingsPath)) {
+        return [];
+    }
+    try {
+        const packageSettings = JSON.parse(readFileSync(packageSettingsPath, 'utf8'));
+        return managedDenyEntriesFromPackageSettings(packageSettings);
+    } catch (parseError) {
+        console.warn(
+            `  Warning: could not read package ${SETTINGS_FILE_NAME} for managed permissions (${parseError.message})`,
+        );
+        return [];
+    }
+}
+
+/**
+ * Merge package-owned permission defaults into ~/.claude/settings.json.
+ *
+ * @returns {{addedCount: number, alreadyPresentCount: number, managedDenyEntries: string[]}}
+ */
+function mergeManagedPermissions() {
+    const managedDenyEntries = loadPackageManagedDenyEntries();
+    if (managedDenyEntries.length === 0) {
+        return { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
+    }
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
+    let settings = {};
+    if (existsSync(settingsPath)) {
+        const raw = readFileSync(settingsPath, 'utf8').trim();
+        if (raw) {
+            try {
+                settings = JSON.parse(raw);
+            } catch {
+                console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.');
+                process.exit(1);
+            }
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+                console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
+                process.exit(1);
+            }
+        }
+    }
+    const mergeOutcome = mergeManagedPermissionsIntoSettings(settings, managedDenyEntries);
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    return mergeOutcome;
 }
 
 /**
@@ -1848,6 +1912,17 @@ function install(selectedGroups, options = {}) {
             console.warn(`      ${mypyIniInstallResult.expectedLine}`);
         }
     }
+
+    const permissionMerge = mergeManagedPermissions();
+    summary.managedPermissions = permissionMerge;
+    if (permissionMerge.managedDenyEntries.length > 0) {
+        console.log(
+            `  Permissions: ${permissionMerge.addedCount} managed deny(s) added, `
+            + `${permissionMerge.alreadyPresentCount} already present `
+            + `(${permissionMerge.managedDenyEntries.length} package-owned)`,
+        );
+    }
+
     const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
         const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
@@ -1893,7 +1968,15 @@ function install(selectedGroups, options = {}) {
     const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
-    writeManifest(manifestFiles, manifestSkillNames);
+    const managedPermissionDenyEntries = summary.managedPermissions?.managedDenyEntries
+        ?? loadPackageManagedDenyEntries();
+    writeManifest(
+        manifestFiles,
+        manifestSkillNames,
+        managedPermissionDenyEntries.length > 0
+            ? { deny: managedPermissionDenyEntries }
+            : null,
+    );
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {
@@ -2034,13 +2117,29 @@ function purgeManagedInstallation({ requireManifest }) {
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     if (existsSync(settingsPath)) {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        let settingsChanged = false;
         if (settings.hooks) {
             const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
                 managedPackageSourceRoots()
             );
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
-            writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+            settingsChanged = true;
             console.log('  Hook entries removed from settings.json');
+        }
+        const managedDenyFromManifest = Array.isArray(manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny)
+            ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY].deny
+            : loadPackageManagedDenyEntries();
+        if (managedDenyFromManifest.length > 0) {
+            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromManifest);
+            if (pruneOutcome.removedCount > 0) {
+                settingsChanged = true;
+                console.log(
+                    `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed deny(s)`,
+                );
+            }
+        }
+        if (settingsChanged) {
+            writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
     unsetGlobalGitHooksPathIfOurs();
