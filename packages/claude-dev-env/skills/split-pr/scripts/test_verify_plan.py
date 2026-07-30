@@ -60,23 +60,23 @@ def test_valid_vertical_slice_keeps_tests_with_behavior() -> None:
 
 
 def test_rejects_test_only_slice_without_behavior() -> None:
-    plan = {
-        PLAN_KEY_SLICES: [
-            {
-                PLAN_KEY_STORY: "tests only",
-                PLAN_KEY_PATHS: ["scripts/test_claude_chain_runner.py"],
-                "is_preparatory_refactor": "false",
-            }
-        ]
-    }
+    all_paths = ["scripts/test_claude_chain_runner.py"]
+    bare: dict[str, object] = {PLAN_KEY_STORY: "tests only", PLAN_KEY_PATHS: all_paths}
+    string_flag: dict[str, object] = {**bare, "is_preparatory_refactor": "false"}
+    true_flag: dict[str, object] = {**bare, "is_preparatory_refactor": True}
     verdict = verify_vertical_plan(
-        plan,
-        all_changed_paths=["scripts/test_claude_chain_runner.py"],
+        {PLAN_KEY_SLICES: [bare]}, all_changed_paths=all_paths
     )
     assert verdict[PLAN_KEY_IS_VALID] is False
     assert any(
         VIOLATION_TEST_WITHOUT_BEHAVIOR in each for each in verdict[PLAN_KEY_VIOLATIONS]
     )
+    assert verify_vertical_plan(
+        {PLAN_KEY_SLICES: [string_flag]}, all_changed_paths=all_paths
+    )[PLAN_KEY_IS_VALID] is False
+    assert verify_vertical_plan(
+        {PLAN_KEY_SLICES: [true_flag]}, all_changed_paths=all_paths
+    )[PLAN_KEY_IS_VALID] is True
 
 
 def test_rejects_duplicate_path_across_slices() -> None:
@@ -97,6 +97,15 @@ def test_rejects_duplicate_path_across_slices() -> None:
     )
     assert verdict[PLAN_KEY_IS_VALID] is False
     assert f"{VIOLATION_DUPLICATE_PATH}:src/a.py" in verdict[PLAN_KEY_VIOLATIONS]
+    alike = {
+        PLAN_KEY_SLICES: [
+            {PLAN_KEY_STORY: "a", PLAN_KEY_PATHS: ["src/a.py"]},
+            {PLAN_KEY_STORY: "b", PLAN_KEY_PATHS: ["src/a.py"]},
+        ]
+    }
+    assert f"{VIOLATION_DUPLICATE_PATH}:src/a.py" in verify_vertical_plan(
+        alike, all_changed_paths=["src/a.py"]
+    )[PLAN_KEY_VIOLATIONS]
 
 
 def test_rejects_missing_changed_path() -> None:
