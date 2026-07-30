@@ -13,7 +13,10 @@ import {
   MCP_BUNDLE_FULL,
   MCP_BUNDLE_LEAN,
 } from './config/profile-isolation-constants.mjs';
-import { validateProfilesManifest } from './lib/profile-manifest.mjs';
+import {
+  resolveProfileDefinition,
+  validateProfilesManifest,
+} from './lib/profile-manifest.mjs';
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const MCP_BUNDLES_CONFIG_PATH = join(MODULE_DIRECTORY, 'config', 'mcp-bundles.json');
@@ -59,10 +62,18 @@ export function validateMcpBundlesDocument(maybeDocument) {
   if (typeof mcpConfigFileName !== 'string' || mcpConfigFileName.length === 0) {
     throw new Error('mcpConfigFileName must be a non-empty string');
   }
-  if (!document.bundles || typeof document.bundles !== 'object') {
+  if (
+    !document.bundles
+    || typeof document.bundles !== 'object'
+    || Array.isArray(document.bundles)
+  ) {
     throw new Error('bundles must be an object');
   }
-  if (!document.serverByName || typeof document.serverByName !== 'object') {
+  if (
+    !document.serverByName
+    || typeof document.serverByName !== 'object'
+    || Array.isArray(document.serverByName)
+  ) {
     throw new Error('serverByName must be an object');
   }
   /** @type {Record<string, {id: string, allServerNames: string[]}>} */
@@ -70,7 +81,11 @@ export function validateMcpBundlesDocument(maybeDocument) {
   for (const [eachBundleId, eachBundleValue] of Object.entries(
     /** @type {Record<string, unknown>} */ (document.bundles),
   )) {
-    if (!eachBundleValue || typeof eachBundleValue !== 'object') {
+    if (
+      !eachBundleValue
+      || typeof eachBundleValue !== 'object'
+      || Array.isArray(eachBundleValue)
+    ) {
       throw new Error(`bundle ${eachBundleId} must be an object`);
     }
     const bundle = /** @type {Record<string, unknown>} */ (eachBundleValue);
@@ -88,12 +103,24 @@ export function validateMcpBundlesDocument(maybeDocument) {
   if (!(MCP_BUNDLE_LEAN in bundles) || !(MCP_BUNDLE_FULL in bundles)) {
     throw new Error('bundles must define lean and full');
   }
+  const leanServerNames = new Set(bundles[MCP_BUNDLE_LEAN].allServerNames);
+  for (const eachLeanServerName of leanServerNames) {
+    if (!bundles[MCP_BUNDLE_FULL].allServerNames.includes(eachLeanServerName)) {
+      throw new Error(
+        `lean server ${eachLeanServerName} must also appear in full`,
+      );
+    }
+  }
   /** @type {Record<string, {command: string, args: string[]}>} */
   const serverByName = {};
   for (const [eachServerName, eachServerValue] of Object.entries(
     /** @type {Record<string, unknown>} */ (document.serverByName),
   )) {
-    if (!eachServerValue || typeof eachServerValue !== 'object') {
+    if (
+      !eachServerValue
+      || typeof eachServerValue !== 'object'
+      || Array.isArray(eachServerValue)
+    ) {
       throw new Error(`server ${eachServerName} must be an object`);
     }
     const server = /** @type {Record<string, unknown>} */ (eachServerValue);
@@ -134,11 +161,17 @@ export function validateMcpBundlesDocument(maybeDocument) {
  */
 export function resolveProfileMcpBundleId(profileId) {
   const manifest = validateProfilesManifest(loadProfilesManifestDocument());
-  const profile = manifest.profileById[profileId];
-  if (!profile) {
-    throw new Error(`unknown profile id for mcp bundle: ${profileId}`);
+  try {
+    return resolveProfileDefinition(manifest, profileId).mcpBundle;
+  } catch (errorValue) {
+    if (
+      errorValue instanceof Error
+      && errorValue.message.startsWith('Unknown profile id or alias:')
+    ) {
+      throw new Error(`unknown profile id for mcp bundle: ${profileId}`);
+    }
+    throw errorValue;
   }
-  return profile.mcpBundle;
 }
 
 /**
@@ -216,8 +249,20 @@ export function readEffectiveMcpServerInventory(mcpConfigPath) {
   if (!existsSync(mcpConfigPath)) {
     throw new Error(`mcp config missing: ${mcpConfigPath}`);
   }
-  const document = JSON.parse(readFileSync(mcpConfigPath, 'utf8'));
-  if (!document || typeof document !== 'object' || !document.mcpServers) {
+  let document;
+  try {
+    document = JSON.parse(readFileSync(mcpConfigPath, 'utf8'));
+  } catch {
+    throw new Error(`mcp config malformed: ${mcpConfigPath}`);
+  }
+  if (
+    !document
+    || typeof document !== 'object'
+    || Array.isArray(document)
+    || !document.mcpServers
+    || typeof document.mcpServers !== 'object'
+    || Array.isArray(document.mcpServers)
+  ) {
     throw new Error(`mcp config malformed: ${mcpConfigPath}`);
   }
   return Object.keys(document.mcpServers).sort();

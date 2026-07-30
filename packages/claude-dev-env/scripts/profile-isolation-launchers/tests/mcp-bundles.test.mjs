@@ -98,3 +98,50 @@ test('malformed mcp config readback fails closed', () => {
     rmSync(claudeConfigDir, { recursive: true, force: true });
   }
 });
+
+test('lean inventory must be a subset of full', () => {
+  assert.throws(
+    () => validateMcpBundlesDocument({
+      schemaVersion: 1,
+      supportedActivationInterface: SUPPORTED_ACTIVATION_INTERFACE,
+      mcpConfigFileName: 'mcp.json',
+      bundles: {
+        lean: { id: 'lean', allServerNames: ['only-lean'] },
+        full: { id: 'full', allServerNames: ['other'] },
+      },
+      serverByName: {
+        'only-lean': { command: 'npx', args: [] },
+        other: { command: 'npx', args: [] },
+      },
+    }),
+    /lean server only-lean must also appear in full/,
+  );
+});
+
+test('bundles and serverByName reject arrays', () => {
+  assert.throws(
+    () => validateMcpBundlesDocument({
+      schemaVersion: 1,
+      supportedActivationInterface: SUPPORTED_ACTIVATION_INTERFACE,
+      mcpConfigFileName: 'mcp.json',
+      bundles: [],
+      serverByName: {},
+    }),
+    /bundles must be an object/,
+  );
+});
+
+test('invalid JSON mcp config readback fails closed as malformed', () => {
+  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-json-'));
+  try {
+    mkdirSync(claudeConfigDir, { recursive: true });
+    const path = join(claudeConfigDir, 'mcp.json');
+    writeFileSync(path, '{not-json', 'utf8');
+    assert.throws(
+      () => readEffectiveMcpServerInventory(path),
+      /malformed/,
+    );
+  } finally {
+    rmSync(claudeConfigDir, { recursive: true, force: true });
+  }
+});

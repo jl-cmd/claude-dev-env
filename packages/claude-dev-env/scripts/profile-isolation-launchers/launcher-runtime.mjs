@@ -31,8 +31,14 @@ export function resolveProfileIdForLauncherName(launcherName) {
   const manifest = validateProfilesManifest(loadProfilesManifestDocument());
   try {
     return resolveProfileDefinition(manifest, launcherName).id;
-  } catch {
-    throw new Error(`no profile owns launcher name: ${launcherName}`);
+  } catch (errorValue) {
+    if (
+      errorValue instanceof Error
+      && errorValue.message.startsWith('Unknown profile id or alias:')
+    ) {
+      throw new Error(`no profile owns launcher name: ${launcherName}`);
+    }
+    throw errorValue;
   }
 }
 
