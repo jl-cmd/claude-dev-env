@@ -33,7 +33,7 @@ test('default target remains join(homeDirectory, .claude)', () => {
 
 test('CLAUDE_CONFIG_DIR selects the profile root over the home default', () => {
     const homeDirectory = resolve(join(tmpdir(), 'a2-home-config'));
-    const profileRoot = resolve(join(tmpdir(), 'a2-profile-editor'));
+    const profileRoot = resolve(join(tmpdir(), 'a2-profile-a'));
     const resolution = resolveInstallRoot({
         homeDirectory,
         environment: { [CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE]: profileRoot },
@@ -49,7 +49,7 @@ test('CLAUDE_CONFIG_DIR selects the profile root over the home default', () => {
 
 test('explicit target has precedence over CLAUDE_CONFIG_DIR and the home default', () => {
     const homeDirectory = resolve(join(tmpdir(), 'a2-home-explicit'));
-    const profileRoot = resolve(join(tmpdir(), 'a2-profile-mel'));
+    const profileRoot = resolve(join(tmpdir(), 'a2-profile-b'));
     const explicitTarget = resolve(join(tmpdir(), 'a2-explicit-target'));
     const resolution = resolveInstallRoot({
         homeDirectory,
@@ -102,10 +102,10 @@ test('parseExplicitTargetFromArgv reads --target and --target=', () => {
     );
 });
 
-test('installer destinations for disposable main, editor, and mel stay inside the managed root', () => {
+test('installer destinations for disposable main, profile-a, and profile-b stay inside the managed root', () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'a2-disposable-'));
     try {
-        for (const eachProfileId of ['main', 'editor', 'mel']) {
+        for (const eachProfileId of ['main', 'profile-a', 'profile-b']) {
             const profileRoot = join(runRoot, eachProfileId);
             mkdirSync(profileRoot, { recursive: true });
             const homeDirectory = join(runRoot, `${eachProfileId}-home`);

@@ -235,12 +235,12 @@ test('full-body load records body marker activation separately from metadata dis
 });
 
 test('skill directory without fixture reports not installed and not discovered', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        mkdirSync(join(roots.profileRootById.editor, SKILLS_DIRECTORY_NAME), { recursive: true });
-        const skillNames = readdirSync(join(roots.profileRootById.editor, SKILLS_DIRECTORY_NAME));
+        mkdirSync(join(roots.profileRootById['profile-a'], SKILLS_DIRECTORY_NAME), { recursive: true });
+        const skillNames = readdirSync(join(roots.profileRootById['profile-a'], SKILLS_DIRECTORY_NAME));
         assert.ok(!skillNames.includes(FIXTURE_SKILL_NAME));
-        const state = buildSkillStateRecord(roots.profileRootById.editor, {
+        const state = buildSkillStateRecord(roots.profileRootById['profile-a'], {
             activated: false,
             behaviorally_verified: false,
         });
