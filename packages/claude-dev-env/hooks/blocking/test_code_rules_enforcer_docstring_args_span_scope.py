@@ -201,3 +201,141 @@ def test_hook_infrastructure_is_not_exempt() -> None:
     assert (
         len(check_docstring_args_single_line_scope_vs_span(content, HOOK_INFRASTRUCTURE_PATH)) == 1
     )
+
+# ---------------------------------------------------------------------------
+# Changed-span grading for the two whole-file docstring checks (issue #237 / P-41)
+# check_docstring_runon_sentence and check_docstring_prose_wall_without_illustration
+# ---------------------------------------------------------------------------
+
+
+def check_docstring_runon_sentence(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    return code_rules_enforcer.check_docstring_runon_sentence(
+        content, file_path, all_changed_lines, defer_scope_to_caller
+    )
+
+
+def check_docstring_prose_wall_without_illustration(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
+    return code_rules_enforcer.check_docstring_prose_wall_without_illustration(
+        content, file_path, all_changed_lines, defer_scope_to_caller
+    )
+
+
+def _module_with_far_away_runon_and_clean_helper() -> str:
+    return (
+        '"""Owns the SIGINT install/restore/installability check, the atexit terminal-record\n'
+        "registration, and the interrupted-run finalizer — the non-promoter-specific\n"
+        "machinery that brackets a run so the JSONL artifact always carries a terminal\n"
+        "record and an in-flight theme record on interrupt.\n"
+        '"""\n'
+        "\n"
+        "def clean_helper() -> str:\n"
+        '    """Return a short status token for the board.\n'
+        "\n"
+        "    Each call names one vessel and its final port.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def _module_with_far_away_prose_wall_and_clean_helper() -> str:
+    return (
+        '"""Assemble the nightly voyage tally from the harbor scans.\n'
+        "\n"
+        "A scan names one vessel and where it dropped anchor.\n"
+        "The tally walks the scans in arrival order and keeps that order.\n"
+        "A calm voyage ends well for every vessel it carried.\n"
+        "A halted voyage marks the vessel it was near when the storm arrived.\n"
+        "A wrecked voyage marks the vessel that sank and stops the walk there.\n"
+        "The tally groups the vessels by their final port for the harbor.\n"
+        "The harbor reads the tally and sees every arrival at a glance.\n"
+        '"""\n'
+        "\n"
+        "def clean_helper() -> str:\n"
+        '    """Return a short status token for the board.\n'
+        "\n"
+        "    Each call names one vessel and its final port.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def test_runon_far_away_no_op_is_grandfathered() -> None:
+    content = _module_with_far_away_runon_and_clean_helper()
+    clean_helper_line = content.splitlines().index("def clean_helper() -> str:") + 1
+    all_changed_lines = set(range(clean_helper_line, clean_helper_line + 6))
+    unscoped = check_docstring_runon_sentence(content, PRODUCTION_FILE_PATH)
+    assert any("run-on" in each for each in unscoped), (
+        f"control: unscoped must still see the far-away run-on, got {unscoped!r}"
+    )
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=all_changed_lines
+    )
+    assert scoped == [], (
+        f"far-away run-on must be grandfathered on a clean-helper edit, got {scoped!r}"
+    )
+
+
+def test_runon_introduced_violation_blocks() -> None:
+    content = _module_with_far_away_runon_and_clean_helper()
+    unscoped = check_docstring_runon_sentence(content, PRODUCTION_FILE_PATH)
+    assert any("run-on" in each for each in unscoped)
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines={1}
+    )
+    assert any("run-on" in each for each in scoped), (
+        f"introduced/touched run-on must block, got {scoped!r}"
+    )
+
+
+def test_prose_wall_far_away_no_op_is_grandfathered() -> None:
+    content = _module_with_far_away_prose_wall_and_clean_helper()
+    clean_helper_line = content.splitlines().index("def clean_helper() -> str:") + 1
+    all_changed_lines = set(range(clean_helper_line, clean_helper_line + 6))
+    unscoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH
+    )
+    assert any("worked example" in each for each in unscoped), (
+        f"control: unscoped must still see the far-away wall, got {unscoped!r}"
+    )
+    scoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=all_changed_lines
+    )
+    assert scoped == [], (
+        f"far-away wall must be grandfathered on a clean-helper edit, got {scoped!r}"
+    )
+
+
+def test_prose_wall_introduced_violation_blocks() -> None:
+    content = _module_with_far_away_prose_wall_and_clean_helper()
+    unscoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH
+    )
+    assert any("worked example" in each for each in unscoped)
+    scoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH, all_changed_lines={1}
+    )
+    assert any("worked example" in each for each in scoped), (
+        f"introduced/touched wall must block, got {scoped!r}"
+    )
+
+
+def test_runon_defer_scope_returns_all_violations() -> None:
+    content = _module_with_far_away_runon_and_clean_helper()
+    deferred = check_docstring_runon_sentence(
+        content,
+        PRODUCTION_FILE_PATH,
+        all_changed_lines={999},
+        defer_scope_to_caller=True,
+    )
+    assert any("run-on" in each for each in deferred)
+

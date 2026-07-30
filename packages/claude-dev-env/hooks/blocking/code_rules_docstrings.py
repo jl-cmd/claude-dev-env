@@ -13,6 +13,7 @@ if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
 from code_rules_shared import (  # noqa: E402
+    _scope_violations_to_changed_lines,
     _statement_is_docstring,
     _walk_skipping_nested_functions,
     _walk_skipping_type_checking_blocks,
@@ -2691,29 +2692,47 @@ def _documentable_docstring_targets(
     return documentable_targets
 
 
-def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
+def check_docstring_runon_sentence(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
     """Flag a docstring narrative sentence that reads as a dense run-on wall.
 
     A readable docstring breaks its narrative into short sentences a general
     developer follows on the first read. The one mechanical mark of a wall is a
     single sentence that runs past the word limit while chaining clauses with an
     em-dash, a double-hyphen, or a semicolon. This check inspects the narrative prose of module,
-    class, and public-function docstrings — the text before the first structured
+    class, and public-function docstrings - the text before the first structured
     section header (``Args:``, ``Arguments:``, ``Returns:``, ``Yields:``,
-    ``Raises:``, ``Note:``, ``Notes:``, ``Example:``, or ``Examples:``) — and
+    ``Raises:``, ``Note:``, ``Notes:``, ``Example:``, or ``Examples:``) - and
     reports a sentence that is both over the word limit and joined by one of those
     marks.
     Whether the prose paints a concrete, illustrative picture is judgment the
     plain-illustrative-docstrings audit lane carries; this gate catches only the
     run-on mark.
 
+    The caller passes the reconstructed full file as *content* so ``ast.parse``
+    sees a complete module. Findings are then scoped to *all_changed_lines* so an
+    Edit blocks on a run-on it just introduced while a pre-existing far-away
+    run-on on an untouched definition does not block the edit.
+
     Args:
-        content: The source text to inspect.
+        content: The source text to inspect - the reconstructed full file on an
+            Edit so the parse succeeds.
         file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a finding
+            blocks only when its definition line intersects the changed lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate's ``split_violations_by_scope`` can scope by added
+            line.
 
     Returns:
         One issue per docstring whose narrative carries a run-on sentence, capped
-        at the module limit.
+        at the module limit and scoped to the changed lines unless
+        *defer_scope_to_caller* is True or *all_changed_lines* is None.
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
@@ -2721,7 +2740,7 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
         parsed_tree = ast.parse(content)
     except SyntaxError:
         return []
-    issues: list[str] = []
+    all_violations_in_walk_order: list[tuple[range, str]] = []
     for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
         parsed_tree
     ):
@@ -2729,17 +2748,28 @@ def check_docstring_runon_sentence(content: str, file_path: str) -> list[str]:
         if not flagged_sentences:
             continue
         run_on_word_count = _sentence_word_count(flagged_sentences[0])
-        issues.append(
+        message = (
             f"Line {each_line_number}: {each_label} docstring carries a {run_on_word_count}-word "
-            "run-on sentence — break the narrative into short, illustrative sentences a general "
+            "run-on sentence - break the narrative into short, illustrative sentences a general "
             "developer reads in one pass (plain-illustrative-docstrings)"
         )
-        if len(issues) >= MAX_DOCSTRING_RUNON_SENTENCE_ISSUES:
-            break
-    return issues[:MAX_DOCSTRING_RUNON_SENTENCE_ISSUES]
+        all_violations_in_walk_order.append(
+            (range(each_line_number, each_line_number + 1), message)
+        )
+    scoped_issues = _scope_violations_to_changed_lines(
+        all_violations_in_walk_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+    return scoped_issues[:MAX_DOCSTRING_RUNON_SENTENCE_ISSUES]
 
 
-def check_docstring_prose_wall_without_illustration(content: str, file_path: str) -> list[str]:
+def check_docstring_prose_wall_without_illustration(
+    content: str,
+    file_path: str,
+    all_changed_lines: set[int] | None = None,
+    defer_scope_to_caller: bool = False,
+) -> list[str]:
     """Flag a summary that tells for many sentences and shows nothing.
 
     A reader trusts the opening to paint a scene. A run of short sentences with
@@ -2754,13 +2784,27 @@ def check_docstring_prose_wall_without_illustration(content: str, file_path: str
     Past the prose-line limit with no ``::`` listing and no ``>>>`` doctest, this
     fires. A narrative that shows a worked example, or one at the limit, passes.
 
+    The caller passes the reconstructed full file as *content* so ``ast.parse``
+    sees a complete module. Findings are then scoped to *all_changed_lines* so an
+    Edit blocks on a wall it just introduced while a pre-existing far-away wall
+    on an untouched definition does not block the edit.
+
     Args:
-        content: The source text to inspect.
+        content: The source text to inspect - the reconstructed full file on an
+            Edit so the parse succeeds.
         file_path: The path the source will be written to, used for exemptions.
+        all_changed_lines: Post-edit line numbers the current edit touched, or
+            None to treat the whole file as in scope. When provided, a finding
+            blocks only when its definition line intersects the changed lines.
+        defer_scope_to_caller: When True, return every violation so the
+            commit/push gate's ``split_violations_by_scope`` can scope by added
+            line.
 
     Returns:
         One issue per summary that runs a wall of sentences with no worked
-        example, capped at the issue limit for the rule.
+        example, capped at the issue limit for the rule and scoped to the
+        changed lines unless *defer_scope_to_caller* is True or
+        *all_changed_lines* is None.
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
@@ -2768,7 +2812,7 @@ def check_docstring_prose_wall_without_illustration(content: str, file_path: str
         parsed_tree = ast.parse(content)
     except SyntaxError:
         return []
-    issues: list[str] = []
+    all_violations_in_walk_order: list[tuple[range, str]] = []
     for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
         parsed_tree
     ):
@@ -2778,15 +2822,21 @@ def check_docstring_prose_wall_without_illustration(content: str, file_path: str
         prose_line_count = len(prose_lines)
         if prose_line_count <= DOCSTRING_NARRATIVE_PROSE_LINE_LIMIT:
             continue
-        issues.append(
+        message = (
             f"Line {each_line_number}: {each_label} summary runs {prose_line_count} "
             "narrative lines with no worked example - show, don't tell: swap the wall for a "
             "'::' listing (a sample input, an annotated outcome, ok/flag contrast rows) and "
             "keep the narrative to a few short lines (plain-illustrative-docstrings)"
         )
-        if len(issues) >= MAX_DOCSTRING_PROSE_WALL_ISSUES:
-            break
-    return issues[:MAX_DOCSTRING_PROSE_WALL_ISSUES]
+        all_violations_in_walk_order.append(
+            (range(each_line_number, each_line_number + 1), message)
+        )
+    scoped_issues = _scope_violations_to_changed_lines(
+        all_violations_in_walk_order,
+        all_changed_lines,
+        defer_scope_to_caller,
+    )
+    return scoped_issues[:MAX_DOCSTRING_PROSE_WALL_ISSUES]
 
 
 def _raises_section_text(docstring_text: str) -> str:
