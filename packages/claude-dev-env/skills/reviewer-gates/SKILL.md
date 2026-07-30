@@ -16,7 +16,7 @@ description: >-
 - **Skill-capable contexts** (a lead session with the `Skill` tool): `Skill({skill: "reviewer-gates", args: "--skill <caller> <gate> [gate parameters]"})`.
 - **Fallback** (a subagent or teammate without the `Skill` tool): the caller's spawn prompt says "Read `~/.claude/skills/reviewer-gates/SKILL.md` and apply the `<gate>` section with the parameters below."
 
-Every invocation carries the caller's identity (`--skill <caller>`, e.g. `pr-converge`, `qbug`). The refusal line in Gate 1 and every logged decision names the caller, so a multi-skill session's transcript shows which loop each gate served.
+Every invocation carries the caller's identity (`--skill <caller>`, e.g. `pr-converge`, `ugteam`). The refusal line in Gate 1 and every logged decision names the caller, so a multi-skill session's transcript shows which loop each gate served.
 
 ## Gate 1: Reviewer opt-out (`CLAUDE_REVIEWS_DISABLED`)
 
@@ -24,7 +24,7 @@ The `CLAUDE_REVIEWS_DISABLED` environment variable is a comma-separated token li
 
 | Token | Disables |
 |---|---|
-| `bugteam` | The whole bug-audit family: `/bugteam`, `/qbug`, `/findbugs`, and audit dispatch in `/monitor-open-prs` |
+| `bugteam` | The whole bug-audit family: `/bugteam`, `/bugteam`, `clean-room audit (code-quality-agent)`, and audit dispatch in `/pr-converge` |
 | `bugbot` | Cursor Bugbot triggering and polling |
 | `copilot` | GitHub Copilot review requests and polling |
 | `codex` | Codex reviewer requests and polling |

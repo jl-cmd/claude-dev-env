@@ -1,6 +1,6 @@
 # Shared PR-loop scripts
 
-Runnable helpers used by **bugteam**, **qbug**, **pr-converge**, and related skills. These files are **executed** from the repository (or a `~/.claude` install); they are not meant as primary model-reading context.
+Runnable helpers used by **bugteam**, **ugteam**, **pr-converge**, and related skills. These files are **executed** from the repository (or a `~/.claude` install); they are not meant as primary model-reading context.
 
 ## Inventory
 

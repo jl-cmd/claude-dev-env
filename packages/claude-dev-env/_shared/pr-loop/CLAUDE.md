@@ -1,6 +1,6 @@
 # _shared/pr-loop
 
-Runtime documents and scripts shared by every PR-loop skill. Changes here affect `bugteam`, `pr-converge`, `findbugs`, `fixbugs`, and `qbug` simultaneously — treat this as a breaking-change surface.
+Runtime documents and scripts shared by every PR-loop skill. Changes here affect `bugteam`, `pr-converge`, `clean-room audit`, `pr-fix-protocol`, and `ugteam` simultaneously — treat this as a breaking-change surface.
 
 ## Key documents
 

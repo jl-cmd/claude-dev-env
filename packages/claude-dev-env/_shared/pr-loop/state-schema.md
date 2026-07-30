@@ -25,7 +25,7 @@ Adds:
 
 State lives inline in the lead session (orchestrator). Cleared on TeamDelete.
 
-### qbug
+### ugteam
 
 Adds nothing beyond common. Single subagent loops internally and returns a final summary; orchestrator discards intermediate state. Subagent's loop counter and findings return in the exit payload (`{exit_reason, loop_count, final_commit_sha, audit_log, unresolved}`).
 
@@ -33,9 +33,9 @@ Adds nothing beyond common. Single subagent loops internally and returns a final
 
 Normative field list, phase enum, dual persistence, and reset semantics: [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md). File-backed multi-PR `status` enum: [`../../skills/pr-converge/reference/multi-pr-orchestration.md`](../../skills/pr-converge/reference/multi-pr-orchestration.md).
 
-### monitor-many
+### pr-converge
 
-Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<repo>-<pr_number>.json`:
+Adds per-PR JSON state file at `~/.claude/skills/pr-converge/state/<owner>-<repo>-<pr_number>.json`:
 
 | Field | Type | Description |
 |---|---|---|
@@ -51,12 +51,12 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 ## Reset semantics
 
 - bugteam: cleared on each new `/bugteam` invocation
-- qbug: cleared on each new `/qbug` invocation
+- ugteam: cleared on each new `/bugteam` invocation
 - pr-converge: see [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md)
-- monitor-many: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
+- pr-converge: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
 
 ## Convergence checks
 
-- bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
+- bugteam, ugteam: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
 - pr-converge: see [`../../skills/pr-converge/reference/convergence-gates.md`](../../skills/pr-converge/reference/convergence-gates.md)
-- monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`
+- pr-converge: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`

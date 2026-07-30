@@ -19,10 +19,10 @@
 
 The three sibling skills compose, but `/bugteam` solves a problem they cannot solve in sequence:
 
-- `/findbugs` audits once and stops.
-- `/fixbugs` fixes the findings of one audit and stops.
-- A human-driven `/findbugs` → `/fixbugs` → `/findbugs` → `/fixbugs` cycle works but requires the user to drive it.
+- `clean-room audit (code-quality-agent)` audits once and stops.
+- `/pr-fix-protocol` fixes the findings of one audit and stops.
+- A human-driven `clean-room audit (code-quality-agent)` → `/pr-fix-protocol` → `clean-room audit (code-quality-agent)` → `/pr-fix-protocol` cycle works but requires the user to drive it.
 
 `/bugteam` automates that cycle. The clean-room property is preserved by spawning a fresh audit agent each loop with no inherited context — every audit is independent of the prior loop's verdict. The 20-loop cap is the safety: pathological cases (audit agent oscillating, fix agent regressing) cannot run away.
 
-The single up-front confirmation is the explicit trade — `/bugteam` is more autonomous than `/findbugs`+`/fixbugs` chained manually. The user accepts that autonomy by typing the command. Stop conditions and the loop log give the user full visibility on exit.
+The single up-front confirmation is the explicit trade — `/bugteam` is more autonomous than `clean-room audit (code-quality-agent)`+`/pr-fix-protocol` chained manually. The user accepts that autonomy by typing the command. Stop conditions and the loop log give the user full visibility on exit.
