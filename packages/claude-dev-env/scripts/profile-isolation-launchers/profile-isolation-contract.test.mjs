@@ -63,8 +63,14 @@ test('resolveProfileDefinition accepts id, alias, and launcher names', () => {
   assert.equal(resolveProfileDefinition(validatedManifest, 'ev').id, 'ev');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-ev').id, 'ev');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-mel-full').id, 'mel');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'Master').id, 'master');
+  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-EV ').id, 'ev');
   assert.throws(
     () => resolveProfileDefinition(validatedManifest, 'not-a-profile'),
+    /Unknown profile id or alias/,
+  );
+  assert.throws(
+    () => resolveProfileDefinition(validatedManifest, /** @type {string} */ (/** @type {unknown} */ (42))),
     /Unknown profile id or alias/,
   );
 });
@@ -91,6 +97,23 @@ test('validators reject bad schemaVersion and non-object allowlist', () => {
   );
   assert.throws(() => validateSharedAllowlist(null), /shared allowlist must be a JSON object/);
   assert.equal(typeof loadSharedAllowlistDocument(), 'object');
+});
+
+test('validators reject duplicate launcher identities across profiles', () => {
+  const rawManifest = loadProfilesManifestDocument();
+  const profiles = {
+    .../** @type {Record<string, object>} */ (rawManifest.profiles),
+  };
+  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-ev'] };
+  const evProfile = { ...profiles.ev };
+  assert.throws(
+    () =>
+      validateProfilesManifest({
+        ...rawManifest,
+        profiles: { ...profiles, master: masterProfile, ev: evProfile },
+      }),
+    /duplicate profile identity/,
+  );
 });
 
 test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', () => {
