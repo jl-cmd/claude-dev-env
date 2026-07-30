@@ -23,6 +23,10 @@ from claude_chain_runner import (  # noqa: E402
     ChainConfigurationError,
     ChainInvocationOutcome,
 )
+from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    TERMINAL_STATUS_CHAIN_EXHAUSTED,
+    TERMINAL_STATUS_SERVED,
+)
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     AGENT_FLAG,
     ALL_AGENT_FILENAMES_BY_ROLE,
@@ -133,6 +137,7 @@ def _claude_served(
         stdout=stdout,
         stderr="",
         attempts=(ChainAttempt(command="claude", status="served"),),
+        terminal_status=TERMINAL_STATUS_SERVED,
     )
 
 
@@ -143,6 +148,7 @@ def _claude_exhausted() -> ChainInvocationOutcome:
         stdout="",
         stderr="usage limit reached",
         attempts=(ChainAttempt(command="claude", status="usage_limited"),),
+        terminal_status=TERMINAL_STATUS_CHAIN_EXHAUSTED,
     )
 
 

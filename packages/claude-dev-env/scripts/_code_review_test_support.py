@@ -27,6 +27,10 @@ if _SCRIPTS_DIRECTORY not in sys.path:
 import claude_chain_runner as chain_runner  # noqa: E402
 import invoke_code_review as invoker  # noqa: E402
 from claude_chain_runner import ChainAttempt, ChainInvocationOutcome  # noqa: E402
+from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    TERMINAL_STATUS_CHAIN_EXHAUSTED,
+    TERMINAL_STATUS_SERVED,
+)
 from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
@@ -128,6 +132,7 @@ def claude_served(
         stdout=stdout,
         stderr="",
         attempts=(ChainAttempt(command=FIXTURE_SERVED_COMMAND, status="served"),),
+        terminal_status=TERMINAL_STATUS_SERVED,
     )
 
 
@@ -140,6 +145,7 @@ def claude_failed() -> ChainInvocationOutcome:
         attempts=(
             ChainAttempt(command=FIXTURE_SERVED_COMMAND, status="usage_limited"),
         ),
+        terminal_status=TERMINAL_STATUS_CHAIN_EXHAUSTED,
     )
 
 

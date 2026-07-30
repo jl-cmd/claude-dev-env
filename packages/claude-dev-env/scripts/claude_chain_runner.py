@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Run a ``claude`` invocation through a usage-ranked fallback chain.
+"""Run a ``claude`` invocation through a fallback chain of account binaries.
 
 An automation that shells out to a single ``claude -p ...`` fails outright when
 that account hits a usage limit. Other logged-in installs sit idle meanwhile.
-This module probes remaining weekly usage once per call, ranks chain accounts
-highest remaining first, and tries that order. It falls over to the next
-ranked binary only on a usage-limit failure. Every other outcome returns to
-the caller unchanged.
+By default this module probes remaining weekly usage once per call, ranks chain
+accounts highest remaining first, and tries that order. It falls over to the
+next ranked binary only on a usage-limit failure. Every other outcome returns
+to the caller unchanged.
+
+Ordered-account mode (``--routing-mode ordered_account``) walks the chain in
+config order instead, still falling over only on a usage-limit signature.
+Authentication, timeout, and other non-usage failures stop immediately with
+``terminal_status=advisor_blocked``.
 
 The chain lives in ``~/.claude/claude-chain.json``. Copy the committed
 ``claude-chain.example.json`` template there and list your account binaries.
-Try order comes from weekly remaining via ``claude_chain_usage`` (usage-pause
-OAuth probe), not from list position alone::
+Default try order comes from weekly remaining via ``claude_chain_usage``
+(usage-pause OAuth probe), not from list position alone::
 
     {"chain": [{"command": "claude", "extra_args": []},
                {"command": "claude-ev", "extra_args": []}]}
@@ -29,7 +34,8 @@ binary in the walk::
 
 Import ``run_claude`` for the outcome object, or run the module as a CLI::
 
-    python claude_chain_runner.py [--timeout-seconds N] -- <claude args...>
+    python claude_chain_runner.py [--timeout-seconds N]
+        [--routing-mode usage_ranked|ordered_account] -- <claude args...>
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
 from dev_env_scripts_constants.claude_chain_constants import (
+    ALL_ROUTING_MODES,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -60,12 +67,14 @@ from dev_env_scripts_constants.claude_chain_constants import (
     ATTEMPT_SUMMARY_ENTRY_TEMPLATE,
     ATTEMPT_SUMMARY_JOIN_SEPARATOR,
     CARRIAGE_RETURN,
+    CHAIN_ADVISOR_BLOCKED_EXIT_CODE,
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     CHAIN_EXHAUSTED_EXIT_CODE,
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
     CHAIN_USAGE_MODULE_NAME,
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
+    CLI_ROUTING_MODE_FLAG,
     CLI_TIMEOUT_FLAG,
     CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
@@ -85,10 +94,17 @@ from dev_env_scripts_constants.claude_chain_constants import (
     CONFIG_NOT_OBJECT_REASON,
     CONFIG_UNREADABLE_MESSAGE_TEMPLATE,
     CRLF_NEWLINE,
+    DEFAULT_ROUTING_MODE,
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
     LINE_FEED,
     NO_COMPLETED_PROCESS_RETURN_CODE,
+    ROUTING_MODE_ORDERED_ACCOUNT,
+    SESSION_ID_JSON_KEY,
+    TERMINAL_STATUS_ADVISOR_BLOCKED,
+    TERMINAL_STATUS_CHAIN_EXHAUSTED,
+    TERMINAL_STATUS_SERVED,
+    TERMINAL_STATUS_TIMEOUT,
     UTF8_ENCODING,
 )
 
@@ -257,12 +273,21 @@ class ChainAttempt:
 
 @dataclass(frozen=True)
 class ChainInvocationOutcome:
-    """Outcome of walking the chain for one call.
+    """Outcome of one chain walk: who served, how it ended, optional session id.
 
-    ``served_command`` names the binary whose response is returned. It is
-    ``None`` when no binary served the call: every entry was usage-limited or
-    missing, or the invocation timed out. The ``attempts`` trail records every
-    binary tried and how it resolved.
+    ::
+
+        zero exit with JSON session_id
+            -> served_command set, terminal_status=served, session_id filled
+        ordered_account auth/timeout/generic process error
+            -> served_command=None, terminal_status=advisor_blocked
+        usage_ranked TimeoutExpired mid-walk
+            -> served_command=None, terminal_status=timeout
+        every entry usage-limited or missing
+            -> served_command=None, terminal_status=chain_exhausted
+
+    ``attempts`` lists every binary tried. Callers resume later consults with
+    ``session_id`` when the bind returned one.
     """
 
     served_command: str | None
@@ -270,6 +295,8 @@ class ChainInvocationOutcome:
     stdout: str
     stderr: str
     attempts: tuple[ChainAttempt, ...]
+    terminal_status: str
+    session_id: str | None = None
 
 
 class WeeklyUsageAccountReport(Protocol):
@@ -444,17 +471,70 @@ def _is_usage_limit_failure(completion: subprocess.CompletedProcess[str]) -> boo
     )
 
 
+def extract_session_id_from_stdout(stdout_text: str) -> str | None:
+    """Return the first ``session_id`` found in Claude JSON stdout.
+
+    ::
+
+        '{"type":"result","session_id":"abc","result":"ok"}'
+            -> "abc"
+        'not json'
+            -> None
+
+    Accepts a single JSON object or NDJSON event lines. The first non-empty
+    string value under the ``session_id`` key wins.
+
+    Args:
+        stdout_text: Captured stdout from a Claude ``--output-format json`` run.
+
+    Returns:
+        The session id string, or ``None`` when none is present.
+    """
+    stripped_stdout = stdout_text.strip()
+    if not stripped_stdout:
+        return None
+    maybe_session_id = _session_id_from_json_text(stripped_stdout)
+    if maybe_session_id is not None:
+        return maybe_session_id
+    for each_line in stripped_stdout.splitlines():
+        stripped_line = each_line.strip()
+        if not stripped_line:
+            continue
+        maybe_session_id = _session_id_from_json_text(stripped_line)
+        if maybe_session_id is not None:
+            return maybe_session_id
+    return None
+
+
+def _session_id_from_json_text(json_text: str) -> str | None:
+    try:
+        parsed_payload = json.loads(json_text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed_payload, dict):
+        return None
+    raw_session_id = parsed_payload.get(SESSION_ID_JSON_KEY)
+    if isinstance(raw_session_id, str) and raw_session_id:
+        return raw_session_id
+    return None
+
+
 def _served_outcome(
     served_command: str,
     completion: subprocess.CompletedProcess[str],
     all_attempts: list[ChainAttempt],
 ) -> ChainInvocationOutcome:
+    maybe_session_id = None
+    if completion.returncode == 0:
+        maybe_session_id = extract_session_id_from_stdout(completion.stdout)
     return ChainInvocationOutcome(
         served_command=served_command,
         returncode=completion.returncode,
         stdout=completion.stdout,
         stderr=completion.stderr,
         attempts=tuple(all_attempts),
+        terminal_status=TERMINAL_STATUS_SERVED,
+        session_id=maybe_session_id,
     )
 
 
@@ -475,6 +555,8 @@ def _timeout_streams(
 def _no_process_outcome(
     all_attempts: list[ChainAttempt],
     timeout_error: subprocess.TimeoutExpired | None,
+    *,
+    terminal_status: str,
 ) -> ChainInvocationOutcome:
     captured_stdout, captured_stderr = _timeout_streams(timeout_error)
     return ChainInvocationOutcome(
@@ -483,6 +565,23 @@ def _no_process_outcome(
         stdout=captured_stdout,
         stderr=captured_stderr,
         attempts=tuple(all_attempts),
+        terminal_status=terminal_status,
+        session_id=None,
+    )
+
+
+def _advisor_blocked_outcome(
+    completion: subprocess.CompletedProcess[str],
+    all_attempts: list[ChainAttempt],
+) -> ChainInvocationOutcome:
+    return ChainInvocationOutcome(
+        served_command=None,
+        returncode=completion.returncode,
+        stdout=completion.stdout,
+        stderr=completion.stderr,
+        attempts=tuple(all_attempts),
+        terminal_status=TERMINAL_STATUS_ADVISOR_BLOCKED,
+        session_id=None,
     )
 
 
@@ -491,13 +590,19 @@ def _exhausted_outcome(
     last_usage_limited: subprocess.CompletedProcess[str] | None,
 ) -> ChainInvocationOutcome:
     if last_usage_limited is None:
-        return _no_process_outcome(all_attempts, None)
+        return _no_process_outcome(
+            all_attempts,
+            None,
+            terminal_status=TERMINAL_STATUS_CHAIN_EXHAUSTED,
+        )
     return ChainInvocationOutcome(
         served_command=None,
         returncode=last_usage_limited.returncode,
         stdout=last_usage_limited.stdout,
         stderr=last_usage_limited.stderr,
         attempts=tuple(all_attempts),
+        terminal_status=TERMINAL_STATUS_CHAIN_EXHAUSTED,
+        session_id=None,
     )
 
 
@@ -505,6 +610,8 @@ def _classify_completion(
     entry: ChainEntry,
     completion: subprocess.CompletedProcess[str],
     all_attempts: list[ChainAttempt],
+    *,
+    routing_mode: str,
 ) -> ChainInvocationOutcome | None:
     if completion.returncode == 0:
         all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_SERVED))
@@ -513,6 +620,8 @@ def _classify_completion(
         all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_USAGE_LIMITED))
         return None
     all_attempts.append(ChainAttempt(entry.command, ATTEMPT_STATUS_NONZERO_EXIT))
+    if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT:
+        return _advisor_blocked_outcome(completion, all_attempts)
     return _served_outcome(entry.command, completion, all_attempts)
 
 
@@ -529,27 +638,50 @@ def _ranked_entries_or_config_order(
         return list(all_entries)
 
 
+def _resolve_walk_entries(
+    all_entries: list[ChainEntry],
+    config_path: Path,
+    routing_mode: str,
+) -> list[ChainEntry]:
+    if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT:
+        return list(all_entries)
+    return _ranked_entries_or_config_order(all_entries, config_path)
+
+
+def _require_known_routing_mode(routing_mode: str) -> str:
+    if routing_mode not in ALL_ROUTING_MODES:
+        raise ValueError(
+            f"Unknown routing_mode {routing_mode!r}; "
+            f"expected one of {sorted(ALL_ROUTING_MODES)}"
+        )
+    return routing_mode
+
+
 def run_claude(
     all_claude_arguments: list[str],
     *,
     timeout_seconds: int,
     stdin_text: str | None = None,
+    routing_mode: str = DEFAULT_ROUTING_MODE,
 ) -> ChainInvocationOutcome:
-    """Run *all_claude_arguments* through the usage-ranked fallback chain.
+    """Run *all_claude_arguments* through the fallback chain.
 
     ::
 
-        highest remaining usage-limited, next ranked ok
-            -> served_command=next ranked, returncode=0
-        first try nonzero without usage-limit signature
-            -> served_command=first try (no fallover)
-        stdin_text set
-            -> same text on every attempt's stdin
+        usage_ranked (default): highest remaining first
+        ordered_account: config order; usage-limit-only fallover
+        ordered_account + auth/timeout/generic process error
+            -> terminal_status=advisor_blocked (no fallover)
+        zero exit with JSON session_id
+            -> outcome.session_id set for later --resume
 
-    Probes weekly remaining once, ranks highest first, then walks that order.
+    Default mode probes weekly remaining once, ranks highest first, then walks
+    that order. Ordered-account mode walks config order and never probes usage.
     Only a usage-limit failure falls over. Missing binaries are skipped and the
-    walk continues; timeout and other nonzero exits stop. When usage ranking
-    infrastructure fails to load, the walk uses config order instead.
+    walk continues; timeout and other nonzero exits stop. In ordered-account
+    mode those non-usage stops report ``advisor_blocked``. When usage ranking
+    infrastructure fails to load under usage-ranked mode, the walk uses config
+    order instead.
 
     Args:
         all_claude_arguments: Arguments passed after the binary name, such as
@@ -557,20 +689,25 @@ def run_claude(
         timeout_seconds: Timeout applied to each binary invocation.
         stdin_text: Optional UTF-8 text forwarded as stdin to every binary.
             ``None`` leaves the subprocess without a piped stdin body.
+        routing_mode: ``usage_ranked`` (default) or ``ordered_account``.
 
     Returns:
-        The outcome of the walk, naming the serving binary and the full
-        attempt trail.
+        The outcome of the walk, naming the serving binary, terminal status,
+        optional session id, and the full attempt trail.
 
     Raises:
         ChainConfigurationError: When the chain configuration cannot be loaded.
+        ValueError: When *routing_mode* is not a known mode.
     """
+    selected_routing_mode = _require_known_routing_mode(routing_mode)
     config_path = chain_config_path()
     all_entries = load_chain(config_path)
-    all_ranked_entries = _ranked_entries_or_config_order(all_entries, config_path)
+    all_walk_entries = _resolve_walk_entries(
+        all_entries, config_path, selected_routing_mode
+    )
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
-    for each_entry in all_ranked_entries:
+    for each_entry in all_walk_entries:
         try:
             completion = chain_subprocess_runner(
                 _build_invocation(each_entry, all_claude_arguments),
@@ -586,13 +723,27 @@ def run_claude(
             all_attempts.append(
                 ChainAttempt(each_entry.command, ATTEMPT_STATUS_TIMEOUT)
             )
-            return _no_process_outcome(all_attempts, timeout_error)
+            timeout_terminal_status = (
+                TERMINAL_STATUS_ADVISOR_BLOCKED
+                if selected_routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
+                else TERMINAL_STATUS_TIMEOUT
+            )
+            return _no_process_outcome(
+                all_attempts,
+                timeout_error,
+                terminal_status=timeout_terminal_status,
+            )
         except FileNotFoundError:
             all_attempts.append(
                 ChainAttempt(each_entry.command, ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND)
             )
             continue
-        terminal_outcome = _classify_completion(each_entry, completion, all_attempts)
+        terminal_outcome = _classify_completion(
+            each_entry,
+            completion,
+            all_attempts,
+            routing_mode=selected_routing_mode,
+        )
         if terminal_outcome is not None:
             return terminal_outcome
         last_usage_limited = completion
@@ -609,6 +760,16 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_TIMEOUT_SECONDS,
         help="Timeout in seconds applied to each binary invocation.",
+    )
+    parser.add_argument(
+        CLI_ROUTING_MODE_FLAG,
+        dest="routing_mode",
+        choices=sorted(ALL_ROUTING_MODES),
+        default=DEFAULT_ROUTING_MODE,
+        help=(
+            "Chain routing: usage_ranked (default) or ordered_account "
+            "(config order, usage-limit-only fallover)."
+        ),
     )
     parser.add_argument("passthrough", nargs=argparse.REMAINDER)
     return parser
@@ -639,12 +800,18 @@ def _read_piped_stdin_text() -> str | None:
 def main(all_command_arguments: list[str]) -> int:
     """Walk the chain for CLI arguments and return the process exit code.
 
+    ::
+
+        main(["--", "-p", "hi"])
+        main(["--routing-mode", "ordered_account", "--", "-p", "hi"])
+
     Args:
         all_command_arguments: The argument vector after the program name.
 
     Returns:
         The served binary's return code, a distinct code when the chain is
-        exhausted, or a distinct code when the configuration cannot be loaded.
+        exhausted or advisor-blocked, or a distinct code when the configuration
+        cannot be loaded.
     """
     parser = _build_argument_parser()
     parsed_arguments = parser.parse_args(all_command_arguments)
@@ -655,10 +822,15 @@ def main(all_command_arguments: list[str]) -> int:
             all_claude_arguments,
             timeout_seconds=parsed_arguments.timeout_seconds,
             stdin_text=maybe_stdin_text,
+            routing_mode=parsed_arguments.routing_mode,
         )
     except ChainConfigurationError as configuration_error:
         print(str(configuration_error), file=sys.stderr)
         return CHAIN_CONFIG_ERROR_EXIT_CODE
+    if chain_outcome.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED:
+        sys.stdout.write(chain_outcome.stdout)
+        sys.stderr.write(chain_outcome.stderr)
+        return CHAIN_ADVISOR_BLOCKED_EXIT_CODE
     if chain_outcome.served_command is None:
         print(_exhausted_message(chain_outcome.attempts), file=sys.stderr)
         return CHAIN_EXHAUSTED_EXIT_CODE
