@@ -207,7 +207,7 @@ test('exactly-once dispatch: one pre and one post for a correlation id', () => {
     }
 });
 
-test('mismatched pre/post correlation ids stay distinct', () => {
+test('eventsForCorrelation keeps mismatched pre/post ids separate', () => {
     const roots = createDisposableRunRoots({ profileIds: ['editor'] });
     try {
         const sinkPath = createToolEventSinkPath(roots.profileRootById.editor);
@@ -222,10 +222,10 @@ test('mismatched pre/post correlation ids stay distinct', () => {
             correlationId: 'corr-b',
         });
         const events = readToolHookEvents(sinkPath);
-        const pre = events.find((eachEvent) => eachEvent.eventName === PRE_TOOL_USE_EVENT);
-        const post = events.find((eachEvent) => eachEvent.eventName === POST_TOOL_USE_EVENT);
-        assert.ok(pre && post);
-        assert.notEqual(pre.correlationId, post.correlationId);
+        assert.equal(eventsForCorrelation(events, 'corr-a').length, 1);
+        assert.equal(eventsForCorrelation(events, 'corr-b').length, 1);
+        assert.equal(eventsForCorrelation(events, 'corr-a', POST_TOOL_USE_EVENT).length, 0);
+        assert.equal(eventsForCorrelation(events, 'corr-b', PRE_TOOL_USE_EVENT).length, 0);
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
