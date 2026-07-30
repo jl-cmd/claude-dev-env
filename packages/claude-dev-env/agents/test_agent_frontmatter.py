@@ -331,14 +331,13 @@ def test_p107_named_agents_yaml_safe_load_as_mapping(agent_file_name: str) -> No
     assert agent_definition_path.is_file(), (
         f"{agent_file_name} missing from agents/ — P-107 surface gone"
     )
-    frontmatter_block = _frontmatter_block(agent_definition_path)
-    parsed_frontmatter = yaml.safe_load(frontmatter_block)
-    assert isinstance(parsed_frontmatter, dict), (
-        f"{agent_file_name} frontmatter must load as a mapping for the subagent loader"
+    parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
+    field_problem = _required_field_problem(parsed_frontmatter)
+    assert field_problem is None, f"{agent_file_name} {field_problem}"
+    name_problem = _agent_name_problem(
+        parsed_frontmatter, agent_definition_path.stem
     )
-    assert parsed_frontmatter.get("name") == agent_file_name.removesuffix(".md")
-    assert isinstance(parsed_frontmatter.get("description"), str)
-    assert parsed_frontmatter["description"].strip()
+    assert name_problem is None, f"{agent_file_name} {name_problem}"
 
 
 def test_every_agent_definition_yields_a_frontmatter_block() -> None:
