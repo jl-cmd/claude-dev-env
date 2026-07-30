@@ -13,6 +13,7 @@ Python scripts that run the PR audit-fix loop at runtime. Both `bugteam` and `pr
 
 | File | Role |
 |---|---|
+| `audit_category_schema.py` | Loads the A-Q schema JSON, exports category entries, validates rubric/prompt projections, renders deterministic skeletons. |
 | `build_audit_prompt.py` | Assembles the audit agent prompt from loop state and category constants. |
 | `build_fix_prompt.py` | Assembles the fix agent prompt from loop state and findings XML. |
 | `init_loop_state.py` | Initializes the per-PR `loop-state.json` file in the workspace directory. |

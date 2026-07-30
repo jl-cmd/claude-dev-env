@@ -2,6 +2,8 @@
 
 import re
 
+from audit_category_schema import category_id_title_entries
+
 RUN_NAME_TEMPLATE_SINGLE = "bugteam-pr-{number}"
 RUN_NAME_TEMPLATE_MULTI = "bugteam-{sanitized_branch}"
 PER_PR_WORKSPACE_TEMPLATE = "pr-{number}"
@@ -33,25 +35,7 @@ ALL_AUDIT_CONSTRAINT_TEXTS = [
     "forward slashes (e.g. C:/Users/...), even on Windows.",
 ]
 
-ALL_AUDIT_CATEGORY_ENTRIES = [
-    ("A", "API contract verification"),
-    ("B", "Selector / query / engine compatibility"),
-    ("C", "Resource cleanup and lifecycle"),
-    ("D", "Variable scoping, ordering, and unbound references"),
-    ("E", "Dead code and unused imports"),
-    ("F", "Silent failures"),
-    ("G", "Off-by-one, bounds, integer overflow"),
-    ("H", "Security boundaries"),
-    ("I", "Concurrency hazards"),
-    ("J", "CODE_RULES.md compliance"),
-    ("K", "Codebase conflicts (incomplete propagation)"),
-    ("L", "Behavior-equivalence for refactors"),
-    ("M", "Producer/consumer cardinality vs collection-type contract"),
-    ("N", "Test-name scenario verifier"),
-    ("O", "Docstring / fixture-prose vs implementation drift"),
-    ("P", "Name / regex / word-list vs behavior-contract precision"),
-    ("Q", "Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard)"),
-]
+ALL_AUDIT_CATEGORY_ENTRIES = category_id_title_entries()
 
 AUDIT_RUBRIC_REFERENCE_TEXT = (
     "The category list above is a summary. The binding definition of each "

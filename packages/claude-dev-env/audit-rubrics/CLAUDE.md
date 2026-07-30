@@ -6,6 +6,7 @@ Audit rubrics for the PR-loop code-review suite. The rubrics define the 17 bug c
 
 | File | Purpose |
 |---|---|
+| `audit-categories.json` | Machine-readable A-Q schema: id, title, slug, and sub-bucket id/axis pairs; single source for rubric and prompt skeleton parity |
 | `source-material-section-types.md` | Lookup table for how to chunk an artifact into sections for an audit prompt; covers code PRs, docs, SQL schemas, config files, and more |
 
 ## Subdirectories
