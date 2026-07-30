@@ -95,7 +95,7 @@ def test_rejects_duplicate_path_across_slices() -> None:
         plan, all_changed_paths=["src/a.py", "src/test_a.py"]
     )
     assert verdict[PLAN_KEY_IS_VALID] is False
-    assert any(VIOLATION_DUPLICATE_PATH in each for each in verdict[PLAN_KEY_VIOLATIONS])
+    assert f"{VIOLATION_DUPLICATE_PATH}:src/a.py" in verdict[PLAN_KEY_VIOLATIONS]
 
 
 def test_rejects_missing_changed_path() -> None:

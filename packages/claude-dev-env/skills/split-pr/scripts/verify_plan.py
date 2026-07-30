@@ -3,12 +3,17 @@
 
 ::
 
-    python verify_plan.py --plan plan.json --pretty
+    python verify_plan.py --plan plan.json --changed-paths-json paths.json
     {"is_valid": true, "violations": []}
 
-Rejects a slice that holds tests and no behavior, a path claimed by two slices,
-and — when ``--changed-paths-json`` names the full path set — a path no slice
-claims.
+Four things get a plan rejected. A slice holds tests and no behavior. A slice
+carries no story. Two slices claim one path. A changed path no slice claims.
+
+That last check needs ``--changed-paths-json``. Without it the coverage check
+is skipped.
+
+Test co-location is read loosely here. A slice holding tests passes as soon as
+it carries any behavior file, so a test beside unrelated behavior passes.
 """
 
 from __future__ import annotations
@@ -48,7 +53,7 @@ def is_test_path(file_path: str) -> bool:
     Returns:
         True when the path matches common test naming layouts.
     """
-    normalized = file_path.replace("\\", "/").lower()
+    normalized = _posix_path(file_path).lower()
     basename = Path(normalized).name
     if basename.startswith("test_") or basename.endswith("_test.py"):
         return True
@@ -86,7 +91,7 @@ def _collect_slice_path_violations(each_slice: object) -> list[str]:
     if not isinstance(all_paths, list):
         all_violations.append("slice_paths_not_list")
         return all_violations
-    is_preparatory = bool(each_slice.get(PLAN_KEY_IS_PREPARATORY_REFACTOR, False))
+    is_preparatory = each_slice.get(PLAN_KEY_IS_PREPARATORY_REFACTOR, False) is True
     all_slice_paths = [str(each) for each in all_paths]
     holds_only_tests = bool(all_slice_paths) and all(
         is_test_path(each) for each in all_slice_paths
@@ -96,11 +101,17 @@ def _collect_slice_path_violations(each_slice: object) -> list[str]:
     return all_violations
 
 
+def _posix_path(file_path: object) -> str:
+    return str(file_path).replace("\\", "/")
+
+
 def _count_path_owners(
     all_slices: list[object],
     all_changed_paths: list[str],
 ) -> dict[str, int]:
-    path_owner_count: dict[str, int] = {each: 0 for each in all_changed_paths}
+    owner_count_by_path: dict[str, int] = {
+        _posix_path(each): 0 for each in all_changed_paths
+    }
     for each_slice in all_slices:
         if not isinstance(each_slice, dict):
             continue
@@ -108,14 +119,14 @@ def _count_path_owners(
         if not isinstance(all_paths, list):
             continue
         for each_path in all_paths:
-            path_text = str(each_path)
-            path_owner_count[path_text] = path_owner_count.get(path_text, 0) + 1
-    return path_owner_count
+            path_text = _posix_path(each_path)
+            owner_count_by_path[path_text] = owner_count_by_path.get(path_text, 0) + 1
+    return owner_count_by_path
 
 
-def _ownership_violations(all_path_owner_counts: dict[str, int]) -> list[str]:
+def _ownership_violations(all_owner_counts_by_path: dict[str, int]) -> list[str]:
     all_violations: list[str] = []
-    for each_path, each_count in all_path_owner_counts.items():
+    for each_path, each_count in all_owner_counts_by_path.items():
         if each_count == 0:
             all_violations.append(f"{VIOLATION_MISSING_PATH}:{each_path}")
         if each_count > 1:
@@ -146,8 +157,8 @@ def verify_vertical_plan(
     all_violations: list[str] = []
     for each_slice in raw_slices:
         all_violations.extend(_collect_slice_path_violations(each_slice))
-    path_owner_count = _count_path_owners(raw_slices, all_changed_paths)
-    all_violations.extend(_ownership_violations(path_owner_count))
+    owner_count_by_path = _count_path_owners(raw_slices, all_changed_paths)
+    all_violations.extend(_ownership_violations(owner_count_by_path))
     all_unique = list(dict.fromkeys(all_violations))
     return {
         PLAN_KEY_IS_VALID: len(all_unique) == 0,

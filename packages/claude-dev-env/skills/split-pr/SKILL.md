@@ -44,7 +44,7 @@ never a hard gate.
 | `SKILL.md` | Analyzer contract and 200/600 gates |
 | `scripts/analyze_pr.py` | Emit analysis JSON from gh or offline files |
 | `scripts/categorize_files.py` | Path churn class (hand-written vs excluded) |
-| `scripts/verify_plan.py` | Vertical-slice plan coverage and test co-location gate |
+| `scripts/verify_plan.py` | Plan gate: path coverage, one owner per path, story present, no test-only slice |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
 | `scripts/test_categorize_files.py` | Exclusion classification tests |

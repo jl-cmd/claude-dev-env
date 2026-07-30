@@ -9,11 +9,11 @@ behavior they cover.
 1. **Test co-location.** A behavior change and its related tests share one
    slice. Tests do not land in a later dedicated-test slice by default.
 2. **One story per slice.** Each slice has a single review focus (one vertical
-   capability or one coherent subsystem story).
+   ability or one coherent subsystem story).
 3. **Unique path ownership.** Every changed path appears in exactly one slice.
 4. **Green intermediate.** Each stacked intermediate must collect and run the
    tests that belong to that slice and its bases.
-5. **Preparatory refactors first.** Substantial refactors that do not change
+5. **Preparatory refactors first.** Large refactors that do not change
    product behavior occupy earlier preparatory slices, not mixed with behavior.
 6. **Dependency bases encode merge order.** Slice N+1 bases on slice N when it
    depends on N's definitions.
