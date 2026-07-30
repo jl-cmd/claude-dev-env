@@ -26,7 +26,6 @@ packages = [
     "prototype_scripts_constants",
     "copilot_finding_triage_constants",
     "codex_review_scripts_constants",
-    "e_code_review_scripts_constants",
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
     "process_tree_scripts_constants",
@@ -45,7 +44,6 @@ usage_pause_constants = "skills/usage-pause/scripts/usage_pause_constants"
 prototype_scripts_constants = "skills/prototype/scripts/prototype_scripts_constants"
 copilot_finding_triage_constants = "skills/copilot-finding-triage/scripts/copilot_finding_triage_constants"
 codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scripts_constants"
-e_code_review_scripts_constants = "skills/e-code-review/scripts/config/e_code_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
 process_tree_scripts_constants = "_shared/process-tree/scripts/config/process_tree_scripts_constants"

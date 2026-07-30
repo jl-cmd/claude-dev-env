@@ -11,7 +11,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from e_code_review_scripts_constants.grok_code_review_constants import (  # noqa: E402
+from config.grok_code_review_constants import (  # noqa: E402
     ALL_MEDIUM_FINDER_ANGLES,
     MEDIUM_REVIEW_FINDER_COUNT,
     VERDICT_CONFIRMED,
