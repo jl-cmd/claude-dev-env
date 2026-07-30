@@ -76,4 +76,3 @@ if ($driverOutputText -notmatch 'ALL CHECKS PASSED') {
 }
 
 Write-Host "Windows installer lifecycle: OK"
-exit 0
