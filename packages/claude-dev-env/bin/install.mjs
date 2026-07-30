@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
 import { join, dirname, resolve, relative, basename, isAbsolute, extname } from 'node:path';
 import { homedir } from 'node:os';
-import { execSync, execFileSync } from 'node:child_process';
+import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { installAllGitHooks } from './git_hooks_installer.mjs';
@@ -27,6 +27,15 @@ import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
 } from './resolve-install-root.mjs';
+import {
+    parseInstallTargetSelectionFromArgv,
+    resolveInstallTargets,
+    buildTargetManifestRecord,
+    stripTargetSelectionFlagsFromArgv,
+    resolveProfilesRootDirectory,
+    MAIN_DEFAULT_TARGET_IDENTITY,
+    TARGET_IDENTITY_FLAG,
+} from './select-install-targets.mjs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
@@ -40,6 +49,25 @@ const MYPY_INI_INSTALL_PATH = INSTALL_ROOT_RESOLUTION.mypyIniInstallPath;
 const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
+
+/**
+ * Target identity for the current process hop. Multi-profile parent hops re-exec
+ * each child with --target-identity; a bare main install stays "main".
+ */
+const INSTALL_TARGET_IDENTITY = (() => {
+    try {
+        const selection = parseInstallTargetSelectionFromArgv(process.argv.slice(2));
+        if (selection.targetIdentity) {
+            return selection.targetIdentity;
+        }
+        if (selection.mode === 'profiles' && selection.allProfileIds.length === 1) {
+            return selection.allProfileIds[0];
+        }
+        return MAIN_DEFAULT_TARGET_IDENTITY;
+    } catch {
+        return MAIN_DEFAULT_TARGET_IDENTITY;
+    }
+})();
 
 export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
 
@@ -1425,15 +1453,14 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
 }
 
 function writeManifest(installedFiles, skillNames, managedPermissions = null) {
-    const manifest = {
-        package: PACKAGE_NAME,
-        version: PACKAGE_VERSION,
-        installedAt: new Date().toISOString(),
-        [MANIFEST_FILES_KEY]: installedFiles,
-    };
-    if (skillNames) {
-        manifest[MANIFEST_SKILLS_KEY] = skillNames;
-    }
+    const manifest = buildTargetManifestRecord({
+        packageName: PACKAGE_NAME,
+        packageVersion: PACKAGE_VERSION,
+        targetIdentity: INSTALL_TARGET_IDENTITY,
+        managedRoot: CLAUDE_HOME,
+        files: installedFiles,
+        skills: skillNames,
+    });
     if (managedPermissions && Array.isArray(managedPermissions.deny) && managedPermissions.deny.length > 0) {
         manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] = {
             deny: [...managedPermissions.deny],
@@ -2192,11 +2219,13 @@ function printHelp() {
 ${PACKAGE_NAME} - Claude Code development standards installer
 
 Usage:
-  npx ${PACKAGE_NAME}              Install everything
+  npx ${PACKAGE_NAME}              Install everything into the main default root
   npx ${PACKAGE_NAME} --update     Full install: remove prior manifest-tracked files first, then reinstall
   npx ${PACKAGE_NAME} --only X     Install specific groups
   npx ${PACKAGE_NAME} --target DIR Install into DIR instead of ~/.claude (overrides CLAUDE_CONFIG_DIR)
-  npx ${PACKAGE_NAME} --uninstall  Remove installed files
+  npx ${PACKAGE_NAME} --profile ID Install into one named profile root (under the profiles root)
+  npx ${PACKAGE_NAME} --profiles A,B  Install into each selected profile (one ownership manifest per target)
+  npx ${PACKAGE_NAME} --uninstall  Remove installed files from the selected root
   npx ${PACKAGE_NAME} --help       Show this help
 
 Groups:
@@ -2205,10 +2234,16 @@ ${groupLines}
 Examples:
   npx ${PACKAGE_NAME} --only core
   npx ${PACKAGE_NAME} --only core,journal
+  npx ${PACKAGE_NAME} --profile editor --only core
+  npx ${PACKAGE_NAME} --profiles editor,mel --only core
 
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
+Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
+Profile selection (--profile/--profiles) is mutually exclusive with --target.
+Target selection finishes before any mutation. Each target writes its own manifest
+with package, version, targetIdentity, managedRoot, files, and skills.
 
 If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
 writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
@@ -2247,30 +2282,178 @@ function realPathOrSelf(filesystemPath) {
     }
 }
 
-if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {
-    const rawArgs = process.argv.slice(2);
-    const args = rawArgs.filter((flag) => flag !== '--update');
-    const isUpdateRefresh = rawArgs.includes('--update');
-    if (args.includes('--help') || args.includes('-h')) {
-        printHelp();
-    } else if (args.includes('--uninstall')) {
-        uninstall();
-    } else {
-        const onlyIndex = args.indexOf('--only');
-        let selectedGroups = null;
-        if (onlyIndex !== -1) {
-            const onlyValue = args[onlyIndex + 1];
-            if (!onlyValue || onlyValue.startsWith('--')) {
-                console.error(`ERROR: --only requires a comma-separated list of groups.\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
-                process.exit(1);
-            }
-            selectedGroups = onlyValue.split(',').map(name => name.trim());
-            const invalidGroups = selectedGroups.filter(name => !INSTALL_GROUPS[name]);
-            if (invalidGroups.length > 0) {
-                console.error(`ERROR: Unknown group(s): ${invalidGroups.join(', ')}\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
-                process.exit(1);
+/**
+ * Load profile id → directoryName from the A1 launcher contract when present.
+ * Falls back to identity mapping so unit tests stay independent of that tree.
+ *
+ * @returns {Record<string, string>}
+ */
+function loadDirectoryNameByProfileId() {
+    const manifestPath = join(
+        PACKAGE_ROOT,
+        'scripts',
+        'profile-isolation-launchers',
+        'config',
+        'profiles.manifest.json',
+    );
+    if (!existsSync(manifestPath)) {
+        return {
+            main: 'main',
+            editor: 'editor',
+            mel: 'mel',
+            ev: 'ev',
+            master: 'master',
+            kimi: 'kimi',
+        };
+    }
+    const document = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    /** @type {Record<string, string>} */
+    const directoryNameByProfileId = {};
+    const profiles = document && typeof document === 'object' ? document.profiles : null;
+    if (profiles && typeof profiles === 'object') {
+        for (const [eachProfileId, eachProfile] of Object.entries(profiles)) {
+            if (eachProfile && typeof eachProfile === 'object' && typeof eachProfile.directoryName === 'string') {
+                directoryNameByProfileId[eachProfileId] = eachProfile.directoryName;
             }
         }
-        install(selectedGroups, { isUpdateRefresh });
+    }
+    return directoryNameByProfileId;
+}
+
+/**
+ * Run one install hop for a resolved target. Multi-target parents re-exec this
+ * module with --target and --target-identity so CLAUDE_HOME is correct at load.
+ *
+ * Abort-first: the first non-zero child status ends the loop.
+ *
+ * @param {import('./select-install-targets.mjs').ResolvedInstallTarget[]} allTargets
+ * @param {string[]} childArgv
+ * @returns {void}
+ */
+function runInstallForAllTargets(allTargets, childArgv) {
+    if (allTargets.length === 1) {
+        const onlyTarget = allTargets[0];
+        if (onlyTarget.managedRoot !== CLAUDE_HOME || onlyTarget.targetIdentity !== INSTALL_TARGET_IDENTITY) {
+            const childStatus = spawnInstallChild(onlyTarget, childArgv);
+            process.exit(childStatus);
+        }
+        return;
+    }
+    for (const eachTarget of allTargets) {
+        console.log(
+            `\n${PACKAGE_NAME}: target ${eachTarget.targetIdentity} → ${eachTarget.managedRoot}`,
+        );
+        const childStatus = spawnInstallChild(eachTarget, childArgv);
+        if (childStatus !== 0) {
+            console.error(
+                `ERROR: install failed for target ${eachTarget.targetIdentity} (exit ${childStatus})`,
+            );
+            process.exit(childStatus === null ? 1 : childStatus);
+        }
+    }
+    process.exit(0);
+}
+
+/**
+ * @param {import('./select-install-targets.mjs').ResolvedInstallTarget} target
+ * @param {string[]} childArgv
+ * @returns {number | null}
+ */
+function spawnInstallChild(target, childArgv) {
+    const result = spawnSync(
+        process.execPath,
+        [
+            fileURLToPath(import.meta.url),
+            '--target',
+            target.managedRoot,
+            TARGET_IDENTITY_FLAG,
+            target.targetIdentity,
+            ...childArgv,
+        ],
+        {
+            stdio: 'inherit',
+            env: process.env,
+        },
+    );
+    if (result.error) {
+        console.error(`ERROR: failed to spawn install child: ${result.error.message}`);
+        return 1;
+    }
+    return result.status === null ? 1 : result.status;
+}
+
+if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {
+    const rawArgs = process.argv.slice(2);
+    if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+        printHelp();
+    } else {
+        let targetSelection;
+        try {
+            targetSelection = parseInstallTargetSelectionFromArgv(rawArgs);
+        } catch (selectionError) {
+            const message = selectionError instanceof Error
+                ? selectionError.message
+                : String(selectionError);
+            console.error(`ERROR: ${message}`);
+            process.exit(1);
+        }
+
+        const homeDirectory = homedir();
+        let allTargets;
+        try {
+            allTargets = resolveInstallTargets(targetSelection, {
+                homeDirectory,
+                environment: process.env,
+                profilesRoot: resolveProfilesRootDirectory({
+                    homeDirectory,
+                    environment: process.env,
+                }),
+                directoryNameByProfileId: loadDirectoryNameByProfileId(),
+            });
+        } catch (resolveError) {
+            const message = resolveError instanceof Error
+                ? resolveError.message
+                : String(resolveError);
+            console.error(`ERROR: ${message}`);
+            process.exit(1);
+        }
+
+        const childArgv = stripTargetSelectionFlagsFromArgv(rawArgs);
+        const args = childArgv.filter((flag) => flag !== '--update');
+        const isUpdateRefresh = childArgv.includes('--update');
+
+        const needsChildHop = allTargets.length > 1
+            || allTargets[0].managedRoot !== CLAUDE_HOME
+            || (
+                targetSelection.mode === 'profiles'
+                && allTargets[0].targetIdentity !== INSTALL_TARGET_IDENTITY
+            );
+
+        if (needsChildHop && !args.includes('--uninstall')) {
+            runInstallForAllTargets(allTargets, childArgv);
+        } else if (args.includes('--uninstall')) {
+            if (needsChildHop) {
+                runInstallForAllTargets(allTargets, childArgv);
+            } else {
+                uninstall();
+            }
+        } else {
+            const onlyIndex = args.indexOf('--only');
+            let selectedGroups = null;
+            if (onlyIndex !== -1) {
+                const onlyValue = args[onlyIndex + 1];
+                if (!onlyValue || onlyValue.startsWith('--')) {
+                    console.error(`ERROR: --only requires a comma-separated list of groups.\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+                    process.exit(1);
+                }
+                selectedGroups = onlyValue.split(',').map(name => name.trim());
+                const invalidGroups = selectedGroups.filter(name => !INSTALL_GROUPS[name]);
+                if (invalidGroups.length > 0) {
+                    console.error(`ERROR: Unknown group(s): ${invalidGroups.join(', ')}\nAvailable groups: ${Object.keys(INSTALL_GROUPS).join(', ')}`);
+                    process.exit(1);
+                }
+            }
+            install(selectedGroups, { isUpdateRefresh });
+        }
     }
 }
