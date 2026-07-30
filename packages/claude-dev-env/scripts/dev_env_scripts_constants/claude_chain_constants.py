@@ -227,3 +227,42 @@ ATTEMPT_SUMMARY_ENTRY_TEMPLATE: str = "{command}={status}"
 
 ATTEMPT_SUMMARY_JOIN_SEPARATOR: str = ", "
 """Separator joining per-attempt fragments in the exhausted-chain summary."""
+
+AFFINITY_STATE_SCHEMA_VERSION: int = 1
+"""Version field written into the session-to-binary affinity state document."""
+
+AFFINITY_STATE_FILENAME: str = "claude-chain-affinity.json"
+"""Default affinity state file name under the Claude home directory."""
+
+AFFINITY_MAXIMUM_ENTRIES: int = 64
+"""Hard cap on retained session-to-binary affinity rows (oldest drop first)."""
+
+AFFINITY_KEY_SCHEMA_VERSION: str = "schema_version"
+"""JSON key for the affinity document schema version."""
+
+AFFINITY_KEY_ALL_BINDINGS: str = "all_bindings"
+"""JSON key for the ordered list of session-to-command bindings."""
+
+AFFINITY_KEY_SESSION_ID: str = "session_id"
+"""JSON key for a bound Claude session id."""
+
+AFFINITY_KEY_COMMAND: str = "command"
+"""JSON key for the chain binary command bound to a session id."""
+
+AFFINITY_TEMP_SUFFIX: str = ".tmp"
+"""Suffix for the temporary file used during atomic affinity replacement."""
+
+AFFINITY_CORRUPT_MESSAGE_TEMPLATE: str = (
+    "Affinity state at {state_path} is corrupt or unreadable: {error}. "
+    "Delete or repair the file; the runner continues without affinity."
+)
+"""Actionable diagnostic when affinity state cannot be loaded."""
+
+AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE: str = (
+    "Failed to write affinity state at {state_path}: {error}. "
+    "Check directory permissions and free space."
+)
+"""Actionable diagnostic when atomic affinity replacement fails."""
+
+AFFINITY_JSON_INDENT_SPACES: int = 2
+"""Indent width for the written affinity state JSON document."""

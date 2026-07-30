@@ -44,11 +44,12 @@ import argparse
 import importlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 from typing import Protocol, TextIO
@@ -57,6 +58,17 @@ if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
 from dev_env_scripts_constants.claude_chain_constants import (
+    AFFINITY_CORRUPT_MESSAGE_TEMPLATE,
+    AFFINITY_JSON_INDENT_SPACES,
+    AFFINITY_KEY_ALL_BINDINGS,
+    AFFINITY_KEY_COMMAND,
+    AFFINITY_KEY_SCHEMA_VERSION,
+    AFFINITY_KEY_SESSION_ID,
+    AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_STATE_FILENAME,
+    AFFINITY_STATE_SCHEMA_VERSION,
+    AFFINITY_TEMP_SUFFIX,
+    AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE,
     ALL_ROUTING_MODES,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -517,6 +529,201 @@ def _session_id_from_json_text(json_text: str) -> str | None:
     if isinstance(raw_session_id, str) and raw_session_id:
         return raw_session_id
     return None
+
+
+@dataclass(frozen=True)
+class AffinityBinding:
+    """One session-id to chain-binary binding."""
+
+    session_id: str
+    command: str
+
+
+@dataclass
+class AffinityStore:
+    """Versioned, bounded session-to-binary affinity document."""
+
+    schema_version: int = AFFINITY_STATE_SCHEMA_VERSION
+    all_bindings: list[AffinityBinding] = field(default_factory=list)
+
+
+def default_affinity_state_path(claude_home_directory: Path) -> Path:
+    """Return the default affinity state path under a Claude home directory.
+
+    Args:
+        claude_home_directory: Claude configuration root (for example ``~/.claude``).
+
+    Returns:
+        Path to the affinity state JSON file.
+    """
+    return claude_home_directory / AFFINITY_STATE_FILENAME
+
+
+def _affinity_corrupt_error(state_path: Path, error: object) -> ValueError:
+    return ValueError(
+        AFFINITY_CORRUPT_MESSAGE_TEMPLATE.format(
+            state_path=state_path,
+            error=error,
+        )
+    )
+
+
+def _parse_affinity_binding(
+    each_binding: object,
+    *,
+    state_path: Path,
+) -> AffinityBinding:
+    if not isinstance(each_binding, dict):
+        raise _affinity_corrupt_error(state_path, "a binding entry is not an object")
+    session_id = each_binding.get(AFFINITY_KEY_SESSION_ID)
+    command = each_binding.get(AFFINITY_KEY_COMMAND)
+    if not isinstance(session_id, str) or not session_id:
+        raise _affinity_corrupt_error(
+            state_path, "binding missing non-empty session_id"
+        )
+    if not isinstance(command, str) or not command:
+        raise _affinity_corrupt_error(state_path, "binding missing non-empty command")
+    return AffinityBinding(session_id=session_id, command=command)
+
+
+def _bindings_from_payload(
+    all_payload_fields: dict[str, object],
+    *,
+    state_path: Path,
+) -> list[AffinityBinding]:
+    schema_version = all_payload_fields.get(AFFINITY_KEY_SCHEMA_VERSION)
+    if schema_version != AFFINITY_STATE_SCHEMA_VERSION:
+        raise _affinity_corrupt_error(
+            state_path, f"unsupported schema_version {schema_version!r}"
+        )
+    raw_bindings = all_payload_fields.get(AFFINITY_KEY_ALL_BINDINGS)
+    if not isinstance(raw_bindings, list):
+        raise _affinity_corrupt_error(
+            state_path, "all_bindings is missing or not a list"
+        )
+    return [
+        _parse_affinity_binding(each_binding, state_path=state_path)
+        for each_binding in raw_bindings
+    ]
+
+
+def load_affinity_store(state_path: Path) -> AffinityStore:
+    """Load a versioned affinity store, or an empty store when the file is absent.
+
+    Args:
+        state_path: Path to the affinity state JSON file.
+
+    Returns:
+        Parsed affinity store.
+
+    Raises:
+        ValueError: When the document is corrupt or uses an unsupported schema.
+    """
+    if not state_path.is_file():
+        return AffinityStore()
+    try:
+        raw_text = state_path.read_text(encoding=UTF8_ENCODING)
+        parsed_payload = json.loads(raw_text)
+    except (OSError, json.JSONDecodeError, UnicodeError) as load_error:
+        raise _affinity_corrupt_error(state_path, load_error) from load_error
+    if not isinstance(parsed_payload, dict):
+        raise _affinity_corrupt_error(
+            state_path, "top-level value is not a JSON object"
+        )
+    return AffinityStore(
+        schema_version=AFFINITY_STATE_SCHEMA_VERSION,
+        all_bindings=_bindings_from_payload(parsed_payload, state_path=state_path),
+    )
+
+
+def record_affinity_binding(
+    store: AffinityStore,
+    *,
+    session_id: str,
+    command: str,
+    maximum_entries: int = AFFINITY_MAXIMUM_ENTRIES,
+) -> AffinityStore:
+    """Return a new store with ``session_id`` bound to ``command``, bounded.
+
+    Re-binding an existing session moves it to the newest end. When the store
+    exceeds ``maximum_entries``, the oldest bindings drop first.
+
+    Args:
+        store: Current affinity store.
+        session_id: Claude session id to bind.
+        command: Chain binary command that served the session.
+        maximum_entries: Hard cap on retained bindings.
+
+    Returns:
+        Updated store (does not mutate ``store``).
+
+    Raises:
+        ValueError: When session_id, command, or maximum_entries is invalid.
+    """
+    if not session_id or not command:
+        raise ValueError("session_id and command must be non-empty")
+    if maximum_entries < 1:
+        raise ValueError("maximum_entries must be at least 1")
+    all_remaining = [
+        each_binding
+        for each_binding in store.all_bindings
+        if each_binding.session_id != session_id
+    ]
+    all_remaining.append(AffinityBinding(session_id=session_id, command=command))
+    if len(all_remaining) > maximum_entries:
+        all_remaining = all_remaining[-maximum_entries:]
+    return AffinityStore(
+        schema_version=AFFINITY_STATE_SCHEMA_VERSION,
+        all_bindings=all_remaining,
+    )
+
+
+def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
+    """Atomically replace the affinity state file with ``store``.
+
+    Writes a sibling temporary file, then uses ``os.replace`` so readers never
+    observe a partial document.
+
+    Args:
+        state_path: Destination affinity state path.
+        store: Store document to persist.
+
+    Raises:
+        OSError: When the write or replace fails (message is actionable).
+    """
+    payload = {
+        AFFINITY_KEY_SCHEMA_VERSION: store.schema_version,
+        AFFINITY_KEY_ALL_BINDINGS: [
+            {
+                AFFINITY_KEY_SESSION_ID: each_binding.session_id,
+                AFFINITY_KEY_COMMAND: each_binding.command,
+            }
+            for each_binding in store.all_bindings
+        ],
+    }
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = state_path.with_name(state_path.name + AFFINITY_TEMP_SUFFIX)
+    try:
+        temporary_path.write_text(
+            json.dumps(
+                payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True
+            )
+            + "\n",
+            encoding=UTF8_ENCODING,
+        )
+        os.replace(temporary_path, state_path)
+    except OSError as write_error:
+        if temporary_path.exists():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        raise OSError(
+            AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE.format(
+                state_path=state_path,
+                error=write_error,
+            )
+        ) from write_error
 
 
 def _served_outcome(
