@@ -12,7 +12,24 @@ those skills invoke during each loop tick.
 | `prompts/` | XML agent prompt templates. |
 | `scripts/` | Python scripts for loop state management, prompt building, outcome recording, path resolution, pacer selection, and preflight checks. |
 
-## Key files
+## Redirects (canonical under `~/.claude/_shared/pr-loop/`)
+
+These stubs exist so a worker that opens `skills/_shared/pr-loop/...` still reaches the real file via `@` load:
+
+| Stub here | Canonical |
+|---|---|
+| `audit-contract.md` | `@~/.claude/_shared/pr-loop/audit-contract.md` |
+| `audit-reply-template.md` | `@~/.claude/_shared/pr-loop/audit-reply-template.md` |
+| `code-rules-gate.md` | `@~/.claude/_shared/pr-loop/code-rules-gate.md` |
+| `fix-protocol.md` | `@~/.claude/_shared/pr-loop/fix-protocol.md` |
+| `gh-payloads.md` | `@~/.claude/_shared/pr-loop/gh-payloads.md` |
+| `post-audit-thread-contract.md` | `@~/.claude/_shared/pr-loop/post-audit-thread-contract.md` |
+| `precatch-rubric.md` | `@~/.claude/_shared/pr-loop/precatch-rubric.md` |
+| `state-schema.md` | `@~/.claude/_shared/pr-loop/state-schema.md` |
+| `worker-spawn.md` | `@~/.claude/_shared/pr-loop/worker-spawn.md` |
+| `scripts/RUNTIME_SCRIPTS.md` | `@~/.claude/_shared/pr-loop/scripts/` |
+
+## Key files (live in this tree)
 
 | File | Role |
 |---|---|
