@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.active_capability_constants import (
+from dev_env_scripts_constants.active_capability_constants import (
     ALL_BANNED_ACTIVE_CAPABILITY_NAMES,
     ALL_INERT_FENCE_LANGUAGES,
     BACKTICK_CAPABILITY_PATTERN,
@@ -33,6 +33,7 @@ from config.active_capability_constants import (
     SLASH_CAPABILITY_PATTERN,
     UTF8_ENCODING,
 )
+
 
 @dataclass(frozen=True)
 class CapabilityInventory:
@@ -49,7 +50,7 @@ class CapabilityInventory:
 
 @dataclass(frozen=True)
 class UnresolvedCapabilityReference:
-    """One active reference that does not resolve to a committed capability."""
+    """One active reference that names a banned capability."""
 
     file_path: str
     line_number: int

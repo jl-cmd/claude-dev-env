@@ -1,4 +1,8 @@
-"""Constants for active skill/agent/command reference resolution."""
+"""Constants for the active_capability_references script.
+
+Script-level scalar constants live in dev_env_scripts_constants alongside
+timing.py and the other per-script constant modules.
+"""
 
 from __future__ import annotations
 

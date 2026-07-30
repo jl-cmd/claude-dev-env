@@ -16,7 +16,9 @@ from active_capability_references import (
     strip_inert_fenced_blocks,
     unresolved_active_capabilities,
 )
-from config.active_capability_constants import ALL_BANNED_ACTIVE_CAPABILITY_NAMES
+from dev_env_scripts_constants.active_capability_constants import (
+    ALL_BANNED_ACTIVE_CAPABILITY_NAMES,
+)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
