@@ -107,6 +107,26 @@ def load_installable_surfaces_manifest(from_package_root: Path) -> Mapping[str, 
     return json.loads(manifest_path.read_text(encoding=UTF8_ENCODING))
 
 
+def _string_names_from_manifest_key(
+    all_manifest_entries: Mapping[str, object],
+    from_key: str,
+) -> list[str]:
+    """Return non-empty string entries for one manifest list key.
+
+    Args:
+        all_manifest_entries: Parsed installable-surfaces manifest.
+        from_key: JSON key whose value is a list of surface names.
+
+    Returns:
+        String basenames from the list, or an empty list when the key is absent
+        or not a list.
+    """
+    all_names = all_manifest_entries.get(from_key, [])
+    if not isinstance(all_names, list):
+        return []
+    return [each for each in all_names if isinstance(each, str) and each]
+
+
 def required_directory_names(all_manifest_entries: Mapping[str, object]) -> list[str]:
     """Return required top-level directory names from the manifest.
 
@@ -116,10 +136,10 @@ def required_directory_names(all_manifest_entries: Mapping[str, object]) -> list
     Returns:
         Directory basenames the packed package must deliver.
     """
-    all_names = all_manifest_entries.get(MANIFEST_DIRECTORIES_KEY, [])
-    if not isinstance(all_names, list):
-        return []
-    return [each for each in all_names if isinstance(each, str) and each]
+    return _string_names_from_manifest_key(
+        all_manifest_entries,
+        MANIFEST_DIRECTORIES_KEY,
+    )
 
 
 def required_root_file_names(all_manifest_entries: Mapping[str, object]) -> list[str]:
@@ -131,10 +151,10 @@ def required_root_file_names(all_manifest_entries: Mapping[str, object]) -> list
     Returns:
         File basenames the packed package must deliver at package root.
     """
-    all_names = all_manifest_entries.get(MANIFEST_ROOT_FILES_KEY, [])
-    if not isinstance(all_names, list):
-        return []
-    return [each for each in all_names if isinstance(each, str) and each]
+    return _string_names_from_manifest_key(
+        all_manifest_entries,
+        MANIFEST_ROOT_FILES_KEY,
+    )
 
 
 def load_package_json_file_entries(from_package_root: Path) -> set[str]:
@@ -219,10 +239,7 @@ def surface_appears_in_tarball_members(
     if member_prefix in all_tarball_members:
         return True
     child_prefix = f"{member_prefix}/"
-    return any(
-        each_member == member_prefix or each_member.startswith(child_prefix)
-        for each_member in all_tarball_members
-    )
+    return any(each_member.startswith(child_prefix) for each_member in all_tarball_members)
 
 
 def list_npm_pack_tarball_members(from_tarball_path: Path) -> frozenset[str]:
@@ -572,13 +589,12 @@ def main() -> int:
     Returns:
         ``0`` when every check passes, ``1`` when any check fails.
     """
-    newline_join_separator = NEWLINE_JOIN_SEPARATOR
     all_failures = run_all_installable_package_checks(
         from_package_root=package_root_path(),
         from_repository_root=repository_root_path(),
     )
     if all_failures:
-        print(newline_join_separator.join(all_failures))
+        print(NEWLINE_JOIN_SEPARATOR.join(all_failures))
         return EXIT_CODE_FAILURE
     print(VERIFICATION_PASSED_MESSAGE)
     return EXIT_CODE_SUCCESS
