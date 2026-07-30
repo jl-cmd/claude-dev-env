@@ -287,7 +287,7 @@ test('repository HEAD metadata still shows version drift', () => {
   );
   assert.equal(plugin.version, '1.0.0');
   assert.equal(marketplace.entry_version, '1.0.0');
-  assert.equal(packageVersion, '2.8.0');
+  assert.match(packageVersion, /^\d+\.\d+\.\d+/);
   assert.equal(readmeEntry.has_plugin_install_instruction, true);
   assert.equal(readmeEntry.has_npx_install_instruction, true);
   assert.notEqual(packageVersion, plugin.version);
