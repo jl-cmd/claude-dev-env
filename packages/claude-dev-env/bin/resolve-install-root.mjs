@@ -10,11 +10,11 @@
  */
 
 import { homedir } from 'node:os';
-import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
+import { join, normalize, resolve, sep } from 'node:path';
+import { MYPY_INI_FILE_NAME } from './install-constants.mjs';
 
 export const CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE = 'CLAUDE_CONFIG_DIR';
 export const DEFAULT_CLAUDE_DIRECTORY_NAME = '.claude';
-export const MYPY_INI_FILE_NAME = '.mypy.ini';
 export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
 
 /**
@@ -53,14 +53,14 @@ export function resolveInstallRoot(options = {}) {
     let managedRoot;
 
     if (explicitTarget) {
-        managedRoot = resolve(explicitTarget);
+        managedRoot = explicitTarget;
         source = 'explicit-target';
     } else {
         const configDir = normalizeOptionalPath(
             environment[CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE],
         );
         if (configDir) {
-            managedRoot = resolve(configDir);
+            managedRoot = configDir;
             source = 'claude-config-dir';
         } else {
             managedRoot = resolve(join(homeDirectory, DEFAULT_CLAUDE_DIRECTORY_NAME));
@@ -159,7 +159,7 @@ function normalizeOptionalPath(maybePath) {
     if (!trimmed) {
         return null;
     }
-    return isAbsolute(trimmed) ? resolve(trimmed) : resolve(trimmed);
+    return resolve(trimmed);
 }
 
 /**
