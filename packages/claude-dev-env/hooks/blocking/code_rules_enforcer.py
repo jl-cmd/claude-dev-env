@@ -288,7 +288,7 @@ def validate_content(
         all_issues.extend(check_naive_datetime_construction(content, file_path))
         all_issues.extend(
             _issues_introduced_in_fragment(
-                check_magic_values, old_content, content, file_path
+                check_magic_values, old_content, content, file_path, defer_scope_to_caller
             )
         )
         all_issues.extend(check_fstring_structural_literals(content, file_path))
@@ -527,12 +527,20 @@ def validate_content(
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(
             _issues_introduced_in_fragment(
-                check_join_separator_string_magic, old_content, content, file_path
+                check_join_separator_string_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(
             _issues_introduced_in_fragment(
-                check_string_literal_magic, old_content, content, file_path
+                check_string_literal_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(check_whitespace_indentation_magic(content, file_path))
@@ -788,6 +796,7 @@ def _issues_introduced_in_fragment(
     old_content: str,
     new_content: str,
     file_path: str,
+    defer_scope_to_caller: bool = False,
 ) -> list[str]:
     """Return fragment findings that are new relative to the pre-edit fragment.
 
@@ -812,14 +821,22 @@ def _issues_introduced_in_fragment(
             there is no prior region to baseline against.
         new_content: The Edit's ``new_string`` fragment (or Write body).
         file_path: Destination path used for path-based exemptions.
+        defer_scope_to_caller: When True, skip the grandfathering subtraction
+            and return every finding in ``new_content`` unfiltered. The gate
+            passes True: it already re-reads ``old_content`` as the whole
+            file at the diff's merge-base and runs its own
+            ``split_violations_by_scope`` over the unfiltered list, so
+            subtracting here would drop a pre-existing violation entirely
+            instead of surfacing it as advisory.
 
     Returns:
         Findings present in ``new_content`` that are absent from ``old_content``
-        under line-number-agnostic body matching. When ``old_content`` is empty,
-        every finding from ``new_content`` is returned.
+        under line-number-agnostic body matching. When ``old_content`` is empty
+        or ``defer_scope_to_caller`` is True, every finding from ``new_content``
+        is returned.
     """
     all_new_issues = check_function(new_content, file_path)
-    if not old_content:
+    if not old_content or defer_scope_to_caller:
         return all_new_issues
     all_old_issues = check_function(old_content, file_path)
     return _issues_absent_from_prior_bodies(all_new_issues, all_old_issues)

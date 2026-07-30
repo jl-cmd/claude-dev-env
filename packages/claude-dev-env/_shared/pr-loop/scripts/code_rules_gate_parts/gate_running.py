@@ -96,6 +96,7 @@ def _scoped_violations_for_file(
     repository_root: Path,
     all_added_lines_for_file: set[int] | None,
     should_read_staged_content: bool = False,
+    prior_ref: str = "HEAD",
 ) -> tuple[list[str], list[str]] | None:
     """Validate one resolved file and partition its violations by diff scope."""
     resolved_root = repository_root.resolve()
@@ -106,7 +107,7 @@ def _scoped_violations_for_file(
     if content is None:
         sys.stderr.write(f"code_rules_gate: skip unreadable {resolved_path}\n")
         return None
-    prior_content = read_prior_committed_content(resolved_root, relative_posix)
+    prior_content = read_prior_committed_content(resolved_root, relative_posix, prior_ref)
     issues = validate_content(
         content,
         relative_posix,
@@ -135,6 +136,7 @@ def _partition_over_eligible_paths(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool,
+    prior_ref: str = "HEAD",
 ) -> PartitionedViolations:
     """Validate each already-resolved eligible file and partition the results."""
     blocking_by_file: dict[Path, list[str]] = {}
@@ -147,6 +149,7 @@ def _partition_over_eligible_paths(
             repository_root,
             _added_lines_for(all_added_lines_by_path, each_resolved),
             should_read_staged_content,
+            prior_ref,
         )
         if scoped_violations is None:
             skipped_unreadable_count += 1
@@ -165,6 +168,7 @@ def _collect_partitioned_violations(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool = False,
+    prior_ref: str = "HEAD",
 ) -> PartitionedViolations:
     """Validate every eligible file and partition results, counting read skips."""
     all_eligible_paths = _eligible_resolved_paths(
@@ -176,6 +180,7 @@ def _collect_partitioned_violations(
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
+        prior_ref,
     )
 
 
@@ -266,6 +271,7 @@ def _validate_and_count(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool,
+    prior_ref: str = "HEAD",
 ) -> PartitionedViolations:
     """Validate the eligible files, report the inspected count, return partitions."""
     all_eligible_paths = _eligible_resolved_paths(
@@ -277,6 +283,7 @@ def _validate_and_count(
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
+        prior_ref,
     )
     _report_inspected_count(len(all_eligible_paths) - skipped_count)
     return blocking_by_file, advisory_by_file, skipped_count
@@ -288,6 +295,7 @@ def run_gate(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None = None,
     should_read_staged_content: bool = False,
+    prior_ref: str = "HEAD",
 ) -> int:
     """Run the gate over *all_file_paths* and emit a partitioned report.
 
@@ -297,6 +305,11 @@ def run_gate(
         repository_root: Repository root for resolving relative paths.
         all_added_lines_by_path: Per-file added-line maps, or None.
         should_read_staged_content: When True, validate staged blobs.
+        prior_ref: The git ref each file's grandfathering baseline is read
+            from. Defaults to ``HEAD`` (staged and explicit-paths mode); diff
+            mode passes the merge-base with the diff's base branch so a
+            magic-value/string-literal finding grandfathers against the
+            branch's starting point, not its own latest commit.
 
     Returns:
         Zero when clean; non-zero on a blocking violation or a skipped file.
@@ -307,6 +320,7 @@ def run_gate(
         repository_root,
         all_added_lines_by_path,
         should_read_staged_content,
+        prior_ref,
     )
     return _report_partitioned_violations(
         partitions, repository_root, all_added_lines_by_path is None
