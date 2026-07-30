@@ -47,6 +47,7 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     DOT_CLAUDE_DIRECTORY_NAME,
     FENCED_CODE_BLOCK_PATTERN,
     FILE_PATH_PATTERN,
+    HEAVY_WORD_SWAP_LIST_SEPARATOR,
     INLINE_CODE_PATTERN,
     INLINE_CODE_PLACEHOLDER,
     INLINE_CODE_SPAN_PATTERN,
@@ -242,7 +243,12 @@ def _load_project_allowlist(
 
 
 def build_block_reason(all_matches: list[tuple[str, str]]) -> str:
-    """Return a deny reason naming each flagged term and its plain replacement."""
+    """Return a legacy block-reason string naming each term and plain swap.
+
+    Heavy-word enforcement no longer hard-denies (OP-07D). Callers that still
+    need the named swap list for notices or tests use this helper. Lean-block
+    denials use ``build_lean_block_reason`` instead.
+    """
     swap_phrases = ", ".join(
         f'use "{each_replacement}" instead of "{each_term}"'
         for each_term, each_replacement in all_matches
@@ -251,6 +257,31 @@ def build_block_reason(all_matches: list[tuple[str, str]]) -> str:
         "BLOCKED: [PLAIN_LANGUAGE] Heavy words detected -- "
         f"{swap_phrases}. Reach for the everyday word the reader understands "
         "on the first pass."
+    )
+
+
+def build_advisory_system_message(all_matches: list[tuple[str, str]]) -> str:
+    """Return allow-path advisory text naming everyday swaps for heavy words.
+
+    ::
+
+        build_advisory_system_message([("initiate", "start")])
+            -> names use "start" instead of "initiate" (no permission deny)
+
+    Args:
+        all_matches: ``(heavy_term, everyday_swap)`` pairs from the word scan.
+
+    Returns:
+        A systemMessage string for PreToolUse allow with advisory guidance.
+    """
+    swap_phrases = HEAVY_WORD_SWAP_LIST_SEPARATOR.join(
+        f'use "{each_replacement}" instead of "{each_term}"'
+        for each_term, each_replacement in all_matches
+    )
+    return (
+        f"[PLAIN_LANGUAGE advisory] {swap_phrases}. "
+        "Reach for the everyday word the reader understands on the first pass. "
+        "This notice does not deny the write; lean-block structure denials still apply."
     )
 
 
@@ -580,6 +611,30 @@ def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
     output_stream.flush()
 
 
+def build_allow_advisory_payload(system_message: str) -> dict[str, object]:
+    """Build an allow payload that still surfaces everyday-word guidance.
+
+    Args:
+        system_message: Advisory text naming heavy terms and plain swaps.
+
+    Returns:
+        A PreToolUse payload without permissionDecision deny.
+    """
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+        },
+        "systemMessage": system_message,
+        "suppressOutput": False,
+    }
+
+
+def _emit_allow_advisory(system_message: str, output_stream: TextIO) -> None:
+    output_stream.write(json.dumps(build_allow_advisory_payload(system_message)))
+    output_stream.flush()
+
+
 def _emit_plain_language_advisory_candidates(
     surface: str,
     all_matches: list[tuple[str, str]],
@@ -601,54 +656,82 @@ def _emit_plain_language_advisory_candidates(
 
 
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
-    """Decide whether a payload carries a question block or heavy words to block.
+    """Return a lean-block deny reason, or None when the payload is allowed.
 
-    An AskUserQuestion payload meets the lean-block check first, so a question
-    text or an option description carrying chat detail returns a LEAN_QUESTION
-    deny reason. When prose-style enforcement is on, the word scan returns a
-    PLAIN_LANGUAGE deny reason for heavy words. When enforcement is off, heavy
-    word hits are recorded as privacy-safe advisory candidates only.
+    Heavy-word matches never produce a deny reason (OP-07D). When prose-style
+    enforcement is on, main still emits an allow advisory naming everyday swaps
+    for AskUserQuestion and ``.md`` writes. When enforcement is off, matches
+    only record privacy-safe advisory candidates (OP-07B).
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
 
     Returns:
-        The permissionDecisionReason text when the payload is denied, or None
-        when it is allowed.
+        The permissionDecisionReason text for a lean-block denial, or None when
+        the payload is allowed (with or without a heavy-word advisory).
+    """
+    deny_reason, _advisory_system_message = evaluate_with_advisory(payload_by_key)
+    return deny_reason
+
+
+def evaluate_with_advisory(
+    payload_by_key: dict[str, object],
+    all_allowlisted_terms: frozenset[str] | None = None,
+) -> tuple[str | None, str | None]:
+    """Return ``(deny_reason, advisory_system_message)`` for one PreToolUse payload.
+
+    ::
+
+        lean chat detail in AskUserQuestion  ->  (lean deny reason, None)
+        heavy word, enforcement ON           ->  (None, advisory systemMessage)
+        heavy word, enforcement OFF          ->  (None, None) + privacy JSONL
+        clean payload                        ->  (None, None)
+
+    Args:
+        payload_by_key: The PreToolUse payload with tool_name and tool_input.
+        all_allowlisted_terms: Optional project-vocabulary exemptions. When
+            omitted, the project allowlist file is loaded for the payload path.
+
+    Returns:
+        A pair of optional deny reason and optional allow-path advisory message.
     """
     raw_tool_name = payload_by_key.get("tool_name", "")
     raw_tool_input = payload_by_key.get("tool_input", {})
     if not isinstance(raw_tool_name, str) or not isinstance(raw_tool_input, dict):
-        return None
+        return None, None
 
     if raw_tool_name in ALL_WRITE_EDIT_TOOL_NAMES:
         target_file_path = raw_tool_input.get("file_path", "")
         if isinstance(target_file_path, str) and is_ephemeral_path(
             target_file_path, payload_by_key
         ):
-            return None
+            return None, None
 
     if raw_tool_name == ASK_USER_QUESTION_TOOL_NAME:
         all_block_violations = find_question_block_violations(raw_tool_input)
         if all_block_violations:
-            return build_lean_block_reason(all_block_violations)
+            return build_lean_block_reason(all_block_violations), None
 
     prose_text = _collect_prose_for_tool(raw_tool_name, raw_tool_input)
     if not prose_text:
-        return None
+        return None, None
 
-    all_allowlisted_terms = _load_project_allowlist(
-        raw_tool_name, raw_tool_input, payload_by_key
+    resolved_allowlisted_terms = (
+        all_allowlisted_terms
+        if all_allowlisted_terms is not None
+        else _load_project_allowlist(raw_tool_name, raw_tool_input, payload_by_key)
     )
-    all_matches = find_banned_terms(prose_text, all_allowlisted_terms)
+    all_matches = find_banned_terms(
+        prose_text, all_allowlisted_terms=resolved_allowlisted_terms
+    )
     if not all_matches:
-        return None
+        return None, None
 
     if not prose_style_enforcement_enabled_in_environment():
         _emit_plain_language_advisory_candidates(raw_tool_name, all_matches, prose_text)
-        return None
+        return None, None
 
-    return build_block_reason(all_matches)
+    return None, build_advisory_system_message(all_matches)
 
 
 def main() -> None:
@@ -660,11 +743,15 @@ def main() -> None:
     if not isinstance(input_data, dict):
         sys.exit(0)
 
-    deny_reason = evaluate(input_data)
-    if deny_reason is None:
+    deny_reason, advisory_system_message = evaluate_with_advisory(input_data)
+    if deny_reason is not None:
+        _emit_deny(deny_reason, sys.stdout)
         sys.exit(0)
 
-    _emit_deny(deny_reason, sys.stdout)
+    if advisory_system_message is not None:
+        _emit_allow_advisory(advisory_system_message, sys.stdout)
+        sys.exit(0)
+
     sys.exit(0)
 
 
