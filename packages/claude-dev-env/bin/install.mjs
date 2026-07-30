@@ -23,26 +23,11 @@ import {
     parseExplicitTargetFromArgv,
 } from './resolve-install-root.mjs';
 
-/**
- * Read `--target` from process argv for install-root resolution.
- * A missing or incomplete `--target` returns null so the resolver falls through
- * to CLAUDE_CONFIG_DIR or the home default without aborting module load.
- *
- * @returns {string | null}
- */
-function readExplicitTargetFromProcessArgv() {
-    try {
-        return parseExplicitTargetFromArgv(process.argv.slice(2));
-    } catch {
-        return null;
-    }
-}
-
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
     environment: process.env,
     homeDirectory: homedir(),
-    explicitTarget: readExplicitTargetFromProcessArgv(),
+    explicitTarget: parseExplicitTargetFromArgv(process.argv.slice(2)),
 });
 const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
 const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;
