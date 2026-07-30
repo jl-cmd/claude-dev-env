@@ -36,6 +36,15 @@ const ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'lib/profile-manifest.mjs',
 ]);
 
+/** J1 MCP activation sources allowed beside the A1a contract surface. */
+const ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS = Object.freeze([
+  'config/mcp-bundles.json',
+  'mcp-bundles.mjs',
+  'launcher-runtime.mjs',
+  'tests/mcp-bundles.test.mjs',
+  'tests/launcher-runtime.test.mjs',
+]);
+
 test('profiles manifest schemaVersion is 1 and every migrationOrder id resolves', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
   assert.equal(validatedManifest.schemaVersion, 1);
@@ -136,6 +145,7 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   walk(CONTRACT_ROOT_DIRECTORY_PATH);
   const allExpectedPaths = new Set([
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
     'profile-isolation-contract.test.mjs',
   ]);
   for (const eachRelativePath of allRelativePaths) {
