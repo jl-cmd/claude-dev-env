@@ -46,6 +46,7 @@ export const MALFORMED_MANIFEST_ERROR_MESSAGE =
 
 const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
+const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
 /**
  * Preflight failure that leaves the managed installation untouched.
@@ -347,6 +348,7 @@ export function buildUninstallPlan(input) {
             removableFiles: Object.freeze([]),
             skippedFiles: Object.freeze([]),
             allManifestFiles: Object.freeze([]),
+            managedPermissionDenyEntries: Object.freeze([]),
             isNoOp: true,
         });
     }
@@ -362,11 +364,16 @@ export function buildUninstallPlan(input) {
 
     preflightSettingsIfNeeded(settingsPath, true, io);
 
-    const rawFiles = manifest && typeof manifest === 'object' && !Array.isArray(manifest)
-        ? manifest[MANIFEST_FILES_KEY]
-        : null;
+    const isManifestObject = manifest && typeof manifest === 'object' && !Array.isArray(manifest);
+    const rawFiles = isManifestObject ? manifest[MANIFEST_FILES_KEY] : null;
     const allManifestFiles = Array.isArray(rawFiles)
         ? rawFiles.filter((eachPath) => typeof eachPath === 'string' && eachPath.trim() !== '')
+        : [];
+    const rawManagedDeny = isManifestObject
+        ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny
+        : null;
+    const managedPermissionDenyEntries = Array.isArray(rawManagedDeny)
+        ? rawManagedDeny.filter((eachEntry) => typeof eachEntry === 'string' && eachEntry.trim() !== '')
         : [];
 
     /** @type {string[]} */
@@ -389,6 +396,7 @@ export function buildUninstallPlan(input) {
         removableFiles: Object.freeze(removableFiles),
         skippedFiles: Object.freeze(skippedFiles),
         allManifestFiles: Object.freeze(allManifestFiles),
+        managedPermissionDenyEntries: Object.freeze(managedPermissionDenyEntries),
         isNoOp: false,
     });
 }

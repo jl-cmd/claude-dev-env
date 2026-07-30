@@ -2225,19 +2225,11 @@ function executeUninstallPlan(plan, helpers = {}) {
             settingsChanged = true;
             console.log('  Hook entries removed from settings.json');
         }
-        let managedDenyFromManifest = loadPackageManagedDenyEntries();
-        if (existsSync(plan.manifestFilePath)) {
-            try {
-                const manifest = JSON.parse(readFileSync(plan.manifestFilePath, 'utf8'));
-                if (Array.isArray(manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny)) {
-                    managedDenyFromManifest = manifest[MANIFEST_MANAGED_PERMISSIONS_KEY].deny;
-                }
-            } catch {
-                // Keep the package deny list when the ownership record cannot be re-read.
-            }
-        }
-        if (managedDenyFromManifest.length > 0) {
-            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromManifest);
+        const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
+            ? plan.managedPermissionDenyEntries
+            : loadPackageManagedDenyEntries();
+        if (managedDenyFromPlan.length > 0) {
+            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromPlan);
             if (pruneOutcome.removedCount > 0) {
                 settingsChanged = true;
                 console.log(
