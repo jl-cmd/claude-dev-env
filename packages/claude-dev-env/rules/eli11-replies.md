@@ -25,7 +25,12 @@
 - **Cut findings first** — when a reply runs long, drop findings and keep the action steps.
 - **Skim test** — reading only the bold words tells the whole story.
 
+## Progress and finals
+
+Mid-run and closing narration follow [`opus5-communication-contract.md`](opus5-communication-contract.md) (`opus5-communication-contract-v1`): first progress update is one sentence; later updates only for important discoveries or direction changes; the final starts with the outcome.
+
 ## Relationship to other rules
 
 - **[`plain-language`](plain-language.md)** owns word choice; this rule owns reply length and shape.
+- **[`opus5-communication-contract`](opus5-communication-contract.md)** owns progress updates, outcome-first finals, and thinking-disabled tool narration.
 - **`AskUserQuestion`** carries every question to the user, in the same short style.

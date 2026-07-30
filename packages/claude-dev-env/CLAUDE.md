@@ -2,7 +2,7 @@
 
 ## Communication
 
-Reply shape and length: follow `~/.claude/rules/eli11-replies.md`. Word choice: follow `~/.claude/rules/plain-language.md`. State claims affirmatively.
+Reply shape and length: follow `~/.claude/rules/eli11-replies.md`. Word choice: follow `~/.claude/rules/plain-language.md`. Progress and finals: follow `~/.claude/rules/opus5-communication-contract.md` (`opus5-communication-contract-v1`). State claims affirmatively.
 
 ## Security
 
