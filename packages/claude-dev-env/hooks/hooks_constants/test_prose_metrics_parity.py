@@ -35,6 +35,9 @@ from hooks_constants.eli11_reply_enforcer_constants import (
 from hooks_constants.eli11_reply_enforcer_constants import (
     COUNTABLE_WORD_PATTERN as ELI11_COUNTABLE_WORD_PATTERN,
 )
+from hooks_constants.ask_user_question_shape import (
+    COUNTABLE_WORD_PATTERN as SHAPE_COUNTABLE_WORD_PATTERN,
+)
 from hooks_constants.plain_language_blocker_constants import ALL_CHAT_DETAIL_MARKERS
 from hooks_constants.plain_language_blocker_constants import (
     COUNTABLE_WORD_PATTERN as PLAIN_LANGUAGE_COUNTABLE_WORD_PATTERN,
@@ -100,6 +103,11 @@ def test_countable_word_pattern_copies_stay_byte_equal() -> None:
         PLAIN_LANGUAGE_COUNTABLE_WORD_PATTERN.flags
         == ELI11_COUNTABLE_WORD_PATTERN.flags
     )
+
+
+def test_shape_analyzer_binds_the_plain_language_countable_word_pattern() -> None:
+    """The pure shape analyzer reuses the shared pattern object, not a private copy."""
+    assert SHAPE_COUNTABLE_WORD_PATTERN is PLAIN_LANGUAGE_COUNTABLE_WORD_PATTERN
 
 
 def test_table_row_pattern_copies_stay_byte_equal() -> None:
