@@ -24,6 +24,7 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "usage_pause_constants",
         "prototype_scripts_constants",
         "codex_review_scripts_constants",
+        "e_code_review_scripts_constants",
         "dev_env_scripts_constants",
         "fresh_branch_scripts_constants",
     }

@@ -20,7 +20,7 @@
 
 ## Rules
 
-- **One command per block** — a command the user runs goes in its own `bash`-tagged fenced block, so the Run button appears. That tag gives the user a Run button; [`shell-invocation-policy`](shell-invocation-policy.md) stays in charge of the agent's own Bash-tool calls, which run pwsh-only.
+- **One command per block** — a command the user runs goes in its own `bash`-tagged fenced block, so the Run button appears. That tag gives the user a Run button; [`shell-invocation-policy`](shell-invocation.md) stays in charge of the agent's own Bash-tool calls, which run pwsh-only.
 - **One line per status** — each background-work update gets a single line.
 - **Cut findings first** — when a reply runs long, drop findings and keep the action steps.
 - **Skim test** — reading only the bold words tells the whole story.

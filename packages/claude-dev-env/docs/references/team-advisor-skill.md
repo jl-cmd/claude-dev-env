@@ -1,14 +1,20 @@
-# Team-Advisor Skill Invocation
+# Team-Advisor Skill
 
-`/team-advisor` spawns a standing review agent for the session at the strongest reachable model tier, run at the highest reasoning effort. Use it to get a second opinion from a distinct model line than the one driving the session. For example:
+`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. Use it when `advisor()` is absent, or when you want a standing four-signal reviewer across many decision points.
 
-- Claude session -> consult Fable xhigh
-- Codex session -> consult Sol xhigh
+## Refs
 
-## When to use it
+| Doc | Holds |
+|---|---|
+| `skills/team-advisor/SKILL.md` | Sole-consumer bind wiring and constraints |
+| `advisor-tool.md` | Consult timing, hard rule, how to treat advice |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, floor, lifecycle |
+| `agents/session-advisor.md` | ENDORSE / CORRECTION / PLAN / STOP |
 
-Consult the spawned advisor before big decisions, before declaring work complete, before any commit, when a failure repeats, or when reconsidering a chosen approach.
+## When to use
 
-## Relationship to the advisor tool
+Follow the call rules in `advisor-tool.md` (orientation first, then consult before substantive work; durable deliverable before the completion consult; stuck or reapproach; long tasks twice).
 
-`/team-advisor` works standalone; it needs no `advisor()` tool present. When both are available (see `advisor-tool.md` in this directory), use `advisor()` for a fast, history-forwarding check before substantive work, and `/team-advisor` for a standing reviewer consulted at decision points.
+## Relation to `advisor()`
+
+`/team-advisor` works with no `advisor()` tool. When both exist: `advisor()` for a fast history-forwarded check; `/team-advisor` for a standing named reviewer consulted at the same cadence.

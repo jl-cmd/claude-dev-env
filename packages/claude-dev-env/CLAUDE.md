@@ -12,7 +12,13 @@ A runtime value that is itself private — a host, an SSH user or port, an owner
 
 ## Advisors
 
-When the `advisor()` tool is available, read `~/.claude/docs/references/advisor-tool.md`. For complex tasks use the `/team-advisor` skill.
+| Path | Holds |
+|---|---|
+| `~/.claude/docs/references/advisor-tool.md` | When to call a stronger reviewer, hard rule before first write, how to treat advice |
+| `/team-advisor` skill | Standing warm advisor bind (map: `docs/references/team-advisor-skill.md`) |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, lifecycle |
+
+When `advisor()` is available, use it under the rules in `advisor-tool.md`. When `advisor()` is unavailable, use `/team-advisor`.
 
 ## Files and workspaces
 

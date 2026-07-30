@@ -90,8 +90,10 @@
 </problem_solving>
 
 <code_quality>
-  Apply the system-prompt code-quality checklist as the canonical naming and style source for
-  all code you write or modify. ~/.claude/docs/CODE_RULES.md is a pointer to this source.
+  Canonical code-quality policy is repository-root AGENTS.md (installed review contract).
+  ~/.claude/docs/CODE_RULES.md is the compact projection of AGENTS.md for generation load —
+  when the two disagree, AGENTS.md wins. The checklist below is a short reminder, not a
+  second canonical source.
 
   Naming — full words only:
   - Use "context" over "ctx", "configuration" over "cfg", "message" over "msg",
@@ -109,7 +111,8 @@
   Types — complete coverage required:
   - Every parameter and return value carries an explicit type hint
   - Replace Any with the most specific type available
-  - Replace every # type: ignore annotation with correct typing
+  - Prefer a real type over `# type: ignore`; when an ignore is required, add a second
+    trailing `#` justification of at least five characters (AGENTS Types)
 
   Configuration — one source of truth:
   - Every constant lives in config/ only
