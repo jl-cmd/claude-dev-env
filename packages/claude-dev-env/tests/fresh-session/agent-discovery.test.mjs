@@ -157,22 +157,22 @@ test('invocation records the fixture agent separately from discovery for each pr
 });
 
 test('missing fixture agent fails discovery for the affected profile only', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['main', 'editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['main', 'profile-a'] });
     try {
         installFixtureAgent(roots.profileRootById.main);
         const mainNames = discoverInstalledAgents(roots.profileRootById.main);
-        const editorNames = discoverInstalledAgents(roots.profileRootById.editor);
+        const profileANames = discoverInstalledAgents(roots.profileRootById['profile-a']);
         assert.ok(mainNames.includes(FIXTURE_AGENT_NAME));
-        assert.ok(!editorNames.includes(FIXTURE_AGENT_NAME));
+        assert.ok(!profileANames.includes(FIXTURE_AGENT_NAME));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
 });
 
 test('fixture agent installs only under disposable profile roots', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['mel'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-b'] });
     try {
-        const installedPath = installFixtureAgent(roots.profileRootById.mel);
+        const installedPath = installFixtureAgent(roots.profileRootById['profile-b']);
         const normalized = installedPath.replace(/\\/gu, '/').toLowerCase();
         const runRoot = roots.runRoot.replace(/\\/gu, '/').toLowerCase();
         assert.ok(normalized.startsWith(runRoot));

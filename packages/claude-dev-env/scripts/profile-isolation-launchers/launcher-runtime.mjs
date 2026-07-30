@@ -81,7 +81,7 @@ export function activateProfileMcpBundle(parameters) {
 }
 
 /**
- * Activate MCP for a launcher name (claude-editor / claude-mel).
+ * Activate MCP for a launcher name (claude-profile-a / claude-profile-b).
  *
  * @param {{
  *   launcherName: string,
