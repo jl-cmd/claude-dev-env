@@ -2290,11 +2290,19 @@ function realPathOrSelf(filesystemPath) {
 
 /**
  * Load profile id → directoryName from the A1 launcher contract when present.
- * Falls back to identity mapping so unit tests stay independent of that tree.
+ * Falls back to identity mapping when the file is missing, unreadable, or empty.
  *
  * @returns {Record<string, string>}
  */
 function loadDirectoryNameByProfileId() {
+    const fallbackDirectoryNameByProfileId = {
+        main: 'main',
+        editor: 'editor',
+        mel: 'mel',
+        ev: 'ev',
+        master: 'master',
+        kimi: 'kimi',
+    };
     const manifestPath = join(
         PACKAGE_ROOT,
         'scripts',
@@ -2303,27 +2311,27 @@ function loadDirectoryNameByProfileId() {
         'profiles.manifest.json',
     );
     if (!existsSync(manifestPath)) {
-        return {
-            main: 'main',
-            editor: 'editor',
-            mel: 'mel',
-            ev: 'ev',
-            master: 'master',
-            kimi: 'kimi',
-        };
+        return fallbackDirectoryNameByProfileId;
     }
-    const document = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    /** @type {Record<string, string>} */
-    const directoryNameByProfileId = {};
-    const profiles = document && typeof document === 'object' ? document.profiles : null;
-    if (profiles && typeof profiles === 'object') {
-        for (const [eachProfileId, eachProfile] of Object.entries(profiles)) {
-            if (eachProfile && typeof eachProfile === 'object' && typeof eachProfile.directoryName === 'string') {
-                directoryNameByProfileId[eachProfileId] = eachProfile.directoryName;
+    try {
+        const document = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        /** @type {Record<string, string>} */
+        const directoryNameByProfileId = {};
+        const profiles = document && typeof document === 'object' ? document.profiles : null;
+        if (profiles && typeof profiles === 'object') {
+            for (const [eachProfileId, eachProfile] of Object.entries(profiles)) {
+                if (eachProfile && typeof eachProfile === 'object' && typeof eachProfile.directoryName === 'string') {
+                    directoryNameByProfileId[eachProfileId] = eachProfile.directoryName;
+                }
             }
         }
+        if (Object.keys(directoryNameByProfileId).length === 0) {
+            return fallbackDirectoryNameByProfileId;
+        }
+        return directoryNameByProfileId;
+    } catch {
+        return fallbackDirectoryNameByProfileId;
     }
-    return directoryNameByProfileId;
 }
 
 /**
