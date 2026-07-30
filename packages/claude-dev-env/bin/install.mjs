@@ -1364,6 +1364,37 @@ export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRel
 }
 
 /**
+ * Load ~/.claude/settings.json for an in-place merge, or `{}` when absent/empty.
+ *
+ * Malformed JSON or a non-object root ends the process so install never writes
+ * onto a shape the harness cannot read.
+ *
+ * @param {string} settingsPath Absolute path to settings.json.
+ * @returns {object}
+ */
+function loadClaudeSettingsObjectOrExit(settingsPath) {
+    if (!existsSync(settingsPath)) {
+        return {};
+    }
+    const raw = readFileSync(settingsPath, 'utf8').trim();
+    if (!raw) {
+        return {};
+    }
+    let settings;
+    try {
+        settings = JSON.parse(raw);
+    } catch {
+        console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.');
+        process.exit(1);
+    }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
+        process.exit(1);
+    }
+    return settings;
+}
+
+/**
  * Merge one package source root's hook groups into ~/.claude/settings.json.
  *
  * A settings file holding anything other than a JSON object ends the install with
@@ -1379,18 +1410,7 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
-    let settings = {};
-    if (existsSync(settingsPath)) {
-        const raw = readFileSync(settingsPath, 'utf8').trim();
-        if (raw) {
-            try { settings = JSON.parse(raw); }
-            catch { console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.'); process.exit(1); }
-            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-                console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
-                process.exit(1);
-            }
-        }
-    }
+    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
     const groupCount = mergeHooksIntoSettings(settings, hooksConfig, CLAUDE_HOME, pythonCommand);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     return groupCount;
@@ -1446,24 +1466,12 @@ function mergeManagedPermissions() {
         return { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
     }
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
-    let settings = {};
-    if (existsSync(settingsPath)) {
-        const raw = readFileSync(settingsPath, 'utf8').trim();
-        if (raw) {
-            try {
-                settings = JSON.parse(raw);
-            } catch {
-                console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.');
-                process.exit(1);
-            }
-            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-                console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
-                process.exit(1);
-            }
-        }
-    }
+    const settingsExisted = existsSync(settingsPath);
+    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
     const mergeOutcome = mergeManagedPermissionsIntoSettings(settings, managedDenyEntries);
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    if (mergeOutcome.addedCount > 0 || !settingsExisted) {
+        writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    }
     return mergeOutcome;
 }
 
@@ -1968,8 +1976,7 @@ function install(selectedGroups, options = {}) {
     const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
-    const managedPermissionDenyEntries = summary.managedPermissions?.managedDenyEntries
-        ?? loadPackageManagedDenyEntries();
+    const managedPermissionDenyEntries = summary.managedPermissions.managedDenyEntries;
     writeManifest(
         manifestFiles,
         manifestSkillNames,

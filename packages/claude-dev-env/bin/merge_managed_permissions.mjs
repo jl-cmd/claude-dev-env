@@ -105,16 +105,9 @@ export function pruneManagedPermissionsFromSettings(targetSettings, managedDenyE
     const managedSet = new Set(
         managedDenyEntries.filter((eachEntry) => typeof eachEntry === 'string'),
     );
-    const retained = [];
-    let removedCount = 0;
-    for (const eachEntry of permissions.deny) {
-        if (managedSet.has(eachEntry)) {
-            removedCount += 1;
-            continue;
-        }
-        retained.push(eachEntry);
-    }
-    permissions.deny = retained;
+    const denyCountBefore = permissions.deny.length;
+    permissions.deny = permissions.deny.filter((eachEntry) => !managedSet.has(eachEntry));
+    const removedCount = denyCountBefore - permissions.deny.length;
 
     if (permissions.deny.length === 0) {
         delete permissions.deny;

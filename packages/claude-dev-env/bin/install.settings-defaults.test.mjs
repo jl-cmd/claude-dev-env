@@ -7,16 +7,14 @@ import { strict as assert } from 'node:assert';
 import {
     mkdtempSync,
     rmSync,
-    mkdirSync,
     writeFileSync,
     readFileSync,
     existsSync,
-    copyFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 import {
     managedDenyEntriesFromPackageSettings,
