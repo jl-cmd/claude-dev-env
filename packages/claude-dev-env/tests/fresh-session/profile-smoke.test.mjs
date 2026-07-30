@@ -7,7 +7,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
     ALL_PROFILE_IDS,
@@ -31,7 +30,7 @@ test('disposable roots set HOME, USERPROFILE, CLAUDE_CONFIG_DIR, and GIT_CONFIG_
         assert.equal(environment.GIT_CONFIG_GLOBAL, roots.gitConfigGlobalPath);
         assert.ok(roots.runRoot.startsWith(tmpdir()) || roots.runRoot.includes('fresh-session'));
         assert.ok(existsSync(roots.profileRootById.main));
-        assert.ok(!environment.CLAUDE_CONFIG_DIR.includes(`${join('Users')}\\jon\\.claude-profiles`.slice(0, 5)) || environment.CLAUDE_CONFIG_DIR.includes('fresh-session') || environment.CLAUDE_CONFIG_DIR.startsWith(tmpdir()));
+        assert.ok(String(environment.CLAUDE_CONFIG_DIR).startsWith(roots.profilesRoot));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
@@ -55,12 +54,9 @@ test('fake transport records command, version, profile root, exit status, and ev
             const evidence = JSON.parse(readFileSync(result.evidencePath, 'utf8'));
             assert.equal(evidence.profileId, eachProfileId);
             assert.equal(evidence.exitStatus, 0);
-            assert.ok(
-                evidence.environment.CLAUDE_CONFIG_DIR === roots.profileRootById[eachProfileId],
-            );
-            assert.ok(
-                !String(evidence.environment.CLAUDE_CONFIG_DIR).includes('.claude-profiles\\editor')
-                || String(evidence.environment.CLAUDE_CONFIG_DIR).includes(roots.profilesRoot),
+            assert.equal(
+                evidence.environment.CLAUDE_CONFIG_DIR,
+                roots.profileRootById[eachProfileId],
             );
         }
     } finally {
@@ -141,14 +137,45 @@ test('parseHarnessArguments reads --profiles and --check transport', () => {
     assert.equal(shouldUseRealCli({ realCli: false }), false);
 });
 
+test('parseHarnessArguments rejects an empty profile list', () => {
+    assert.throws(
+        () => parseHarnessArguments(['--profiles', '']),
+        /At least one profile id is required/,
+    );
+});
+
+test('inherited FRESH_SESSION_FAIL_PROFILE does not poison a clean profile run', () => {
+    const previous = process.env.FRESH_SESSION_FAIL_PROFILE;
+    process.env.FRESH_SESSION_FAIL_PROFILE = 'main';
+    const roots = createDisposableRunRoots({ profileIds: ['main'] });
+    try {
+        const result = runProfileSession({
+            roots,
+            profileId: 'main',
+            realCli: false,
+        });
+        assert.equal(result.exitStatus, 0);
+        assert.equal(result.diagnostic, null);
+    } finally {
+        removeDisposableRunRoots(roots.runRoot);
+        if (previous === undefined) {
+            delete process.env.FRESH_SESSION_FAIL_PROFILE;
+        } else {
+            process.env.FRESH_SESSION_FAIL_PROFILE = previous;
+        }
+    }
+});
+
+
 test('live profile paths are never used as CLAUDE_CONFIG_DIR under fake transport', () => {
     const roots = createDisposableRunRoots({ profileIds: ['main'] });
     try {
         const result = runProfileSession({ roots, profileId: 'main', realCli: false });
         const configDir = result.profileRoot.replace(/\\/g, '/').toLowerCase();
-        assert.ok(configDir.includes('fresh-session') || configDir.includes(tmpdir().replace(/\\/g, '/').toLowerCase()));
-        assert.ok(!configDir.endsWith('/.claude-profiles/main'));
-        assert.ok(!configDir.includes('/users/jon/.claude-profiles/'));
+        const runRoot = roots.runRoot.replace(/\\/g, '/').toLowerCase();
+        assert.equal(result.profileRoot, roots.profileRootById.main);
+        assert.ok(configDir.startsWith(runRoot));
+        assert.ok(configDir.includes('fresh-session') || configDir.startsWith(tmpdir().replace(/\\/g, '/').toLowerCase()));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
