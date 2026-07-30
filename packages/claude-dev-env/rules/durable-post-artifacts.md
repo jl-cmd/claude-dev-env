@@ -17,6 +17,12 @@ Handle the two kinds of content differently:
 
   It ensures the repository has a prerelease tagged `artifacts`, uploads the file under a `YYYYMMDD_HHMMSS_<name>` asset name, and prints the permanent download URL. Put that URL in the post.
 
+## Viewable pages (HTML/SVG) download, not render
+
+GitHub serves every release asset as `application/octet-stream`, so a browser-viewable page (`.html`, `.htm`, `.svg`) linked from a `.../releases/download/...` URL downloads as an attachment instead of rendering inline. `gh_artifact_upload.py` prints a stderr warning when you upload such a file; stdout remains the durable URL only.
+
+For a page meant to be viewed inline, use a render host (gist or GitHub Pages). That render path is a documented, deferred option, not yet built, because it is unproven new behavior.
+
 ## Volatile paths that must not appear in a post body
 
 - A job scratch directory (`.claude-editor/jobs/`)
