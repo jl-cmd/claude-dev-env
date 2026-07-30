@@ -1,11 +1,14 @@
 """Tests for hedging_language_blocker hook response shape."""
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
+
+import pytest
 
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "hedging_language_blocker.py")
 _HOOKS_DIR = os.path.dirname(HOOK_SCRIPT_PATH)
@@ -89,6 +92,49 @@ def test_user_facing_notice_matches_config_messages_module():
     specification.loader.exec_module(module)
 
     assert module.USER_FACING_NOTICE == USER_FACING_NOTICE
+
+
+def test_hedging_scan_is_default_off() -> None:
+    completed_process = run_hook_with_message(
+        HEDGING_MESSAGE, is_prose_style_enabled=False
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_default_off_emits_privacy_safe_advisory_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_emitted: list[tuple[str, str, str]] = []
+
+    def _record_advisory(
+        matcher_id: str, surface: str, context_text: str, **_kwargs: object
+    ) -> dict[str, object]:
+        all_emitted.append((matcher_id, surface, context_text))
+        return {}
+
+    monkeypatch.setattr(
+        hedging_language_blocker, "emit_advisory_candidate", _record_advisory
+    )
+    monkeypatch.setattr(
+        hedging_language_blocker,
+        "prose_style_enforcement_enabled_in_environment",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        hedging_language_blocker.sys,
+        "stdin",
+        io.StringIO(json.dumps({"last_assistant_message": HEDGING_MESSAGE})),
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        hedging_language_blocker.main()
+    assert exit_info.value.code == 0
+    assert all_emitted
+    matcher_id, surface, context_text = all_emitted[0]
+    assert matcher_id == "hedging_word"
+    assert surface == "Stop"
+    assert "likely" in context_text
 
 
 def test_hedging_message_emits_block_with_short_user_notice():

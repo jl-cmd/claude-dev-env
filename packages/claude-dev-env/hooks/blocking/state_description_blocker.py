@@ -282,7 +282,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     Applies the same tool-name gate, file-extension gate, content selection, and
     pattern scan the standalone hook applies. Returns the deny-reason text when a
     historical phrase is found, or None to allow. Opinionated prose enforcement
-    is default-off via ``PROSE_STYLE_ENFORCEMENT_ENABLED``.
+    is default-off via ``prose_style_enforcement_enabled_in_environment()``.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.

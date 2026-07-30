@@ -14,6 +14,7 @@ fail-open malformed input.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,10 @@ if str(_BLOCKING_DIR) not in sys.path:
     sys.path.insert(0, str(_BLOCKING_DIR))
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
+
+_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT = {
+    "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1",
+}
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
@@ -63,6 +68,7 @@ def _run_hook_subprocess(
         The completed subprocess result with stdout and stderr captured.
     """
     script_path = str(_HOOKS_ROOT / hook_relative_path)
+    environment_by_key = {**os.environ, **_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT}
     return subprocess.run(
         [sys.executable, script_path],
         check=False,
@@ -70,6 +76,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=environment_by_key,
     )
 
 
@@ -82,6 +89,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
     Returns:
         The completed subprocess result with stdout and stderr captured.
     """
+    environment_by_key = {**os.environ, **_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT}
     return subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
         check=False,
@@ -89,6 +97,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=environment_by_key,
     )
 
 

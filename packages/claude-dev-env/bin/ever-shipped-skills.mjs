@@ -71,4 +71,5 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'update',
     'usage-pause',
     'verified-build',
+    'split-pr',
 ]);

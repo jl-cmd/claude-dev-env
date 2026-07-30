@@ -1,0 +1,21 @@
+{
+  "directories": [
+    "bin",
+    "rules",
+    "docs",
+    "commands",
+    "agents",
+    "output-styles",
+    "skills",
+    "hooks",
+    "system-prompts",
+    "scripts",
+    "_shared",
+    "audit-rubrics"
+  ],
+  "root_files": [
+    "CLAUDE.md",
+    "codex-capability-map.json",
+    "installable-surfaces.manifest.json"
+  ]
+}
