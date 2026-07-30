@@ -24,7 +24,7 @@ from config.finding_pipeline_constants import (
     FINDING_FIELD_FILE,
     FINDING_FIELD_LINE,
     FINDING_FIELD_SEVERITY,
-    SEVERITY_RANK_BY_TOKEN,
+    ALL_SEVERITY_RANK_BY_TOKEN,
 )
 
 
@@ -122,13 +122,13 @@ def filter_findings_by_severity(
     Raises:
         ValueError: When ``minimum_severity`` is not a known severity token.
     """
-    if minimum_severity not in SEVERITY_RANK_BY_TOKEN:
+    if minimum_severity not in ALL_SEVERITY_RANK_BY_TOKEN:
         raise ValueError(f"unknown minimum severity: {minimum_severity!r}")
-    minimum_rank = SEVERITY_RANK_BY_TOKEN[minimum_severity]
+    minimum_rank = ALL_SEVERITY_RANK_BY_TOKEN[minimum_severity]
     all_kept = tuple(
         each_finding
         for each_finding in collection.all_findings
-        if SEVERITY_RANK_BY_TOKEN[each_finding.severity] >= minimum_rank
+        if ALL_SEVERITY_RANK_BY_TOKEN[each_finding.severity] >= minimum_rank
     )
     return SeverityFilterView(
         stage_name=FILTER_STAGE_NAME,
