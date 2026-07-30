@@ -22,9 +22,8 @@ $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 $inventoryJson = & $inventoryScript -ManifestPath $ManifestPath -DesktopPath $DesktopPath -StartMenuPath $StartMenuPath
 $inventory = $inventoryJson | ConvertFrom-Json
 
-$allActions = @()
+$allActions = [System.Collections.Generic.List[object]]::new()
 foreach ($eachRow in $inventory.shortcuts) {
-    $desiredPresent = $true
     $actualPresent = [bool]$eachRow.exists
     $status = if (-not $actualPresent) {
         'missing'
@@ -35,18 +34,18 @@ foreach ($eachRow in $inventory.shortcuts) {
     else {
         'source-ambiguous'
     }
-    $allActions += [pscustomobject]@{
+    $allActions.Add([pscustomobject]@{
         id = $eachRow.id
         visibleName = $eachRow.visibleName
         source = $eachRow.source
         profileId = $eachRow.profileId
         groupingIdentity = $eachRow.groupingIdentity
-        desiredPresent = $desiredPresent
+        desiredPresent = $true
         actualPresent = $actualPresent
         status = $status
         expectedPath = $eachRow.expectedPath
         mutation = 'none'
-    }
+    })
 }
 
 if ($Apply) {

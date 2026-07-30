@@ -24,50 +24,60 @@ if ($manifest.schemaVersion -ne 1) {
 function Get-ShortcutMetadata {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ShortcutPath
+        [string]$ShortcutPath,
+        [Parameter(Mandatory = $true)]
+        $Shell
     )
     if (-not (Test-Path -LiteralPath $ShortcutPath)) {
         return $null
     }
-    $shell = New-Object -ComObject WScript.Shell
-    try {
-        $link = $shell.CreateShortcut($ShortcutPath)
-        return [pscustomobject]@{
-            path              = $ShortcutPath
-            targetPath        = $link.TargetPath
-            arguments         = $link.Arguments
-            workingDirectory  = $link.WorkingDirectory
-            iconLocation      = $link.IconLocation
-            exists            = $true
-        }
-    }
-    finally {
-        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+    $link = $Shell.CreateShortcut($ShortcutPath)
+    return [pscustomobject]@{
+        path              = $ShortcutPath
+        targetPath        = $link.TargetPath
+        arguments         = $link.Arguments
+        workingDirectory  = $link.WorkingDirectory
+        iconLocation      = $link.IconLocation
+        exists            = $true
     }
 }
 
-$allRows = @()
-foreach ($eachShortcut in $manifest.allManagedShortcuts) {
-    $baseDirectory = if ($eachShortcut.locationKind -eq 'desktop') { $DesktopPath } else { $StartMenuPath }
-    $shortcutPath = Join-Path $baseDirectory ($eachShortcut.visibleName + '.lnk')
-    $metadata = Get-ShortcutMetadata -ShortcutPath $shortcutPath
-    $allRows += [pscustomobject]@{
-        id                = $eachShortcut.id
-        visibleName       = $eachShortcut.visibleName
-        source            = $eachShortcut.source
-        profileId         = $eachShortcut.profileId
-        locationKind      = $eachShortcut.locationKind
-        targetKind        = $eachShortcut.targetKind
-        launcherName      = $eachShortcut.launcherName
-        groupingIdentity  = $eachShortcut.groupingIdentity
-        expectedPath      = $shortcutPath
-        exists            = [bool]$metadata
-        targetPath        = if ($metadata) { $metadata.targetPath } else { $null }
-        arguments         = if ($metadata) { $metadata.arguments } else { $null }
-        workingDirectory  = if ($metadata) { $metadata.workingDirectory } else { $null }
-        iconLocation      = if ($metadata) { $metadata.iconLocation } else { $null }
-        liveMutationAuthorized = [bool]$manifest.policy.liveMutationAuthorized
+$shell = New-Object -ComObject WScript.Shell
+$allRows = [System.Collections.Generic.List[object]]::new()
+try {
+    foreach ($eachShortcut in $manifest.allManagedShortcuts) {
+        if ($eachShortcut.locationKind -eq 'desktop') {
+            $baseDirectory = $DesktopPath
+        }
+        elseif ($eachShortcut.locationKind -eq 'start-menu') {
+            $baseDirectory = $StartMenuPath
+        }
+        else {
+            throw "unsupported locationKind for $($eachShortcut.id): $($eachShortcut.locationKind)"
+        }
+        $shortcutPath = Join-Path $baseDirectory ($eachShortcut.visibleName + '.lnk')
+        $metadata = Get-ShortcutMetadata -ShortcutPath $shortcutPath -Shell $shell
+        $allRows.Add([pscustomobject]@{
+            id                = $eachShortcut.id
+            visibleName       = $eachShortcut.visibleName
+            source            = $eachShortcut.source
+            profileId         = $eachShortcut.profileId
+            locationKind      = $eachShortcut.locationKind
+            targetKind        = $eachShortcut.targetKind
+            launcherName      = $eachShortcut.launcherName
+            groupingIdentity  = $eachShortcut.groupingIdentity
+            expectedPath      = $shortcutPath
+            exists            = [bool]$metadata
+            targetPath        = if ($metadata) { $metadata.targetPath } else { $null }
+            arguments         = if ($metadata) { $metadata.arguments } else { $null }
+            workingDirectory  = if ($metadata) { $metadata.workingDirectory } else { $null }
+            iconLocation      = if ($metadata) { $metadata.iconLocation } else { $null }
+            liveMutationAuthorized = [bool]$manifest.policy.liveMutationAuthorized
+        })
     }
+}
+finally {
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
 }
 
 $result = [pscustomobject]@{
