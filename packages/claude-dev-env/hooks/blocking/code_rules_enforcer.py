@@ -748,6 +748,41 @@ def _without_line_prefix(violation_text: str) -> str:
     return violation_text
 
 
+def _issues_absent_from_prior_bodies(
+    all_candidate_issues: list[str],
+    all_prior_issues: list[str],
+) -> list[str]:
+    """Return candidates whose message bodies are not covered by prior issues.
+
+    Matching is line-number-agnostic with per-occurrence accounting: each prior
+    entry consumes exactly one candidate carrying the same body.
+
+    ::
+
+        prior:    ["Line 1: magic 'X'"]
+        candidates: ["Line 4: magic 'X'", "Line 9: magic 'Y'"]
+        -> ["Line 9: magic 'Y'"]
+
+    Args:
+        all_candidate_issues: Findings from the scan under review.
+        all_prior_issues: Findings that already account for a body.
+
+    Returns:
+        Candidates not consumed by a matching prior body.
+    """
+    remaining_prior_counts = Counter(
+        _without_line_prefix(each_issue) for each_issue in all_prior_issues
+    )
+    all_uncovered_issues: list[str] = []
+    for each_issue in all_candidate_issues:
+        message_body = _without_line_prefix(each_issue)
+        if remaining_prior_counts[message_body] > 0:
+            remaining_prior_counts[message_body] -= 1
+            continue
+        all_uncovered_issues.append(each_issue)
+    return all_uncovered_issues
+
+
 def _issues_introduced_in_fragment(
     check_function: Callable[[str, str], list[str]],
     old_content: str,
@@ -787,17 +822,7 @@ def _issues_introduced_in_fragment(
     if not old_content:
         return all_new_issues
     all_old_issues = check_function(old_content, file_path)
-    remaining_prior_counts = Counter(
-        _without_line_prefix(each_issue) for each_issue in all_old_issues
-    )
-    all_introduced_issues: list[str] = []
-    for each_issue in all_new_issues:
-        message_body = _without_line_prefix(each_issue)
-        if remaining_prior_counts[message_body] > 0:
-            remaining_prior_counts[message_body] -= 1
-            continue
-        all_introduced_issues.append(each_issue)
-    return all_introduced_issues
+    return _issues_absent_from_prior_bodies(all_new_issues, all_old_issues)
 
 
 def _forecast_full_file_violations(
@@ -840,17 +865,7 @@ def _forecast_full_file_violations(
     all_full_file_issues = validate_content(
         full_file_content_after_edit, file_path, prior_full_file_content
     )
-    remaining_blocking_counts = Counter(
-        _without_line_prefix(each_issue) for each_issue in all_blocking_issues
-    )
-    forecast_issues: list[str] = []
-    for each_issue in all_full_file_issues:
-        message_body = _without_line_prefix(each_issue)
-        if remaining_blocking_counts[message_body] > 0:
-            remaining_blocking_counts[message_body] -= 1
-            continue
-        forecast_issues.append(each_issue)
-    return forecast_issues
+    return _issues_absent_from_prior_bodies(all_full_file_issues, all_blocking_issues)
 
 
 def _precheck_hint() -> str:
