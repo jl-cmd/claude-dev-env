@@ -1,52 +1,53 @@
 {
-    "name": "claude-dev-env",
-    "version": "2.8.0",
-    "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
-    "type": "module",
-    "bin": {
-        "claude-dev-env": "bin/install.mjs",
-        "codex-compat": "bin/codex-compat.mjs"
-    },
-    "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
-    },
-    "files": [
-        "bin/",
-        "rules/",
-        "docs/",
-        "commands/",
-        "agents/",
-        "skills/",
-        "hooks/",
-        "system-prompts/",
-        "scripts/",
-        "codex-capability-map.json",
-        "_shared/",
-        "audit-rubrics/",
-        "CLAUDE.md",
-        "!**/__pycache__/**",
-        "!**/*.py[cod]",
-        "!**/.pytest_cache/**",
-        "!**/.mypy_cache/**",
-        "!**/.ruff_cache/**",
-        "!**/*.log",
-        "!**/debug-*.log",
-        "!**/*.egg-info/**"
-    ],
-    "keywords": [
-        "claude-code",
-        "plugin",
-        "cli",
-        "tdd",
-        "code-quality"
-    ],
-    "dependencies": {
-        "@jl-cmd/prompt-generator": "^1.0.0"
-    },
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/jl-cmd/claude-dev-env.git",
-        "directory": "packages/claude-dev-env"
-    }
+  "name": "claude-dev-env",
+  "version": "2.8.0",
+  "description": "Claude Code development standards \u2014 rules, hooks, agents, commands, and skills",
+  "type": "module",
+  "bin": {
+    "claude-dev-env": "bin/install.mjs",
+    "codex-compat": "bin/codex-compat.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+  },
+  "files": [
+    "bin/",
+    "rules/",
+    "docs/",
+    "commands/",
+    "agents/",
+    "output-styles/",
+    "skills/",
+    "hooks/",
+    "system-prompts/",
+    "scripts/",
+    "codex-capability-map.json",
+    "_shared/",
+    "audit-rubrics/",
+    "CLAUDE.md",
+    "!**/__pycache__/**",
+    "!**/*.py[cod]",
+    "!**/.pytest_cache/**",
+    "!**/.mypy_cache/**",
+    "!**/.ruff_cache/**",
+    "!**/*.log",
+    "!**/debug-*.log",
+    "!**/*.egg-info/**"
+  ],
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "cli",
+    "tdd",
+    "code-quality"
+  ],
+  "dependencies": {
+    "@jl-cmd/prompt-generator": "^1.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jl-cmd/claude-dev-env.git",
+    "directory": "packages/claude-dev-env"
+  }
 }
