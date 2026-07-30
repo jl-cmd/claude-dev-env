@@ -1,6 +1,6 @@
 {
     "name": "claude-dev-env",
-    "version": "2.8.0",
+    "version": "2.9.0",
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
@@ -8,7 +8,7 @@
         "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"scripts/profile-isolation-launchers/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"scripts/profile-isolation-launchers/* \"tests/fresh-session/**/*.test.mjs\""
     },
     "files": [
         "bin/",
@@ -22,6 +22,8 @@
         "system-prompts/",
         "scripts/",
         "codex-capability-map.json",
+        "settings.json",
+        "installable-surfaces.manifest.json",
         "_shared/",
         "audit-rubrics/",
         "CLAUDE.md",

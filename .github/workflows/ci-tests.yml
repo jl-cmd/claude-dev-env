@@ -326,3 +326,51 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "windows-semantics pytest exited $LASTEXITCODE"
           }
+
+  # P-21 / H: Node installer lifecycle on a clean Windows runner with isolated
+  # HOME, USERPROFILE, and GIT_CONFIG_GLOBAL (the driver sandbox owns those).
+  windows-installer-lifecycle:
+    name: Windows installer lifecycle
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.javascript == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python for installer hooks
+        run: pip install -e packages/claude-dev-env/
+
+      - name: Install package JS dependencies
+        working-directory: packages/claude-dev-env
+        run: npm install
+
+      - name: Run isolated Windows installer lifecycle
+        shell: pwsh
+        working-directory: packages/claude-dev-env
+        run: |
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-installer-lifecycle'
+          $adapter = Join-Path $PWD 'scripts/ci/windows-installer-lifecycle.ps1'
+          & $adapter -EvidenceRoot $evidenceRoot
+
+      - name: Run package npm test on Windows
+        working-directory: packages/claude-dev-env
+        run: npm test
+
+      - name: Upload Windows lifecycle failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-lifecycle-evidence
+          path: ${{ runner.temp }}/windows-installer-lifecycle/**
+          if-no-files-found: ignore
+          retention-days: 7
