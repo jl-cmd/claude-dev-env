@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from config.plan_constants import EXIT_CODE_SUCCESS, UTF8_ENCODING
+
+ProcessRunner = Callable[[list[str], str], "CapturedProcessOutcome"]
 
 
 @dataclass(frozen=True)

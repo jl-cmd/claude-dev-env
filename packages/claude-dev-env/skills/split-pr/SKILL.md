@@ -68,14 +68,13 @@ never a hard gate.
 | `scripts/test_split_pr_title.py` | One-prefix title normalization |
 | `scripts/test_split_pr_layer_order.py` | Layer order ranking |
 | `scripts/test_split_pr_paginate.py` | Slurp page flattening |
+| `scripts/split_pr_process_runner.py` | Captured subprocess runner for Git ops |
+| `scripts/split_pr_git_operations.py` | Safe local slice commit + restore via git_operations_constants |
+| `scripts/execute_split_slices.py` | Materialize full plan in topo order |
+| `scripts/config/git_operations_constants.py` | Git argv tokens and error strings |
+| `scripts/test_split_pr_git_operations.py` | Dirty-tree, path staging, restore tests |
+| `scripts/test_execute_split_slices.py` | Plan walk order and failure restore |
 | `reference/proposal-format.md` | Human-readable plan field contract |
-
-| scripts/split_pr_process_runner.py | Captured subprocess runner for Git ops |
-| scripts/split_pr_git_operations.py | Safe local slice commit + restore via git_operations_constants |
-| scripts/execute_split_slices.py | Materialize full plan in topo order |
-| scripts/config/git_operations_constants.py | Git argv tokens and error strings |
-| scripts/test_split_pr_git_operations.py | Dirty-tree, path staging, restore tests |
-| scripts/test_execute_split_slices.py | Plan walk order and failure restore |
 
 ## Folder map
 
