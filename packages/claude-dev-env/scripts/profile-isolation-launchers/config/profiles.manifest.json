@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "profilesRootPlaceholder": "${PROFILES_ROOT}",
+  "sharedSourcePlaceholder": "${SHARED_SOURCE_ROOT}",
+  "pluginSeedPlaceholder": "${PLUGIN_SEED_ROOT}",
+  "migrationOrder": ["ev", "mel", "editor", "master", "kimi"],
+  "profiles": {
+    "master": {
+      "id": "master",
+      "aliases": ["default"],
+      "directoryName": "master",
+      "launcherNames": ["claude"],
+      "fullLauncherNames": ["claude-full"],
+      "migrationMode": "materialize-from-legacy",
+      "mcpBundle": "lean"
+    },
+    "editor": {
+      "id": "editor",
+      "aliases": [],
+      "directoryName": "editor",
+      "launcherNames": ["claude-editor"],
+      "fullLauncherNames": ["claude-editor-full"],
+      "migrationMode": "materialize-from-legacy",
+      "mcpBundle": "lean"
+    },
+    "ev": {
+      "id": "ev",
+      "aliases": [],
+      "directoryName": "ev",
+      "launcherNames": ["claude-ev"],
+      "fullLauncherNames": ["claude-ev-full"],
+      "migrationMode": "clean-local-runtime",
+      "mcpBundle": "lean"
+    },
+    "mel": {
+      "id": "mel",
+      "aliases": [],
+      "directoryName": "mel",
+      "launcherNames": ["claude-mel"],
+      "fullLauncherNames": ["claude-mel-full"],
+      "migrationMode": "clean-local-runtime",
+      "mcpBundle": "lean"
+    },
+    "kimi": {
+      "id": "kimi",
+      "aliases": [],
+      "directoryName": "kimi",
+      "launcherNames": ["claude-kimi"],
+      "fullLauncherNames": ["claude-kimi-full"],
+      "migrationMode": "clean-local-runtime",
+      "mcpBundle": "lean"
+    }
+  }
+}
