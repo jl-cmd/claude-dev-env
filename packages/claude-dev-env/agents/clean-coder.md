@@ -67,7 +67,7 @@ def fetch_with_retries(url: str) -> str:
 - **No secrets in context.** Never open `.env` / `.env.*` / credential files. The sensitive-file protector also blocks editing them.
 - **No lock-file hand edits.** Regenerate with the package manager.
 - **No scratch/planning artifacts in the repo.** No `scratch_*.py`, `docs/plans/*.md`, or image assets committed for this agent’s work.
-- **Pre-check before Write.** Run `../hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` until clean, then Write/Edit once. Wrong `--as` can hide violations.
+- **Pre-check before Write.** Run `python ~/.claude/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Wrong `--as` can hide violations.
 - **Windows shell.** Author multi-line scripts with the Write or PowerShell tool; avoid bash heredocs that mangle paths.
 - **`gh` bodies.** Always `--body-file`; never `--body` / `-b` with markdown.
 - **Windows rmtree.** Never `shutil.rmtree(..., ignore_errors=True)`; strip `S_IWRITE` and retry (see windows-filesystem-safe rule).
