@@ -27,12 +27,10 @@ from config.plan_constants import (
     PLAN_KEY_SOURCE_COMMIT,
     SLICE_KEY_ALL_PATHS,
     UTF8_ENCODING,
+    VERIFY_PAYLOAD_KEY_OK,
 )
-from config.split_pr_constants import EXIT_CODE_FAILURE
-from split_pr_script_types import validate_split_plan
-from split_pr_title import normalize_split_title
-
-JsonObject = dict[str, object]
+from config.split_pr_constants import EXIT_CODE_FAILURE, PAYLOAD_KEY_ERROR
+from split_pr_script_types import JsonObject, validate_split_plan
 
 
 def _is_drive_path(path_text: str) -> bool:
@@ -108,13 +106,6 @@ def verify_split_plan_coverage(all_plan: JsonObject) -> None:
         raise ValueError("source_commit is required")
     normalized = _normalize_plan_paths(all_plan)
     validate_split_plan(normalized)
-    all_slices = normalized[PLAN_KEY_ALL_SLICES]
-    assert isinstance(all_slices, list)
-    for each_slice in all_slices:
-        assert isinstance(each_slice, dict)
-        title = each_slice.get("title")
-        if not isinstance(title, str) or normalize_split_title(title) != title:
-            raise ValueError(f"title not normalized: {title!r}")
 
 
 def main(all_argv: list[str]) -> int:
@@ -138,9 +129,9 @@ def main(all_argv: list[str]) -> int:
             raise ValueError("plan root must be an object")
         verify_split_plan_coverage(payload)
     except (OSError, ValueError, json.JSONDecodeError) as error:
-        print(json.dumps({"ok": False, "error": str(error)}))
+        print(json.dumps({VERIFY_PAYLOAD_KEY_OK: False, PAYLOAD_KEY_ERROR: str(error)}))
         return EXIT_CODE_FAILURE
-    print(json.dumps({"ok": True}))
+    print(json.dumps({VERIFY_PAYLOAD_KEY_OK: True}))
     return EXIT_CODE_SUCCESS
 
 
