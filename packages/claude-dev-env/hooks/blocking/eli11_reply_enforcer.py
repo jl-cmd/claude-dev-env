@@ -66,18 +66,6 @@ def extract_reply_prose(assistant_message: str) -> str:
     return LINK_TARGET_PATTERN.sub("", prose_text)
 
 
-def count_reply_words(prose_text: str) -> int:
-    """Return the number of reader-visible words in the stripped prose.
-
-    Args:
-        prose_text: Prose already cleaned of code, quotes, tables, and links.
-
-    Returns:
-        The count of whitespace-separated tokens carrying a letter or digit.
-    """
-    return len(COUNTABLE_WORD_PATTERN.findall(prose_text))
-
-
 def collect_non_empty_lines(prose_text: str) -> list[str]:
     """Return every line of the stripped prose that carries visible text.
 
