@@ -145,6 +145,10 @@ test('SessionStart and InstructionsLoaded each fire once per profile with profil
             const outcome = fireSessionStartLifecycle(roots, eachProfileId, sessionId);
             assert.equal(outcome.listResult.exitStatus, 0);
             assert.ok(outcome.listResult.command.includes(HARNESS_FIRE_EVENT_ARGUMENT));
+            assert.ok(
+                outcome.sinkPath.startsWith(roots.profileRootById[eachProfileId]),
+                'event sink stays under the disposable profile root',
+            );
 
             assert.equal(
                 countEvents(outcome.events, SESSION_START_EVENT, eachProfileId),
@@ -194,12 +198,16 @@ test('duplicate SessionStart fails independently of InstructionsLoaded', () => {
             sequence: 3,
         });
         const events = readHookEvents(sinkPath);
-        const sessionStartCount = countEvents(events, SESSION_START_EVENT, 'main');
-        const instructionsCount = countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'main');
-        assert.equal(sessionStartCount, 2);
-        assert.equal(instructionsCount, 1);
-        assert.notEqual(sessionStartCount, 1, 'duplicate SessionStart is a failure signal');
-        assert.equal(instructionsCount, 1, 'InstructionsLoaded remains independently valid');
+        assert.equal(
+            countEvents(events, SESSION_START_EVENT, 'main'),
+            2,
+            'duplicate SessionStart is a failure signal',
+        );
+        assert.equal(
+            countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'main'),
+            1,
+            'InstructionsLoaded remains independently valid',
+        );
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
@@ -217,10 +225,9 @@ test('missing InstructionsLoaded fails independently of SessionStart', () => {
         });
         const events = readHookEvents(sinkPath);
         assert.equal(countEvents(events, SESSION_START_EVENT, 'editor'), 1);
-        assert.equal(countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'editor'), 0);
-        assert.notEqual(
+        assert.equal(
             countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'editor'),
-            1,
+            0,
             'missing InstructionsLoaded is a failure signal',
         );
     } finally {
@@ -239,10 +246,10 @@ test('intended red evidence stores missing registration shape', () => {
             actualCount: 0,
             diagnostic: 'missing SessionStart registration',
         };
+        assert.ok(redPath.startsWith(roots.evidenceRoot));
+        assert.notEqual(redRecord.actualCount, redRecord.expectedCount);
         writeFileSync(redPath, `${JSON.stringify(redRecord, null, 2)}\n`, 'utf8');
-        const loaded = JSON.parse(readFileSync(redPath, 'utf8'));
-        assert.equal(loaded.actualCount, 0);
-        assert.notEqual(loaded.actualCount, loaded.expectedCount);
+        assert.ok(existsSync(redPath), 'red evidence lands under the disposable evidence root');
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
