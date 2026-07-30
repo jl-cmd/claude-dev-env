@@ -58,6 +58,10 @@ if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
 from dev_env_scripts_constants.claude_chain_constants import (
+    AFFINITY_BINDING_COMMAND_MISSING_REASON,
+    AFFINITY_BINDING_NOT_OBJECT_REASON,
+    AFFINITY_BINDING_SESSION_ID_MISSING_REASON,
+    AFFINITY_BINDINGS_MISSING_OR_NOT_LIST_REASON,
     AFFINITY_CORRUPT_MESSAGE_TEMPLATE,
     AFFINITY_JSON_INDENT_SPACES,
     AFFINITY_KEY_ALL_BINDINGS,
@@ -65,9 +69,13 @@ from dev_env_scripts_constants.claude_chain_constants import (
     AFFINITY_KEY_SCHEMA_VERSION,
     AFFINITY_KEY_SESSION_ID,
     AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_MAXIMUM_ENTRIES_MINIMUM_MESSAGE,
+    AFFINITY_SESSION_ID_AND_COMMAND_REQUIRED_MESSAGE,
     AFFINITY_STATE_FILENAME,
     AFFINITY_STATE_SCHEMA_VERSION,
     AFFINITY_TEMP_SUFFIX,
+    AFFINITY_TOP_LEVEL_NOT_OBJECT_REASON,
+    AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE,
     AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE,
     ALL_ROUTING_MODES,
     RESUME_SESSION_FLAG,
@@ -540,7 +548,7 @@ class AffinityBinding:
     command: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class AffinityStore:
     """Versioned, bounded session-to-binary affinity document."""
 
@@ -575,15 +583,17 @@ def _parse_affinity_binding(
     state_path: Path,
 ) -> AffinityBinding:
     if not isinstance(each_binding, dict):
-        raise _affinity_corrupt_error(state_path, "a binding entry is not an object")
+        raise _affinity_corrupt_error(state_path, AFFINITY_BINDING_NOT_OBJECT_REASON)
     session_id = each_binding.get(AFFINITY_KEY_SESSION_ID)
     command = each_binding.get(AFFINITY_KEY_COMMAND)
     if not isinstance(session_id, str) or not session_id:
         raise _affinity_corrupt_error(
-            state_path, "binding missing non-empty session_id"
+            state_path, AFFINITY_BINDING_SESSION_ID_MISSING_REASON
         )
     if not isinstance(command, str) or not command:
-        raise _affinity_corrupt_error(state_path, "binding missing non-empty command")
+        raise _affinity_corrupt_error(
+            state_path, AFFINITY_BINDING_COMMAND_MISSING_REASON
+        )
     return AffinityBinding(session_id=session_id, command=command)
 
 
@@ -595,12 +605,15 @@ def _bindings_from_payload(
     schema_version = all_payload_fields.get(AFFINITY_KEY_SCHEMA_VERSION)
     if schema_version != AFFINITY_STATE_SCHEMA_VERSION:
         raise _affinity_corrupt_error(
-            state_path, f"unsupported schema_version {schema_version!r}"
+            state_path,
+            AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE.format(
+                schema_version=schema_version
+            ),
         )
     raw_bindings = all_payload_fields.get(AFFINITY_KEY_ALL_BINDINGS)
     if not isinstance(raw_bindings, list):
         raise _affinity_corrupt_error(
-            state_path, "all_bindings is missing or not a list"
+            state_path, AFFINITY_BINDINGS_MISSING_OR_NOT_LIST_REASON
         )
     return [
         _parse_affinity_binding(each_binding, state_path=state_path)
@@ -629,7 +642,7 @@ def load_affinity_store(state_path: Path) -> AffinityStore:
         raise _affinity_corrupt_error(state_path, load_error) from load_error
     if not isinstance(parsed_payload, dict):
         raise _affinity_corrupt_error(
-            state_path, "top-level value is not a JSON object"
+            state_path, AFFINITY_TOP_LEVEL_NOT_OBJECT_REASON
         )
     return AffinityStore(
         schema_version=AFFINITY_STATE_SCHEMA_VERSION,
@@ -662,9 +675,9 @@ def record_affinity_binding(
         ValueError: When session_id, command, or maximum_entries is invalid.
     """
     if not session_id or not command:
-        raise ValueError("session_id and command must be non-empty")
+        raise ValueError(AFFINITY_SESSION_ID_AND_COMMAND_REQUIRED_MESSAGE)
     if maximum_entries < 1:
-        raise ValueError("maximum_entries must be at least 1")
+        raise ValueError(AFFINITY_MAXIMUM_ENTRIES_MINIMUM_MESSAGE)
     all_remaining = [
         each_binding
         for each_binding in store.all_bindings
@@ -682,7 +695,8 @@ def record_affinity_binding(
 def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
     """Atomically replace the affinity state file with ``store``.
 
-    Writes a sibling temporary file, then uses ``os.replace`` so readers never
+    Creates a unique sibling temporary file via ``tempfile.mkstemp``, writes
+    and flushes the document, then uses ``os.replace`` so readers never
     observe a partial document.
 
     Args:
@@ -702,23 +716,35 @@ def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
             for each_binding in store.all_bindings
         ],
     }
+    serialized_document = (
+        json.dumps(payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True)
+        + "\n"
+    )
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = state_path.with_name(state_path.name + AFFINITY_TEMP_SUFFIX)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{state_path.name}.",
+        suffix=AFFINITY_TEMP_SUFFIX,
+        dir=state_path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    owned_descriptor = file_descriptor
     try:
-        temporary_path.write_text(
-            json.dumps(
-                payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True
-            )
-            + "\n",
-            encoding=UTF8_ENCODING,
-        )
+        with os.fdopen(file_descriptor, "w", encoding=UTF8_ENCODING) as temporary_file:
+            owned_descriptor = -1
+            temporary_file.write(serialized_document)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
         os.replace(temporary_path, state_path)
     except OSError as write_error:
-        if temporary_path.exists():
+        if owned_descriptor >= 0:
             try:
-                temporary_path.unlink()
+                os.close(owned_descriptor)
             except OSError:
                 pass
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise OSError(
             AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE.format(
                 state_path=state_path,

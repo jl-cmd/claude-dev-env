@@ -1508,7 +1508,7 @@ def test_default_affinity_state_path_joins_filename() -> None:
 
 
 def test_affinity_store_round_trip_is_versioned_and_atomic(tmp_path: Path) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     empty_store = load_affinity_store(state_path)
     assert empty_store.schema_version == AFFINITY_STATE_SCHEMA_VERSION
     assert empty_store.all_bindings == []
@@ -1568,17 +1568,72 @@ def test_affinity_rebind_moves_session_to_newest_end() -> None:
 
 
 def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     state_path.write_text("{not-json", encoding=UTF8_ENCODING)
     with pytest.raises(ValueError, match="corrupt or unreadable") as raised:
         load_affinity_store(state_path)
     assert str(state_path) in str(raised.value)
 
 
+def test_affinity_unsupported_schema_version_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION + 1,
+                AFFINITY_KEY_ALL_BINDINGS: [],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="unsupported schema_version") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_binding_not_object_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION,
+                AFFINITY_KEY_ALL_BINDINGS: ["not-an-object"],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="not an object") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_record_affinity_binding_rejects_empty_session_or_command() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id="", command=_PRIMARY_LAUNCHER)
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id=_BOUND_SESSION_ID, command="")
+
+
+def test_record_affinity_binding_rejects_non_positive_maximum_entries() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="maximum_entries must be at least 1"):
+        record_affinity_binding(
+            store,
+            session_id=_BOUND_SESSION_ID,
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=0,
+        )
+
+
 def test_affinity_write_failure_raises_actionable_diagnostic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     store = record_affinity_binding(
         runner.AffinityStore(),
         session_id=_BOUND_SESSION_ID,
@@ -1592,7 +1647,6 @@ def test_affinity_write_failure_raises_actionable_diagnostic(
     with pytest.raises(OSError, match="Failed to write affinity state") as raised:
         save_affinity_store_atomic(state_path, store)
     assert str(state_path) in str(raised.value)
-
 
 
 def test_extract_resume_session_id_reads_flag() -> None:
@@ -1689,6 +1743,7 @@ def test_run_claude_resume_routes_through_originating_binary(
     )
     assert outcome.served_command == _SECONDARY_LAUNCHER
     assert all_called[0] == _SECONDARY_LAUNCHER
+
 
 def test_run_claude_success_persists_session_affinity(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
