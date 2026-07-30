@@ -3,8 +3,7 @@
 
 Builds inventories from committed skill manifests, agent markdown files, and
 commands. Scans active prompt text for slash and backticked capability names.
-Fails when an active (non-inert) reference names a banned or unavailable
-capability.
+Fails when an active (non-inert) reference names a banned capability.
 
 ::
 
@@ -23,6 +22,9 @@ from config.active_capability_constants import (
     ALL_BANNED_ACTIVE_CAPABILITY_NAMES,
     ALL_INERT_FENCE_LANGUAGES,
     BACKTICK_CAPABILITY_PATTERN,
+    BANNED_REASON_PREFIX,
+    FENCE_CLOSE_PATTERN,
+    FENCE_OPEN_PATTERN,
     NEWLINE_JOIN_SEPARATOR,
     PACKAGE_AGENTS_DIRECTORY,
     PACKAGE_COMMANDS_DIRECTORY,
@@ -31,7 +33,6 @@ from config.active_capability_constants import (
     SLASH_CAPABILITY_PATTERN,
     UTF8_ENCODING,
 )
-
 
 @dataclass(frozen=True)
 class CapabilityInventory:
@@ -99,8 +100,8 @@ def strip_inert_fenced_blocks(markdown_text: str) -> str:
     Returns:
         Text with inert fenced blocks replaced by blank lines.
     """
-    fence_open_pattern = re.compile(r"^```([A-Za-z0-9_-]*)\s*$")
-    fence_close_pattern = re.compile(r"^```\s*$")
+    fence_open_pattern = re.compile(FENCE_OPEN_PATTERN)
+    fence_close_pattern = re.compile(FENCE_CLOSE_PATTERN)
     all_lines = markdown_text.splitlines()
     all_kept: list[str] = []
     is_inside_inert = False
@@ -142,25 +143,20 @@ def extract_active_capability_names(markdown_text: str) -> list[tuple[int, str]]
     return all_hits
 
 
-def classify_capability_reference(
-    capability_name: str,
-    inventory: CapabilityInventory,
-) -> str | None:
-    """Return a failure reason when the capability is banned or missing.
+def classify_capability_reference(capability_name: str) -> str | None:
+    """Return a failure reason when the capability is banned.
+
+    Extractors also match ordinary prose tokens, so unknown names pass.
+    Only the ban list fails a reference.
 
     Args:
         capability_name: Extracted skill/command-like name.
-        inventory: Committed capability inventory.
 
     Returns:
         Reason string, or None when the reference is allowed.
     """
     if capability_name in ALL_BANNED_ACTIVE_CAPABILITY_NAMES:
-        return f"banned_active_capability:{capability_name}"
-    # Only fail unknown names when they look like slash-command inventory
-    # members we track (skills/agents/commands). Ban list always fails.
-    if capability_name in inventory.all_known_names():
-        return None
+        return f"{BANNED_REASON_PREFIX}{capability_name}"
     return None
 
 
@@ -169,7 +165,7 @@ def unresolved_active_capabilities(
     *,
     all_relative_markdown_paths: list[str] | None = None,
 ) -> list[UnresolvedCapabilityReference]:
-    """Scan package markdown for unresolved or banned active references.
+    """Scan package markdown for banned active capability references.
 
     Args:
         from_package_root: ``packages/claude-dev-env`` root.
@@ -177,9 +173,8 @@ def unresolved_active_capabilities(
             defaults to all skills, agents, and commands markdown.
 
     Returns:
-        Unresolved references with file, line, name, and reason.
+        Banned references with file, line, name, and reason.
     """
-    inventory = build_capability_inventory(from_package_root)
     if all_relative_markdown_paths is None:
         all_relative_markdown_paths = _default_markdown_paths(from_package_root)
     all_unresolved: list[UnresolvedCapabilityReference] = []
@@ -191,7 +186,7 @@ def unresolved_active_capabilities(
         for each_line_number, each_name in extract_active_capability_names(
             markdown_text
         ):
-            reason = classify_capability_reference(each_name, inventory)
+            reason = classify_capability_reference(each_name)
             if reason is None:
                 continue
             all_unresolved.append(
