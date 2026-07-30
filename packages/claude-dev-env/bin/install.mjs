@@ -41,7 +41,13 @@ const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
     environment: process.env,
     homeDirectory: homedir(),
-    explicitTarget: parseExplicitTargetFromArgv(process.argv.slice(2)),
+    explicitTarget: (() => {
+        try {
+            return parseExplicitTargetFromArgv(process.argv.slice(2));
+        } catch {
+            return null;
+        }
+    })(),
 });
 const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
 const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;

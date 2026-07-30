@@ -6,10 +6,11 @@
  * env or disk fixtures.
  */
 
-import { join, resolve, isAbsolute, normalize, sep } from 'node:path';
+import { join, resolve, isAbsolute, normalize } from 'node:path';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
+    normalizePathForComparison,
 } from './resolve-install-root.mjs';
 
 export const MAIN_DEFAULT_TARGET_IDENTITY = 'main';
@@ -149,44 +150,20 @@ export function resolveInstallTargets(selection, options) {
         return dedupeTargetsByManagedRoot(allTargets);
     }
 
-    if (selection.mode === 'child-identity') {
-        const resolution = resolveInstallRoot({
-            homeDirectory,
-            environment,
-            explicitTarget: selection.explicitTarget,
-        });
-        return [{
-            targetIdentity: selection.targetIdentity ?? MAIN_DEFAULT_TARGET_IDENTITY,
-            managedRoot: resolution.managedRoot,
-            source: resolution.source,
-            profileId: selection.targetIdentity,
-        }];
-    }
-
-    if (selection.mode === 'explicit-path') {
-        const resolution = resolveInstallRoot({
-            homeDirectory,
-            environment,
-            explicitTarget: selection.explicitTarget,
-        });
-        return [{
-            targetIdentity: MAIN_DEFAULT_TARGET_IDENTITY,
-            managedRoot: resolution.managedRoot,
-            source: resolution.source,
-            profileId: null,
-        }];
-    }
-
+    const explicitTarget = selection.mode === 'main-default' ? null : selection.explicitTarget;
     const resolution = resolveInstallRoot({
         homeDirectory,
         environment,
-        explicitTarget: null,
+        explicitTarget,
     });
+    const isChildIdentity = selection.mode === 'child-identity';
     return [{
-        targetIdentity: MAIN_DEFAULT_TARGET_IDENTITY,
+        targetIdentity: isChildIdentity
+            ? (selection.targetIdentity ?? MAIN_DEFAULT_TARGET_IDENTITY)
+            : MAIN_DEFAULT_TARGET_IDENTITY,
         managedRoot: resolution.managedRoot,
         source: resolution.source,
-        profileId: null,
+        profileId: isChildIdentity ? selection.targetIdentity : null,
     }];
 }
 
@@ -299,12 +276,8 @@ export function assertSafeProfileDirectoryName(directoryName) {
     if (isAbsolute(trimmed) || hasWindowsDriveAbsolute || hasWindowsUncAbsolute) {
         throw new Error(`profile directoryName must be relative, got absolute: ${trimmed}`);
     }
-    const normalized = normalize(trimmed);
-    const allSegments = normalized.split(/[/\\]/).filter(Boolean);
+    const allSegments = normalize(trimmed).split(/[/\\]/).filter(Boolean);
     if (allSegments.some((eachSegment) => eachSegment === '..')) {
-        throw new Error(`profile directoryName rejects parent segments: ${trimmed}`);
-    }
-    if (normalized === '..' || normalized.startsWith(`..${sep}`) || normalized.startsWith('../')) {
         throw new Error(`profile directoryName rejects parent segments: ${trimmed}`);
     }
     return trimmed;
@@ -414,7 +387,7 @@ function dedupeTargetsByManagedRoot(allTargets) {
     /** @type {ResolvedInstallTarget[]} */
     const uniqueTargets = [];
     for (const eachTarget of allTargets) {
-        const rootKey = normalizeRootKey(eachTarget.managedRoot);
+        const rootKey = normalizePathForComparison(eachTarget.managedRoot);
         if (seenRootByKey.has(rootKey)) {
             const priorIdentity = seenRootByKey.get(rootKey);
             throw new Error(
@@ -425,14 +398,4 @@ function dedupeTargetsByManagedRoot(allTargets) {
         uniqueTargets.push(eachTarget);
     }
     return uniqueTargets;
-}
-
-/**
- * @param {string} managedRoot
- * @returns {string}
- */
-function normalizeRootKey(managedRoot) {
-    const resolved = resolve(managedRoot);
-    const withForwardSlashes = resolved.split(sep).join('/');
-    return process.platform === 'win32' ? withForwardSlashes.toLowerCase() : withForwardSlashes;
 }
