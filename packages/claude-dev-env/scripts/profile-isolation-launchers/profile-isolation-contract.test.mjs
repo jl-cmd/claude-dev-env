@@ -45,6 +45,13 @@ const ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS = Object.freeze([
   'tests/launcher-runtime.test.mjs',
 ]);
 
+const ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS = Object.freeze([
+  'tests/shortcut-contract.test.ps1',
+  'windows/shortcut-inventory.ps1',
+  'windows/shortcut-manifest.json',
+  'windows/shortcut-reconcile.ps1',
+]);
+
 test('profiles manifest schemaVersion is 1 and every migrationOrder id resolves', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
   assert.equal(validatedManifest.schemaVersion, 1);
@@ -137,7 +144,7 @@ test('resolveProfileRootDirectoryPath joins profiles root with directoryName', (
   );
 });
 
-test('package ships contract under scripts/, reserves live deploy for L1, and holds only A1a files', () => {
+test('package ships contract under scripts/, reserves live deploy for L1, and holds only A1a+N1 files', () => {
   const packageJson = JSON.parse(
     readFileSync(join(PACKAGE_ROOT_DIRECTORY_PATH, 'package.json'), 'utf8'),
   );
@@ -169,19 +176,27 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   const allExpectedPaths = new Set([
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
     ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
+    ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
     'profile-isolation-contract.test.mjs',
   ]);
   for (const eachRelativePath of allRelativePaths) {
-    assert.ok(allExpectedPaths.has(eachRelativePath), `unexpected A1a file: ${eachRelativePath}`);
+    assert.ok(allExpectedPaths.has(eachRelativePath), `unexpected package file: ${eachRelativePath}`);
   }
-  for (const eachRequiredPath of ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS) {
+  for (const eachRequiredPath of [
+    ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
+    ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
+  ]) {
     const absolutePath = join(CONTRACT_ROOT_DIRECTORY_PATH, ...eachRequiredPath.split('/'));
     assert.ok(existsSync(absolutePath) && statSync(absolutePath).isFile());
   }
 });
 
 test('committed contract sources are tracked by git (not dirty-worktree-only)', () => {
-  for (const eachRelativePath of ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS) {
+  for (const eachRelativePath of [
+    ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
+  ]) {
     const repositoryRelativePath =
       `packages/claude-dev-env/scripts/profile-isolation-launchers/${eachRelativePath}`;
     const lsFilesOutput = execFileSync(
