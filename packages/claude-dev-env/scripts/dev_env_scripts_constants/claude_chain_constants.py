@@ -227,3 +227,74 @@ ATTEMPT_SUMMARY_ENTRY_TEMPLATE: str = "{command}={status}"
 
 ATTEMPT_SUMMARY_JOIN_SEPARATOR: str = ", "
 """Separator joining per-attempt fragments in the exhausted-chain summary."""
+
+AFFINITY_STATE_SCHEMA_VERSION: int = 1
+"""Version field written into the session-to-binary affinity state document."""
+
+AFFINITY_STATE_FILENAME: str = "claude-chain-affinity.json"
+"""Default affinity state file name under the Claude home directory."""
+
+AFFINITY_MAXIMUM_ENTRIES: int = 64
+"""Hard cap on retained session-to-binary affinity rows (oldest drop first)."""
+
+AFFINITY_KEY_SCHEMA_VERSION: str = "schema_version"
+"""JSON key for the affinity document schema version."""
+
+AFFINITY_KEY_ALL_BINDINGS: str = "all_bindings"
+"""JSON key for the ordered list of session-to-command bindings."""
+
+AFFINITY_KEY_SESSION_ID: str = "session_id"
+"""JSON key for a bound Claude session id."""
+
+AFFINITY_KEY_COMMAND: str = "command"
+"""JSON key for the chain binary command bound to a session id."""
+
+AFFINITY_TEMP_SUFFIX: str = ".tmp"
+"""Suffix for the temporary file used during atomic affinity replacement."""
+
+AFFINITY_BINDING_NOT_OBJECT_REASON: str = "a binding entry is not an object"
+"""Reason when an affinity binding entry is not a JSON object."""
+
+AFFINITY_BINDING_SESSION_ID_MISSING_REASON: str = (
+    "binding missing non-empty session_id"
+)
+"""Reason when an affinity binding lacks a usable session_id."""
+
+AFFINITY_BINDING_COMMAND_MISSING_REASON: str = "binding missing non-empty command"
+"""Reason when an affinity binding lacks a usable command."""
+
+AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE: str = (
+    "unsupported schema_version {schema_version!r}"
+)
+"""Reason when the affinity document schema version is not supported."""
+
+AFFINITY_BINDINGS_MISSING_OR_NOT_LIST_REASON: str = (
+    "all_bindings is missing or not a list"
+)
+"""Reason when all_bindings is absent or the wrong type."""
+
+AFFINITY_TOP_LEVEL_NOT_OBJECT_REASON: str = "top-level value is not a JSON object"
+"""Reason when the affinity document root is not an object."""
+
+AFFINITY_SESSION_ID_AND_COMMAND_REQUIRED_MESSAGE: str = (
+    "session_id and command must be non-empty"
+)
+"""ValueError message when record_affinity_binding receives empty ids."""
+
+AFFINITY_MAXIMUM_ENTRIES_MINIMUM_MESSAGE: str = "maximum_entries must be at least 1"
+"""ValueError message when maximum_entries is below one."""
+
+AFFINITY_CORRUPT_MESSAGE_TEMPLATE: str = (
+    "Affinity state at {state_path} is corrupt or unreadable: {error}. "
+    "Delete or repair the file before retrying."
+)
+"""Actionable diagnostic when affinity state cannot be loaded."""
+
+AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE: str = (
+    "Failed to write affinity state at {state_path}: {error}. "
+    "Check directory permissions and free space."
+)
+"""Actionable diagnostic when atomic affinity replacement fails."""
+
+AFFINITY_JSON_INDENT_SPACES: int = 2
+"""Indent width for the written affinity state JSON document."""
