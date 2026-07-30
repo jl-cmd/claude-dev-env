@@ -1,13 +1,15 @@
-"""Tests for check_docstring_args_single_line_scope_vs_span — Category O6 drift.
+"""Span-scope tests for docstring checks.
 
-A docstring Args: entry that scopes a finding to one named line ("only when its
-block-anchor line is among the changed lines") while the body builds a range()
-span and routes it through a span-intersection scoper claims a narrower scope
-than the code applies. The body blocks when ANY line of the span is among the
-changed lines, so an edit touching a non-anchor line of the span still blocks —
-contradicting the single-line Args sentence. This is the deterministic slice of
-Category O6 (free-form docstring-vs-implementation drift) for an Args entry whose
-single-line scope claim disagrees with a span-intersection body.
+Covers two surfaces:
+
+1. ``check_docstring_args_single_line_scope_vs_span`` (Category O6) — an Args
+   entry that claims single-line (block-anchor) scope while the body builds a
+   multi-line span and routes it through span intersection.
+
+2. Changed-span grading for ``check_docstring_runon_sentence`` and
+   ``check_docstring_prose_wall_without_illustration`` (issue #237) — far-away
+   no-op grandfathering, introduced-violation blocking, and
+   ``defer_scope_to_caller`` pass-through.
 """
 
 from __future__ import annotations
@@ -230,6 +232,17 @@ def check_docstring_prose_wall_without_illustration(
     )
 
 
+_CLEAN_HELPER_TAIL = (
+    "\n"
+    "def clean_helper() -> str:\n"
+    '    """Return a short status token for the board.\n'
+    "\n"
+    "    Each call names one vessel and its final port.\n"
+    '    """\n'
+    '    return "ok"\n'
+)
+
+
 def _module_with_far_away_runon_and_clean_helper() -> str:
     return (
         '"""Owns the SIGINT install/restore/installability check, the atexit terminal-record\n'
@@ -237,13 +250,7 @@ def _module_with_far_away_runon_and_clean_helper() -> str:
         "machinery that brackets a run so the JSONL artifact always carries a terminal\n"
         "record and an in-flight theme record on interrupt.\n"
         '"""\n'
-        "\n"
-        "def clean_helper() -> str:\n"
-        '    """Return a short status token for the board.\n'
-        "\n"
-        "    Each call names one vessel and its final port.\n"
-        '    """\n'
-        '    return "ok"\n'
+        + _CLEAN_HELPER_TAIL
     )
 
 
@@ -259,13 +266,7 @@ def _module_with_far_away_prose_wall_and_clean_helper() -> str:
         "The tally groups the vessels by their final port for the harbor.\n"
         "The harbor reads the tally and sees every arrival at a glance.\n"
         '"""\n'
-        "\n"
-        "def clean_helper() -> str:\n"
-        '    """Return a short status token for the board.\n'
-        "\n"
-        "    Each call names one vessel and its final port.\n"
-        '    """\n'
-        '    return "ok"\n'
+        + _CLEAN_HELPER_TAIL
     )
 
 
@@ -338,4 +339,87 @@ def test_runon_defer_scope_returns_all_violations() -> None:
         defer_scope_to_caller=True,
     )
     assert any("run-on" in each for each in deferred)
+
+
+def _function_with_runon_docstring() -> str:
+    return (
+        "def clean_helper() -> str:\n"
+        '    """Owns the SIGINT install/restore/installability check, the atexit terminal-record\n'
+        "    registration, and the interrupted-run finalizer — the non-promoter-specific\n"
+        "    machinery that brackets a run so the JSONL artifact always carries a terminal\n"
+        "    record and an in-flight theme record on interrupt.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def test_runon_docstring_body_edit_blocks_without_def_line() -> None:
+    content = _function_with_runon_docstring()
+    unscoped = check_docstring_runon_sentence(content, PRODUCTION_FILE_PATH)
+    assert any("run-on" in each for each in unscoped), (
+        f"control: unscoped must see the function run-on, got {unscoped!r}"
+    )
+    docstring_body_lines = {2, 3, 4, 5}
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=docstring_body_lines
+    )
+    assert any("run-on" in each for each in scoped), (
+        f"docstring-body edit must block even when the def line is untouched, got {scoped!r}"
+    )
+
+
+def test_runon_post_docstring_body_edit_is_grandfathered() -> None:
+    content = _function_with_runon_docstring()
+    return_line = content.splitlines().index('    return "ok"') + 1
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines={return_line}
+    )
+    assert scoped == [], (
+        f"post-docstring body edit must grandfather the pre-existing run-on, got {scoped!r}"
+    )
+
+
+def _function_with_prose_wall_docstring() -> str:
+    return (
+        "def clean_helper() -> str:\n"
+        '    """Assemble the nightly voyage tally from the harbor scans.\n'
+        "\n"
+        "    A scan names one vessel and where it dropped anchor.\n"
+        "    The tally walks the scans in arrival order and keeps that order.\n"
+        "    A calm voyage ends well for every vessel it carried.\n"
+        "    A halted voyage marks the vessel it was near when the storm arrived.\n"
+        "    A wrecked voyage marks the vessel that sank and stops the walk there.\n"
+        "    The tally groups the vessels by their final port for the harbor.\n"
+        "    The harbor reads the tally and sees every arrival at a glance.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def test_prose_wall_docstring_body_edit_blocks_without_def_line() -> None:
+    content = _function_with_prose_wall_docstring()
+    unscoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH
+    )
+    assert any("worked example" in each for each in unscoped), (
+        f"control: unscoped must see the function wall, got {unscoped!r}"
+    )
+    docstring_body_lines = set(range(2, 12))
+    scoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=docstring_body_lines
+    )
+    assert any("worked example" in each for each in scoped), (
+        f"docstring-body edit must block even when the def line is untouched, got {scoped!r}"
+    )
+
+
+def test_prose_wall_defer_scope_returns_all_violations() -> None:
+    content = _module_with_far_away_prose_wall_and_clean_helper()
+    deferred = check_docstring_prose_wall_without_illustration(
+        content,
+        PRODUCTION_FILE_PATH,
+        all_changed_lines={999},
+        defer_scope_to_caller=True,
+    )
+    assert any("worked example" in each for each in deferred)
 

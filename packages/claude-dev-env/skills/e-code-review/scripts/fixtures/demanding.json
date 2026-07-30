@@ -1,0 +1,26 @@
+{
+  "fixture_id": "demanding-multi-surface",
+  "band": "demanding",
+  "description": "Cross-file review with three seeded findings across hooks and tests.",
+  "target_summary": "Hook change drifts docstring, drops a paired test path, and uses a banned identifier.",
+  "seeded_findings": [
+    {
+      "file": "hooks/blocking/sample_gate.py",
+      "line": 88,
+      "category": "docstring-vs-impl",
+      "severity": "high"
+    },
+    {
+      "file": "hooks/blocking/test_sample_gate.py",
+      "line": 1,
+      "category": "paired-test-coverage",
+      "severity": "blocker"
+    },
+    {
+      "file": "hooks/blocking/sample_gate.py",
+      "line": 15,
+      "category": "banned-identifier",
+      "severity": "medium"
+    }
+  ]
+}

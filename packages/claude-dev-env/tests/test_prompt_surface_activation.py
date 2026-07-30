@@ -1,138 +1,104 @@
-"""Assert every documented prompt surface has an activation classification.
+"""Assert installable surfaces ship in the real npm pack tarball.
 
-Builds an inventory from package.json files, hooks.json registrations, and
-on-disk installer roots. Surfaces that exist only as source but are claimed
-as packaged fail. Every hook command path must resolve to a committed file.
+Drives ``verify_installable_package`` helpers so the suite proves what users
+receive from the packed package: every manifest directory and root file is a
+tarball member, every hooks.json ``.py`` command resolves to a git-tracked
+file, and those scripts pass ``py_compile``.
 """
 
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
-REPOSITORY_ROOT = PACKAGE_ROOT.parent.parent
+SCRIPTS_DIR = PACKAGE_ROOT / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
-CLASS_PACKAGED = "packaged"
-CLASS_SOURCE_ONLY = "source_only"
-CLASS_CONTRADICTORY = "contradictory"
-
-INSTALLER_SURFACE_DIRS: tuple[str, ...] = (
-    "rules",
-    "docs",
-    "commands",
-    "agents",
-    "skills",
-    "hooks",
-    "system-prompts",
-    "scripts",
-    "_shared",
-    "audit-rubrics",
-    "output-styles",
+import verify_installable_package as verify
+from dev_env_scripts_constants.verify_installable_package_constants import (
+    CLASS_CONTRADICTORY,
+    CLASS_PACKAGED,
+    CLASS_SOURCE_ONLY,
+    MANIFEST_FILENAME,
 )
 
 
-def _load_package_files() -> set[str]:
-    package_json = PACKAGE_ROOT / "package.json"
-    payload = json.loads(package_json.read_text(encoding="utf-8"))
-    return {
-        each.rstrip("/")
-        for each in payload.get("files", [])
-        if isinstance(each, str) and not each.startswith("!")
-    }
-
-
-def _load_hook_commands() -> list[str]:
-    hooks_json = PACKAGE_ROOT / "hooks" / "hooks.json"
-    payload = json.loads(hooks_json.read_text(encoding="utf-8"))
-    commands: list[str] = []
-
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            command = node.get("command")
-            if isinstance(command, str) and command.strip():
-                commands.append(command)
-            for each_value in node.values():
-                walk(each_value)
-        elif isinstance(node, list):
-            for each_item in node:
-                walk(each_item)
-
-    walk(payload)
-    return commands
-
-
-def classify_surface(directory_name: str, packaged_names: set[str]) -> str:
-    """Classify one top-level surface directory.
-
-    Args:
-        directory_name: Top-level package directory name.
-        packaged_names: Basename entries from package.json files without slash.
-
-    Returns:
-        One of packaged, source_only, or contradictory.
-    """
-    on_disk = (PACKAGE_ROOT / directory_name).is_dir()
-    is_packaged = directory_name in packaged_names
-    if on_disk and is_packaged:
-        return CLASS_PACKAGED
-    if on_disk and not is_packaged:
-        return CLASS_SOURCE_ONLY
-    if not on_disk and is_packaged:
-        return CLASS_CONTRADICTORY
-    return CLASS_SOURCE_ONLY
+def test_manifest_file_is_listed_in_package_json_files() -> None:
+    packaged_names = verify.load_package_json_file_entries(from_package_root=PACKAGE_ROOT)
+    assert MANIFEST_FILENAME in packaged_names
 
 
 def test_output_styles_is_packaged_not_source_only() -> None:
-    packaged = _load_package_files()
-    classification = classify_surface("output-styles", packaged)
-    assert classification == CLASS_PACKAGED, (
-        "output-styles must be packaged once documented as an installed surface; "
-        f"got {classification}"
+    packaged_names = verify.load_package_json_file_entries(from_package_root=PACKAGE_ROOT)
+    classification = verify.classify_surface(
+        "output-styles",
+        packaged_names,
+        from_package_root=PACKAGE_ROOT,
+    )
+    assert classification == CLASS_PACKAGED
+
+
+def test_every_manifest_directory_has_non_contradictory_classification() -> None:
+    manifest = verify.load_installable_surfaces_manifest(from_package_root=PACKAGE_ROOT)
+    packaged_names = verify.load_package_json_file_entries(from_package_root=PACKAGE_ROOT)
+    classification_by_directory = {
+        each_name: verify.classify_surface(
+            each_name,
+            packaged_names,
+            from_package_root=PACKAGE_ROOT,
+        )
+        for each_name in verify.required_directory_names(manifest)
+    }
+    assert classification_by_directory
+    assert CLASS_CONTRADICTORY not in classification_by_directory.values()
+    for each_name, each_class in classification_by_directory.items():
+        assert each_class in {CLASS_PACKAGED, CLASS_SOURCE_ONLY}, (
+            f"{each_name}={each_class}"
+        )
+
+
+def test_npm_pack_tarball_contains_every_manifest_surface() -> None:
+    missing_surfaces = verify.verify_packed_manifest_surfaces(
+        from_package_root=PACKAGE_ROOT,
+    )
+    assert missing_surfaces == [], (
+        "Manifest surfaces missing from npm pack tarball:\n"
+        + "\n".join(missing_surfaces)
     )
 
 
-def test_every_installer_surface_has_classification() -> None:
-    packaged = _load_package_files()
-    classifications = {
-        each_name: classify_surface(each_name, packaged)
-        for each_name in INSTALLER_SURFACE_DIRS
-        if (PACKAGE_ROOT / each_name).exists() or each_name in packaged
-    }
-    assert classifications
-    assert CLASS_CONTRADICTORY not in classifications.values(), classifications
-    for each_name, each_class in classifications.items():
-        assert each_class in {
-            CLASS_PACKAGED,
-            CLASS_SOURCE_ONLY,
-        }, f"{each_name}={each_class}"
+def test_hook_commands_resolve_to_git_tracked_files() -> None:
+    all_hook_scripts = verify.load_hook_python_script_paths(
+        from_package_root=PACKAGE_ROOT,
+    )
+    assert all_hook_scripts
+    missing_scripts = verify.untracked_or_missing_hook_scripts(
+        all_package_relative_scripts=all_hook_scripts,
+        from_package_root=PACKAGE_ROOT,
+        from_repository_root=verify.repository_root_path(),
+    )
+    assert missing_scripts == [], (
+        "Hook scripts missing from git index or disk:\n" + "\n".join(missing_scripts)
+    )
 
 
-def test_hook_commands_resolve_to_committed_files() -> None:
-    all_commands = _load_hook_commands()
-    assert all_commands
-    unresolved: list[str] = []
-    for each_command in all_commands:
-        # Hooks store absolute or relative python script paths after install rewrite;
-        # in source, command often ends with a .py path segment.
-        if ".py" not in each_command:
-            continue
-        script_token = each_command
-        for each_part in each_command.replace("\\", "/").split():
-            if each_part.endswith(".py"):
-                script_token = each_part
-                break
-        relative = script_token.replace("\\", "/")
-        if "packages/claude-dev-env/" in relative:
-            relative = relative.split("packages/claude-dev-env/", 1)[1]
-        elif relative.startswith("hooks/"):
-            pass
-        candidate = PACKAGE_ROOT / relative
-        if not candidate.is_file():
-            # try basename search under hooks/
-            basename = Path(relative).name
-            matches = list((PACKAGE_ROOT / "hooks").rglob(basename))
-            if not matches:
-                unresolved.append(each_command)
-    assert not unresolved, "Unresolved hook commands:\n" + "\n".join(unresolved)
+def test_hook_scripts_pass_py_compile_smoke() -> None:
+    all_hook_scripts = verify.load_hook_python_script_paths(
+        from_package_root=PACKAGE_ROOT,
+    )
+    compile_failures = verify.smoke_compile_python_scripts(
+        all_package_relative_scripts=all_hook_scripts,
+        from_package_root=PACKAGE_ROOT,
+    )
+    assert compile_failures == [], (
+        "Hook scripts failed py_compile:\n" + "\n".join(compile_failures)
+    )
+
+
+def test_install_entrypoint_passes_node_check_smoke() -> None:
+    entrypoint_failure = verify.smoke_check_install_entrypoint(
+        from_package_root=PACKAGE_ROOT,
+    )
+    assert entrypoint_failure is None, entrypoint_failure
