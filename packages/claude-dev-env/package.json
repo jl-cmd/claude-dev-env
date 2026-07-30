@@ -8,7 +8,7 @@
         "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
     },
     "files": [
         "bin/",
