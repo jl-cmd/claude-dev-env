@@ -19,12 +19,13 @@ from pathlib import Path
 
 from categorize_files import annotate_files, sum_churn_by_class
 from config.split_pr_constants import (
-    ALL_EXCLUDED_CHURN_CLASSES,
     CHURN_CLASS_HAND_WRITTEN,
     DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FILE_KEY_ADDITIONS,
+    FILE_KEY_CHANGED_LINES,
+    FILE_KEY_CHURN_CLASS,
     FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
     GH_COMMAND,
@@ -78,10 +79,11 @@ def build_analysis_from_files(
         all_annotated, churn_class=CHURN_CLASS_HAND_WRITTEN
     )
     excluded_churn_lines = 0
-    for each_class in ALL_EXCLUDED_CHURN_CLASSES:
-        excluded_churn_lines += sum_churn_by_class(
-            all_annotated, churn_class=each_class
-        )
+    for each_record in all_annotated:
+        if each_record.get(FILE_KEY_CHURN_CLASS) != CHURN_CLASS_HAND_WRITTEN:
+            excluded_churn_lines += int(
+                each_record.get(FILE_KEY_CHANGED_LINES, 0) or 0
+            )
     file_count = len(all_annotated)
     requires_split_analysis = (
         hand_written_lines >= SPLIT_ANALYSIS_HAND_WRITTEN_LINE_THRESHOLD
@@ -165,7 +167,7 @@ def _analysis_for_cli(
     exception_reason: str | None,
     standing_verdict: str | None,
 ) -> JsonObject:
-    """Build analysis for CLI flags without acting as a kwargs-forwarding wrapper."""
+    """Map CLI flag values onto the analysis builder kwargs."""
     return build_analysis_from_files(
         all_file_records,
         atomic_exception_reason=exception_reason,

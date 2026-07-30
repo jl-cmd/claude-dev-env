@@ -48,14 +48,12 @@ def classify_path_churn(file_path: str) -> str:
     for each_suffix in ALL_MINIFIED_SUFFIXES:
         if lowered.endswith(each_suffix):
             return CHURN_CLASS_MINIFIED
+    path_with_slashes = f"/{lowered}/"
     for each_marker in ALL_VENDOR_PATH_MARKERS:
-        if each_marker.replace("\\", "/") in f"/{lowered}/" or each_marker.replace(
-            "\\", "/"
-        ) in lowered:
+        if each_marker in path_with_slashes:
             return CHURN_CLASS_VENDOR
     for each_marker in ALL_GENERATED_PATH_MARKERS:
-        marker = each_marker.replace("\\", "/")
-        if marker in lowered or marker.strip("/") in lowered.split("/"):
+        if each_marker in lowered or each_marker.strip("/") in lowered.split("/"):
             return CHURN_CLASS_GENERATED
     return CHURN_CLASS_HAND_WRITTEN
 

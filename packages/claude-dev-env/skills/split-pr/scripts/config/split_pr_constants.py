@@ -26,32 +26,17 @@ CHURN_CLASS_VENDOR: str = "vendor"
 CHURN_CLASS_MINIFIED: str = "minified"
 CHURN_CLASS_LOCKFILE: str = "lockfile"
 
-ALL_EXCLUDED_CHURN_CLASSES: frozenset[str] = frozenset(
-    {
-        CHURN_CLASS_GENERATED,
-        CHURN_CLASS_VENDOR,
-        CHURN_CLASS_MINIFIED,
-        CHURN_CLASS_LOCKFILE,
-    }
-)
-
 ALL_GENERATED_PATH_MARKERS: tuple[str, ...] = (
     "/generated/",
-    "\\generated\\",
     ".generated.",
     "/dist/",
-    "\\dist\\",
     "/build/",
-    "\\build\\",
 )
 
 ALL_VENDOR_PATH_MARKERS: tuple[str, ...] = (
     "/vendor/",
-    "\\vendor\\",
     "/third_party/",
-    "\\third_party\\",
     "/node_modules/",
-    "\\node_modules\\",
 )
 
 ALL_MINIFIED_SUFFIXES: tuple[str, ...] = (
@@ -92,12 +77,10 @@ FILE_KEY_CHANGED_LINES: str = "changed_lines"
 
 GH_COMMAND: str = "gh"
 GH_PR_VIEW: str = "pr"
-GH_VIEW: str = "view"
 GH_JSON_FLAG: str = "--json"
 GH_REPO_FLAG: str = "--repo"
 GH_PR_JSON_FIELDS: str = "number,files"
 GH_FIELD_FILES: str = "files"
-GH_FIELD_NUMBER: str = "number"
 GH_FILE_PATH: str = "path"
 GH_FILE_ADDITIONS: str = "additions"
 GH_FILE_DELETIONS: str = "deletions"
