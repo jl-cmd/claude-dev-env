@@ -120,7 +120,7 @@ def filter_findings_by_severity(
         Filter-stage view. The input collection record is not mutated.
 
     Raises:
-        ValueError: When ``minimum_severity`` is not a known severity token.
+        ValueError: When ``minimum_severity`` or a finding severity is unknown.
     """
     if minimum_severity not in ALL_SEVERITY_RANK_BY_TOKEN:
         raise ValueError(f"unknown minimum severity: {minimum_severity!r}")
