@@ -4,9 +4,7 @@ Output-style instruction files installed into `~/.claude/output-styles/` by `bin
 
 ## Files
 
-| File | Style | Effect |
-|---|---|---|
-| `caveman-agent.md` | Caveman Agent | Terse fragments, lead with answer, smallest artifact that solves the stated problem, question premise before building |
+No output-style instruction files ship in this directory. The active caveman behavior lives in `agents/caveman.md`.
 
 ## Format
 
