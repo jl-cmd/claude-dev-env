@@ -7,7 +7,7 @@
 1. **Bold keyword first** — open every line and bullet with its load-bearing words in bold. Eyes land on the first words of a line, then fall down the left edge — the [F-pattern](https://www.nngroup.com/articles/f-shaped-pattern-reading-web-content-discovered/).
 2. **One idea per line** — a second idea in the same line is invisible to a skimmer.
 3. **Conclusion first** — the outcome goes in sentence one. Detail sits below it, or gets cut.
-4. **Half the words** — write it, halve it, halve it again. Cap a reply at about 120 words.
+4. **Half the words** — write it, halve it, halve it again. Stay brief by default; a requested full report may run long.
 
 **Measured gains** ([NN/g eyetracking](https://www.nngroup.com/articles/how-users-read-on-the-web/)): concise +58%, scannable layout +47%, both together +124%.
 

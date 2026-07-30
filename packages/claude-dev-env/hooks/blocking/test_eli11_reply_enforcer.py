@@ -15,16 +15,16 @@ if _HOOKS_ROOT not in sys.path:
 import eli11_reply_enforcer
 from hooks_constants.eli11_reply_enforcer_constants import (
     MAXIMUM_BULLET_LINE_COUNT,
-    MAXIMUM_OVERPACKED_LINE_COUNT,
-    MAXIMUM_REPLY_WORD_COUNT,
-    MAXIMUM_WORDS_PER_LINE,
-    MINIMUM_ENFORCED_WORD_COUNT,
+    MAXIMUM_OVERPACKED_LIST_LINE_COUNT,
+    MAXIMUM_WORDS_PER_LIST_LINE,
     TARGET_BULLET_LINE_COUNT,
 )
 from hooks_constants.text_stripping import strip_code_and_quotes
 
-SAFE_LINE_WORD_COUNT = MAXIMUM_WORDS_PER_LINE // 2
-OVERPACKED_LINE_WORD_COUNT = MAXIMUM_WORDS_PER_LINE + 5
+SAFE_LINE_WORD_COUNT = MAXIMUM_WORDS_PER_LIST_LINE // 2
+OVERPACKED_LIST_LINE_WORD_COUNT = MAXIMUM_WORDS_PER_LIST_LINE + 5
+LONG_REPORT_WORD_COUNT = 240
+SHORT_REPLY_WORD_COUNT = 30
 
 
 def build_filler_prose(word_count: int) -> str:
@@ -45,17 +45,13 @@ def build_prose_block(line_count: int, words_per_line: int) -> str:
 
 
 def build_reply_of_exactly(total_word_count: int) -> str:
-    """Return a filler reply holding exactly the requested words, no line overpacked.
-
-    ::
-
-        in:  22  ->  three lines of 10, 10, and 2 filler words
+    """Return a filler reply holding exactly the requested words, no list line overpacked.
 
     Args:
         total_word_count: How many countable words the whole reply carries.
 
     Returns:
-        A newline-joined reply whose every line stays under the per-line cap.
+        A newline-joined reply whose every line stays under the list-line word cap.
     """
     all_lines = []
     remaining_word_count = total_word_count
@@ -66,63 +62,34 @@ def build_reply_of_exactly(total_word_count: int) -> str:
     return "\n".join(all_lines)
 
 
-SHORT_REPLY_WORD_COUNT = MINIMUM_ENFORCED_WORD_COUNT // 2
-OVERLONG_REPLY_WORD_COUNT = MAXIMUM_REPLY_WORD_COUNT * 2
-JUST_OVER_WORD_CAP_WORD_COUNT = MAXIMUM_REPLY_WORD_COUNT + 1
-UNDER_FLOOR_WORD_COUNT = MINIMUM_ENFORCED_WORD_COUNT - 1
-
 SHORT_REPLY = build_reply_of_exactly(SHORT_REPLY_WORD_COUNT)
-OVERLONG_REPLY = build_reply_of_exactly(OVERLONG_REPLY_WORD_COUNT)
-UNDER_FLOOR_REPLY = build_reply_of_exactly(UNDER_FLOOR_WORD_COUNT)
-JUST_OVER_WORD_CAP_REPLY = build_reply_of_exactly(JUST_OVER_WORD_CAP_WORD_COUNT)
-THREE_OVERPACKED_LINE_REPLY = build_prose_block(
-    MAXIMUM_OVERPACKED_LINE_COUNT + 1, OVERPACKED_LINE_WORD_COUNT
+LONG_REPORT_REPLY = build_reply_of_exactly(LONG_REPORT_WORD_COUNT)
+REQUESTED_FULL_REPORT = (
+    "Outcome: the audit is complete.\n\n"
+    + build_reply_of_exactly(LONG_REPORT_WORD_COUNT)
 )
-TWO_OVERPACKED_LINES = build_prose_block(
-    MAXIMUM_OVERPACKED_LINE_COUNT, OVERPACKED_LINE_WORD_COUNT
+THREE_OVERPACKED_LIST_LINE_REPLY = build_bullet_block(
+    MAXIMUM_OVERPACKED_LIST_LINE_COUNT + 1, OVERPACKED_LIST_LINE_WORD_COUNT
 )
-TWO_OVERPACKED_LINE_REPLY = (
-    f"{TWO_OVERPACKED_LINES}\n{build_filler_prose(SAFE_LINE_WORD_COUNT)}"
+TWO_OVERPACKED_LIST_LINE_REPLY = build_bullet_block(
+    MAXIMUM_OVERPACKED_LIST_LINE_COUNT, OVERPACKED_LIST_LINE_WORD_COUNT
 )
-SEVEN_BULLET_JUST_OVER_FLOOR_REPLY = build_bullet_block(
+SEVEN_BULLET_REPLY = build_bullet_block(
     MAXIMUM_BULLET_LINE_COUNT + 1, SAFE_LINE_WORD_COUNT
 )
-LONG_FORM_OVERLONG_REPLY = f"Long form: the audit report follows.\n\n{OVERLONG_REPLY}"
-BOLD_LONG_FORM_OVERLONG_REPLY = f"**Long form:** the audit report follows.\n\n{OVERLONG_REPLY}"
-QUOTED_LONG_FORM_OVERLONG_REPLY = f"> Long form: the audit report follows.\n\n{OVERLONG_REPLY}"
-HEADING_LONG_FORM_OVERLONG_REPLY = f"# Long form: the audit report follows.\n\n{OVERLONG_REPLY}"
-
+SIX_BULLET_REPLY = build_bullet_block(
+    MAXIMUM_BULLET_LINE_COUNT, SAFE_LINE_WORD_COUNT
+)
 INSTRUCTION_LINE = "Run the migration script."
-INSTRUCTION_LINE_WORD_COUNT = len(INSTRUCTION_LINE.split())
-
 ACTION_WITHOUT_STEPS_FIRST_REPLY = (
-    f"{build_reply_of_exactly(MAXIMUM_REPLY_WORD_COUNT // 2)}\n\n"
-    f"{INSTRUCTION_LINE}\n\nMerge the branch."
+    f"{build_reply_of_exactly(40)}\n\n{INSTRUCTION_LINE}\n\nMerge the branch."
 )
 ACTION_WITH_STEPS_FIRST_REPLY = (
     "1. **Run** the migration script.\n"
     "2. **Merge** the branch.\n\n"
-    f"{build_reply_of_exactly(MAXIMUM_REPLY_WORD_COUNT // 2)}"
+    f"{build_reply_of_exactly(40)}"
 )
-AT_FLOOR_ACTION_REPLY = (
-    f"{build_reply_of_exactly(MINIMUM_ENFORCED_WORD_COUNT - INSTRUCTION_LINE_WORD_COUNT)}"
-    f"\n\n{INSTRUCTION_LINE}"
-)
-SEVEN_BULLET_REPLY = build_bullet_block(
-    MAXIMUM_BULLET_LINE_COUNT + 1, SAFE_LINE_WORD_COUNT + 3
-)
-SIX_BULLET_REPLY = build_bullet_block(
-    MAXIMUM_BULLET_LINE_COUNT, SAFE_LINE_WORD_COUNT + 5
-)
-FENCED_CODE_REPLY = f"{SHORT_REPLY}\n\n```python\n{OVERLONG_REPLY}\n```\n"
-BLOCKQUOTE_REPLY = f"{SHORT_REPLY}\n\n> {build_filler_prose(OVERLONG_REPLY_WORD_COUNT)}\n"
-TABLE_REPLY = "{}\n\n{}\n".format(
-    SHORT_REPLY,
-    "\n".join(
-        f"| {build_filler_prose(MAXIMUM_WORDS_PER_LINE)} | cell |" for _ in range(15)
-    ),
-)
-
+SINGLE_LINE_INSTRUCTION = INSTRUCTION_LINE
 ALL_NARRATIVE_OPENER_LINES = (
     "Open questions remain about the stripper edge cases.",
     "Run time stays under one second on the package suite.",
@@ -130,10 +97,10 @@ ALL_NARRATIVE_OPENER_LINES = (
 )
 NARRATIVE_OPENER_REPLY = "{}\n\n{}".format(
     "\n".join(ALL_NARRATIVE_OPENER_LINES),
-    build_reply_of_exactly(MINIMUM_ENFORCED_WORD_COUNT),
+    build_reply_of_exactly(40),
 )
 INSTALL_WITHOUT_STEPS_FIRST_REPLY = (
-    f"{build_reply_of_exactly(MINIMUM_ENFORCED_WORD_COUNT)}\n\n"
+    f"{build_reply_of_exactly(40)}\n\n"
     "Install the package from the registry."
 )
 DO_THINGS_WITH_STEPS_FIRST_REPLY = (
@@ -141,11 +108,23 @@ DO_THINGS_WITH_STEPS_FIRST_REPLY = (
     "1. Install the package.\n"
     "2. Restart the daemon.\n"
     "3. Save the file.\n\n"
-    f"{build_reply_of_exactly(MINIMUM_ENFORCED_WORD_COUNT)}"
+    f"{build_reply_of_exactly(40)}"
 )
 DO_THINGS_WITHOUT_STEPS_FIRST_REPLY = (
-    f"{build_reply_of_exactly(MINIMUM_ENFORCED_WORD_COUNT)}\n\n"
+    f"{build_reply_of_exactly(40)}\n\n"
     "Do 3 things: install, restart, save."
+)
+FENCED_CODE_REPLY = f"{SHORT_REPLY}\n\n```python\n{LONG_REPORT_REPLY}\n```\n"
+BLOCKQUOTE_REPLY = f"{SHORT_REPLY}\n\n> {build_filler_prose(LONG_REPORT_WORD_COUNT)}\n"
+TABLE_REPLY = "{}\n\n{}\n".format(
+    SHORT_REPLY,
+    "\n".join(
+        f"| {build_filler_prose(MAXIMUM_WORDS_PER_LIST_LINE)} | cell |"
+        for _ in range(15)
+    ),
+)
+LONG_PROSE_PARAGRAPHS_REPLY = "\n\n".join(
+    build_filler_prose(MAXIMUM_WORDS_PER_LIST_LINE + 10) for _ in range(4)
 )
 
 
@@ -171,8 +150,8 @@ def test_blocker_uses_shared_strip_code_and_quotes() -> None:
     assert eli11_reply_enforcer.strip_code_and_quotes is strip_code_and_quotes
 
 
-def test_short_reply_passes_through() -> None:
-    """A reply under the enforced word floor is never judged."""
+def test_short_correct_reply_passes_through() -> None:
+    """A concise outcome reply passes without padding."""
     completed_process = run_hook_with_message(SHORT_REPLY)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
@@ -188,117 +167,61 @@ def test_empty_message_passes_through() -> None:
 def test_stop_hook_active_flag_passes_through() -> None:
     """A re-entrant Stop invocation never blocks again."""
     completed_process = run_hook_with_payload(
-        {"last_assistant_message": OVERLONG_REPLY, "stop_hook_active": True}
+        {
+            "last_assistant_message": ACTION_WITHOUT_STEPS_FIRST_REPLY,
+            "stop_hook_active": True,
+        }
     )
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
-def test_reply_over_word_cap_emits_block() -> None:
-    """A reply past the word cap blocks with the count and the cap named."""
-    completed_process = run_hook_with_message(OVERLONG_REPLY)
-    assert completed_process.returncode == 0
-    parsed_response = json.loads(completed_process.stdout)
-    assert parsed_response["decision"] == "block"
-    assert str(OVERLONG_REPLY_WORD_COUNT) in parsed_response["reason"]
-    assert str(MAXIMUM_REPLY_WORD_COUNT) in parsed_response["reason"]
-
-
-def test_reply_just_over_word_cap_emits_block() -> None:
-    """A reply one word past the cap blocks on length alone."""
-    completed_process = run_hook_with_message(JUST_OVER_WORD_CAP_REPLY)
-    assert completed_process.returncode == 0
-    parsed_response = json.loads(completed_process.stdout)
-    assert parsed_response["decision"] == "block"
-    assert (
-        f"{JUST_OVER_WORD_CAP_WORD_COUNT} words, over the "
-        f"{MAXIMUM_REPLY_WORD_COUNT}-word cap"
-    ) in parsed_response["reason"]
-
-
-def test_reply_under_word_floor_passes_through() -> None:
-    """A reply one word under the floor is never judged."""
-    completed_process = run_hook_with_message(UNDER_FLOOR_REPLY)
+def test_long_requested_report_passes_without_magic_prefix() -> None:
+    """A thorough report passes with no Long form: prefix and no word ceiling."""
+    completed_process = run_hook_with_message(REQUESTED_FULL_REPORT)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
-def test_reply_at_the_word_floor_is_judged_for_action_first() -> None:
-    """A reply of exactly the floor word count earns its action-first violation."""
-    completed_process = run_hook_with_message(AT_FLOOR_ACTION_REPLY)
+def test_long_prose_paragraphs_are_not_overpacked() -> None:
+    """Plain paragraphs over the list-line word cap do not block."""
+    completed_process = run_hook_with_message(LONG_PROSE_PARAGRAPHS_REPLY)
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_single_line_instruction_passes_through() -> None:
+    """A one-line imperative does not require a numbered list."""
+    completed_process = run_hook_with_message(SINGLE_LINE_INSTRUCTION)
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_three_overpacked_list_lines_emit_block() -> None:
+    """List lines past the overpacked-list cap block on one idea per bullet."""
+    completed_process = run_hook_with_message(THREE_OVERPACKED_LIST_LINE_REPLY)
     assert completed_process.returncode == 0
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
-    assert "put the steps first" in parsed_response["reason"]
+    assert "list lines carry too many words" in parsed_response["reason"]
 
 
-def test_reply_just_over_word_floor_is_judged() -> None:
-    """A bullet-heavy reply just over the floor earns its bullet violation."""
-    completed_process = run_hook_with_message(SEVEN_BULLET_JUST_OVER_FLOOR_REPLY)
-    assert completed_process.returncode == 0
-    parsed_response = json.loads(completed_process.stdout)
-    assert parsed_response["decision"] == "block"
-    assert (
-        f"cut findings to {TARGET_BULLET_LINE_COUNT} bullets"
-        in parsed_response["reason"]
-    )
-
-
-def test_three_overpacked_lines_emit_block() -> None:
-    """One line past the overpacked-line cap blocks on one idea per line."""
-    completed_process = run_hook_with_message(THREE_OVERPACKED_LINE_REPLY)
-    assert completed_process.returncode == 0
-    parsed_response = json.loads(completed_process.stdout)
-    assert parsed_response["decision"] == "block"
-    assert "lines carry too many words - one idea per line" in (
-        parsed_response["reason"]
-    )
-
-
-def test_two_overpacked_lines_pass_through() -> None:
-    """Over-packed lines at the cap pass."""
-    completed_process = run_hook_with_message(TWO_OVERPACKED_LINE_REPLY)
+def test_two_overpacked_list_lines_pass_through() -> None:
+    """Over-packed list lines at the cap pass."""
+    completed_process = run_hook_with_message(TWO_OVERPACKED_LIST_LINE_REPLY)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
 def test_bullet_marker_is_not_counted_as_a_line_word() -> None:
-    """A bullet at the per-line cap stays under it once its marker comes off."""
+    """A bullet at the per-list-line cap stays under it once its marker comes off."""
     capped_bullet_lines = build_bullet_block(
-        MAXIMUM_BULLET_LINE_COUNT - 2, MAXIMUM_WORDS_PER_LINE
+        MAXIMUM_BULLET_LINE_COUNT - 2, MAXIMUM_WORDS_PER_LIST_LINE
     )
     all_violations = eli11_reply_enforcer.find_reply_shape_violations(
         capped_bullet_lines
     )
     assert all_violations == []
-
-
-def test_long_form_prefix_exempts_an_overlong_reply() -> None:
-    """The Long form escape hatch clears every reply-shape check."""
-    completed_process = run_hook_with_message(LONG_FORM_OVERLONG_REPLY)
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
-
-
-def test_bold_long_form_prefix_exempts_an_overlong_reply() -> None:
-    """A bold-wrapped Long form prefix still opts the reply out."""
-    completed_process = run_hook_with_message(BOLD_LONG_FORM_OVERLONG_REPLY)
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
-
-
-def test_quoted_long_form_prefix_exempts_an_overlong_reply() -> None:
-    """A blockquoted Long form prefix still opts the reply out."""
-    completed_process = run_hook_with_message(QUOTED_LONG_FORM_OVERLONG_REPLY)
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
-
-
-def test_heading_long_form_prefix_exempts_an_overlong_reply() -> None:
-    """A heading-wrapped Long form prefix still opts the reply out."""
-    completed_process = run_hook_with_message(HEADING_LONG_FORM_OVERLONG_REPLY)
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
 
 
 def test_instruction_lines_without_leading_steps_emit_block() -> None:
@@ -307,7 +230,8 @@ def test_instruction_lines_without_leading_steps_emit_block() -> None:
     assert completed_process.returncode == 0
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
-    assert "put the steps first" in parsed_response["reason"]
+    assert "numbered steps" in parsed_response["reason"]
+    assert "Rewrite the reply" in parsed_response["reason"]
 
 
 def test_numbered_steps_in_lead_lines_pass_through() -> None:
@@ -350,11 +274,11 @@ def test_names_imperative_object_accepts_determiners_counts_and_paths() -> None:
 def test_strip_markdown_lead_markers_removes_every_wrapper() -> None:
     """Blockquote, heading, and bold wrappers come off the front of a line."""
     assert eli11_reply_enforcer.strip_markdown_lead_markers(
-        "> **Long form:** the report follows"
-    ) == "Long form:** the report follows"
+        "> **Bold lead:** the report follows"
+    ) == "Bold lead:** the report follows"
     assert eli11_reply_enforcer.strip_markdown_lead_markers(
-        "# Long form: the report follows"
-    ) == "Long form: the report follows"
+        "# Heading lead: the report follows"
+    ) == "Heading lead: the report follows"
 
 
 def test_install_instruction_without_leading_steps_emits_block() -> None:
@@ -363,7 +287,7 @@ def test_install_instruction_without_leading_steps_emits_block() -> None:
     assert completed_process.returncode == 0
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
-    assert "put the steps first" in parsed_response["reason"]
+    assert "numbered steps" in parsed_response["reason"]
 
 
 def test_do_three_things_without_leading_steps_emits_block() -> None:
@@ -372,7 +296,7 @@ def test_do_three_things_without_leading_steps_emits_block() -> None:
     assert completed_process.returncode == 0
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
-    assert "put the steps first" in parsed_response["reason"]
+    assert "numbered steps" in parsed_response["reason"]
 
 
 def test_do_three_things_with_numbered_steps_passes_through() -> None:
@@ -398,13 +322,13 @@ def test_numbered_step_opener_is_a_numbered_step() -> None:
 
 
 def test_more_than_six_bullets_emits_block() -> None:
-    """One bullet past the cap blocks with the cut-to-target-bullets message."""
+    """One bullet past the cap blocks with the put-findings message."""
     completed_process = run_hook_with_message(SEVEN_BULLET_REPLY)
     assert completed_process.returncode == 0
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
     assert (
-        f"cut findings to {TARGET_BULLET_LINE_COUNT} bullets"
+        f"put findings in at most {TARGET_BULLET_LINE_COUNT} bullets"
         in parsed_response["reason"]
     )
 
@@ -416,29 +340,29 @@ def test_six_bullets_pass_through() -> None:
     assert completed_process.stdout == ""
 
 
-def test_fenced_code_words_are_not_counted() -> None:
-    """Words inside a fenced code block never push a reply past the cap."""
+def test_fenced_code_does_not_force_shape_block() -> None:
+    """Words inside a fenced code block do not create shape violations alone."""
     completed_process = run_hook_with_message(FENCED_CODE_REPLY)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
-def test_blockquote_words_are_not_counted() -> None:
-    """Quoted lines are the user's words and never push a reply past the cap."""
+def test_blockquote_does_not_force_shape_block() -> None:
+    """Quoted lines are exempt from shape counting."""
     completed_process = run_hook_with_message(BLOCKQUOTE_REPLY)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
 def test_table_rows_are_not_counted() -> None:
-    """Table rows carry reference data and never push a reply past the cap."""
+    """Table rows carry reference data and do not create shape violations alone."""
     completed_process = run_hook_with_message(TABLE_REPLY)
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
 
 
 def test_urls_are_removed_from_counted_prose() -> None:
-    """A link target is stripped before the words are counted."""
+    """A link target is stripped before prose is judged."""
     prose_text = eli11_reply_enforcer.extract_reply_prose(
         "The draft is at https://github.com/owner/repo/pull/704 now"
     )
@@ -446,12 +370,21 @@ def test_urls_are_removed_from_counted_prose() -> None:
     assert "draft" in prose_text
 
 
-def test_block_response_json_shape() -> None:
-    """The block payload carries the Stop-hook keys and names the escape hatch."""
-    completed_process = run_hook_with_message(OVERLONG_REPLY)
+def test_block_reason_uses_positive_rewrite_language() -> None:
+    """Corrective output tells the model what to write, not only what failed."""
+    reason = eli11_reply_enforcer.build_block_reason(
+        [eli11_reply_enforcer.describe_action_first_violation()]
+    )
+    assert "Rewrite the reply" in reason
+    assert "120-word" not in reason
+    assert "Long form:" not in reason
+    assert "minimum" not in reason.lower()
+
+
+def test_hook_never_forces_padding_on_short_replies() -> None:
+    """A correct short reply is not blocked for being under a word floor."""
+    tiny_reply = "Done."
+    completed_process = run_hook_with_message(tiny_reply)
     assert completed_process.returncode == 0
-    parsed_response = json.loads(completed_process.stdout)
-    assert parsed_response["decision"] == "block"
-    assert parsed_response["suppressOutput"] is True
-    assert parsed_response["systemMessage"]
-    assert "Long form:" in parsed_response["reason"]
+    assert completed_process.stdout == ""
+    assert eli11_reply_enforcer.find_reply_shape_violations(tiny_reply) == []
