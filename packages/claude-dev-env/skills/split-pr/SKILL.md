@@ -44,10 +44,16 @@ never a hard gate.
 | `SKILL.md` | Analyzer contract and 200/600 gates |
 | `scripts/analyze_pr.py` | Emit analysis JSON from gh or offline files |
 | `scripts/categorize_files.py` | Path churn class (hand-written vs excluded) |
+| `scripts/verify_plan.py` | Vertical-slice plan coverage and test co-location gate |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
 | `scripts/test_categorize_files.py` | Exclusion classification tests |
+| `scripts/test_verify_plan.py` | Vertical-slice plan validation tests |
+| `reference/splitting-principles.md` | Vertical-slice invariants |
+| `reference/path-layers.md` | Layer hints (context only) |
+| `reference/split-further-loop.md` | Re-split loop until leaves fit review |
 
 ## Folder map
 
-- `scripts/` — analyzer, categorize helpers, constants, tests
+- `scripts/` — analyzer, categorize helpers, plan verifier, constants, tests
+- `reference/` — vertical-slice principles and layer hints
