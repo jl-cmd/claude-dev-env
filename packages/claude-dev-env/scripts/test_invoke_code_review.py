@@ -268,6 +268,17 @@ def test_empty_findings_return_clean() -> None:
     assert terminal_status == TERMINAL_CLEAN
 
 
+def test_empty_findings_continue_when_gates_have_not_passed() -> None:
+    terminal_status = resolve_review_loop_terminal(
+        all_findings=(),
+        reviewed_head_count=1,
+        is_gates_passed=False,
+        is_nits_applied=False,
+    )
+
+    assert terminal_status is None
+
+
 def test_nits_only_round_returns_nits_fixed_after_gates() -> None:
     all_nits = (
         _retained_finding(severity=SEVERITY_NIT),
@@ -283,6 +294,26 @@ def test_nits_only_round_returns_nits_fixed_after_gates() -> None:
     )
 
     assert terminal_status == TERMINAL_NITS_FIXED
+
+
+def test_nits_without_retained_verdict_do_not_return_nits_fixed() -> None:
+    severity_only_nit = {
+        "file": FINDING_FILE_PATH,
+        "line": FINDING_LINE_NUMBER,
+        "summary": FINDING_SUMMARY_TEXT,
+        FINDING_FIELD_SEVERITY: SEVERITY_NIT,
+    }
+
+    assert is_nits_only_findings((severity_only_nit,)) is True
+    assert all_findings_carry_severity_and_verdict((severity_only_nit,)) is False
+    terminal_status = resolve_review_loop_terminal(
+        all_findings=(severity_only_nit,),
+        reviewed_head_count=1,
+        is_gates_passed=True,
+        is_nits_applied=True,
+    )
+
+    assert terminal_status is None
 
 
 def test_third_head_with_non_nit_finding_returns_blocked_at_cap() -> None:
@@ -368,6 +399,25 @@ def test_blocked_at_cap_serialization_preserves_draft_and_findings() -> None:
     assert encoded_payload[RESULT_KEY_DRAFT_PRESERVED] is True
     assert encoded_payload[RESULT_KEY_REVIEWED_HEAD_COUNT] == MAXIMUM_REVIEWED_HEADS
     assert encoded_payload[RESULT_KEY_SURVIVING_FINDINGS] == [surviving_finding]
+
+
+def test_blocked_terminals_force_draft_preserved_when_caller_passes_false() -> None:
+    surviving_finding = _retained_finding(severity=SEVERITY_HIGH)
+    blocked_at_cap_payload = encode_review_loop_terminal_result(
+        terminal=TERMINAL_BLOCKED_AT_CAP,
+        all_surviving_findings=(surviving_finding,),
+        reviewed_head_count=MAXIMUM_REVIEWED_HEADS,
+        is_draft_preserved=False,
+    )
+    advisor_blocked_payload = encode_review_loop_terminal_result(
+        terminal=TERMINAL_ADVISOR_BLOCKED,
+        all_surviving_findings=(surviving_finding,),
+        reviewed_head_count=1,
+        is_draft_preserved=False,
+    )
+
+    assert blocked_at_cap_payload[RESULT_KEY_DRAFT_PRESERVED] is True
+    assert advisor_blocked_payload[RESULT_KEY_DRAFT_PRESERVED] is True
 
 
 def test_fourth_head_is_never_recorded_once_cap_is_reached() -> None:

@@ -162,8 +162,8 @@ The loop emits exactly one of these terminals when it stops:
 
 | Terminal | When |
 |---|---|
-| `clean` | Zero retained findings on the current head |
-| `nits_fixed` | Every retained finding is a nit, every nit is fixed, and required checks pass (including on the third head) |
+| `clean` | Zero retained findings on the current head, and required checks pass |
+| `nits_fixed` | Every retained finding is a nit with severity and a retained verdict, every nit is fixed, and required checks pass (including on the third head) |
 | `blocked_at_cap` | Third reviewed head still holds an unclassified or non-nit finding; draft state is preserved |
 | `advisor_blocked` | Classification needs the assigned advisor and that advisor is unreachable |
 
@@ -225,8 +225,8 @@ Gate 3 reads that stated outcome, never a case label.
 **Gate 3 — exit test.** Resolve the terminal from the table above, then stop or
 continue:
 
-- zero retained findings → `clean`;
-- nits only, all fixed, required checks pass → `nits_fixed`;
+- zero retained findings and required checks pass → `clean`;
+- nits only (each with severity and a retained verdict), all fixed, required checks pass → `nits_fixed`;
 - third head with unclassified or non-nit findings → `blocked_at_cap` (keep
   draft; report surviving findings);
 - advisor needed for classification and unreachable → `advisor_blocked`;
@@ -270,9 +270,9 @@ them and re-run the checks.
 
 **Commit and push are lead-owned.** Gate 2 and the round tail leave every fix
 unstaged-or-staged in the working tree for the lead that owns the branch. A
-fix agent, patch worker, or fix agent never creates the commit and never
-pushes. The lead stages, commits once per review round, and pushes after the
-gates pass. Start the next round under *Each round reviews new code* only
+fix agent, patch worker, or resumed finding agent never creates the commit and
+never pushes. The lead stages, commits once per review round, and pushes after
+the gates pass. Start the next round under *Each round reviews new code* only
 after that lead commit lands a new head, or after a no-edit round that is
 still under the three-head cap.
 

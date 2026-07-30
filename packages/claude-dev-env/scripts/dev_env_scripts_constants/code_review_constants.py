@@ -553,15 +553,21 @@ def resolve_review_loop_terminal(
             is_gates_passed=True, is_nits_applied=False,
         )  # ok: "clean"
         resolve_review_loop_terminal(
+            all_findings=(), reviewed_head_count=1,
+            is_gates_passed=False, is_nits_applied=False,
+        )  # flag: None  (gates still open)
+        resolve_review_loop_terminal(
             all_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
             reviewed_head_count=3, is_gates_passed=True, is_nits_applied=False,
         )  # ok: "blocked_at_cap"
 
-    Empty findings return clean. Nits-only findings return nits_fixed after
-    the nits are applied and gates pass, including on the third head. An
-    unclassified or non-nit finding on the third head returns blocked_at_cap.
-    An unreachable advisor needed for classification returns advisor_blocked.
-    Open non-nit work before the cap returns None so the caller re-enters.
+    Empty findings return clean only when gates pass. Nits-only findings
+    return nits_fixed after each finding carries severity and a retained
+    verdict, the nits are applied, and gates pass, including on the third
+    head. An unclassified or non-nit finding on the third head returns
+    blocked_at_cap. An unreachable advisor needed for classification
+    returns advisor_blocked. Open non-nit work before the cap returns None
+    so the caller re-enters.
 
     Args:
         all_findings: Structured findings retained for this head.
@@ -576,8 +582,15 @@ def resolve_review_loop_terminal(
     if is_advisor_unreachable and has_unclassified_finding(all_findings):
         return TERMINAL_ADVISOR_BLOCKED
     if not all_findings:
-        return TERMINAL_CLEAN
-    if is_nits_only_findings(all_findings) and is_nits_applied and is_gates_passed:
+        if is_gates_passed:
+            return TERMINAL_CLEAN
+        return None
+    if (
+        is_nits_only_findings(all_findings)
+        and all_findings_carry_severity_and_verdict(all_findings)
+        and is_nits_applied
+        and is_gates_passed
+    ):
         return TERMINAL_NITS_FIXED
     if reviewed_head_count < MAXIMUM_REVIEWED_HEADS:
         return None
@@ -603,12 +616,12 @@ def encode_review_loop_terminal_result(
             terminal="blocked_at_cap",
             all_surviving_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
             reviewed_head_count=3,
-            is_draft_preserved=True,
-        )["draft_preserved"]  # ok: True
+            is_draft_preserved=False,
+        )["draft_preserved"]  # ok: True  (blocked terminals force draft)
 
-    ``blocked_at_cap`` keeps the pull request draft and carries every
-    surviving structured finding. Other terminals use the same shape so
-    callers read one schema.
+    ``blocked_at_cap`` and ``advisor_blocked`` keep the pull request draft
+    even when the caller passes a false draft flag. Other terminals use the
+    caller's flag. Every terminal uses the same JSON shape.
 
     Args:
         terminal: One of ``ALL_LOOP_TERMINALS``.
@@ -619,9 +632,14 @@ def encode_review_loop_terminal_result(
     Returns:
         A JSON-ready mapping with terminal, draft flag, head count, findings.
     """
+    is_blocked_terminal = terminal in (
+        TERMINAL_BLOCKED_AT_CAP,
+        TERMINAL_ADVISOR_BLOCKED,
+    )
+    should_preserve_draft = is_blocked_terminal or is_draft_preserved
     return {
         RESULT_KEY_TERMINAL: terminal,
-        RESULT_KEY_DRAFT_PRESERVED: is_draft_preserved,
+        RESULT_KEY_DRAFT_PRESERVED: should_preserve_draft,
         RESULT_KEY_REVIEWED_HEAD_COUNT: reviewed_head_count,
         RESULT_KEY_SURVIVING_FINDINGS: list(all_surviving_findings),
     }
