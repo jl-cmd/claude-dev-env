@@ -90,21 +90,6 @@ added path, and the range the first round reviewed stays in scope. The level
 file gathers what the round hands it, so a widened path is gathered and reviewed
 like any other part of the target.
 
-## Reviewed heads and the three-head cap
-
-Record every distinct git head the loop reviews. Reviewing a **new** head
-increments the reviewed-head count by one. Re-reviewing the **same** head does
-not increment the count.
-
-The cap is **three** distinct reviewed heads. Never open a fourth head. On the
-third head:
-
-- any unclassified finding, or any non-nit finding, terminates as
-  `blocked_at_cap` — the pull request stays draft, and the terminal report
-  carries every surviving structured finding;
-- nits only, after every nit is fixed and required checks pass, terminates as
-  `nits_fixed`.
-
 ## Dangerous diffs take two full rounds
 
 A diff is dangerous when it touches deletion paths, locks or other concurrency
@@ -164,7 +149,6 @@ The loop emits exactly one of these terminals when it stops:
 |---|---|
 | `clean` | Zero retained findings on the current head, and required checks pass |
 | `nits_fixed` | Every retained finding is a nit with severity and a retained verdict, every nit is fixed, and required checks pass (including on the third head) |
-| `blocked_at_cap` | Third reviewed head still holds an unclassified or non-nit finding; draft state is preserved |
 | `advisor_blocked` | Classification needs the assigned advisor and that advisor is unreachable |
 
 Every round does this round's own work first, then runs the three gates below,
@@ -227,10 +211,8 @@ continue:
 
 - zero retained findings and required checks pass → `clean`;
 - nits only (each with severity and a retained verdict), all fixed, required checks pass → `nits_fixed`;
-- third head with unclassified or non-nit findings → `blocked_at_cap` (keep
-  draft; report surviving findings);
 - advisor needed for classification and unreachable → `advisor_blocked`;
-- otherwise continue only when the reviewed-head count is still under three.
+- otherwise continue.
 
 Also require, for `clean` and `nits_fixed`:
 
@@ -238,8 +220,7 @@ Also require, for `clean` and `nits_fixed`:
 - gate 2 states no unresolved findings remain;
 - this round produced no edits after the gates settled.
 
-Any other combination runs the round tail and re-enters the loop, unless the
-three-head cap already forced `blocked_at_cap`.
+Any other combination runs the round tail and re-enters the loop.
 
 Terminating with `clean` or `nits_fixed` carries one further condition — the
 termination-time disclosure: the ready-for-review message names every broken
@@ -254,8 +235,8 @@ round. With that condition met, post the proof-of-work PR comment when the
 target is a PR, then run `gh pr ready` for a draft PR, or state ready
 otherwise.
 
-`blocked_at_cap` and `advisor_blocked` keep the pull request draft. They do
-not run `gh pr ready`. They report every surviving structured finding.
+`advisor_blocked` keeps the pull request draft. It does
+not run `gh pr ready`. It reports every surviving structured finding.
 
 Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
@@ -273,7 +254,6 @@ unstaged-or-staged in the working tree for the lead that owns the branch. A
 fix agent, patch worker, or resumed finding agent never creates the commit and
 never pushes. The lead stages, commits once per review round, and pushes after
 the gates pass. Start the next round under *Each round reviews new code* only
-after that lead commit lands a new head, or after a no-edit round that is
-still under the three-head cap.
+after that lead commit lands a new head.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
