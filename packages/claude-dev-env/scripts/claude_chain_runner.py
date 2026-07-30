@@ -78,6 +78,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE,
     AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE,
     ALL_ROUTING_MODES,
+    RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -871,6 +872,80 @@ def _ranked_entries_or_config_order(
         return list(all_entries)
 
 
+def extract_resume_session_id(
+    all_claude_arguments: Sequence[str],
+) -> str | None:
+    """Return the session id after ``--resume`` when present.
+
+    Args:
+        all_claude_arguments: Arguments passed after the binary name.
+
+    Returns:
+        The non-empty session id, or ``None`` when the flag is absent.
+    """
+    for each_index, each_argument in enumerate(all_claude_arguments):
+        if each_argument != RESUME_SESSION_FLAG:
+            continue
+        next_index = each_index + 1
+        if next_index >= len(all_claude_arguments):
+            return None
+        session_id = all_claude_arguments[next_index]
+        if session_id and not session_id.startswith("-"):
+            return session_id
+        return None
+    return None
+
+
+def lookup_affinity_command(
+    store: AffinityStore,
+    session_id: str,
+) -> str | None:
+    """Return the bound binary command for ``session_id``, if any.
+
+    Args:
+        store: Loaded affinity store.
+        session_id: Session id from a prior serve.
+
+    Returns:
+        The bound command string, or ``None`` when unbound.
+    """
+    for each_binding in store.all_bindings:
+        if each_binding.session_id == session_id:
+            return each_binding.command
+    return None
+
+
+def order_entries_for_resume(
+    all_entries: list[ChainEntry],
+    *,
+    preferred_command: str | None,
+) -> list[ChainEntry]:
+    """Put the preferred originating binary first; keep relative order of the rest.
+
+    When ``preferred_command`` is missing from the chain or is ``None``, the
+    original list order is returned unchanged (documented fallback).
+
+    Args:
+        all_entries: Chain entries in the mode's base order.
+        preferred_command: Originating binary from the affinity store.
+
+    Returns:
+        Ordered walk list for this invocation.
+    """
+    if preferred_command is None:
+        return list(all_entries)
+    preferred: list[ChainEntry] = []
+    remaining: list[ChainEntry] = []
+    for each_entry in all_entries:
+        if each_entry.command == preferred_command and not preferred:
+            preferred.append(each_entry)
+        else:
+            remaining.append(each_entry)
+    if not preferred:
+        return list(all_entries)
+    return preferred + remaining
+
+
 def _resolve_walk_entries(
     all_entries: list[ChainEntry],
     config_path: Path,
@@ -879,6 +954,36 @@ def _resolve_walk_entries(
     if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT:
         return list(all_entries)
     return _ranked_entries_or_config_order(all_entries, config_path)
+
+
+def _affinity_preferred_command(
+    all_claude_arguments: Sequence[str],
+    affinity_path: Path,
+) -> str | None:
+    resume_session_id = extract_resume_session_id(all_claude_arguments)
+    if resume_session_id is None:
+        return None
+    try:
+        affinity_store = load_affinity_store(affinity_path)
+    except ValueError:
+        return None
+    return lookup_affinity_command(affinity_store, resume_session_id)
+
+
+def _walk_entries_for_invocation(
+    all_entries: list[ChainEntry],
+    config_path: Path,
+    routing_mode: str,
+    all_claude_arguments: Sequence[str],
+    affinity_path: Path,
+) -> list[ChainEntry]:
+    base_order = _resolve_walk_entries(all_entries, config_path, routing_mode)
+    preferred_command = _affinity_preferred_command(
+        all_claude_arguments, affinity_path
+    )
+    return order_entries_for_resume(
+        base_order, preferred_command=preferred_command
+    )
 
 
 def _require_known_routing_mode(routing_mode: str) -> str:
@@ -935,9 +1040,35 @@ def run_claude(
     selected_routing_mode = _require_known_routing_mode(routing_mode)
     config_path = chain_config_path()
     all_entries = load_chain(config_path)
-    all_walk_entries = _resolve_walk_entries(
-        all_entries, config_path, selected_routing_mode
+    affinity_path = default_affinity_state_path(
+        Path.home() / CLAUDE_HOME_SUBDIRECTORY
     )
+    all_walk_entries = _walk_entries_for_invocation(
+        all_entries,
+        config_path,
+        selected_routing_mode,
+        all_claude_arguments,
+        affinity_path,
+    )
+    return _walk_chain_attempts(
+        all_walk_entries,
+        all_claude_arguments=all_claude_arguments,
+        timeout_seconds=timeout_seconds,
+        stdin_text=stdin_text,
+        routing_mode=selected_routing_mode,
+        affinity_path=affinity_path,
+    )
+
+
+def _walk_chain_attempts(
+    all_walk_entries: list[ChainEntry],
+    *,
+    all_claude_arguments: list[str],
+    timeout_seconds: int,
+    stdin_text: str | None,
+    routing_mode: str,
+    affinity_path: Path,
+) -> ChainInvocationOutcome:
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
     for each_entry in all_walk_entries:
@@ -958,7 +1089,7 @@ def run_claude(
             )
             timeout_terminal_status = (
                 TERMINAL_STATUS_ADVISOR_BLOCKED
-                if selected_routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
+                if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
                 else TERMINAL_STATUS_TIMEOUT
             )
             return _no_process_outcome(
@@ -975,12 +1106,36 @@ def run_claude(
             each_entry,
             completion,
             all_attempts,
-            routing_mode=selected_routing_mode,
+            routing_mode=routing_mode,
         )
         if terminal_outcome is not None:
+            _persist_served_affinity(
+                affinity_path,
+                served_command=each_entry.command,
+                session_id=terminal_outcome.session_id,
+            )
             return terminal_outcome
         last_usage_limited = completion
     return _exhausted_outcome(all_attempts, last_usage_limited)
+
+
+def _persist_served_affinity(
+    affinity_path: Path,
+    *,
+    served_command: str,
+    session_id: str | None,
+) -> None:
+    """Best-effort write of session-to-binary affinity after a successful serve."""
+    if not session_id:
+        return
+    try:
+        store = load_affinity_store(affinity_path)
+        updated = record_affinity_binding(
+            store, session_id=session_id, command=served_command
+        )
+        save_affinity_store_atomic(affinity_path, updated)
+    except (OSError, ValueError):
+        return
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:

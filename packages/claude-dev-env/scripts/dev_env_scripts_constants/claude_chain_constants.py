@@ -298,3 +298,6 @@ AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE: str = (
 
 AFFINITY_JSON_INDENT_SPACES: int = 2
 """Indent width for the written affinity state JSON document."""
+
+RESUME_SESSION_FLAG: str = "--resume"
+"""Claude CLI flag that continues a prior session by id."""
