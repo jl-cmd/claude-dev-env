@@ -1,0 +1,14 @@
+{
+  "fixture_id": "easy-comment-preservation",
+  "band": "easy",
+  "description": "Single-file comment-preservation miss with one seeded finding.",
+  "target_summary": "Production helper drops an existing inline comment on an unchanged line.",
+  "seeded_findings": [
+    {
+      "file": "sample_helper.py",
+      "line": 12,
+      "category": "comment-preservation",
+      "severity": "medium"
+    }
+  ]
+}

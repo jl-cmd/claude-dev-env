@@ -8,7 +8,7 @@
         "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"scripts/profile-isolation-launchers/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
     },
     "files": [
         "bin/",
@@ -22,6 +22,7 @@
         "system-prompts/",
         "scripts/",
         "codex-capability-map.json",
+        "settings.json",
         "installable-surfaces.manifest.json",
         "_shared/",
         "audit-rubrics/",

@@ -16,6 +16,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |
 | `resolve_worker_spawn.py` | Dispatches a worker role through grok then claude fallback tiers (preflight, headless grok, `claude_agent_required` handoff, optional claude headless); applies `require_timeout_within_bounds` before the preflight, so an out-of-bounds `--timeout-seconds` prints a `timeout_out_of_bounds` outcome and exits 3 on every tier; protocol: [`../_shared/pr-loop/worker-spawn.md`](../_shared/pr-loop/worker-spawn.md) |
+| `active_capability_references.py` | Inventories committed skill, agent, and command names and scans package markdown for active slash or backticked capability references; fails ban-listed names outside inert historical/example fences |
 | `verify_installable_package.py` | Verifies the published package: runs real `npm pack`, checks every surface in `installable-surfaces.manifest.json` appears in the tarball, requires each `hooks.json` `.py` command to be git-tracked, and smoke-compiles those scripts (`node --check` on `bin/install.mjs`) |
 
 ## PowerShell scripts
@@ -34,7 +35,9 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 
 | Entry | Description |
 |---|---|
+| `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
 | `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
+| `profile-isolation-launchers/` | Profile-launcher contract plus Windows shortcut source semantics: profiles manifest, shared-path allowlist, profile resolver, read-only shortcut inventory and preview reconcile under `windows/`. Live shortcut mutation waits on owner authorization; L1 deploy stays residual |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
@@ -44,6 +47,12 @@ Python scripts (pytest):
 
 ```bash
 python -m pytest packages/claude-dev-env/scripts/tests/
+```
+
+Profile-isolation launcher contract (node:test):
+
+```bash
+node --test packages/claude-dev-env/scripts/profile-isolation-launchers/**/*.test.mjs
 ```
 
 PowerShell scripts (Pester 5+, `*.Tests.ps1`):
