@@ -89,9 +89,9 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
 | `gh_pr_author_restore.py` | PostToolUse | Restores PR author after a tool call |
-| `hedging_language_blocker.py` | Stop | Responses with hedging words (`likely`, `probably`, `appears to`) |
-| `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on |
-| `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work |
+| `hedging_language_blocker.py` | Stop | Responses with hedging words (`likely`, `probably`, `appears to`); armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
+| `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
+| `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
 | `open_questions_in_plans_blocker.py` | PreToolUse (Write/Edit) | Plan documents with unresolved open questions |
 | `nas_ssh_binary_enforcer.py` | PreToolUse (Bash) | A bare `ssh`/`scp`/`sftp` command word targeting the NAS (Git Bash's MSYS ssh stalls on an interactive password prompt), or the full `System32/OpenSSH` binary to that host without `-o BatchMode=yes` |
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |
@@ -100,7 +100,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `piped_pytest_blocker.py` | PreToolUse (Bash) | A pytest run whose output feeds a pipe, where the pipeline reports the exit code of the command on the right |
-| `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose |
+| `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off); AskUserQuestion lean-block structure stays always on |
 | `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
 | `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
@@ -113,7 +113,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
 | `shell_substitution_blocker.py` | PreToolUse (Bash) | A command carrying `$(...)`, a live backtick, or `<(...)`/`>(...)` process substitution, which the allowlist matcher cannot descend into |
 | `stale_comment_reference_blocker.py` | PreToolUse (Edit) | An Edit that rewrites a Python code line while keeping the standalone comment directly above it, when that comment names an identifier the rewrite removes from the line |
-| `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |
+| `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |
 | `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, bare home, or a network share root |

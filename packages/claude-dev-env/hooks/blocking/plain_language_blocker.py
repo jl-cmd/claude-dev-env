@@ -580,8 +580,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
 
     An AskUserQuestion payload meets the lean-block check first, so a question
     text or an option description carrying chat detail returns a LEAN_QUESTION
-    deny reason. Every guarded payload then meets the word scan, which returns a
-    PLAIN_LANGUAGE deny reason for the first heavy word it finds.
+    deny reason. When ``CLAUDE_PROSE_STYLE_ENFORCEMENT`` is on, a guarded payload
+    then meets the word scan, which returns a PLAIN_LANGUAGE deny reason for the
+    first heavy word it finds.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.

@@ -91,6 +91,15 @@ def test_user_facing_notice_matches_config_messages_module():
     assert module.USER_FACING_NOTICE == USER_FACING_NOTICE
 
 
+def test_hedging_scan_is_default_off() -> None:
+    completed_process = run_hook_with_message(
+        HEDGING_MESSAGE, is_prose_style_enabled=False
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
 def test_hedging_message_emits_block_with_short_user_notice():
     completed_process = run_hook_with_message(HEDGING_MESSAGE)
 
