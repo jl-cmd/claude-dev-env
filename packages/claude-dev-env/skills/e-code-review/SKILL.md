@@ -68,7 +68,6 @@ Detail: `reference/effort-evaluation.md`.
 | `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
 | `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
 
-
 ## Folder map
 
 - `SKILL.md` — route and dispatch.

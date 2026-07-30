@@ -169,3 +169,12 @@ def test_map_high_and_max_to_skill_xhigh() -> None:
     assert map_evaluation_effort_to_skill_level("high") == "xhigh"
     assert map_evaluation_effort_to_skill_level("max") == "xhigh"
     assert map_evaluation_effort_to_skill_level("medium") == "medium"
+
+
+def test_resolve_rejects_unknown_band() -> None:
+    try:
+        resolve_skill_effort_for_band("not-a-band")
+    except ValueError as error:
+        assert "unknown fixture band" in str(error)
+    else:
+        raise AssertionError("expected ValueError for unknown band")

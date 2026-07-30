@@ -353,4 +353,10 @@ def resolve_skill_effort_for_band(fixture_band: str) -> str:
             f"no evaluation-backed skill effort for band {fixture_band!r}: "
             f"{band_default.get('blocker')}"
         )
-    return str(skill_effort)
+    skill_effort_name = str(skill_effort)
+    if skill_effort_name not in ALL_SKILL_EFFORT_LEVELS:
+        raise ValueError(
+            f"skill effort out of surface for band {fixture_band!r}: "
+            f"{skill_effort_name!r}"
+        )
+    return skill_effort_name

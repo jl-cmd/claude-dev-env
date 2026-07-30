@@ -1,6 +1,6 @@
 # Effort evaluation sweep (Opus)
 
-Offline-first harness for choosing e-code-review effort without changing defaults.
+Offline-first harness for choosing e-code-review effort and publishing cited skill defaults.
 
 ## What it holds
 
