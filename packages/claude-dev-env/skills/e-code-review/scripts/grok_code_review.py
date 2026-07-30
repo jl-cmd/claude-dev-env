@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from config.grok_code_review_constants import (
+from e_code_review_scripts_constants.grok_code_review_constants import (
     ALL_MEDIUM_FINDER_ANGLES,
     ALL_SEVERITIES,
     ALL_VERIFICATION_VERDICTS,
