@@ -101,3 +101,24 @@ GH_FIELD_NUMBER: str = "number"
 GH_FILE_PATH: str = "path"
 GH_FILE_ADDITIONS: str = "additions"
 GH_FILE_DELETIONS: str = "deletions"
+
+PLAN_KEY_SLICES: str = "slices"
+PLAN_KEY_PATHS: str = "paths"
+PLAN_KEY_STORY: str = "story"
+PLAN_KEY_IS_PREPARATORY_REFACTOR: str = "is_preparatory_refactor"
+PLAN_KEY_IS_VALID: str = "is_valid"
+PLAN_KEY_VIOLATIONS: str = "violations"
+
+VIOLATION_MISSING_PATH: str = "path_missing_from_all_slices"
+VIOLATION_DUPLICATE_PATH: str = "path_in_multiple_slices"
+VIOLATION_TEST_WITHOUT_BEHAVIOR: str = "test_slice_missing_related_behavior"
+VIOLATION_EMPTY_STORY: str = "slice_missing_story"
+
+ALL_TEST_PATH_MARKERS: tuple[str, ...] = (
+    "/test_",
+    "_test.py",
+    ".test.",
+    ".spec.",
+    "/tests/",
+    "\\tests\\",
+)
