@@ -21,8 +21,14 @@ sys.path.insert(0, _REPO_ROOT)
 sys.modules.pop("config", None)
 
 from config.sync_ai_rules_paths import (
+    BUGBOT_DESTINATION_PATH,
     BUGBOT_ONLY_DESTINATION_PATHS,
     DESTINATION_PATHS,
+    FORCE_INITIAL_OVERWRITE_ENV_KEY,
+    GITHUB_REPOSITORY_ENV_KEY,
+    GITHUB_TOKEN_ENV_KEY,
+    RAW_URL_ENV_KEY,
+    SOURCE_COMMIT_ENV_KEY,
     SOURCE_FILE_PATH,
 )
 
@@ -484,80 +490,148 @@ def report_drift_errors(
     write_step_summary(drift_summary)
 
 
-def main() -> int:
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "")
-    source_commit = os.environ.get("SOURCE_COMMIT") or UNKNOWN_COMMIT_PLACEHOLDER
-    raw_url = os.environ.get("RAW_URL") or DEFAULT_RAW_URL
-    should_force_initial_overwrite = (
-        (os.environ.get("FORCE_INITIAL_OVERWRITE") or "false").lower() == "true"
-    )
+def check_local_agents_bugbot_parity() -> int:
+    """Exit 0 when .cursor/BUGBOT.md body matches local AGENTS.md; else 1.
 
-    if Path(OPT_OUT_SENTINEL_PATH).exists():
-        write_step_summary("Opted out via sentinel file.")
-        return 0
+    Source-repo gate: BugBot is a projection of AGENTS.md and must not be
+    hand-edited. Listener repos keep using the network sync path without
+    --check.
+    """
+    agents_path = Path(SOURCE_FILE_PATH)
+    bugbot_path = Path(BUGBOT_DESTINATION_PATH)
+    if not agents_path.is_file():
+        print(f"::error::Missing canonical file: {SOURCE_FILE_PATH}", file=sys.stderr)
+        return 1
+    if not bugbot_path.is_file():
+        print(
+            f"::error::Missing BugBot projection: {BUGBOT_DESTINATION_PATH}",
+            file=sys.stderr,
+        )
+        return 1
+    agents_body = normalize_line_endings(agents_path.read_text(encoding="utf-8"))
+    bugbot_content = normalize_line_endings(bugbot_path.read_text(encoding="utf-8"))
+    bugbot_body = strip_sync_header(bugbot_content)
+    if bugbot_body is None:
+        print(
+            f"::error::{BUGBOT_DESTINATION_PATH} is missing SYNC-HEADER markers.",
+            file=sys.stderr,
+        )
+        return 1
+    if agents_body != bugbot_body:
+        print(
+            "::error::BugBot body drifted from AGENTS.md; regenerate the projection.",
+            file=sys.stderr,
+        )
+        return 1
+    print("OK: .cursor/BUGBOT.md body matches AGENTS.md")
+    return 0
 
+
+def _fetch_validated_canonical_body(raw_url: str) -> Optional[str]:
+    """Return the canonical body after size checks, or ``None`` on failure."""
     try:
         canonical_body = fetch_canonical_body(raw_url)
     except Exception as fetch_error:
         print(
             f"::error::Failed to fetch canonical file: {fetch_error}", file=sys.stderr
         )
-        return 1
-
+        return None
     if not canonical_body.strip():
         print("::error::Canonical file is empty.", file=sys.stderr)
-        return 1
-
+        return None
     if len(canonical_body.encode("utf-8")) < CANONICAL_BODY_MINIMUM_LENGTH_BYTES:
         print(
             f"::error::Canonical body shorter than "
             f"{CANONICAL_BODY_MINIMUM_LENGTH_BYTES} bytes; suspected truncation",
             file=sys.stderr,
         )
-        return 1
+        return None
+    return canonical_body
 
-    canonical_body_sha256 = compute_sha256(canonical_body)
 
-    destination_paths = effective_destination_paths(github_repository)
-
+def _collect_destination_policy_errors(
+    all_destination_paths: tuple[str, ...],
+    should_force_initial_overwrite: bool,
+) -> list[DriftError]:
     all_policy_errors: list[DriftError] = []
-    for destination_path in destination_paths:
+    for each_destination_path in all_destination_paths:
         policy_error_message = check_destination_policy(
-            destination_path,
+            each_destination_path,
             should_force_initial_overwrite,
         )
         if policy_error_message:
             all_policy_errors.append(
                 DriftError(
-                    destination_path=destination_path,
+                    destination_path=each_destination_path,
                     message=policy_error_message,
                 )
             )
+    return all_policy_errors
 
-    if all_policy_errors:
-        report_drift_errors(all_policy_errors, github_token, github_repository)
-        return 1
 
-    synced_at = datetime.now(timezone.utc).isoformat()
+def _write_updated_destinations(
+    all_destination_paths: tuple[str, ...],
+    canonical_body: str,
+    source_commit: str,
+    synced_at: str,
+) -> list[str]:
     all_written_paths: list[str] = []
-
-    for destination_path in destination_paths:
+    for each_destination_path in all_destination_paths:
         was_written = write_destination_if_needed(
-            destination_path,
+            each_destination_path,
             canonical_body,
             source_commit,
             synced_at,
         )
         if was_written:
-            all_written_paths.append(destination_path)
+            all_written_paths.append(each_destination_path)
+    return all_written_paths
 
+
+def run_listener_sync() -> int:
+    """Fetch the canonical AGENTS body and write listener destinations.
+
+    Returns:
+        Process exit code: ``0`` on success, ``1`` on drift or fetch failure.
+    """
+    github_token = os.environ.get(GITHUB_TOKEN_ENV_KEY, "")
+    github_repository = os.environ.get(GITHUB_REPOSITORY_ENV_KEY, "")
+    source_commit = os.environ.get(SOURCE_COMMIT_ENV_KEY) or UNKNOWN_COMMIT_PLACEHOLDER
+    raw_url = os.environ.get(RAW_URL_ENV_KEY) or DEFAULT_RAW_URL
+    should_force_initial_overwrite = (
+        (os.environ.get(FORCE_INITIAL_OVERWRITE_ENV_KEY) or "false").lower() == "true"
+    )
+
+    if Path(OPT_OUT_SENTINEL_PATH).exists():
+        write_step_summary("Opted out via sentinel file.")
+        return 0
+
+    canonical_body = _fetch_validated_canonical_body(raw_url)
+    if canonical_body is None:
+        return 1
+
+    all_destination_paths = effective_destination_paths(github_repository)
+    all_policy_errors = _collect_destination_policy_errors(
+        all_destination_paths,
+        should_force_initial_overwrite,
+    )
+    if all_policy_errors:
+        report_drift_errors(all_policy_errors, github_token, github_repository)
+        return 1
+
+    synced_at = datetime.now(timezone.utc).isoformat()
+    all_written_paths = _write_updated_destinations(
+        all_destination_paths,
+        canonical_body,
+        source_commit,
+        synced_at,
+    )
     if not all_written_paths:
         write_step_summary("No changes needed.")
         return 0
 
+    canonical_body_sha256 = compute_sha256(canonical_body)
     commit_and_push_sync(all_written_paths, source_commit, canonical_body_sha256)
-
     success_summary = (
         f"## Sync complete\n\n"
         f"- Source commit: `{source_commit}`\n"
@@ -568,6 +642,12 @@ def main() -> int:
     write_step_summary(success_summary)
     return 0
 
+
+def main() -> int:
+    """CLI entry: ``--check`` runs local BugBot parity; otherwise listener sync."""
+    if "--check" in sys.argv[1:]:
+        return check_local_agents_bugbot_parity()
+    return run_listener_sync()
 
 if __name__ == "__main__":
     sys.exit(main())
