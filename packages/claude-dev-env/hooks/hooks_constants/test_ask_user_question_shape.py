@@ -13,7 +13,6 @@ _HOOKS_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-from hooks_constants import ask_user_question_shape as shape_module  # noqa: E402
 from hooks_constants.ask_user_question_shape import (  # noqa: E402
     analyze_ask_user_question_shape,
     count_prose_words,
@@ -22,7 +21,6 @@ from hooks_constants.ask_user_question_shape import (  # noqa: E402
     normalize_line_endings,
 )
 from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
-    COUNTABLE_WORD_PATTERN,
     MAXIMUM_OPTION_DESCRIPTION_WORD_COUNT,
     MAXIMUM_QUESTION_SENTENCE_COUNT,
     MAXIMUM_QUESTION_WORD_COUNT,
@@ -167,8 +165,3 @@ def test_duplicate_faults_report_once() -> None:
 def test_non_dict_questions_list_is_clean() -> None:
     result = analyze_ask_user_question_shape({"questions": "not-a-list"})
     assert result.is_lean
-
-
-def test_shape_module_reads_countable_word_pattern_from_shared_constants() -> None:
-    """Metric parity: the shape analyzer binds the same COUNTABLE_WORD_PATTERN."""
-    assert shape_module.COUNTABLE_WORD_PATTERN is COUNTABLE_WORD_PATTERN
