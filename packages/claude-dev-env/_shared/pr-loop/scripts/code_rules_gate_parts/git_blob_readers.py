@@ -9,11 +9,12 @@ False so the caller fails closed rather than crashing.
 import subprocess
 from pathlib import Path
 
+from pr_loop_shared_constants.code_rules_gate_constants import GIT_HEAD_REVISION
 from terminology_sweep import repository_environment
 
 
 def read_prior_committed_content(
-    repository_root: Path, relative_path_posix: str, ref: str = "HEAD"
+    repository_root: Path, relative_path_posix: str, ref: str = GIT_HEAD_REVISION
 ) -> str:
     """Return *ref*'s committed content for *relative_path_posix*.
 

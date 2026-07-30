@@ -9,7 +9,10 @@ names how many files it inspected.
 import sys
 from pathlib import Path
 
-from pr_loop_shared_constants.code_rules_gate_constants import INSPECTED_COUNT_MESSAGE
+from pr_loop_shared_constants.code_rules_gate_constants import (
+    GIT_HEAD_REVISION,
+    INSPECTED_COUNT_MESSAGE,
+)
 from pr_loop_shared_constants.terminology_sweep_constants import (
     TERMINOLOGY_SWEEP_GATE_HEADER,
 )
@@ -96,7 +99,7 @@ def _scoped_violations_for_file(
     repository_root: Path,
     all_added_lines_for_file: set[int] | None,
     should_read_staged_content: bool = False,
-    prior_ref: str = "HEAD",
+    prior_ref: str = GIT_HEAD_REVISION,
 ) -> tuple[list[str], list[str]] | None:
     """Validate one resolved file and partition its violations by diff scope."""
     resolved_root = repository_root.resolve()
@@ -136,7 +139,7 @@ def _partition_over_eligible_paths(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool,
-    prior_ref: str = "HEAD",
+    prior_ref: str = GIT_HEAD_REVISION,
 ) -> PartitionedViolations:
     """Validate each already-resolved eligible file and partition the results."""
     blocking_by_file: dict[Path, list[str]] = {}
@@ -168,7 +171,7 @@ def _collect_partitioned_violations(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool = False,
-    prior_ref: str = "HEAD",
+    prior_ref: str = GIT_HEAD_REVISION,
 ) -> PartitionedViolations:
     """Validate every eligible file and partition results, counting read skips."""
     all_eligible_paths = _eligible_resolved_paths(
@@ -271,7 +274,7 @@ def _validate_and_count(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None,
     should_read_staged_content: bool,
-    prior_ref: str = "HEAD",
+    prior_ref: str = GIT_HEAD_REVISION,
 ) -> PartitionedViolations:
     """Validate the eligible files, report the inspected count, return partitions."""
     all_eligible_paths = _eligible_resolved_paths(
@@ -295,7 +298,7 @@ def run_gate(
     repository_root: Path,
     all_added_lines_by_path: dict[Path, set[int]] | None = None,
     should_read_staged_content: bool = False,
-    prior_ref: str = "HEAD",
+    prior_ref: str = GIT_HEAD_REVISION,
 ) -> int:
     """Run the gate over *all_file_paths* and emit a partitioned report.
 
