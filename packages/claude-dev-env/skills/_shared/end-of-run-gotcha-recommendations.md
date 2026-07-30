@@ -54,14 +54,26 @@ When the fix fits one line, put the full fix in the bullet.
 
 ### 2. Issue offer (`AskUserQuestion`)
 
-**After** the chat block is visible, call `AskUserQuestion` once:
+**After** the chat block is visible, call `AskUserQuestion` once.
+
+The form must stand alone: a skimmer who only opens the widget still sees
+**what broke** and **why filing helps**.
 
 - **Header:** `File issues` (≤12 chars)
-- **Question:** one short sentence (e.g. `File a GitHub issue for any of these?`)
+- **Question:** short, action-first — e.g. `File a GitHub issue for any of these gotchas?`
 - **multiSelect:** `true` when more than one gotcha
-- **Options:** one per gotcha — **label only**, 1–5 words (`File: Catalog path`)
-- **Option description:** one short sentence max (the fix), or empty when the
-  chat block already carries it
+- **Each option (required substance):**
+  - **label:** `File: <short name>` (what it is)
+  - **description:** one tight sentence = **what bit you** + **exact fix** (why it matters)
+- Mirror session-log decision extraction: the choice text carries the finding,
+  not only a topic word
+
+**Example option:**
+
+| Field | Example |
+|---|---|
+| label | `File: Catalog path` |
+| description | `CLI missed the catalog off-repo. Fix: run from repo root with data/midjourney_sref_catalog.json.` |
 
 **Only on confirm:** file selected gotchas through **`issue-tracker`** (dedup +
 epic). One issue per selection. Body: gotcha summary, exact fix, cold-reader
