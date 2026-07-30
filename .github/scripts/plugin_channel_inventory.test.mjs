@@ -72,14 +72,14 @@ test('profile and collision probes distinguish absent from present registration'
   assert.equal(
     computeSelectedLiveConsumerCollision([
       { profile: 'main', is_registered: false },
-      { profile: 'editor', is_registered: false },
+      { profile: 'profile-a', is_registered: false },
     ]),
     false,
   );
   assert.equal(
     computeSelectedLiveConsumerCollision([
       { profile: 'main', is_registered: false },
-      { profile: 'editor', is_registered: true },
+      { profile: 'profile-a', is_registered: true },
     ]),
     true,
   );

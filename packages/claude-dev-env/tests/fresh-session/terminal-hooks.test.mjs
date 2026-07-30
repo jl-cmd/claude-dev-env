@@ -182,12 +182,12 @@ test('events from different sessions do not share a session identifier', () => {
 });
 
 test('missing SessionEnd for a session id is an independent failure signal', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        const sinkPath = createTerminalSinkPath(roots.profileRootById.editor);
+        const sinkPath = createTerminalSinkPath(roots.profileRootById['profile-a']);
         appendTerminalEvent(sinkPath, {
             eventName: STOP_EVENT,
-            profileId: 'editor',
+            profileId: 'profile-a',
             sessionId: 'orphan-stop',
         });
         const events = readTerminalEvents(sinkPath);
