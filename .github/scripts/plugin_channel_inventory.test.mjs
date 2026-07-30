@@ -125,6 +125,111 @@ test('buildInventoryJournal emits boolean collision and valid consumers', () => 
   assert.deepEqual(validation.errors, []);
 });
 
+function journalWith(overrides) {
+  return buildInventoryJournal({
+    generated_from_ref: 'abc123',
+    package_version: '2.8.0',
+    plugin_manifest: parsePluginManifest(PLUGIN_JSON),
+    marketplace_manifest: parseMarketplaceManifest(MARKETPLACE_JSON),
+    readme_entry: extractReadmePluginEntry(README_BOTH),
+    selected_profiles: [],
+    ...overrides,
+  });
+}
+
+function consumerById(journal, consumerId) {
+  return journal.consumers.find((eachConsumer) => eachConsumer.id === consumerId);
+}
+
+test('an unprobed release records unreadable rather than registered', () => {
+  const journal = journalWith({});
+  const release = consumerById(journal, 'github-release-package');
+  assert.equal(release.probe_result, 'unreadable');
+  assert.equal(release.classification, 'unresolved');
+  assert.equal(release.owner, 'R2A');
+  assert.ok(release.blocker);
+  assert.equal(validateInventoryJournal(journal).is_valid, true);
+});
+
+test('a release input carrying no tag counts as unprobed', () => {
+  const release = consumerById(
+    journalWith({ release: { classification: 'active' } }),
+    'github-release-package',
+  );
+  assert.equal(release.probe_result, 'unreadable');
+  assert.equal(release.probe_path, 'release:unknown');
+});
+
+test('a probed unresolved release keeps the owner and blocker it was given', () => {
+  const journal = journalWith({
+    release: {
+      tag: 'claude-dev-env-v2.8.0',
+      classification: 'unresolved',
+      owner: 'R2A',
+      blocker: 'GitHub release API rate-limited during probe',
+    },
+  });
+  const release = consumerById(journal, 'github-release-package');
+  assert.equal(release.blocker, 'GitHub release API rate-limited during probe');
+  assert.equal(validateInventoryJournal(journal).is_valid, true);
+});
+
+test('a resolved consumer carries no owner or blocker key', () => {
+  const external = consumerById(
+    journalWith({
+      external_marketplace_registration: {
+        classification: 'retained-external',
+        notes: 'Listed in an external marketplace',
+      },
+    }),
+    'external-marketplace-registration',
+  );
+  assert.equal(external.classification, 'retained-external');
+  assert.equal('blocker' in external, false);
+  assert.equal('owner' in external, false);
+});
+
+test('a README missing the npx line yields an owned unresolved consumer', () => {
+  const journal = journalWith({
+    readme_entry: extractReadmePluginEntry('claude plugin install jl-cmd/claude-dev-env'),
+  });
+  const npxEntry = consumerById(journal, 'readme-npx-entry');
+  assert.equal(npxEntry.classification, 'unresolved');
+  assert.ok(npxEntry.owner);
+  assert.ok(npxEntry.blocker);
+  assert.equal(validateInventoryJournal(journal).is_valid, true);
+});
+
+test('validateInventoryJournal rejects a missing package_name and a wrong schema_version', () => {
+  const journal = journalWith({});
+  assert.ok(
+    validateInventoryJournal({ ...journal, package_name: '' }).errors.some(
+      (eachError) => eachError.includes('package_name'),
+    ),
+  );
+  assert.ok(
+    validateInventoryJournal({ ...journal, schema_version: 99 }).errors.some(
+      (eachError) => eachError.includes('schema_version'),
+    ),
+  );
+});
+
+test('a non-boolean is_registered counts as absent everywhere in the journal', () => {
+  const journal = journalWith({
+    selected_profiles: [
+      { profile: 'main', is_registered: 'yes', probe_path: 'profile:main', plugin_count: 3 },
+    ],
+  });
+  assert.equal(journal.selected_live_consumer_collision, false);
+  assert.equal(consumerById(journal, 'selected-profile-main').probe_result, 'absent');
+  assert.equal(
+    journal.evidence.find(
+      (eachItem) => eachItem.claim === 'selected_live_consumer_collision',
+    ).verbatim,
+    'main:absent',
+  );
+});
+
 test('validateInventoryJournal rejects missing collision boolean', () => {
   const validation = validateInventoryJournal({
     schema_version: 1,

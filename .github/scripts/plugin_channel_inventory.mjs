@@ -110,6 +110,18 @@ export function computeSelectedLiveConsumerCollision(profileProbeResults) {
   );
 }
 
+/**
+ * Attach owner and blocker to a consumer whose classification is unresolved.
+ *
+ * A resolved consumer carries neither key, so a journal never records an
+ * accountability field the classification does not call for.
+ */
+function withOwnership(consumer, owner, blocker) {
+  return consumer.classification === 'unresolved'
+    ? { ...consumer, owner, blocker }
+    : consumer;
+}
+
 /** Build the inventory journal from already-parsed probe inputs. */
 export function buildInventoryJournal(inputs) {
   const selectedProfiles = inputs.selected_profiles ?? [];
@@ -117,7 +129,7 @@ export function buildInventoryJournal(inputs) {
   const external = inputs.external_marketplace_registration ?? {};
   const readme = inputs.readme_entry;
   const release = inputs.release;
-  const releaseWasProbed = release != null;
+  const releaseWasProbed = Boolean(release?.tag);
 
   const consumers = [
     {
@@ -147,51 +159,68 @@ export function buildInventoryJournal(inputs) {
       observed_at: 'source',
       notes: readme.plugin_install_command,
     },
-    {
-      id: 'readme-npx-entry',
-      channel: 'npx',
-      classification: readme.has_npx_install_instruction ? 'active' : 'unresolved',
-      probe_path: 'README.md',
-      probe_result: readme.has_npx_install_instruction ? 'registered' : 'absent',
-      observed_at: 'source',
-      notes: readme.npx_install_command,
-    },
-    {
-      id: 'github-release-package',
-      channel: 'npx',
-      classification: releaseWasProbed
-        ? release.classification ?? 'active'
-        : 'unresolved',
-      probe_path: `release:${release?.tag ?? 'unknown'}`,
-      probe_result: releaseWasProbed ? 'registered' : 'unreadable',
-      observed_at: 'github',
-      notes: releaseWasProbed
-        ? `target_commitish=${release.target_commitish ?? ''}`
-        : 'No release probe supplied for this inventory run',
-      owner: releaseWasProbed ? '' : 'R2A',
-      blocker: releaseWasProbed ? '' : 'GitHub release probe input absent',
-    },
-    {
-      id: 'external-marketplace-registration',
-      channel: 'plugin',
-      classification: external.classification ?? 'unresolved',
-      probe_path: 'external:marketplace',
-      probe_result: 'unreadable',
-      observed_at: 'external',
-      notes: external.notes ?? 'External marketplace registration unverified',
-      owner: external.owner ?? 'R2C',
-      blocker:
-        external.blocker ?? 'External marketplace registration unverified',
-    },
+    withOwnership(
+      {
+        id: 'readme-npx-entry',
+        channel: 'npx',
+        classification: readme.has_npx_install_instruction
+          ? 'active'
+          : 'unresolved',
+        probe_path: 'README.md',
+        probe_result: readme.has_npx_install_instruction
+          ? 'registered'
+          : 'absent',
+        observed_at: 'source',
+        notes: readme.npx_install_command,
+      },
+      'R2A',
+      'README advertises no npx install instruction',
+    ),
+    withOwnership(
+      {
+        id: 'github-release-package',
+        channel: 'npx',
+        classification: releaseWasProbed
+          ? release.classification ?? 'active'
+          : 'unresolved',
+        probe_path: `release:${release?.tag ?? 'unknown'}`,
+        probe_result: releaseWasProbed
+          ? release.probe_result ?? 'registered'
+          : 'unreadable',
+        observed_at: 'github',
+        notes: releaseWasProbed
+          ? `target_commitish=${release.target_commitish ?? ''}`
+          : 'No release probe supplied for this inventory run',
+      },
+      release?.owner ?? 'R2A',
+      release?.blocker ?? 'GitHub release probe input absent',
+    ),
+    withOwnership(
+      {
+        id: 'external-marketplace-registration',
+        channel: 'plugin',
+        classification: external.classification ?? 'unresolved',
+        probe_path: 'external:marketplace',
+        probe_result: 'unreadable',
+        observed_at: 'external',
+        notes:
+          external.notes ??
+          'No verified external marketplace registration for this inventory run',
+      },
+      external.owner ?? 'R2C',
+      external.blocker ??
+        'External marketplace registration unverified without a supported read API',
+    ),
   ];
 
   for (const eachProfile of selectedProfiles) {
+    const profileIsRegistered = eachProfile.is_registered === true;
     consumers.push({
       id: `selected-profile-${eachProfile.profile}`,
       channel: 'plugin',
-      classification: eachProfile.is_registered ? 'active' : 'migrated',
+      classification: profileIsRegistered ? 'active' : 'migrated',
       probe_path: eachProfile.probe_path,
-      probe_result: eachProfile.is_registered ? 'registered' : 'absent',
+      probe_result: profileIsRegistered ? 'registered' : 'absent',
       observed_at: 'selected-profile',
       notes: `plugin_count=${eachProfile.plugin_count ?? 0}`,
     });
@@ -214,7 +243,7 @@ export function buildInventoryJournal(inputs) {
         verbatim: selectedProfiles
           .map(
             (eachProfile) =>
-              `${eachProfile.profile}:${eachProfile.is_registered ? 'registered' : 'absent'}`,
+              `${eachProfile.profile}:${eachProfile.is_registered === true ? 'registered' : 'absent'}`,
           )
           .join('; '),
       },
@@ -246,8 +275,8 @@ const consumerVocabularyFields = [
   ['probe_result', PROBE_RESULT_VALUES],
 ];
 
-function requireNonEmptyString(value, fieldName, allErrors) {
-  if (typeof value !== 'string' || !value) {
+function requireNonEmptyString(fieldValue, fieldName, allErrors) {
+  if (typeof fieldValue !== 'string' || !fieldValue) {
     allErrors.push(`${fieldName} must be a non-empty string`);
   }
 }
@@ -258,9 +287,10 @@ export function validateInventoryJournal(journal) {
   if (journal == null || typeof journal !== 'object') {
     return { is_valid: false, errors: ['journal must be an object'] };
   }
-  if (typeof journal.schema_version !== 'number') {
-    allErrors.push('schema_version must be a number');
+  if (journal.schema_version !== SCHEMA_VERSION) {
+    allErrors.push(`schema_version must be ${SCHEMA_VERSION}`);
   }
+  requireNonEmptyString(journal.package_name, 'package_name', allErrors);
   requireNonEmptyString(journal.generated_from_ref, 'generated_from_ref', allErrors);
   requireNonEmptyString(journal.package_version, 'package_version', allErrors);
   requireNonEmptyString(
