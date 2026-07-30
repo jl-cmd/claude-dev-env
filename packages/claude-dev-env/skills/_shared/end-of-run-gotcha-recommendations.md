@@ -1,7 +1,7 @@
 # End-of-run gotcha recommendations
 
-**Shared close-out** for every skill. After the deliverable, recommend pasteable
-gotchas from issues **this run** hit.
+**Shared close-out** for every skill.
+After the deliverable, recommend pasteable gotchas from issues **this run** hit.
 
 ## When
 
@@ -24,70 +24,68 @@ Keep only items that **bit this run**:
 
 ## What to produce
 
-Two turns in order (same pattern as lean AskUserQuestion + ELI11 chat):
+**Order (hard):**
 
-1. **Print findings in chat first** — ELI11, clean, concise (see below).
-2. **Then** `AskUserQuestion` — lean question + short option labels only.
-3. **On confirm only** — file selected gotchas via **`issue-tracker`**.
+1. **Show findings in chat** (user-friendly, detail lives here).
+2. **Then** `AskUserQuestion` (one brief sentence + short options).
+3. **On confirm only** — file via **`issue-tracker`**.
 
 ### 1. Chat findings (always first)
 
-Print a **Gotcha recommendations** block in the assistant message **before**
-any `AskUserQuestion` call. Follow `eli11-replies` + `plain-language`:
+Print **before** any `AskUserQuestion`.
+**One sentence per line. Max.**
+ELI11: bold lead, short lines, scannable.
 
-- **Bold lead** on each bullet
-- **One idea per line**
-- **What failed + exact fix** that worked
-- **Prefer a split** — short bullet; longer walkthrough in
-  `reference/<slug>.md` with a link
-- **Paste-ready** for the skill `## Gotchas`
+Each gotcha line:
 
-```markdown
+- **What bit you.**
+- **Exact fix.**
+
+Prefer a **user-friendly layout** in chat:
+
+- Bullets with bold names
+- Optional **ASCII infographic** when it clarifies (flow, before/after, map)
+- Links to `reference/<slug>.md` when the walkthrough is longer
+
+```text
 ## Gotcha recommendations
 
-- **<short gotcha>.** Exact fix. More: [`reference/<slug>.md`](reference/<slug>.md)
+- **Catalog path.** CLI missed the catalog off-repo.
+  Fix: run from repo root with data/midjourney_sref_catalog.json.
+
+  cwd off-repo  -->  catalog miss
+  cwd = repo    -->  data/midjourney_sref_catalog.json  OK
 ```
 
-When the fix fits one line, put the full fix in the bullet.
-
-**Detail lives in chat** (and refs). Keep it out of the question widget.
+Paste-ready for skill `## Gotchas` when the user wants it in the skill.
 
 ### 2. Issue offer (`AskUserQuestion`)
 
-**After** the chat block is visible, call `AskUserQuestion` once.
+**Only after** the chat block.
 
-The form must stand alone: a skimmer who only opens the widget still sees
-**what broke** and **why filing helps**.
+**Hard limits on the widget:**
 
-- **Header:** `File issues` (≤12 chars)
-- **Question:** short, action-first — e.g. `File a GitHub issue for any of these gotchas?`
+- **Question:** **one sentence**, brief (e.g. `File a GitHub issue for any of these?`)
+- **Header:** `File issues`
 - **multiSelect:** `true` when more than one gotcha
-- **Each option (required substance):**
-  - **label:** `File: <short name>` (what it is)
-  - **description:** one tight sentence = **what bit you** + **exact fix** (why it matters)
-- Mirror session-log decision extraction: the choice text carries the finding,
-  not only a topic word
+- **label:** short name only (`File: Multi-code flag`)
+- **description:** **one short sentence** = what bit you + fix (or omit if the chat block already said it)
 
-**Example option:**
+**Everything longer stays in chat** (prose, ASCII, refs).
+The form is the decision only.
 
-| Field | Example |
-|---|---|
-| label | `File: Catalog path` |
-| description | `CLI missed the catalog off-repo. Fix: run from repo root with data/midjourney_sref_catalog.json.` |
+**On confirm:** file selected gotchas through **`issue-tracker`**.
+One issue per selection.
+Body: summary, exact fix, cold-reader evidence.
 
-**Only on confirm:** file selected gotchas through **`issue-tracker`** (dedup +
-epic). One issue per selection. Body: gotcha summary, exact fix, cold-reader
-evidence.
-
-When the run was clean, skip the chat block and the offer.
+Clean run: skip chat block and offer.
 
 ## Rules
 
-- **Chat first, then ask** — never open AskUserQuestion without the ELI11
-  findings already printed in that turn.
-- **Lean question block** — short question + short labels; detail stays in chat
-  (standing pattern: lean AskUserQuestion / PR #720 family).
-- **Recommend only** — apply skill edits when the user asks.
-- **File only on confirm** — selected gotchas only, via `issue-tracker`.
-- **Lived issues only** — keep only issues this run hit.
-- **Short hub, deep ref** — skill gotcha names the trap; ref holds the walkthrough.
+- **Chat first, then ask.**
+- **One sentence per chat line.**
+- **AskUserQuestion = one brief sentence** + short labels.
+- **Detail and ASCII live in chat**, not in the form tree.
+- **Recommend only** — skill edits when the user asks.
+- **File only on confirm** via `issue-tracker`.
+- **Lived issues only.**
