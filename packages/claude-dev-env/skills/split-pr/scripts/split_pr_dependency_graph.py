@@ -5,7 +5,7 @@
     graph = build_dependency_graph(all_slices)
     # edges: lower-rank layers must land before higher-rank layers
 
-Invalid cycles and unknown layers fail with exact diagnostics.
+Empty input, empty or duplicate ids, and unknown layers raise ValueError.
 """
 
 from __future__ import annotations
@@ -19,8 +19,7 @@ from config.dependency_constants import (
     ALL_LAYER_RANK_BY_NAME,
 )
 from config.plan_constants import SLICE_KEY_ID, SLICE_KEY_LAYER
-
-JsonObject = dict[str, object]
+from split_pr_script_types import JsonObject
 
 
 def build_dependency_graph(all_slices: list[JsonObject]) -> JsonObject:
@@ -33,8 +32,8 @@ def build_dependency_graph(all_slices: list[JsonObject]) -> JsonObject:
         Graph document with nodes, edges, and topological_order.
 
     Raises:
-        ValueError: When a layer is unknown or the graph would cycle
-            (should not happen under pure layer edges).
+        ValueError: When input is empty, a slice id is empty or duplicated,
+            or a layer is unknown.
     """
     if not all_slices:
         raise ValueError("all_slices must be non-empty")
