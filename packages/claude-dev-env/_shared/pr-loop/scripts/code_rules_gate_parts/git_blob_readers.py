@@ -12,19 +12,25 @@ from pathlib import Path
 from terminology_sweep import repository_environment
 
 
-def read_prior_committed_content(repository_root: Path, relative_path_posix: str) -> str:
-    """Return the HEAD-committed content for *relative_path_posix*.
+def read_prior_committed_content(
+    repository_root: Path, relative_path_posix: str, ref: str = "HEAD"
+) -> str:
+    """Return *ref*'s committed content for *relative_path_posix*.
 
     Args:
         repository_root: Repository root used as the ``git -C`` target.
         relative_path_posix: Repository-relative POSIX path to read.
+        ref: The git ref to read the blob from. Defaults to ``HEAD`` for
+            staged and explicit-paths mode; diff mode passes the merge-base
+            with the diff's base branch so grandfathering compares against
+            the branch's starting point rather than its own latest commit.
 
     Returns:
-        The committed content at HEAD, or an empty string when the path is not
-        tracked or ``git show`` returns non-zero.
+        The committed content at *ref*, or an empty string when the path is
+        not tracked there or ``git show`` returns non-zero.
     """
     completed = subprocess.run(
-        ["git", "show", f"HEAD:{relative_path_posix}"],
+        ["git", "show", f"{ref}:{relative_path_posix}"],
         cwd=str(repository_root),
         capture_output=True,
         text=True,

@@ -314,11 +314,13 @@ def _run_diff_mode(
     scoped_added_lines = (
         added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
     )
+    merge_base_ref = resolve_merge_base(repository_root, arguments.base)
     return run_gate(
         validate_content,
         file_paths,
         repository_root,
         all_added_lines_by_path=scoped_added_lines,
+        prior_ref=merge_base_ref,
     )
 
 
