@@ -54,8 +54,14 @@ test('resolveProfileDefinition accepts id, alias, and launcher names', () => {
   assert.equal(resolveProfileDefinition(validatedManifest, 'ev').id, 'ev');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-ev').id, 'ev');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-mel-full').id, 'mel');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'Master').id, 'master');
+  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-EV ').id, 'ev');
   assert.throws(
     () => resolveProfileDefinition(validatedManifest, 'not-a-profile'),
+    /Unknown profile id or alias/,
+  );
+  assert.throws(
+    () => resolveProfileDefinition(validatedManifest, /** @type {string} */ (/** @type {unknown} */ (42))),
     /Unknown profile id or alias/,
   );
 });

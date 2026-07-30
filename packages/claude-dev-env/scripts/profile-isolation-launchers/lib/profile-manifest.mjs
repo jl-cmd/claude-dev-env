@@ -148,6 +148,9 @@ export function loadAndValidateSharedAllowlist() {
  * @returns {ProfileDefinition}
  */
 export function resolveProfileDefinition(validatedManifest, profileIdOrAlias) {
+  if (typeof profileIdOrAlias !== 'string') {
+    throw new Error(`Unknown profile id or alias: ${String(profileIdOrAlias)}`);
+  }
   const normalizedIdentity = profileIdOrAlias.trim().toLowerCase();
   for (const eachProfile of Object.values(validatedManifest.profileById)) {
     const allProfileIdentities = [
@@ -156,7 +159,11 @@ export function resolveProfileDefinition(validatedManifest, profileIdOrAlias) {
       ...eachProfile.launcherNames,
       ...eachProfile.fullLauncherNames,
     ];
-    if (allProfileIdentities.includes(normalizedIdentity)) {
+    if (
+      allProfileIdentities.some(
+        (eachIdentity) => eachIdentity.trim().toLowerCase() === normalizedIdentity,
+      )
+    ) {
       return eachProfile;
     }
   }
