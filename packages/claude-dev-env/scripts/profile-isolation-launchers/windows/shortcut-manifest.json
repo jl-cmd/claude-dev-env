@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "unsuffixedNames": "Native Desktop wins: Claude Editor and Claude Mel",
+    "browserNames": "Chrome variants use explicit Web or Chrome source labels",
+    "authority": "The owner confirms or revises this policy before live mutation.",
+    "liveMutationAuthorized": false
+  },
+  "allManagedShortcuts": [
+    {
+      "id": "desktop-editor-native",
+      "visibleName": "Claude Editor",
+      "source": "native-desktop",
+      "profileId": "editor",
+      "locationKind": "desktop",
+      "targetKind": "native-launcher",
+      "launcherName": "claude-editor",
+      "groupingIdentity": "native-editor"
+    },
+    {
+      "id": "desktop-mel-native",
+      "visibleName": "Claude Mel",
+      "source": "native-desktop",
+      "profileId": "mel",
+      "locationKind": "desktop",
+      "targetKind": "native-launcher",
+      "launcherName": "claude-mel",
+      "groupingIdentity": "native-mel"
+    },
+    {
+      "id": "start-editor-chrome",
+      "visibleName": "Claude Editor (Chrome)",
+      "source": "chrome-start-menu",
+      "profileId": "editor",
+      "locationKind": "start-menu",
+      "targetKind": "chrome-profile",
+      "launcherName": "claude-editor",
+      "groupingIdentity": "chrome-editor"
+    },
+    {
+      "id": "start-mel-chrome",
+      "visibleName": "Claude Mel (Chrome)",
+      "source": "chrome-start-menu",
+      "profileId": "mel",
+      "locationKind": "start-menu",
+      "targetKind": "chrome-profile",
+      "launcherName": "claude-mel",
+      "groupingIdentity": "chrome-mel"
+    }
+  ]
+}

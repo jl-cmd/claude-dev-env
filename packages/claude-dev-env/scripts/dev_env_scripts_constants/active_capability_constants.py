@@ -1,4 +1,8 @@
-"""Constants for active skill/agent/command reference resolution."""
+"""Constants for the active_capability_references script.
+
+Script-level scalar constants live in dev_env_scripts_constants alongside
+timing.py and the other per-script constant modules.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +10,6 @@ PACKAGE_SKILLS_DIRECTORY: str = "skills"
 PACKAGE_AGENTS_DIRECTORY: str = "agents"
 PACKAGE_COMMANDS_DIRECTORY: str = "commands"
 SKILL_MANIFEST_FILENAME: str = "SKILL.md"
-
-CAPABILITY_KIND_SKILL: str = "skill"
-CAPABILITY_KIND_AGENT: str = "agent"
-CAPABILITY_KIND_COMMAND: str = "command"
 
 # Slash-command and skill names that must never appear as active instructions.
 ALL_BANNED_ACTIVE_CAPABILITY_NAMES: frozenset[str] = frozenset(
@@ -38,6 +38,9 @@ SLASH_CAPABILITY_PATTERN: str = r"(?<![`\w])/([a-z][a-z0-9-]{2,})"
 BACKTICK_CAPABILITY_PATTERN: str = (
     r"`(?:skills/)?([a-z][a-z0-9-]{2,})(?:/SKILL\.md)?`"
 )
+FENCE_OPEN_PATTERN: str = r"^```([A-Za-z0-9_-]*)\s*$"
+FENCE_CLOSE_PATTERN: str = r"^```\s*$"
+BANNED_REASON_PREFIX: str = "banned_active_capability:"
 
 UTF8_ENCODING: str = "utf-8"
 NEWLINE_JOIN_SEPARATOR: str = "\n"

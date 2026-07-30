@@ -11,19 +11,32 @@ import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
+    managedDenyEntriesFromPackageSettings,
+    mergeManagedPermissionsIntoSettings,
+    pruneManagedPermissionsFromSettings,
+} from './merge_managed_permissions.mjs';
+import {
     SKIPPED_SOURCE_ENTRY_NAMES,
     SKIPPED_SOURCE_FILE_EXTENSIONS,
     RUN_BACKUP_DIRECTORY_NAME_PATTERN,
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
-    MYPY_INI_FILE_NAME,
 } from './install-constants.mjs';
+import {
+    resolveInstallRoot,
+    parseExplicitTargetFromArgv,
+} from './resolve-install-root.mjs';
 
-const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
-const MYPY_INI_INSTALL_PATH = join(homedir(), MYPY_INI_FILE_NAME);
+const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
+    environment: process.env,
+    homeDirectory: homedir(),
+    explicitTarget: parseExplicitTargetFromArgv(process.argv.slice(2)),
+});
+const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
+const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;
+const MYPY_INI_INSTALL_PATH = INSTALL_ROOT_RESOLUTION.mypyIniInstallPath;
 const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
@@ -50,6 +63,7 @@ const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
 const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
+const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
@@ -1358,6 +1372,37 @@ export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRel
 }
 
 /**
+ * Load ~/.claude/settings.json for an in-place merge, or `{}` when absent/empty.
+ *
+ * Malformed JSON or a non-object root ends the process so install never writes
+ * onto a shape the harness cannot read.
+ *
+ * @param {string} settingsPath Absolute path to settings.json.
+ * @returns {object}
+ */
+function loadClaudeSettingsObjectOrExit(settingsPath) {
+    if (!existsSync(settingsPath)) {
+        return {};
+    }
+    const raw = readFileSync(settingsPath, 'utf8').trim();
+    if (!raw) {
+        return {};
+    }
+    let settings;
+    try {
+        settings = JSON.parse(raw);
+    } catch {
+        console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.');
+        process.exit(1);
+    }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
+        process.exit(1);
+    }
+    return settings;
+}
+
+/**
  * Merge one package source root's hook groups into ~/.claude/settings.json.
  *
  * A settings file holding anything other than a JSON object ends the install with
@@ -1373,24 +1418,13 @@ function mergeHooks(hooksSourceRoot, pythonCommand) {
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
-    let settings = {};
-    if (existsSync(settingsPath)) {
-        const raw = readFileSync(settingsPath, 'utf8').trim();
-        if (raw) {
-            try { settings = JSON.parse(raw); }
-            catch { console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.'); process.exit(1); }
-            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-                console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
-                process.exit(1);
-            }
-        }
-    }
+    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
     const groupCount = mergeHooksIntoSettings(settings, hooksConfig, CLAUDE_HOME, pythonCommand);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     return groupCount;
 }
 
-function writeManifest(installedFiles, skillNames) {
+function writeManifest(installedFiles, skillNames, managedPermissions = null) {
     const manifest = {
         package: PACKAGE_NAME,
         version: PACKAGE_VERSION,
@@ -1400,7 +1434,53 @@ function writeManifest(installedFiles, skillNames) {
     if (skillNames) {
         manifest[MANIFEST_SKILLS_KEY] = skillNames;
     }
+    if (managedPermissions && Array.isArray(managedPermissions.deny) && managedPermissions.deny.length > 0) {
+        manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] = {
+            deny: [...managedPermissions.deny],
+        };
+    }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
+}
+
+/**
+ * Load package-owned deny entries from the package settings.json source.
+ *
+ * @returns {string[]}
+ */
+function loadPackageManagedDenyEntries() {
+    const packageSettingsPath = join(PACKAGE_ROOT, SETTINGS_FILE_NAME);
+    if (!existsSync(packageSettingsPath)) {
+        return [];
+    }
+    try {
+        const packageSettings = JSON.parse(readFileSync(packageSettingsPath, 'utf8'));
+        return managedDenyEntriesFromPackageSettings(packageSettings);
+    } catch (parseError) {
+        console.warn(
+            `  Warning: could not read package ${SETTINGS_FILE_NAME} for managed permissions (${parseError.message})`,
+        );
+        return [];
+    }
+}
+
+/**
+ * Merge package-owned permission defaults into ~/.claude/settings.json.
+ *
+ * @returns {{addedCount: number, alreadyPresentCount: number, managedDenyEntries: string[]}}
+ */
+function mergeManagedPermissions() {
+    const managedDenyEntries = loadPackageManagedDenyEntries();
+    if (managedDenyEntries.length === 0) {
+        return { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
+    }
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
+    const settingsExisted = existsSync(settingsPath);
+    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
+    const mergeOutcome = mergeManagedPermissionsIntoSettings(settings, managedDenyEntries);
+    if (mergeOutcome.addedCount > 0 || !settingsExisted) {
+        writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    }
+    return mergeOutcome;
 }
 
 /**
@@ -1848,6 +1928,17 @@ function install(selectedGroups, options = {}) {
             console.warn(`      ${mypyIniInstallResult.expectedLine}`);
         }
     }
+
+    const permissionMerge = mergeManagedPermissions();
+    summary.managedPermissions = permissionMerge;
+    if (permissionMerge.managedDenyEntries.length > 0) {
+        console.log(
+            `  Permissions: ${permissionMerge.addedCount} managed deny(s) added, `
+            + `${permissionMerge.alreadyPresentCount} already present `
+            + `(${permissionMerge.managedDenyEntries.length} package-owned)`,
+        );
+    }
+
     const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
         const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
@@ -1893,7 +1984,14 @@ function install(selectedGroups, options = {}) {
     const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
-    writeManifest(manifestFiles, manifestSkillNames);
+    const managedPermissionDenyEntries = summary.managedPermissions.managedDenyEntries;
+    writeManifest(
+        manifestFiles,
+        manifestSkillNames,
+        managedPermissionDenyEntries.length > 0
+            ? { deny: managedPermissionDenyEntries }
+            : null,
+    );
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {
@@ -2034,13 +2132,29 @@ function purgeManagedInstallation({ requireManifest }) {
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     if (existsSync(settingsPath)) {
         const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        let settingsChanged = false;
         if (settings.hooks) {
             const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
                 managedPackageSourceRoots()
             );
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
-            writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+            settingsChanged = true;
             console.log('  Hook entries removed from settings.json');
+        }
+        const managedDenyFromManifest = Array.isArray(manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny)
+            ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY].deny
+            : loadPackageManagedDenyEntries();
+        if (managedDenyFromManifest.length > 0) {
+            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromManifest);
+            if (pruneOutcome.removedCount > 0) {
+                settingsChanged = true;
+                console.log(
+                    `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed deny(s)`,
+                );
+            }
+        }
+        if (settingsChanged) {
+            writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
     unsetGlobalGitHooksPathIfOurs();
@@ -2081,6 +2195,7 @@ Usage:
   npx ${PACKAGE_NAME}              Install everything
   npx ${PACKAGE_NAME} --update     Full install: remove prior manifest-tracked files first, then reinstall
   npx ${PACKAGE_NAME} --only X     Install specific groups
+  npx ${PACKAGE_NAME} --target DIR Install into DIR instead of ~/.claude (overrides CLAUDE_CONFIG_DIR)
   npx ${PACKAGE_NAME} --uninstall  Remove installed files
   npx ${PACKAGE_NAME} --help       Show this help
 
@@ -2091,7 +2206,9 @@ Examples:
   npx ${PACKAGE_NAME} --only core
   npx ${PACKAGE_NAME} --only core,journal
 
-Install location: ~/.claude/
+Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
+
+Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 
 If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
 writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.

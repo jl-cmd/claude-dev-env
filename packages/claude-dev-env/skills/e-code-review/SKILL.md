@@ -28,6 +28,20 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 
 - **No level, or an unknown level.** Respond exactly: `Which effort level — low, medium, or xhigh?`
 
+## Evaluation-backed defaults (e-code-review family)
+
+When the caller asks which level to pick for a known fixture band (easy / medium / demanding scope), use the committed OP-02B evaluation evidence — not an inherited hard-coded preference. Thinking stays on; **effort** is the only cost/latency lever.
+
+| Fixture band | Skill effort | Source |
+|---|---|---|
+| easy | `medium` | `scripts/effort_defaults_evidence.json` → `skill_defaults.default_by_band.easy` |
+| medium | `xhigh` | same file → `medium` (maps evaluation `high`) |
+| demanding | `xhigh` | same file → `demanding` (maps evaluation `max`) |
+
+Resolve programmatically with `scripts/effort_evaluation.py` → `resolve_skill_effort_for_band`. Every default cites a completed evaluation row. The user-facing command still requires an explicit level flag; these defaults answer "what should I pick?" for this workflow family only.
+
+Detail: `reference/effort-evaluation.md`.
+
 ## The process
 
 1. Read `<level>` and the optional `--fix` and `loop` flags. Apply the refusal first.
@@ -46,8 +60,16 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 | `reference/xhigh.md` | xhigh review procedure — 10 angles, 1-vote verify, gap sweep |
 | `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
 | `reference/loop.md` | Repeat review/fix rounds until clean |
+| `reference/effort-evaluation.md` | Effort evaluation fixtures, evidence, and skill defaults |
+| `reference/runner-selection.md` | Runner selection map |
+| `scripts/effort_evaluation.py` | Effort rows, recommendation, skill default resolver |
+| `scripts/effort_defaults_evidence.json` | Committed evaluation rows + e-code-review skill defaults |
+| `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
+| `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
+| `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
 
 ## Folder map
 
 - `SKILL.md` — route and dispatch.
-- `reference/` — one procedure per level, plus `fix.md` and `loop.md`.
+- `reference/` — level procedures, fix/loop, effort evaluation, runner selection.
+- `scripts/` — effort evaluation, medium-review module, tests, `e_code_review_scripts_constants/`.
