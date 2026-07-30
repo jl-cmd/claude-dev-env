@@ -24,42 +24,42 @@ const PACKAGE_ROOT = join(
   '..',
 );
 
-test('claude-editor and claude-mel resolve to editor and mel profiles', () => {
-  assert.equal(resolveProfileIdForLauncherName('claude-editor'), 'editor');
-  assert.equal(resolveProfileIdForLauncherName('claude-mel'), 'mel');
+test('claude-profile-a and claude-profile-b resolve to profile-a and profile-b profiles', () => {
+  assert.equal(resolveProfileIdForLauncherName('claude-profile-a'), 'profile-a');
+  assert.equal(resolveProfileIdForLauncherName('claude-profile-b'), 'profile-b');
 });
 
-test('activateLauncherMcpBundle materializes lean inventory for editor and mel', () => {
-  const editorDir = mkdtempSync(join(tmpdir(), 'launcher-editor-'));
-  const melDir = mkdtempSync(join(tmpdir(), 'launcher-mel-'));
+test('activateLauncherMcpBundle materializes lean inventory for profile-a and profile-b', () => {
+  const profileADir = mkdtempSync(join(tmpdir(), 'launcher-profile-a-'));
+  const profileBDir = mkdtempSync(join(tmpdir(), 'launcher-profile-b-'));
   try {
-    const editor = activateLauncherMcpBundle({
-      launcherName: 'claude-editor',
-      claudeConfigDir: editorDir,
+    const profileA = activateLauncherMcpBundle({
+      launcherName: 'claude-profile-a',
+      claudeConfigDir: profileADir,
     });
-    const mel = activateLauncherMcpBundle({
-      launcherName: 'claude-mel',
-      claudeConfigDir: melDir,
+    const profileB = activateLauncherMcpBundle({
+      launcherName: 'claude-profile-b',
+      claudeConfigDir: profileBDir,
     });
-    assert.equal(editor.activationInterface, SUPPORTED_ACTIVATION_INTERFACE);
-    assert.equal(mel.activationInterface, SUPPORTED_ACTIVATION_INTERFACE);
-    assert.equal(editor.bundleId, 'lean');
-    assert.equal(mel.bundleId, 'lean');
+    assert.equal(profileA.activationInterface, SUPPORTED_ACTIVATION_INTERFACE);
+    assert.equal(profileB.activationInterface, SUPPORTED_ACTIVATION_INTERFACE);
+    assert.equal(profileA.bundleId, 'lean');
+    assert.equal(profileB.bundleId, 'lean');
     assert.equal(
-      editor.environment[CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE],
-      editorDir,
+      profileA.environment[CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE],
+      profileADir,
     );
     assert.deepEqual(
-      readEffectiveMcpServerInventory(editor.mcpConfigPath),
-      editor.expectedInventory,
+      readEffectiveMcpServerInventory(profileA.mcpConfigPath),
+      profileA.expectedInventory,
     );
     assert.deepEqual(
-      readEffectiveMcpServerInventory(mel.mcpConfigPath),
-      mel.expectedInventory,
+      readEffectiveMcpServerInventory(profileB.mcpConfigPath),
+      profileB.expectedInventory,
     );
   } finally {
-    rmSync(editorDir, { recursive: true, force: true });
-    rmSync(melDir, { recursive: true, force: true });
+    rmSync(profileADir, { recursive: true, force: true });
+    rmSync(profileBDir, { recursive: true, force: true });
   }
 });
 
@@ -75,7 +75,7 @@ test('lean aliases expose only lean servers', () => {
   const claudeConfigDir = mkdtempSync(join(tmpdir(), 'launcher-lean-'));
   try {
     const activation = activateProfileMcpBundle({
-      profileId: 'editor',
+      profileId: 'profile-a',
       claudeConfigDir,
     });
     assert.deepEqual(activation.expectedInventory, boundary.leanServers);
@@ -93,10 +93,10 @@ test('unknown launcher name fails with an actionable message', () => {
     /no profile owns launcher name/,
   );
   const message = formatProfileMcpActivationFailure(
-    'editor',
+    'profile-a',
     new Error('bundle missing'),
   );
-  assert.match(message, /profile editor mcp activation failed/);
+  assert.match(message, /profile profile-a mcp activation failed/);
   assert.match(message, /bundle missing/);
 });
 

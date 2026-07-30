@@ -21,7 +21,7 @@ another argument never classifies.
 
 The marker scan runs in two tiers over the normalized body. Five bare markers
 — the system temp locations and env tokens — match as a plain substring
-anywhere. Two dot-relative directory markers, ``.claude-editor/jobs/`` and
+anywhere. Two dot-relative directory markers, ``.claude-profile-a/jobs/`` and
 ``.claude/worktrees/``, match when either a slash sits immediately before the
 marker or a path segment follows it. A machine-local absolute path
 (``~/.claude/worktrees/wt/f.py``) and a relative path that names a child
@@ -117,7 +117,7 @@ def scan_text_for_volatile_marker(text: str) -> str | None:
     markers match anywhere::
 
         ok:   "the `.claude/worktrees/` manifest key"    -> None
-        flag: r"C:\\Users\\me\\.claude-editor\\jobs\\x"   -> ".claude-editor/jobs/"
+        flag: r"C:\\Users\\me\\.claude-profile-a\\jobs\\x"   -> ".claude-profile-a/jobs/"
         flag: "see .claude/worktrees/wt-1/notes.md"       -> ".claude/worktrees/"
         flag: "saved to %TEMP%\\out.txt"                  -> "%temp%"
 

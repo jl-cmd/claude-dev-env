@@ -20,16 +20,16 @@ test('mcp bundles document loads with lean and full inventories', () => {
   assert.ok(document.bundles.full.allServerNames.length >= document.bundles.lean.allServerNames.length);
 });
 
-test('editor and mel resolve to lean mcp bundles from the profiles manifest', () => {
-  assert.equal(resolveProfileMcpBundleId('editor'), 'lean');
-  assert.equal(resolveProfileMcpBundleId('mel'), 'lean');
+test('profile-a and profile-b resolve to lean mcp bundles from the profiles manifest', () => {
+  assert.equal(resolveProfileMcpBundleId('profile-a'), 'lean');
+  assert.equal(resolveProfileMcpBundleId('profile-b'), 'lean');
 });
 
-test('materializeProfileMcpConfig writes mcp.json inventory for editor', () => {
-  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-editor-'));
+test('materializeProfileMcpConfig writes mcp.json inventory for profile-a', () => {
+  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-profile-a-'));
   try {
     const result = materializeProfileMcpConfig({
-      profileId: 'editor',
+      profileId: 'profile-a',
       claudeConfigDir,
     });
     assert.equal(result.activationInterface, SUPPORTED_ACTIVATION_INTERFACE);
@@ -43,11 +43,11 @@ test('materializeProfileMcpConfig writes mcp.json inventory for editor', () => {
   }
 });
 
-test('materializeProfileMcpConfig writes mcp.json inventory for mel', () => {
-  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-mel-'));
+test('materializeProfileMcpConfig writes mcp.json inventory for profile-b', () => {
+  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-profile-b-'));
   try {
     const result = materializeProfileMcpConfig({
-      profileId: 'mel',
+      profileId: 'profile-b',
       claudeConfigDir,
     });
     assert.equal(result.bundleId, 'lean');
@@ -90,6 +90,53 @@ test('malformed mcp config readback fails closed', () => {
     mkdirSync(claudeConfigDir, { recursive: true });
     const path = join(claudeConfigDir, 'mcp.json');
     writeFileSync(path, '{"notServers":true}\n', 'utf8');
+    assert.throws(
+      () => readEffectiveMcpServerInventory(path),
+      /malformed/,
+    );
+  } finally {
+    rmSync(claudeConfigDir, { recursive: true, force: true });
+  }
+});
+
+test('lean inventory must be a subset of full', () => {
+  assert.throws(
+    () => validateMcpBundlesDocument({
+      schemaVersion: 1,
+      supportedActivationInterface: SUPPORTED_ACTIVATION_INTERFACE,
+      mcpConfigFileName: 'mcp.json',
+      bundles: {
+        lean: { id: 'lean', allServerNames: ['only-lean'] },
+        full: { id: 'full', allServerNames: ['other'] },
+      },
+      serverByName: {
+        'only-lean': { command: 'npx', args: [] },
+        other: { command: 'npx', args: [] },
+      },
+    }),
+    /lean server only-lean must also appear in full/,
+  );
+});
+
+test('bundles and serverByName reject arrays', () => {
+  assert.throws(
+    () => validateMcpBundlesDocument({
+      schemaVersion: 1,
+      supportedActivationInterface: SUPPORTED_ACTIVATION_INTERFACE,
+      mcpConfigFileName: 'mcp.json',
+      bundles: [],
+      serverByName: {},
+    }),
+    /bundles must be an object/,
+  );
+});
+
+test('invalid JSON mcp config readback fails closed as malformed', () => {
+  const claudeConfigDir = mkdtempSync(join(tmpdir(), 'mcp-json-'));
+  try {
+    mkdirSync(claudeConfigDir, { recursive: true });
+    const path = join(claudeConfigDir, 'mcp.json');
+    writeFileSync(path, '{not-json', 'utf8');
     assert.throws(
       () => readEffectiveMcpServerInventory(path),
       /malformed/,

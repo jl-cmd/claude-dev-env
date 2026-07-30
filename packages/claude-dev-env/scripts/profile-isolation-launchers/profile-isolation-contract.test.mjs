@@ -60,11 +60,17 @@ test('resolveProfileDefinition accepts id, alias, and launcher names', () => {
   assert.equal(resolveProfileDefinition(validatedManifest, 'default').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-full').id, 'master');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-mel-full').id, 'mel');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-b-full').id, 'profile-b');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'Master').id, 'master');
+  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-PROFILE-C ').id, 'profile-c');
   assert.throws(
     () => resolveProfileDefinition(validatedManifest, 'not-a-profile'),
+    /Unknown profile id or alias/,
+  );
+  assert.throws(
+    () => resolveProfileDefinition(validatedManifest, /** @type {string} */ (/** @type {unknown} */ (42))),
     /Unknown profile id or alias/,
   );
 });
@@ -93,6 +99,23 @@ test('validators reject bad schemaVersion and non-object allowlist', () => {
   assert.equal(typeof loadSharedAllowlistDocument(), 'object');
 });
 
+test('validators reject duplicate launcher identities across profiles', () => {
+  const rawManifest = loadProfilesManifestDocument();
+  const profiles = {
+    .../** @type {Record<string, object>} */ (rawManifest.profiles),
+  };
+  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-profile-c'] };
+  const profileCDefinition = { ...profiles["profile-c"] };
+  assert.throws(
+    () =>
+      validateProfilesManifest({
+        ...rawManifest,
+        profiles: { ...profiles, master: masterProfile, 'profile-c': profileCDefinition },
+      }),
+    /duplicate profile identity/,
+  );
+});
+
 test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', () => {
   assert.equal(CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE, 'CLAUDE_CONFIG_DIR');
   assert.equal(CLAUDE_HOME_ENVIRONMENT_VARIABLE, 'CLAUDE_HOME');
@@ -107,10 +130,10 @@ test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', (
 
 test('resolveProfileRootDirectoryPath joins profiles root with directoryName', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
-  const evProfile = resolveProfileDefinition(validatedManifest, 'ev');
+  const profileCDefinition = resolveProfileDefinition(validatedManifest, 'profile-c');
   assert.equal(
-    resolveProfileRootDirectoryPath('/profiles', evProfile),
-    join('/profiles', 'ev'),
+    resolveProfileRootDirectoryPath('/profiles', profileCDefinition),
+    join('/profiles', 'profile-c'),
   );
 });
 

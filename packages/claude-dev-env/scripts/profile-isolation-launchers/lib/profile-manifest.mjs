@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import {
+  LAUNCHER_SCHEMA_VERSION,
   loadProfilesManifestDocument,
   loadSharedAllowlistDocument,
   MCP_BUNDLE_FULL,
@@ -57,8 +58,8 @@ export function validateProfilesManifest(maybeManifest) {
     throw new Error('profiles manifest must be a JSON object');
   }
   const schemaVersion = maybeManifest.schemaVersion;
-  if (schemaVersion !== 1) {
-    throw new Error('profiles manifest schemaVersion must be 1');
+  if (schemaVersion !== LAUNCHER_SCHEMA_VERSION) {
+    throw new Error(`profiles manifest schemaVersion must be ${LAUNCHER_SCHEMA_VERSION}`);
   }
   if (!Array.isArray(maybeManifest.migrationOrder) || maybeManifest.migrationOrder.length === 0) {
     throw new Error('profiles manifest migrationOrder must be a non-empty array');
@@ -71,10 +72,14 @@ export function validateProfilesManifest(maybeManifest) {
   for (const [eachProfileKey, eachProfileValue] of Object.entries(maybeManifest.profiles)) {
     profileById[eachProfileKey] = validateProfileDefinition(eachProfileKey, eachProfileValue);
   }
+  assertUniqueProfileIdentities(profileById);
+  /** @type {string[]} */
+  const allMigrationOrderIds = [];
   for (const eachOrderedProfileId of maybeManifest.migrationOrder) {
     if (typeof eachOrderedProfileId !== 'string' || !(eachOrderedProfileId in profileById)) {
       throw new Error(`migrationOrder references unknown profile id: ${String(eachOrderedProfileId)}`);
     }
+    allMigrationOrderIds.push(eachOrderedProfileId);
   }
   return {
     schemaVersion,
@@ -90,7 +95,7 @@ export function validateProfilesManifest(maybeManifest) {
       maybeManifest.pluginSeedPlaceholder,
       'pluginSeedPlaceholder',
     ),
-    migrationOrder: maybeManifest.migrationOrder.map(String),
+    migrationOrder: allMigrationOrderIds,
     profileById,
   };
 }
@@ -103,11 +108,11 @@ export function validateSharedAllowlist(maybeAllowlist) {
   if (!isPlainObject(maybeAllowlist)) {
     throw new Error('shared allowlist must be a JSON object');
   }
-  if (maybeAllowlist.schemaVersion !== 1) {
-    throw new Error('shared allowlist schemaVersion must be 1');
+  if (maybeAllowlist.schemaVersion !== LAUNCHER_SCHEMA_VERSION) {
+    throw new Error(`shared allowlist schemaVersion must be ${LAUNCHER_SCHEMA_VERSION}`);
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: LAUNCHER_SCHEMA_VERSION,
     allSharedRelativePaths: requireStringArray(
       maybeAllowlist.allSharedRelativePaths,
       'allSharedRelativePaths',
@@ -143,18 +148,22 @@ export function loadAndValidateSharedAllowlist() {
  * @returns {ProfileDefinition}
  */
 export function resolveProfileDefinition(validatedManifest, profileIdOrAlias) {
+  if (typeof profileIdOrAlias !== 'string') {
+    throw new Error(`Unknown profile id or alias: ${String(profileIdOrAlias)}`);
+  }
   const normalizedIdentity = profileIdOrAlias.trim().toLowerCase();
   for (const eachProfile of Object.values(validatedManifest.profileById)) {
-    if (eachProfile.id === normalizedIdentity) {
-      return eachProfile;
-    }
-    if (eachProfile.aliases.includes(normalizedIdentity)) {
-      return eachProfile;
-    }
-    if (eachProfile.launcherNames.includes(normalizedIdentity)) {
-      return eachProfile;
-    }
-    if (eachProfile.fullLauncherNames.includes(normalizedIdentity)) {
+    const allProfileIdentities = [
+      eachProfile.id,
+      ...eachProfile.aliases,
+      ...eachProfile.launcherNames,
+      ...eachProfile.fullLauncherNames,
+    ];
+    if (
+      allProfileIdentities.some(
+        (eachIdentity) => eachIdentity.trim().toLowerCase() === normalizedIdentity,
+      )
+    ) {
       return eachProfile;
     }
   }
@@ -168,6 +177,42 @@ export function resolveProfileDefinition(validatedManifest, profileIdOrAlias) {
  */
 export function resolveProfileRootDirectoryPath(profilesRootDirectoryPath, profileDefinition) {
   return join(profilesRootDirectoryPath, profileDefinition.directoryName);
+}
+
+/**
+ * Reject a launcher name, alias, or id claimed by more than one profile.
+ *
+ * ::
+ *
+ *     profiles["profile-c"].launcherNames = ["claude"]
+ *     profiles.master.launcherNames = ["claude"]
+ *     flag: same identity claimed twice → resolve order would be nondeterministic
+ *     ok:   each identity maps to exactly one profile id
+ *
+ * @param {Record<string, ProfileDefinition>} profileById
+ * @returns {void}
+ */
+function assertUniqueProfileIdentities(profileById) {
+  /** @type {Map<string, string>} */
+  const profileIdByNormalizedIdentity = new Map();
+  for (const eachProfile of Object.values(profileById)) {
+    const allProfileIdentities = [
+      eachProfile.id,
+      ...eachProfile.aliases,
+      ...eachProfile.launcherNames,
+      ...eachProfile.fullLauncherNames,
+    ];
+    for (const eachIdentity of allProfileIdentities) {
+      const normalizedIdentity = eachIdentity.trim().toLowerCase();
+      const previousProfileId = profileIdByNormalizedIdentity.get(normalizedIdentity);
+      if (previousProfileId !== undefined) {
+        throw new Error(
+          `duplicate profile identity '${eachIdentity}' claimed by ${previousProfileId} and ${eachProfile.id}`,
+        );
+      }
+      profileIdByNormalizedIdentity.set(normalizedIdentity, eachProfile.id);
+    }
+  }
 }
 
 /**
@@ -231,8 +276,13 @@ function requireNonEmptyString(candidate, fieldName) {
  * @returns {string[]}
  */
 function requireStringArray(candidate, fieldName) {
-  if (!Array.isArray(candidate) || candidate.some((eachEntry) => typeof eachEntry !== 'string')) {
-    throw new Error(`${fieldName} must be an array of strings`);
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some(
+      (eachEntry) => typeof eachEntry !== 'string' || eachEntry.trim() === '',
+    )
+  ) {
+    throw new Error(`${fieldName} must be an array of non-empty strings`);
   }
-  return candidate.map(String);
+  return /** @type {string[]} */ (candidate);
 }
