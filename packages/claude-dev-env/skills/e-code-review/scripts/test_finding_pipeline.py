@@ -150,6 +150,23 @@ def test_filter_rejects_unknown_minimum_severity() -> None:
         filter_findings_by_severity(collection, minimum_severity="P1")
 
 
+def test_filter_rejects_unknown_finding_severity_with_value_error() -> None:
+    collection = FindingCollection(
+        stage_name=COLLECTION_STAGE_NAME,
+        all_findings=(
+            CollectedFinding(
+                file_path="pkg/x.py",
+                line_number=1,
+                severity="P0",
+                category="correctness",
+                evidence="bypass collect",
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="unknown collection severity"):
+        filter_findings_by_severity(collection, minimum_severity=SEVERITY_LOW)
+
+
 def test_collect_rejects_finding_missing_required_fields() -> None:
     with pytest.raises(ValueError, match="file"):
         collect_findings(

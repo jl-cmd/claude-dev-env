@@ -125,13 +125,16 @@ def filter_findings_by_severity(
     if minimum_severity not in ALL_SEVERITY_RANK_BY_TOKEN:
         raise ValueError(f"unknown minimum severity: {minimum_severity!r}")
     minimum_rank = ALL_SEVERITY_RANK_BY_TOKEN[minimum_severity]
-    all_kept = tuple(
-        each_finding
-        for each_finding in collection.all_findings
-        if ALL_SEVERITY_RANK_BY_TOKEN[each_finding.severity] >= minimum_rank
-    )
+    all_kept: list[CollectedFinding] = []
+    for each_finding in collection.all_findings:
+        if each_finding.severity not in ALL_SEVERITY_RANK_BY_TOKEN:
+            raise ValueError(
+                f"unknown collection severity: {each_finding.severity!r}"
+            )
+        if ALL_SEVERITY_RANK_BY_TOKEN[each_finding.severity] >= minimum_rank:
+            all_kept.append(each_finding)
     return SeverityFilterView(
         stage_name=FILTER_STAGE_NAME,
         minimum_severity=minimum_severity,
-        all_findings=all_kept,
+        all_findings=tuple(all_kept),
     )

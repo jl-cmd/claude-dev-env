@@ -28,15 +28,6 @@ SEVERITY_MEDIUM: str = "medium"
 SEVERITY_LOW: str = "low"
 SEVERITY_NIT: str = "nit"
 
-ALL_COLLECTION_SEVERITIES: tuple[str, ...] = (
-    SEVERITY_BLOCKER,
-    SEVERITY_HIGH,
-    SEVERITY_MEDIUM,
-    SEVERITY_LOW,
-    SEVERITY_NIT,
-)
-"""Severity tokens collection accepts without dropping any real finding."""
-
 ALL_SEVERITY_RANK_BY_TOKEN: dict[str, int] = {
     SEVERITY_BLOCKER: 5,
     SEVERITY_HIGH: 4,
@@ -45,6 +36,9 @@ ALL_SEVERITY_RANK_BY_TOKEN: dict[str, int] = {
     SEVERITY_NIT: 1,
 }
 """Higher rank is more severe; used only by the filter stage."""
+
+ALL_COLLECTION_SEVERITIES: tuple[str, ...] = tuple(ALL_SEVERITY_RANK_BY_TOKEN)
+"""Severity tokens collection accepts; derived from the rank map keys."""
 
 REPORT_EVERY_FINDING_INSTRUCTION: str = (
     "Report every real finding. Collection retains all severities "
