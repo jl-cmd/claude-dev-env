@@ -15,7 +15,25 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
+from claude_chain_runner import (  # noqa: E402
+    ChainEntry,
+    default_affinity_state_path,
+    extract_resume_session_id,
+    load_affinity_store,
+    lookup_affinity_command,
+    order_entries_for_resume,
+    record_affinity_binding,
+    save_affinity_store_atomic,
+)
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    AFFINITY_KEY_ALL_BINDINGS,
+    AFFINITY_KEY_COMMAND,
+    AFFINITY_KEY_SCHEMA_VERSION,
+    AFFINITY_KEY_SESSION_ID,
+    AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_STATE_FILENAME,
+    AFFINITY_STATE_SCHEMA_VERSION,
+    RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -183,6 +201,12 @@ def _install(
         else _config_order_usage_reporter
     )
     monkeypatch.setattr(runner, "chain_weekly_usage_reporter", active_reporter)
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
     _install_tty_stdin(monkeypatch)
     return recorder
 
@@ -1477,3 +1501,311 @@ def test_cli_ordered_account_advisor_blocked_exit_code(
     assert exit_code == CHAIN_ADVISOR_BLOCKED_EXIT_CODE
 
 
+def test_default_affinity_state_path_joins_filename() -> None:
+    claude_home = Path("/tmp/claude-home")
+    resolved = default_affinity_state_path(claude_home)
+    assert resolved == claude_home / AFFINITY_STATE_FILENAME
+
+
+def test_affinity_store_round_trip_is_versioned_and_atomic(tmp_path: Path) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    empty_store = load_affinity_store(state_path)
+    assert empty_store.schema_version == AFFINITY_STATE_SCHEMA_VERSION
+    assert empty_store.all_bindings == []
+
+    updated = record_affinity_binding(
+        empty_store,
+        session_id=_BOUND_SESSION_ID,
+        command=_PRIMARY_LAUNCHER,
+    )
+    save_affinity_store_atomic(state_path, updated)
+
+    reloaded = load_affinity_store(state_path)
+    assert reloaded.schema_version == AFFINITY_STATE_SCHEMA_VERSION
+    assert len(reloaded.all_bindings) == 1
+    assert reloaded.all_bindings[0].session_id == _BOUND_SESSION_ID
+    assert reloaded.all_bindings[0].command == _PRIMARY_LAUNCHER
+    on_disk = json.loads(state_path.read_text(encoding=UTF8_ENCODING))
+    assert on_disk[AFFINITY_KEY_SCHEMA_VERSION] == AFFINITY_STATE_SCHEMA_VERSION
+    assert on_disk[AFFINITY_KEY_ALL_BINDINGS][0][AFFINITY_KEY_SESSION_ID] == (
+        _BOUND_SESSION_ID
+    )
+    assert on_disk[AFFINITY_KEY_ALL_BINDINGS][0][AFFINITY_KEY_COMMAND] == (
+        _PRIMARY_LAUNCHER
+    )
+
+
+def test_affinity_store_is_bounded_and_drops_oldest() -> None:
+    store = runner.AffinityStore()
+    for each_index in range(AFFINITY_MAXIMUM_ENTRIES + 3):
+        store = record_affinity_binding(
+            store,
+            session_id=f"session-{each_index}",
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=AFFINITY_MAXIMUM_ENTRIES,
+        )
+    assert len(store.all_bindings) == AFFINITY_MAXIMUM_ENTRIES
+    all_session_ids = [each.session_id for each in store.all_bindings]
+    assert "session-0" not in all_session_ids
+    assert "session-1" not in all_session_ids
+    assert "session-2" not in all_session_ids
+    assert f"session-{AFFINITY_MAXIMUM_ENTRIES + 2}" in all_session_ids
+
+
+def test_affinity_rebind_moves_session_to_newest_end() -> None:
+    store = runner.AffinityStore()
+    store = record_affinity_binding(
+        store, session_id="a", command=_PRIMARY_LAUNCHER
+    )
+    store = record_affinity_binding(
+        store, session_id="b", command=_SECONDARY_LAUNCHER
+    )
+    store = record_affinity_binding(
+        store, session_id="a", command=_SECONDARY_LAUNCHER
+    )
+    assert [each.session_id for each in store.all_bindings] == ["b", "a"]
+    assert store.all_bindings[-1].command == _SECONDARY_LAUNCHER
+
+
+def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text("{not-json", encoding=UTF8_ENCODING)
+    with pytest.raises(ValueError, match="corrupt or unreadable") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_unsupported_schema_version_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION + 1,
+                AFFINITY_KEY_ALL_BINDINGS: [],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="unsupported schema_version") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_binding_not_object_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION,
+                AFFINITY_KEY_ALL_BINDINGS: ["not-an-object"],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="not an object") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_record_affinity_binding_rejects_empty_session_or_command() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id="", command=_PRIMARY_LAUNCHER)
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id=_BOUND_SESSION_ID, command="")
+
+
+def test_record_affinity_binding_rejects_non_positive_maximum_entries() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="maximum_entries must be at least 1"):
+        record_affinity_binding(
+            store,
+            session_id=_BOUND_SESSION_ID,
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=0,
+        )
+
+
+def test_affinity_write_failure_raises_actionable_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_PRIMARY_LAUNCHER,
+    )
+
+    def _raise_replace(_source: object, _destination: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(runner.os, "replace", _raise_replace)
+    with pytest.raises(OSError, match="Failed to write affinity state") as raised:
+        save_affinity_store_atomic(state_path, store)
+    assert str(state_path) in str(raised.value)
+
+
+def test_extract_resume_session_id_reads_flag() -> None:
+    assert extract_resume_session_id(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"]
+    ) == _BOUND_SESSION_ID
+    assert extract_resume_session_id(["-p", "hi"]) is None
+    assert extract_resume_session_id([RESUME_SESSION_FLAG]) is None
+
+
+def test_order_entries_for_resume_puts_originating_binary_first() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command=_SECONDARY_LAUNCHER
+    )
+    assert [each.command for each in ordered] == [
+        _SECONDARY_LAUNCHER,
+        _PRIMARY_LAUNCHER,
+    ]
+
+
+def test_order_entries_for_resume_falls_back_when_command_missing() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command="missing-binary"
+    )
+    assert [each.command for each in ordered] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+    ordered_none = order_entries_for_resume(all_entries, preferred_command=None)
+    assert [each.command for each in ordered_none] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+
+
+def test_lookup_affinity_command_returns_bound_binary() -> None:
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    assert lookup_affinity_command(store, _BOUND_SESSION_ID) == _SECONDARY_LAUNCHER
+    assert lookup_affinity_command(store, "unknown") is None
+
+
+def test_run_claude_resume_routes_through_originating_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = tmp_path / "claude-chain-affinity.json"
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    save_affinity_store_atomic(affinity_path, store)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home: affinity_path,
+    )
+    monkeypatch.setattr(
+        runner,
+        "chain_weekly_usage_reporter",
+        _usage_reporter_from_remaining(
+            {
+                _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+                _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _SECONDARY_LAUNCHER
+    assert all_called[0] == _SECONDARY_LAUNCHER
+
+
+def test_run_claude_success_persists_session_affinity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+    assert chain_result.session_id == _BOUND_SESSION_ID
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    reloaded = load_affinity_store(affinity_path)
+    assert len(reloaded.all_bindings) == 1
+    assert reloaded.all_bindings[0].session_id == _BOUND_SESSION_ID
+    assert reloaded.all_bindings[0].command == _PRIMARY_LAUNCHER
+
+
+def test_run_claude_resume_falls_back_when_affinity_corrupt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    affinity_path.write_text("{not-json", encoding=UTF8_ENCODING)
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
+    monkeypatch.setattr(runner, "chain_weekly_usage_reporter", usage_reporter)
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _PRIMARY_LAUNCHER
+    assert all_called[0] == _PRIMARY_LAUNCHER
