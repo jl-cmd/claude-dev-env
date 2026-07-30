@@ -65,6 +65,7 @@ def test_rejects_test_only_slice_without_behavior() -> None:
             {
                 PLAN_KEY_STORY: "tests only",
                 PLAN_KEY_PATHS: ["scripts/test_claude_chain_runner.py"],
+                "is_preparatory_refactor": "false",
             }
         ]
     }
@@ -87,7 +88,7 @@ def test_rejects_duplicate_path_across_slices() -> None:
             },
             {
                 PLAN_KEY_STORY: "b",
-                PLAN_KEY_PATHS: ["src/a.py"],
+                PLAN_KEY_PATHS: ["src\\a.py"],
             },
         ]
     }

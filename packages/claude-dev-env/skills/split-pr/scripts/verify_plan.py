@@ -13,7 +13,13 @@ That last check needs ``--changed-paths-json``. Without it the coverage check
 is skipped.
 
 Test co-location is read loosely here. A slice holding tests passes as soon as
-it carries any behavior file, so a test beside unrelated behavior passes.
+it carries any behavior file, so a test beside unrelated behavior passes. A
+slice may also set ``is_preparatory_refactor`` to JSON true and hold tests
+alone.
+
+A malformed plan is rejected on codes of its own. A ``slices`` value that is
+not a list, a slice that is not an object, and a slice whose ``paths`` value is
+not a list each get one.
 """
 
 from __future__ import annotations
