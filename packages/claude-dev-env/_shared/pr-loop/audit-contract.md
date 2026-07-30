@@ -22,7 +22,7 @@ Each finding an audit produces MUST be one of exactly two shapes.
   "id": "loop<L>-<K>",
   "file": "path/relative/to/repo/root.py",
   "line": 123,
-  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P",
+  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q",
   "severity": "P0 | P1 | P2",
   "excerpt": "verbatim code snippet from the offending line(s)",
   "failure_mode": "one sentence describing what goes wrong and when",
@@ -38,7 +38,7 @@ Used when an audit investigates a category and does NOT find a bug. Bare "verifi
 
 ```json
 {
-  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P",
+  "category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q",
   "files_opened": ["file1.py", "file2.py"],
   "lines_quoted": [
     {"file": "file1.py", "line": 88, "text": "verbatim line content"}
@@ -108,7 +108,7 @@ Merge rules — applied whenever the LEAD combines findings from multiple source
 - **Zero secondary findings**: the primary set is trusted and the audit moves on.
 - **Malformed or non-parseable secondary output**: lead trusts the primary set and logs the event in `loop-<L>-diagnostics.json` under `haiku_findings` as `[{"parse_error": "<message>"}]`.
 
-For `/bugteam`, the single audit agent provides per-category coverage by walking all A–P rubrics in one invocation.
+For `/bugteam`, the single audit agent provides per-category coverage by walking all A–Q rubrics in one invocation.
 
 ## Post-fix self-audit
 
@@ -121,7 +121,7 @@ Sequence:
 3. Run `py_compile` (or language-equivalent) on each modified file.
 4. Compute `fix_diff` against pre-fix contents for the modified set.
 5. Run `_shared/pr-loop/scripts/code_rules_gate.py` with explicit paths for every modified file.
-6. Spawn a scoped audit of `fix_diff` with full A–P rigor, Shape A/B contract, adversarial pass, AND Haiku secondary in parallel (paranoid mode on post-fix).
+6. Spawn a scoped audit of `fix_diff` with full A–Q rigor, Shape A/B contract, adversarial pass, AND Haiku secondary in parallel (paranoid mode on post-fix).
 7. Read the previous loop's outcome XML (`<worktree_path>/.bugteam-pr<N>-loop<L-1>.outcomes.xml`) and obtain its total finding count. If this is the first loop (L <= 1) or the file does not exist, skip this comparison. Compute the post-fix total: previous total minus bugs fixed in this round plus new violations found in the post-fix audit (step 6). If the post-fix total exceeds the previous total, flag all new findings as same-loop fix-targets and revise. An increase in total findings across loop transitions is a regression.
 8. Any new findings become same-loop fix-targets. Internal iteration count increments by one.
 9. After 3 internal iterations with fresh findings each time, exit `stuck: post-fix audit not converging`.

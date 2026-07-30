@@ -54,7 +54,7 @@ The PR body and the diff describe the same change, both directions.
 ## Lane 5 — Adversarial audit
 
 The bug-audit lens runs the adversarial second pass the audit contract specifies
-(`~/.claude/_shared/pr-loop/audit-contract.md`): assume the first A-P pass missed
+(`~/.claude/_shared/pr-loop/audit-contract.md`): assume the first A-Q pass missed
 at least three P1 bugs, then find them.
 
 - Return new file:line findings for the bugs the first pass missed.
@@ -62,4 +62,4 @@ at least three P1 bugs, then find them.
   and why it holds.
 - A bare "nothing new" is not an acceptable result for this pass.
 - **Proof of absence:** a per-category adversarial-probe entry for each re-examined
-  A-P category with no new finding.
+  A-Q category with no new finding.
