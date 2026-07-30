@@ -1,28 +1,22 @@
-# _shared (under skills/)
+# skills/_shared
 
-Skill-install shared assets. **Two homes:**
+**Map** for skill-install shared assets. Open a stub, then load the `@` target.
+
+## Two homes
 
 | Home | Path | Holds |
 |---|---|---|
-| **Skills shared** (this tree) | `~/.claude/skills/_shared/` | Skill-local PR-loop helpers (`portable-driver`, converge scripts), end-of-run gotcha protocol, and canonical-path stubs |
-| **Top-level shared** | `~/.claude/_shared` | Advisor protocol, PR-loop contracts, runtime gate/preflight/review scripts |
-
-Open a stub here, then load the `@~/.claude/_shared/...` target it names.
+| **Skills shared** | `~/.claude/skills/_shared/` | Converge helpers (`portable-driver`, scripts) and `@` stubs |
+| **Top-level shared** | `~/.claude/_shared/` | Advisor protocol, PR-loop contracts, runtime scripts |
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
-| `advisor/` | Canonical path stubs for `@~/.claude/_shared/advisor/` (protocol + scripts) |
-| `pr-loop/` | Skill-local converge helpers and stubs for contracts/runtime scripts under `@~/.claude/_shared/pr-loop/` |
+| **`advisor/`** | Stubs → `@~/.claude/_shared/advisor/` |
+| **`pr-loop/`** | Local converge helpers + stubs → `@~/.claude/_shared/pr-loop/` |
 
-## Shared reference docs (this tree)
-
-| File | Role |
-|---|---|
-| `end-of-run-gotcha-recommendations.md` | End-of-run protocol: recommend pasteable skill gotchas (and split ref docs) from issues this run hit |
-
-## Canonical-path stubs (load via `@`)
+## Canonical-path stubs
 
 | Stub here | Load |
 |---|---|
@@ -40,4 +34,4 @@ Open a stub here, then load the `@~/.claude/_shared/...` target it names.
 | `pr-loop/worker-spawn.md` | `@~/.claude/_shared/pr-loop/worker-spawn.md` |
 | `pr-loop/scripts/RUNTIME_SCRIPTS.md` | `@~/.claude/_shared/pr-loop/scripts/` |
 
-Files here are skills support assets (no `SKILL.md`). They install via `packages/claude-dev-env/bin/install.mjs`.
+Install via `packages/claude-dev-env/bin/install.mjs`.
