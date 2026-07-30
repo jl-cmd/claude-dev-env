@@ -18,7 +18,7 @@ import {
     runPathRuleActivationSession,
 } from './fixtures/path-rule-marker.mjs';
 
-test('path rule activates in matching workspace for main, editor, and mel', () => {
+test('path rule activates in matching workspace for main, profile-a, and profile-b', () => {
     const roots = createDisposableRunRoots({ profileIds: [...ALL_PROFILE_IDS] });
     try {
         for (const eachProfileId of ALL_PROFILE_IDS) {
@@ -105,14 +105,14 @@ test('paired matching green and control red are reproducible for one profile', (
 });
 
 test('missing path-rule fixture records red for matching workspace', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        const profileRoot = roots.profileRootById.editor;
+        const profileRoot = roots.profileRootById['profile-a'];
         const matchingWorkspace = join(profileRoot, 'workspaces', MATCHING_WORKSPACE_SEGMENT);
         mkdirSync(matchingWorkspace, { recursive: true });
         const result = runPathRuleActivationSession({
             roots,
-            profileId: 'editor',
+            profileId: 'profile-a',
             workspacePath: matchingWorkspace,
             workspaceLabel: 'matching',
         });

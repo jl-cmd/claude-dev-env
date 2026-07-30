@@ -58,11 +58,11 @@ test('resolveProfileDefinition accepts id, alias, and launcher names', () => {
   assert.equal(resolveProfileDefinition(validatedManifest, 'default').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-full').id, 'master');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-mel-full').id, 'mel');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-b-full').id, 'profile-b');
   assert.equal(resolveProfileDefinition(validatedManifest, 'Master').id, 'master');
-  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-EV ').id, 'ev');
+  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-PROFILE-C ').id, 'profile-c');
   assert.throws(
     () => resolveProfileDefinition(validatedManifest, 'not-a-profile'),
     /Unknown profile id or alias/,
@@ -102,13 +102,13 @@ test('validators reject duplicate launcher identities across profiles', () => {
   const profiles = {
     .../** @type {Record<string, object>} */ (rawManifest.profiles),
   };
-  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-ev'] };
-  const evProfile = { ...profiles.ev };
+  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-profile-c'] };
+  const profileC = { ...profiles['profile-c'] };
   assert.throws(
     () =>
       validateProfilesManifest({
         ...rawManifest,
-        profiles: { ...profiles, master: masterProfile, ev: evProfile },
+        profiles: { ...profiles, master: masterProfile, 'profile-c': profileC },
       }),
     /duplicate profile identity/,
   );
@@ -128,10 +128,10 @@ test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', (
 
 test('resolveProfileRootDirectoryPath joins profiles root with directoryName', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
-  const evProfile = resolveProfileDefinition(validatedManifest, 'ev');
+  const profileC = resolveProfileDefinition(validatedManifest, 'profile-c');
   assert.equal(
-    resolveProfileRootDirectoryPath('/profiles', evProfile),
-    join('/profiles', 'ev'),
+    resolveProfileRootDirectoryPath('/profiles', profileC),
+    join('/profiles', 'profile-c'),
   );
 });
 
