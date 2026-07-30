@@ -61,10 +61,16 @@ Detail: `reference/effort-evaluation.md`.
 | `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
 | `reference/loop.md` | Repeat review/fix rounds until clean |
 | `reference/effort-evaluation.md` | Effort evaluation fixtures, evidence, and skill defaults |
+| `reference/runner-selection.md` | Runner selection map |
 | `scripts/effort_evaluation.py` | Effort rows, recommendation, skill default resolver |
 | `scripts/effort_defaults_evidence.json` | Committed evaluation rows + e-code-review skill defaults |
+| `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
+| `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
+| `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
+
 
 ## Folder map
 
 - `SKILL.md` — route and dispatch.
-- `reference/` — one procedure per level, plus `fix.md` and `loop.md`.
+- `reference/` — level procedures, fix/loop, effort evaluation, runner selection.
+- `scripts/` — effort evaluation, medium-review module, tests, `e_code_review_scripts_constants/`.

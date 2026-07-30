@@ -70,6 +70,10 @@ def test_validate_row_accepts_complete_row_and_rejects_thinking_off() -> None:
     bad_row["thinking_enabled"] = False
     problems = validate_evaluation_row(bad_row)
     assert any("thinking_enabled" in each_problem for each_problem in problems)
+    bool_score_row = dict(good_row)
+    bool_score_row["quality_score"] = True
+    bool_problems = validate_evaluation_row(bool_score_row)
+    assert any("quality_score" in each_problem for each_problem in bool_problems)
 
 
 def test_recommend_picks_lowest_effort_that_holds_quality() -> None:
