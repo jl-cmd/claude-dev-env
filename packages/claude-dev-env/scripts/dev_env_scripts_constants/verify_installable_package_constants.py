@@ -31,8 +31,17 @@ PLUGIN_ROOT_TOKEN: str = "${CLAUDE_PLUGIN_ROOT}/"
 PYTHON_FILE_SUFFIX: str = ".py"
 """Suffix that marks a hook command token as a Python script path."""
 
+HOOKS_DIRECTORY_NAME: str = "hooks"
+"""Top-level package directory that holds hook scripts and hooks.json."""
+
+HOOKS_DIRECTORY_PREFIX: str = "hooks/"
+"""Package-relative prefix that marks a hook script path under hooks/."""
+
 HOOKS_JSON_RELATIVE_PATH: str = "hooks/hooks.json"
 """Package-relative path of the hook registration map."""
+
+JSON_COMMAND_KEY: str = "command"
+"""JSON object key whose string value is a hook command line."""
 
 INSTALL_ENTRYPOINT_RELATIVE_PATH: str = "bin/install.mjs"
 """Package-relative path of the primary install CLI entrypoint."""

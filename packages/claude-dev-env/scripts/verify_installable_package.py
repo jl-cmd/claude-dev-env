@@ -36,9 +36,12 @@ from dev_env_scripts_constants.verify_installable_package_constants import (
     EXIT_CODE_SUCCESS,
     GIT_BINARY_NAME,
     GIT_LS_FILES_SUBCOMMAND,
+    HOOKS_DIRECTORY_NAME,
+    HOOKS_DIRECTORY_PREFIX,
     HOOKS_JSON_RELATIVE_PATH,
     INSTALL_ENTRYPOINT_RELATIVE_PATH,
     INSTALL_ENTRYPOINT_SMOKE_FAILURE_HEADER,
+    JSON_COMMAND_KEY,
     MANIFEST_DIRECTORIES_KEY,
     MANIFEST_FILENAME,
     MANIFEST_ROOT_FILES_KEY,
@@ -124,7 +127,11 @@ def _string_names_from_manifest_key(
     all_names = all_manifest_entries.get(from_key, [])
     if not isinstance(all_names, list):
         return []
-    return [each for each in all_names if isinstance(each, str) and each]
+    return [
+        each_name
+        for each_name in all_names
+        if isinstance(each_name, str) and each_name
+    ]
 
 
 def required_directory_names(all_manifest_entries: Mapping[str, object]) -> list[str]:
@@ -172,9 +179,10 @@ def load_package_json_file_entries(from_package_root: Path) -> set[str]:
     if not isinstance(all_entries, list):
         return set()
     return {
-        each.rstrip("/")
-        for each in all_entries
-        if isinstance(each, str) and not each.startswith(PACKAGE_JSON_EXCLUDE_PREFIX)
+        each_entry.rstrip("/")
+        for each_entry in all_entries
+        if isinstance(each_entry, str)
+        and not each_entry.startswith(PACKAGE_JSON_EXCLUDE_PREFIX)
     }
 
 
@@ -334,7 +342,7 @@ def walk_json_command_fields(node: object) -> list[str]:
     """
     all_commands: list[str] = []
     if isinstance(node, dict):
-        command = node.get("command")
+        command = node.get(JSON_COMMAND_KEY)
         if isinstance(command, str) and command.strip():
             all_commands.append(command)
         for each_child in node.values():
@@ -381,7 +389,7 @@ def package_relative_hook_script_path(script_token: str) -> str | None:
     package_marker = f"{PACKAGE_PATH_FROM_REPOSITORY}/"
     if package_marker in normalized:
         normalized = normalized.split(package_marker, 1)[1]
-    if normalized.startswith("hooks/"):
+    if normalized.startswith(HOOKS_DIRECTORY_PREFIX):
         return normalized
     return None
 
@@ -454,7 +462,7 @@ def untracked_or_missing_hook_scripts(
     Returns:
         Package-relative script paths that fail the committed-file check.
     """
-    hooks_prefix = f"{PACKAGE_PATH_FROM_REPOSITORY}/hooks"
+    hooks_prefix = f"{PACKAGE_PATH_FROM_REPOSITORY}/{HOOKS_DIRECTORY_NAME}"
     all_tracked = list_git_tracked_paths_under(
         under_relative_path=hooks_prefix,
         from_repository_root=from_repository_root,
