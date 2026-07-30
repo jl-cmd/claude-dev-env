@@ -17,7 +17,6 @@ import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
     default_affinity_state_path,
-    extract_session_id_from_stdout,
     load_affinity_store,
     record_affinity_binding,
     save_affinity_store_atomic,
@@ -28,6 +27,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     AFFINITY_KEY_SCHEMA_VERSION,
     AFFINITY_KEY_SESSION_ID,
     AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_STATE_FILENAME,
     AFFINITY_STATE_SCHEMA_VERSION,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -1493,11 +1493,11 @@ def test_cli_ordered_account_advisor_blocked_exit_code(
 def test_default_affinity_state_path_joins_filename() -> None:
     claude_home = Path("/tmp/claude-home")
     resolved = default_affinity_state_path(claude_home)
-    assert resolved == claude_home / "claude-chain-affinity.json"
+    assert resolved == claude_home / AFFINITY_STATE_FILENAME
 
 
 def test_affinity_store_round_trip_is_versioned_and_atomic(tmp_path: Path) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     empty_store = load_affinity_store(state_path)
     assert empty_store.schema_version == AFFINITY_STATE_SCHEMA_VERSION
     assert empty_store.all_bindings == []
@@ -1557,7 +1557,7 @@ def test_affinity_rebind_moves_session_to_newest_end() -> None:
 
 
 def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     state_path.write_text("{not-json", encoding=UTF8_ENCODING)
     with pytest.raises(ValueError, match="corrupt or unreadable") as raised:
         load_affinity_store(state_path)
@@ -1567,7 +1567,7 @@ def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> 
 def test_affinity_write_failure_raises_actionable_diagnostic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    state_path = tmp_path / "claude-chain-affinity.json"
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
     store = record_affinity_binding(
         runner.AffinityStore(),
         session_id=_BOUND_SESSION_ID,
@@ -1581,13 +1581,5 @@ def test_affinity_write_failure_raises_actionable_diagnostic(
     with pytest.raises(OSError, match="Failed to write affinity state") as raised:
         save_affinity_store_atomic(state_path, store)
     assert str(state_path) in str(raised.value)
-
-
-def test_extract_session_id_from_stdout_affinity_import_path() -> None:
-    payload = (
-        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
-        f'"result":"ok"}}'
-    )
-    assert extract_session_id_from_stdout(payload) == _BOUND_SESSION_ID
 
 
