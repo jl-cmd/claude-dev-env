@@ -52,7 +52,7 @@ def is_test_path(file_path: str) -> bool:
     if basename.startswith("test_") or basename.endswith("_test.py"):
         return True
     for each_marker in ALL_TEST_PATH_MARKERS:
-        if each_marker.replace("\\", "/") in normalized:
+        if each_marker in normalized:
             return True
     return False
 
