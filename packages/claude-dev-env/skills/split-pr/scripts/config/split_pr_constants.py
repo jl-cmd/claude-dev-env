@@ -77,6 +77,7 @@ FILE_KEY_CHANGED_LINES: str = "changed_lines"
 
 GH_COMMAND: str = "gh"
 GH_PR_VIEW: str = "pr"
+GH_VIEW: str = "view"
 GH_JSON_FLAG: str = "--json"
 GH_REPO_FLAG: str = "--repo"
 GH_PR_JSON_FIELDS: str = "number,files"
