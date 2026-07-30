@@ -42,9 +42,8 @@
 
     Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`, see [`skills/bugteam/reference/obstacles/fix-resolve-thread.md`](../../skills/bugteam/reference/obstacles/fix-resolve-thread.md)).
 13. **Re-trigger reviewer** when the calling workflow specifies. Workflow-specific:
-    - `pr-converge`: post `bugbot run` issue comment after every push (Cursor Bugbot)
-    - `pr-converge`: post `bugbot run` issue comment AND call `requested_reviewers` API for Copilot
-    - `bugteam` / `ugteam`: skip — Claude itself is the reviewer; the next loop iteration audits
+    - `pr-converge`: post `bugbot run` issue comment after every push (Cursor Bugbot); when the multi-PR path also needs Copilot, call `requested_reviewers` for Copilot as well
+    - `bugteam`: skip — Claude itself is the reviewer; the next loop iteration audits
 
 ## Stuck detection
 

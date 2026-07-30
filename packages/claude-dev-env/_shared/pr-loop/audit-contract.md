@@ -1,6 +1,6 @@
 # Audit contract
 
-Shared output schema and audit-loop contract used by `/bugteam`, `/bugteam`, `clean-room audit (code-quality-agent)`, and `/pr-fix-protocol`. Changing a shape here is a breaking change for every consuming skill.
+Shared output schema and audit-loop contract used by `/bugteam`, `clean-room audit (code-quality-agent)`, and `/pr-fix-protocol`. Changing a shape here is a breaking change for every consuming skill.
 
 ## Contents
 
@@ -94,7 +94,7 @@ The audit must either produce new Shape A findings citing new file:line referenc
 
 For single-subagent skills (`/bugteam`, `clean-room audit (code-quality-agent)`) the LEAD spawns two `Agent()` calls in one message:
 
-- **Primary** — `subagent_type=clean-coder`, `model=sonnet` (for ugteam cycle) or `subagent_type=code-quality-agent`, `model=sonnet` (for clean-room audit clean-room).
+- **Primary** — `subagent_type=clean-coder`, `model=sonnet` (for `/bugteam` cycle) or `subagent_type=code-quality-agent`, `model=sonnet` (for clean-room audit).
 - **Secondary (Haiku)** — `subagent_type=code-quality-agent`, `model=haiku`, same self-contained clean-room prompt shape used by `clean-room audit (code-quality-agent)`.
 
 Both audit the same diff. The secondary returns findings to the LEAD only — never posted to the PR.
@@ -112,7 +112,7 @@ For `/bugteam`, the single audit agent provides per-category coverage by walking
 
 ## Post-fix self-audit
 
-Audit-and-fix skills (`/bugteam`, `/bugteam`) MUST re-audit modified files between `py_compile` and `git add`. This catches fix-induced regressions in the same loop that introduced them rather than on loop N+1.
+Audit-and-fix skills (`/bugteam`) MUST re-audit modified files between `py_compile` and `git add`. This catches fix-induced regressions in the same loop that introduced them rather than on loop N+1.
 
 Sequence:
 

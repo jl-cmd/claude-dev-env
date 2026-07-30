@@ -1,10 +1,10 @@
 # Audit reply template
 
-Canonical reply shape for every orchestrator-to-thread reply posted by the PR-loop suite (`pr-converge`, `bugteam`, `ugteam`, and the `clean-coder` agent). Every reply Claude posts to an unresolved review thread on a draft PR uses this template.
+Canonical reply shape for every orchestrator-to-thread reply posted by the PR-loop suite (`pr-converge`, `bugteam`, and the `clean-coder` agent). Every reply Claude posts to an unresolved review thread on a draft PR uses this template.
 
-Read this doc before authoring any code that posts a reply. The template is the contract emitted by every `clean-coder` reply path; the audit-skill wiring (`bugteam`, `ugteam`, `pr-converge`) reads it before authoring a reply.
+Read this doc before authoring any code that posts a reply. The template is the contract emitted by every `clean-coder` reply path; the audit-skill wiring (`bugteam`, `pr-converge`) reads it before authoring a reply.
 
-This doc has two surfaces, called out separately so consumers do not conflate them: the **reply template** (this section and below) shapes the body Claude posts back to a single review thread; the **audit body skeleton** in [Relationship to the audit review body](#relationship-to-the-audit-review-body) shapes the parent review `post_audit_thread.py` posts at audit time. The reply-template consumers are the four skills/agents listed above (read-only `clean-room audit` is excluded — it posts an audit review via `post_audit_thread.py` but never authors thread replies). The audit-body-skeleton consumers include `clean-room audit` alongside `bugteam` and `ugteam` because all three skills post audit reviews via the same script.
+This doc has two surfaces, called out separately so consumers do not conflate them: the **reply template** (this section and below) shapes the body Claude posts back to a single review thread; the **audit body skeleton** in [Relationship to the audit review body](#relationship-to-the-audit-review-body) shapes the parent review `post_audit_thread.py` posts at audit time. The reply-template consumers are the skills/agents listed above (read-only `clean-room audit` is excluded — it posts an audit review via `post_audit_thread.py` but never authors thread replies). The audit-body-skeleton consumers include `clean-room audit` alongside `bugteam` because both post audit reviews via the same script.
 
 ## Provenance
 
@@ -121,7 +121,7 @@ The thread can be resolved without further action; the reviewer's underlying con
 
 ## Relationship to the audit review body
 
-The audit review body posted by `post_audit_thread.py` (consumers: `bugteam`, `clean-room audit`, `ugteam`) shares the same header anchor pattern:
+The audit review body posted by `post_audit_thread.py` (consumers: `bugteam`, `clean-room audit`) shares the same header anchor pattern:
 
 <!-- audit-body-skeleton:start -->
 ```

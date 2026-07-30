@@ -1,6 +1,6 @@
 ---
 name: pr-loop-cloud-transport
-description: Runs any PR-loop skill in a Claude Code session whose gh CLI cannot act on the PR. Use at run start when pr-converge, autoconverge, bugteam, bugteam, clean-room audit, pr-fix-protocol, pr-converge, or copilot-review runs in a cloud session, when `command -v gh` or `gh auth status` fails, or when an MCP tool call fails with InputValidationError.
+description: Runs any PR-loop skill in a Claude Code session whose gh CLI cannot act on the PR. Use at run start when pr-converge, autoconverge, bugteam, clean-room audit, pr-fix-protocol, or copilot-review runs in a cloud session, when `command -v gh` or `gh auth status` fails, or when an MCP tool call fails with InputValidationError.
 ---
 
 # PR-loop cloud transport

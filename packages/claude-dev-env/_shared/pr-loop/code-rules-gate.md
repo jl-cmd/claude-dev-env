@@ -7,7 +7,7 @@ Pre-audit validator run before each AUDIT (and pre-commit when applicable). Wrap
 Canonical: `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py` after install.
 
 Workflows reference it via:
-- all skills (bugteam, bugteam, pr-converge, pr-converge): `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
+- all skills (bugteam, pr-converge): `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
 
 Cross-skill path traversal works because every skill installs as a flat top-level dir under `~/.claude/skills/` and `_shared/` lives alongside `skills/` under `~/.claude/`.
 
@@ -37,9 +37,7 @@ python "<gate_script>" --base origin/<base_branch> --only-under <prefix> [--only
 ## Workflow integration
 
 - **bugteam:** before every AUDIT in Step 3 of the loop. Non-zero → spawn clean-coder for standards fix; loop until exit 0 or 5 consecutive gate failures → `error: code rules gate failed pre-audit`.
-- **ugteam:** before every AUDIT inside the subagent's loop. Three consecutive failures → `error: code rules gate failed pre-audit`.
-- **pr-converge:** before every push in the Fix protocol. Halt on non-zero, fix violations, re-run.
-- **pr-converge:** before every commit during the fix loop. Halt on non-zero, fix violations, re-run.
+- **pr-converge:** before every push in the Fix protocol and before every commit during the fix loop. Halt on non-zero, fix violations, re-run.
 
 ## Coverage
 
@@ -61,4 +59,4 @@ When the gate exits non-zero:
 2. Group violations by file
 3. Apply fixes in the smallest change set (extract constants to `config/`, rename collection params with `all_` prefix, replace literals with named constants, etc.)
 4. Re-run the gate with the same arguments
-5. Cap at 5 consecutive failures (bugteam, pr-converge) or 3 (ugteam); on cap exceeded, exit `error`
+5. Cap at 5 consecutive failures (bugteam, pr-converge); on cap exceeded, exit `error`

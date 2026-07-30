@@ -1,6 +1,6 @@
 # MCP-based payloads
 
-Shared payload shapes for posting PR reviews and replies. Used by `bugteam`, `ugteam`, `pr-converge`, `pr-converge`.
+Shared payload shapes for posting PR reviews and replies. Used by `bugteam` and `pr-converge`.
 
 ## Build payloads with MCP tools
 
