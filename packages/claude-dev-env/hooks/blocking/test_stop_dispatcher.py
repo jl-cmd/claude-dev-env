@@ -173,14 +173,16 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
 
 
-def test_dispatcher_blocks_overlong_reply_matching_standalone() -> None:
-    """An overlong last_assistant_message blocks through the dispatcher."""
-    overlong_message = "\n".join(
-        " ".join(f"finding{each_index}" for each_index in range(10))
-        for _ in range(30)
+def test_dispatcher_blocks_eli11_shape_violation_matching_standalone() -> None:
+    """An ELI11 shape violation (too many bullets) blocks through the dispatcher."""
+    too_many_bullets_message = "\n".join(
+        f"- finding{each_index} detail for this line" for each_index in range(7)
     )
     payload_text = json.dumps(
-        {"stop_hook_active": False, "last_assistant_message": overlong_message}
+        {
+            "stop_hook_active": False,
+            "last_assistant_message": too_many_bullets_message,
+        }
     )
     completed = subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
