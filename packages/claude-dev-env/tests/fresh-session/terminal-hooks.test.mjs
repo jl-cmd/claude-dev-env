@@ -47,18 +47,6 @@ function createTerminalSinkPath(profileRoot) {
 
 /**
  * @param {string} sinkPath
- * @param {TerminalHookEventRecord} record
- * @returns {void}
- */
-function appendTerminalEvent(sinkPath, record) {
-    writeFileSync(sinkPath, `${JSON.stringify(record)}\n`, {
-        encoding: 'utf8',
-        flag: 'a',
-    });
-}
-
-/**
- * @param {string} sinkPath
  * @returns {TerminalHookEventRecord[]}
  */
 function readTerminalEvents(sinkPath) {
@@ -69,6 +57,38 @@ function readTerminalEvents(sinkPath) {
         .split(/\r?\n/u)
         .filter(Boolean)
         .map((eachLine) => /** @type {TerminalHookEventRecord} */ (JSON.parse(eachLine)));
+}
+
+/**
+ * Append a terminal event; sequence is next after the sink's current length.
+ *
+ * @param {string} sinkPath
+ * @param {{eventName: string, profileId: string, sessionId: string}} fields
+ * @returns {TerminalHookEventRecord}
+ */
+function appendTerminalEvent(sinkPath, fields) {
+    const record = {
+        ...fields,
+        sequence: readTerminalEvents(sinkPath).length + 1,
+    };
+    writeFileSync(sinkPath, `${JSON.stringify(record)}\n`, {
+        encoding: 'utf8',
+        flag: 'a',
+    });
+    return record;
+}
+
+/**
+ * @param {TerminalHookEventRecord[]} events
+ * @param {string} eventName
+ * @param {string} [sessionId]
+ * @returns {TerminalHookEventRecord[]}
+ */
+function eventsForSession(events, eventName, sessionId) {
+    return events.filter(
+        (eachEvent) => eachEvent.eventName === eventName
+            && (sessionId === undefined || eachEvent.sessionId === sessionId),
+    );
 }
 
 /**
@@ -101,13 +121,11 @@ function closeDisposableSession(roots, profileId, sessionId) {
         eventName: STOP_EVENT,
         profileId,
         sessionId,
-        sequence: 1,
     });
     appendTerminalEvent(sinkPath, {
         eventName: SESSION_END_EVENT,
         profileId,
         sessionId,
-        sequence: 2,
     });
 
     return {
@@ -131,15 +149,10 @@ test('Stop and SessionEnd each fire once for the same session id per profile', (
                 ),
                 'command must carry the session id',
             );
+            assert.ok(outcome.sinkPath.startsWith(roots.profileRootById[eachProfileId]));
 
-            const stopEvents = outcome.events.filter(
-                (eachEvent) => eachEvent.eventName === STOP_EVENT
-                    && eachEvent.sessionId === sessionId,
-            );
-            const endEvents = outcome.events.filter(
-                (eachEvent) => eachEvent.eventName === SESSION_END_EVENT
-                    && eachEvent.sessionId === sessionId,
-            );
+            const stopEvents = eventsForSession(outcome.events, STOP_EVENT, sessionId);
+            const endEvents = eventsForSession(outcome.events, SESSION_END_EVENT, sessionId);
             assert.equal(stopEvents.length, 1);
             assert.equal(endEvents.length, 1);
             assert.equal(stopEvents[0].profileId, eachProfileId);
@@ -158,7 +171,6 @@ test('events from different sessions do not share a session identifier', () => {
         const firstIds = new Set(first.events.map((eachEvent) => eachEvent.sessionId));
         assert.deepEqual([...firstIds], ['session-a']);
 
-        // Fresh sink path isolation: wipe prior terminal events before session-b.
         writeFileSync(first.sinkPath, '', 'utf8');
         const second = closeDisposableSession(roots, 'main', 'session-b');
         const secondIds = new Set(second.events.map((eachEvent) => eachEvent.sessionId));
@@ -177,18 +189,20 @@ test('missing SessionEnd for a session id is an independent failure signal', () 
             eventName: STOP_EVENT,
             profileId: 'editor',
             sessionId: 'orphan-stop',
-            sequence: 1,
         });
         const events = readTerminalEvents(sinkPath);
-        const stopCount = events.filter((eachEvent) => eachEvent.eventName === STOP_EVENT).length;
-        const endCount = events.filter((eachEvent) => eachEvent.eventName === SESSION_END_EVENT).length;
+        const stopCount = eventsForSession(events, STOP_EVENT).length;
+        const endCount = eventsForSession(events, SESSION_END_EVENT).length;
         assert.equal(stopCount, 1);
         assert.equal(endCount, 0);
+
+        const evidencePath = join(roots.evidenceRoot, 'missing-session-end.json');
         writeFileSync(
-            join(roots.evidenceRoot, 'missing-session-end.json'),
+            evidencePath,
             `${JSON.stringify({ sessionId: 'orphan-stop', stopCount, endCount }, null, 2)}\n`,
             'utf8',
         );
+        assert.ok(evidencePath.startsWith(roots.evidenceRoot));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }

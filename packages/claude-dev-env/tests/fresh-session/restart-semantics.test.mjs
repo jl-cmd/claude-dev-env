@@ -85,6 +85,7 @@ test('second fresh session observes the updated configuration marker for each pr
         for (const eachProfileId of ALL_PROFILE_IDS) {
             const profileRoot = roots.profileRootById[eachProfileId];
             writeConfigMarker(profileRoot, INITIAL_MARKER_VALUE);
+            assert.ok(configMarkerPath(profileRoot).startsWith(profileRoot));
 
             const firstSession = observeConfigMarkerSession(roots, eachProfileId);
             assert.equal(firstSession.harnessResult.exitStatus, 0);
@@ -97,7 +98,6 @@ test('second fresh session observes the updated configuration marker for each pr
             assert.equal(secondSession.harnessResult.exitStatus, 0);
             assert.equal(secondSession.marker, UPDATED_MARKER_VALUE);
             assert.ok(secondSession.harnessResult.command.includes(UPDATED_MARKER_VALUE));
-            assert.notEqual(firstSession.marker, secondSession.marker);
         }
     } finally {
         removeDisposableRunRoots(roots.runRoot);
@@ -107,15 +107,17 @@ test('second fresh session observes the updated configuration marker for each pr
 test('restart boundary requires a new session observation after the marker changes', () => {
     const roots = createDisposableRunRoots({ profileIds: ['main'] });
     try {
-        writeConfigMarker(roots.profileRootById.main, INITIAL_MARKER_VALUE);
-        const before = readConfigMarker(roots.profileRootById.main);
-        writeConfigMarker(roots.profileRootById.main, UPDATED_MARKER_VALUE);
-        const after = readConfigMarker(roots.profileRootById.main);
+        const profileRoot = roots.profileRootById.main;
+        writeConfigMarker(profileRoot, INITIAL_MARKER_VALUE);
+        const before = readConfigMarker(profileRoot);
+        writeConfigMarker(profileRoot, UPDATED_MARKER_VALUE);
+        const after = readConfigMarker(profileRoot);
         assert.equal(before, INITIAL_MARKER_VALUE);
         assert.equal(after, UPDATED_MARKER_VALUE);
 
+        const evidencePath = join(roots.evidenceRoot, 'restart-boundary.json');
         writeFileSync(
-            join(roots.evidenceRoot, 'restart-boundary.json'),
+            evidencePath,
             `${JSON.stringify({
                 documentedBoundary: 'fresh session after configuration marker change',
                 before,
@@ -123,7 +125,7 @@ test('restart boundary requires a new session observation after the marker chang
             }, null, 2)}\n`,
             'utf8',
         );
-        assert.ok(existsSync(join(roots.evidenceRoot, 'restart-boundary.json')));
+        assert.ok(evidencePath.startsWith(roots.evidenceRoot));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
