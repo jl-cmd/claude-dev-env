@@ -1,0 +1,90 @@
+# Read-only inventory of managed Claude profile shortcuts.
+# Does not mutate Desktop, Start Menu, or taskbar state.
+
+[CmdletBinding()]
+param(
+    [string]$ManifestPath = (Join-Path $PSScriptRoot 'shortcut-manifest.json'),
+    [string]$DesktopPath = [Environment]::GetFolderPath('Desktop'),
+    [string]$StartMenuPath = [Environment]::GetFolderPath('StartMenu'),
+    [string]$OutputPath
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if (-not (Test-Path -LiteralPath $ManifestPath)) {
+    throw "shortcut manifest missing: $ManifestPath"
+}
+
+$manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+if ($manifest.schemaVersion -ne 1) {
+    throw "unsupported shortcut manifest schemaVersion: $($manifest.schemaVersion)"
+}
+
+function Get-ShortcutMetadata {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ShortcutPath
+    )
+    if (-not (Test-Path -LiteralPath $ShortcutPath)) {
+        return $null
+    }
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        $link = $shell.CreateShortcut($ShortcutPath)
+        return [pscustomobject]@{
+            path              = $ShortcutPath
+            targetPath        = $link.TargetPath
+            arguments         = $link.Arguments
+            workingDirectory  = $link.WorkingDirectory
+            iconLocation      = $link.IconLocation
+            exists            = $true
+        }
+    }
+    finally {
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+    }
+}
+
+$allRows = @()
+foreach ($eachShortcut in $manifest.allManagedShortcuts) {
+    $baseDirectory = if ($eachShortcut.locationKind -eq 'desktop') { $DesktopPath } else { $StartMenuPath }
+    $shortcutPath = Join-Path $baseDirectory ($eachShortcut.visibleName + '.lnk')
+    $metadata = Get-ShortcutMetadata -ShortcutPath $shortcutPath
+    $allRows += [pscustomobject]@{
+        id                = $eachShortcut.id
+        visibleName       = $eachShortcut.visibleName
+        source            = $eachShortcut.source
+        profileId         = $eachShortcut.profileId
+        locationKind      = $eachShortcut.locationKind
+        targetKind        = $eachShortcut.targetKind
+        launcherName      = $eachShortcut.launcherName
+        groupingIdentity  = $eachShortcut.groupingIdentity
+        expectedPath      = $shortcutPath
+        exists            = [bool]$metadata
+        targetPath        = if ($metadata) { $metadata.targetPath } else { $null }
+        arguments         = if ($metadata) { $metadata.arguments } else { $null }
+        workingDirectory  = if ($metadata) { $metadata.workingDirectory } else { $null }
+        iconLocation      = if ($metadata) { $metadata.iconLocation } else { $null }
+        liveMutationAuthorized = [bool]$manifest.policy.liveMutationAuthorized
+    }
+}
+
+$result = [pscustomobject]@{
+    mode = 'read-only-inventory'
+    policy = $manifest.policy
+    scannedAt = (Get-Date).ToString('o')
+    desktopPath = $DesktopPath
+    startMenuPath = $StartMenuPath
+    shortcuts = $allRows
+}
+
+$json = $result | ConvertTo-Json -Depth 6
+if ($OutputPath) {
+    $directory = Split-Path -Parent $OutputPath
+    if ($directory -and -not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory | Out-Null
+    }
+    [IO.File]::WriteAllText($OutputPath, $json, [Text.UTF8Encoding]::new($false))
+}
+Write-Output $json
