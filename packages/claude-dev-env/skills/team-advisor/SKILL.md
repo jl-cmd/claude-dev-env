@@ -16,7 +16,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 | Doc | Holds |
 |---|---|
 | [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
-| [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up or CLI bind, charter, drift re-bind, CLI fallback, executor paste blocks. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up or CLI bind, charter, drift re-bind, CLI fallback, executor paste blocks. Package-root `_shared/` (installs to `~/.claude/_shared/`); **not** `skills/_shared/`. |
 | [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
 
 ## Bind
