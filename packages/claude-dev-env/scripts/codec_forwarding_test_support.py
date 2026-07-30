@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import claude_chain_runner as chain_runner
 import pytest
 from claude_chain_runner import ChainAttempt, ChainInvocationOutcome
+from dev_env_scripts_constants.claude_chain_constants import TERMINAL_STATUS_SERVED
 
 FIXTURE_ENCODING_KEYWORD_NAME = "encoding"
 FIXTURE_ERRORS_KEYWORD_NAME = "errors"
@@ -23,6 +24,7 @@ def build_served_outcome(*, chain_stdout: str) -> ChainInvocationOutcome:
         stdout=chain_stdout,
         stderr="",
         attempts=(ChainAttempt(command=FIXTURE_SERVED_COMMAND, status="served"),),
+        terminal_status=TERMINAL_STATUS_SERVED,
     )
 
 

@@ -104,6 +104,7 @@ from dev_env_scripts_constants.claude_chain_constants import (
     TERMINAL_STATUS_ADVISOR_BLOCKED,
     TERMINAL_STATUS_CHAIN_EXHAUSTED,
     TERMINAL_STATUS_SERVED,
+    TERMINAL_STATUS_TIMEOUT,
     UTF8_ENCODING,
 )
 
@@ -280,6 +281,8 @@ class ChainInvocationOutcome:
             -> served_command set, terminal_status=served, session_id filled
         ordered_account auth/timeout/generic process error
             -> served_command=None, terminal_status=advisor_blocked
+        usage_ranked TimeoutExpired mid-walk
+            -> served_command=None, terminal_status=timeout
         every entry usage-limited or missing
             -> served_command=None, terminal_status=chain_exhausted
 
@@ -723,7 +726,7 @@ def run_claude(
             timeout_terminal_status = (
                 TERMINAL_STATUS_ADVISOR_BLOCKED
                 if selected_routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
-                else TERMINAL_STATUS_CHAIN_EXHAUSTED
+                else TERMINAL_STATUS_TIMEOUT
             )
             return _no_process_outcome(
                 all_attempts,
@@ -794,21 +797,6 @@ def _read_piped_stdin_text() -> str | None:
     return sys.stdin.read()
 
 
-def _execute_chain_walk(
-    all_claude_arguments: list[str],
-    timeout_seconds: int,
-    routing_mode: str,
-    stdin_text: str | None,
-) -> ChainInvocationOutcome:
-    """Invoke ``run_claude`` with fully resolved CLI parameters."""
-    return run_claude(
-        all_claude_arguments,
-        timeout_seconds=timeout_seconds,
-        stdin_text=stdin_text,
-        routing_mode=routing_mode,
-    )
-
-
 def main(all_command_arguments: list[str]) -> int:
     """Walk the chain for CLI arguments and return the process exit code.
 
@@ -830,11 +818,11 @@ def main(all_command_arguments: list[str]) -> int:
     all_claude_arguments = _strip_leading_separator(parsed_arguments.passthrough)
     maybe_stdin_text = _read_piped_stdin_text()
     try:
-        chain_outcome = _execute_chain_walk(
+        chain_outcome = run_claude(
             all_claude_arguments,
-            parsed_arguments.timeout_seconds,
-            parsed_arguments.routing_mode,
-            maybe_stdin_text,
+            timeout_seconds=parsed_arguments.timeout_seconds,
+            stdin_text=maybe_stdin_text,
+            routing_mode=parsed_arguments.routing_mode,
         )
     except ChainConfigurationError as configuration_error:
         print(str(configuration_error), file=sys.stderr)

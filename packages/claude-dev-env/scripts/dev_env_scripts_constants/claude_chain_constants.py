@@ -158,6 +158,9 @@ TERMINAL_STATUS_ADVISOR_BLOCKED: str = "advisor_blocked"
 TERMINAL_STATUS_CHAIN_EXHAUSTED: str = "chain_exhausted"
 """Outcome status when every chain entry was usage-limited or missing."""
 
+TERMINAL_STATUS_TIMEOUT: str = "timeout"
+"""Outcome status when a usage-ranked walk stops on TimeoutExpired mid-walk."""
+
 SESSION_ID_JSON_KEY: str = "session_id"
 """JSON key read from Claude ``--output-format json`` events for resume."""
 

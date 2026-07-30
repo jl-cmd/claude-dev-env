@@ -54,6 +54,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     SESSION_ID_JSON_KEY,
     TERMINAL_STATUS_ADVISOR_BLOCKED,
     TERMINAL_STATUS_SERVED,
+    TERMINAL_STATUS_TIMEOUT,
     UTF8_ENCODING,
 )
 
@@ -582,6 +583,7 @@ def test_timeout_on_primary_does_not_fall_over(
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert chain_result.served_command is None
     assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert chain_result.terminal_status == TERMINAL_STATUS_TIMEOUT
     assert len(chain_result.attempts) == 1
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
 

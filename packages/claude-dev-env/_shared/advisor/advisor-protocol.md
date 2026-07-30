@@ -125,7 +125,7 @@ The orchestrating session owns the Claude CLI advisor bind for the whole run —
 
 The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" [--routing-mode usage_ranked|ordered_account] -- <claude args...>`.
 
-| Mode | Flag | Walk order | Fallover |
+| Mode | Flag | Walk order | Failover |
 |---|---|---|---|
 | Usage-ranked (default) | `--routing-mode usage_ranked` or omit the flag | Highest weekly remaining first (`claude_chain_usage` / usage-pause OAuth probe) | Usage-limit signature only |
 | Ordered-account | `--routing-mode ordered_account` | Config list order in `~/.claude/claude-chain.json` | Usage-limit signature only; auth / timeout / config / other process errors → `advisor_blocked` |

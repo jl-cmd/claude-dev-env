@@ -15,6 +15,7 @@ import pytest
 import invoke_code_review as invoker
 from claude_chain_runner import ChainConfigurationError, ChainInvocationOutcome
 from _code_review_test_support import FIXTURE_SESSION_OPUS
+from dev_env_scripts_constants.claude_chain_constants import TERMINAL_STATUS_SERVED
 from dev_env_scripts_constants.code_review_constants import (
     DEFAULT_CODE_REVIEW_EFFORT,
     PERMISSION_MODE_ACCEPT_EDITS,
@@ -66,6 +67,7 @@ def _serve_a_refusing_binary(
         stdout=EMPTY_REVIEW_STDOUT,
         stderr=REVIEW_BINARY_REFUSAL_TEXT,
         attempts=(),
+        terminal_status=TERMINAL_STATUS_SERVED,
     )
 
 
