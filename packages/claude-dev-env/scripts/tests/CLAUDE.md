@@ -6,6 +6,7 @@ pytest suite for the Python scripts and Pester suite for the PowerShell scripts 
 
 | File | Covers |
 |---|---|
+| `test_build_per_artifact_batch.py` | `build_per_artifact_batch.py` — per-artifact batch-spec emission, `load_batch_spec` round-trip, determinism, validation, and CLI |
 | `test_setup_project_paths.py` | `setup_project_paths.py` — discovery, filtering, and `project-paths.json` writing |
 | `test_setup_project_paths_config.py` | Configuration constants used by `setup_project_paths.py` |
 | `test_sweep_empty_dirs.py` | `sweep_empty_dirs.py` — age check, one-shot mode, and continuous-watch behavior |
