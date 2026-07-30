@@ -40,4 +40,4 @@ Audit rubrics for the PR-loop code-review suite. The rubrics define the 17 bug c
 
 ## Breaking-change rule
 
-Adding a sub-bucket to a category rubric requires updating the matching prompt template in `prompts/` in the same commit. Skills that reference category IDs (`bugteam`, `findbugs`) rely on stable sub-bucket IDs (A1, A2, … P-n).
+Adding a sub-bucket to a category rubric requires updating `audit-categories.json` and the matching prompt template in `prompts/` in the same commit, then running `audit_category_schema.py --validate`. Skills that reference category IDs (`bugteam`, `findbugs`) rely on stable sub-bucket IDs (A1, A2, … Q-n). Worked examples stay in the rubric markdown only; they are outside the schema.

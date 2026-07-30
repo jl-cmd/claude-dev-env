@@ -63,3 +63,25 @@ def test_schema_omits_worked_example_prose() -> None:
     schema_text = schema_path.read_text(encoding="utf-8")
     assert "Examples of Category" not in schema_text
     assert "Sample prompt" not in schema_text
+
+
+def test_no_prompt_skeleton_uses_placeholder_count() -> None:
+    """Migrated prompts state a numeric sub-bucket count, never [N]."""
+    schema = audit_category_schema.load_audit_category_schema()
+    prompts_directory = (
+        audit_category_schema.audit_category_schema_path().parent / "prompts"
+    )
+    for each_category in schema["categories"]:
+        slug = each_category["slug"]
+        assert isinstance(slug, str)
+        prompt_path = prompts_directory / f"{slug}.md"
+        skeleton_lines: list[str] = []
+        for each_line in prompt_path.read_text(encoding="utf-8").splitlines():
+            if each_line == "---":
+                break
+            skeleton_lines.append(each_line)
+        skeleton_text = "\n".join(skeleton_lines)
+        assert "decomposed into [N] sub-buckets" not in skeleton_text, slug
+        assert f"decomposed into {len(each_category['sub_buckets'])} sub-buckets" in (
+            skeleton_text
+        ), slug
