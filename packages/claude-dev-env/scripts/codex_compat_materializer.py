@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import json
 import os
@@ -14,6 +13,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
+
+import yaml
 
 
 ManagedContent = str | bytes
@@ -259,73 +260,69 @@ def validate_target_path(target_root: Path, relative_path: str) -> Path:
     return _validate_containment(root, candidate)
 
 
-def _parse_frontmatter_scalar(serialized_field_text: str) -> str | tuple[str, ...] | None:
-    normalized_field_text = serialized_field_text.strip()
-    if not normalized_field_text:
-        return ""
-    if normalized_field_text.startswith("["):
-        return _parse_frontmatter_list(normalized_field_text)
-    try:
-        parsed = ast.literal_eval(normalized_field_text)
-    except (SyntaxError, ValueError):
-        if normalized_field_text[:1] in {'"', "'"} or normalized_field_text[:1] == "[":
-            raise MaterializerError("malformed frontmatter value")
-        return normalized_field_text
-    if isinstance(parsed, str):
-        return parsed
-    if isinstance(parsed, list) and all(isinstance(each_entry, str) for each_entry in parsed):
-        return tuple(parsed)
-    raise MaterializerError("frontmatter value must be a string or string list")
+class _UniqueKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys (safe_load keeps last)."""
 
 
-def _parse_frontmatter_list(serialized_list: str) -> tuple[str, ...]:
-    if not serialized_list.endswith("]"):
-        raise MaterializerError("malformed frontmatter value")
-    all_entries: list[str] = []
-    entry_start = 1
-    quote: str | None = None
-    has_escape_pending = False
-    for each_index, each_character in enumerate(serialized_list[1:-1], 1):
-        if has_escape_pending:
-            has_escape_pending = False
-            continue
-        if quote == '"' and each_character == "\\":
-            has_escape_pending = True
-            continue
-        if each_character in {'"', "'"}:
-            if quote is None:
-                quote = each_character
-            elif quote == each_character:
-                quote = None
-            continue
-        if each_character == "," and quote is None:
-            all_entries.append(_parse_frontmatter_list_entry(serialized_list[entry_start:each_index]))
-            entry_start = each_index + 1
-    if quote is not None or has_escape_pending:
-        raise MaterializerError("malformed frontmatter value")
-    all_entries.append(_parse_frontmatter_list_entry(serialized_list[entry_start:-1]))
-    return tuple(all_entries) if all_entries != [""] else ()
+def _construct_mapping_rejecting_duplicates(
+    loader: yaml.SafeLoader,
+    node: yaml.nodes.MappingNode,
+    is_deep: bool = False,
+) -> dict:
+    mapping: dict = {}
+    for each_key_node, each_field_node in node.value:
+        key = loader.construct_object(each_key_node, deep=is_deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                f"duplicate key {key!r}",
+                each_key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(each_field_node, deep=is_deep)
+    return mapping
 
 
-def _parse_frontmatter_list_entry(raw_entry: str) -> str:
-    entry = raw_entry.strip()
-    if not entry:
-        raise MaterializerError("malformed frontmatter value")
-    try:
-        parsed = ast.literal_eval(entry)
-    except (SyntaxError, ValueError):
-        if entry[0] in {'"', "'"}:
-            raise MaterializerError("malformed frontmatter value")
-        if any(character in entry for character in "[]{}:"):
-            raise MaterializerError("malformed frontmatter value")
-        return entry
-    if not isinstance(parsed, str):
-        raise MaterializerError("frontmatter list entries must be strings")
-    return parsed
+_UniqueKeySafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_rejecting_duplicates,
+)
+
+
+def _require_nonempty_string(
+    field_content: object, field_name: str, source_path: Path
+) -> str:
+    if not isinstance(field_content, str):
+        raise MaterializerError(f"name and description are required: {source_path}")
+    if not field_content.strip():
+        raise MaterializerError(f"name and description are required: {source_path}")
+    return field_content
+
+
+def _require_optional_string(
+    field_content: object, field_name: str, source_path: Path
+) -> str | None:
+    if field_content is None:
+        return None
+    if not isinstance(field_content, str):
+        raise MaterializerError(f"{field_name} must be a string: {source_path}")
+    return field_content
+
+
+def _require_tools_list(tools_content: object, source_path: Path) -> tuple[str, ...]:
+    if tools_content is None:
+        return ()
+    if isinstance(tools_content, str):
+        return (tools_content,)
+    if not isinstance(tools_content, list):
+        raise MaterializerError(f"tools must be a list: {source_path}")
+    if not all(isinstance(each_entry, str) for each_entry in tools_content):
+        raise MaterializerError(f"tools must be a list: {source_path}")
+    return tuple(tools_content)
 
 
 def parse_frontmatter(source_path: Path, source_text: str, relative_source: str) -> ClaudeAgent:
-    """Parse one Claude agent's frontmatter.
+    """Parse one Claude agent's frontmatter through validated YAML.
 
     Args:
         source_path: Path used in validation errors.
@@ -342,30 +339,56 @@ def parse_frontmatter(source_path: Path, source_text: str, relative_source: str)
     lines = source_text.splitlines()
     if len(lines) < 3 or lines[0].strip() != "---":
         raise MaterializerError(f"malformed frontmatter: {source_path}")
-    delimiters = [each_index for each_index, line in enumerate(lines[1:], 1) if line.strip() == "---"]
+    delimiters = [
+        each_index for each_index, line in enumerate(lines[1:], 1) if line.strip() == "---"
+    ]
     if len(delimiters) != 1:
         raise MaterializerError(f"malformed frontmatter delimiters: {source_path}")
-    all_fields: dict[str, str | tuple[str, ...] | None] = {}
-    for each_line in lines[1 : delimiters[0]]:
-        if not each_line.strip() or ":" not in each_line:
-            raise MaterializerError(f"malformed frontmatter: {source_path}")
-        key, serialized_field_text = each_line.split(":", 1)
-        key = key.strip()
-        if key in all_fields or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", key):
+    frontmatter_text = line_separator.join(lines[1 : delimiters[0]]) + line_separator
+    try:
+        parsed_fields = yaml.load(frontmatter_text, Loader=_UniqueKeySafeLoader)
+    except yaml.YAMLError as yaml_error:
+        raise MaterializerError(f"malformed frontmatter: {source_path}") from yaml_error
+    if not isinstance(parsed_fields, dict):
+        raise MaterializerError(f"malformed frontmatter: {source_path}")
+    for each_key in parsed_fields:
+        if not isinstance(each_key, str) or not re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9_-]*", each_key
+        ):
             raise MaterializerError(f"malformed frontmatter key: {source_path}")
-        all_fields[key] = _parse_frontmatter_scalar(serialized_field_text)
-    unknown = tuple(sorted(each_key for each_key in all_fields if each_key not in frontmatter_allowed_fields))
+    unknown = tuple(
+        sorted(
+            each_key
+            for each_key in parsed_fields
+            if each_key not in frontmatter_allowed_fields
+        )
+    )
     if unknown:
         raise MaterializerError(f"unknown frontmatter keys: {source_path}")
-    unsupported = tuple(sorted(each_key for each_key in all_fields if each_key in frontmatter_unsupported_fields))
-    if any(not isinstance(all_fields.get(each_key), str) or not all_fields[each_key] for each_key in frontmatter_required_fields):
-        raise MaterializerError(f"name and description are required: {source_path}")
-    tools = all_fields.get("tools", ())
-    if isinstance(tools, str):
-        tools = (tools,)
-    if not isinstance(tools, tuple):
-        raise MaterializerError(f"tools must be a list: {source_path}")
-    return ClaudeAgent(source_path, source_identity, all_fields["name"], all_fields["description"], tools, all_fields.get("model"), all_fields.get("color"), unsupported)
+    unsupported = tuple(
+        sorted(
+            each_key
+            for each_key in parsed_fields
+            if each_key in frontmatter_unsupported_fields
+        )
+    )
+    name = _require_nonempty_string(parsed_fields.get("name"), "name", source_path)
+    description = _require_nonempty_string(
+        parsed_fields.get("description"), "description", source_path
+    )
+    tools = _require_tools_list(parsed_fields.get("tools"), source_path)
+    model = _require_optional_string(parsed_fields.get("model"), "model", source_path)
+    color = _require_optional_string(parsed_fields.get("color"), "color", source_path)
+    return ClaudeAgent(
+        source_path,
+        source_identity,
+        name,
+        description,
+        tools,
+        model,
+        color,
+        unsupported,
+    )
 
 
 def convert_agent(agent: ClaudeAgent) -> str:
