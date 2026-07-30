@@ -46,6 +46,8 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 | `reference/xhigh.md` | xhigh review procedure — 10 angles, 1-vote verify, gap sweep |
 | `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
 | `reference/loop.md` | Repeat review/fix rounds until clean |
+| `reference/effort-evaluation.md` | Opus effort evaluation fixtures, schema, and offline recommend path |
+| `scripts/effort_evaluation.py` | Machine-readable effort rows + recommendation (no default changes) |
 
 ## Folder map
 

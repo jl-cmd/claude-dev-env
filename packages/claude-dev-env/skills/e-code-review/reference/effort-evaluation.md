@@ -1,0 +1,27 @@
+# Effort evaluation sweep (Opus)
+
+Offline-first harness for choosing e-code-review effort without changing defaults.
+
+## What it holds
+
+| Piece | Path |
+|---|---|
+| Fixtures | `scripts/fixtures/{easy,medium,demanding}.json` |
+| Schema + recommend | `scripts/effort_evaluation.py` |
+| Constants | `scripts/e_code_review_effort_constants/` |
+| Tests | `scripts/test_effort_evaluation.py` |
+
+## How to run offline tests
+
+```
+python -m pytest packages/claude-dev-env/skills/e-code-review/scripts/test_effort_evaluation.py -q
+```
+
+## Paid / live runs (optional)
+
+1. For each fixture, run the matching e-code-review level at each CLI-supported effort (`low` … `max`) with thinking on.
+2. Score quality, finding recall, finding precision; record visible tokens and latency.
+3. Feed completed rows into `recommend_effort_by_band` — every recommendation cites a row.
+4. Do **not** change skill defaults from a single sweep; publish the machine-readable recommendation only.
+
+Stop if the Opus 5 CLI model is unavailable, or if results cannot separate quality from cost/latency.
