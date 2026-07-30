@@ -340,3 +340,41 @@ def test_runon_defer_scope_returns_all_violations() -> None:
     )
     assert any("run-on" in each for each in deferred)
 
+
+def _function_with_runon_docstring() -> str:
+    return (
+        "def clean_helper() -> str:\n"
+        '    """Owns the SIGINT install/restore/installability check, the atexit terminal-record\n'
+        "    registration, and the interrupted-run finalizer — the non-promoter-specific\n"
+        "    machinery that brackets a run so the JSONL artifact always carries a terminal\n"
+        "    record and an in-flight theme record on interrupt.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def test_runon_docstring_body_edit_blocks_without_def_line() -> None:
+    content = _function_with_runon_docstring()
+    unscoped = check_docstring_runon_sentence(content, PRODUCTION_FILE_PATH)
+    assert any("run-on" in each for each in unscoped), (
+        f"control: unscoped must see the function run-on, got {unscoped!r}"
+    )
+    docstring_body_lines = {2, 3, 4, 5}
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=docstring_body_lines
+    )
+    assert any("run-on" in each for each in scoped), (
+        f"docstring-body edit must block even when the def line is untouched, got {scoped!r}"
+    )
+
+
+def test_runon_post_docstring_body_edit_is_grandfathered() -> None:
+    content = _function_with_runon_docstring()
+    return_line = content.splitlines().index('    return "ok"') + 1
+    scoped = check_docstring_runon_sentence(
+        content, PRODUCTION_FILE_PATH, all_changed_lines={return_line}
+    )
+    assert scoped == [], (
+        f"post-docstring body edit must grandfather the pre-existing run-on, got {scoped!r}"
+    )
+

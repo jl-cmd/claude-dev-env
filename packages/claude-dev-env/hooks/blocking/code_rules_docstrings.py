@@ -2665,18 +2665,53 @@ def _runon_sentences(narrative_text: str) -> list[str]:
     return flagged_sentences
 
 
+def _docstring_owner_span(owner_node: ast.AST, anchor_lineno: int) -> range:
+    """Lines from the owner's anchor through the end of its docstring statement.
+
+    ::
+
+        def clean_helper() -> str:                 <- anchor (def / class line)
+            \"\"\"run-on narrative across lines\"\"\"  <- docstring end
+            return "ok"                            <- outside the span
+
+        An edit that only rewrites the docstring body intersects this span and
+        re-grades the finding. An edit to the return line does not.
+    """
+    body = getattr(owner_node, "body", None) or []
+    if not body:
+        return range(anchor_lineno, anchor_lineno + 1)
+    first_statement = body[0]
+    end_lineno = getattr(first_statement, "end_lineno", None) or first_statement.lineno
+    return range(anchor_lineno, end_lineno + 1)
+
+
 def _documentable_docstring_targets(
     parsed_tree: ast.Module,
-) -> list[tuple[int, str, str]]:
-    documentable_targets: list[tuple[int, str, str]] = []
+) -> list[tuple[int, str, str, range]]:
+    documentable_targets: list[tuple[int, str, str, range]] = []
     module_docstring = ast.get_docstring(parsed_tree)
     if module_docstring and parsed_tree.body:
-        documentable_targets.append((parsed_tree.body[0].lineno, "module", module_docstring))
+        module_anchor = parsed_tree.body[0].lineno
+        documentable_targets.append(
+            (
+                module_anchor,
+                "module",
+                module_docstring,
+                _docstring_owner_span(parsed_tree, module_anchor),
+            )
+        )
     for each_node in _walk_skipping_type_checking_blocks(parsed_tree):
         if isinstance(each_node, ast.ClassDef):
             class_docstring = ast.get_docstring(each_node)
             if class_docstring:
-                documentable_targets.append((each_node.lineno, each_node.name, class_docstring))
+                documentable_targets.append(
+                    (
+                        each_node.lineno,
+                        each_node.name,
+                        class_docstring,
+                        _docstring_owner_span(each_node, each_node.lineno),
+                    )
+                )
             continue
         if not isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -2687,7 +2722,12 @@ def _documentable_docstring_targets(
         function_docstring = _function_docstring_text(each_node)
         if function_docstring:
             documentable_targets.append(
-                (each_node.lineno, f"{each_node.name}()", function_docstring)
+                (
+                    each_node.lineno,
+                    f"{each_node.name}()",
+                    function_docstring,
+                    _docstring_owner_span(each_node, each_node.lineno),
+                )
             )
     return documentable_targets
 
@@ -2724,7 +2764,8 @@ def check_docstring_runon_sentence(
         file_path: The path the source will be written to, used for exemptions.
         all_changed_lines: Post-edit line numbers the current edit touched, or
             None to treat the whole file as in scope. When provided, a finding
-            blocks only when its definition line intersects the changed lines.
+            blocks only when its definition-through-docstring span intersects
+            the changed lines.
         defer_scope_to_caller: When True, return every violation so the
             commit/push gate's ``split_violations_by_scope`` can scope by added
             line.
@@ -2741,9 +2782,12 @@ def check_docstring_runon_sentence(
     except SyntaxError:
         return []
     all_violations_in_walk_order: list[tuple[range, str]] = []
-    for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
-        parsed_tree
-    ):
+    for (
+        each_line_number,
+        each_label,
+        each_docstring,
+        each_span,
+    ) in _documentable_docstring_targets(parsed_tree):
         flagged_sentences = _runon_sentences(_docstring_narrative_text(each_docstring))
         if not flagged_sentences:
             continue
@@ -2753,9 +2797,7 @@ def check_docstring_runon_sentence(
             "run-on sentence - break the narrative into short, illustrative sentences a general "
             "developer reads in one pass (plain-illustrative-docstrings)"
         )
-        all_violations_in_walk_order.append(
-            (range(each_line_number, each_line_number + 1), message)
-        )
+        all_violations_in_walk_order.append((each_span, message))
     scoped_issues = _scope_violations_to_changed_lines(
         all_violations_in_walk_order,
         all_changed_lines,
@@ -2795,7 +2837,8 @@ def check_docstring_prose_wall_without_illustration(
         file_path: The path the source will be written to, used for exemptions.
         all_changed_lines: Post-edit line numbers the current edit touched, or
             None to treat the whole file as in scope. When provided, a finding
-            blocks only when its definition line intersects the changed lines.
+            blocks only when its definition-through-docstring span intersects
+            the changed lines.
         defer_scope_to_caller: When True, return every violation so the
             commit/push gate's ``split_violations_by_scope`` can scope by added
             line.
@@ -2813,9 +2856,12 @@ def check_docstring_prose_wall_without_illustration(
     except SyntaxError:
         return []
     all_violations_in_walk_order: list[tuple[range, str]] = []
-    for each_line_number, each_label, each_docstring in _documentable_docstring_targets(
-        parsed_tree
-    ):
+    for (
+        each_line_number,
+        each_label,
+        each_docstring,
+        each_span,
+    ) in _documentable_docstring_targets(parsed_tree):
         prose_lines, has_illustration = _docstring_narrative_partition(each_docstring)
         if has_illustration:
             continue
@@ -2828,9 +2874,7 @@ def check_docstring_prose_wall_without_illustration(
             "'::' listing (a sample input, an annotated outcome, ok/flag contrast rows) and "
             "keep the narrative to a few short lines (plain-illustrative-docstrings)"
         )
-        all_violations_in_walk_order.append(
-            (range(each_line_number, each_line_number + 1), message)
-        )
+        all_violations_in_walk_order.append((each_span, message))
     scoped_issues = _scope_violations_to_changed_lines(
         all_violations_in_walk_order,
         all_changed_lines,
