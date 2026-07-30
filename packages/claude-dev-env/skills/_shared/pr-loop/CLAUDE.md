@@ -12,11 +12,11 @@ those skills invoke during each loop tick.
 | `prompts/` | XML agent prompt templates. |
 | `scripts/` | Python scripts for loop state management, prompt building, outcome recording, path resolution, pacer selection, and preflight checks. |
 
-## Redirects (canonical under `~/.claude/_shared/pr-loop/`)
+## Canonical-path stubs (`~/.claude/_shared/pr-loop/`)
 
-These stubs exist so a worker that opens `skills/_shared/pr-loop/...` still reaches the real file via `@` load:
+Open a stub, then load the `@` target:
 
-| Stub here | Canonical |
+| Stub here | Load |
 |---|---|
 | `audit-contract.md` | `@~/.claude/_shared/pr-loop/audit-contract.md` |
 | `audit-reply-template.md` | `@~/.claude/_shared/pr-loop/audit-reply-template.md` |

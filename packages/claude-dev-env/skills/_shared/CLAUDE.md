@@ -1,30 +1,30 @@
 # _shared (under skills/)
 
-Skill-install shared assets. **Two homes exist** — do not confuse them:
+Skill-install shared assets. **Two homes:**
 
 | Home | Path | Holds |
 |---|---|---|
-| **Skills shared** (this tree) | `~/.claude/skills/_shared/` | Skill-local PR-loop helpers (`portable-driver`, converge scripts), end-of-run gotcha protocol, **and redirect stubs** |
-| **Top-level shared** (canonical runtime) | `~/.claude/_shared/` | Advisor protocol, PR-loop contracts, runtime gate/preflight/review scripts |
+| **Skills shared** (this tree) | `~/.claude/skills/_shared/` | Skill-local PR-loop helpers (`portable-driver`, converge scripts), end-of-run gotcha protocol, and canonical-path stubs |
+| **Top-level shared** | `~/.claude/_shared` | Advisor protocol, PR-loop contracts, runtime gate/preflight/review scripts |
 
-When a path is missing here but exists under `~/.claude/_shared/`, open the redirect stub or load the `@~/.claude/_shared/...` target directly.
+Open a stub here, then load the `@~/.claude/_shared/...` target it names.
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
-| `advisor/` | **Redirect** → `@~/.claude/_shared/advisor/` (protocol + scripts) |
-| `pr-loop/` | Skill-local converge helpers **plus** redirects for contracts/runtime scripts that live under `@~/.claude/_shared/pr-loop/` |
+| `advisor/` | Canonical path stubs for `@~/.claude/_shared/advisor/` (protocol + scripts) |
+| `pr-loop/` | Skill-local converge helpers and stubs for contracts/runtime scripts under `@~/.claude/_shared/pr-loop/` |
 
-## Shared reference docs (live here)
+## Shared reference docs (this tree)
 
 | File | Role |
 |---|---|
 | `end-of-run-gotcha-recommendations.md` | End-of-run protocol: recommend pasteable skill gotchas (and split ref docs) from issues this run hit |
 
-## Redirect stubs (canonical under `~/.claude/_shared/`)
+## Canonical-path stubs (load via `@`)
 
-| Stub here | Load instead |
+| Stub here | Load |
 |---|---|
 | `advisor/advisor-protocol.md` | `@~/.claude/_shared/advisor/advisor-protocol.md` |
 | `advisor/CLAUDE.md` | `@~/.claude/_shared/advisor/CLAUDE.md` |
@@ -40,4 +40,4 @@ When a path is missing here but exists under `~/.claude/_shared/`, open the redi
 | `pr-loop/worker-spawn.md` | `@~/.claude/_shared/pr-loop/worker-spawn.md` |
 | `pr-loop/scripts/RUNTIME_SCRIPTS.md` | `@~/.claude/_shared/pr-loop/scripts/` |
 
-Files here are not skills themselves and have no `SKILL.md`. They install alongside each consuming skill via the install pipeline in `packages/claude-dev-env/bin/install.mjs`.
+Files here are skills support assets (no `SKILL.md`). They install via `packages/claude-dev-env/bin/install.mjs`.

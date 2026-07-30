@@ -1,8 +1,6 @@
 # PR-loop runtime scripts
 
-**Redirect only.** Canonical file lives under the top-level `_shared` tree (not `skills/_shared`).
-
-Load the real file:
+**Canonical home:**
 
 @~/.claude/_shared/pr-loop/scripts/code_rules_gate.py
 
@@ -28,4 +26,4 @@ Load the real file:
 
 @~/.claude/_shared/pr-loop/scripts/README.md
 
-Skill-local scripts in **this** folder (`build_*_prompt.py`, `init_loop_state.py`, etc.) stay here. Runtime gate/preflight/review helpers live only under `~/.claude/_shared/pr-loop/scripts/`.
+Skill-local converge helpers (`build_*_prompt.py`, `init_loop_state.py`, and siblings) live in this `scripts/` folder. Runtime gate, preflight, and review helpers live under `~/.claude/_shared/pr-loop/scripts/`.

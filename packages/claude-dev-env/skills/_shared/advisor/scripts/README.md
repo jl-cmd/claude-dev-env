@@ -1,8 +1,6 @@
-# advisor scripts
+# Advisor scripts
 
-**Redirect only.** Canonical file lives under the top-level `_shared` tree (not `skills/_shared`).
-
-Load the real file:
+**Canonical home:**
 
 @~/.claude/_shared/advisor/scripts/model_tier_run_validator.py
 

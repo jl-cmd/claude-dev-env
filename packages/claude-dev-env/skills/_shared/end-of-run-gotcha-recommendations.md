@@ -5,20 +5,20 @@ recommend pasteable gotchas from issues **this run** hit.
 
 ## When
 
-- **Run:** at end of work, after the deliverable.
-- **Skip:** when the run was clean.
+- **Run:** at end of work, after the deliverable, when this run hit issues.
+- **Clean run:** end with the deliverable only.
 
 ## What counts as an issue
 
-Only items that **actually bit this run**:
+Keep only items that **bit this run**:
 
-- Wrong or missing **path, file, or config**
+- Wrong **path, file, or config**
 - **Command / CLI** failed or needed different flags
 - **Auth, permission, or environment** blocked a step
 - **Data shape** mismatch (empty set, wrong schema, bad field)
 - **Tool, UI, or selector** missed the target
 - **Timing** needed a retry or longer wait
-- **Dependency or install** missing or wrong version
+- **Dependency or install** gap or wrong version
 - **Output format** wrong for the next step
 - A **workaround** required to finish
 
@@ -40,10 +40,10 @@ A short **Gotcha recommendations** block for the user:
 - **<short gotcha>.** Exact fix. More: [`reference/<slug>.md`](reference/<slug>.md)
 ```
 
-When the fix fits one line, skip the ref file and put the full fix in the bullet.
+When the fix fits one line, put the full fix in the bullet.
 
 ## Rules
 
-- **Recommend only** — leave skill files unchanged unless the user asks to apply.
-- **Lived issues only** — drop anything this run never hit.
+- **Recommend only** — apply skill edits when the user asks.
+- **Lived issues only** — keep only issues this run hit.
 - **Short hub, deep ref** — skill gotcha names the trap; ref doc holds the walkthrough.

@@ -17,7 +17,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 ## Shared support code
 
-`skills/_shared/` — skill-install shared assets (converge helpers, `end-of-run-gotcha-recommendations.md`) **plus redirect stubs** into the top-level `~/.claude/_shared/` tree (advisor protocol, PR-loop contracts, runtime scripts). Canonical advisor/PR-loop runtime lives at `@~/.claude/_shared/`, not only under `skills/`.
+skills/_shared/ — skill-install shared assets (converge helpers, nd-of-run-gotcha-recommendations.md) and @ stubs into the top-level ~/.claude/_shared/ tree (advisor protocol, PR-loop contracts, runtime scripts). Canonical advisor and PR-loop runtime live at @~/.claude/_shared/.
 
 ## Skill groups
 
