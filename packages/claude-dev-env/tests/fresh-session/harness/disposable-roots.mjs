@@ -99,24 +99,11 @@ export function removeDisposableRunRoots(runRoot) {
         throw new Error('removeDisposableRunRoots requires a run root path');
     }
     const normalized = runRoot.replace(/\\/g, '/').toLowerCase();
-    const forbiddenMarkers = [
-        '/.claude-profiles/',
-        '/.claude/',
-        '/users/',
-    ];
-    // Only allow removal under the OS temp tree (or explicit fresh-session prefix).
     const tempRoot = tmpdir().replace(/\\/g, '/').toLowerCase();
-    if (!normalized.startsWith(tempRoot) && !normalized.includes('/fresh-session-')) {
+    const isUnderTemp = normalized.startsWith(tempRoot);
+    const isFreshSessionTree = normalized.includes('/fresh-session-');
+    if (!isUnderTemp && !isFreshSessionTree) {
         throw new Error(`Refusing to remove non-disposable path: ${runRoot}`);
-    }
-    for (const eachMarker of forbiddenMarkers) {
-        if (
-            normalized.includes(eachMarker)
-            && !normalized.includes('/fresh-session-')
-            && !normalized.startsWith(tempRoot)
-        ) {
-            throw new Error(`Refusing to remove live-looking path: ${runRoot}`);
-        }
     }
     rmSync(runRoot, { recursive: true, force: true });
 }
