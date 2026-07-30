@@ -174,7 +174,7 @@ test('update plan marks purge and lists E2 mutation kinds; journal omits hooks',
         writeFileSync(join(managedRoot, 'settings.json'), '{}\n');
         const plan = buildInstallPlan(planInput(packageRoot, managedRoot, {
             manifestFilePath,
-            targetIdentity: 'editor',
+            targetIdentity: 'profile-a',
             isUpdateRefresh: true,
         }));
         assert.equal(plan.shouldPurgeBeforeReinstall, true);

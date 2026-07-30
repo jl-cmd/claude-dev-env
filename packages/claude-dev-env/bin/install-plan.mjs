@@ -63,13 +63,13 @@ export function planShouldInstallHooks(selectedGroups, installGroups) {
     if (!selectedGroups) {
         return true;
     }
-    const allActiveGroups = selectedGroups.map((eachName) => installGroups[eachName]).filter(Boolean);
-    if (allActiveGroups.some((eachGroup) => eachGroup.includeAllHooks)) {
-        return true;
-    }
-    return allActiveGroups.some(
-        (eachGroup) => Array.isArray(eachGroup.includeHookFiles) && eachGroup.includeHookFiles.length > 0,
-    );
+    return selectedGroups
+        .map((eachName) => installGroups[eachName])
+        .filter(Boolean)
+        .some(
+            (eachGroup) => eachGroup.includeAllHooks
+                || (Array.isArray(eachGroup.includeHookFiles) && eachGroup.includeHookFiles.length > 0),
+        );
 }
 
 /**
@@ -79,6 +79,11 @@ export function planShouldInstallHooks(selectedGroups, installGroups) {
  * @param {{ existsSync?: typeof existsSync, readFileSync?: typeof readFileSync }} [io]
  * @returns {{ files: string[]|null, skills: string[]|null }}
  */
+function arrayFieldOrNull(record, fieldName) {
+    const fieldValue = record[fieldName];
+    return Array.isArray(fieldValue) ? fieldValue : null;
+}
+
 export function readPriorManifestArraysFromPath(manifestFilePath, io = {}) {
     const exists = io.existsSync || existsSync;
     const readFile = io.readFileSync || readFileSync;
@@ -89,8 +94,8 @@ export function readPriorManifestArraysFromPath(manifestFilePath, io = {}) {
     try {
         const priorManifest = JSON.parse(readFile(manifestFilePath, 'utf8'));
         return {
-            files: Array.isArray(priorManifest[MANIFEST_FILES_KEY]) ? priorManifest[MANIFEST_FILES_KEY] : null,
-            skills: Array.isArray(priorManifest[MANIFEST_SKILLS_KEY]) ? priorManifest[MANIFEST_SKILLS_KEY] : null,
+            files: arrayFieldOrNull(priorManifest, MANIFEST_FILES_KEY),
+            skills: arrayFieldOrNull(priorManifest, MANIFEST_SKILLS_KEY),
         };
     } catch {
         return missingRecord;
