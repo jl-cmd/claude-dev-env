@@ -1319,3 +1319,261 @@ def test_load_batch_spec_rejects_empty_agent_name(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=WORKER_SPEC_AGENT_NAME_KEY):
         batch.load_batch_spec(specification_path)
+
+# --- O-02 worker advisor contract ---
+
+
+def test_extract_advisor_signal_accepts_four_tokens_only() -> None:
+    assert batch.extract_advisor_signal("ENDORSE\nok") == "ENDORSE"
+    assert batch.extract_advisor_signal("CORRECTION fix path") == "CORRECTION"
+    assert batch.extract_advisor_signal("PLAN later") == "PLAN"
+    assert batch.extract_advisor_signal("STOP") == "STOP"
+    assert batch.extract_advisor_signal("hello ENDORSE") is None
+    assert batch.extract_advisor_signal("") is None
+
+
+def test_load_batch_spec_parses_advisor_block(tmp_path: Path) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    payload = _worker_payload(
+        role_name="lens",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=tmp_path,
+        tool_profile=TOOL_PROFILE_READONLY,
+    )
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": [payload],
+                "advisor": {
+                    "launcher": "fixture-advisor-launcher",
+                    "model": "opus",
+                    "effort": "high",
+                },
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    loaded = batch.load_batch_spec(specification_path)
+    assert loaded.advisor is not None
+    assert loaded.advisor.launcher == "fixture-advisor-launcher"
+    assert loaded.advisor.model == "opus"
+    assert loaded.advisor.effort == "high"
+
+
+def test_unique_advisor_sessions_and_completion_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    header_a, body_a = _write_prompt_parts(tmp_path, role_marker="alpha")
+    header_b, body_b = _write_prompt_parts(tmp_path, role_marker="beta")
+    workers = [
+        _worker_payload(
+            role_name="alpha",
+            all_prompt_parts=[str(header_a), str(body_a)],
+            working_directory=tmp_path,
+            tool_profile=TOOL_PROFILE_BUILD,
+        ),
+        _worker_payload(
+            role_name="beta",
+            all_prompt_parts=[str(header_b), str(body_b)],
+            working_directory=tmp_path,
+            tool_profile=TOOL_PROFILE_BUILD,
+        ),
+    ]
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": workers,
+                "advisor": {
+                    "launcher": "fixture-advisor-launcher",
+                    "model": "opus",
+                    "effort": "high",
+                },
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    bind_count = {"n": 0}
+    sessions_issued: list[str] = []
+
+    def fake_advisor(
+        *,
+        launcher: str,
+        model: str,
+        effort: str,
+        prompt_text: str,
+        session_id: str | None = None,
+    ) -> tuple[str | None, str, int]:
+        assert launcher == "fixture-advisor-launcher"
+        assert model == "opus"
+        assert effort == "high"
+        if session_id is None:
+            bind_count["n"] += 1
+            session = f"session-{bind_count['n']}"
+            sessions_issued.append(session)
+            return session, "ENDORSE\npre-dispatch ok", 0
+        return session_id, "ENDORSE\npost-report ok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake_advisor)
+    monkeypatch.setattr(
+        batch,
+        "batch_preflight",
+        lambda **kwargs: PreflightOutcome(is_usable=True, reason=None),
+    )
+    monkeypatch.setattr(batch, "batch_sleep", lambda seconds: None)
+    recorder = _RunnerRecorder(
+        {
+            "alpha": _ok_outcome(),
+            "beta": _ok_outcome(),
+        }
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    loaded = batch.load_batch_spec(specification_path)
+    summary = batch.run_grok_batch(
+        batch_spec=loaded, run_state_directory=tmp_path / "run"
+    )
+    assert summary.is_preflight_usable
+    assert len(summary.all_worker_reports) == 2
+    all_session_ids = {
+        each.advisor_session_id for each in summary.all_worker_reports
+    }
+    assert all_session_ids == {"session-1", "session-2"}
+    assert all(
+        each.advisor_completion_signal == "ENDORSE"
+        for each in summary.all_worker_reports
+    )
+    assert all(
+        each.classification != "advisor_blocked"
+        for each in summary.all_worker_reports
+    )
+    for each_report in summary.all_worker_reports:
+        prompt_text = Path(each_report.prompt_path).read_text(encoding=UTF8_ENCODING)
+        assert each_report.advisor_session_id in prompt_text
+
+
+def test_advisor_failure_classifies_advisor_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="solo")
+    payload = _worker_payload(
+        role_name="solo",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=tmp_path,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": [payload],
+                "advisor": {"launcher": "fixture-advisor-launcher"},
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+
+    def failing_advisor(**kwargs: object) -> tuple[str | None, str, int]:
+        return None, "", 1
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", failing_advisor)
+    monkeypatch.setattr(
+        batch,
+        "batch_preflight",
+        lambda **kwargs: PreflightOutcome(is_usable=True, reason=None),
+    )
+    monkeypatch.setattr(batch, "batch_sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        batch,
+        "batch_headless_runner",
+        _RunnerRecorder({"solo": _ok_outcome()}),
+    )
+    loaded = batch.load_batch_spec(specification_path)
+    summary = batch.run_grok_batch(
+        batch_spec=loaded, run_state_directory=tmp_path / "run"
+    )
+    assert len(summary.all_worker_reports) == 1
+    report = summary.all_worker_reports[0]
+    assert report.classification == "advisor_blocked"
+    assert report.is_ok is False
+
+def test_bind_unique_worker_advisor_rejects_placeholder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(**kwargs: object) -> tuple[str | None, str, int]:
+        raise AssertionError("should not call launcher for placeholder")
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", boom)
+    with pytest.raises(ValueError, match="placeholder"):
+        batch.bind_unique_worker_advisor(
+            advisor_spec=batch.AdvisorSpec(launcher=batch.DEFAULT_ADVISOR_LAUNCHER_PLACEHOLDER),
+            role_name="lens",
+            all_used_session_ids=set(),
+        )
+
+
+def test_bind_unique_worker_advisor_returns_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(**kwargs: object) -> tuple[str | None, str, int]:
+        return "sess-unique-1", "ENDORSE\nok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake)
+    session_id, signal = batch.bind_unique_worker_advisor(
+        advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
+        role_name="lens",
+        all_used_session_ids=set(),
+    )
+    assert session_id == "sess-unique-1"
+    assert signal == "ENDORSE"
+
+
+def test_obtain_advisor_completion_verdict_endorses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(**kwargs: object) -> tuple[str | None, str, int]:
+        return kwargs.get("session_id"), "ENDORSE\nok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake)
+    signal = batch.obtain_advisor_completion_verdict(
+        advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
+        role_name="lens",
+        session_id="sess-1",
+        report_text="done",
+    )
+    assert signal == "ENDORSE"
+
+
+def test_invoke_advisor_launcher_builds_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Completed:
+        returncode = 0
+        stdout = '{"session_id":"s1","result":"ENDORSE\\nok"}'
+        stderr = ""
+
+    def fake_run(args, **kwargs):  # type: ignore[no-untyped-def]  # subprocess.run stub for argv capture
+        captured["args"] = list(args)
+        captured["input"] = kwargs.get("input")
+        return _Completed()
+
+    monkeypatch.setattr(batch.subprocess, "run", fake_run)
+    session_id, body, code = batch.invoke_advisor_launcher(
+        launcher="fixture-advisor-launcher",
+        model="opus",
+        effort="high",
+        prompt_text="hello",
+    )
+    assert code == 0
+    assert session_id == "s1"
+    assert "ENDORSE" in body
+    assert captured["args"][0] == "fixture-advisor-launcher"
+    assert "--model" in captured["args"]

@@ -503,3 +503,104 @@ CLI_ENABLE_CLAUDE_TIER_FLAG: str = "--enable-claude-tier"
 
 EMPTY_OUTPUT: str = ""
 """Empty captured output when no tier produced stdout."""
+
+BATCH_SPEC_ADVISOR_KEY: str = "advisor"
+"""JSON key for the optional batch-level worker-advisor block."""
+
+ADVISOR_SPEC_LAUNCHER_KEY: str = "launcher"
+"""JSON key for the lead-supplied advisor launcher executable name."""
+
+ADVISOR_SPEC_MODEL_KEY: str = "model"
+"""JSON key for the advisor model name."""
+
+ADVISOR_SPEC_EFFORT_KEY: str = "effort"
+"""JSON key for the advisor effort level."""
+
+DEFAULT_ADVISOR_LAUNCHER_PLACEHOLDER: str = "ADVISOR_LAUNCHER_PLACEHOLDER"
+"""Committed placeholder; real launcher arrives only from the lead's batch spec."""
+
+DEFAULT_ADVISOR_MODEL: str = "opus"
+"""Default advisor model when the batch advisor block omits model."""
+
+DEFAULT_ADVISOR_EFFORT: str = "high"
+"""Default advisor effort when the batch advisor block omits effort."""
+
+MAXIMUM_WORKER_ADVISOR_CORRECTIONS: int = 3
+"""Maximum CORRECTION/PLAN re-consults per worker before advisor_blocked."""
+
+ADVISOR_SIGNAL_ENDORSE: str = "ENDORSE"
+"""Opening signal that accepts a worker report."""
+
+ADVISOR_SIGNAL_CORRECTION: str = "CORRECTION"
+"""Opening signal that requires a re-consult up to the correction cap."""
+
+ADVISOR_SIGNAL_PLAN: str = "PLAN"
+"""Opening signal treated like CORRECTION for re-consult counting."""
+
+ADVISOR_SIGNAL_STOP: str = "STOP"
+"""Opening signal that ends the worker as advisor_blocked immediately."""
+
+ALL_KNOWN_ADVISOR_SIGNALS: frozenset[str] = frozenset(
+    {
+        ADVISOR_SIGNAL_ENDORSE,
+        ADVISOR_SIGNAL_CORRECTION,
+        ADVISOR_SIGNAL_PLAN,
+        ADVISOR_SIGNAL_STOP,
+    }
+)
+"""The four allowed first tokens of an advisor reply."""
+
+CLASSIFICATION_ADVISOR_BLOCKED: str = "advisor_blocked"
+"""Worker classification when advisor bind, resume, or verdict fails closed."""
+
+PENDING_BIND_SENTINEL: str = "PENDING_BIND"
+"""Unbound advisor session or signal sentinel; must fail closed before launch."""
+
+ADVISOR_PROMPT_HEADER_TEMPLATE: str = (
+    "Worker advisor session: {session_id}\n"
+    "Advisor model: {model}\n"
+    "Advisor effort: {effort}\n"
+    "Report only after the same session endorses or corrections are applied.\n\n"
+)
+"""Prefix injected into each worker prompt after a successful pre-dispatch bind."""
+
+SUMMARY_ADVISOR_SESSION_ID_KEY: str = "advisor_session_id"
+"""Per-worker report JSON key for the unique advisor session id."""
+
+SUMMARY_ADVISOR_SIGNAL_KEY: str = "advisor_completion_signal"
+"""Per-worker report JSON key for the final advisor opening signal."""
+
+SUMMARY_ADVISOR_LAUNCHER_KEY: str = "advisor_launcher"
+"""Per-worker report JSON key for the spec-supplied launcher (runtime only)."""
+
+ADVISOR_CLI_PRINT_FLAG: str = "-p"
+"""Print/non-interactive flag passed to the advisor launcher."""
+
+ADVISOR_CLI_MODEL_FLAG: str = "--model"
+"""Model flag passed to the advisor launcher."""
+
+ADVISOR_CLI_EFFORT_FLAG: str = "--effort"
+"""Effort flag passed to the advisor launcher."""
+
+ADVISOR_CLI_OUTPUT_FORMAT_FLAG: str = "--output-format"
+"""Output-format flag passed to the advisor launcher."""
+
+ADVISOR_CLI_OUTPUT_FORMAT_JSON: str = "json"
+"""JSON output format value for advisor launcher calls."""
+
+ADVISOR_CLI_RESUME_FLAG: str = "--resume"
+"""Resume flag for post-report advisor consults."""
+
+ADVISOR_BIND_PROMPT_TEMPLATE: str = (
+    "You are the unique worker advisor for role {role_name}. "
+    "Answer only. Open with exactly one of: ENDORSE | CORRECTION | PLAN | STOP. "
+    "Pre-dispatch: ENDORSE this worker assignment if safe, else CORRECTION."
+)
+"""Prompt body used for the pre-dispatch advisor bind."""
+
+ADVISOR_VERDICT_PROMPT_TEMPLATE: str = (
+    "You are the unique worker advisor for role {role_name}, session {session_id}. "
+    "Answer only. Open with exactly one of: ENDORSE | CORRECTION | PLAN | STOP. "
+    "Post-report review of the worker report follows.\n\n{report_text}"
+)
+"""Prompt body used for the post-report advisor verdict."""
