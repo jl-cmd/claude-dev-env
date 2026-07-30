@@ -20,6 +20,33 @@ $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1) {
     throw "unsupported shortcut manifest schemaVersion: $($manifest.schemaVersion)"
 }
+if ($null -eq $manifest.allManagedShortcuts) {
+    throw 'shortcut manifest allManagedShortcuts is required'
+}
+
+$allSeenIds = @{}
+$allSeenVisibleNames = @{}
+$allSeenGrouping = @{}
+foreach ($eachShortcut in $manifest.allManagedShortcuts) {
+    foreach ($eachFieldName in @('id', 'visibleName', 'source', 'profileId', 'locationKind', 'groupingIdentity')) {
+        $fieldValue = $eachShortcut.$eachFieldName
+        if ([string]::IsNullOrWhiteSpace([string]$fieldValue)) {
+            throw "shortcut missing required field $eachFieldName"
+        }
+    }
+    if ($allSeenIds.ContainsKey($eachShortcut.id)) {
+        throw "duplicate shortcut id: $($eachShortcut.id)"
+    }
+    if ($allSeenVisibleNames.ContainsKey($eachShortcut.visibleName)) {
+        throw "duplicate shortcut visibleName: $($eachShortcut.visibleName)"
+    }
+    if ($allSeenGrouping.ContainsKey($eachShortcut.groupingIdentity)) {
+        throw "duplicate shortcut groupingIdentity: $($eachShortcut.groupingIdentity)"
+    }
+    $allSeenIds[$eachShortcut.id] = $true
+    $allSeenVisibleNames[$eachShortcut.visibleName] = $true
+    $allSeenGrouping[$eachShortcut.groupingIdentity] = $true
+}
 
 function Get-ShortcutMetadata {
     param(

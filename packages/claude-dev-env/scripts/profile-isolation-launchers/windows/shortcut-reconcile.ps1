@@ -25,10 +25,13 @@ $inventory = $inventoryJson | ConvertFrom-Json
 $allActions = [System.Collections.Generic.List[object]]::new()
 foreach ($eachRow in $inventory.shortcuts) {
     $actualPresent = [bool]$eachRow.exists
+    $hasSourceIdentity = -not [string]::IsNullOrWhiteSpace([string]$eachRow.source) -and
+        -not [string]::IsNullOrWhiteSpace([string]$eachRow.profileId) -and
+        -not [string]::IsNullOrWhiteSpace([string]$eachRow.groupingIdentity)
     $status = if (-not $actualPresent) {
         'missing'
     }
-    elseif ($eachRow.source -and $eachRow.profileId -and $eachRow.groupingIdentity) {
+    elseif ($hasSourceIdentity) {
         'present-unverified-target'
     }
     else {
