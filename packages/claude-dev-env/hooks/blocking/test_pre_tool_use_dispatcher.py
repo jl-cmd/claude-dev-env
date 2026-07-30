@@ -79,7 +79,8 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,    )
+        env=environment_by_key,
+    )
 
 
 def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
@@ -99,7 +100,8 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,    )
+        env=environment_by_key,
+    )
 
 
 def _parse_hook_decision(completed_process: subprocess.CompletedProcess[str]) -> tuple[bool, str]:
