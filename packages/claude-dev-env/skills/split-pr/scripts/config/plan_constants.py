@@ -20,6 +20,10 @@ ALL_LAYER_ORDER: tuple[str, ...] = (
     "docs",
     "other",
 )
+ALL_LAYER_RANK_BY_NAME: dict[str, int] = {
+    each_layer: each_index for each_index, each_layer in enumerate(ALL_LAYER_ORDER)
+}
+UNKNOWN_LAYER_RANK: int = len(ALL_LAYER_ORDER)
 
 CONVENTIONAL_PREFIX_PATTERN: str = (
     r"^(?P<prefix>feat|fix|docs|chore|refactor|test|ci|perf|build|style|revert)"
@@ -27,12 +31,15 @@ CONVENTIONAL_PREFIX_PATTERN: str = (
 )
 TITLE_PREFIX_SEPARATOR: str = ": "
 DEFAULT_TITLE_PREFIX: str = "chore"
+DEFAULT_SLICE_LAYER: str = "other"
+DEFAULT_EMPTY_TITLE_REMAINDER: str = "split slice"
 UTF8_ENCODING: str = "utf-8"
 GH_COMMAND: str = "gh"
 GH_API: str = "api"
 GH_PAGINATE_FLAG: str = "--paginate"
 GH_SLURP_FLAG: str = "--slurp"
 GH_PULLS_FILES_PATH_TEMPLATE: str = "repos/{owner}/{repo}/pulls/{pr_number}/files"
+GH_REST_FILE_FILENAME: str = "filename"
 FILE_KEY_PATH: str = "path"
 FILE_KEY_ADDITIONS: str = "additions"
 FILE_KEY_DELETIONS: str = "deletions"

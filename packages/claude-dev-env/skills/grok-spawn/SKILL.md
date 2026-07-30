@@ -231,3 +231,8 @@ Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handof
 
 - `SKILL.md` — hub and process.
 - `reference/` — brief templates and flag profiles.
+
+## Worker advisors
+
+Each grok worker binds a unique Opus-high dvisor_session_id through the lead-supplied dvisor.launcher in the batch spec (committed default is a placeholder). Reports require the same handle\'s ENDORSE (or bounded CORRECTION/PLAN then ENDORSE); STOP or malformed signals end as advisor_blocked.
+

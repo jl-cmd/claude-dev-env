@@ -8,7 +8,12 @@
 
 from __future__ import annotations
 
-from config.plan_constants import ALL_LAYER_ORDER, SLICE_KEY_LAYER
+from config.plan_constants import (
+    ALL_LAYER_RANK_BY_NAME,
+    DEFAULT_SLICE_LAYER,
+    SLICE_KEY_LAYER,
+    UNKNOWN_LAYER_RANK,
+)
 
 JsonObject = dict[str, object]
 
@@ -22,15 +27,11 @@ def layer_rank(layer_name: str) -> int:
     Returns:
         Integer rank; lower values sort earlier.
     """
-    layer_rank_by_name = {
-        each_layer: each_index for each_index, each_layer in enumerate(ALL_LAYER_ORDER)
-    }
-    unknown_layer_rank = len(ALL_LAYER_ORDER)
-    return layer_rank_by_name.get(layer_name, unknown_layer_rank)
+    return ALL_LAYER_RANK_BY_NAME.get(layer_name, UNKNOWN_LAYER_RANK)
 
 
 def sort_slices_by_layer_order(all_slices: list[JsonObject]) -> list[JsonObject]:
-    """Return a new list of slices sorted by ALL_LAYER_ORDER then original index.
+    """Return a new list of slices sorted by layer rank then original index.
 
     Args:
         all_slices: Slice maps that may carry a ``layer`` key.
@@ -44,8 +45,11 @@ def sort_slices_by_layer_order(all_slices: list[JsonObject]) -> list[JsonObject]
         all_indexed_slice: tuple[int, JsonObject],
     ) -> tuple[int, int]:
         each_index, each_slice = all_indexed_slice
-        layer_field = each_slice.get(SLICE_KEY_LAYER, "other")
-        layer_name = str(layer_field) if layer_field is not None else "other"
+        layer_field = each_slice.get(SLICE_KEY_LAYER, DEFAULT_SLICE_LAYER)
+        if layer_field is None:
+            layer_name = DEFAULT_SLICE_LAYER
+        else:
+            layer_name = str(layer_field)
         return (layer_rank(layer_name), each_index)
 
     return [

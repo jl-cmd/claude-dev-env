@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from config.plan_constants import ALL_LAYER_ORDER
 from config.split_pr_constants import (
     DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD,
     SPLIT_ANALYSIS_HAND_WRITTEN_LINE_THRESHOLD,
@@ -11,12 +12,14 @@ REVIEW_BUDGET_HAND_WRITTEN_LINES: int = SPLIT_ANALYSIS_HAND_WRITTEN_LINE_THRESHO
 HARD_CAP_HAND_WRITTEN_LINES: int = DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD
 SLICE_ID_TEMPLATE: str = "{index:02d}-{layer}"
 SLICE_TITLE_TEMPLATE: str = "chore: {layer} slice {index}"
-LAYER_CONFIG: str = "config"
-LAYER_BACKEND: str = "backend"
-LAYER_FRONTEND: str = "frontend"
-LAYER_TESTS: str = "tests"
-LAYER_DOCS: str = "docs"
-LAYER_OTHER: str = "other"
+(
+    LAYER_CONFIG,
+    LAYER_BACKEND,
+    LAYER_FRONTEND,
+    LAYER_TESTS,
+    LAYER_DOCS,
+    LAYER_OTHER,
+) = ALL_LAYER_ORDER
 ALL_TEST_PATH_MARKERS: tuple[str, ...] = (
     "/tests/",
     "/test/",

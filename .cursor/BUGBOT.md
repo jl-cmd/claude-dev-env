@@ -1,10 +1,10 @@
 <!-- SYNC-HEADER-START -->
 <!--
-AUTO-GENERATED — DO NOT EDIT.
+AUTO-GENERATED - DO NOT EDIT.
 Source of truth: jl-cmd/claude-dev-env/AGENTS.md
 Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: dc117b29504385b0446cf1ad01595cfea75a5bfb
-Synced at: 2026-07-17T00:15:56.303558+00:00
+Source commit: 6c861b98f23572578d211356ce48e30907a7bd89
+Synced at: 2026-07-30T11:04:05.146356+00:00
 -->
 <!-- SYNC-HEADER-END -->
 
@@ -22,6 +22,8 @@ These rules describe the green-light state of code in this repository. Agents ap
 Where a rule lists exemptions (test files, migrations, config files), the exemption applies. Where a rule shows a before/after pair, the "after" form is the green-light pattern.
 
 This file is **rules-only**. Repo layout, build commands, and workflow guidance live elsewhere.
+
+**Surface map:** this file is the canonical human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement (not generated from this file). `.cursor/BUGBOT.md` is a sync projection of this file. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
 
 ---
 
@@ -144,6 +146,7 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
 - Corollary-matrix tests are findings: when the code reduces inputs to a canonical form and then compares, flag a matrix over input spellings that follows from the reduction being canonical — test the reduction once and the comparison with discriminating cases (`anti-corollary-tests.md`).
 - Tests whose expected value equals the degenerate default a dead implementation would return (empty string, `None`, `False`, blanket refusal, empty collection) prove nothing on their own — the suite needs at least one case expecting the non-default answer on the real code path (`anti-corollary-tests.md`).
 - Decoration tests are findings: when no single named change to the code under test would fail the test (or only a change that also breaks unrelated cases), the test proves nothing — drop or rewrite it. For a new mechanism with a degenerate failure mode, a stated mutation (one specific code change and how many tests it kills) belongs in the audit lane; a mutation that kills zero tests means the suite proves nothing (`anti-corollary-tests.md`).
+- A new test, probe, concurrency harness, sweep, mutation check, or measurement script counts as evidence only after that same check ran red on a deliberate named break, with a paired control passing beside it. The shown-red record names three parts: the break applied, the red output it printed, and the control that passed beside it. A green with no shown red is an unmeasured result, not a pass (`falsify-before-green.md`).
 - When a system dependency is missing, the test fails with a clear error rather than skipping. Do not use `@skip_if_missing_dependency`, environment-based skip decorators, or guard clauses that swallow the missing dependency.
 - Keep test infrastructure pragmatic. A test helper file passes when all of these hold: (1) ONE file, not a package; (2) only `def` functions, no class definitions; (3) no module-level state besides one or two simple constants; (4) no caching, no lazy initialization, no abstractions added "for future use"; (5) imports cover the test target plus stdlib only — no helper imports another helper.
 - Test through the public API. Do not assert on private state, hook return values, internal class fields, or `component.state.X`. If the test needs visibility the public API does not provide, the public API needs a method, not the test.
@@ -166,7 +169,7 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
   - Helper files created to work around a tool limitation that the PR did not explicitly call out.
   - Any file the PR description does not reference and that a reviewer cannot trace to one of the listed changes.
 - In a per-directory `CLAUDE.md`, every backticked bare filename in a markdown table's first column names a file that exists in the directory subtree the `CLAUDE.md` describes (the directory, its subdirectories, or its siblings under the parent). A first-column cell naming a file that exists nowhere under that scan root points the reader at something that is not there — drop the row or correct the cell to name an existing file. Cells that hold a path, a subdirectory ending in `/`, or a slash-command are out of scope, as is a table whose content names an explicit relative-path source (a `../` token).
-- In a `.md` file, cut a sentence whose only job is to say why a stated choice is good, or to restate a gain a reader already works out from the behavior the doc states or from a rule a hook or another file enforces. A sentence like that carries no fact the reader acts on. Keep a rule's one-line reason when it names present behavior (`--jq` runs per page, so cross-page sorts give wrong results); flag a trailing sentence that only re-argues or restates a fact the doc already states. This finding is distinct from the historical-clutter finding (old-state references), the self-contained-docs finding (references to the chat that produced the doc), and the plain-language finding (heavy words): it targets a present-tense sentence that adds no actionable fact. Full rule: [`packages/claude-dev-env/rules/no-justification-noise.md`](packages/claude-dev-env/rules/no-justification-noise.md).
+- In a `.md` file, cut a sentence whose only job is to say why a stated choice is good, or to restate a gain a reader already works out from the behavior the doc states or from a rule a hook or another file enforces. A sentence like that carries no fact the reader acts on. Keep a rule's one-line reason when it names present behavior (`--jq` runs per page, so cross-page sorts give wrong results); flag a trailing sentence that only re-argues or restates a fact the doc already states. This finding is distinct from the historical-clutter finding (old-state references), the self-contained-docs finding (references to the chat that produced the doc), and the plain-language finding (heavy words): it targets a present-tense sentence that adds no actionable fact. Full rule: [`packages/claude-dev-env/rules/doc-prose-cuts.md`](packages/claude-dev-env/rules/doc-prose-cuts.md).
 
 ### Scope of review
 

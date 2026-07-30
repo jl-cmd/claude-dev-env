@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from config.plan_constants import (
+    DEFAULT_SLICE_LAYER,
     PLAN_KEY_ALL_CHANGED_PATHS,
     PLAN_KEY_ALL_SLICES,
     PLAN_KEY_SCHEMA_VERSION,
@@ -22,6 +23,7 @@ from config.plan_constants import (
     SLICE_KEY_ID,
     SLICE_KEY_LAYER,
     SLICE_KEY_TITLE,
+    TITLE_PREFIX_SEPARATOR,
 )
 from split_pr_layer_order import sort_slices_by_layer_order
 from split_pr_title import normalize_split_title
@@ -54,7 +56,9 @@ def build_split_plan(
             {
                 SLICE_KEY_ID: str(each_slice.get(SLICE_KEY_ID, "")),
                 SLICE_KEY_TITLE: title,
-                SLICE_KEY_LAYER: str(each_slice.get(SLICE_KEY_LAYER, "other")),
+                SLICE_KEY_LAYER: str(
+                    each_slice.get(SLICE_KEY_LAYER, DEFAULT_SLICE_LAYER)
+                ),
                 SLICE_KEY_ALL_PATHS: [str(each_path) for each_path in all_paths],
             }
         )
@@ -94,8 +98,11 @@ def validate_split_plan(all_plan: JsonObject) -> None:
     for each_slice in all_slices:
         if not isinstance(each_slice, dict):
             raise ValueError("each slice must be an object")
+        slice_id = each_slice.get(SLICE_KEY_ID)
+        if not isinstance(slice_id, str) or not slice_id.strip():
+            raise ValueError(f"slice id must be a non-empty string: {slice_id!r}")
         title = each_slice.get(SLICE_KEY_TITLE)
-        if not isinstance(title, str) or title.count(": ") < 1:
+        if not isinstance(title, str) or TITLE_PREFIX_SEPARATOR not in title:
             raise ValueError(f"slice title missing conventional prefix: {title!r}")
         normalized = normalize_split_title(title)
         if normalized != title:

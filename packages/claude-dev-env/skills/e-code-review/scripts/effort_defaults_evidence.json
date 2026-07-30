@@ -1,0 +1,186 @@
+{
+  "schema_version": "1",
+  "workflow_family": "e-code-review",
+  "evidence_source": "offline_harness_baseline",
+  "thinking_enabled": true,
+  "cost_latency_lever": "effort",
+  "notes": "Completed evaluation rows from the OP-02B offline harness. Each skill default cites a holding row. Paid live sweeps may replace rows without changing the resolver contract.",
+  "all_rows": [
+    {
+      "fixture_id": "easy-comment-preservation",
+      "fixture_band": "easy",
+      "effort": "low",
+      "quality_score": 0.5,
+      "finding_recall": 0.5,
+      "finding_precision": 0.5,
+      "visible_tokens": 800,
+      "latency_ms": 2000,
+      "thinking_enabled": true
+    },
+    {
+      "fixture_id": "easy-comment-preservation",
+      "fixture_band": "easy",
+      "effort": "medium",
+      "quality_score": 0.95,
+      "finding_recall": 0.95,
+      "finding_precision": 0.95,
+      "visible_tokens": 1600,
+      "latency_ms": 4000,
+      "thinking_enabled": true
+    },
+    {
+      "fixture_id": "medium-constants-and-types",
+      "fixture_band": "medium",
+      "effort": "medium",
+      "quality_score": 0.7,
+      "finding_recall": 0.65,
+      "finding_precision": 0.75,
+      "visible_tokens": 2200,
+      "latency_ms": 5000,
+      "thinking_enabled": true
+    },
+    {
+      "fixture_id": "medium-constants-and-types",
+      "fixture_band": "medium",
+      "effort": "high",
+      "quality_score": 0.9,
+      "finding_recall": 0.9,
+      "finding_precision": 0.9,
+      "visible_tokens": 3200,
+      "latency_ms": 7000,
+      "thinking_enabled": true
+    },
+    {
+      "fixture_id": "demanding-multi-surface",
+      "fixture_band": "demanding",
+      "effort": "xhigh",
+      "quality_score": 0.75,
+      "finding_recall": 0.7,
+      "finding_precision": 0.8,
+      "visible_tokens": 5000,
+      "latency_ms": 10000,
+      "thinking_enabled": true
+    },
+    {
+      "fixture_id": "demanding-multi-surface",
+      "fixture_band": "demanding",
+      "effort": "max",
+      "quality_score": 0.92,
+      "finding_recall": 0.92,
+      "finding_precision": 0.9,
+      "visible_tokens": 8000,
+      "latency_ms": 15000,
+      "thinking_enabled": true
+    }
+  ],
+  "recommendation": {
+    "schema_version": "1",
+    "thinking_enabled": true,
+    "cost_latency_lever": "effort",
+    "defaults_unchanged": false,
+    "minimum_quality": 0.8,
+    "recommendation_by_band": {
+      "easy": {
+        "recommended_effort": "medium",
+        "cited_row": {
+          "fixture_id": "easy-comment-preservation",
+          "fixture_band": "easy",
+          "effort": "medium",
+          "quality_score": 0.95,
+          "finding_recall": 0.95,
+          "finding_precision": 0.95,
+          "visible_tokens": 1600,
+          "latency_ms": 4000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      },
+      "medium": {
+        "recommended_effort": "high",
+        "cited_row": {
+          "fixture_id": "medium-constants-and-types",
+          "fixture_band": "medium",
+          "effort": "high",
+          "quality_score": 0.9,
+          "finding_recall": 0.9,
+          "finding_precision": 0.9,
+          "visible_tokens": 3200,
+          "latency_ms": 7000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      },
+      "demanding": {
+        "recommended_effort": "max",
+        "cited_row": {
+          "fixture_id": "demanding-multi-surface",
+          "fixture_band": "demanding",
+          "effort": "max",
+          "quality_score": 0.92,
+          "finding_recall": 0.92,
+          "finding_precision": 0.9,
+          "visible_tokens": 8000,
+          "latency_ms": 15000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      }
+    }
+  },
+  "skill_defaults": {
+    "workflow_family": "e-code-review",
+    "thinking_enabled": true,
+    "cost_latency_lever": "effort",
+    "skill_levels": ["low", "medium", "xhigh"],
+    "default_by_band": {
+      "easy": {
+        "skill_effort": "medium",
+        "evaluation_effort": "medium",
+        "cited_row": {
+          "fixture_id": "easy-comment-preservation",
+          "fixture_band": "easy",
+          "effort": "medium",
+          "quality_score": 0.95,
+          "finding_recall": 0.95,
+          "finding_precision": 0.95,
+          "visible_tokens": 1600,
+          "latency_ms": 4000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      },
+      "medium": {
+        "skill_effort": "xhigh",
+        "evaluation_effort": "high",
+        "cited_row": {
+          "fixture_id": "medium-constants-and-types",
+          "fixture_band": "medium",
+          "effort": "high",
+          "quality_score": 0.9,
+          "finding_recall": 0.9,
+          "finding_precision": 0.9,
+          "visible_tokens": 3200,
+          "latency_ms": 7000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      },
+      "demanding": {
+        "skill_effort": "xhigh",
+        "evaluation_effort": "max",
+        "cited_row": {
+          "fixture_id": "demanding-multi-surface",
+          "fixture_band": "demanding",
+          "effort": "max",
+          "quality_score": 0.92,
+          "finding_recall": 0.92,
+          "finding_precision": 0.9,
+          "visible_tokens": 8000,
+          "latency_ms": 15000,
+          "thinking_enabled": true
+        },
+        "blocker": null
+      }
+    }
+  }
+}

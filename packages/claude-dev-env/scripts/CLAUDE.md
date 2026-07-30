@@ -12,10 +12,12 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `grok_headless_runner.py` | Runs one worker as headless `grok`: builds argv with no turn cap (the timeout is the only bound), mints a unique leader socket, captures streams, refuses a timeout that is missing, below `MIN_WORKER_TIMEOUT_SECONDS`, or above the `MAXIMUM_WORKER_TIMEOUT_SECONDS` (5400) ceiling, kills the whole process tree on timeout with grace and retries the kill-and-drain round once, classifies ok/usage_limit/auth_failure/timeout/kill_failed/error; exports `require_timeout_within_bounds` so a dispatcher can apply the same bounds without launching; imported by `spawn_grok_batch.py` and `resolve_worker_spawn.py` |
 | `grok_worker_preflight.py` | Soft gate for the headless grok tier: binary on PATH, `grok models` auth, install manifest + role agents, opt-in cached live ping; non-zero exit is fallthrough, not failure |
 | `setup_project_paths.py` | One-time bootstrap: discovers git repos via `es.exe` (Everything) and writes `~/.claude/project-paths.json`; never hardcodes scan roots |
-| `spawn_grok_batch.py` | Launches a fleet of headless grok workers from a JSON batch spec: gates once through the preflight, refuses a spec whose `timeout_seconds` exceeds `MAXIMUM_WORKER_TIMEOUT_SECONDS` (5400) rather than clamping it, assembles each prompt from part files, staggers starts, runs each through `grok_headless_runner.py`, and emits one batch summary JSON |
+| `spawn_grok_batch.py` | Launches a fleet of headless grok workers from a JSON batch spec: gates once through the preflight, refuses a spec whose `timeout_seconds` exceeds `MAXIMUM_WORKER_TIMEOUT_SECONDS` (5400) rather than clamping it, assembles each prompt from part files, optionally binds a unique worker advisor per role via the lead-supplied `advisor.launcher` (placeholder default in constants), injects `advisor_session_id`, requires the same session ENDORSE or bounded CORRECTION/PLAN then ENDORSE, classifies bind/verdict/timeout/missing-launcher failures as `advisor_blocked`, staggers starts, runs each through `grok_headless_runner.py`, and emits one batch summary JSON |
 | `sweep_empty_dirs.py` | Deletes empty directories older than a configurable age under a given root; runs once (`--once`) or in continuous-watch mode |
 | `sync_to_cursor.py` | Entry point for syncing Claude rules to Cursor `.mdc` files; delegates to the `sync_to_cursor/` package |
 | `resolve_worker_spawn.py` | Dispatches a worker role through grok then claude fallback tiers (preflight, headless grok, `claude_agent_required` handoff, optional claude headless); applies `require_timeout_within_bounds` before the preflight, so an out-of-bounds `--timeout-seconds` prints a `timeout_out_of_bounds` outcome and exits 3 on every tier; protocol: [`../_shared/pr-loop/worker-spawn.md`](../_shared/pr-loop/worker-spawn.md) |
+| `active_capability_references.py` | Inventories committed skill, agent, and command names and scans package markdown for active slash or backticked capability references; fails ban-listed names outside inert historical/example fences |
+| `verify_installable_package.py` | Verifies the published package: runs real `npm pack`, checks every surface in `installable-surfaces.manifest.json` appears in the tarball, requires each `hooks.json` `.py` command to be git-tracked, and smoke-compiles those scripts (`node --check` on `bin/install.mjs`) |
 
 ## PowerShell scripts
 
@@ -33,7 +35,9 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 
 | Entry | Description |
 |---|---|
-| `dev_env_scripts_constants/` | Named constants (`timing.py`) for scripts in this directory |
+| `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
+| `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
+| `profile-isolation-launchers/` | Profile-launcher contract plus Windows shortcut source semantics: profiles manifest, shared-path allowlist, profile resolver, read-only shortcut inventory and preview reconcile under `windows/`. Live shortcut mutation waits on owner authorization; L1 deploy stays residual |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
@@ -43,6 +47,12 @@ Python scripts (pytest):
 
 ```bash
 python -m pytest packages/claude-dev-env/scripts/tests/
+```
+
+Profile-isolation launcher contract (node:test):
+
+```bash
+node --test packages/claude-dev-env/scripts/profile-isolation-launchers/**/*.test.mjs
 ```
 
 PowerShell scripts (Pester 5+, `*.Tests.ps1`):

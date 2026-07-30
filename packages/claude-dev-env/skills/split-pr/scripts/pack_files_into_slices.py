@@ -6,7 +6,8 @@
         source_commit="abc",
         all_file_records=[{"path": "a.py", "additions": 50, "deletions": 0}],
     )
-    # plan["all_slices"] each stays under the 200 hand-written budget
+    # multi-file slices stay under the 200 hand-written budget;
+    # a single file may reach the 600 hard cap alone
 """
 
 from __future__ import annotations
@@ -35,15 +36,19 @@ from config.packing_constants import (
     SLICE_ID_TEMPLATE,
     SLICE_TITLE_TEMPLATE,
 )
+from config.plan_constants import (
+    SLICE_KEY_ALL_PATHS,
+    SLICE_KEY_ID,
+    SLICE_KEY_LAYER,
+    SLICE_KEY_TITLE,
+)
 from config.split_pr_constants import (
     CHURN_CLASS_HAND_WRITTEN,
     FILE_KEY_CHANGED_LINES,
     FILE_KEY_CHURN_CLASS,
     FILE_KEY_PATH,
 )
-from split_pr_script_types import build_split_plan, validate_split_plan
-
-JsonObject = dict[str, object]
+from split_pr_script_types import JsonObject, build_split_plan, validate_split_plan
 
 
 def infer_path_layer(file_path: str) -> str:
@@ -86,11 +91,13 @@ def _slice_document(
     title_layer: str | None = None,
 ) -> JsonObject:
     title_token = title_layer if title_layer is not None else layer_name
+    slice_id = SLICE_ID_TEMPLATE.format(index=slice_index, layer=layer_name)
+    slice_title = SLICE_TITLE_TEMPLATE.format(layer=title_token, index=slice_index)
     return {
-        "id": SLICE_ID_TEMPLATE.format(index=slice_index, layer=layer_name),
-        "title": SLICE_TITLE_TEMPLATE.format(layer=title_token, index=slice_index),
-        "layer": layer_name,
-        "all_paths": list(all_paths),
+        SLICE_KEY_ID: slice_id,
+        SLICE_KEY_TITLE: slice_title,
+        SLICE_KEY_LAYER: layer_name,
+        SLICE_KEY_ALL_PATHS: list(all_paths),
     }
 
 
@@ -194,10 +201,10 @@ def pack_files_into_slices(
     if not all_slices and all_changed_paths:
         all_slices.append(
             {
-                "id": EMPTY_HAND_WRITTEN_SLICE_ID,
-                "title": EMPTY_HAND_WRITTEN_TITLE,
-                "layer": LAYER_OTHER,
-                "all_paths": list(all_changed_paths),
+                SLICE_KEY_ID: EMPTY_HAND_WRITTEN_SLICE_ID,
+                SLICE_KEY_TITLE: EMPTY_HAND_WRITTEN_TITLE,
+                SLICE_KEY_LAYER: LAYER_OTHER,
+                SLICE_KEY_ALL_PATHS: list(all_changed_paths),
             }
         )
     plan = build_split_plan(source_commit, all_changed_paths, all_slices)

@@ -64,7 +64,11 @@ never a hard gate.
 | `scripts/test_split_pr_layer_order.py` | Layer order ranking |
 | `scripts/test_split_pr_paginate.py` | Slurp page flattening |
 | `reference/proposal-format.md` | Human-readable plan field contract |
+| `reference/splitting-principles.md` | Vertical-slice invariants |
+| `reference/path-layers.md` | Layer hints (context only) |
+| `reference/split-further-loop.md` | Re-split loop until leaves fit review |
 
 ## Folder map
 
-- `scripts/` — analyzer, categorize helpers, constants, tests
+- `scripts/` — analyzer, categorize helpers, plan verifier, plan contract, constants, tests
+- `reference/` — vertical-slice principles, layer hints, plan field contract

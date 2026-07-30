@@ -19,6 +19,7 @@ from config.plan_constants import (
     GH_COMMAND,
     GH_PAGINATE_FLAG,
     GH_PULLS_FILES_PATH_TEMPLATE,
+    GH_REST_FILE_FILENAME,
     GH_SLURP_FLAG,
     UTF8_ENCODING,
 )
@@ -98,7 +99,9 @@ def parse_paginated_files_payload(raw_json: str) -> list[JsonObject]:
         for each_file in each_page:
             if not isinstance(each_file, dict):
                 continue
-            path = each_file.get(FILE_KEY_PATH)
+            path = each_file.get(GH_REST_FILE_FILENAME)
+            if path is None:
+                path = each_file.get(FILE_KEY_PATH)
             if not path:
                 continue
             path_text = str(path)
