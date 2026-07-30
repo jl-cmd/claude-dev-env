@@ -528,6 +528,9 @@ DEFAULT_ADVISOR_EFFORT: str = "high"
 MAXIMUM_WORKER_ADVISOR_CORRECTIONS: int = 3
 """Maximum CORRECTION/PLAN re-consults per worker before advisor_blocked."""
 
+MAXIMUM_ADVISOR_TIMEOUT_SECONDS: int = 600
+"""Timeout for one advisor launcher subprocess call, in seconds."""
+
 ADVISOR_SIGNAL_ENDORSE: str = "ENDORSE"
 """Opening signal that accepts a worker report."""
 

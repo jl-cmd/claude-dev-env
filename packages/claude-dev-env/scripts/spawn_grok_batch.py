@@ -92,6 +92,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     DEFAULT_ADVISOR_MODEL,
     DEFAULT_ADVISOR_EFFORT,
     MAXIMUM_WORKER_ADVISOR_CORRECTIONS,
+    MAXIMUM_ADVISOR_TIMEOUT_SECONDS,
     ADVISOR_SIGNAL_ENDORSE,
     ADVISOR_SIGNAL_CORRECTION,
     ADVISOR_SIGNAL_PLAN,
@@ -115,6 +116,10 @@ from dev_env_scripts_constants.grok_worker_constants import (
 from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS
 from grok_headless_runner import GrokRunnerOutcome, run_headless_worker
 from grok_worker_preflight import PreflightOutcome, run_preflight
+
+class AdvisorFailureError(ValueError):
+    """Raised when an advisor bind, resume, or launcher call fails closed."""
+
 
 batch_sleep = time.sleep
 batch_headless_runner = run_headless_worker
@@ -246,14 +251,24 @@ def invoke_advisor_launcher(
     ]
     if session_id is not None:
         all_command_arguments.extend([ADVISOR_CLI_RESUME_FLAG, session_id])
-    completion = subprocess.run(
-        all_command_arguments,
-        input=prompt_text,
-        capture_output=True,
-        text=True,
-        encoding=UTF8_ENCODING,
-        check=False,
-    )
+    try:
+        completion = subprocess.run(
+            all_command_arguments,
+            input=prompt_text,
+            capture_output=True,
+            text=True,
+            encoding=UTF8_ENCODING,
+            check=False,
+            timeout=MAXIMUM_ADVISOR_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as missing_launcher:
+        raise AdvisorFailureError(
+            f"advisor launcher not found: {launcher}"
+        ) from missing_launcher
+    except subprocess.TimeoutExpired as timed_out:
+        raise AdvisorFailureError(
+            f"advisor launcher timed out after {MAXIMUM_ADVISOR_TIMEOUT_SECONDS}s"
+        ) from timed_out
     stdout_text = completion.stdout or ""
     resolved_session = _session_id_from_advisor_stdout(stdout_text)
     if session_id is not None and resolved_session is None:
@@ -304,11 +319,11 @@ def bind_unique_worker_advisor(
         prompt_text=prompt_text,
     )
     if returncode != 0 or not session_id or session_id == PENDING_BIND_SENTINEL:
-        raise ValueError(
+        raise AdvisorFailureError(
             f"advisor bind failed for role {role_name}: returncode={returncode}"
         )
     if session_id in all_used_session_ids:
-        raise ValueError(
+        raise AdvisorFailureError(
             f"duplicate advisor session id {session_id} for role {role_name}"
         )
     signal = extract_advisor_signal(advisor_body_text)
@@ -997,8 +1012,9 @@ def _map_launch_exception(
     advisor_launcher: str | None,
 ) -> WorkerReport:
     if advisor_spec is not None and (
-        "advisor" in str(raised_exception).lower()
+        isinstance(raised_exception, AdvisorFailureError)
         or PENDING_BIND_SENTINEL in str(raised_exception)
+        or "advisor" in str(raised_exception).lower()
     ):
         return _advisor_blocked_report(
             worker_spec=worker_spec,
@@ -1091,6 +1107,7 @@ def _launch_one_worker(
         TypeError,
         AttributeError,
         LookupError,
+        AdvisorFailureError,
     ) as raised_exception:
         return _map_launch_exception(
             worker_spec=worker_spec,

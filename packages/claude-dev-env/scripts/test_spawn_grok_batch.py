@@ -1577,3 +1577,40 @@ def test_invoke_advisor_launcher_builds_command(
     assert "ENDORSE" in body
     assert captured["args"][0] == "fixture-advisor-launcher"
     assert "--model" in captured["args"]
+
+
+def test_invoke_advisor_launcher_missing_binary_raises_advisor_failure() -> None:
+    try:
+        batch.invoke_advisor_launcher(
+            launcher="__no_such_advisor_launcher_xyz__",
+            model="opus",
+            effort="high",
+            prompt_text="ping",
+        )
+        raise AssertionError("expected AdvisorFailureError")
+    except batch.AdvisorFailureError as raised:
+        assert "not found" in str(raised).lower() or "launcher" in str(raised).lower()
+
+
+def test_invoke_advisor_launcher_passes_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Completed:
+        returncode = 0
+        stdout = '{"session_id":"s-timeout","result":"ENDORSE\\nok"}'
+        stderr = ""
+
+    def fake_run(args, **kwargs):  # type: ignore[no-untyped-def]  # subprocess.run stub
+        captured["timeout"] = kwargs.get("timeout")
+        return _Completed()
+
+    monkeypatch.setattr(batch.subprocess, "run", fake_run)
+    batch.invoke_advisor_launcher(
+        launcher="fixture-advisor-launcher",
+        model="opus",
+        effort="high",
+        prompt_text="hello",
+    )
+    assert captured["timeout"] == batch.MAXIMUM_ADVISOR_TIMEOUT_SECONDS
