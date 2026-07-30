@@ -51,18 +51,6 @@ function createToolEventSinkPath(profileRoot) {
 
 /**
  * @param {string} sinkPath
- * @param {ToolHookEventRecord} record
- * @returns {void}
- */
-function appendToolHookEvent(sinkPath, record) {
-    writeFileSync(sinkPath, `${JSON.stringify(record)}\n`, {
-        encoding: 'utf8',
-        flag: 'a',
-    });
-}
-
-/**
- * @param {string} sinkPath
  * @returns {ToolHookEventRecord[]}
  */
 function readToolHookEvents(sinkPath) {
@@ -73,6 +61,52 @@ function readToolHookEvents(sinkPath) {
         .split(/\r?\n/u)
         .filter(Boolean)
         .map((eachLine) => /** @type {ToolHookEventRecord} */ (JSON.parse(eachLine)));
+}
+
+/**
+ * Append one tool-hook record; sequence is derived from sink order.
+ *
+ * @param {string} sinkPath
+ * @param {{
+ *   eventName: string,
+ *   profileId: string,
+ *   correlationId: string,
+ *   toolName?: string,
+ * }} fields
+ * @returns {ToolHookEventRecord}
+ */
+function appendToolHookEvent(sinkPath, fields) {
+    const record = {
+        eventName: fields.eventName,
+        profileId: fields.profileId,
+        correlationId: fields.correlationId,
+        toolName: fields.toolName ?? DISPOSABLE_TOOL_NAME,
+        sequence: readToolHookEvents(sinkPath).length + 1,
+        recordedAtMs: Date.now(),
+    };
+    writeFileSync(sinkPath, `${JSON.stringify(record)}\n`, {
+        encoding: 'utf8',
+        flag: 'a',
+    });
+    return record;
+}
+
+/**
+ * @param {ToolHookEventRecord[]} allEvents
+ * @param {string} correlationId
+ * @param {string} [eventName]
+ * @returns {ToolHookEventRecord[]}
+ */
+function eventsForCorrelation(allEvents, correlationId, eventName) {
+    return allEvents.filter((eachEvent) => {
+        if (eachEvent.correlationId !== correlationId) {
+            return false;
+        }
+        if (eventName && eachEvent.eventName !== eventName) {
+            return false;
+        }
+        return true;
+    });
 }
 
 /**
@@ -90,15 +124,11 @@ function readToolHookEvents(sinkPath) {
 function runDisposableToolAction(roots, profileId, correlationId) {
     const profileRoot = roots.profileRootById[profileId];
     const sinkPath = createToolEventSinkPath(profileRoot);
-    const baseMs = Date.now();
 
     appendToolHookEvent(sinkPath, {
         eventName: PRE_TOOL_USE_EVENT,
         profileId,
         correlationId,
-        toolName: DISPOSABLE_TOOL_NAME,
-        sequence: 1,
-        recordedAtMs: baseMs,
     });
 
     const harnessResult = runProfileSession({
@@ -116,9 +146,6 @@ function runDisposableToolAction(roots, profileId, correlationId) {
         eventName: POST_TOOL_USE_EVENT,
         profileId,
         correlationId,
-        toolName: DISPOSABLE_TOOL_NAME,
-        sequence: 2,
-        recordedAtMs: baseMs + 1,
     });
 
     return {
@@ -144,9 +171,7 @@ test('pre and post events correlate to one disposable action per profile', () =>
                 'command must carry the correlation id',
             );
 
-            const matched = outcome.events.filter(
-                (eachEvent) => eachEvent.correlationId === correlationId,
-            );
+            const matched = eventsForCorrelation(outcome.events, correlationId);
             assert.equal(matched.length, 2);
             const preEvent = matched.find((eachEvent) => eachEvent.eventName === PRE_TOOL_USE_EVENT);
             const postEvent = matched.find((eachEvent) => eachEvent.eventName === POST_TOOL_USE_EVENT);
@@ -169,22 +194,20 @@ test('exactly-once dispatch: one pre and one post for a correlation id', () => {
     try {
         const correlationId = 'corr-once';
         const outcome = runDisposableToolAction(roots, 'main', correlationId);
-        const preCount = outcome.events.filter(
-            (eachEvent) => eachEvent.eventName === PRE_TOOL_USE_EVENT
-                && eachEvent.correlationId === correlationId,
-        ).length;
-        const postCount = outcome.events.filter(
-            (eachEvent) => eachEvent.eventName === POST_TOOL_USE_EVENT
-                && eachEvent.correlationId === correlationId,
-        ).length;
-        assert.equal(preCount, 1);
-        assert.equal(postCount, 1);
+        assert.equal(
+            eventsForCorrelation(outcome.events, correlationId, PRE_TOOL_USE_EVENT).length,
+            1,
+        );
+        assert.equal(
+            eventsForCorrelation(outcome.events, correlationId, POST_TOOL_USE_EVENT).length,
+            1,
+        );
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
 });
 
-test('uncorrelated post event fails correlation assertion', () => {
+test('mismatched pre/post correlation ids stay distinct', () => {
     const roots = createDisposableRunRoots({ profileIds: ['editor'] });
     try {
         const sinkPath = createToolEventSinkPath(roots.profileRootById.editor);
@@ -192,17 +215,11 @@ test('uncorrelated post event fails correlation assertion', () => {
             eventName: PRE_TOOL_USE_EVENT,
             profileId: 'editor',
             correlationId: 'corr-a',
-            toolName: DISPOSABLE_TOOL_NAME,
-            sequence: 1,
-            recordedAtMs: 1,
         });
         appendToolHookEvent(sinkPath, {
             eventName: POST_TOOL_USE_EVENT,
             profileId: 'editor',
             correlationId: 'corr-b',
-            toolName: DISPOSABLE_TOOL_NAME,
-            sequence: 2,
-            recordedAtMs: 2,
         });
         const events = readToolHookEvents(sinkPath);
         const pre = events.find((eachEvent) => eachEvent.eventName === PRE_TOOL_USE_EVENT);
@@ -218,18 +235,11 @@ test('disposable tool action does not target live project paths', () => {
     const roots = createDisposableRunRoots({ profileIds: ['mel'] });
     try {
         const outcome = runDisposableToolAction(roots, 'mel', 'corr-safety');
+        assert.equal(outcome.harnessResult.profileRoot, roots.profileRootById.mel);
         const configDir = String(outcome.harnessResult.profileRoot).replace(/\\/gu, '/').toLowerCase();
-        assert.ok(configDir.includes('fresh-session') || configDir.includes(roots.runRoot.replace(/\\/gu, '/').toLowerCase()));
-        writeFileSync(
-            join(roots.evidenceRoot, 'tool-hook-safety.json'),
-            `${JSON.stringify({
-                toolName: DISPOSABLE_TOOL_NAME,
-                profileRoot: outcome.harnessResult.profileRoot,
-                sideEffectFree: true,
-            }, null, 2)}\n`,
-            'utf8',
-        );
-        assert.ok(existsSync(join(roots.evidenceRoot, 'tool-hook-safety.json')));
+        const runRoot = roots.runRoot.replace(/\\/gu, '/').toLowerCase();
+        assert.ok(configDir.startsWith(runRoot));
+        assert.ok(configDir.includes('fresh-session'));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
