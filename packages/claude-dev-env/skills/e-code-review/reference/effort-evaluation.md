@@ -8,7 +8,7 @@ Offline-first harness for choosing e-code-review effort without changing default
 |---|---|
 | Fixtures | `scripts/fixtures/{easy,medium,demanding}.json` |
 | Schema + recommend | `scripts/effort_evaluation.py` |
-| Constants | `scripts/e_code_review_effort_constants/` |
+| Constants | `scripts/config/e_code_review_effort_constants/` |
 | Tests | `scripts/test_effort_evaluation.py` |
 
 ## How to run offline tests

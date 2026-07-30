@@ -26,6 +26,9 @@ from e_code_review_effort_constants import (
     ALL_EFFORT_LEVELS,
     ALL_FIXTURE_BANDS,
     ALL_REQUIRED_ROW_KEYS,
+    ALL_SCORE_ROW_KEYS,
+    COST_LATENCY_LEVER,
+    ALL_EFFORT_RANK_BY_NAME,
     EVALUATION_SCHEMA_VERSION,
     FIXTURES_DIRECTORY_NAME,
     JSON_SUFFIX,
@@ -34,6 +37,7 @@ from e_code_review_effort_constants import (
     THINKING_ENABLED_DEFAULT,
     VISIBLE_TOKENS_ROW_KEY,
 )
+
 
 def fixtures_directory() -> Path:
     """Return the frozen fixture directory next to this module.
@@ -94,7 +98,7 @@ def validate_evaluation_row(all_row_fields: Mapping[str, object]) -> list[str]:
         all_problems.append(f"unknown fixture_band: {fixture_band!r}")
     if all_row_fields["thinking_enabled"] is not True:
         all_problems.append("thinking_enabled must be true on Opus paths")
-    for each_score_key in ("quality_score", "finding_recall", "finding_precision"):
+    for each_score_key in ALL_SCORE_ROW_KEYS:
         score_amount = all_row_fields[each_score_key]
         if not isinstance(score_amount, (int, float)):
             all_problems.append(f"{each_score_key} must be numeric")
@@ -120,24 +124,19 @@ def quality_holds(
     Returns:
         Whether the row holds quality at the floor.
     """
-    return (
-        float(all_row_fields["quality_score"]) >= minimum_quality
-        and float(all_row_fields["finding_recall"]) >= minimum_quality
-        and float(all_row_fields["finding_precision"]) >= minimum_quality
+    return all(
+        float(all_row_fields[each_score_key]) >= minimum_quality
+        for each_score_key in ALL_SCORE_ROW_KEYS
     )
 
 
 def _lowest_holding_row(
     all_band_rows: Sequence[Mapping[str, object]],
 ) -> Mapping[str, object]:
-    all_effort_rank_by_name: Mapping[str, int] = {
-        each_effort: each_index
-        for each_index, each_effort in enumerate(ALL_EFFORT_LEVELS)
-    }
-    return sorted(
+    return min(
         all_band_rows,
-        key=lambda each_row: all_effort_rank_by_name[str(each_row["effort"])],
-    )[0]
+        key=lambda each_row: ALL_EFFORT_RANK_BY_NAME[str(each_row["effort"])],
+    )
 
 
 def recommend_effort_by_band(
@@ -180,7 +179,7 @@ def recommend_effort_by_band(
     return {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "thinking_enabled": THINKING_ENABLED_DEFAULT,
-        "cost_latency_lever": "effort",
+        "cost_latency_lever": COST_LATENCY_LEVER,
         "defaults_unchanged": True,
         "minimum_quality": minimum_quality,
         "recommendation_by_band": dict(recommendation_by_band),
