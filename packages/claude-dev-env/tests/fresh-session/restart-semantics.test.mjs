@@ -109,19 +109,22 @@ test('restart boundary requires a new session observation after the marker chang
     try {
         const profileRoot = roots.profileRootById.main;
         writeConfigMarker(profileRoot, INITIAL_MARKER_VALUE);
-        const before = readConfigMarker(profileRoot);
+        const firstSession = observeConfigMarkerSession(roots, 'main');
+        assert.equal(firstSession.marker, INITIAL_MARKER_VALUE);
+
         writeConfigMarker(profileRoot, UPDATED_MARKER_VALUE);
-        const after = readConfigMarker(profileRoot);
-        assert.equal(before, INITIAL_MARKER_VALUE);
-        assert.equal(after, UPDATED_MARKER_VALUE);
+        const secondSession = observeConfigMarkerSession(roots, 'main');
+        assert.equal(secondSession.marker, UPDATED_MARKER_VALUE);
+        assert.ok(secondSession.harnessResult.command.includes(UPDATED_MARKER_VALUE));
+        assert.ok(!secondSession.harnessResult.command.includes(INITIAL_MARKER_VALUE));
 
         const evidencePath = join(roots.evidenceRoot, 'restart-boundary.json');
         writeFileSync(
             evidencePath,
             `${JSON.stringify({
                 documentedBoundary: 'fresh session after configuration marker change',
-                before,
-                after,
+                before: firstSession.marker,
+                after: secondSession.marker,
             }, null, 2)}\n`,
             'utf8',
         );
