@@ -14,7 +14,6 @@ import {
     mkdirSync,
     readdirSync,
     readFileSync,
-    writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,14 +25,14 @@ import {
 import { runProfileSession } from './harness/transport.mjs';
 
 const TEST_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+const FIXTURE_AGENT_NAME = 'fixture-discoverable';
+const FIXTURE_AGENT_FILE_NAME = `${FIXTURE_AGENT_NAME}.md`;
 const FIXTURE_AGENT_SOURCE_PATH = join(
     TEST_DIRECTORY,
     'fixtures',
     'agent-discovery',
-    'fixture-discoverable.md',
+    FIXTURE_AGENT_FILE_NAME,
 );
-const FIXTURE_AGENT_FILE_NAME = 'fixture-discoverable.md';
-const FIXTURE_AGENT_NAME = 'fixture-discoverable';
 const AGENTS_DIRECTORY_NAME = 'agents';
 const HARNESS_LIST_AGENTS_ARGUMENT = '--harness-list-agents';
 const HARNESS_INVOKE_AGENT_ARGUMENT = '--harness-invoke-agent';
@@ -71,13 +70,12 @@ function discoverInstalledAgents(profileRoot) {
 }
 
 /**
- * Parse the fixture agent name from YAML frontmatter.
+ * Parse the fixture agent name from YAML frontmatter body text.
  *
- * @param {string} agentSourcePath
+ * @param {string} body
  * @returns {string}
  */
-function readFixtureAgentName(agentSourcePath) {
-    const body = readFileSync(agentSourcePath, 'utf8');
+function readFixtureAgentName(body) {
     const match = /^name:\s*([^\r\n]+)/mu.exec(body);
     assert.ok(match, 'fixture agent must declare name frontmatter');
     return match[1].trim();
@@ -86,8 +84,8 @@ function readFixtureAgentName(agentSourcePath) {
 test('fixture agent source declares a stable name and invocation marker', () => {
     assert.ok(existsSync(FIXTURE_AGENT_SOURCE_PATH));
     const body = readFileSync(FIXTURE_AGENT_SOURCE_PATH, 'utf8');
-    assert.equal(readFixtureAgentName(FIXTURE_AGENT_SOURCE_PATH), FIXTURE_AGENT_NAME);
-    assert.match(body, new RegExp(INVOCATION_MARKER));
+    assert.equal(readFixtureAgentName(body), FIXTURE_AGENT_NAME);
+    assert.ok(body.includes(INVOCATION_MARKER));
 });
 
 test('discovery lists the fixture agent independently of invocation for each profile', () => {
@@ -129,10 +127,7 @@ test('invocation records the fixture agent separately from discovery for each pr
     const roots = createDisposableRunRoots({ profileIds: [...ALL_PROFILE_IDS] });
     try {
         for (const eachProfileId of ALL_PROFILE_IDS) {
-            const profileRoot = roots.profileRootById[eachProfileId];
-            const installedPath = installFixtureAgent(profileRoot);
-            const fixtureBody = readFileSync(installedPath, 'utf8');
-            assert.match(fixtureBody, new RegExp(INVOCATION_MARKER));
+            installFixtureAgent(roots.profileRootById[eachProfileId]);
 
             const invokeResult = runProfileSession({
                 roots,
@@ -179,14 +174,10 @@ test('fixture agent installs only under disposable profile roots', () => {
     try {
         const installedPath = installFixtureAgent(roots.profileRootById.mel);
         const normalized = installedPath.replace(/\\/gu, '/').toLowerCase();
-        assert.ok(normalized.includes('fresh-session') || normalized.includes(roots.runRoot.replace(/\\/gu, '/').toLowerCase()));
+        const runRoot = roots.runRoot.replace(/\\/gu, '/').toLowerCase();
+        assert.ok(normalized.startsWith(runRoot));
+        assert.ok(normalized.includes('/agents/'));
         assert.ok(!normalized.includes('/.claude/agents/'));
-        writeFileSync(
-            join(roots.evidenceRoot, 'agent-discovery-install.json'),
-            `${JSON.stringify({ installedPath, profileId: 'mel' }, null, 2)}\n`,
-            'utf8',
-        );
-        assert.ok(existsSync(join(roots.evidenceRoot, 'agent-discovery-install.json')));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
