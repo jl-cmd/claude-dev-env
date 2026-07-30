@@ -25,7 +25,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `anthropic-plan` — creates a source-grounded plan packet before any code changes
 - `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; a third-party host: max-tier Claude via CLI Claude-chain)
 - `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; a third-party host's Claude CLI chain, no Agent-tool advisor spawn)
-- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; a third-party host: max-tier Claude via CLI Claude-chain, fail closed when unreachable) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
+- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; a third-party host: max-tier Claude via CLI Claude-chain, fail closed when unreachable); consult cadence and weight live in `docs/references/advisor-tool.md`
 - `grokify` — builds a paste-ready Grok Build handoff with a Claude advisor charter
 - `grok-spawn` — orchestrator playbook for fleets of headless grok CLI workers (preflight, batch spec, `spawn_grok_batch.py`)
 
