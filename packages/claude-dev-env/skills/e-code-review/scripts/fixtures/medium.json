@@ -1,0 +1,20 @@
+{
+  "fixture_id": "medium-constants-and-types",
+  "band": "medium",
+  "description": "Two seeded findings: bare type-ignore and a magic timeout literal.",
+  "target_summary": "Service module adds a bare type ignore and a hard-coded timeout.",
+  "seeded_findings": [
+    {
+      "file": "order_service.py",
+      "line": 24,
+      "category": "type-ignore-justification",
+      "severity": "high"
+    },
+    {
+      "file": "order_service.py",
+      "line": 41,
+      "category": "magic-value",
+      "severity": "medium"
+    }
+  ]
+}

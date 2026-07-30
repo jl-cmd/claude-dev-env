@@ -7,6 +7,8 @@ Python helper scripts called by GitHub Actions workflows in `.github/workflows/`
 | File | Purpose |
 |------|---------|
 | `sync_ai_rules.py` | Syncs `AGENTS.md` from this repo into target repos. Fetches the source content, prepends a sync header (source commit, timestamp, SHA256 trailer), and commits to the target's default branch. Called by `sync-ai-rules.yml` (target-side listener). |
+| `plugin_channel_inventory.mjs` | Pure parse and classify helpers for the plugin-channel consumer inventory: plugin and marketplace manifests, README entry detection, selected-profile registration probes, collision boolean, and journal schema validation. |
+| `plugin_channel_inventory.test.mjs` | `node:test` suite for the inventory helpers and the committed `docs/references/plugin-channel-inventory.json` journal. |
 
 ## How `sync_ai_rules.py` works
 
@@ -21,3 +23,4 @@ Python helper scripts called by GitHub Actions workflows in `.github/workflows/`
 - Do not call `sync_ai_rules.py` directly during development; drive it through `python -m pytest tests/test_sync_ai_rules.py` to run against fixtures.
 - The script imports from `config/sync_ai_rules_paths.py` via a guarded `sys.path.insert`; the repo root must be on the path, which `pytest.ini` handles via `pythonpath = .`.
 - `__pycache__/` is gitignored; the `.pyc` file next to this script is a local artifact.
+- Run the plugin-channel inventory suite with `node --test .github/scripts/plugin_channel_inventory.test.mjs` from the repository root.
