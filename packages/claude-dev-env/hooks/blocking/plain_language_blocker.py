@@ -31,6 +31,9 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
+from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
+    prose_style_enforcement_enabled_in_environment,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     ALL_CHAT_DETAIL_MARKERS,
@@ -603,6 +606,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         all_block_violations = find_question_block_violations(raw_tool_input)
         if all_block_violations:
             return build_lean_block_reason(all_block_violations)
+
+    if not prose_style_enforcement_enabled_in_environment():
+        return None
 
     prose_text = _collect_prose_for_tool(raw_tool_name, raw_tool_input)
     if not prose_text:
