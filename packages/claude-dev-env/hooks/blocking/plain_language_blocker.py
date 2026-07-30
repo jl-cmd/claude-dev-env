@@ -69,6 +69,7 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     USER_FACING_PLAIN_LANGUAGE_NOTICE,
 )
 from hooks_constants.prose_matcher_precision_constants import (  # noqa: E402
+    ADVISORY_CONTEXT_SNIPPET_MAX_CHARS,
     MATCHER_ID_PLAIN_LANGUAGE_HEAVY_WORD,
     MAXIMUM_ADVISORY_EMITS_PER_CALL,
 )
@@ -587,14 +588,12 @@ def _emit_plain_language_advisory_candidates(
 ) -> None:
     """Record privacy-safe advisory hits when enforcement is off (fail open)."""
     try:
-        for each_term, each_replacement in all_matches[
-            :MAXIMUM_ADVISORY_EMITS_PER_CALL
-        ]:
-            del each_replacement
+        for each_match in all_matches[:MAXIMUM_ADVISORY_EMITS_PER_CALL]:
+            each_term = each_match[0]
             emit_advisory_candidate(
                 MATCHER_ID_PLAIN_LANGUAGE_HEAVY_WORD,
                 surface,
-                f"{each_term}:{prose_text[:120]}",
+                f"{each_term}:{prose_text[:ADVISORY_CONTEXT_SNIPPET_MAX_CHARS]}",
             )
     except (ImportError, OSError, TypeError, ValueError):
         return

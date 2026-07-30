@@ -22,6 +22,7 @@ from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_NOTICE  # noqa: E402
 from hooks_constants.prose_matcher_precision_constants import (  # noqa: E402
+    ADVISORY_CONTEXT_SNIPPET_MAX_CHARS,
     MATCHER_ID_HEDGING_WORD,
     MAXIMUM_ADVISORY_EMITS_PER_CALL,
 )
@@ -107,7 +108,7 @@ def main() -> None:
                 emit_advisory_candidate(
                     MATCHER_ID_HEDGING_WORD,
                     "Stop",
-                    f"{each_term}:{assistant_message[:120]}",
+                    f"{each_term}:{assistant_message[:ADVISORY_CONTEXT_SNIPPET_MAX_CHARS]}",
                 )
         except (ImportError, OSError, TypeError, ValueError):
             pass
