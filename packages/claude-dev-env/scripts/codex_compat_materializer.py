@@ -25,7 +25,6 @@ reparse_point_attribute_name = "FILE_ATTRIBUTE_REPARSE_POINT"
 manifest_indentation_width = 2
 publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
-frontmatter_required_fields = ("name", "description")
 frontmatter_unsupported_fields = ("tools", "model", "color")
 full_prune_opt_in_flag = "--allow-prune-all"
 unreadable_source_root_message = (
@@ -289,9 +288,7 @@ _UniqueKeySafeLoader.add_constructor(
 )
 
 
-def _require_nonempty_string(
-    field_content: object, field_name: str, source_path: Path
-) -> str:
+def _require_nonempty_string(field_content: object, source_path: Path) -> str:
     if not isinstance(field_content, str):
         raise MaterializerError(f"name and description are required: {source_path}")
     if not field_content.strip():
@@ -372,9 +369,9 @@ def parse_frontmatter(source_path: Path, source_text: str, relative_source: str)
             if each_key in frontmatter_unsupported_fields
         )
     )
-    name = _require_nonempty_string(parsed_fields.get("name"), "name", source_path)
+    name = _require_nonempty_string(parsed_fields.get("name"), source_path)
     description = _require_nonempty_string(
-        parsed_fields.get("description"), "description", source_path
+        parsed_fields.get("description"), source_path
     )
     tools = _require_tools_list(parsed_fields.get("tools"), source_path)
     model = _require_optional_string(parsed_fields.get("model"), "model", source_path)
