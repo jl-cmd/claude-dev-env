@@ -19,11 +19,26 @@ import {
     SETTINGS_FILE_NAME,
     MYPY_INI_FILE_NAME,
 } from './install-constants.mjs';
+import {
+    resolveInstallRoot,
+    parseExplicitTargetFromArgv,
+} from './resolve-install-root.mjs';
 
-const CLAUDE_HOME = join(homedir(), '.claude');
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const MANIFEST_FILE = join(CLAUDE_HOME, '.claude-dev-env-manifest.json');
-const MYPY_INI_INSTALL_PATH = join(homedir(), MYPY_INI_FILE_NAME);
+const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
+    environment: process.env,
+    homeDirectory: homedir(),
+    explicitTarget: (() => {
+        try {
+            return parseExplicitTargetFromArgv(process.argv.slice(2));
+        } catch {
+            return null;
+        }
+    })(),
+});
+const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
+const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;
+const MYPY_INI_INSTALL_PATH = INSTALL_ROOT_RESOLUTION.mypyIniInstallPath;
 const PACKAGE_NAME = 'claude-dev-env';
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 const packageRequire = createRequire(import.meta.url);
@@ -2091,7 +2106,9 @@ Examples:
   npx ${PACKAGE_NAME} --only core
   npx ${PACKAGE_NAME} --only core,journal
 
-Install location: ~/.claude/
+Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
+
+Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 
 If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
 writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
