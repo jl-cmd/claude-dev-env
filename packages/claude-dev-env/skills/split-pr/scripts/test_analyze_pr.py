@@ -13,14 +13,21 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from analyze_pr import _fetch_pr_files, build_analysis_from_files
+from analyze_pr import (
+    _fetch_pr_files,
+    _file_records_from_gh,
+    _flatten_paginated_file_pages,
+    build_analysis_from_files,
+)
 from config.split_pr_constants import (
     DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD,
     EXIT_CODE_SUCCESS,
     FILE_KEY_ADDITIONS,
     FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
-    GH_VIEW,
+    GH_API_SUBCOMMAND,
+    GH_PAGINATE_FLAG,
+    GH_SLURP_FLAG,
     PAYLOAD_KEY_ATOMIC_EXCEPTION,
     PAYLOAD_KEY_DEFAULT_SPLIT,
     PAYLOAD_KEY_EXCLUDED_CHURN_LINES,
@@ -141,7 +148,9 @@ def test_file_count_is_reported_but_not_a_hard_gate() -> None:
     assert analysis[PAYLOAD_KEY_REQUIRES_SPLIT_ANALYSIS] is False
 
 
-def test_fetch_pr_files_invokes_gh_pr_view(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_pr_files_uses_paginated_pulls_files_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     all_captured_commands: list[list[str]] = []
 
     def _fake_run(all_command: list[str], **_kwargs: object) -> object:
@@ -150,11 +159,15 @@ def test_fetch_pr_files_invokes_gh_pr_view(monkeypatch: pytest.MonkeyPatch) -> N
         class _Completed:
             returncode = EXIT_CODE_SUCCESS
             stdout = json.dumps(
-                {
-                    "files": [
-                        {"path": "src/a.py", "additions": 3, "deletions": 1},
+                [
+                    [
+                        {
+                            "filename": "src/a.py",
+                            "additions": 3,
+                            "deletions": 1,
+                        }
                     ]
-                }
+                ]
             )
             stderr = ""
 
@@ -163,11 +176,25 @@ def test_fetch_pr_files_invokes_gh_pr_view(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("analyze_pr.subprocess.run", _fake_run)
     all_records = _fetch_pr_files(895, "jl-cmd/claude-dev-env")
     assert len(all_captured_commands) == 1
-    assert GH_VIEW in all_captured_commands[0]
-    assert all_captured_commands[0][:3] == ["gh", "pr", "view"]
+    assert all_captured_commands[0][0:2] == ["gh", GH_API_SUBCOMMAND]
+    assert "repos/jl-cmd/claude-dev-env/pulls/895/files" in all_captured_commands[0]
+    assert GH_PAGINATE_FLAG in all_captured_commands[0]
+    assert GH_SLURP_FLAG in all_captured_commands[0]
     assert all_records[0][FILE_KEY_PATH] == "src/a.py"
     assert all_records[0][FILE_KEY_ADDITIONS] == 3
     assert all_records[0][FILE_KEY_DELETIONS] == 1
+
+
+def test_flatten_paginated_file_pages_merges_pages() -> None:
+    all_files = _flatten_paginated_file_pages(
+        [
+            [{"filename": "a.py", "additions": 1, "deletions": 0}],
+            [{"filename": "b.py", "additions": 2, "deletions": 0}],
+        ]
+    )
+    assert len(all_files) == 2
+    all_records = _file_records_from_gh(all_files)
+    assert {each[FILE_KEY_PATH] for each in all_records} == {"a.py", "b.py"}
 
 
 def test_analyze_pr_cli_files_json(tmp_path: Path) -> None:
