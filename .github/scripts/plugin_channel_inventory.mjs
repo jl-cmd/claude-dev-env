@@ -231,6 +231,12 @@ export function buildInventoryJournal(inputs) {
   };
 }
 
+const consumerVocabularyFields = [
+  ['channel', CHANNEL_VALUES],
+  ['classification', CLASSIFICATION_VALUES],
+  ['probe_result', PROBE_RESULT_VALUES],
+];
+
 function requireNonEmptyString(value, fieldName, allErrors) {
   if (typeof value !== 'string' || !value) {
     allErrors.push(`${fieldName} must be a non-empty string`);
@@ -268,14 +274,10 @@ export function validateInventoryJournal(journal) {
       if (!eachConsumer?.id) {
         allErrors.push('consumer missing id');
       }
-      if (!CHANNEL_VALUES.includes(eachConsumer?.channel)) {
-        allErrors.push(`consumer ${eachConsumer?.id} has invalid channel`);
-      }
-      if (!CLASSIFICATION_VALUES.includes(eachConsumer?.classification)) {
-        allErrors.push(`consumer ${eachConsumer?.id} has invalid classification`);
-      }
-      if (!PROBE_RESULT_VALUES.includes(eachConsumer?.probe_result)) {
-        allErrors.push(`consumer ${eachConsumer?.id} has invalid probe_result`);
+      for (const [fieldName, allowedValues] of consumerVocabularyFields) {
+        if (!allowedValues.includes(eachConsumer?.[fieldName])) {
+          allErrors.push(`consumer ${eachConsumer?.id} has invalid ${fieldName}`);
+        }
       }
       if (
         eachConsumer?.classification === 'unresolved' &&
