@@ -72,6 +72,7 @@ export function validateProfilesManifest(maybeManifest) {
   for (const [eachProfileKey, eachProfileValue] of Object.entries(maybeManifest.profiles)) {
     profileById[eachProfileKey] = validateProfileDefinition(eachProfileKey, eachProfileValue);
   }
+  assertUniqueProfileIdentities(profileById);
   /** @type {string[]} */
   const allMigrationOrderIds = [];
   for (const eachOrderedProfileId of maybeManifest.migrationOrder) {
@@ -172,6 +173,42 @@ export function resolveProfileRootDirectoryPath(profilesRootDirectoryPath, profi
 }
 
 /**
+ * Reject a launcher name, alias, or id claimed by more than one profile.
+ *
+ * ::
+ *
+ *     profiles.ev.launcherNames = ["claude"]
+ *     profiles.master.launcherNames = ["claude"]
+ *     flag: same identity claimed twice → resolve order would be nondeterministic
+ *     ok:   each identity maps to exactly one profile id
+ *
+ * @param {Record<string, ProfileDefinition>} profileById
+ * @returns {void}
+ */
+function assertUniqueProfileIdentities(profileById) {
+  /** @type {Map<string, string>} */
+  const profileIdByNormalizedIdentity = new Map();
+  for (const eachProfile of Object.values(profileById)) {
+    const allProfileIdentities = [
+      eachProfile.id,
+      ...eachProfile.aliases,
+      ...eachProfile.launcherNames,
+      ...eachProfile.fullLauncherNames,
+    ];
+    for (const eachIdentity of allProfileIdentities) {
+      const normalizedIdentity = eachIdentity.trim().toLowerCase();
+      const previousProfileId = profileIdByNormalizedIdentity.get(normalizedIdentity);
+      if (previousProfileId !== undefined) {
+        throw new Error(
+          `duplicate profile identity '${eachIdentity}' claimed by ${previousProfileId} and ${eachProfile.id}`,
+        );
+      }
+      profileIdByNormalizedIdentity.set(normalizedIdentity, eachProfile.id);
+    }
+  }
+}
+
+/**
  * @param {string} profileKey
  * @param {unknown} maybeProfile
  * @returns {ProfileDefinition}
@@ -232,8 +269,13 @@ function requireNonEmptyString(candidate, fieldName) {
  * @returns {string[]}
  */
 function requireStringArray(candidate, fieldName) {
-  if (!Array.isArray(candidate) || candidate.some((eachEntry) => typeof eachEntry !== 'string')) {
-    throw new Error(`${fieldName} must be an array of strings`);
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some(
+      (eachEntry) => typeof eachEntry !== 'string' || eachEntry.trim() === '',
+    )
+  ) {
+    throw new Error(`${fieldName} must be an array of non-empty strings`);
   }
   return /** @type {string[]} */ (candidate);
 }

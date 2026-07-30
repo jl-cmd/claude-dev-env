@@ -84,6 +84,23 @@ test('validators reject bad schemaVersion and non-object allowlist', () => {
   assert.equal(typeof loadSharedAllowlistDocument(), 'object');
 });
 
+test('validators reject duplicate launcher identities across profiles', () => {
+  const rawManifest = loadProfilesManifestDocument();
+  const profiles = {
+    .../** @type {Record<string, object>} */ (rawManifest.profiles),
+  };
+  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-ev'] };
+  const evProfile = { ...profiles.ev };
+  assert.throws(
+    () =>
+      validateProfilesManifest({
+        ...rawManifest,
+        profiles: { ...profiles, master: masterProfile, ev: evProfile },
+      }),
+    /duplicate profile identity/,
+  );
+});
+
 test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', () => {
   assert.equal(CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE, 'CLAUDE_CONFIG_DIR');
   assert.equal(CLAUDE_HOME_ENVIRONMENT_VARIABLE, 'CLAUDE_HOME');
