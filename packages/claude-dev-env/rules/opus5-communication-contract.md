@@ -2,7 +2,7 @@
 
 **Marker:** `opus5-communication-contract-v1`
 
-Positive contract for visible replies. Complements [`eli11-replies.md`](eli11-replies.md) (shape) and [`plain-language.md`](plain-language.md) (word choice). It does not own ELI11 hook mechanics or hedging matchers.
+Positive contract for visible replies. Complements [`eli11-replies.md`](eli11-replies.md) (shape) and [`plain-language.md`](plain-language.md) (word choice).
 
 ## Visible output
 

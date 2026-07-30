@@ -19,8 +19,8 @@ if _HOOKS_ROOT not in sys.path:
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 from state_description_blocker import (  # noqa: E402
     build_deny_payload,
-    evaluate,
 )
+from state_description_blocker import evaluate as _evaluate_without_opt_in  # noqa: E402
 
 HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "state_description_blocker.py"
@@ -39,21 +39,64 @@ VIOLATION_MD_PREVIOUSLY = "# Config\n\nPreviously set via env var."
 VIOLATION_MD_NOW_USES = "# Auth\n\nNow uses OAuth2."
 
 
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Call evaluate with opinionated prose enforcement enabled."""
+    with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+        return _evaluate_without_opt_in(payload_by_key)
+
+
 class _RunHook:
     """Helper to test the hook via subprocess."""
 
-    def __call__(self, tool_name: str, tool_input: dict) -> subprocess.CompletedProcess:
+    def __call__(
+        self,
+        tool_name: str,
+        tool_input: dict,
+        *,
+        is_prose_style_enabled: bool = True,
+    ) -> subprocess.CompletedProcess:
         payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+        environment_by_key = os.environ.copy()
+        if is_prose_style_enabled:
+            environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+        else:
+            environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
         return subprocess.run(
             [sys.executable, HOOK_SCRIPT_PATH],
             input=payload,
             capture_output=True,
             text=True,
             check=False,
+            env=environment_by_key,
         )
 
 
 _run_hook = _RunHook()
+
+
+def test_historical_phrase_scan_is_default_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
+    result = _run_hook(
+        "Write",
+        {
+            "file_path": "src/main.py",
+            "content": VIOLATION_INSTEAD_OF_COMMENT,
+        },
+        is_prose_style_enabled=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert _evaluate_without_opt_in(
+        {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": "src/main.py",
+                "content": VIOLATION_INSTEAD_OF_COMMENT,
+            },
+        }
+    ) is None
 
 
 def test_block_clean_python_comment_passes():

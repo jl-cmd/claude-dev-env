@@ -1,16 +1,14 @@
 # hooks/blocking/config
 
-A Python package that holds shared constants for the verified-commit gate family. Three modules in `blocking/` import from here:
-
-- `verification_verdict_store.py`
-- `verified_commit_gate.py`
-- `verifier_verdict_minter.py`
+A Python package that holds shared constants for blocking hooks. Verified-commit gate modules and opinionated prose-style gates import from here.
 
 ## Key files
 
 | File | Contents |
 |---|---|
 | `__init__.py` | Declares this as a regular package (not a namespace package) so it resolves first on `sys.path` |
+| `code_review_enforcement_constants.py` | Stamp and effort tunables for the code-review enforcement gates |
+| `prose_style_enforcement_constants.py` | `CLAUDE_PROSE_STYLE_ENFORCEMENT` opt-in (default off) for opinionated prose gates |
 | `verified_commit_constants.py` | All tunables for the gate: directory names, regex patterns for detecting verdict paths and obfuscation attempts, timeout values, git subcommand sets, bypass marker, and corrective messages |
 | `verified_commit_context_constants.py` | `VERIFY_SKIP_ADDITIONAL_CONTEXT`, the ``# verify-skip`` usage rule the gate attaches to a deny payload's `additionalContext` |
 | `verified_commit_gate_output_constants.py` | `PRE_TOOL_USE_HOOK_EVENT_NAME` and `DENY_PERMISSION_DECISION` (the deny payload's event name and decision string), `GATE_HOOK_MODULE_NAME` (the gate's own module name for block logging), and `REGEX_ALTERNATION_SEPARATOR` (the `\|` join for the directory-change verb alternation in `gated_invocations.py`) |

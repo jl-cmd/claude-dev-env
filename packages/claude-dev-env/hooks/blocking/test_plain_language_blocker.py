@@ -103,6 +103,34 @@ def test_heavy_word_scan_is_default_off(monkeypatch: pytest.MonkeyPatch) -> None
     assert _decision_from(completed) is None
 
 
+def test_default_off_emits_privacy_safe_advisory_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
+    all_emitted: list[tuple[str, str, str]] = []
+
+    def _record_advisory(
+        matcher_id: str, surface: str, context_text: str, **_kwargs: object
+    ) -> dict[str, object]:
+        all_emitted.append((matcher_id, surface, context_text))
+        return {}
+
+    monkeypatch.setattr(hook_module, "emit_advisory_candidate", _record_advisory)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert hook_module.evaluate(payload) is None
+    assert all_emitted
+    matcher_id, surface, context_text = all_emitted[0]
+    assert matcher_id == "plain_language_heavy_word"
+    assert surface == "Write"
+    assert "initiate" in context_text
+
+
 def test_heavy_word_scan_opt_in_allows_with_system_message_swaps() -> None:
     payload = {
         "tool_name": "Write",
