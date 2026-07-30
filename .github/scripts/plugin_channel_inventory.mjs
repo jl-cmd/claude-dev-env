@@ -103,11 +103,14 @@ export function profileRegistersPackage(installedPluginsJsonText, packageName) {
   );
 }
 
+/** True only when is_registered is the boolean true (not a truthy string). */
+function isProfileRegistered(profileProbe) {
+  return profileProbe.is_registered === true;
+}
+
 /** True when any selected profile still registers the package as a plugin. */
 export function computeSelectedLiveConsumerCollision(profileProbeResults) {
-  return profileProbeResults.some(
-    (eachProfile) => eachProfile.is_registered === true,
-  );
+  return profileProbeResults.some(isProfileRegistered);
 }
 
 /**
@@ -214,7 +217,7 @@ export function buildInventoryJournal(inputs) {
   ];
 
   for (const eachProfile of selectedProfiles) {
-    const profileIsRegistered = eachProfile.is_registered === true;
+    const profileIsRegistered = isProfileRegistered(eachProfile);
     consumers.push({
       id: `selected-profile-${eachProfile.profile}`,
       channel: 'plugin',
@@ -243,7 +246,7 @@ export function buildInventoryJournal(inputs) {
         verbatim: selectedProfiles
           .map(
             (eachProfile) =>
-              `${eachProfile.profile}:${eachProfile.is_registered === true ? 'registered' : 'absent'}`,
+              `${eachProfile.profile}:${isProfileRegistered(eachProfile) ? 'registered' : 'absent'}`,
           )
           .join('; '),
       },
@@ -281,6 +284,14 @@ function requireNonEmptyString(fieldValue, fieldName, allErrors) {
   }
 }
 
+const requiredJournalStringFields = [
+  'package_name',
+  'generated_from_ref',
+  'package_version',
+  'plugin_manifest_version',
+  'marketplace_entry_version',
+];
+
 /** Validate inventory journal shape and vocabulary. */
 export function validateInventoryJournal(journal) {
   const allErrors = [];
@@ -290,19 +301,9 @@ export function validateInventoryJournal(journal) {
   if (journal.schema_version !== SCHEMA_VERSION) {
     allErrors.push(`schema_version must be ${SCHEMA_VERSION}`);
   }
-  requireNonEmptyString(journal.package_name, 'package_name', allErrors);
-  requireNonEmptyString(journal.generated_from_ref, 'generated_from_ref', allErrors);
-  requireNonEmptyString(journal.package_version, 'package_version', allErrors);
-  requireNonEmptyString(
-    journal.plugin_manifest_version,
-    'plugin_manifest_version',
-    allErrors,
-  );
-  requireNonEmptyString(
-    journal.marketplace_entry_version,
-    'marketplace_entry_version',
-    allErrors,
-  );
+  for (const eachFieldName of requiredJournalStringFields) {
+    requireNonEmptyString(journal[eachFieldName], eachFieldName, allErrors);
+  }
   if (typeof journal.selected_live_consumer_collision !== 'boolean') {
     allErrors.push('selected_live_consumer_collision must be a boolean');
   }
