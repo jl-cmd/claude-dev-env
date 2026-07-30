@@ -11,3 +11,7 @@ The flag is `PROSE_STYLE_ENFORCEMENT_ENABLED` in `hooks/blocking/config/prose_st
 ## Always on
 
 Structural AskUserQuestion lean-block validation in `plain_language_blocker` (chat detail, length caps on question blocks) stays active regardless of the flag. Code-rules and security blockers are out of scope for this switch.
+
+## Advisory precision measurement (OP-07B)
+
+When the flag is off, heavy-word and hedging hits still emit privacy-safe advisory candidates to `~/.claude/logs/prose-matcher-advisory.jsonl` (matcher id, surface, hashed context fingerprint, optional label). Classification (`keep` / `narrow` / `drop` / `advisory`) uses a labeled sample floor of 30 and precision floors 0.7 / 0.4. Matchers below the floor stay advisory. No matcher becomes hard-blocking from historical labels alone. See `hooks/observability/prose_matcher_advisory.py`.

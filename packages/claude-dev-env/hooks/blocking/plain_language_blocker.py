@@ -68,6 +68,11 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     USER_FACING_LEAN_QUESTION_NOTICE,
     USER_FACING_PLAIN_LANGUAGE_NOTICE,
 )
+from hooks_constants.prose_matcher_precision_constants import (  # noqa: E402
+    MATCHER_ID_PLAIN_LANGUAGE_HEAVY_WORD,
+    MAXIMUM_ADVISORY_EMITS_PER_CALL,
+)
+from observability.prose_matcher_advisory import emit_advisory_candidate  # noqa: E402
 
 
 def strip_non_prose_regions(text: str) -> str:
@@ -575,13 +580,34 @@ def _emit_deny(deny_reason: str, output_stream: TextIO) -> None:
     output_stream.flush()
 
 
+def _emit_plain_language_advisory_candidates(
+    surface: str,
+    all_matches: list[tuple[str, str]],
+    prose_text: str,
+) -> None:
+    """Record privacy-safe advisory hits when enforcement is off (fail open)."""
+    try:
+        for each_term, each_replacement in all_matches[
+            :MAXIMUM_ADVISORY_EMITS_PER_CALL
+        ]:
+            del each_replacement
+            emit_advisory_candidate(
+                MATCHER_ID_PLAIN_LANGUAGE_HEAVY_WORD,
+                surface,
+                f"{each_term}:{prose_text[:120]}",
+            )
+    except (ImportError, OSError, TypeError, ValueError):
+        return
+
+
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """Decide whether a payload carries a question block or heavy words to block.
 
     An AskUserQuestion payload meets the lean-block check first, so a question
     text or an option description carrying chat detail returns a LEAN_QUESTION
-    deny reason. Every guarded payload then meets the word scan, which returns a
-    PLAIN_LANGUAGE deny reason for the first heavy word it finds.
+    deny reason. When prose-style enforcement is on, the word scan returns a
+    PLAIN_LANGUAGE deny reason for heavy words. When enforcement is off, heavy
+    word hits are recorded as privacy-safe advisory candidates only.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
@@ -607,9 +633,6 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         if all_block_violations:
             return build_lean_block_reason(all_block_violations)
 
-    if not prose_style_enforcement_enabled_in_environment():
-        return None
-
     prose_text = _collect_prose_for_tool(raw_tool_name, raw_tool_input)
     if not prose_text:
         return None
@@ -619,6 +642,10 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     )
     all_matches = find_banned_terms(prose_text, all_allowlisted_terms)
     if not all_matches:
+        return None
+
+    if not prose_style_enforcement_enabled_in_environment():
+        _emit_plain_language_advisory_candidates(raw_tool_name, all_matches, prose_text)
         return None
 
     return build_block_reason(all_matches)
