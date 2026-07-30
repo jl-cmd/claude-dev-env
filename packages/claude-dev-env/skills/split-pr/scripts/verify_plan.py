@@ -6,8 +6,9 @@
     python verify_plan.py --plan plan.json --pretty
     {"is_valid": true, "violations": []}
 
-Rejects plans that isolate tests from related behavior, duplicate paths, or
-omit paths from every slice.
+Rejects a slice that holds tests and no behavior, a path claimed by two slices,
+and — when ``--changed-paths-json`` names the full path set — a path no slice
+claims.
 """
 
 from __future__ import annotations
@@ -74,14 +75,6 @@ def related_behavior_stem(test_path: str) -> str | None:
     return None
 
 
-def _dedupe_violations(all_violations: list[str]) -> list[str]:
-    all_unique: list[str] = []
-    for each_violation in all_violations:
-        if each_violation not in all_unique:
-            all_unique.append(each_violation)
-    return all_unique
-
-
 def _collect_slice_path_violations(each_slice: object) -> list[str]:
     all_violations: list[str] = []
     if not isinstance(each_slice, dict):
@@ -95,9 +88,10 @@ def _collect_slice_path_violations(each_slice: object) -> list[str]:
         return all_violations
     is_preparatory = bool(each_slice.get(PLAN_KEY_IS_PREPARATORY_REFACTOR, False))
     all_slice_paths = [str(each) for each in all_paths]
-    all_test_paths = [each for each in all_slice_paths if is_test_path(each)]
-    all_behavior_paths = [each for each in all_slice_paths if not is_test_path(each)]
-    if all_test_paths and not all_behavior_paths and not is_preparatory:
+    holds_only_tests = bool(all_slice_paths) and all(
+        is_test_path(each) for each in all_slice_paths
+    )
+    if holds_only_tests and not is_preparatory:
         all_violations.append(VIOLATION_TEST_WITHOUT_BEHAVIOR)
     return all_violations
 
@@ -154,7 +148,7 @@ def verify_vertical_plan(
         all_violations.extend(_collect_slice_path_violations(each_slice))
     path_owner_count = _count_path_owners(raw_slices, all_changed_paths)
     all_violations.extend(_ownership_violations(path_owner_count))
-    all_unique = _dedupe_violations(all_violations)
+    all_unique = list(dict.fromkeys(all_violations))
     return {
         PLAN_KEY_IS_VALID: len(all_unique) == 0,
         PLAN_KEY_VIOLATIONS: all_unique,
@@ -176,7 +170,7 @@ def main() -> int:
         "--changed-paths-json",
         type=Path,
         default=None,
-        help="JSON array of all changed paths; defaults to union of slice paths",
+        help="JSON array of all changed paths; omit to skip the coverage check",
     )
     parser.add_argument("--pretty", action="store_true")
     parsed = parser.parse_args()
@@ -193,10 +187,6 @@ def main() -> int:
             all_changed_paths = [str(each) for each in raw_paths]
         else:
             all_changed_paths = []
-            for each_slice in plan.get(PLAN_KEY_SLICES, []) or []:
-                if isinstance(each_slice, dict):
-                    for each_path in each_slice.get(PLAN_KEY_PATHS, []) or []:
-                        all_changed_paths.append(str(each_path))
         verdict = verify_vertical_plan(plan, all_changed_paths=all_changed_paths)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(json.dumps({PAYLOAD_KEY_ERROR: str(error)}))

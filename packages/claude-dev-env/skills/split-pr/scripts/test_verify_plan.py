@@ -111,4 +111,7 @@ def test_rejects_missing_changed_path() -> None:
         plan, all_changed_paths=["src/a.py", "src/test_a.py", "src/b.py"]
     )
     assert verdict[PLAN_KEY_IS_VALID] is False
-    assert any("path_missing" in each for each in verdict[PLAN_KEY_VIOLATIONS])
+    assert any(
+        each.startswith("path_missing_from_all_slices:")
+        for each in verdict[PLAN_KEY_VIOLATIONS]
+    )
