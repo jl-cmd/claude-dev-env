@@ -49,7 +49,7 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 | `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
 | `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
 | `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
-| `reference/runner-selection.md` | Runner selection map (multi-harness target; issue #902) |
+| `reference/runner-selection.md` | Runner selection map |
 
 ## Folder map
 
