@@ -16,22 +16,22 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
+    ChainEntry,
     default_affinity_state_path,
     extract_resume_session_id,
-    extract_session_id_from_stdout,
     load_affinity_store,
     lookup_affinity_command,
     order_entries_for_resume,
     record_affinity_binding,
     save_affinity_store_atomic,
 )
-from claude_chain_runner import ChainEntry  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     AFFINITY_KEY_ALL_BINDINGS,
     AFFINITY_KEY_COMMAND,
     AFFINITY_KEY_SCHEMA_VERSION,
     AFFINITY_KEY_SESSION_ID,
     AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_STATE_FILENAME,
     AFFINITY_STATE_SCHEMA_VERSION,
     RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
@@ -201,6 +201,12 @@ def _install(
         else _config_order_usage_reporter
     )
     monkeypatch.setattr(runner, "chain_weekly_usage_reporter", active_reporter)
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
     _install_tty_stdin(monkeypatch)
     return recorder
 
@@ -1498,7 +1504,7 @@ def test_cli_ordered_account_advisor_blocked_exit_code(
 def test_default_affinity_state_path_joins_filename() -> None:
     claude_home = Path("/tmp/claude-home")
     resolved = default_affinity_state_path(claude_home)
-    assert resolved == claude_home / "claude-chain-affinity.json"
+    assert resolved == claude_home / AFFINITY_STATE_FILENAME
 
 
 def test_affinity_store_round_trip_is_versioned_and_atomic(tmp_path: Path) -> None:
@@ -1587,13 +1593,6 @@ def test_affinity_write_failure_raises_actionable_diagnostic(
         save_affinity_store_atomic(state_path, store)
     assert str(state_path) in str(raised.value)
 
-
-def test_extract_session_id_from_stdout_affinity_import_path() -> None:
-    payload = (
-        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
-        f'"result":"ok"}}'
-    )
-    assert extract_session_id_from_stdout(payload) == _BOUND_SESSION_ID
 
 
 def test_extract_resume_session_id_reads_flag() -> None:
@@ -1691,4 +1690,67 @@ def test_run_claude_resume_routes_through_originating_binary(
     assert outcome.served_command == _SECONDARY_LAUNCHER
     assert all_called[0] == _SECONDARY_LAUNCHER
 
+def test_run_claude_success_persists_session_affinity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+    assert chain_result.session_id == _BOUND_SESSION_ID
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    reloaded = load_affinity_store(affinity_path)
+    assert len(reloaded.all_bindings) == 1
+    assert reloaded.all_bindings[0].session_id == _BOUND_SESSION_ID
+    assert reloaded.all_bindings[0].command == _PRIMARY_LAUNCHER
 
+
+def test_run_claude_resume_falls_back_when_affinity_corrupt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    affinity_path.write_text("{not-json", encoding=UTF8_ENCODING)
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
+    monkeypatch.setattr(runner, "chain_weekly_usage_reporter", usage_reporter)
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _PRIMARY_LAUNCHER
+    assert all_called[0] == _PRIMARY_LAUNCHER
