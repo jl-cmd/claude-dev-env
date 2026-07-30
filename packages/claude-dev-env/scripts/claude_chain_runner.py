@@ -694,7 +694,8 @@ def record_affinity_binding(
 def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
     """Atomically replace the affinity state file with ``store``.
 
-    Writes a sibling temporary file, then uses ``os.replace`` so readers never
+    Creates a unique sibling temporary file via ``tempfile.mkstemp``, writes
+    and flushes the document, then uses ``os.replace`` so readers never
     observe a partial document.
 
     Args:
@@ -725,12 +726,20 @@ def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
         dir=state_path.parent,
     )
     temporary_path = Path(temporary_name)
+    owned_descriptor = file_descriptor
     try:
         with os.fdopen(file_descriptor, "w", encoding=UTF8_ENCODING) as temporary_file:
+            owned_descriptor = -1
             temporary_file.write(serialized_document)
             temporary_file.flush()
+            os.fsync(temporary_file.fileno())
         os.replace(temporary_path, state_path)
     except OSError as write_error:
+        if owned_descriptor >= 0:
+            try:
+                os.close(owned_descriptor)
+            except OSError:
+                pass
         try:
             temporary_path.unlink(missing_ok=True)
         except OSError:

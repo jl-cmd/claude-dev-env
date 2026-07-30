@@ -1564,6 +1564,61 @@ def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> 
     assert str(state_path) in str(raised.value)
 
 
+def test_affinity_unsupported_schema_version_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION + 1,
+                AFFINITY_KEY_ALL_BINDINGS: [],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="unsupported schema_version") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_binding_not_object_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION,
+                AFFINITY_KEY_ALL_BINDINGS: ["not-an-object"],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="not an object") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_record_affinity_binding_rejects_empty_session_or_command() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id="", command=_PRIMARY_LAUNCHER)
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id=_BOUND_SESSION_ID, command="")
+
+
+def test_record_affinity_binding_rejects_non_positive_maximum_entries() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="maximum_entries must be at least 1"):
+        record_affinity_binding(
+            store,
+            session_id=_BOUND_SESSION_ID,
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=0,
+        )
+
+
 def test_affinity_write_failure_raises_actionable_diagnostic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
