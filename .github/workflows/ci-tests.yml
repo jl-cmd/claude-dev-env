@@ -359,12 +359,8 @@ jobs:
         working-directory: packages/claude-dev-env
         run: |
           $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-installer-lifecycle'
-          New-Item -ItemType Directory -Force -Path $evidenceRoot | Out-Null
           $adapter = Join-Path $PWD 'scripts/ci/windows-installer-lifecycle.ps1'
-          & pwsh -NoProfile -File $adapter -EvidenceRoot $evidenceRoot
-          if ($LASTEXITCODE -ne 0) {
-            throw "windows installer lifecycle adapter exited $LASTEXITCODE"
-          }
+          & $adapter -EvidenceRoot $evidenceRoot
 
       - name: Run package npm test on Windows
         working-directory: packages/claude-dev-env

@@ -18,17 +18,21 @@ $ErrorActionPreference = 'Stop'
 
 $packageRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $driverPath = Join-Path $packageRoot '.claude\skills\run-claude-dev-env\driver.mjs'
-$evidenceDirectory = $EvidenceRoot
+$allIsolationEnvNames = @(
+    'HOME',
+    'USERPROFILE',
+    'GIT_CONFIG_GLOBAL'
+)
 
 if (-not (Test-Path -LiteralPath $driverPath)) {
     throw "Lifecycle driver missing at $driverPath"
 }
 
-New-Item -ItemType Directory -Force -Path $evidenceDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $EvidenceRoot | Out-Null
 
-$preflightPath = Join-Path $evidenceDirectory 'preflight.json'
-$driverLogPath = Join-Path $evidenceDirectory 'driver.log'
-$summaryPath = Join-Path $evidenceDirectory 'summary.json'
+$preflightPath = Join-Path $EvidenceRoot 'preflight.json'
+$driverLogPath = Join-Path $EvidenceRoot 'driver.log'
+$summaryPath = Join-Path $EvidenceRoot 'summary.json'
 
 $preflight = [ordered]@{
     packageRoot = $packageRoot
@@ -36,18 +40,14 @@ $preflight = [ordered]@{
     platform = [System.Environment]::OSVersion.VersionString
     nodeVersion = (& node --version 2>&1 | Out-String).Trim()
     pythonVersion = (& python --version 2>&1 | Out-String).Trim()
-    isolationContract = @(
-        'HOME',
-        'USERPROFILE',
-        'GIT_CONFIG_GLOBAL'
-    )
+    isolationContract = $allIsolationEnvNames
     note = 'Driver owns isolation roots; adapter never points at the real user profile.'
 }
 $preflight | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $preflightPath -Encoding utf8
 
-Write-Host "Evidence root: $evidenceDirectory"
+Write-Host "Evidence root: $EvidenceRoot"
 Write-Host "Driver: $driverPath"
-Write-Host "Isolation contract: HOME, USERPROFILE, GIT_CONFIG_GLOBAL (driver-owned sandbox)"
+Write-Host ("Isolation contract: {0} (driver-owned sandbox)" -f ($allIsolationEnvNames -join ', '))
 
 $driverOutput = & node $driverPath 2>&1
 $driverExitCode = $LASTEXITCODE
