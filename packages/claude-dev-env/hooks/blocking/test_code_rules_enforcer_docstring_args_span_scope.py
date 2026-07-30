@@ -378,3 +378,48 @@ def test_runon_post_docstring_body_edit_is_grandfathered() -> None:
         f"post-docstring body edit must grandfather the pre-existing run-on, got {scoped!r}"
     )
 
+
+def _function_with_prose_wall_docstring() -> str:
+    return (
+        "def clean_helper() -> str:\n"
+        '    """Assemble the nightly voyage tally from the harbor scans.\n'
+        "\n"
+        "    A scan names one vessel and where it dropped anchor.\n"
+        "    The tally walks the scans in arrival order and keeps that order.\n"
+        "    A calm voyage ends well for every vessel it carried.\n"
+        "    A halted voyage marks the vessel it was near when the storm arrived.\n"
+        "    A wrecked voyage marks the vessel that sank and stops the walk there.\n"
+        "    The tally groups the vessels by their final port for the harbor.\n"
+        "    The harbor reads the tally and sees every arrival at a glance.\n"
+        '    """\n'
+        '    return "ok"\n'
+    )
+
+
+def test_prose_wall_docstring_body_edit_blocks_without_def_line() -> None:
+    content = _function_with_prose_wall_docstring()
+    unscoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH
+    )
+    assert any("worked example" in each for each in unscoped), (
+        f"control: unscoped must see the function wall, got {unscoped!r}"
+    )
+    docstring_body_lines = set(range(2, 12))
+    scoped = check_docstring_prose_wall_without_illustration(
+        content, PRODUCTION_FILE_PATH, all_changed_lines=docstring_body_lines
+    )
+    assert any("worked example" in each for each in scoped), (
+        f"docstring-body edit must block even when the def line is untouched, got {scoped!r}"
+    )
+
+
+def test_prose_wall_defer_scope_returns_all_violations() -> None:
+    content = _module_with_far_away_prose_wall_and_clean_helper()
+    deferred = check_docstring_prose_wall_without_illustration(
+        content,
+        PRODUCTION_FILE_PATH,
+        all_changed_lines={999},
+        defer_scope_to_caller=True,
+    )
+    assert any("worked example" in each for each in deferred)
+

@@ -2670,9 +2670,9 @@ def _docstring_owner_span(owner_node: ast.AST, anchor_lineno: int) -> range:
 
     ::
 
-        def clean_helper() -> str:                 <- anchor (def / class line)
-            \"\"\"run-on narrative across lines\"\"\"  <- docstring end
-            return "ok"                            <- outside the span
+        def clean_helper() -> str:              <- anchor (def / class line)
+            '''run-on narrative across lines''' <- docstring end
+            return "ok"                         <- outside the span
 
         An edit that only rewrites the docstring body intersects this span and
         re-grades the finding. An edit to the return line does not.
