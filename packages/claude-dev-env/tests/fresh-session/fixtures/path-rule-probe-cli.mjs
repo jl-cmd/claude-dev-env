@@ -46,11 +46,12 @@ function extractPathGlobs(content) {
 function workspaceMatchesGlob(workspacePath, globPattern, matchingSegment) {
     const normalizedWorkspace = workspacePath.replace(/\\/g, '/').toLowerCase();
     const normalizedGlob = globPattern.replace(/\\/g, '/').toLowerCase();
-    if (normalizedGlob.includes(`**/${matchingSegment.toLowerCase()}/**`)) {
-        return normalizedWorkspace.includes(`/${matchingSegment.toLowerCase()}`);
+    const normalizedSegment = matchingSegment.toLowerCase();
+    if (normalizedGlob.includes(`**/${normalizedSegment}/**`)) {
+        return normalizedWorkspace.includes(`/${normalizedSegment}`);
     }
-    if (normalizedGlob.includes(matchingSegment.toLowerCase())) {
-        return normalizedWorkspace.includes(matchingSegment.toLowerCase());
+    if (normalizedGlob.includes(normalizedSegment)) {
+        return normalizedWorkspace.includes(normalizedSegment);
     }
     return false;
 }

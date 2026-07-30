@@ -45,8 +45,6 @@ test('path rule activates in matching workspace for main, editor, and mel', () =
 test('same path rule stays inactive in the control workspace for each profile', () => {
     const roots = createDisposableRunRoots({ profileIds: [...ALL_PROFILE_IDS] });
     try {
-        /** @type {string[]} */
-        const allControlClassifications = [];
         for (const eachProfileId of ALL_PROFILE_IDS) {
             const fixture = installPathRuleFixture(roots.profileRootById[eachProfileId]);
             const result = runPathRuleActivationSession({
@@ -60,13 +58,7 @@ test('same path rule stays inactive in the control workspace for each profile', 
             assert.equal(result.activation.isActivated, false);
             assert.equal(result.activation.classification, 'red-missing-activation');
             assert.equal(result.activation.simulation, true);
-            allControlClassifications.push(`${eachProfileId}:${result.activation.classification}`);
         }
-        assert.deepEqual(allControlClassifications, [
-            'main:red-missing-activation',
-            'editor:red-missing-activation',
-            'mel:red-missing-activation',
-        ]);
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }

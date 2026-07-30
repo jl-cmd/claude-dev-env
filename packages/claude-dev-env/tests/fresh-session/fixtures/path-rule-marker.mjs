@@ -90,6 +90,8 @@ export function runPathRuleActivationSession(parameters) {
         [PATH_RULE_PROBE_SCRIPT_PATH, '--probe', 'path-rule'],
         { env: environment, encoding: 'utf8', cwd: workspacePath },
     );
+    const stderrFromError = result.error ? String(result.error.message) : '';
+    const stderrText = `${result.stderr ?? ''}${stderrFromError}`;
 
     /** @type {{ activation?: {
      *   loadedMarkers?: string[],
@@ -125,7 +127,7 @@ export function runPathRuleActivationSession(parameters) {
         evidencePath,
         exitStatus: result.status,
         stdout: result.stdout ?? '',
-        stderr: result.stderr ?? '',
+        stderr: stderrText,
         relativeWorkspace: relative(profileRoot, workspacePath).split(sep).join('/'),
     };
 }
