@@ -46,17 +46,9 @@ def test_quoted_pipe_inside_k_expression_stays_in_one_segment() -> None:
 
 
 def test_quote_unaware_segments_split_on_pipe_inside_quotes() -> None:
-    """Divergence: shell_command_segments is not quote-aware."""
-    # A token stream that already glued the quoted pipe into one token would
-    # not split; the divergence is on a raw pipe character inside one word-shaped
-    # token list when the shared splitter peels control operators from text.
-    all_tokens = ["pytest", "-k", "a|b", "tests"]
-    # split_into_segments explodes glued operators inside tokens.
+    """Divergence: shell_command_segments peels | inside a|b; quote-aware path does not."""
     all_segments = split_into_segments(["pytest", "-k", "a|b", "tests"])
-    # "a|b" contains | so the naive splitter peels it into ["a", "|", "b"].
-    flattened = [each_token for each_segment in all_segments for each_token in each_segment]
-    assert "|" in flattened or len(all_segments) > 1 or all_tokens == flattened
-    # The quote-aware path treats the same command as one segment (see sibling test).
+    assert len(all_segments) > 1
     quote_aware_pairs = pipeline_segments_for_command('pytest -k "a|b" tests')
     assert len(quote_aware_pairs) >= 1
     assert all(each_operator != "|" for _, each_operator in quote_aware_pairs)

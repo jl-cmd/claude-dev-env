@@ -291,7 +291,7 @@ def command_line_without_comment(command_line: str) -> str:
     return command_line
 
 
-def comment_free_lines(all_command_lines: list[str]) -> list[str]:
+def _comment_free_lines(all_command_lines: list[str]) -> list[str]:
     """Return every line with its shell comment removed.
 
     Args:
@@ -355,7 +355,7 @@ def scannable_command_lines(joined_command: str) -> list[str]:
     """
     all_command_lines = COMMAND_LINE_SPLIT_PATTERN.split(joined_command)
     if COMMENT_START_CHARACTER in joined_command:
-        all_command_lines = comment_free_lines(all_command_lines)
+        all_command_lines = _comment_free_lines(all_command_lines)
     if HEREDOC_OPENER_OPERATOR in joined_command:
         all_command_lines = live_command_lines(all_command_lines)
     if GROUP_OPEN_CHARACTER not in joined_command:
