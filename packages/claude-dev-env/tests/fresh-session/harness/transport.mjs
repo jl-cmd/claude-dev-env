@@ -84,10 +84,12 @@ function spawnCliProcess(binary, args, environment, spawnOptions = {}) {
         encoding: 'utf8',
         shell: spawnOptions.shell === true,
     });
+    const stderrFromSpawn = result.stderr ?? '';
+    const stderrFromError = result.error ? String(result.error.message) : '';
     return {
         exitStatus: result.status,
         stdout: result.stdout ?? '',
-        stderr: result.stderr ?? '',
+        stderr: stderrFromSpawn || stderrFromError,
     };
 }
 
@@ -164,9 +166,12 @@ export function runProfileSession(parameters) {
 
     const { exitStatus, stdout, stderr } = spawnResult;
     let cliVersion = stdout.trim().split(/\r?\n/)[0] || null;
-    let diagnostic = exitStatus === 0
-        ? null
-        : `${transport}-cli: profile ${profileId} exited ${exitStatus}`;
+    let diagnostic = null;
+    if (exitStatus !== 0) {
+        diagnostic = exitStatus === null && stderr
+            ? `${transport}-cli: profile ${profileId} failed to launch: ${stderr}`
+            : `${transport}-cli: profile ${profileId} exited ${exitStatus}`;
+    }
 
     if (!useReal && existsSync(evidencePath)) {
         const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
