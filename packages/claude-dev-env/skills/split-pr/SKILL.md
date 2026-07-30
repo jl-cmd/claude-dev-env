@@ -48,6 +48,9 @@ never a hard gate.
 | `scripts/split_pr_title.py` | Collapse titles to exactly one conventional prefix |
 | `scripts/split_pr_layer_order.py` | Deterministic config→other layer sort |
 | `scripts/split_pr_paginate.py` | Paginated PR file intake via gh api --slurp |
+| `scripts/pack_files_into_slices.py` | Pack annotated files into ≤200 hand-written-line slices by layer |
+| `scripts/config/packing_constants.py` | Review budget, hard cap, path→layer markers for packing |
+| `scripts/test_categorize_files_packing.py` | Budget packing and layer inference tests |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/config/plan_constants.py` | Plan schema keys, layer order, title-prefix tokens |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
