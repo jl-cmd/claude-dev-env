@@ -16,7 +16,9 @@ from active_capability_references import (
     strip_inert_fenced_blocks,
     unresolved_active_capabilities,
 )
-from config.active_capability_constants import ALL_BANNED_ACTIVE_CAPABILITY_NAMES
+from dev_env_scripts_constants.active_capability_constants import (
+    ALL_BANNED_ACTIVE_CAPABILITY_NAMES,
+)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -50,29 +52,31 @@ def test_extract_active_capability_names_finds_slash_and_backticks() -> None:
 
 
 def test_banned_names_always_fail_classification() -> None:
-    inventory = build_capability_inventory(PACKAGE_ROOT)
     for each_banned_name in sorted(ALL_BANNED_ACTIVE_CAPABILITY_NAMES):
-        reason = classify_capability_reference(each_banned_name, inventory)
+        reason = classify_capability_reference(each_banned_name)
         assert reason is not None
         assert each_banned_name in reason
+
+
+def test_known_and_unknown_non_banned_names_pass() -> None:
+    inventory = build_capability_inventory(PACKAGE_ROOT)
+    known_name = next(iter(inventory.all_skill_names), "e-code-review")
+    assert classify_capability_reference(known_name) is None
+    assert classify_capability_reference("not-a-real-capability") is None
 
 
 def test_unresolved_reports_file_and_line_for_fixture(tmp_path: Path) -> None:
     package_root = tmp_path / "pkg"
     skills = package_root / "skills" / "real-skill"
     skills.mkdir(parents=True)
-    (skills / "SKILL.md").write_text("# real\n", encoding="utf-8")
-    agents = package_root / "agents"
-    agents.mkdir()
-    (agents / "real-agent.md").write_text("# agent\n", encoding="utf-8")
-    commands = package_root / "commands"
-    commands.mkdir()
-    (commands / "real-cmd.md").write_text("# cmd\n", encoding="utf-8")
-    skill_md = package_root / "skills" / "real-skill" / "SKILL.md"
-    skill_md.write_text(
+    (skills / "SKILL.md").write_text(
         "Active instruction: call /qbug now.\n",
         encoding="utf-8",
     )
+    (package_root / "agents").mkdir()
+    (package_root / "agents" / "real-agent.md").write_text("# agent\n", encoding="utf-8")
+    (package_root / "commands").mkdir()
+    (package_root / "commands" / "real-cmd.md").write_text("# cmd\n", encoding="utf-8")
     all_unresolved = unresolved_active_capabilities(
         package_root,
         all_relative_markdown_paths=["skills/real-skill/SKILL.md"],

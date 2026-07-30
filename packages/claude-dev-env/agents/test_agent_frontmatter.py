@@ -445,3 +445,29 @@ def test_agent_frontmatter_carries_no_model_key(
         "the caller supplies the model on every spawn, so agent definitions "
         "carry no model key at all, not even model: inherit"
     )
+
+
+def _clean_coder_body() -> str:
+    return (Path(__file__).parent / "clean-coder.md").read_text(encoding="utf-8")
+
+
+def test_clean_coder_never_globs_or_reads_dotenv_files() -> None:
+    body = _clean_coder_body()
+    assert "`**/.env`" not in body
+    assert "`**/.env.*`" not in body
+    assert "Never open `.env`" in body or "Do **not** glob or open `.env`" in body
+    assert re.search(r"(?i)glob.*\.env|\.env.*glob", body) is None or "Do **not** glob or open `.env`" in body
+
+
+def test_clean_coder_uses_task_local_config_discovery() -> None:
+    body = _clean_coder_body()
+    assert "task-local" in body.lower()
+    assert "project-wide preload" in body.lower() or "Do **not** glob the whole tree" in body
+    assert "Issue all five Glob calls" not in body
+    assert "Issue all seven Glob calls" not in body
+
+
+def test_clean_coder_examples_import_constants_from_config() -> None:
+    body = _clean_coder_body()
+    assert "from config.timing import MAXIMUM_RETRIES" in body
+    assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None

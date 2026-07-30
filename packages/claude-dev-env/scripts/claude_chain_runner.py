@@ -44,11 +44,12 @@ import argparse
 import importlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 from typing import Protocol, TextIO
@@ -57,7 +58,27 @@ if __name__ == "__main__":
     sys.modules.setdefault("claude_chain_runner", sys.modules[__name__])
 
 from dev_env_scripts_constants.claude_chain_constants import (
+    AFFINITY_BINDING_COMMAND_MISSING_REASON,
+    AFFINITY_BINDING_NOT_OBJECT_REASON,
+    AFFINITY_BINDING_SESSION_ID_MISSING_REASON,
+    AFFINITY_BINDINGS_MISSING_OR_NOT_LIST_REASON,
+    AFFINITY_CORRUPT_MESSAGE_TEMPLATE,
+    AFFINITY_JSON_INDENT_SPACES,
+    AFFINITY_KEY_ALL_BINDINGS,
+    AFFINITY_KEY_COMMAND,
+    AFFINITY_KEY_SCHEMA_VERSION,
+    AFFINITY_KEY_SESSION_ID,
+    AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_MAXIMUM_ENTRIES_MINIMUM_MESSAGE,
+    AFFINITY_SESSION_ID_AND_COMMAND_REQUIRED_MESSAGE,
+    AFFINITY_STATE_FILENAME,
+    AFFINITY_STATE_SCHEMA_VERSION,
+    AFFINITY_TEMP_SUFFIX,
+    AFFINITY_TOP_LEVEL_NOT_OBJECT_REASON,
+    AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE,
+    AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE,
     ALL_ROUTING_MODES,
+    RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -519,6 +540,219 @@ def _session_id_from_json_text(json_text: str) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class AffinityBinding:
+    """One session-id to chain-binary binding."""
+
+    session_id: str
+    command: str
+
+
+@dataclass(frozen=True)
+class AffinityStore:
+    """Versioned, bounded session-to-binary affinity document."""
+
+    schema_version: int = AFFINITY_STATE_SCHEMA_VERSION
+    all_bindings: list[AffinityBinding] = field(default_factory=list)
+
+
+def default_affinity_state_path(claude_home_directory: Path) -> Path:
+    """Return the default affinity state path under a Claude home directory.
+
+    Args:
+        claude_home_directory: Claude configuration root (for example ``~/.claude``).
+
+    Returns:
+        Path to the affinity state JSON file.
+    """
+    return claude_home_directory / AFFINITY_STATE_FILENAME
+
+
+def _affinity_corrupt_error(state_path: Path, error: object) -> ValueError:
+    return ValueError(
+        AFFINITY_CORRUPT_MESSAGE_TEMPLATE.format(
+            state_path=state_path,
+            error=error,
+        )
+    )
+
+
+def _parse_affinity_binding(
+    each_binding: object,
+    *,
+    state_path: Path,
+) -> AffinityBinding:
+    if not isinstance(each_binding, dict):
+        raise _affinity_corrupt_error(state_path, AFFINITY_BINDING_NOT_OBJECT_REASON)
+    session_id = each_binding.get(AFFINITY_KEY_SESSION_ID)
+    command = each_binding.get(AFFINITY_KEY_COMMAND)
+    if not isinstance(session_id, str) or not session_id:
+        raise _affinity_corrupt_error(
+            state_path, AFFINITY_BINDING_SESSION_ID_MISSING_REASON
+        )
+    if not isinstance(command, str) or not command:
+        raise _affinity_corrupt_error(
+            state_path, AFFINITY_BINDING_COMMAND_MISSING_REASON
+        )
+    return AffinityBinding(session_id=session_id, command=command)
+
+
+def _bindings_from_payload(
+    all_payload_fields: dict[str, object],
+    *,
+    state_path: Path,
+) -> list[AffinityBinding]:
+    schema_version = all_payload_fields.get(AFFINITY_KEY_SCHEMA_VERSION)
+    if schema_version != AFFINITY_STATE_SCHEMA_VERSION:
+        raise _affinity_corrupt_error(
+            state_path,
+            AFFINITY_UNSUPPORTED_SCHEMA_VERSION_REASON_TEMPLATE.format(
+                schema_version=schema_version
+            ),
+        )
+    raw_bindings = all_payload_fields.get(AFFINITY_KEY_ALL_BINDINGS)
+    if not isinstance(raw_bindings, list):
+        raise _affinity_corrupt_error(
+            state_path, AFFINITY_BINDINGS_MISSING_OR_NOT_LIST_REASON
+        )
+    return [
+        _parse_affinity_binding(each_binding, state_path=state_path)
+        for each_binding in raw_bindings
+    ]
+
+
+def load_affinity_store(state_path: Path) -> AffinityStore:
+    """Load a versioned affinity store, or an empty store when the file is absent.
+
+    Args:
+        state_path: Path to the affinity state JSON file.
+
+    Returns:
+        Parsed affinity store.
+
+    Raises:
+        ValueError: When the document is corrupt or uses an unsupported schema.
+    """
+    if not state_path.is_file():
+        return AffinityStore()
+    try:
+        raw_text = state_path.read_text(encoding=UTF8_ENCODING)
+        parsed_payload = json.loads(raw_text)
+    except (OSError, json.JSONDecodeError, UnicodeError) as load_error:
+        raise _affinity_corrupt_error(state_path, load_error) from load_error
+    if not isinstance(parsed_payload, dict):
+        raise _affinity_corrupt_error(
+            state_path, AFFINITY_TOP_LEVEL_NOT_OBJECT_REASON
+        )
+    return AffinityStore(
+        schema_version=AFFINITY_STATE_SCHEMA_VERSION,
+        all_bindings=_bindings_from_payload(parsed_payload, state_path=state_path),
+    )
+
+
+def record_affinity_binding(
+    store: AffinityStore,
+    *,
+    session_id: str,
+    command: str,
+    maximum_entries: int = AFFINITY_MAXIMUM_ENTRIES,
+) -> AffinityStore:
+    """Return a new store with ``session_id`` bound to ``command``, bounded.
+
+    Re-binding an existing session moves it to the newest end. When the store
+    exceeds ``maximum_entries``, the oldest bindings drop first.
+
+    Args:
+        store: Current affinity store.
+        session_id: Claude session id to bind.
+        command: Chain binary command that served the session.
+        maximum_entries: Hard cap on retained bindings.
+
+    Returns:
+        Updated store (does not mutate ``store``).
+
+    Raises:
+        ValueError: When session_id, command, or maximum_entries is invalid.
+    """
+    if not session_id or not command:
+        raise ValueError(AFFINITY_SESSION_ID_AND_COMMAND_REQUIRED_MESSAGE)
+    if maximum_entries < 1:
+        raise ValueError(AFFINITY_MAXIMUM_ENTRIES_MINIMUM_MESSAGE)
+    all_remaining = [
+        each_binding
+        for each_binding in store.all_bindings
+        if each_binding.session_id != session_id
+    ]
+    all_remaining.append(AffinityBinding(session_id=session_id, command=command))
+    if len(all_remaining) > maximum_entries:
+        all_remaining = all_remaining[-maximum_entries:]
+    return AffinityStore(
+        schema_version=AFFINITY_STATE_SCHEMA_VERSION,
+        all_bindings=all_remaining,
+    )
+
+
+def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
+    """Atomically replace the affinity state file with ``store``.
+
+    Creates a unique sibling temporary file via ``tempfile.mkstemp``, writes
+    and flushes the document, then uses ``os.replace`` so readers never
+    observe a partial document.
+
+    Args:
+        state_path: Destination affinity state path.
+        store: Store document to persist.
+
+    Raises:
+        OSError: When the write or replace fails (message is actionable).
+    """
+    payload = {
+        AFFINITY_KEY_SCHEMA_VERSION: store.schema_version,
+        AFFINITY_KEY_ALL_BINDINGS: [
+            {
+                AFFINITY_KEY_SESSION_ID: each_binding.session_id,
+                AFFINITY_KEY_COMMAND: each_binding.command,
+            }
+            for each_binding in store.all_bindings
+        ],
+    }
+    serialized_document = (
+        json.dumps(payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True)
+        + "\n"
+    )
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{state_path.name}.",
+        suffix=AFFINITY_TEMP_SUFFIX,
+        dir=state_path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    owned_descriptor = file_descriptor
+    try:
+        with os.fdopen(file_descriptor, "w", encoding=UTF8_ENCODING) as temporary_file:
+            owned_descriptor = -1
+            temporary_file.write(serialized_document)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, state_path)
+    except OSError as write_error:
+        if owned_descriptor >= 0:
+            try:
+                os.close(owned_descriptor)
+            except OSError:
+                pass
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise OSError(
+            AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE.format(
+                state_path=state_path,
+                error=write_error,
+            )
+        ) from write_error
+
+
 def _served_outcome(
     served_command: str,
     completion: subprocess.CompletedProcess[str],
@@ -638,6 +872,80 @@ def _ranked_entries_or_config_order(
         return list(all_entries)
 
 
+def extract_resume_session_id(
+    all_claude_arguments: Sequence[str],
+) -> str | None:
+    """Return the session id after ``--resume`` when present.
+
+    Args:
+        all_claude_arguments: Arguments passed after the binary name.
+
+    Returns:
+        The non-empty session id, or ``None`` when the flag is absent.
+    """
+    for each_index, each_argument in enumerate(all_claude_arguments):
+        if each_argument != RESUME_SESSION_FLAG:
+            continue
+        next_index = each_index + 1
+        if next_index >= len(all_claude_arguments):
+            return None
+        session_id = all_claude_arguments[next_index]
+        if session_id and not session_id.startswith("-"):
+            return session_id
+        return None
+    return None
+
+
+def lookup_affinity_command(
+    store: AffinityStore,
+    session_id: str,
+) -> str | None:
+    """Return the bound binary command for ``session_id``, if any.
+
+    Args:
+        store: Loaded affinity store.
+        session_id: Session id from a prior serve.
+
+    Returns:
+        The bound command string, or ``None`` when unbound.
+    """
+    for each_binding in store.all_bindings:
+        if each_binding.session_id == session_id:
+            return each_binding.command
+    return None
+
+
+def order_entries_for_resume(
+    all_entries: list[ChainEntry],
+    *,
+    preferred_command: str | None,
+) -> list[ChainEntry]:
+    """Put the preferred originating binary first; keep relative order of the rest.
+
+    When ``preferred_command`` is missing from the chain or is ``None``, the
+    original list order is returned unchanged (documented fallback).
+
+    Args:
+        all_entries: Chain entries in the mode's base order.
+        preferred_command: Originating binary from the affinity store.
+
+    Returns:
+        Ordered walk list for this invocation.
+    """
+    if preferred_command is None:
+        return list(all_entries)
+    preferred: list[ChainEntry] = []
+    remaining: list[ChainEntry] = []
+    for each_entry in all_entries:
+        if each_entry.command == preferred_command and not preferred:
+            preferred.append(each_entry)
+        else:
+            remaining.append(each_entry)
+    if not preferred:
+        return list(all_entries)
+    return preferred + remaining
+
+
 def _resolve_walk_entries(
     all_entries: list[ChainEntry],
     config_path: Path,
@@ -646,6 +954,36 @@ def _resolve_walk_entries(
     if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT:
         return list(all_entries)
     return _ranked_entries_or_config_order(all_entries, config_path)
+
+
+def _affinity_preferred_command(
+    all_claude_arguments: Sequence[str],
+    affinity_path: Path,
+) -> str | None:
+    resume_session_id = extract_resume_session_id(all_claude_arguments)
+    if resume_session_id is None:
+        return None
+    try:
+        affinity_store = load_affinity_store(affinity_path)
+    except ValueError:
+        return None
+    return lookup_affinity_command(affinity_store, resume_session_id)
+
+
+def _walk_entries_for_invocation(
+    all_entries: list[ChainEntry],
+    config_path: Path,
+    routing_mode: str,
+    all_claude_arguments: Sequence[str],
+    affinity_path: Path,
+) -> list[ChainEntry]:
+    base_order = _resolve_walk_entries(all_entries, config_path, routing_mode)
+    preferred_command = _affinity_preferred_command(
+        all_claude_arguments, affinity_path
+    )
+    return order_entries_for_resume(
+        base_order, preferred_command=preferred_command
+    )
 
 
 def _require_known_routing_mode(routing_mode: str) -> str:
@@ -702,9 +1040,35 @@ def run_claude(
     selected_routing_mode = _require_known_routing_mode(routing_mode)
     config_path = chain_config_path()
     all_entries = load_chain(config_path)
-    all_walk_entries = _resolve_walk_entries(
-        all_entries, config_path, selected_routing_mode
+    affinity_path = default_affinity_state_path(
+        Path.home() / CLAUDE_HOME_SUBDIRECTORY
     )
+    all_walk_entries = _walk_entries_for_invocation(
+        all_entries,
+        config_path,
+        selected_routing_mode,
+        all_claude_arguments,
+        affinity_path,
+    )
+    return _walk_chain_attempts(
+        all_walk_entries,
+        all_claude_arguments=all_claude_arguments,
+        timeout_seconds=timeout_seconds,
+        stdin_text=stdin_text,
+        routing_mode=selected_routing_mode,
+        affinity_path=affinity_path,
+    )
+
+
+def _walk_chain_attempts(
+    all_walk_entries: list[ChainEntry],
+    *,
+    all_claude_arguments: list[str],
+    timeout_seconds: int,
+    stdin_text: str | None,
+    routing_mode: str,
+    affinity_path: Path,
+) -> ChainInvocationOutcome:
     all_attempts: list[ChainAttempt] = []
     last_usage_limited: subprocess.CompletedProcess[str] | None = None
     for each_entry in all_walk_entries:
@@ -725,7 +1089,7 @@ def run_claude(
             )
             timeout_terminal_status = (
                 TERMINAL_STATUS_ADVISOR_BLOCKED
-                if selected_routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
+                if routing_mode == ROUTING_MODE_ORDERED_ACCOUNT
                 else TERMINAL_STATUS_TIMEOUT
             )
             return _no_process_outcome(
@@ -742,12 +1106,36 @@ def run_claude(
             each_entry,
             completion,
             all_attempts,
-            routing_mode=selected_routing_mode,
+            routing_mode=routing_mode,
         )
         if terminal_outcome is not None:
+            _persist_served_affinity(
+                affinity_path,
+                served_command=each_entry.command,
+                session_id=terminal_outcome.session_id,
+            )
             return terminal_outcome
         last_usage_limited = completion
     return _exhausted_outcome(all_attempts, last_usage_limited)
+
+
+def _persist_served_affinity(
+    affinity_path: Path,
+    *,
+    served_command: str,
+    session_id: str | None,
+) -> None:
+    """Best-effort write of session-to-binary affinity after a successful serve."""
+    if not session_id:
+        return
+    try:
+        store = load_affinity_store(affinity_path)
+        updated = record_affinity_binding(
+            store, session_id=session_id, command=served_command
+        )
+        save_affinity_store_atomic(affinity_path, updated)
+    except (OSError, ValueError):
+        return
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
