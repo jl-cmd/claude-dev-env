@@ -8,8 +8,11 @@ import os
 from pathlib import Path
 
 from hooks_constants.dynamic_stderr_handler import DynamicStderrHandler
-from hooks_constants.setup_project_paths_constants import META_KEY, UTF8_ENCODING
-
+from hooks_constants.setup_project_paths_constants import (
+    GIT_DIRECTORY_SEGMENT_NAME,
+    META_KEY,
+    UTF8_ENCODING,
+)
 
 _logger = logging.getLogger("project_paths_reader")
 if not _logger.handlers:
@@ -33,6 +36,30 @@ def _normalize_path_separators(raw_path: str) -> str:
     forward_slash_form = raw_path.replace("\\", "/")
     return os.path.normcase(os.path.normpath(forward_slash_form)).replace("\\", "/")
 
+
+def find_git_root(start_path: str) -> str | None:
+    """Walk upward for .git; stop at home or filesystem root.
+
+    Home bound prevents a parent .git above the user home from becoming the
+    session repo root (same contract as the untracked-repo SessionStart hook).
+
+    Args:
+        start_path: Directory to begin the upward walk.
+
+    Returns:
+        Absolute path of the git root, or None when none is found in bounds.
+    """
+    home_directory = Path.home().resolve()
+    candidate = Path(start_path).resolve()
+    while True:
+        if (candidate / GIT_DIRECTORY_SEGMENT_NAME).exists():
+            return str(candidate)
+        if candidate == home_directory:
+            return None
+        parent = candidate.parent
+        if parent == candidate:
+            return None
+        candidate = parent
 
 def load_registry(config_path: Path | None = None) -> dict[str, str]:
     """Return the name-to-absolute-path mapping with the _meta key stripped.
@@ -65,14 +92,14 @@ def load_registry(config_path: Path | None = None) -> dict[str, str]:
     }
 
 
-def registry_contains_path(known_registry: dict[str, str], path_to_find: str) -> bool:
+def registry_contains_path(all_known_registry: dict[str, str], path_to_find: str) -> bool:
     """Return True when the given path appears as any registry value.
 
     Normalizes both sides before comparing so Windows and POSIX separator
     forms of the same path compare equal.
     """
     normalized_target = _normalize_path_separators(path_to_find)
-    for each_registered_path in known_registry.values():
+    for each_registered_path in all_known_registry.values():
         if _normalize_path_separators(each_registered_path) == normalized_target:
             return True
     return False

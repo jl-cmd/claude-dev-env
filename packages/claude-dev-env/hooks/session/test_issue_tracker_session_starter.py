@@ -34,6 +34,13 @@ def test_default_environment_is_disabled(monkeypatch: pytest.MonkeyPatch) -> Non
     assert issue_tracker_session_starter_enabled_in_environment() is False
 
 
+def test_enabled_env_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ISSUE_TRACKER_SESSION_STARTER_ENABLED_ENV_VAR, "1")
+    assert issue_tracker_session_starter_enabled_in_environment() is True
+    monkeypatch.setenv(ISSUE_TRACKER_SESSION_STARTER_ENABLED_ENV_VAR, "true")
+    assert issue_tracker_session_starter_enabled_in_environment() is True
+
+
 def test_disabled_or_ineligible_emits_nothing() -> None:
     assert (
         run_issue_tracker_session_starter(
@@ -70,7 +77,7 @@ def test_unknown_source_emits_nothing() -> None:
 
 
 def test_repository_is_registered_fail_closed_empty_registry() -> None:
-    assert repository_is_registered("/any/path", {}) is False
+    assert repository_is_registered("/any/path", {}) is False  # empty registry fails closed
 
 
 def test_repository_is_registered_matches_git_root(tmp_path: Path) -> None:

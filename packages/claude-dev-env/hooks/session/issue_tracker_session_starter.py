@@ -28,6 +28,7 @@ from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
 from hooks_constants.project_paths_reader import (  # noqa: E402
+    find_git_root,
     load_registry,
     registry_contains_path,
 )
@@ -39,9 +40,6 @@ from hooks_constants.session_start_injector import (  # noqa: E402
 from hooks_constants.session_start_injector_constants import (  # noqa: E402
     ALL_KNOWN_SESSION_START_SOURCES,
 )
-from hooks_constants.setup_project_paths_constants import (  # noqa: E402
-    GIT_DIRECTORY_SEGMENT_NAME,
-)
 
 
 def issue_tracker_session_starter_enabled_in_environment() -> bool:
@@ -50,41 +48,34 @@ def issue_tracker_session_starter_enabled_in_environment() -> bool:
     return raw_setting.strip().lower() in ALL_ISSUE_TRACKER_STARTER_ENABLED_ENV_VALUES
 
 
-def find_git_root(start_path: str) -> str | None:
-    """Walk upward for .git; stop at filesystem root."""
-    candidate = Path(start_path).resolve()
-    while True:
-        if (candidate / GIT_DIRECTORY_SEGMENT_NAME).exists():
-            return str(candidate)
-        parent = candidate.parent
-        if parent == candidate:
-            return None
-        candidate = parent
-
-
 def repository_is_registered(
     working_directory: str,
-    registry_by_name: dict[str, str] | None = None,
+    registry_by_name: dict[str, str],
 ) -> bool:
     """Return True when cwd git root is a value in the project-paths registry.
 
     Missing registry, missing git root, or unregistered root fail closed.
+
+    Args:
+        working_directory: Session cwd used to locate the git root.
+        registry_by_name: Name-to-path map; empty map fails closed.
     """
-    known_registry = (
-        registry_by_name if registry_by_name is not None else load_registry()
-    )
-    if not known_registry:
+    if not registry_by_name:
         return False
     git_root = find_git_root(working_directory)
     if git_root is None:
         return False
-    return registry_contains_path(known_registry, git_root)
+    return registry_contains_path(registry_by_name, git_root)
 
 
 def build_issue_tracker_injector_configuration(
     timeout_milliseconds: int,
 ) -> InjectorConfiguration:
-    """Build injector config with the issue-tracker directive per known source."""
+    """Build injector config with the issue-tracker directive per known source.
+
+    Args:
+        timeout_milliseconds: Injector budget; zero or less yields timeout status.
+    """
     context_by_source = {
         each_source: ISSUE_TRACKER_SESSION_START_DIRECTIVE
         for each_source in ALL_KNOWN_SESSION_START_SOURCES
@@ -103,7 +94,17 @@ def run_issue_tracker_session_starter(
     is_repository_eligible: bool,
     timeout_milliseconds: int,
 ) -> dict[str, str]:
-    """Return additionalContext when opt-in and repo gate both pass, else empty."""
+    """Return additionalContext when opt-in and repo gate both pass, else empty.
+
+    Args:
+        payload_by_key: Parsed SessionStart payload.
+        is_enabled: When False, return empty without calling the injector.
+        is_repository_eligible: When False, return empty without calling the injector.
+        timeout_milliseconds: Injector timeout budget.
+
+    Returns:
+        ``{"additionalContext": ...}`` when injected, else ``{}``.
+    """
     if not is_enabled or not is_repository_eligible:
         return {}
     configuration = build_issue_tracker_injector_configuration(timeout_milliseconds)
@@ -116,10 +117,14 @@ def main() -> None:
     payload_by_key = read_hook_input_dictionary_from_stdin()
     if payload_by_key is None:
         return
+    is_enabled = issue_tracker_session_starter_enabled_in_environment()
+    is_repository_eligible = (
+        repository_is_registered(os.getcwd(), load_registry()) if is_enabled else False
+    )
     payload = run_issue_tracker_session_starter(
         payload_by_key,
-        issue_tracker_session_starter_enabled_in_environment(),
-        repository_is_registered(os.getcwd()),
+        is_enabled,
+        is_repository_eligible,
         ISSUE_TRACKER_STARTER_TIMEOUT_MILLISECONDS,
     )
     if payload:
