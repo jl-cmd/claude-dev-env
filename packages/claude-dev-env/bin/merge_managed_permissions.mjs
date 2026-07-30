@@ -54,7 +54,11 @@ export function mergeManagedPermissionsIntoSettings(targetSettings, managedDenyE
         throw new TypeError('managedDenyEntries must be an array');
     }
 
-    if (!targetSettings.permissions || typeof targetSettings.permissions !== 'object') {
+    if (
+        !targetSettings.permissions
+        || typeof targetSettings.permissions !== 'object'
+        || Array.isArray(targetSettings.permissions)
+    ) {
         targetSettings.permissions = {};
     }
     const permissions = targetSettings.permissions;
