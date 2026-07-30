@@ -358,3 +358,8 @@ no open work remains, run `set --status done` before any re-arm attempt.
 - `scripts/` — deterministic status_gate.
 - Advisor policy:
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+
+## File-backed run ledger
+
+When host task tools are absent, reconcile delegated work through `scripts/grok_run_ledger.py` under the run-state directory (stable task ids, one live owner, unique advisor sessions, dependency blocking, snapshot-drift reopening).
+
