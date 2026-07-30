@@ -282,3 +282,33 @@ def test_should_block_new_string_magic_in_wide_edit() -> None:
         f"introduced string magic must block with a line locator, got: {magic_issues}"
     )
     assert any("STRIPE_SECRET" in each_issue for each_issue in magic_issues)
+
+
+def test_should_block_second_identical_string_magic_per_occurrence() -> None:
+    prior_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    proposed_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+        "\n"
+        "def fetch_backup() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        proposed_fragment,
+        PRODUCTION_FILE_PATH,
+        prior_fragment,
+    )
+    magic_issues = [each for each in issues if "STRIPE_SECRET" in each]
+    assert len(magic_issues) == 1, (
+        f"exactly one new identical magic must block (per-occurrence), got: {magic_issues}"
+    )
+    assert any("Line 7" in each_issue for each_issue in magic_issues), (
+        f"second occurrence must keep proposed-fragment line, got: {magic_issues}"
+    )
