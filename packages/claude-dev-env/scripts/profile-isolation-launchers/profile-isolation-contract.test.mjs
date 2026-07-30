@@ -36,13 +36,15 @@ const ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'lib/profile-manifest.mjs',
 ]);
 
-/** J1 MCP activation sources allowed beside the A1a contract surface. */
+/** J1 MCP activation and K1 version-preflight sources allowed beside the A1a contract surface. */
 const ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS = Object.freeze([
   'config/mcp-bundles.json',
   'mcp-bundles.mjs',
   'launcher-runtime.mjs',
+  'version-compatibility.mjs',
   'tests/mcp-bundles.test.mjs',
   'tests/launcher-runtime.test.mjs',
+  'tests/version-compatibility.test.mjs',
 ]);
 
 test('profiles manifest schemaVersion is 1 and every migrationOrder id resolves', () => {
