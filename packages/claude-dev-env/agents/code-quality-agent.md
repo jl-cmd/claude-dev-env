@@ -175,7 +175,7 @@ Followed by the Shape A finding list, the Shape B proof-of-absence list, and the
 
 ## Caller Context
 
-Callers /bugteam, /pr-converge, and /pr-fix-protocol invoke this agent at different models per call (opus for /bugteam; the PR-loop orchestrators set their own Agent model). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
+Callers /bugteam, /pr-converge, and /autoconverge invoke this agent at different models per call (opus for /bugteam; the PR-loop orchestrators set their own Agent model). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
 
 ## Examples
 
