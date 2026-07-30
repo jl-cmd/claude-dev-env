@@ -161,9 +161,9 @@ test('missing fixture agent fails discovery for the affected profile only', () =
     try {
         installFixtureAgent(roots.profileRootById.main);
         const mainNames = discoverInstalledAgents(roots.profileRootById.main);
-        const editorNames = discoverInstalledAgents(roots.profileRootById['profile-a']);
+        const profileANames = discoverInstalledAgents(roots.profileRootById['profile-a']);
         assert.ok(mainNames.includes(FIXTURE_AGENT_NAME));
-        assert.ok(!editorNames.includes(FIXTURE_AGENT_NAME));
+        assert.ok(!profileANames.includes(FIXTURE_AGENT_NAME));
     } finally {
         removeDisposableRunRoots(roots.runRoot);
     }
