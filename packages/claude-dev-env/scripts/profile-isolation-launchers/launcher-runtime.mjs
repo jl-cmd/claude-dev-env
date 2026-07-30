@@ -15,6 +15,10 @@ import {
   resolveProfileMcpBundleId,
   SUPPORTED_ACTIVATION_INTERFACE,
 } from './mcp-bundles.mjs';
+import {
+  classifyVersionCompatibility,
+  shouldBlockLaunch,
+} from './version-compatibility.mjs';
 
 /**
  * Resolve a launcher name to a profile id from the profiles manifest.
@@ -117,6 +121,42 @@ export function formatProfileMcpActivationFailure(profileId, errorValue) {
 }
 
 /**
+ * Evaluate CLI vs Desktop version compatibility from already-collected probes.
+ *
+ * Call this before any profile-state mutation. Spawn and binary discovery stay
+ * in the caller; this adapter only runs the shared classifier.
+ *
+ * @param {{
+ *   cli: import('./version-compatibility.mjs').VersionProbeResult,
+ *   desktop: import('./version-compatibility.mjs').VersionProbeResult,
+ * }} parameters
+ * @returns {import('./version-compatibility.mjs').CompatibilityResult}
+ */
+export function evaluateLauncherVersionCompatibility(parameters) {
+  return classifyVersionCompatibility(parameters);
+}
+
+/**
+ * Build a preflight failure message when compatibility blocks launch.
+ *
+ * @param {import('./version-compatibility.mjs').CompatibilityResult} result
+ * @returns {string}
+ */
+export function formatCompatibilityPreflightFailure(result) {
+  return `version compatibility preflight blocked launch (${result.class}): ${result.message}`;
+}
+
+/**
+ * True when a classified result must stop launch before profile mutation.
+ *
+ * @param {import('./version-compatibility.mjs').CompatibilityResult} result
+ * @returns {boolean}
+ */
+export function mustBlockLaunchForCompatibility(result) {
+  return shouldBlockLaunch(result);
+}
+
+/**
  * Path helpers for tests and pack verification.
  *
  * @param {string} packageRoot
@@ -126,14 +166,18 @@ export function listMcpActivationPackageRelativePaths(packageRoot) {
   return [
     join(packageRoot, 'scripts/profile-isolation-launchers/mcp-bundles.mjs'),
     join(packageRoot, 'scripts/profile-isolation-launchers/launcher-runtime.mjs'),
+    join(packageRoot, 'scripts/profile-isolation-launchers/version-compatibility.mjs'),
     join(packageRoot, 'scripts/profile-isolation-launchers/config/mcp-bundles.json'),
     join(packageRoot, 'scripts/profile-isolation-launchers/config/profiles.manifest.json'),
     join(packageRoot, 'scripts/profile-isolation-launchers/tests/mcp-bundles.test.mjs'),
     join(packageRoot, 'scripts/profile-isolation-launchers/tests/launcher-runtime.test.mjs'),
+    join(packageRoot, 'scripts/profile-isolation-launchers/tests/version-compatibility.test.mjs'),
   ];
 }
 
 export {
   SUPPORTED_ACTIVATION_INTERFACE,
   resolveProfileMcpBundleId,
+  classifyVersionCompatibility,
+  shouldBlockLaunch,
 };
