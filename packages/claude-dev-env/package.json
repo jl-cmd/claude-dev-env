@@ -16,6 +16,7 @@
         "docs/",
         "commands/",
         "agents/",
+        "output-styles/",
         "skills/",
         "hooks/",
         "system-prompts/",
