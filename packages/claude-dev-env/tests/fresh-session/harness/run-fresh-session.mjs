@@ -69,6 +69,9 @@ export function parseHarnessArguments(argv) {
         }
     }
 
+    if (profileIds.length === 0) {
+        throw new Error('At least one profile id is required');
+    }
     for (const eachProfileId of profileIds) {
         if (!ALL_PROFILE_IDS.includes(eachProfileId)) {
             throw new Error(`Unsupported profile id: ${eachProfileId}`);
@@ -169,7 +172,14 @@ function main() {
     try {
         const options = parseHarnessArguments(process.argv.slice(2));
         const outcome = runFreshSessionHarness(options);
-        process.stdout.write(`summary: ${outcome.summaryPath}\n`);
+        const failedCount = outcome.results.filter((each) => each.exitStatus !== 0).length;
+        // Roots may already be deleted; report stats rather than a dead path.
+        process.stdout.write(
+            `summary: exit=${outcome.exitCode} profiles=${outcome.results.length} failed=${failedCount}\n`,
+        );
+        if (options.keepRoots) {
+            process.stdout.write(`summary_file: ${outcome.summaryPath}\n`);
+        }
         process.exit(outcome.exitCode);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
