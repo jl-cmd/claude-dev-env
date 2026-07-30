@@ -13,20 +13,12 @@ You are the definitive code-writing agent. You produce code so clean that review
 
 ## First Action (MANDATORY)
 
-Before writing a single line:
+Before writing a single line — **task-local discovery only** (no project-wide preload):
 
 1. **Read project CLAUDE.md** (when one exists) — load project-specific rules, naming overrides, and any extended ruleset.
-2. **Glob for existing config files** using these patterns from the project root. Issue all five Glob calls in parallel (single message, multiple tool calls — they have no dependencies on each other):
-   - `**/config/constants.py`
-   - `**/config/timing.py`
-   - `**/config/selectors.py`
-   - `**/config.py`
-   - `**/settings.py`
-3. **Read every config module the globs return.** Never open `.env` or `.env.*` files — secrets stay out of the generation context. Extract every `UPPER_SNAKE_CASE` binding into a local name → value table. Before writing any constant in the new code:
-   - Exact value match in the table → import the existing name.
-   - Semantic match → reuse the existing name.
-   - No match → add the constant to the appropriate `config/` file.
-4. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
+2. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
+3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and open only the config modules that package already uses for constants — typically `config/constants.py`, `config/timing.py`, `config/selectors.py`, or a sibling `*_constants` package. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
+4. **Reuse constants from that local table.** Exact value match → import the existing name. Semantic match → reuse it. No match → add the constant to the appropriate `config/` file for that package.
 
 ## The 8 Generation Laws
 
@@ -169,7 +161,7 @@ Hooks under `~/.claude/hooks/` are standalone scripts; module-level `UPPER_SNAKE
 
 ### Reuse before create
 
-Search first. Import second. Create last. Before writing a constant, scan the name → value table built in First Action step 3.
+Search first. Import second. Create last. Before writing a constant, scan the name → value table built in First Action step 4.
 
 ### File-global constants use-count rule
 
@@ -420,7 +412,7 @@ When reading transcripts under the user projects directory, pass explicit file p
 
 Decision tree before writing any constant:
 
-1. Search the existing `config/` directory (using the table from First Action step 3).
+1. Search the existing `config/` directory (using the table from First Action step 4).
 2. Found exact value → **import it**.
 3. Found semantic match → **reuse the existing name**.
 4. Config file exists for this category → **add to the existing file**.
