@@ -1,5 +1,77 @@
 # Changelog
 
+## [2.8.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.7.1...claude-dev-env-v2.8.0) (2026-07-30)
+
+
+### Features
+
+* **advisor:** add ordered-account chain routing mode ([83bab7c](https://github.com/jl-cmd/claude-dev-env/commit/83bab7c10ea51b1fe5e22ba69c7340d7cedce751))
+* **advisor:** ordered-account chain routing mode ([10783ca](https://github.com/jl-cmd/claude-dev-env/commit/10783ca07fa56cff363f7061b1b29061f17ac68e))
+* **audit:** restore Category Q (A-Q contracts) ([936919c](https://github.com/jl-cmd/claude-dev-env/commit/936919ca0bdce19dc8e7dcc51b9582a6c1f1829c))
+* **audit:** restore Category Q in default A-Q contracts ([880313c](https://github.com/jl-cmd/claude-dev-env/commit/880313cdf68cfedb0c4ef039ce523e74060c8041))
+* **fresh-branch:** configurable isolated worktree root ([f1b5c4b](https://github.com/jl-cmd/claude-dev-env/commit/f1b5c4bd6184c26c188496cebe4ac587243ceba1))
+* **fresh-branch:** configurable isolated worktree root ([cb0d929](https://github.com/jl-cmd/claude-dev-env/commit/cb0d929d6e1ce0aa9d96547504f5e488907e3620))
+* **grok:** reject unknown keys in a batch worker spec ([50d60db](https://github.com/jl-cmd/claude-dev-env/commit/50d60db00eb4708d634a5183d151eeb86747ff54))
+* **grok:** reject unknown keys in a batch worker spec ([4f02450](https://github.com/jl-cmd/claude-dev-env/commit/4f02450af22af9856df5edabd7ca1ed8f322810d))
+* **hooks:** deny a fable subagent spawn without the authorization marker ([7aab582](https://github.com/jl-cmd/claude-dev-env/commit/7aab5823a090915e4afa4ea30ebb677e756d7457))
+* **hooks:** Fold the Edit advisory hooks into the dispatcher and right-size hook budgets ([e65da42](https://github.com/jl-cmd/claude-dev-env/commit/e65da42f400fd35de09632ba3cf0ed99b5a4a3d9))
+* **hooks:** make AskUserQuestion carry a lean question block ([939ebcd](https://github.com/jl-cmd/claude-dev-env/commit/939ebcdc7830d373297e49d1e1dd4bbbd1a42c3c))
+* **review:** severity schema and three-head terminal contract ([a18b0da](https://github.com/jl-cmd/claude-dev-env/commit/a18b0da8ade24de5c2ec0ae8dd927ee055d8a288))
+* **review:** severity schema and uncapped loop terminals ([941ad93](https://github.com/jl-cmd/claude-dev-env/commit/941ad930a43e70e349685eca7242abeedf2c6198))
+* **rules:** add claims-as-quotes ([abfadf8](https://github.com/jl-cmd/claude-dev-env/commit/abfadf8b0da8d9c219cdd75cee4521c165c129e8))
+
+
+### Bug Fixes
+
+* **advisor:** address PR 880 eight-angle findings ([c5629f1](https://github.com/jl-cmd/claude-dev-env/commit/c5629f1ed219afd69fc1c20572af39a84edc237e))
+* **agents:** make every definition readable by both frontmatter parsers ([00460c9](https://github.com/jl-cmd/claude-dev-env/commit/00460c9e3d14af80bef3e44dcec49b740bf83a13))
+* **agents:** parse every agent's frontmatter, and repair the two that failed ([61097a3](https://github.com/jl-cmd/claude-dev-env/commit/61097a39968c12b30a422b1ecf5d6a193a2524a1))
+* **audit:** ban en-dash A-P in code-quality agent pin ([cdf5b9a](https://github.com/jl-cmd/claude-dev-env/commit/cdf5b9a39da6671d294c6cdb46fa0dcbeaffd613))
+* **autoconverge:** give both fence readers one definition of the fence ([179e78e](https://github.com/jl-cmd/claude-dev-env/commit/179e78eff70ddb57302e67c7685489ea3e12c0c1))
+* **autoconverge:** share the verdict fence recipe across verify paths ([ef30ea7](https://github.com/jl-cmd/claude-dev-env/commit/ef30ea7153c30e6d646205cd46716bc27901e63c))
+* **e-code-review:** bare gate covers staged and committed lines only ([b2f9f22](https://github.com/jl-cmd/claude-dev-env/commit/b2f9f22eb3b99265221d55336d020d0e2b66a75d))
+* **e-code-review:** bare gate covers staged/committed lines only ([e0af06e](https://github.com/jl-cmd/claude-dev-env/commit/e0af06e3f8f2a89dd9d7e120cfd5d984e4279e30))
+* **e-code-review:** let a level file gather the target a widening produces ([c299632](https://github.com/jl-cmd/claude-dev-env/commit/c299632108f7d5c910a481401138d34a03d9e36b))
+* **e-code-review:** name the checks a round runs, and where a re-run level file stops ([0c40a71](https://github.com/jl-cmd/claude-dev-env/commit/0c40a71dfa1f70db5982d34fb684dab8ca88b791))
+* **e-code-review:** name the gate fix.md runs, and let a widened target keep its range ([acb85c8](https://github.com/jl-cmd/claude-dev-env/commit/acb85c8fd995c98ef81dafca097ade2701e66c47))
+* **fable-spawn-gate:** deny recovery matches substring marker check ([7e9603f](https://github.com/jl-cmd/claude-dev-env/commit/7e9603f6ce21ac219d8cdf83d46f5dc6b9af73c4))
+* **fable-spawn-gate:** deny text matches substring marker check ([d0637b3](https://github.com/jl-cmd/claude-dev-env/commit/d0637b393cf4c1036326e6dd381fc54bc775a50b))
+* **fable-spawn-gate:** lead DENY_REASON with how to authorize ([50d5c44](https://github.com/jl-cmd/claude-dev-env/commit/50d5c44baec2badd22f039217f4649cd92bd200c))
+* **fable-spawn-gate:** put recovery steps in additionalContext on deny ([1ad76fe](https://github.com/jl-cmd/claude-dev-env/commit/1ad76fe97234764445ced2ef913820a5c3cdd70b))
+* **fresh-branch:** validate worktree-root before fetch ([031dcba](https://github.com/jl-cmd/claude-dev-env/commit/031dcba77bf4887dbd3ab7796b40e26cc88bb613))
+* **hooks:** deny a pytest run piped into another command ([2d0b6ea](https://github.com/jl-cmd/claude-dev-env/commit/2d0b6ea5652adf79abdc503c0b7e5c5668438d4e))
+* **hooks:** read heredoc delimiters, brace groups, shims, and wrappers as a shell does ([877dc1c](https://github.com/jl-cmd/claude-dev-env/commit/877dc1c3afee6b0ff3b3fda68a480cd2e07bad68))
+* **hooks:** read option values, clustered flags, and more pytest runners as a shell does ([4cf5f14](https://github.com/jl-cmd/claude-dev-env/commit/4cf5f14902c3f153a6036746042da8cadc5c30e6))
+* **hooks:** see a compound command's status, and stop reading a script's argv as the interpreter's ([73aa07d](https://github.com/jl-cmd/claude-dev-env/commit/73aa07d474116a968588aefdc56c7189261c8547))
+* **pre_push:** decode git ref queries with replace; fix skip message ([06606d8](https://github.com/jl-cmd/claude-dev-env/commit/06606d8b668f0dfa00d9c8f841333b127af78f5b))
+* **pre_push:** gate compares the merge base with the remote default branch ([1f9b2c5](https://github.com/jl-cmd/claude-dev-env/commit/1f9b2c5b58f54e1b1fadf9001510c3280eeabc8e))
+* **pre_push:** reject a dangling origin/HEAD as the default branch ([496371e](https://github.com/jl-cmd/claude-dev-env/commit/496371ea7e0b0b9bb572f13dd605acb72aab6489))
+* **pre_push:** skip the gate when merge-base cannot resolve ([0f43f2f](https://github.com/jl-cmd/claude-dev-env/commit/0f43f2fbf4a38bdd050f2e73e3127c111daeb207))
+* **review:** address PR 886 eight-angle findings ([bd24690](https://github.com/jl-cmd/claude-dev-env/commit/bd2469090668d4ae7124888e30902faf33b267fe))
+* **review:** remove three-head reviewed-head cap ([e7ce85b](https://github.com/jl-cmd/claude-dev-env/commit/e7ce85b690873053ce24f700b6bdfc3898e2c0ec))
+* **rules:** keep claims-as-quotes always-on ([109a6e6](https://github.com/jl-cmd/claude-dev-env/commit/109a6e6fe81251de523edf0e33a34e202203a1f8))
+* **rules:** one truth for chat vs three-piece claims-as-quotes ([31130c1](https://github.com/jl-cmd/claude-dev-env/commit/31130c1875fe4585f2ff91a454b7fcf74074bff9))
+* **rules:** reconcile chat compact vs three-piece claims-as-quotes ([1e9ee20](https://github.com/jl-cmd/claude-dev-env/commit/1e9ee20fce1d77c3f426edba96c7b8b39f414c71))
+* **rules:** scope claims-as-quotes to markdown files ([fe2aff7](https://github.com/jl-cmd/claude-dev-env/commit/fe2aff764dfe33f33c7d354bd819745efefcddcc))
+
+
+### Documentation
+
+* **e-code-review:** bare code-rules gate in fix.md with out-of-scope skips ([af01140](https://github.com/jl-cmd/claude-dev-env/commit/af01140600fa0c1f8e8fcad3aab4da6756c1edee))
+* **e-code-review:** bare gate call and present-tense loop prose ([b092871](https://github.com/jl-cmd/claude-dev-env/commit/b0928716204c1247c5733c4ccc962a10d072a264))
+* **skills:** review loop treats repair diffs as new code ([df10df0](https://github.com/jl-cmd/claude-dev-env/commit/df10df0263588bf92f078e5873e64ed45036c249))
+
+
+### Refactoring
+
+* **scripts:** share one process-tree kill helper across three callers ([be98e9e](https://github.com/jl-cmd/claude-dev-env/commit/be98e9e411cfb94c7dd5a28853fa5e729b5bdc13))
+* **scripts:** share one process-tree kill helper across three callers ([4f8b7b9](https://github.com/jl-cmd/claude-dev-env/commit/4f8b7b9f729f590b6adeb31c800e922556822d4c))
+
+
+### Tests
+
+* **pre_push:** clarify dangling origin/HEAD docstring ([f9d676d](https://github.com/jl-cmd/claude-dev-env/commit/f9d676da722e3fe7442d526a508c5c234e4bb204))
+
 ## [2.7.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.7.0...claude-dev-env-v2.7.1) (2026-07-29)
 
 
