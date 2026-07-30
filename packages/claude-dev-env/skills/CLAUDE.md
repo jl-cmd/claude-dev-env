@@ -17,7 +17,9 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 ## Shared support code
 
-`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared across the PR-loop skills, and `advisor/`, which provides the shared warm-advisor protocol used by `team-advisor`, `orchestrator`, and `orchestrator-refresh`.
+**`skills/_shared/`** — skill-local PR-loop helpers plus `@` stubs that name
+canonical homes under **`@~/.claude/_shared/`** (advisor protocol, PR-loop
+contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`.
 
 ## Skill groups
 
