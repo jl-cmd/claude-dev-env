@@ -15,15 +15,22 @@ for each_path in (_SCRIPTS_DIRECTORY, _CONSTANTS_PARENT):
 from e_code_review_effort_constants import (  # noqa: E402
     ALL_EFFORT_LEVELS,
     ALL_FIXTURE_BANDS,
+    ALL_SKILL_EFFORT_LEVELS,
     MINIMUM_QUALITY_HOLD_SCORE,
     THINKING_ENABLED_DEFAULT,
+    WORKFLOW_FAMILY_E_CODE_REVIEW,
 )
 from effort_evaluation import (  # noqa: E402
     build_synthetic_row,
+    evaluation_evidence_path,
     fixtures_directory,
+    load_evaluation_evidence,
     load_fixtures,
+    map_evaluation_effort_to_skill_level,
     quality_holds,
     recommend_effort_by_band,
+    resolve_skill_effort_for_band,
+    skill_defaults_from_recommendation,
     validate_evaluation_row,
 )
 
@@ -115,3 +122,46 @@ def test_effort_levels_cover_cli_set() -> None:
     assert "low" in ALL_EFFORT_LEVELS
     assert "max" in ALL_EFFORT_LEVELS
     assert len(ALL_EFFORT_LEVELS) == 5
+
+
+def test_evidence_rows_validate_and_skill_defaults_cite_rows() -> None:
+    evidence_path = evaluation_evidence_path()
+    assert evidence_path.is_file()
+    assert evidence_path.name == "effort_defaults_evidence.json"
+    evidence = load_evaluation_evidence()
+    assert evidence["workflow_family"] == WORKFLOW_FAMILY_E_CODE_REVIEW
+    assert evidence["thinking_enabled"] is True
+    all_rows = evidence["all_rows"]
+    assert isinstance(all_rows, list)
+    for each_row in all_rows:
+        assert isinstance(each_row, dict)
+        assert validate_evaluation_row(each_row) == []
+    recommendation = recommend_effort_by_band(all_rows)
+    skill_defaults = skill_defaults_from_recommendation(recommendation)
+    assert skill_defaults["workflow_family"] == WORKFLOW_FAMILY_E_CODE_REVIEW
+    default_by_band = skill_defaults["default_by_band"]
+    assert isinstance(default_by_band, dict)
+    for each_band in ALL_FIXTURE_BANDS:
+        band_default = default_by_band[each_band]
+        assert band_default["skill_effort"] in ALL_SKILL_EFFORT_LEVELS
+        assert band_default["cited_row"] is not None
+        assert band_default["cited_row"]["thinking_enabled"] is True
+
+
+def test_committed_skill_defaults_match_resolver() -> None:
+    assert resolve_skill_effort_for_band("easy") == "medium"
+    assert resolve_skill_effort_for_band("medium") == "xhigh"
+    assert resolve_skill_effort_for_band("demanding") == "xhigh"
+    evidence = load_evaluation_evidence()
+    committed = evidence["skill_defaults"]["default_by_band"]
+    for each_band in ALL_FIXTURE_BANDS:
+        assert committed[each_band]["skill_effort"] == resolve_skill_effort_for_band(
+            each_band
+        )
+        assert committed[each_band]["cited_row"]["effort"] is not None
+
+
+def test_map_high_and_max_to_skill_xhigh() -> None:
+    assert map_evaluation_effort_to_skill_level("high") == "xhigh"
+    assert map_evaluation_effort_to_skill_level("max") == "xhigh"
+    assert map_evaluation_effort_to_skill_level("medium") == "medium"
