@@ -38,6 +38,7 @@ import {
 } from './select-install-targets.mjs';
 import {
     buildInstallPlan,
+    buildUninstallPlan,
     InstallPlanPreflightError,
 } from './install-plan.mjs';
 import {
@@ -1813,7 +1814,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(
             `${PACKAGE_NAME}: --update — removing prior managed files under ${CLAUDE_HOME}, then reinstalling from the package.\n`,
         );
-        purgeManagedInstallation({ requireManifest: false });
+        purgeManagedInstallation({
+            requireManifest: false,
+            throwIfFault,
+        });
     } else if (isUpdateRefresh) {
         const installScope = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'full';
         console.log(`${PACKAGE_NAME}: --update — re-running ${installScope} install into ${CLAUDE_HOME}\n`);
@@ -2159,67 +2163,79 @@ function removeRecordedFile(filePath) {
 }
 
 /**
- * Remove every file the manifest records, then drop the directories the removals
- * emptied.
+ * Build the uninstall plan for this managed root.
  *
- * A record is removed when it names a path the installer writes: anything under
- * ~/.claude, plus the `~/.mypy.ini` the install writes in the home directory.
- * Every other record is skipped with a warning and counted, so one malformed
- * entry costs that entry alone: the purge removes every legitimate record, clears
- * the manifest, and leaves the user with a whole uninstall rather than a
- * half-removed install.
- *
- * Directory cleanup runs after the file loop so a directory holding two recorded
- * files is judged once both are gone. Each walk stops at the managed root the
- * purged file sits under, which keeps ~/.claude itself and every unmanaged
- * sibling directory in place.
- *
- * @param {{requireManifest: boolean}} options `requireManifest` exits when no manifest exists.
- * @returns {number|void} 0 when no manifest exists and none is required.
+ * @param {boolean} requireManifest
+ * @returns {ReturnType<typeof buildUninstallPlan>}
  */
-function purgeManagedInstallation({ requireManifest }) {
-    if (!existsSync(MANIFEST_FILE)) {
-        if (requireManifest) {
-            console.error('No installation manifest found. Nothing to uninstall.');
-            process.exit(1);
-        }
-        return 0;
-    }
-    const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
+function resolveUninstallPlan(requireManifest) {
+    return buildUninstallPlan({
+        managedRoot: CLAUDE_HOME,
+        manifestFilePath: MANIFEST_FILE,
+        requireManifest,
+        isRemovableRecord: isRemovableManifestRecord,
+    });
+}
+
+/**
+ * Apply one preflighted uninstall plan: remove removable files, prune managed
+ * hooks from settings, unset core.hooksPath when it points here, then drop the
+ * ownership manifest. Fault phases mirror the install transaction names.
+ *
+ * @param {ReturnType<typeof buildUninstallPlan>} plan
+ * @param {{ throwIfFault?: (phase: string) => void }} [helpers]
+ * @returns {number} Count of files this call removed.
+ */
+function executeUninstallPlan(plan, helpers = {}) {
+    const throwIfFault = helpers.throwIfFault || (() => {});
     let removed = 0;
-    let skippedUnmanagedCount = 0;
     const managedRootByEmptiedDirectory = new Map();
-    for (const filePath of manifest.files) {
-        if (!isRemovableManifestRecord(filePath)) {
-            console.warn(`  Warning: skipping ${filePath} — the manifest record names no path this installer writes`);
-            skippedUnmanagedCount++;
-            continue;
+    for (const filePath of plan.removableFiles) {
+        if (removeRecordedFile(filePath)) {
+            removed += 1;
         }
-        if (removeRecordedFile(filePath)) removed++;
         const managedRoot = owningManagedRoot(filePath);
-        if (managedRoot) managedRootByEmptiedDirectory.set(dirname(resolve(filePath)), managedRoot);
+        if (managedRoot) {
+            managedRootByEmptiedDirectory.set(dirname(resolve(filePath)), managedRoot);
+        }
     }
     for (const [emptiedDirectory, managedRoot] of managedRootByEmptiedDirectory) {
         removeEmptiedParentDirectories(emptiedDirectory, managedRoot);
     }
-    if (skippedUnmanagedCount > 0) {
-        console.warn(`  ${skippedUnmanagedCount} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME} and outside ${MYPY_INI_INSTALL_PATH}`);
+    for (const eachSkippedPath of plan.skippedFiles) {
+        console.warn(
+            `  Warning: skipping ${eachSkippedPath} — the manifest record names no path this installer writes`,
+        );
     }
-    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
-    if (existsSync(settingsPath)) {
-        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    if (plan.skippedFiles.length > 0) {
+        console.warn(
+            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME} and outside ${MYPY_INI_INSTALL_PATH}`,
+        );
+    }
+    throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
+
+    if (existsSync(plan.settingsPath)) {
+        const settings = JSON.parse(readFileSync(plan.settingsPath, 'utf8'));
         let settingsChanged = false;
         if (settings.hooks) {
             const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
-                managedPackageSourceRoots()
+                managedPackageSourceRoots(),
             );
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
             settingsChanged = true;
             console.log('  Hook entries removed from settings.json');
         }
-        const managedDenyFromManifest = Array.isArray(manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny)
-            ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY].deny
-            : loadPackageManagedDenyEntries();
+        let managedDenyFromManifest = loadPackageManagedDenyEntries();
+        if (existsSync(plan.manifestFilePath)) {
+            try {
+                const manifest = JSON.parse(readFileSync(plan.manifestFilePath, 'utf8'));
+                if (Array.isArray(manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny)) {
+                    managedDenyFromManifest = manifest[MANIFEST_MANAGED_PERMISSIONS_KEY].deny;
+                }
+            } catch {
+                // Keep the package deny list when the ownership record cannot be re-read.
+            }
+        }
         if (managedDenyFromManifest.length > 0) {
             const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromManifest);
             if (pruneOutcome.removedCount > 0) {
@@ -2230,11 +2246,17 @@ function purgeManagedInstallation({ requireManifest }) {
             }
         }
         if (settingsChanged) {
-            writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+            writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
+    throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
+
     unsetGlobalGitHooksPathIfOurs();
-    unlinkSync(MANIFEST_FILE);
+    throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
+
+    unlinkSync(plan.manifestFilePath);
+    throwIfFault(FAULT_PHASES.AFTER_MANIFEST_WRITE);
+
     for (const directory of MANAGED_TOP_LEVEL_DIRECTORY_NAMES) {
         const dirPath = join(CLAUDE_HOME, directory);
         try {
@@ -2244,11 +2266,85 @@ function purgeManagedInstallation({ requireManifest }) {
         } catch { /* leave non-empty dirs */ }
     }
     console.log(`\nRemoved ${removed} files.\n`);
+    return removed;
 }
 
+/**
+ * Remove every file the ownership record lists for this managed root.
+ *
+ * Preflights the uninstall plan (settings JSON must be an object when present)
+ * before any removal. When called from `--update` inside an install transaction,
+ * pass that transaction's `throwIfFault` so a fault restores the outer snapshot
+ * without nesting a second journal.
+ *
+ * @param {{
+ *   requireManifest: boolean,
+ *   throwIfFault?: (phase: string) => void,
+ * }} options
+ * @returns {number|void} 0 when no manifest exists and none is required.
+ */
+function purgeManagedInstallation({ requireManifest, throwIfFault }) {
+    const plan = resolveUninstallPlan(requireManifest);
+    if (plan.isNoOp) {
+        return 0;
+    }
+    return executeUninstallPlan(plan, { throwIfFault });
+}
+
+/**
+ * Uninstall the selected managed root inside a snapshot/restore transaction.
+ *
+ * Captures files, settings, manifest, and core.hooksPath before removal so any
+ * later fault restores a retryable installation from the ownership record.
+ *
+ * @returns {void}
+ */
 function uninstall() {
     console.log(`\nUninstalling ${PACKAGE_NAME}...\n`);
-    purgeManagedInstallation({ requireManifest: true });
+    let plan;
+    try {
+        plan = resolveUninstallPlan(true);
+    } catch (preflightError) {
+        if (preflightError instanceof InstallPlanPreflightError) {
+            console.error(preflightError.message);
+            process.exit(1);
+        }
+        throw preflightError;
+    }
+    if (plan.isNoOp) {
+        return;
+    }
+
+    const faultPhase = resolveFaultPhaseFromEnvironment(process.env);
+    const snapshot = capturePriorInstallSnapshot({
+        managedRoot: CLAUDE_HOME,
+        manifestFilePath: MANIFEST_FILE,
+        settingsPath: plan.settingsPath,
+        priorManifestFiles: plan.removableFiles,
+        journalParentDirectory: join(CLAUDE_HOME, TRANSACTION_JOURNAL_DIRECTORY_NAME),
+    });
+
+    try {
+        runWithInstallTransaction({
+            snapshot,
+            faultPhase,
+            runMutations: ({ throwIfFault }) => {
+                executeUninstallPlan(plan, { throwIfFault });
+            },
+        });
+    } catch (mutationError) {
+        if (mutationError instanceof InstallTransactionFaultError) {
+            console.error(
+                `ERROR: uninstall aborted at ${mutationError.phase}; prior installation restored.`,
+            );
+            process.exit(1);
+        }
+        const message = mutationError instanceof Error
+            ? mutationError.message
+            : String(mutationError);
+        console.error(`ERROR: uninstall failed (${message}); prior installation restored.`);
+        process.exit(1);
+    }
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Install and update transaction journal for claude-dev-env.
+ * Install, update, and uninstall transaction journal for claude-dev-env.
  *
  * Captures the prior managed installation, runs mutations, and restores
  * settings, manifest, managed files, and core.hooksPath when any phase fails.
