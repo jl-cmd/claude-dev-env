@@ -24,11 +24,14 @@ if str(_SCRIPTS_DIRECTORY) not in sys.path:
 
 from e_code_review_effort_constants import (
     ALL_EFFORT_LEVELS,
+    ALL_EFFORT_RANK_BY_NAME,
     ALL_FIXTURE_BANDS,
     ALL_REQUIRED_ROW_KEYS,
     ALL_SCORE_ROW_KEYS,
+    ALL_SKILL_EFFORT_FOR_EVALUATION_EFFORT,
+    ALL_SKILL_EFFORT_LEVELS,
     COST_LATENCY_LEVER,
-    ALL_EFFORT_RANK_BY_NAME,
+    EVALUATION_EVIDENCE_FILENAME,
     EVALUATION_SCHEMA_VERSION,
     FIXTURES_DIRECTORY_NAME,
     JSON_SUFFIX,
@@ -36,6 +39,7 @@ from e_code_review_effort_constants import (
     MINIMUM_QUALITY_HOLD_SCORE,
     THINKING_ENABLED_DEFAULT,
     VISIBLE_TOKENS_ROW_KEY,
+    WORKFLOW_FAMILY_E_CODE_REVIEW,
 )
 
 
@@ -226,3 +230,133 @@ def build_synthetic_row(
         LATENCY_MS_ROW_KEY: latency_ms,
         "thinking_enabled": THINKING_ENABLED_DEFAULT,
     }
+
+
+def evaluation_evidence_path() -> Path:
+    """Return the committed evaluation evidence file path.
+
+    Returns:
+        Path to ``effort_defaults_evidence.json`` beside this module.
+    """
+    return _SCRIPTS_DIRECTORY / EVALUATION_EVIDENCE_FILENAME
+
+
+def load_evaluation_evidence() -> dict[str, object]:
+    """Load the committed evaluation evidence document.
+
+    Returns:
+        Parsed evidence mapping (rows, recommendation, skill defaults).
+
+    Raises:
+        OSError: When the evidence file cannot be read.
+        json.JSONDecodeError: When the evidence file is not valid JSON.
+    """
+    return json.loads(evaluation_evidence_path().read_text(encoding="utf-8"))
+
+
+def map_evaluation_effort_to_skill_level(evaluation_effort: str) -> str:
+    """Map a full evaluation effort name to an e-code-review skill level.
+
+    Args:
+        evaluation_effort: One of low / medium / high / xhigh / max.
+
+    Returns:
+        One of low / medium / xhigh.
+
+    Raises:
+        ValueError: When the evaluation effort is unknown.
+    """
+    skill_effort = ALL_SKILL_EFFORT_FOR_EVALUATION_EFFORT.get(evaluation_effort)
+    if skill_effort is None:
+        raise ValueError(f"unknown evaluation effort: {evaluation_effort!r}")
+    return skill_effort
+
+
+def skill_defaults_from_recommendation(
+    all_recommendation_fields: Mapping[str, object],
+) -> dict[str, object]:
+    """Build e-code-review skill defaults that each cite a recommendation row.
+
+    Args:
+        all_recommendation_fields: Output of ``recommend_effort_by_band``.
+
+    Returns:
+        Skill-family defaults document with cited rows per band.
+
+    Raises:
+        TypeError: When recommendation structure is not mapping-shaped.
+        ValueError: When a mapped skill effort leaves the skill surface.
+    """
+    recommendation_by_band = all_recommendation_fields["recommendation_by_band"]
+    if not isinstance(recommendation_by_band, Mapping):
+        raise TypeError("recommendation_by_band must be a mapping")
+    default_by_band: MutableMapping[str, object] = {}
+    for each_band in ALL_FIXTURE_BANDS:
+        band_entry = recommendation_by_band[each_band]
+        if not isinstance(band_entry, Mapping):
+            raise TypeError(f"band entry for {each_band} must be a mapping")
+        evaluation_effort = band_entry.get("recommended_effort")
+        cited_row = band_entry.get("cited_row")
+        if evaluation_effort is None or cited_row is None:
+            default_by_band[each_band] = {
+                "skill_effort": None,
+                "cited_row": None,
+                "blocker": band_entry.get("blocker"),
+            }
+            continue
+        skill_effort = map_evaluation_effort_to_skill_level(str(evaluation_effort))
+        if skill_effort not in ALL_SKILL_EFFORT_LEVELS:
+            raise ValueError(f"skill effort out of surface: {skill_effort!r}")
+        default_by_band[each_band] = {
+            "skill_effort": skill_effort,
+            "evaluation_effort": evaluation_effort,
+            "cited_row": dict(cited_row) if isinstance(cited_row, Mapping) else cited_row,
+            "blocker": None,
+        }
+    return {
+        "workflow_family": WORKFLOW_FAMILY_E_CODE_REVIEW,
+        "thinking_enabled": THINKING_ENABLED_DEFAULT,
+        "cost_latency_lever": COST_LATENCY_LEVER,
+        "skill_levels": list(ALL_SKILL_EFFORT_LEVELS),
+        "default_by_band": dict(default_by_band),
+    }
+
+
+def resolve_skill_effort_for_band(fixture_band: str) -> str:
+    """Return the evaluation-backed skill effort for one fixture band.
+
+    Args:
+        fixture_band: easy / medium / demanding.
+
+    Returns:
+        Skill effort level (low / medium / xhigh).
+
+    Raises:
+        ValueError: When the band is unknown or has no holding recommendation.
+        KeyError: When the evidence document lacks the band.
+    """
+    if fixture_band not in ALL_FIXTURE_BANDS:
+        raise ValueError(f"unknown fixture band: {fixture_band!r}")
+    evidence = load_evaluation_evidence()
+    skill_defaults = evidence["skill_defaults"]
+    if not isinstance(skill_defaults, Mapping):
+        raise TypeError("skill_defaults must be a mapping")
+    default_by_band = skill_defaults["default_by_band"]
+    if not isinstance(default_by_band, Mapping):
+        raise TypeError("default_by_band must be a mapping")
+    band_default = default_by_band[fixture_band]
+    if not isinstance(band_default, Mapping):
+        raise TypeError(f"default for {fixture_band} must be a mapping")
+    skill_effort = band_default.get("skill_effort")
+    if skill_effort is None:
+        raise ValueError(
+            f"no evaluation-backed skill effort for band {fixture_band!r}: "
+            f"{band_default.get('blocker')}"
+        )
+    skill_effort_name = str(skill_effort)
+    if skill_effort_name not in ALL_SKILL_EFFORT_LEVELS:
+        raise ValueError(
+            f"skill effort out of surface for band {fixture_band!r}: "
+            f"{skill_effort_name!r}"
+        )
+    return skill_effort_name

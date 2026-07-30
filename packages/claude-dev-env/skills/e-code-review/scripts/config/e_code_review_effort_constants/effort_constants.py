@@ -28,3 +28,13 @@ ALL_EFFORT_RANK_BY_NAME: dict[str, int] = {
     each_effort: each_index
     for each_index, each_effort in enumerate(ALL_EFFORT_LEVELS)
 }
+ALL_SKILL_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "xhigh")
+EVALUATION_EVIDENCE_FILENAME: str = "effort_defaults_evidence.json"
+WORKFLOW_FAMILY_E_CODE_REVIEW: str = "e-code-review"
+ALL_SKILL_EFFORT_FOR_EVALUATION_EFFORT: dict[str, str] = {
+    "low": "low",
+    "medium": "medium",
+    "high": "xhigh",
+    "xhigh": "xhigh",
+    "max": "xhigh",
+}
