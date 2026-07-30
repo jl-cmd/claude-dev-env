@@ -27,6 +27,7 @@ from hooks_constants.session_start_injector_constants import (
     INJECTION_STATUS_OK,
     INJECTION_STATUS_TIMEOUT,
     INJECTION_STATUS_UNKNOWN_SOURCE,
+    MILLISECONDS_PER_SECOND,
     SESSION_START_INJECTOR_ENABLED_ENV_VAR,
     SESSION_START_SOURCE_PAYLOAD_KEY,
     SESSION_START_SOURCE_UNKNOWN,
@@ -121,41 +122,28 @@ def inject_session_start_context(
     """
     read_clock = clock if clock is not None else time.perf_counter
     start_time = read_clock()
+    normalized_source = normalize_session_start_source(payload_by_key)
 
     if not configuration.is_enabled:
-        end_time = read_clock()
-        return InjectionResult(
-            source=normalize_session_start_source(payload_by_key),
-            status=INJECTION_STATUS_DISABLED,
-            additional_context="",
-            latency_milliseconds=(end_time - start_time) * 1000.0,
-            is_context_injected=False,
-        )
-
-    if configuration.timeout_milliseconds <= 0:
-        end_time = read_clock()
-        return InjectionResult(
-            source=normalize_session_start_source(payload_by_key),
-            status=INJECTION_STATUS_TIMEOUT,
-            additional_context="",
-            latency_milliseconds=(end_time - start_time) * 1000.0,
-            is_context_injected=False,
-        )
-
-    normalized_source = normalize_session_start_source(payload_by_key)
-    if normalized_source == SESSION_START_SOURCE_UNKNOWN:
-        context_text = configuration.default_context_for_unknown
+        status = INJECTION_STATUS_DISABLED
+        context_text = ""
+    elif configuration.timeout_milliseconds <= 0:
+        status = INJECTION_STATUS_TIMEOUT
+        context_text = ""
+    elif normalized_source == SESSION_START_SOURCE_UNKNOWN:
         status = INJECTION_STATUS_UNKNOWN_SOURCE
+        context_text = configuration.default_context_for_unknown
     else:
-        context_text = configuration.context_by_source.get(normalized_source, "")
         status = INJECTION_STATUS_OK
+        context_text = configuration.context_by_source.get(normalized_source, "")
 
     end_time = read_clock()
     return InjectionResult(
         source=normalized_source,
         status=status,
         additional_context=context_text,
-        latency_milliseconds=(end_time - start_time) * 1000.0,
+        latency_milliseconds=(end_time - start_time)
+        * MILLISECONDS_PER_SECOND,
         is_context_injected=bool(context_text),
     )
 
