@@ -46,13 +46,15 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 | `reference/xhigh.md` | xhigh review procedure — 10 angles, 1-vote verify, gap sweep |
 | `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
 | `reference/loop.md` | Repeat review/fix rounds until clean |
+| `reference/effort-evaluation.md` | Opus effort evaluation fixtures, schema, and offline recommend path |
+| `reference/runner-selection.md` | Runner selection map |
+| `scripts/effort_evaluation.py` | Machine-readable effort rows + recommendation (no default changes) |
 | `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
 | `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
 | `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
-| `reference/runner-selection.md` | Runner selection map |
 
 ## Folder map
 
 - `SKILL.md` — route and dispatch.
-- `reference/` — level procedures, fix/loop, runner selection.
-- `scripts/` — medium-review module, tests, `e_code_review_scripts_constants/`.
+- `reference/` — level procedures, fix/loop, effort evaluation, runner selection.
+- `scripts/` — effort evaluation, medium-review module, tests, `e_code_review_scripts_constants/`.
