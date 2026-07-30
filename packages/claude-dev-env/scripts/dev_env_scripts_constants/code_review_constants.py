@@ -1,15 +1,20 @@
-"""Named constants for the host-aware `/code-review` invoker.
+"""Named constants for the host-aware `/code-review` invoker and review loop.
 
 ::
 
     ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER
         ok: ("low", "medium", "high", "xhigh", "max")
         flag: "ultra"  (rejected; needs an interactive terminal)
+    ALL_FINDING_SEVERITIES
+        ok: ("blocker", "high", "medium", "low", "nit")
+    ALL_LOOP_TERMINALS
+        ok: ("clean", "nits_fixed", "blocked_at_cap", "advisor_blocked")
     RECORD_STAMP_FLAG
         ok: "--record-stamp"
 
 Effort tokens re-export the hooks enforcement constants (single source).
-Scalar flags, JSON keys, and mint-loop messages live here for the invoker.
+Scalar flags, JSON keys, mint-loop messages, finding severity vocabulary,
+reviewed-head counting, and loop terminal resolution live here.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 
@@ -223,3 +229,399 @@ STAMP_STORE_RECORD_CLEAN_STAMP_NAME: str = "record_clean_stamp"
 
 STAMP_STORE_RESOLVE_REPO_ROOT_NAME: str = "resolve_repo_root"
 """Attribute name of the repo-root resolver on the stamp store module."""
+
+SEVERITY_BLOCKER: str = "blocker"
+"""Finding severity for a release-blocking defect."""
+
+SEVERITY_HIGH: str = "high"
+"""Finding severity for a high-impact defect that is not a release blocker."""
+
+SEVERITY_MEDIUM: str = "medium"
+"""Finding severity for a moderate maintainer-action defect."""
+
+SEVERITY_LOW: str = "low"
+"""Finding severity for a low-impact non-nit defect."""
+
+SEVERITY_NIT: str = "nit"
+"""Finding severity for a mechanical clarity, format, or typo fix only."""
+
+ALL_FINDING_SEVERITIES: tuple[str, ...] = (
+    SEVERITY_BLOCKER,
+    SEVERITY_HIGH,
+    SEVERITY_MEDIUM,
+    SEVERITY_LOW,
+    SEVERITY_NIT,
+)
+"""Frozen severity vocabulary every retained finding must use."""
+
+VERDICT_CONFIRMED: str = "CONFIRMED"
+"""Verification verdict when the trigger and wrong outcome are named."""
+
+VERDICT_PLAUSIBLE: str = "PLAUSIBLE"
+"""Verification verdict when the mechanism is real and the trigger is uncertain."""
+
+VERDICT_REFUTED: str = "REFUTED"
+"""Verification verdict when the candidate is factually wrong or guarded."""
+
+ALL_VERIFICATION_VERDICTS: tuple[str, ...] = (
+    VERDICT_CONFIRMED,
+    VERDICT_PLAUSIBLE,
+    VERDICT_REFUTED,
+)
+"""Frozen verification-verdict vocabulary from the medium verify phase."""
+
+ALL_RETAINED_VERIFICATION_VERDICTS: tuple[str, ...] = (
+    VERDICT_CONFIRMED,
+    VERDICT_PLAUSIBLE,
+)
+"""Verdicts that keep a candidate in the retained findings list."""
+
+TERMINAL_CLEAN: str = "clean"
+"""Loop terminal when a reviewed head retains zero findings."""
+
+TERMINAL_NITS_FIXED: str = "nits_fixed"
+"""Loop terminal when every retained finding is a fixed nit after gates."""
+
+TERMINAL_BLOCKED_AT_CAP: str = "blocked_at_cap"
+"""Loop terminal when head three still holds an unclassified or non-nit finding."""
+
+TERMINAL_ADVISOR_BLOCKED: str = "advisor_blocked"
+"""Loop terminal when classification needs an advisor that cannot be reached."""
+
+ALL_LOOP_TERMINALS: tuple[str, ...] = (
+    TERMINAL_CLEAN,
+    TERMINAL_NITS_FIXED,
+    TERMINAL_BLOCKED_AT_CAP,
+    TERMINAL_ADVISOR_BLOCKED,
+)
+"""Frozen set of review-loop terminal statuses."""
+
+MAXIMUM_REVIEWED_HEADS: int = 3
+"""Cap on distinct git heads the review loop may review before blocking."""
+
+FINDING_FIELD_SEVERITY: str = "severity"
+"""Structured finding field that holds one of ``ALL_FINDING_SEVERITIES``."""
+
+FINDING_FIELD_VERDICT: str = "verdict"
+"""Structured finding field that holds a verification verdict."""
+
+RESULT_KEY_TERMINAL: str = "terminal"
+"""JSON result key naming the review-loop terminal status."""
+
+RESULT_KEY_DRAFT_PRESERVED: str = "draft_preserved"
+"""JSON result key holding whether the pull request stays draft."""
+
+RESULT_KEY_REVIEWED_HEAD_COUNT: str = "reviewed_head_count"
+"""JSON result key holding how many distinct heads the loop reviewed."""
+
+RESULT_KEY_SURVIVING_FINDINGS: str = "surviving_findings"
+"""JSON result key holding structured findings that remain at terminal."""
+
+
+def is_known_finding_severity(severity: str) -> bool:
+    """Return whether ``severity`` is one of the frozen five tokens.
+
+    ::
+
+        is_known_finding_severity("nit")      # ok: True
+        is_known_finding_severity("P1")       # flag: False
+        is_known_finding_severity("")         # flag: False
+
+    Args:
+        severity: Candidate severity token from a structured finding.
+
+    Returns:
+        True when ``severity`` is in ``ALL_FINDING_SEVERITIES``.
+    """
+    return severity in ALL_FINDING_SEVERITIES
+
+
+def is_nit_finding_severity(severity: str) -> bool:
+    """Return whether ``severity`` is exactly the nit token.
+
+    ::
+
+        is_nit_finding_severity("nit")   # ok: True
+        is_nit_finding_severity("low")   # flag: False
+
+    Args:
+        severity: Candidate severity token from a structured finding.
+
+    Returns:
+        True when ``severity`` equals ``SEVERITY_NIT``.
+    """
+    return severity == SEVERITY_NIT
+
+
+def is_retained_verification_verdict(verdict: str) -> bool:
+    """Return whether ``verdict`` keeps a finding in the retained set.
+
+    ::
+
+        is_retained_verification_verdict("CONFIRMED")  # ok: True
+        is_retained_verification_verdict("REFUTED")    # flag: False
+
+    Args:
+        verdict: Verification vote from the medium verify phase.
+
+    Returns:
+        True when ``verdict`` is CONFIRMED or PLAUSIBLE.
+    """
+    return verdict in ALL_RETAINED_VERIFICATION_VERDICTS
+
+
+def finding_carries_severity_and_verdict(
+    *,
+    severity: object,
+    verdict: object,
+) -> bool:
+    """Return whether one retained finding carries both required fields.
+
+    ::
+
+        finding_carries_severity_and_verdict(
+            severity="high", verdict="CONFIRMED"
+        )  # ok: True
+        finding_carries_severity_and_verdict(
+            severity="high", verdict=None
+        )  # flag: False
+
+    A retained finding needs a known severity and a retained verification
+    verdict. Missing either field, or a REFUTED verdict, fails the contract.
+
+    Args:
+        severity: Severity token from a structured finding, or missing value.
+        verdict: Verification verdict from a structured finding, or missing.
+
+    Returns:
+        True when severity and retained verdict are both present and valid.
+    """
+    if not isinstance(severity, str) or not isinstance(verdict, str):
+        return False
+    if not is_known_finding_severity(severity):
+        return False
+    return is_retained_verification_verdict(verdict)
+
+
+def all_findings_carry_severity_and_verdict(
+    all_findings: Sequence[Mapping[str, object]],
+) -> bool:
+    """Return whether every finding carries severity and a retained verdict.
+
+    ::
+
+        all_findings_carry_severity_and_verdict([])  # ok: True
+        all_findings_carry_severity_and_verdict(
+            [{"severity": "nit", "verdict": "CONFIRMED"}]
+        )  # ok: True
+
+    Args:
+        all_findings: Structured findings retained after verification.
+
+    Returns:
+        True when every finding passes ``finding_carries_severity_and_verdict``.
+    """
+    for each_finding in all_findings:
+        if not finding_carries_severity_and_verdict(
+            severity=each_finding.get(FINDING_FIELD_SEVERITY),
+            verdict=each_finding.get(FINDING_FIELD_VERDICT),
+        ):
+            return False
+    return True
+
+
+def has_unclassified_finding(all_findings: Sequence[Mapping[str, object]]) -> bool:
+    """Return whether any finding lacks a known severity token.
+
+    ::
+
+        has_unclassified_finding([{"verdict": "CONFIRMED"}])  # ok: True
+        has_unclassified_finding(
+            [{"severity": "nit", "verdict": "CONFIRMED"}]
+        )  # flag: False
+
+    Args:
+        all_findings: Structured findings under terminal evaluation.
+
+    Returns:
+        True when any finding omits severity or uses an unknown token.
+    """
+    for each_finding in all_findings:
+        severity = each_finding.get(FINDING_FIELD_SEVERITY)
+        if not isinstance(severity, str):
+            return True
+        if not is_known_finding_severity(severity):
+            return True
+    return False
+
+
+def has_non_nit_finding(all_findings: Sequence[Mapping[str, object]]) -> bool:
+    """Return whether any finding carries a known non-nit severity.
+
+    ::
+
+        has_non_nit_finding([{"severity": "high"}])  # ok: True
+        has_non_nit_finding([{"severity": "nit"}])   # flag: False
+
+    Args:
+        all_findings: Structured findings under terminal evaluation.
+
+    Returns:
+        True when any finding's severity is known and not ``nit``.
+    """
+    for each_finding in all_findings:
+        severity = each_finding.get(FINDING_FIELD_SEVERITY)
+        if not isinstance(severity, str):
+            continue
+        if not is_known_finding_severity(severity):
+            continue
+        if not is_nit_finding_severity(severity):
+            return True
+    return False
+
+
+def is_nits_only_findings(all_findings: Sequence[Mapping[str, object]]) -> bool:
+    """Return whether every finding is a classified nit and at least one exists.
+
+    ::
+
+        is_nits_only_findings([{"severity": "nit"}])  # ok: True
+        is_nits_only_findings([])                      # flag: False
+        is_nits_only_findings(
+            [{"severity": "nit"}, {"severity": "high"}]
+        )  # flag: False
+
+    An empty list is clean, not nits-only. Unclassified findings fail the
+    nits-only check so they route to classification or the cap terminal.
+
+    Args:
+        all_findings: Structured findings under terminal evaluation.
+
+    Returns:
+        True when the list is non-empty, fully classified, and all nits.
+    """
+    if not all_findings:
+        return False
+    if has_unclassified_finding(all_findings):
+        return False
+    return not has_non_nit_finding(all_findings)
+
+
+def record_reviewed_head(
+    all_reviewed_head_shas: tuple[str, ...],
+    head_sha: str,
+) -> tuple[str, ...]:
+    """Append ``head_sha`` once when it is new and under the three-head cap.
+
+    ::
+
+        record_reviewed_head((), "aaa")           # ok: ("aaa",)
+        record_reviewed_head(("aaa",), "aaa")     # ok: ("aaa",)  re-review
+        record_reviewed_head(("a", "b", "c"), "d")  # ok: unchanged at cap
+
+    A re-review of the same head does not increment the count. A fourth
+    distinct head is refused so the loop never reviews past the cap.
+
+    Args:
+        all_reviewed_head_shas: Ordered distinct heads already reviewed.
+        head_sha: Git head under review for this pass.
+
+    Returns:
+        The prior tuple, or the prior tuple plus ``head_sha`` when new.
+    """
+    if head_sha in all_reviewed_head_shas:
+        return all_reviewed_head_shas
+    if len(all_reviewed_head_shas) >= MAXIMUM_REVIEWED_HEADS:
+        return all_reviewed_head_shas
+    return all_reviewed_head_shas + (head_sha,)
+
+
+def resolve_review_loop_terminal(
+    *,
+    all_findings: Sequence[Mapping[str, object]],
+    reviewed_head_count: int,
+    is_gates_passed: bool,
+    is_nits_applied: bool,
+    is_advisor_unreachable: bool = False,
+) -> str | None:
+    """Resolve the review-loop terminal, or None when the loop continues.
+
+    ::
+
+        resolve_review_loop_terminal(
+            all_findings=(), reviewed_head_count=1,
+            is_gates_passed=True, is_nits_applied=False,
+        )  # ok: "clean"
+        resolve_review_loop_terminal(
+            all_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
+            reviewed_head_count=3, is_gates_passed=True, is_nits_applied=False,
+        )  # ok: "blocked_at_cap"
+
+    Empty findings return clean. Nits-only findings return nits_fixed after
+    the nits are applied and gates pass, including on the third head. An
+    unclassified or non-nit finding on the third head returns blocked_at_cap.
+    An unreachable advisor needed for classification returns advisor_blocked.
+    Open non-nit work before the cap returns None so the caller re-enters.
+
+    Args:
+        all_findings: Structured findings retained for this head.
+        reviewed_head_count: Distinct heads reviewed so far, including this one.
+        is_gates_passed: Whether required checks passed for this decision.
+        is_nits_applied: Whether every nit on the target was fixed.
+        is_advisor_unreachable: Whether classification needs a missing advisor.
+
+    Returns:
+        One of ``ALL_LOOP_TERMINALS``, or None when the loop continues.
+    """
+    if is_advisor_unreachable and has_unclassified_finding(all_findings):
+        return TERMINAL_ADVISOR_BLOCKED
+    if not all_findings:
+        return TERMINAL_CLEAN
+    if is_nits_only_findings(all_findings) and is_nits_applied and is_gates_passed:
+        return TERMINAL_NITS_FIXED
+    if reviewed_head_count < MAXIMUM_REVIEWED_HEADS:
+        return None
+    if has_unclassified_finding(all_findings):
+        return TERMINAL_BLOCKED_AT_CAP
+    if has_non_nit_finding(all_findings):
+        return TERMINAL_BLOCKED_AT_CAP
+    return None
+
+
+def encode_review_loop_terminal_result(
+    *,
+    terminal: str,
+    all_surviving_findings: Sequence[Mapping[str, object]],
+    reviewed_head_count: int,
+    is_draft_preserved: bool,
+) -> dict[str, object]:
+    """Serialize a review-loop terminal for hand-off and reporting.
+
+    ::
+
+        encode_review_loop_terminal_result(
+            terminal="blocked_at_cap",
+            all_surviving_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
+            reviewed_head_count=3,
+            is_draft_preserved=True,
+        )["draft_preserved"]  # ok: True
+
+    ``blocked_at_cap`` keeps the pull request draft and carries every
+    surviving structured finding. Other terminals use the same shape so
+    callers read one schema.
+
+    Args:
+        terminal: One of ``ALL_LOOP_TERMINALS``.
+        all_surviving_findings: Findings still open at the terminal.
+        reviewed_head_count: Distinct heads reviewed before this terminal.
+        is_draft_preserved: Whether the pull request stays in draft.
+
+    Returns:
+        A JSON-ready mapping with terminal, draft flag, head count, findings.
+    """
+    return {
+        RESULT_KEY_TERMINAL: terminal,
+        RESULT_KEY_DRAFT_PRESERVED: is_draft_preserved,
+        RESULT_KEY_REVIEWED_HEAD_COUNT: reviewed_head_count,
+        RESULT_KEY_SURVIVING_FINDINGS: list(all_surviving_findings),
+    }

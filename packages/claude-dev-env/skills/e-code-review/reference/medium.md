@@ -123,15 +123,31 @@ Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
 
 Report this review's results — `{level, findings}` — through the structured
 findings-report call: the mechanism that renders a review's results as a typed
-list in the host UI, ranked most-severe first. Each entry has `file`, `line`,
-`summary`, `short_summary` — the claim compressed to ≤60 characters, no
-rationale or consequence clause — `failure_scenario`, and `category` — a short
-kebab-case slug for the angle that produced it (`correctness`,
-`simplification`, `efficiency`, `reuse`, `altitude`, `conventions`, or a more
-specific slug like `test-coverage` when one fits better) — plus `verdict` when
-a verify pass produced one. If nothing survives verification, make that call
-with an empty array. Do not also print the findings as text, and do not create
-or publish an artifact of the review — the structured call is the report.
+list in the host UI, ranked most-severe first. Each **retained** entry carries
+every field below. Drop REFUTED candidates before this report; do not emit a
+finding that lacks `severity` or `verdict`.
+
+| Field | Required | Value |
+|---|---|---|
+| `file` | yes | path under review |
+| `line` | yes | 1-based line number |
+| `summary` | yes | full claim |
+| `short_summary` | yes | claim compressed to ≤60 characters, no rationale or consequence clause |
+| `failure_scenario` | yes | concrete trigger and wrong outcome, or concrete cost for cleanup |
+| `category` | yes | short kebab-case slug for the angle (`correctness`, `simplification`, `efficiency`, `reuse`, `altitude`, `conventions`, or a tighter slug like `test-coverage`) |
+| `severity` | yes | one of `blocker`, `high`, `medium`, `low`, `nit` |
+| `verdict` | yes | `CONFIRMED` or `PLAUSIBLE` from Phase 2 |
+
+**Severity rules.** Assign exactly one token from the frozen set above. Use
+`nit` only when all five hold: the change is localized clarity, formatting, or
+a typo; correctness, security, data, and API behavior stay identical; test
+coverage and operability stay identical; dependencies and rollout stay
+identical; the fix is mechanical and bounded. Any other retained finding is
+`low` or higher. Correctness bugs outrank cleanup, altitude, and conventions.
+
+If nothing survives verification, make that call with an empty array. Do not
+also print the findings as text, and do not create or publish an artifact of
+the review — the structured call is the report.
 
 ## Applying fixes (--fix)
 
