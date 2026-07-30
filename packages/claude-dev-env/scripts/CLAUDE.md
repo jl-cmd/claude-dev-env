@@ -37,7 +37,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 |---|---|
 | `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
 | `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
-| `profile-isolation-launchers/` | Profile-launcher contract plus MCP activation and version preflight: profiles manifest, shared-path allowlist, profile resolver, `CLAUDE_CONFIG_DIR` authority, lean/full MCP bundle materialization into profile `mcp.json`, pure CLI/Desktop version-compatibility classifier consumed by launcher preflight. Live launcher execution, provenance pin, and L1 deploy stay residual |
+| `profile-isolation-launchers/` | Profile-launcher contract plus MCP activation, Windows shortcut source semantics, and version preflight: profiles manifest, shared-path allowlist, profile resolver, `CLAUDE_CONFIG_DIR` authority, lean/full MCP bundle materialization into profile `mcp.json`, pure CLI/Desktop version-compatibility classifier consumed by launcher preflight, read-only shortcut inventory and preview reconcile under `windows/`. Live launcher execution, provenance pin, live shortcut mutation, and L1 deploy stay residual |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
