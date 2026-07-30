@@ -73,6 +73,10 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
+| `session_start_injector.py` | Shared helper that builds the nested SessionStart `hookSpecificOutput` payload used by SessionStart injector hooks |
+| `session_start_injector_constants.py` | The environment off-values, inject-eligible session sources, SessionStart payload field names, and nested `hookSpecificOutput` payload keys and event name shared by the SessionStart injector hooks |
+| `orchestrator_auto_starter_constants.py` | The `CLAUDE_AUTO_ORCHESTRATOR` toggle name and the `/orchestrator` start directive text for the orchestrator SessionStart injector hook |
+| `issue_tracker_session_starter_constants.py` | The `CLAUDE_ISSUE_TRACKER` toggle name, the tracker start directive text, the `.claude` config directory name, the skill and agent presence-probe path fragments, and the git command pieces and GitHub marker for the issue-tracker SessionStart injector hook |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `shell_command_segments.py` | Shell tokenization helpers shared by the segment-walking blockers: segment splitting on control operators, a segment's effective leading program, and a token's basename |
 | `shell_substitution_blocker_constants.py` | Tool name, payload keys, the four substitution-detection patterns, the deny decision shape, and the corrective message for the shell-substitution blocker |
