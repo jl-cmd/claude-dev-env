@@ -58,6 +58,8 @@ never a hard gate.
 | `scripts/split_pr_dependency_graph.py` | Deterministic layer-rank dependency graph over slices |
 | `scripts/config/dependency_constants.py` | Graph key names and layer ranks |
 | `scripts/test_split_pr_dependency_graph.py` | Graph order, duplicate-id, unknown-layer tests |
+| `scripts/verify_dependency_graph.py` | CLI + shape/order checks for a dependency graph document |
+| `scripts/test_verify_dependency_graph.py` | Rebuild-order accept/reject and CLI exit tests |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/config/plan_constants.py` | Plan schema keys, layer order, title-prefix tokens |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
