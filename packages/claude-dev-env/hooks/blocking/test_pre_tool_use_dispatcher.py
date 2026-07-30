@@ -44,9 +44,12 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
     HostedHookEntry,
 )
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
+    DispatcherDecision,
     HostedHookResult,
+    _emit_deny_decision,
     aggregate_hosted_hook_results,
     run_hosted_hook,
+    unique_first_seen_strings,
 )
 
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
@@ -76,8 +79,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,
-    )
+        env=environment_by_key,    )
 
 
 def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
@@ -97,8 +99,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,
-    )
+        env=environment_by_key,    )
 
 
 def _parse_hook_decision(completed_process: subprocess.CompletedProcess[str]) -> tuple[bool, str]:
@@ -620,6 +621,57 @@ def test_aggregate_explicit_allow_is_overridden_by_a_deny() -> None:
     assert not decision.should_allow, (
         "should_allow must be False when any hook denies, so deny wins"
     )
+
+
+def test_unique_first_seen_strings_keeps_order_and_drops_exact_duplicates() -> None:
+    assert unique_first_seen_strings(["a", "b", "a", "c", "b"]) == ["a", "b", "c"]
+    assert unique_first_seen_strings(["Same", "same"]) == ["Same", "same"]
+
+
+def test_emit_deny_collapses_identical_reasons_and_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Final JSON keeps each exact string once; distinct reasons stay; suppress stays."""
+    shared_text = "BLOCKED: same corrective text"
+    decision = DispatcherDecision(
+        should_deny=True,
+        should_allow=False,
+        all_deny_reasons=[shared_text, "BLOCKED: other reason", shared_text],
+        all_system_messages=[shared_text, shared_text, "other notice"],
+        all_additional_context=["ctx-a", "ctx-a", "ctx-b"],
+        should_suppress_output=True,
+    )
+    _emit_deny_decision(decision)
+    captured = capsys.readouterr().out
+    parsed = json.loads(captured)
+    reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason == f"{shared_text} | BLOCKED: other reason"
+    assert reason.count(shared_text) == 1
+    system_message = parsed["systemMessage"]
+    assert system_message == f"{shared_text}\nother notice"
+    assert parsed["hookSpecificOutput"]["additionalContext"] == "ctx-a\nctx-b"
+    assert parsed["suppressOutput"] is True
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_emit_deny_does_not_cross_collapse_reason_and_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A deny reason equal to a systemMessage string stays in both fields."""
+    shared_text = "identical across fields"
+    decision = DispatcherDecision(
+        should_deny=True,
+        should_allow=False,
+        all_deny_reasons=[shared_text],
+        all_system_messages=[shared_text],
+        all_additional_context=[shared_text],
+        should_suppress_output=False,
+    )
+    _emit_deny_decision(decision)
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["hookSpecificOutput"]["permissionDecisionReason"] == shared_text
+    assert parsed["systemMessage"] == shared_text
+    assert parsed["hookSpecificOutput"]["additionalContext"] == shared_text
 
 
 def test_later_hook_deny_survives_early_hook_exit() -> None:
