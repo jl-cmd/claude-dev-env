@@ -714,23 +714,27 @@ def save_affinity_store_atomic(state_path: Path, store: AffinityStore) -> None:
             for each_binding in store.all_bindings
         ],
     }
+    serialized_document = (
+        json.dumps(payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True)
+        + "\n"
+    )
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = state_path.with_name(state_path.name + AFFINITY_TEMP_SUFFIX)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{state_path.name}.",
+        suffix=AFFINITY_TEMP_SUFFIX,
+        dir=state_path.parent,
+    )
+    temporary_path = Path(temporary_name)
     try:
-        temporary_path.write_text(
-            json.dumps(
-                payload, indent=AFFINITY_JSON_INDENT_SPACES, sort_keys=True
-            )
-            + "\n",
-            encoding=UTF8_ENCODING,
-        )
+        with os.fdopen(file_descriptor, "w", encoding=UTF8_ENCODING) as temporary_file:
+            temporary_file.write(serialized_document)
+            temporary_file.flush()
         os.replace(temporary_path, state_path)
     except OSError as write_error:
-        if temporary_path.exists():
-            try:
-                temporary_path.unlink()
-            except OSError:
-                pass
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise OSError(
             AFFINITY_WRITE_FAILED_MESSAGE_TEMPLATE.format(
                 state_path=state_path,
