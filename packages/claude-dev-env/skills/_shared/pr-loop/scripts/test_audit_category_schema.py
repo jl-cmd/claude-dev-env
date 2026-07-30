@@ -12,6 +12,15 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from skills_pr_loop_constants.audit_category_schema_constants import (
+    CATEGORY_SLUG_KEY,
+    CATEGORY_SUB_BUCKETS_KEY,
+    PROMPTS_DIRECTORY,
+    SCHEMA_CATEGORIES_KEY,
+    SKELETON_PLACEHOLDER_FRAGMENT,
+    SKELETON_SEPARATOR_LINE,
+    UTF8_ENCODING,
+)
 from skills_pr_loop_constants.path_resolver_constants import ALL_AUDIT_CATEGORY_ENTRIES
 
 
@@ -68,20 +77,18 @@ def test_schema_omits_worked_example_prose() -> None:
 def test_no_prompt_skeleton_uses_placeholder_count() -> None:
     """Migrated prompts state a numeric sub-bucket count, never [N]."""
     schema = audit_category_schema.load_audit_category_schema()
-    prompts_directory = (
-        audit_category_schema.audit_category_schema_path().parent / "prompts"
-    )
-    for each_category in schema["categories"]:
-        slug = each_category["slug"]
+    all_findings = audit_category_schema.validate_projections()
+    assert all_findings == [], all_findings
+    for each_category in schema[SCHEMA_CATEGORIES_KEY]:
+        slug = each_category[CATEGORY_SLUG_KEY]
         assert isinstance(slug, str)
-        prompt_path = prompts_directory / f"{slug}.md"
-        skeleton_lines: list[str] = []
-        for each_line in prompt_path.read_text(encoding="utf-8").splitlines():
-            if each_line == "---":
+        prompt_path = PROMPTS_DIRECTORY / f"{slug}.md"
+        all_skeleton_lines: list[str] = []
+        for each_line in prompt_path.read_text(encoding=UTF8_ENCODING).splitlines():
+            if each_line == SKELETON_SEPARATOR_LINE:
                 break
-            skeleton_lines.append(each_line)
-        skeleton_text = "\n".join(skeleton_lines)
-        assert "decomposed into [N] sub-buckets" not in skeleton_text, slug
-        assert f"decomposed into {len(each_category['sub_buckets'])} sub-buckets" in (
-            skeleton_text
-        ), slug
+            all_skeleton_lines.append(each_line)
+        skeleton_text = "\n".join(all_skeleton_lines)
+        assert SKELETON_PLACEHOLDER_FRAGMENT not in skeleton_text, slug
+        sub_bucket_count = len(each_category[CATEGORY_SUB_BUCKETS_KEY])
+        assert f"decomposed into {sub_bucket_count} sub-buckets" in skeleton_text, slug
