@@ -136,6 +136,8 @@ export function runProfileSession(parameters) {
     const environment = buildIsolatedProfileEnvironment(roots, profileId);
     environment.FRESH_SESSION_PROFILE_ID = profileId;
     environment.FRESH_SESSION_EVIDENCE_PATH = evidencePath;
+    // Drop inherited fail flags so a parent shell cannot poison the run.
+    delete environment.FRESH_SESSION_FAIL_PROFILE;
     if (parameters.failProfile) {
         environment.FRESH_SESSION_FAIL_PROFILE = parameters.failProfile;
     }

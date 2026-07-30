@@ -137,6 +137,36 @@ test('parseHarnessArguments reads --profiles and --check transport', () => {
     assert.equal(shouldUseRealCli({ realCli: false }), false);
 });
 
+test('parseHarnessArguments rejects an empty profile list', () => {
+    assert.throws(
+        () => parseHarnessArguments(['--profiles', '']),
+        /At least one profile id is required/,
+    );
+});
+
+test('inherited FRESH_SESSION_FAIL_PROFILE does not poison a clean profile run', () => {
+    const previous = process.env.FRESH_SESSION_FAIL_PROFILE;
+    process.env.FRESH_SESSION_FAIL_PROFILE = 'main';
+    const roots = createDisposableRunRoots({ profileIds: ['main'] });
+    try {
+        const result = runProfileSession({
+            roots,
+            profileId: 'main',
+            realCli: false,
+        });
+        assert.equal(result.exitStatus, 0);
+        assert.equal(result.diagnostic, null);
+    } finally {
+        removeDisposableRunRoots(roots.runRoot);
+        if (previous === undefined) {
+            delete process.env.FRESH_SESSION_FAIL_PROFILE;
+        } else {
+            process.env.FRESH_SESSION_FAIL_PROFILE = previous;
+        }
+    }
+});
+
+
 test('live profile paths are never used as CLAUDE_CONFIG_DIR under fake transport', () => {
     const roots = createDisposableRunRoots({ profileIds: ['main'] });
     try {
