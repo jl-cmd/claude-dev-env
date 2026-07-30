@@ -100,13 +100,17 @@ def validate_evaluation_row(all_row_fields: Mapping[str, object]) -> list[str]:
         all_problems.append("thinking_enabled must be true on Opus paths")
     for each_score_key in ALL_SCORE_ROW_KEYS:
         score_amount = all_row_fields[each_score_key]
-        if not isinstance(score_amount, (int, float)):
+        if isinstance(score_amount, bool) or not isinstance(score_amount, (int, float)):
             all_problems.append(f"{each_score_key} must be numeric")
         elif not 0.0 <= float(score_amount) <= 1.0:
             all_problems.append(f"{each_score_key} out of range [0, 1]")
     for each_count_key in (VISIBLE_TOKENS_ROW_KEY, LATENCY_MS_ROW_KEY):
         count_amount = all_row_fields[each_count_key]
-        if not isinstance(count_amount, (int, float)) or float(count_amount) < 0:
+        if (
+            isinstance(count_amount, bool)
+            or not isinstance(count_amount, (int, float))
+            or float(count_amount) < 0
+        ):
             all_problems.append(f"{each_count_key} must be a non-negative number")
     return all_problems
 

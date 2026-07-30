@@ -11,21 +11,19 @@ ALL_SCORE_ROW_KEYS: tuple[str, ...] = (
     "finding_recall",
     "finding_precision",
 )
-ALL_REQUIRED_ROW_KEYS: tuple[str, ...] = (
-    "fixture_id",
-    "fixture_band",
-    "effort",
-    "quality_score",
-    "finding_recall",
-    "finding_precision",
-    "visible_tokens",
-    "latency_ms",
-    "thinking_enabled",
-)
 FIXTURES_DIRECTORY_NAME: str = "fixtures"
 JSON_SUFFIX: str = ".json"
 VISIBLE_TOKENS_ROW_KEY: str = "visible_tokens"
 LATENCY_MS_ROW_KEY: str = "latency_ms"
+ALL_REQUIRED_ROW_KEYS: tuple[str, ...] = (
+    "fixture_id",
+    "fixture_band",
+    "effort",
+    *ALL_SCORE_ROW_KEYS,
+    VISIBLE_TOKENS_ROW_KEY,
+    LATENCY_MS_ROW_KEY,
+    "thinking_enabled",
+)
 ALL_EFFORT_RANK_BY_NAME: dict[str, int] = {
     each_effort: each_index
     for each_index, each_effort in enumerate(ALL_EFFORT_LEVELS)
