@@ -17,3 +17,6 @@ Do not invent a tool name. Tool availability means the callable tool is exposed 
 ## Reporting
 
 State the selected tool, the number of new items, the number already tracked, and the new task subjects. If the fallback path was used, name the unavailable preferred tools briefly.
+
+4. **File ledger fallback** — when no host task/plan tool is exposed, register work in the durable `grok_run_ledger` under the run-state directory so orchestration stays reconcilable across hosts.
+

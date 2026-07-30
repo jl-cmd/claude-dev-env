@@ -50,9 +50,13 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 | `scripts/finding_pipeline.py` | Collect every real finding; filter severity only later |
 | `scripts/test_finding_pipeline.py` | Collection and filter-stage behavioral tests |
 | `scripts/config/finding_pipeline_constants.py` | Named constants for the collect-then-filter pipeline |
+| `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
+| `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
+| `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
+| `reference/runner-selection.md` | Runner selection map |
 
 ## Folder map
 
 - `SKILL.md` — route and dispatch.
-- `reference/` — one procedure per level, plus `fix.md` and `loop.md`.
-- `scripts/` — collect-then-filter finding pipeline and tests.
+- `reference/` — level procedures, fix/loop, runner selection.
+- `scripts/` — collect-then-filter finding pipeline, Grok medium-review module, tests, and `e_code_review_scripts_constants/`.

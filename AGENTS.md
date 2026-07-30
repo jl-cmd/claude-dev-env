@@ -13,6 +13,8 @@ Where a rule lists exemptions (test files, migrations, config files), the exempt
 
 This file is **rules-only**. Repo layout, build commands, and workflow guidance live elsewhere.
 
+**Surface map:** this file is the canonical human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement (not generated from this file). `.cursor/BUGBOT.md` is a sync projection of this file. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
+
 ---
 
 ## Contents

@@ -2,7 +2,14 @@
 
 Python scripts that run the PR audit-fix loop at runtime. Both `bugteam` and `pr-converge` invoke these scripts during each loop tick.
 
-## Key files
+## Two script homes
+
+| Home | Path |
+|---|---|
+| **Skill-local** (this folder) | Converge helpers: `build_*_prompt.py`, `init_loop_state.py`, `portable_converge_driver.py`, … |
+| **Runtime** (top-level shared) | Gate / preflight / review helpers — see `RUNTIME_SCRIPTS.md` → `@~/.claude/_shared/pr-loop/scripts/` |
+
+## Key files (skill-local)
 
 | File | Role |
 |---|---|

@@ -1,13 +1,39 @@
 # Code Standards
 
-> **MANDATORY REFERENCE:** CODE_RULES.md - Load for ALL code generation.
-> This is the single source of truth for code standards. Non-negotiable.
+> **Canonical policy:** repository-root [`AGENTS.md`](../../../AGENTS.md) — the human and AI review contract for code quality.
+> **Compact projection:** [`CODE_RULES.md`](../docs/CODE_RULES.md) — validated summary for generation load.
+> **Production enforcement:** `hooks/blocking/code_rules_enforcer.py` — hand-maintained Write/Edit gates; each mechanical rule carries a synchronization test.
 
-`CODE_RULES.md` (`~/.claude/docs/CODE_RULES.md`) is the compact reference for every standard: self-documenting names, centralized configuration, constant reuse, no magic literals, full words, complete type hints, required-vs-optional parameters, construction logic in the model, temporary-code `TODO:` markers, behavior-first component names, and TDD.
+## Policy surface map
 
-Two standards live there in full and nowhere else:
+| Layer | Path | Role |
+|---|---|---|
+| Canonical | `AGENTS.md` (repo root) | Full review criteria for PR agents; BugBot sync source |
+| Projection | `docs/CODE_RULES.md` | Compact always-load reference; must not diverge from AGENTS |
+| Enforcer | `hooks/blocking/code_rules_enforcer.py` | Hand-maintained blockers; not generated from the docs |
+| Session rules | `rules/*.md` | Runtime session policy (questions, tasks, shell) |
 
-- **TDD** — CODE_RULES §8 is canonical: red, green, refactor, with no production code before a failing test.
-- **Right-sized engineering** — CODE_RULES §7 is canonical: functions over classes, concrete over abstract, an abstraction added at the commit that introduces its second concrete implementation.
+Load `AGENTS.md` when reviewing a PR or resolving a policy conflict. Load `CODE_RULES.md` when generating code under the compact checklist. Prefer linking these refs over restating rules.
 
-BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers and formulates the behavior a feature needs, then each formulated behavior is built through the CODE_RULES §8 red-green-refactor cycle.
+Two standards live in the canonical policy in full (and in the projection by name):
+
+- **TDD** — CODE_RULES §8 / AGENTS Tests: red, green, refactor; no production code before a failing test.
+- **Right-sized engineering** — CODE_RULES §7 / AGENTS Design: functions over classes; concrete over abstract; add an abstraction at the commit that introduces its second concrete implementation.
+
+BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers and formulates the behavior a feature needs, then each formulated behavior is built through the TDD cycle.
+
+## Session policies (ref docs, not restated here)
+
+| Concern | Rule file |
+|---|---|
+| Question routing | [`ask-user-question-required.md`](ask-user-question-required.md) |
+| Task tracking / worker completion | [`workers-done-before-complete.md`](workers-done-before-complete.md) |
+| Multi-step task list | skill `task-build` (see agents catalog) |
+
+## Synchronization
+
+Mechanical enforcer coverage is checked by `tests/test_agents_policy_parity.py` and the existing `hooks/blocking/test_code_rules_enforcer*.py` suite. BugBot projection drift is checked with:
+
+```
+python .github/scripts/sync_ai_rules.py --check
+```
