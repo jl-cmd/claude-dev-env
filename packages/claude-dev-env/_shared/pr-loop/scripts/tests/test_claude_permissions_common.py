@@ -200,9 +200,9 @@ def test_is_valid_project_root_uses_extracted_directory_marker_constants() -> No
 
 def test_permission_rule_tool_name_extracts_tool_prefix() -> None:
     assert common.permission_rule_tool_name("Edit(/repo/.claude/**)") == "Edit"
-    assert common.permission_rule_tool_name("Write(c:/Users/example/.claude/worktrees/x/**)") == (
-        "Write"
-    )
+    assert common.permission_rule_tool_name(
+        "Write(c:/Users/example/.claude/worktrees/x/**)"
+    ) == ("Write")
     assert common.permission_rule_tool_name(None) is None
     assert common.permission_rule_tool_name("not-a-rule") is None
 

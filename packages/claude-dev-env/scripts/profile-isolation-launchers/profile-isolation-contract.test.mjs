@@ -112,12 +112,12 @@ test('validators reject duplicate launcher identities across profiles', () => {
     .../** @type {Record<string, object>} */ (rawManifest.profiles),
   };
   const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-profile-c'] };
-  const profileCDefinition = { ...profiles["profile-c"] };
+  const profileC = { ...profiles['profile-c'] };
   assert.throws(
     () =>
       validateProfilesManifest({
         ...rawManifest,
-        profiles: { ...profiles, master: masterProfile, 'profile-c': profileCDefinition },
+        profiles: { ...profiles, master: masterProfile, 'profile-c': profileC },
       }),
     /duplicate profile identity/,
   );
@@ -137,9 +137,9 @@ test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', (
 
 test('resolveProfileRootDirectoryPath joins profiles root with directoryName', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
-  const profileCDefinition = resolveProfileDefinition(validatedManifest, 'profile-c');
+  const profileC = resolveProfileDefinition(validatedManifest, 'profile-c');
   assert.equal(
-    resolveProfileRootDirectoryPath('/profiles', profileCDefinition),
+    resolveProfileRootDirectoryPath('/profiles', profileC),
     join('/profiles', 'profile-c'),
   );
 });

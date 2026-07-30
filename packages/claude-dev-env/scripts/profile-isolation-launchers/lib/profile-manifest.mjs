@@ -184,7 +184,7 @@ export function resolveProfileRootDirectoryPath(profilesRootDirectoryPath, profi
  *
  * ::
  *
- *     profiles["profile-c"].launcherNames = ["claude"]
+ *     profiles['profile-c'].launcherNames = ["claude"]
  *     profiles.master.launcherNames = ["claude"]
  *     flag: same identity claimed twice → resolve order would be nondeterministic
  *     ok:   each identity maps to exactly one profile id
