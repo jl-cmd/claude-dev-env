@@ -17,11 +17,15 @@ import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
     default_affinity_state_path,
+    extract_resume_session_id,
     extract_session_id_from_stdout,
     load_affinity_store,
+    lookup_affinity_command,
+    order_entries_for_resume,
     record_affinity_binding,
     save_affinity_store_atomic,
 )
+from claude_chain_runner import ChainEntry  # noqa: E402
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     AFFINITY_KEY_ALL_BINDINGS,
     AFFINITY_KEY_COMMAND,
@@ -29,6 +33,7 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     AFFINITY_KEY_SESSION_ID,
     AFFINITY_MAXIMUM_ENTRIES,
     AFFINITY_STATE_SCHEMA_VERSION,
+    RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -1589,5 +1594,101 @@ def test_extract_session_id_from_stdout_affinity_import_path() -> None:
         f'"result":"ok"}}'
     )
     assert extract_session_id_from_stdout(payload) == _BOUND_SESSION_ID
+
+
+def test_extract_resume_session_id_reads_flag() -> None:
+    assert extract_resume_session_id(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"]
+    ) == _BOUND_SESSION_ID
+    assert extract_resume_session_id(["-p", "hi"]) is None
+    assert extract_resume_session_id([RESUME_SESSION_FLAG]) is None
+
+
+def test_order_entries_for_resume_puts_originating_binary_first() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command=_SECONDARY_LAUNCHER
+    )
+    assert [each.command for each in ordered] == [
+        _SECONDARY_LAUNCHER,
+        _PRIMARY_LAUNCHER,
+    ]
+
+
+def test_order_entries_for_resume_falls_back_when_command_missing() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command="missing-binary"
+    )
+    assert [each.command for each in ordered] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+    ordered_none = order_entries_for_resume(all_entries, preferred_command=None)
+    assert [each.command for each in ordered_none] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+
+
+def test_lookup_affinity_command_returns_bound_binary() -> None:
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    assert lookup_affinity_command(store, _BOUND_SESSION_ID) == _SECONDARY_LAUNCHER
+    assert lookup_affinity_command(store, "unknown") is None
+
+
+def test_run_claude_resume_routes_through_originating_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = tmp_path / "claude-chain-affinity.json"
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    save_affinity_store_atomic(affinity_path, store)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home: affinity_path,
+    )
+    monkeypatch.setattr(
+        runner,
+        "chain_weekly_usage_reporter",
+        _usage_reporter_from_remaining(
+            {
+                _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+                _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _SECONDARY_LAUNCHER
+    assert all_called[0] == _SECONDARY_LAUNCHER
 
 
