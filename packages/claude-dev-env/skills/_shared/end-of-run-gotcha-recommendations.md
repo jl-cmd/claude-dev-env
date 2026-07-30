@@ -27,7 +27,7 @@ Keep only items that **bit this run**:
 
 **Order (hard):**
 
-1. Show findings in chat.
+1. Show findings in chat; categorize as P0-P3.
 2. Then `AskUserQuestion`.
 3. On confirm only, file via `issue-tracker`.
 
