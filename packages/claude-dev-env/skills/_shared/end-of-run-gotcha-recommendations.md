@@ -24,16 +24,23 @@ Keep only items that **bit this run**:
 
 ## What to produce
 
-**Gotcha recommendations** for the user:
+Two turns in order (same pattern as lean AskUserQuestion + ELI11 chat):
 
-1. **One bullet per issue** — what failed + the **exact fix** that worked.
-2. **Prefer a split** — short skill bullet; longer walkthrough in
-   `reference/<slug>.md` with a link.
-3. **Paste-ready** text for the skill `## Gotchas` (or a new ref + one-line link).
-4. **Issue offer** — after the recommendations print, ask via `AskUserQuestion`
-   whether to **file a GitHub issue** for each gotcha (session-log style).
+1. **Print findings in chat first** — ELI11, clean, concise (see below).
+2. **Then** `AskUserQuestion` — lean question + short option labels only.
+3. **On confirm only** — file selected gotchas via **`issue-tracker`**.
 
-### Shape
+### 1. Chat findings (always first)
+
+Print a **Gotcha recommendations** block in the assistant message **before**
+any `AskUserQuestion` call. Follow `eli11-replies` + `plain-language`:
+
+- **Bold lead** on each bullet
+- **One idea per line**
+- **What failed + exact fix** that worked
+- **Prefer a split** — short bullet; longer walkthrough in
+  `reference/<slug>.md` with a link
+- **Paste-ready** for the skill `## Gotchas`
 
 ```markdown
 ## Gotcha recommendations
@@ -43,29 +50,31 @@ Keep only items that **bit this run**:
 
 When the fix fits one line, put the full fix in the bullet.
 
-### Issue offer (`AskUserQuestion`)
+**Detail lives in chat** (and refs). Keep it out of the question widget.
 
-After the recommendations block, for each recommended gotcha ask the user
-via `AskUserQuestion` (same pattern as session-log decision extraction):
+### 2. Issue offer (`AskUserQuestion`)
 
-> "Gotcha: [summary + exact fix]. File a GitHub issue for it?"
+**After** the chat block is visible, call `AskUserQuestion` once:
 
-**Shape of the question:**
+- **Header:** `File issues` (≤12 chars)
+- **Question:** one short sentence (e.g. `File a GitHub issue for any of these?`)
+- **multiSelect:** `true` when more than one gotcha
+- **Options:** one per gotcha — **label only**, 1–5 words (`File: Catalog path`)
+- **Option description:** one short sentence max (the fix), or empty when the
+  chat block already carries it
 
-- **Header:** `File issues` (12 chars or fewer)
-- **multiSelect:** `true` when more than one gotcha is on the table
-- **Options:** one option per gotcha — label `File: <short gotcha>`
-- **Recommended option first** when a default makes sense
+**Only on confirm:** file selected gotchas through **`issue-tracker`** (dedup +
+epic). One issue per selection. Body: gotcha summary, exact fix, cold-reader
+evidence.
 
-**Only on confirm:** file the selected gotchas through the **`issue-tracker`**
-skill (or agent) so dedup and epic linking apply. One issue per selected
-gotcha. Body carries the gotcha summary, the exact fix that worked, and
-enough evidence for a cold reader.
-
-When the run was clean, skip recommendations and this offer.
+When the run was clean, skip the chat block and the offer.
 
 ## Rules
 
+- **Chat first, then ask** — never open AskUserQuestion without the ELI11
+  findings already printed in that turn.
+- **Lean question block** — short question + short labels; detail stays in chat
+  (standing pattern: lean AskUserQuestion / PR #720 family).
 - **Recommend only** — apply skill edits when the user asks.
 - **File only on confirm** — selected gotchas only, via `issue-tracker`.
 - **Lived issues only** — keep only issues this run hit.
