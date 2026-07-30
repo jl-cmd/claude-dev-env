@@ -241,7 +241,9 @@ def create_fresh_branch(
         )
         # worktree under /tmp/isolated/grok/fix/x
 
-    The caller's working tree is never checked out. The worktree lands under
+    The caller's working tree is never checked out. The configured root is
+    validated before any git fetch so a relative ``--worktree-root`` fails
+    closed with no network I/O. The worktree lands under
     ``<configured-root>/<agent>/<branch>``, suffixed ``-2``, ``-3``, … when
     that path is already taken. Every allocated path must resolve beneath the
     configured root.
@@ -264,14 +266,16 @@ def create_fresh_branch(
     """
     cleaned_branch = _require_safe_branch_name(branch_name)
     normalized_agent_slug = _normalize_agent_slug(agent_slug)
-    resolved_base_ref, repo_root, base_commit = _resolve_branch_base(
-        repo_path, base_ref,
+    repo_root = resolve_repo_root(repo_path)
+    configured_root = resolve_configured_worktree_root(
+        repo_root,
+        maybe_worktree_root=maybe_worktree_root,
     )
+    resolved_base_ref, base_commit = _fetch_resolved_base(repo_root, base_ref)
     worktree_path = _allocate_worktree_path(
         cleaned_branch,
         normalized_agent_slug,
-        repo_root,
-        maybe_worktree_root=maybe_worktree_root,
+        configured_root,
     )
     create_worktree_branch(
         repo_root,
@@ -285,15 +289,11 @@ def create_fresh_branch(
     )
 
 
-def _resolve_branch_base(
-    repo_path: Path,
-    base_ref: str,
-) -> tuple[str, Path, str]:
+def _fetch_resolved_base(repo_root: Path, base_ref: str) -> tuple[str, str]:
     resolved_base_ref = normalize_base_ref(base_ref)
-    repo_root = resolve_repo_root(repo_path)
     fetch_base_ref(repo_root, resolved_base_ref)
     base_commit = resolve_base_commit(repo_root, resolved_base_ref)
-    return resolved_base_ref, repo_root, base_commit
+    return resolved_base_ref, base_commit
 
 
 def main() -> int:
@@ -334,18 +334,9 @@ def _require_safe_branch_name(branch_name: str) -> str:
 def _allocate_worktree_path(
     branch_name: str,
     agent_slug: str,
-    repo_root: Path,
-    maybe_worktree_root: str | None = None,
+    configured_root: Path,
 ) -> Path:
-    configured_root = resolve_configured_worktree_root(
-        repo_root,
-        maybe_worktree_root=maybe_worktree_root,
-    )
-    agent_worktree_root = resolve_agent_worktree_root(
-        repo_root,
-        agent_slug,
-        maybe_worktree_root=maybe_worktree_root,
-    )
+    agent_worktree_root = configured_root / agent_slug
     agent_worktree_root.mkdir(parents=True, exist_ok=True)
     preferred_path = agent_worktree_root / branch_name
     _assert_path_is_under_configured_root(

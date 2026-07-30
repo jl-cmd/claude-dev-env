@@ -71,11 +71,12 @@ Agent resolution inside the script: `--agent` → `FRESH_BRANCH_AGENT` env → h
 Configured-root contract:
 
 - Default configured root: `<repo-root>/.claude/worktrees`
-- Explicit `--worktree-root` must be absolute; a relative value fails closed with a deterministic error
+- Explicit `--worktree-root` must be absolute; a relative value fails closed with a deterministic error before any git fetch
 - Absolute roots outside the repository are legal; the agent and branch still nest under that root
 - Worktree path: `<configured-root>/<agent>/<branch-name>`, on every platform
 - Every allocated path must resolve under the configured root; traversal that escapes fails closed
 - If the path exists, the script suffixes `-2`, `-3`, …
+- Permission-rule cleanup (`stale_worktree_rule_sweep`) only walks `~/.claude/worktrees`; external `--worktree-root` trees are outside that sweep until a follow-up ships
 
 On exit 0, stdout is one JSON object:
 
@@ -109,7 +110,8 @@ Further edits for the new branch belong in `worktree_path`, not in the caller's 
 - **Caller HEAD must stay put.** After success, the original repo's checked-out branch and dirty files are unchanged; only the new worktree has the new branch.
 - **Branch name collision.** If the branch already exists, the script exits non-zero with `{"error":...}`. Pick a new name; do not delete remote branches unless the user asks.
 - **Path already occupied.** A leftover folder at the preferred worktree path gets a numeric suffix (`-2`, …); report the path from JSON, not the path you assumed.
-- **Relative `--worktree-root` is refused.** Only an absolute path is accepted; the default root applies when the flag is omitted.
+- **Relative `--worktree-root` is refused before fetch.** Only an absolute path is accepted; the default root applies when the flag is omitted. Validation runs before `git fetch`, so a bad root never touches the network or remote-tracking refs.
+- **External roots and stale permission rules.** `stale_worktree_rule_sweep` only walks `~/.claude/worktrees`. Edit rules granted under an external `--worktree-root` are not swept when that tree is deleted.
 
 ## File index
 

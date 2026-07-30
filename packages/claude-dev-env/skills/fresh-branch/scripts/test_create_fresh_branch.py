@@ -480,6 +480,31 @@ class TestConfiguredWorktreeRootIntegration:
         assert str(raised_error.value) == ERROR_WORKTREE_ROOT_NOT_ABSOLUTE
         assert not (repository_path / ".claude" / "worktrees").exists()
 
+    def should_reject_relative_worktree_root_before_fetch(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        all_fetch_calls: list[str] = []
+
+        def record_fetch(repo_root: Path, base_ref: str) -> None:
+            all_fetch_calls.append(base_ref)
+            raise AssertionError("fetch must not run for a relative worktree root")
+
+        monkeypatch.setattr(module, "fetch_base_ref", record_fetch)
+        with pytest.raises(ValueError, match="absolute path") as raised_error:
+            module.create_fresh_branch(
+                branch_name="fix/relative-root-before-fetch",
+                repo_path=repository_path,
+                agent_slug="claude",
+                base_ref=DEFAULT_BASE_REF,
+                maybe_worktree_root="relative/worktrees",
+            )
+        assert str(raised_error.value) == ERROR_WORKTREE_ROOT_NOT_ABSOLUTE
+        assert all_fetch_calls == []
+
     def should_fetch_base_before_creating_worktree(
         self,
         tmp_path: Path,
