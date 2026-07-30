@@ -9,8 +9,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-const MARKER_PATTERN = /FRESH_SESSION_CLAUDE_MD_MARKER_C1_\w+/g;
-
 function main() {
     const profileId = process.env.FRESH_SESSION_PROFILE_ID ?? 'unknown';
     const evidencePath = process.env.FRESH_SESSION_EVIDENCE_PATH;
@@ -26,12 +24,11 @@ function main() {
     const filePresent = existsSync(claudeMdPath);
     /** @type {string[]} */
     let loadedMarkers = [];
-    if (filePresent) {
-        const content = readFileSync(claudeMdPath, 'utf8');
-        loadedMarkers = [...content.matchAll(MARKER_PATTERN)].map((each) => each[0]);
+    if (filePresent && expectedMarker.length > 0 && readFileSync(claudeMdPath, 'utf8').includes(expectedMarker)) {
+        loadedMarkers = [expectedMarker];
     }
 
-    const isActivated = expectedMarker.length > 0 && loadedMarkers.includes(expectedMarker);
+    const isActivated = loadedMarkers.length > 0;
     const record = {
         transport: 'fake-probe',
         profileId,

@@ -8,9 +8,9 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildIsolatedProfileEnvironment } from '../harness/disposable-roots.mjs';
+import { spawnCliProcess } from '../harness/transport.mjs';
 
 export const CLAUDE_MD_MARKER_TOKEN = 'FRESH_SESSION_CLAUDE_MD_MARKER_C1_7f3a9c';
 export const CLAUDE_MD_MARKER_FILE_NAME = 'CLAUDE.md';
@@ -89,10 +89,10 @@ export function runClaudeMdActivationSession(parameters) {
     environment.FRESH_SESSION_EVIDENCE_PATH = evidencePath;
     environment.FRESH_SESSION_CLAUDE_MD_MARKER = CLAUDE_MD_MARKER_TOKEN;
 
-    const result = spawnSync(
+    const spawnResult = spawnCliProcess(
         process.execPath,
-        [CLAUDE_MD_PROBE_SCRIPT_PATH, '--probe', 'claude-md'],
-        { env: environment, encoding: 'utf8' },
+        [CLAUDE_MD_PROBE_SCRIPT_PATH],
+        environment,
     );
 
     const filePresent = isClaudeMdFilePresent(profileRoot);
@@ -118,8 +118,8 @@ export function runClaudeMdActivationSession(parameters) {
             classification,
         },
         evidencePath,
-        exitStatus: result.status,
-        stdout: result.stdout ?? '',
-        stderr: result.stderr ?? '',
+        exitStatus: spawnResult.exitStatus,
+        stdout: spawnResult.stdout,
+        stderr: spawnResult.stderr,
     };
 }
