@@ -65,3 +65,44 @@ def test_should_report_join_separator_line_number() -> None:
     assert any("Line 2" in each_issue for each_issue in issues), (
         f"Expected line 2 reported, got: {issues}"
     )
+
+
+def test_should_grandfather_unchanged_join_separator_in_wide_edit() -> None:
+    prior_fragment = (
+        "def render(all_paths: list) -> str:\n"
+        "    return ', '.join(str(each_path) for each_path in all_paths)\n"
+    )
+    proposed_fragment = (
+        "def render(all_paths: list) -> str:\n"
+        "    # keep the join separator the same\n"
+        "    return ', '.join(str(each_path) for each_path in all_paths)\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        proposed_fragment,
+        PRODUCTION_FILE_PATH,
+        prior_fragment,
+    )
+    join_issues = [each for each in issues if "join" in each]
+    assert join_issues == [], (
+        f"unchanged enclosed join separator must be grandfathered, got: {join_issues}"
+    )
+
+
+def test_should_block_new_join_separator_in_wide_edit() -> None:
+    prior_fragment = (
+        "def render(all_paths: list) -> str:\n"
+        "    return JOIN_DELIMITER.join(all_paths)\n"
+    )
+    proposed_fragment = (
+        "def render(all_paths: list) -> str:\n"
+        "    return ', '.join(all_paths)\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        proposed_fragment,
+        PRODUCTION_FILE_PATH,
+        prior_fragment,
+    )
+    join_issues = [each for each in issues if "join" in each]
+    assert any("Line 2" in each_issue for each_issue in join_issues), (
+        f"introduced join separator must block at its new location, got: {join_issues}"
+    )

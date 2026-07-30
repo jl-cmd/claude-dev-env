@@ -232,3 +232,53 @@ def test_should_still_flag_literal_in_nested_function_body() -> None:
     assert len(issues) == 1, (
         f"Inner literal must be flagged exactly once (no duplicate from outer walk), got: {issues}"
     )
+
+
+def test_should_grandfather_unchanged_string_magic_in_wide_edit() -> None:
+    prior_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    proposed_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    # wide edit that leaves the magic string in place\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        proposed_fragment,
+        PRODUCTION_FILE_PATH,
+        prior_fragment,
+    )
+    magic_issues = [each for each in issues if "STRIPE_SECRET" in each]
+    assert magic_issues == [], (
+        f"unchanged enclosed string magic must be grandfathered, got: {magic_issues}"
+    )
+
+
+def test_should_block_new_string_magic_in_wide_edit() -> None:
+    prior_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ.get('missing', '')\n"
+    )
+    proposed_fragment = (
+        "import os\n"
+        "\n"
+        "def fetch_secret() -> str:\n"
+        "    return os.environ['STRIPE_SECRET']\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        proposed_fragment,
+        PRODUCTION_FILE_PATH,
+        prior_fragment,
+    )
+    magic_issues = [each for each in issues if "STRIPE_SECRET" in each]
+    assert any("Line " in each_issue for each_issue in magic_issues), (
+        f"introduced string magic must block with a line locator, got: {magic_issues}"
+    )
+    assert any("STRIPE_SECRET" in each_issue for each_issue in magic_issues)

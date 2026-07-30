@@ -18,6 +18,7 @@ concern focused. The separate ``tdd_enforcer.py`` hook accepts any
 import json
 import sys
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
 
@@ -285,7 +286,11 @@ def validate_content(
         all_issues.extend(check_logging_adjacent_string_literals(content, file_path))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_naive_datetime_construction(content, file_path))
-        all_issues.extend(check_magic_values(content, file_path))
+        all_issues.extend(
+            _issues_introduced_in_fragment(
+                check_magic_values, old_content, content, file_path
+            )
+        )
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
         all_issues.extend(check_config_duplicate_path_anchor(content, file_path))
@@ -520,8 +525,16 @@ def validate_content(
         all_issues.extend(check_polarity_name_contradiction(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
-        all_issues.extend(check_join_separator_string_magic(content, file_path))
-        all_issues.extend(check_string_literal_magic(content, file_path))
+        all_issues.extend(
+            _issues_introduced_in_fragment(
+                check_join_separator_string_magic, old_content, content, file_path
+            )
+        )
+        all_issues.extend(
+            _issues_introduced_in_fragment(
+                check_string_literal_magic, old_content, content, file_path
+            )
+        )
         all_issues.extend(check_whitespace_indentation_magic(content, file_path))
         all_issues.extend(check_orphan_css_classes(effective_content, file_path))
         check_incomplete_mocks(content, file_path)
@@ -733,6 +746,58 @@ def _without_line_prefix(violation_text: str) -> str:
     if separator and locator.startswith("Line ") and locator[len("Line "):].isdigit():
         return message_body
     return violation_text
+
+
+def _issues_introduced_in_fragment(
+    check_function: Callable[[str, str], list[str]],
+    old_content: str,
+    new_content: str,
+    file_path: str,
+) -> list[str]:
+    """Return fragment findings that are new relative to the pre-edit fragment.
+
+    Grades both the prior and proposed Edit fragments with the same check, then
+    subtracts findings whose message body already appears in the prior scan.
+    Per-occurrence accounting keeps a second identical new finding when only
+    one matching body existed before. Line numbers on kept findings come from
+    the proposed fragment so diagnostics point at the introduced location.
+
+    ::
+
+        old:  def f(): return os.environ['STRIPE_SECRET']
+        new:  def f(): return os.environ['STRIPE_SECRET']  # same body
+              -> []  grandfathered
+        old:  def f(): return 0
+        new:  def f(): return os.environ['STRIPE_SECRET']
+              -> [Line ...: string magic value 'STRIPE_SECRET' ...]
+
+    Args:
+        check_function: A ``(content, file_path) -> list[str]`` check.
+        old_content: The Edit's prior ``old_string`` fragment, or empty when
+            there is no prior region to baseline against.
+        new_content: The Edit's ``new_string`` fragment (or Write body).
+        file_path: Destination path used for path-based exemptions.
+
+    Returns:
+        Findings present in ``new_content`` that are absent from ``old_content``
+        under line-number-agnostic body matching. When ``old_content`` is empty,
+        every finding from ``new_content`` is returned.
+    """
+    all_new_issues = check_function(new_content, file_path)
+    if not old_content:
+        return all_new_issues
+    all_old_issues = check_function(old_content, file_path)
+    remaining_prior_counts = Counter(
+        _without_line_prefix(each_issue) for each_issue in all_old_issues
+    )
+    all_introduced_issues: list[str] = []
+    for each_issue in all_new_issues:
+        message_body = _without_line_prefix(each_issue)
+        if remaining_prior_counts[message_body] > 0:
+            remaining_prior_counts[message_body] -= 1
+            continue
+        all_introduced_issues.append(each_issue)
+    return all_introduced_issues
 
 
 def _forecast_full_file_violations(
