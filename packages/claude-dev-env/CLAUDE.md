@@ -18,7 +18,7 @@ A runtime value that is itself private — a host, an SSH user or port, an owner
 | `/team-advisor` skill | Standing warm advisor bind (map: `docs/references/team-advisor-skill.md`) |
 | `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, lifecycle |
 
-When `advisor()` is available, use it under the rules in `advisor-tool.md`. When it is not, use `/team-advisor`.
+When `advisor()` is available, use it under the rules in `advisor-tool.md`. When `advisor()` is unavailable, use `/team-advisor`.
 
 ## Files and workspaces
 

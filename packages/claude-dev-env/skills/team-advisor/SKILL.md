@@ -16,16 +16,16 @@ One warm advisor at the strongest tier this session can reach. This session is t
 | Doc | Holds |
 |---|---|
 | [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
-| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up or CLI bind, charter, drift re-bind, CLI fallback, executor paste blocks. Package-root `_shared/` (installs to `~/.claude/_shared/`); **not** `skills/_shared/`. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up or CLI bind, charter, drift re-bind, CLI fallback, executor paste blocks. |
 | [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
 
 ## Bind
 
-1. Detect the host profile first (protocol **Host profiles**). Do not walk the model floor until the host is known.
+1. Detect the host profile first (protocol **Host profiles**), then walk the model floor.
 2. Floor: this session's own tier on Claude; Opus floor with Fable first on a third-party host.
 3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); one CLI `session_id` on a third-party host via the protocol Claude-chain.
 4. Skip the multi-consumer "who you are" opener — sole consumer.
-5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this session.
+5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
 Full walk, charter, consult message shape, and drift re-bind live in the protocol.
 
@@ -38,5 +38,5 @@ Each brief: delta since last consult, live decision or blocker, paths or excerpt
 ## Constraints
 
 - One bind per session; this session owns spawn or CLI bind, drift re-bind, and shutdown.
-- Never bind below the protocol floor for this host.
-- The advisor only answers. It never edits, builds, tests, or posts on the session's behalf.
+- Bind at or above the protocol floor for this host.
+- The advisor only answers (messaging); the session runs tools and posts.
