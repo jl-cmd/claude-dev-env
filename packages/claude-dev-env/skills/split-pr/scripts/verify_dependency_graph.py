@@ -3,7 +3,7 @@
 ::
 
     python verify_dependency_graph.py --graph-json graph.json
-    # exit 0 when nodes, edges, and order agree
+    # exit 0 when shape is valid and order matches a rebuild when all_slices set
 """
 
 from __future__ import annotations
@@ -23,24 +23,29 @@ from config.dependency_constants import (
     GRAPH_KEY_NODES,
     GRAPH_KEY_ORDER,
 )
-from config.plan_constants import EXIT_CODE_SUCCESS, UTF8_ENCODING
+from config.plan_constants import (
+    EXIT_CODE_SUCCESS,
+    PLAN_KEY_ALL_SLICES,
+    UTF8_ENCODING,
+)
 from config.split_pr_constants import EXIT_CODE_FAILURE
 from split_pr_dependency_graph import build_dependency_graph
-
-JsonObject = dict[str, object]
+from split_pr_script_types import JsonObject
 
 
 def verify_dependency_graph_document(all_graph: JsonObject) -> None:
-    """Require graph nodes, edges, and order to match a rebuild from layers.
+    """Validate graph shape; when ``all_slices`` is set, match rebuild order.
 
     Args:
         all_graph: Graph document with nodes, edges, topological_order, and
-            optional ``all_slices`` used for rebuild. When ``all_slices`` is
-            present, rebuild and compare. When absent, check internal shape
-            only (order lists every node exactly once; edges use known nodes).
+            optional ``all_slices``. Always checks: non-empty unique nodes,
+            order lists each node once, edges reference known nodes. When
+            ``all_slices`` is a non-empty list, rebuilds and requires
+            topological_order to match.
 
     Raises:
-        ValueError: When the graph is invalid.
+        ValueError: When shape checks fail or topological_order mismatches
+            a rebuild from ``all_slices``.
     """
     all_nodes = all_graph.get(GRAPH_KEY_NODES)
     all_edges = all_graph.get(GRAPH_KEY_EDGES)
@@ -65,7 +70,7 @@ def verify_dependency_graph_document(all_graph: JsonObject) -> None:
         edge_to = str(each_edge.get(EDGE_KEY_TO, ""))
         if edge_from not in all_node_set or edge_to not in all_node_set:
             raise ValueError(f"edge uses unknown node: {each_edge!r}")
-    all_slices = all_graph.get("all_slices")
+    all_slices = all_graph.get(PLAN_KEY_ALL_SLICES)
     if isinstance(all_slices, list) and all_slices:
         rebuilt = build_dependency_graph(all_slices)
         if rebuilt[GRAPH_KEY_ORDER] != all_order_ids:
