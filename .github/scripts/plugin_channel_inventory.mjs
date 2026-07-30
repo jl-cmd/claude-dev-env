@@ -116,6 +116,8 @@ export function buildInventoryJournal(inputs) {
   const collision = computeSelectedLiveConsumerCollision(selectedProfiles);
   const external = inputs.external_marketplace_registration ?? {};
   const readme = inputs.readme_entry;
+  const release = inputs.release;
+  const releaseWasProbed = release != null;
 
   const consumers = [
     {
@@ -157,11 +159,17 @@ export function buildInventoryJournal(inputs) {
     {
       id: 'github-release-package',
       channel: 'npx',
-      classification: inputs.release?.classification ?? 'active',
-      probe_path: `release:${inputs.release?.tag ?? 'unknown'}`,
-      probe_result: 'registered',
+      classification: releaseWasProbed
+        ? release.classification ?? 'active'
+        : 'unresolved',
+      probe_path: `release:${release?.tag ?? 'unknown'}`,
+      probe_result: releaseWasProbed ? 'registered' : 'unreadable',
       observed_at: 'github',
-      notes: `target_commitish=${inputs.release?.target_commitish ?? ''}`,
+      notes: releaseWasProbed
+        ? `target_commitish=${release.target_commitish ?? ''}`
+        : 'No release probe supplied for this inventory run',
+      owner: releaseWasProbed ? '' : 'R2A',
+      blocker: releaseWasProbed ? '' : 'GitHub release probe input absent',
     },
     {
       id: 'external-marketplace-registration',
@@ -170,9 +178,10 @@ export function buildInventoryJournal(inputs) {
       probe_path: 'external:marketplace',
       probe_result: 'unreadable',
       observed_at: 'external',
-      notes: external.blocker ?? 'External marketplace registration unverified',
+      notes: external.notes ?? 'External marketplace registration unverified',
       owner: external.owner ?? 'R2C',
-      blocker: external.blocker ?? '',
+      blocker:
+        external.blocker ?? 'External marketplace registration unverified',
     },
   ];
 
