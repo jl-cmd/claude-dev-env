@@ -17,7 +17,7 @@ description: >-
 - **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) surface only findings a maintainer would act on. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
 - **Every retained finding carries `severity` and `verdict`.** Severity is one of `blocker`, `high`, `medium`, `low`, `nit`. Verdict is `CONFIRMED` or `PLAUSIBLE`. Drop REFUTED candidates; never emit an unclassified retained finding.
 - **`--fix` applies findings once.** Load `reference/fix.md` and follow it — it owns the fix agent, the code-rules gate, skip logging, and outcome reporting. Commits are lead-owned; fix agents never commit or push.
-- **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. Terminals are exactly `clean`, `nits_fixed`, `blocked_at_cap`, and `advisor_blocked`. Cap is three distinct reviewed heads; a new head increments the count once, a re-review of the same head does not. Load `reference/loop.md` and follow it.
+- **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. Terminals are exactly `clean`, `nits_fixed`, and `advisor_blocked`. There is no reviewed-head count limit; a new head increments the count once, a re-review of the same head does not. Load `reference/loop.md` and follow it.
 - **`--fix` and `loop` combine.** With both, each loop round runs the level file, and the round's fixing happens inside `reference/loop.md`'s gate sequence, which loads `reference/fix.md` for the mechanics. There is no separate fix pass around the round.
 
 ## When this skill applies

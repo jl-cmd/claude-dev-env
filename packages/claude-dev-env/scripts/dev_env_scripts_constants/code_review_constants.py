@@ -8,7 +8,7 @@
     ALL_FINDING_SEVERITIES
         ok: ("blocker", "high", "medium", "low", "nit")
     ALL_LOOP_TERMINALS
-        ok: ("clean", "nits_fixed", "blocked_at_cap", "advisor_blocked")
+        ok: ("clean", "nits_fixed", "advisor_blocked")
     RECORD_STAMP_FLAG
         ok: "--record-stamp"
 
@@ -282,22 +282,15 @@ TERMINAL_CLEAN: str = "clean"
 TERMINAL_NITS_FIXED: str = "nits_fixed"
 """Loop terminal when every retained finding is a fixed nit after gates."""
 
-TERMINAL_BLOCKED_AT_CAP: str = "blocked_at_cap"
-"""Loop terminal when head three still holds an unclassified or non-nit finding."""
-
 TERMINAL_ADVISOR_BLOCKED: str = "advisor_blocked"
 """Loop terminal when classification needs an advisor that cannot be reached."""
 
 ALL_LOOP_TERMINALS: tuple[str, ...] = (
     TERMINAL_CLEAN,
     TERMINAL_NITS_FIXED,
-    TERMINAL_BLOCKED_AT_CAP,
     TERMINAL_ADVISOR_BLOCKED,
 )
 """Frozen set of review-loop terminal statuses."""
-
-MAXIMUM_REVIEWED_HEADS: int = 3
-"""Cap on distinct git heads the review loop may review before blocking."""
 
 FINDING_FIELD_SEVERITY: str = "severity"
 """Structured finding field that holds one of ``ALL_FINDING_SEVERITIES``."""
@@ -492,7 +485,7 @@ def is_nits_only_findings(all_findings: Sequence[Mapping[str, object]]) -> bool:
         )  # flag: False
 
     An empty list is clean, not nits-only. Unclassified findings fail the
-    nits-only check so they route to classification or the cap terminal.
+    nits-only check so they route to classification before a terminal.
 
     Args:
         all_findings: Structured findings under terminal evaluation.
@@ -511,16 +504,16 @@ def record_reviewed_head(
     all_reviewed_head_shas: tuple[str, ...],
     head_sha: str,
 ) -> tuple[str, ...]:
-    """Append ``head_sha`` once when it is new and under the three-head cap.
+    """Append ``head_sha`` once when it is a new distinct head.
 
     ::
 
         record_reviewed_head((), "aaa")           # ok: ("aaa",)
         record_reviewed_head(("aaa",), "aaa")     # ok: ("aaa",)  re-review
-        record_reviewed_head(("a", "b", "c"), "d")  # ok: unchanged at cap
+        record_reviewed_head(("a", "b", "c"), "d")  # ok: ("a", "b", "c", "d")
 
-    A re-review of the same head does not increment the count. A fourth
-    distinct head is refused so the loop never reviews past the cap.
+    A re-review of the same head does not increment the count. There is no
+    head count limit — every new head is recorded.
 
     Args:
         all_reviewed_head_shas: Ordered distinct heads already reviewed.
@@ -530,8 +523,6 @@ def record_reviewed_head(
         The prior tuple, or the prior tuple plus ``head_sha`` when new.
     """
     if head_sha in all_reviewed_head_shas:
-        return all_reviewed_head_shas
-    if len(all_reviewed_head_shas) >= MAXIMUM_REVIEWED_HEADS:
         return all_reviewed_head_shas
     return all_reviewed_head_shas + (head_sha,)
 
@@ -558,16 +549,14 @@ def resolve_review_loop_terminal(
         )  # flag: None  (gates still open)
         resolve_review_loop_terminal(
             all_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
-            reviewed_head_count=3, is_gates_passed=True, is_nits_applied=False,
-        )  # ok: "blocked_at_cap"
+            reviewed_head_count=5, is_gates_passed=True, is_nits_applied=False,
+        )  # flag: None  (open non-nit work continues)
 
     Empty findings return clean only when gates pass. Nits-only findings
     return nits_fixed after each finding carries severity and a retained
-    verdict, the nits are applied, and gates pass, including on the third
-    head. An unclassified or non-nit finding on the third head returns
-    blocked_at_cap. An unreachable advisor needed for classification
-    returns advisor_blocked. Open non-nit work before the cap returns None
-    so the caller re-enters.
+    verdict, the nits are applied, and gates pass. An unreachable advisor
+    needed for classification returns advisor_blocked. Open non-nit work
+    returns None so the caller re-enters. There is no head-count stop.
 
     Args:
         all_findings: Structured findings retained for this head.
@@ -579,6 +568,7 @@ def resolve_review_loop_terminal(
     Returns:
         One of ``ALL_LOOP_TERMINALS``, or None when the loop continues.
     """
+    _ = reviewed_head_count
     if is_advisor_unreachable and has_unclassified_finding(all_findings):
         return TERMINAL_ADVISOR_BLOCKED
     if not all_findings:
@@ -592,12 +582,6 @@ def resolve_review_loop_terminal(
         and is_gates_passed
     ):
         return TERMINAL_NITS_FIXED
-    if reviewed_head_count < MAXIMUM_REVIEWED_HEADS:
-        return None
-    if has_unclassified_finding(all_findings):
-        return TERMINAL_BLOCKED_AT_CAP
-    if has_non_nit_finding(all_findings):
-        return TERMINAL_BLOCKED_AT_CAP
     return None
 
 
@@ -613,15 +597,15 @@ def encode_review_loop_terminal_result(
     ::
 
         encode_review_loop_terminal_result(
-            terminal="blocked_at_cap",
+            terminal="advisor_blocked",
             all_surviving_findings=[{"severity": "high", "verdict": "CONFIRMED"}],
-            reviewed_head_count=3,
+            reviewed_head_count=2,
             is_draft_preserved=False,
         )["draft_preserved"]  # ok: True  (blocked terminals force draft)
 
-    ``blocked_at_cap`` and ``advisor_blocked`` keep the pull request draft
-    even when the caller passes a false draft flag. Other terminals use the
-    caller's flag. Every terminal uses the same JSON shape.
+    ``advisor_blocked`` keeps the pull request draft even when the caller
+    passes a false draft flag. Other terminals use the caller's flag.
+    Every terminal uses the same JSON shape.
 
     Args:
         terminal: One of ``ALL_LOOP_TERMINALS``.
@@ -632,10 +616,7 @@ def encode_review_loop_terminal_result(
     Returns:
         A JSON-ready mapping with terminal, draft flag, head count, findings.
     """
-    is_blocked_terminal = terminal in (
-        TERMINAL_BLOCKED_AT_CAP,
-        TERMINAL_ADVISOR_BLOCKED,
-    )
+    is_blocked_terminal = terminal == TERMINAL_ADVISOR_BLOCKED
     should_preserve_draft = is_blocked_terminal or is_draft_preserved
     return {
         RESULT_KEY_TERMINAL: terminal,

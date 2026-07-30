@@ -148,7 +148,7 @@ The loop emits exactly one of these terminals when it stops:
 | Terminal | When |
 |---|---|
 | `clean` | Zero retained findings on the current head, and required checks pass |
-| `nits_fixed` | Every retained finding is a nit with severity and a retained verdict, every nit is fixed, and required checks pass (including on the third head) |
+| `nits_fixed` | Every retained finding is a nit with severity and a retained verdict, every nit is fixed, and required checks pass |
 | `advisor_blocked` | Classification needs the assigned advisor and that advisor is unreachable |
 
 Every round does this round's own work first, then runs the three gates below,

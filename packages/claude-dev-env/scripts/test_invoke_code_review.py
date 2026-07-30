@@ -22,7 +22,6 @@ from dev_env_scripts_constants.code_review_constants import (
     DEFAULT_CODE_REVIEW_EFFORT,
     FINDING_FIELD_SEVERITY,
     FINDING_FIELD_VERDICT,
-    MAXIMUM_REVIEWED_HEADS,
     PERMISSION_MODE_ACCEPT_EDITS,
     PERMISSION_MODE_BYPASS,
     RESULT_KEY_DRAFT_PRESERVED,
@@ -36,7 +35,6 @@ from dev_env_scripts_constants.code_review_constants import (
     SEVERITY_MEDIUM,
     SEVERITY_NIT,
     TERMINAL_ADVISOR_BLOCKED,
-    TERMINAL_BLOCKED_AT_CAP,
     TERMINAL_CLEAN,
     TERMINAL_NITS_FIXED,
     VERDICT_CONFIRMED,
@@ -210,14 +208,12 @@ def test_severity_vocabulary_is_the_frozen_five_token_set() -> None:
     )
 
 
-def test_loop_terminals_are_the_frozen_four_token_set() -> None:
+def test_loop_terminals_are_the_frozen_three_token_set() -> None:
     assert ALL_LOOP_TERMINALS == (
         TERMINAL_CLEAN,
         TERMINAL_NITS_FIXED,
-        TERMINAL_BLOCKED_AT_CAP,
         TERMINAL_ADVISOR_BLOCKED,
     )
-    assert MAXIMUM_REVIEWED_HEADS == 3
 
 
 def test_retained_finding_requires_severity_and_verification_verdict() -> None:
@@ -316,7 +312,7 @@ def test_nits_without_retained_verdict_do_not_return_nits_fixed() -> None:
     assert terminal_status is None
 
 
-def test_third_head_with_non_nit_finding_returns_blocked_at_cap() -> None:
+def test_open_non_nit_findings_continue_at_any_head_count() -> None:
     all_findings = (
         _retained_finding(severity=SEVERITY_HIGH),
         _retained_finding(severity=SEVERITY_NIT),
@@ -324,8 +320,9 @@ def test_third_head_with_non_nit_finding_returns_blocked_at_cap() -> None:
     all_heads = record_reviewed_head((), HEAD_SHA_ONE)
     all_heads = record_reviewed_head(all_heads, HEAD_SHA_TWO)
     all_heads = record_reviewed_head(all_heads, HEAD_SHA_THREE)
+    all_heads = record_reviewed_head(all_heads, HEAD_SHA_FOUR)
 
-    assert len(all_heads) == MAXIMUM_REVIEWED_HEADS
+    assert len(all_heads) == 4
     terminal_status = resolve_review_loop_terminal(
         all_findings=all_findings,
         reviewed_head_count=len(all_heads),
@@ -333,10 +330,10 @@ def test_third_head_with_non_nit_finding_returns_blocked_at_cap() -> None:
         is_nits_applied=False,
     )
 
-    assert terminal_status == TERMINAL_BLOCKED_AT_CAP
+    assert terminal_status is None
 
 
-def test_third_head_with_unclassified_finding_returns_blocked_at_cap() -> None:
+def test_unclassified_findings_continue_when_advisor_is_reachable() -> None:
     unclassified_finding = {
         "file": FINDING_FILE_PATH,
         "line": FINDING_LINE_NUMBER,
@@ -346,26 +343,25 @@ def test_third_head_with_unclassified_finding_returns_blocked_at_cap() -> None:
 
     terminal_status = resolve_review_loop_terminal(
         all_findings=(unclassified_finding,),
-        reviewed_head_count=MAXIMUM_REVIEWED_HEADS,
+        reviewed_head_count=5,
         is_gates_passed=True,
         is_nits_applied=False,
     )
 
-    assert terminal_status == TERMINAL_BLOCKED_AT_CAP
+    assert terminal_status is None
 
 
-def test_third_head_with_only_nits_returns_nits_fixed() -> None:
+def test_nits_only_returns_nits_fixed_at_any_head_count() -> None:
     all_nits = (_retained_finding(severity=SEVERITY_NIT),)
 
     terminal_status = resolve_review_loop_terminal(
         all_findings=all_nits,
-        reviewed_head_count=MAXIMUM_REVIEWED_HEADS,
+        reviewed_head_count=5,
         is_gates_passed=True,
         is_nits_applied=True,
     )
 
     assert terminal_status == TERMINAL_NITS_FIXED
-    assert terminal_status != TERMINAL_BLOCKED_AT_CAP
 
 
 def test_advisor_unreachable_with_unclassified_returns_advisor_blocked() -> None:
@@ -386,46 +382,51 @@ def test_advisor_unreachable_with_unclassified_returns_advisor_blocked() -> None
     assert terminal_status == TERMINAL_ADVISOR_BLOCKED
 
 
-def test_blocked_at_cap_serialization_preserves_draft_and_findings() -> None:
+def test_terminal_serialization_preserves_draft_and_findings() -> None:
     surviving_finding = _retained_finding(severity=SEVERITY_MEDIUM)
     encoded_payload = encode_review_loop_terminal_result(
-        terminal=TERMINAL_BLOCKED_AT_CAP,
+        terminal=TERMINAL_ADVISOR_BLOCKED,
         all_surviving_findings=(surviving_finding,),
-        reviewed_head_count=MAXIMUM_REVIEWED_HEADS,
+        reviewed_head_count=4,
         is_draft_preserved=True,
     )
 
-    assert encoded_payload[RESULT_KEY_TERMINAL] == TERMINAL_BLOCKED_AT_CAP
+    assert encoded_payload[RESULT_KEY_TERMINAL] == TERMINAL_ADVISOR_BLOCKED
     assert encoded_payload[RESULT_KEY_DRAFT_PRESERVED] is True
-    assert encoded_payload[RESULT_KEY_REVIEWED_HEAD_COUNT] == MAXIMUM_REVIEWED_HEADS
+    assert encoded_payload[RESULT_KEY_REVIEWED_HEAD_COUNT] == 4
     assert encoded_payload[RESULT_KEY_SURVIVING_FINDINGS] == [surviving_finding]
 
 
-def test_blocked_terminals_force_draft_preserved_when_caller_passes_false() -> None:
+def test_advisor_blocked_forces_draft_preserved_when_caller_passes_false() -> None:
     surviving_finding = _retained_finding(severity=SEVERITY_HIGH)
-    blocked_at_cap_payload = encode_review_loop_terminal_result(
-        terminal=TERMINAL_BLOCKED_AT_CAP,
-        all_surviving_findings=(surviving_finding,),
-        reviewed_head_count=MAXIMUM_REVIEWED_HEADS,
-        is_draft_preserved=False,
-    )
     advisor_blocked_payload = encode_review_loop_terminal_result(
         terminal=TERMINAL_ADVISOR_BLOCKED,
         all_surviving_findings=(surviving_finding,),
         reviewed_head_count=1,
         is_draft_preserved=False,
     )
+    clean_payload = encode_review_loop_terminal_result(
+        terminal=TERMINAL_CLEAN,
+        all_surviving_findings=(),
+        reviewed_head_count=1,
+        is_draft_preserved=False,
+    )
 
-    assert blocked_at_cap_payload[RESULT_KEY_DRAFT_PRESERVED] is True
     assert advisor_blocked_payload[RESULT_KEY_DRAFT_PRESERVED] is True
+    assert clean_payload[RESULT_KEY_DRAFT_PRESERVED] is False
 
 
-def test_fourth_head_is_never_recorded_once_cap_is_reached() -> None:
+def test_fourth_and_later_heads_are_recorded() -> None:
     all_heads = (HEAD_SHA_ONE, HEAD_SHA_TWO, HEAD_SHA_THREE)
-    after_cap = record_reviewed_head(all_heads, HEAD_SHA_FOUR)
+    after_fourth = record_reviewed_head(all_heads, HEAD_SHA_FOUR)
 
-    assert after_cap == all_heads
-    assert len(after_cap) == MAXIMUM_REVIEWED_HEADS
+    assert after_fourth == (
+        HEAD_SHA_ONE,
+        HEAD_SHA_TWO,
+        HEAD_SHA_THREE,
+        HEAD_SHA_FOUR,
+    )
+    assert len(after_fourth) == 4
 
 
 def test_mixed_severities_are_not_nits_only() -> None:
