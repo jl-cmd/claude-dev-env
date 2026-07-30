@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from config.finding_pipeline_constants import (
+from e_code_review_scripts_constants.finding_pipeline_constants import (
     ALL_COLLECTION_SEVERITIES,
     COLLECTION_STAGE_NAME,
     FILTER_STAGE_NAME,

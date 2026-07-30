@@ -65,7 +65,7 @@ Detail: `reference/effort-evaluation.md`.
 | `reference/runner-selection.md` | Runner selection map |
 | `scripts/finding_pipeline.py` | Collect every real finding; filter severity only later |
 | `scripts/test_finding_pipeline.py` | Collection and filter-stage behavioral tests |
-| `scripts/config/finding_pipeline_constants.py` | Named constants for the collect-then-filter pipeline |
+| `scripts/e_code_review_scripts_constants/finding_pipeline_constants.py` | Named constants for the collect-then-filter pipeline |
 | `scripts/effort_evaluation.py` | Effort rows, recommendation, skill default resolver |
 | `scripts/effort_defaults_evidence.json` | Committed evaluation rows + e-code-review skill defaults |
 | `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
