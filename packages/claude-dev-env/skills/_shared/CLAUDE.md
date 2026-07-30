@@ -6,8 +6,15 @@
 
 | Home | Path | Holds |
 |---|---|---|
-| **Skills shared** | `~/.claude/skills/_shared/` | Converge helpers (`portable-driver`, scripts) and `@` stubs |
+| **Skills shared** | `~/.claude/skills/_shared/` | Converge helpers, end-of-run gotcha ref, and `@` stubs |
 | **Top-level shared** | `~/.claude/_shared/` | Advisor protocol, PR-loop contracts, runtime scripts |
+
+
+## Reference docs (this tree)
+
+| File | Role |
+|---|---|
+| **`end-of-run-gotcha-recommendations.md`** | End-of-run pasteable gotcha protocol for every skill |
 
 ## Subdirectories
 
