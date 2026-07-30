@@ -32,16 +32,18 @@ A file path named on the command line puts the gate in whole-file scope and can
 churn on untouched lines; keep the call bare.
 
 This gate commits nothing. The fix lands in the working tree and stays
-uncommitted; committing belongs to whatever invoked this document. The bare
-code-rules call covers the merge-base surface and staged added lines only —
-working-tree-only lines enter that scope after stage or commit.
+uncommitted. **Commit ownership is lead-only:** a fix agent, patch worker, or
+resumed finding agent never runs `git commit` or `git push`. The lead that owns
+the branch creates the commit after gates pass. The bare code-rules call covers
+the merge-base surface and staged added lines only — working-tree-only lines
+enter that scope after the lead stages or commits them.
 
 Under a bare `--fix` — this document invoked without `loop` — nothing
 downstream commits either, and that is the intended outcome: a one-shot fix
-pass leaves its fixes uncommitted in the working tree for the user to review
+pass leaves its fixes uncommitted in the working tree for the lead to review
 and commit (stage first if you re-run the gate on those lines). Under `loop`,
-the round tail in `reference\loop.md` stages, runs required checks, and
-commits the round's fixes.
+the round tail in `reference\loop.md` stages and runs required checks; the lead
+still owns the commit and push.
 
 ## Skip candidates
 

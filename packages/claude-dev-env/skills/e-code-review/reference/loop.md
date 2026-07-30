@@ -29,13 +29,21 @@ Auto-fix only verified findings on the review target. Leave deferred PR-body fol
 
 ## How to class each finding
 
-Use the finding's verified `severity` when the level emits one.
+Every retained finding carries a verified `severity` and a verification
+`verdict` (`CONFIRMED` or `PLAUSIBLE`). The frozen severity set is exactly
+`blocker`, `high`, `medium`, `low`, `nit`.
 
-A finding is a `nit` only when that severity is `nit`. Runtime-correctness, security, data-loss, compatibility, and every other non-nit finding is a `bug`.
+A finding is a `nit` only when that severity is `nit`. Runtime-correctness,
+security, data-loss, compatibility, and every other non-nit finding is a
+`bug`.
 
-If the level emits no severity (for example untagged `low` lines), consult your advisor to determine classification.
+A finding that lacks severity is **unclassified**. Consult the assigned
+advisor to classify it before Gate 2. When that advisor is unreachable,
+terminate with `advisor_blocked` and preserve draft state.
 
-A finding this document has already classed keeps that class at every level. An on-target shape-reader break is `bug` under *A shape change names its readers*; no advisor call reopens that.
+A finding this document has already classed keeps that class at every level. An
+on-target shape-reader break is `bug` under *A shape change names its readers*;
+no advisor call reopens that.
 
 ## Required checks
 
@@ -135,6 +143,14 @@ that hand-off, and they land at different times:
 
 ## Terminal outcomes
 
+The loop emits exactly one of these terminals when it stops:
+
+| Terminal | When |
+|---|---|
+| `clean` | Zero retained findings on the current head, and required checks pass |
+| `nits_fixed` | Every retained finding is a nit with severity and a retained verdict, every nit is fixed, and required checks pass |
+| `advisor_blocked` | Classification needs the assigned advisor and that advisor is unreachable |
+
 Every round does this round's own work first, then runs the three gates below,
 in order: gate 1, then gate 2, then gate 3.
 
@@ -190,25 +206,37 @@ rather than replacing it.
 
 Gate 3 reads that stated outcome, never a case label.
 
-**Gate 3 — exit test.** Terminate only when all three of these hold:
+**Gate 3 — exit test.** Resolve the terminal from the table above, then stop or
+continue:
+
+- zero retained findings and required checks pass → `clean`;
+- nits only (each with severity and a retained verdict), all fixed, required checks pass → `nits_fixed`;
+- advisor needed for classification and unreachable → `advisor_blocked`;
+- otherwise continue.
+
+Also require, for `clean` and `nits_fixed`:
 
 - gate 1 shows no open obligation;
 - gate 2 states no unresolved findings remain;
-- this round produced no edits.
+- this round produced no edits after the gates settled.
 
 Any other combination runs the round tail and re-enters the loop.
 
-Terminating carries one further condition — the termination-time disclosure: the
-ready-for-review message names every broken off-target reader and every skipped
-finding that still exists. When the target is a pull request, the pull request
-body carries the same names; a target with no pull request owes the ready message
-alone. Every surface this condition names is written at termination — the ready
-message always, the pull request body too when the target is a pull request — so
-each one is available to the terminating round. A
-round that cannot name them does not terminate; it runs the round tail and
-re-enters the loop, the same as any other non-terminating round. With that
-condition met, post the proof-of-work PR comment when the target is a PR, then
-run `gh pr ready` for a draft PR, or state ready otherwise.
+Terminating with `clean` or `nits_fixed` carries one further condition — the
+termination-time disclosure: the ready-for-review message names every broken
+off-target reader and every skipped finding that still exists. When the target
+is a pull request, the pull request body carries the same names; a target with
+no pull request owes the ready message alone. Every surface this condition
+names is written at termination — the ready message always, the pull request
+body too when the target is a pull request — so each one is available to the
+terminating round. A round that cannot name them does not terminate; it runs
+the round tail and re-enters the loop, the same as any other non-terminating
+round. With that condition met, post the proof-of-work PR comment when the
+target is a PR, then run `gh pr ready` for a draft PR, or state ready
+otherwise.
+
+`advisor_blocked` keeps the pull request draft. It does
+not run `gh pr ready`. It reports every surviving structured finding.
 
 Gate 3 points at gate 1 for the obligation answer. It does not restate the
 two-round rule or the shape-reader rule; each of those keeps its one home in its
@@ -217,16 +245,15 @@ own section above.
 **The round tail.** Every round runs required checks here, in the one form
 *Required checks* gives: the bare command, no file paths. When this round
 produced edits, stage those edits first so they enter the bare gate's scope,
-run the checks, then commit once and push. When this round produced no edits,
-run the same checks and commit nothing. Should those checks produce repairs,
-this round has produced edits — stage them, re-run the checks, then commit
-once and push. Either way, start the next round under *Each round reviews
-new code*.
+then run the checks. When this round produced no edits, run the same checks.
+Should those checks produce repairs, this round has produced edits — stage
+them and re-run the checks.
 
-The round tail owns the round's commit, and it is the only home that commits.
-Gate 2 leaves its change uncommitted, and the tail stages then commits it.
-Required checks run here after every fix has landed and been staged, so the
-tail's single commit carries the round's fixes and the repairs those checks
-produce together.
+**Commit and push are lead-owned.** Gate 2 and the round tail leave every fix
+unstaged-or-staged in the working tree for the lead that owns the branch. A
+fix agent, patch worker, or resumed finding agent never creates the commit and
+never pushes. The lead stages, commits once per review round, and pushes after
+the gates pass. Start the next round under *Each round reviews new code* only
+after that lead commit lands a new head.
 
 Do not drop findings to force ready. Without `loop`, run one review at the selected level, fix, and return every validated finding.
