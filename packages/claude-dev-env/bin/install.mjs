@@ -36,6 +36,10 @@ import {
     MAIN_DEFAULT_TARGET_IDENTITY,
     TARGET_IDENTITY_FLAG,
 } from './select-install-targets.mjs';
+import {
+    buildInstallPlan,
+    InstallPlanPreflightError,
+} from './install-plan.mjs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
@@ -95,8 +99,6 @@ const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
-const MANIFEST_FILES_KEY = 'files';
-const MANIFEST_SKILLS_KEY = 'skills';
 const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
 export const CORE_INCLUDE_DIRECTORIES = [
@@ -156,24 +158,6 @@ export function collectPackageSourceConflicts(packageDirectory) {
         allConflicts.push({ statusCode, path: conflictPath });
     }
     return allConflicts;
-}
-
-function abortWhenPackageSourceHasConflicts(packageDirectory) {
-    const conflicts = collectPackageSourceConflicts(packageDirectory);
-    if (conflicts.length === 0) return;
-    console.error(
-        `\nERROR: ${PACKAGE_NAME} source has unmerged conflicts under ${packageDirectory}:\n`,
-    );
-    for (const conflict of conflicts) {
-        console.error(`  ${conflict.statusCode} ${conflict.path}`);
-    }
-    console.error(
-        '\nResolve the conflicts in the package source before running the installer.',
-    );
-    console.error(
-        'Installing from a conflicted source can copy stale or broken files into ~/.claude/.\n',
-    );
-    process.exit(1);
 }
 
 function resolveDependencyPackageRoot(dependencyPackageName) {
@@ -1517,46 +1501,6 @@ function mergeManagedPermissions() {
 }
 
 /**
- * Read the file list and the skill list the previous install recorded, in one
- * parse of the manifest.
- *
- * A full install's manifest holds thousands of path strings, so the record is
- * read and parsed once and both lists are handed back together.
- *
- * Either list is null when the manifest is missing, unreadable, or holds no array
- * at that key, so a caller treats every such case as "no prior record": the skills
- * list leans on the ever-shipped set to find retired skills, and the files list
- * holds the stale-file prune for that run rather than guessing at what a prior
- * install wrote. A `--update` run purges the manifest before reinstalling, so this
- * read happens at the top of `install()` while the record is still on disk.
- *
- * @returns {{files: string[]|null, skills: string[]|null}} The recorded lists, each null when absent.
- */
-function readPriorManifestArrays() {
-    const missingRecord = { files: null, skills: null };
-    if (!existsSync(MANIFEST_FILE)) return missingRecord;
-    try {
-        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
-        return {
-            files: arrayOrNull(priorManifest[MANIFEST_FILES_KEY]),
-            skills: arrayOrNull(priorManifest[MANIFEST_SKILLS_KEY]),
-        };
-    } catch {
-        return missingRecord;
-    }
-}
-
-/**
- * Return a recorded manifest value when it is an array, and null otherwise.
- *
- * @param {unknown} recordedEntries The value read at a manifest key.
- * @returns {string[]|null} The array, or null when the key holds anything else.
- */
-function arrayOrNull(recordedEntries) {
-    return Array.isArray(recordedEntries) ? recordedEntries : null;
-}
-
-/**
  * Merge two path lists into one, keyed on `comparisonKeyForPath`, with the
  * current run's spelling winning a collision.
  *
@@ -1773,9 +1717,45 @@ function runFullInstallPrunes(
  * @returns {void}
  */
 function install(selectedGroups, options = {}) {
-    const { files: priorManifestFiles, skills: priorManifestSkills } = readPriorManifestArrays();
-    const isUpdateRefresh = Boolean(options.isUpdateRefresh);
-    if (isUpdateRefresh && !selectedGroups && existsSync(MANIFEST_FILE)) {
+    let plan;
+    try {
+        plan = buildInstallPlan({
+            packageRoot: PACKAGE_ROOT,
+            managedRoot: CLAUDE_HOME,
+            manifestFilePath: MANIFEST_FILE,
+            targetIdentity: INSTALL_TARGET_IDENTITY,
+            selectedGroups,
+            isUpdateRefresh: Boolean(options.isUpdateRefresh),
+            installGroups: INSTALL_GROUPS,
+            collectSourceConflicts: collectPackageSourceConflicts,
+            detectPythonCommand: detectPython,
+            packageName: PACKAGE_NAME,
+        });
+    } catch (preflightError) {
+        if (preflightError instanceof InstallPlanPreflightError) {
+            console.error(preflightError.message);
+            process.exit(1);
+        }
+        throw preflightError;
+    }
+    executeInstallPlan(plan);
+}
+
+/**
+ * Apply one preflighted installation plan. All filesystem and settings writes
+ * start here so E2 can wrap the same executor with recovery.
+ *
+ * @param {ReturnType<typeof buildInstallPlan>} plan
+ * @returns {void}
+ */
+function executeInstallPlan(plan) {
+    const selectedGroups = plan.selectedGroups;
+    const priorManifestFiles = plan.priorManifest.files;
+    const priorManifestSkills = plan.priorManifest.skills;
+    const isUpdateRefresh = plan.isUpdateRefresh;
+    const pythonCommand = plan.pythonCommand;
+
+    if (plan.shouldPurgeBeforeReinstall) {
         console.log(
             `${PACKAGE_NAME}: --update — removing prior managed files under ${CLAUDE_HOME}, then reinstalling from the package.\n`,
         );
@@ -1786,12 +1766,6 @@ function install(selectedGroups, options = {}) {
     }
     const groupLabel = selectedGroups ? `groups: ${selectedGroups.join(', ')}` : 'all';
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
-    abortWhenPackageSourceHasConflicts(PACKAGE_ROOT);
-    const pythonCommand = detectPython();
-    if (!pythonCommand) {
-        console.error('ERROR: No usable Python 3 found. Install Python 3.8+ from python.org and ensure py, python3, or python is on PATH. On Windows the Microsoft Store python.exe alias is rejected because it cannot run hooks.');
-        process.exit(1);
-    }
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
 
