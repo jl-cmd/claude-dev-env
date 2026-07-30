@@ -404,6 +404,7 @@ def test_code_quality_agent_default_scope_is_a_through_q() -> None:
     assert _STALE_SIXTEEN_PATTERN.search(agent_text) is None
     assert "A through Q" in agent_text
     assert "A through P" not in agent_text
+    assert _STALE_A_THROUGH_P_PATTERN.search(agent_text) is None
     assert "## Bug Categories A–Q" in agent_text
     assert _CATEGORY_Q_LABEL in agent_text
     assert _CATEGORY_Q_RUBRIC_REFERENCE in agent_text
