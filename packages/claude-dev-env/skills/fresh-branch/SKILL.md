@@ -1,14 +1,14 @@
 ---
 name: fresh-branch
 description: >-
-  Fresh git branch from origin/main in an isolated worktree under the repo's .claude/worktrees/ (never checkout -b in the caller tree).
+  Fresh git branch from origin/main in an isolated worktree under a configured root (default: <repo>/.claude/worktrees/<agent>/; never checkout -b in the caller tree).
   Triggers: fresh branch, new branch from main, /fresh-branch, start fresh, clean branch off main,
   worktree branch, branch in temp.
 ---
 
 # fresh-branch
 
-Creates a new branch from a fresh-fetched `origin/main` inside an isolated git worktree under the repository's `.claude/worktrees/<agent>/` root. Shared primitive: other skills invoke `/fresh-branch` when they need a clean branch without touching the caller's dirty tree.
+Creates a new branch from a fresh-fetched `origin/main` inside an isolated git worktree under a **configured isolated root**. Default root is the repository's `.claude/worktrees/`; pass `--worktree-root` for an absolute alternate root (including outside the repo). Every worktree path must resolve under that root. Shared primitive: other skills invoke `/fresh-branch` when they need a clean branch without touching the caller's dirty tree.
 
 **Announce at start:** "Creating a fresh branch from origin/main."
 
@@ -62,15 +62,21 @@ Optional flags:
 | Flag | Role |
 |------|------|
 | `--repo <path>` | Source repo (default: current directory) |
-| `--agent <slug>` | Worktree-root segment: `claude`, `grok`, `cursor`, `codex`, … |
+| `--agent <slug>` | Agent segment under the configured root: `claude`, `grok`, `cursor`, `codex`, … |
 | `--base <ref>` | Base ref (default: `origin/main`) |
+| `--worktree-root <abs-path>` | Absolute isolated root for all worktrees (default: `<repo-root>/.claude/worktrees`) |
 
 Agent resolution inside the script: `--agent` → `FRESH_BRANCH_AGENT` env → host markers → `claude`.
 
-Worktree path:
+Configured-root contract:
 
-- `<repo-root>/.claude/worktrees/<agent>/<branch-name>`, on every platform
+- Default configured root: `<repo-root>/.claude/worktrees`
+- Explicit `--worktree-root` must be absolute; a relative value fails closed with a deterministic error before any git fetch
+- Absolute roots outside the repository are legal; the agent and branch still nest under that root
+- Worktree path: `<configured-root>/<agent>/<branch-name>`, on every platform
+- Every allocated path must resolve under the configured root; traversal that escapes fails closed
 - If the path exists, the script suffixes `-2`, `-3`, …
+- Permission-rule cleanup (`stale_worktree_rule_sweep`) only walks `~/.claude/worktrees`; external `--worktree-root` trees are outside that sweep until a follow-up ships
 
 On exit 0, stdout is one JSON object:
 
@@ -100,10 +106,12 @@ Further edits for the new branch belong in `worktree_path`, not in the caller's 
 
 ## Gotchas
 
-- **Dirty caller cwd blocks `checkout -b` and pollutes the tree.** Phase 3 always uses `git worktree add -b` into `<repo-root>/.claude/worktrees/<agent>/…`. If you reconstruct Phase 3 by hand with `checkout -b` in the session cwd, local modifications block the checkout and leave the user on a half-switched branch.
+- **Dirty caller cwd blocks `checkout -b` and pollutes the tree.** Phase 3 always uses `git worktree add -b` into `<configured-root>/<agent>/…`. If you reconstruct Phase 3 by hand with `checkout -b` in the session cwd, local modifications block the checkout and leave the user on a half-switched branch.
 - **Caller HEAD must stay put.** After success, the original repo's checked-out branch and dirty files are unchanged; only the new worktree has the new branch.
 - **Branch name collision.** If the branch already exists, the script exits non-zero with `{"error":...}`. Pick a new name; do not delete remote branches unless the user asks.
 - **Path already occupied.** A leftover folder at the preferred worktree path gets a numeric suffix (`-2`, …); report the path from JSON, not the path you assumed.
+- **Relative `--worktree-root` is refused before fetch.** Only an absolute path is accepted; the default root applies when the flag is omitted. Validation runs before `git fetch`, so a bad root never touches the network or remote-tracking refs.
+- **External roots and stale permission rules.** `stale_worktree_rule_sweep` only walks `~/.claude/worktrees`. Edit rules granted under an external `--worktree-root` are not swept when that tree is deleted.
 
 ## File index
 

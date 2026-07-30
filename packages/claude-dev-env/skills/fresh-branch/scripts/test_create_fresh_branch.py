@@ -17,9 +17,12 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
+    ALL_REPOSITORY_WORKTREE_ROOT_PARTS,
+    CLI_FLAG_WORKTREE_ROOT,
     DEFAULT_AGENT_SLUG,
     DEFAULT_BASE_REF,
     ERROR_CLI_ARGUMENTS,
+    ERROR_WORKTREE_ROOT_NOT_ABSOLUTE,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FRESH_BRANCH_AGENT_ENV_VAR,
@@ -244,6 +247,40 @@ class TestResolveAgentSlug:
             module.resolve_agent_slug("../evil")
 
 
+class TestResolveConfiguredWorktreeRoot:
+    def should_default_to_repo_claude_worktrees(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        configured_root = module.resolve_configured_worktree_root(tmp_path)
+        expected_root = tmp_path.joinpath(*ALL_REPOSITORY_WORKTREE_ROOT_PARTS)
+        assert configured_root == expected_root.resolve()
+
+    def should_accept_an_absolute_root_outside_the_repo(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        external_root = (tmp_path / "external-isolated").resolve()
+        configured_root = module.resolve_configured_worktree_root(
+            tmp_path / "repo",
+            maybe_worktree_root=str(external_root),
+        )
+        assert configured_root == external_root
+
+    def should_reject_a_relative_worktree_root(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        with pytest.raises(ValueError, match="absolute path"):
+            module.resolve_configured_worktree_root(
+                tmp_path,
+                maybe_worktree_root="relative/worktrees",
+            )
+
+
 class TestResolveAgentWorktreeRoot:
     def should_nest_under_the_repository_claude_worktrees_directory(
         self,
@@ -262,6 +299,19 @@ class TestResolveAgentWorktreeRoot:
         claude_root = module.resolve_agent_worktree_root(tmp_path, "claude")
         assert grok_root != claude_root
         assert grok_root.parent == claude_root.parent
+
+    def should_nest_agent_under_an_explicit_configured_root(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        external_root = (tmp_path / "isolated-root").resolve()
+        agent_root = module.resolve_agent_worktree_root(
+            tmp_path / "repo",
+            "grok",
+            maybe_worktree_root=str(external_root),
+        )
+        assert agent_root == external_root / "grok"
 
 
 class TestResolveUniqueWorktreePath:
@@ -356,6 +406,146 @@ class TestBranchNamePathSafety:
             )
         assert not outside_target.exists()
         assert not (tmp_path / "unused-repo").exists()
+
+
+class TestConfiguredWorktreeRootIntegration:
+    def should_create_worktree_under_explicit_absolute_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        configured_root = (tmp_path / "isolated-worktrees").resolve()
+        caller_head_before = read_head_branch(repository_path)
+        caller_commit_before = read_head_commit(repository_path)
+        success_payload = module.create_fresh_branch(
+            branch_name="fix/external-root",
+            repo_path=repository_path,
+            agent_slug="grok",
+            base_ref=DEFAULT_BASE_REF,
+            maybe_worktree_root=str(configured_root),
+        )
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        assert worktree_path == configured_root / "grok" / "fix" / "external-root"
+        assert worktree_path.is_dir()
+        assert worktree_path.resolve().is_relative_to(configured_root)
+        assert not (
+            repository_path.resolve()
+            / ".claude"
+            / "worktrees"
+            / "grok"
+            / "fix"
+            / "external-root"
+        ).exists()
+        assert read_head_branch(repository_path) == caller_head_before
+        assert read_head_commit(repository_path) == caller_commit_before
+
+    def should_suffix_when_path_exists_under_configured_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        configured_root = (tmp_path / "isolated-worktrees").resolve()
+        occupied_path = configured_root / "claude" / "fix" / "collision"
+        occupied_path.mkdir(parents=True)
+        success_payload = module.create_fresh_branch(
+            branch_name="fix/collision",
+            repo_path=repository_path,
+            agent_slug="claude",
+            base_ref=DEFAULT_BASE_REF,
+            maybe_worktree_root=str(configured_root),
+        )
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        assert worktree_path == configured_root / "claude" / "fix" / "collision-2"
+        assert worktree_path.is_dir()
+
+    def should_reject_relative_worktree_root_without_creating_worktree(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        with pytest.raises(ValueError, match="absolute path") as raised_error:
+            module.create_fresh_branch(
+                branch_name="fix/relative-root",
+                repo_path=repository_path,
+                agent_slug="claude",
+                base_ref=DEFAULT_BASE_REF,
+                maybe_worktree_root="relative/worktrees",
+            )
+        assert str(raised_error.value) == ERROR_WORKTREE_ROOT_NOT_ABSOLUTE
+        assert not (repository_path / ".claude" / "worktrees").exists()
+
+    def should_reject_relative_worktree_root_before_fetch(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        all_fetch_calls: list[str] = []
+
+        def record_fetch(repo_root: Path, base_ref: str) -> None:
+            all_fetch_calls.append(base_ref)
+            raise AssertionError("fetch must not run for a relative worktree root")
+
+        monkeypatch.setattr(module, "fetch_base_ref", record_fetch)
+        with pytest.raises(ValueError, match="absolute path") as raised_error:
+            module.create_fresh_branch(
+                branch_name="fix/relative-root-before-fetch",
+                repo_path=repository_path,
+                agent_slug="claude",
+                base_ref=DEFAULT_BASE_REF,
+                maybe_worktree_root="relative/worktrees",
+            )
+        assert str(raised_error.value) == ERROR_WORKTREE_ROOT_NOT_ABSOLUTE
+        assert all_fetch_calls == []
+
+    def should_fetch_base_before_creating_worktree(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        all_call_names: list[str] = []
+        real_fetch = module.fetch_base_ref
+        real_create = module.create_worktree_branch
+
+        def record_fetch(
+            repo_root: Path,
+            base_ref: str,
+        ) -> None:
+            all_call_names.append("fetch")
+            real_fetch(repo_root, base_ref)
+
+        def record_create(
+            repo_root: Path,
+            branch_name: str,
+            worktree_path: Path,
+            base_ref: str,
+        ) -> None:
+            all_call_names.append("create")
+            real_create(
+                repo_root,
+                branch_name=branch_name,
+                worktree_path=worktree_path,
+                base_ref=base_ref,
+            )
+
+        monkeypatch.setattr(module, "fetch_base_ref", record_fetch)
+        monkeypatch.setattr(module, "create_worktree_branch", record_create)
+        module.create_fresh_branch(
+            branch_name="fix/fetch-order",
+            repo_path=repository_path,
+            agent_slug="claude",
+            base_ref=DEFAULT_BASE_REF,
+        )
+        assert all_call_names == ["fetch", "create"]
 
 
 class TestCreateFreshBranchIntegration:
@@ -670,3 +860,64 @@ class TestMainCli:
         assert "relative path" in error_payload[PAYLOAD_KEY_ERROR]
         assert not outside_target.exists()
         assert not (tmp_path / "unused-repo").exists()
+
+    def should_print_error_json_for_relative_worktree_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "create_fresh_branch.py",
+                "--branch-name",
+                "feat/relative-root",
+                "--repo",
+                str(repository_path),
+                "--agent",
+                "claude",
+                CLI_FLAG_WORKTREE_ROOT,
+                "relative/worktrees",
+            ],
+        )
+        exit_code = module.main()
+        captured = capsys.readouterr()
+        assert exit_code == EXIT_CODE_FAILURE
+        error_payload = json.loads(captured.out)
+        assert error_payload[PAYLOAD_KEY_ERROR] == ERROR_WORKTREE_ROOT_NOT_ABSOLUTE
+
+    def should_print_success_json_for_absolute_worktree_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        module = load_create_fresh_branch_module()
+        repository_path = build_repo_with_origin(tmp_path / "repo")
+        configured_root = (tmp_path / "cli-isolated").resolve()
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "create_fresh_branch.py",
+                "--branch-name",
+                "feat/cli-root",
+                "--repo",
+                str(repository_path),
+                "--agent",
+                "grok",
+                CLI_FLAG_WORKTREE_ROOT,
+                str(configured_root),
+            ],
+        )
+        exit_code = module.main()
+        captured = capsys.readouterr()
+        assert exit_code == EXIT_CODE_SUCCESS
+        success_payload = json.loads(captured.out)
+        worktree_path = Path(success_payload[PAYLOAD_KEY_WORKTREE_PATH])
+        assert worktree_path == configured_root / "grok" / "feat" / "cli-root"
+        assert worktree_path.is_dir()

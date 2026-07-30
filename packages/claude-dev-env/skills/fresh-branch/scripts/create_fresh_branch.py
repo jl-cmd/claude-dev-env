@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a fresh branch in an isolated git worktree under the repository.
+"""Create a fresh branch in an isolated git worktree under a configured root.
 
 ::
 
@@ -9,8 +9,9 @@
 
 Never runs ``git checkout -b`` in the caller's working tree. Fetches the base
 ref, then ``git worktree add -b --no-track`` into
-``<repo-root>/.claude/worktrees/<agent>/<branch>``. Exit 0 prints success JSON;
-any failure prints ``{"error": ...}`` and exits non-zero.
+``<configured-root>/<agent>/<branch>`` (default configured root:
+``<repo-root>/.claude/worktrees``). Exit 0 prints success JSON; any failure
+prints ``{"error": ...}`` and exits non-zero.
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     AGENT_SLUG_PATTERN,
     ALL_AGENT_DETECTION_MARKERS,
     ALL_REPOSITORY_WORKTREE_ROOT_PARTS,
+    CLI_FLAG_WORKTREE_ROOT,
+    CLI_HELP_WORKTREE_ROOT,
     DEFAULT_AGENT_SLUG,
     DEFAULT_BASE_REF,
     ERROR_AGENT_SLUG_INVALID,
@@ -41,6 +44,7 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     ERROR_CLI_ARGUMENTS,
     ERROR_UNIQUE_PATH_EXHAUSTED,
     ERROR_WORKTREE_PATH_OUTSIDE_ROOT,
+    ERROR_WORKTREE_ROOT_NOT_ABSOLUTE,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FRESH_BRANCH_AGENT_ENV_VAR,
@@ -91,26 +95,79 @@ def _detect_agent_slug_from_environment() -> str:
     return DEFAULT_AGENT_SLUG
 
 
-def resolve_agent_worktree_root(repo_root: Path, agent_slug: str) -> Path:
-    """Return the repository's per-agent worktree root.
+def resolve_configured_worktree_root(
+    repo_root: Path,
+    maybe_worktree_root: str | None = None,
+) -> Path:
+    """Return the isolated root that every worktree path must stay under.
+
+    ::
+
+        resolve_configured_worktree_root(Path("/srv/app"))
+        # ok: /srv/app/.claude/worktrees
+        resolve_configured_worktree_root(Path("/srv/app"), "/tmp/isolated")
+        # ok: /tmp/isolated
+        resolve_configured_worktree_root(Path("/srv/app"), "relative/path")
+        # flag: ValueError --worktree-root must be an absolute path
+
+    When ``maybe_worktree_root`` is omitted, the default root is the repository's
+    ``.claude/worktrees`` directory. An explicit root must be absolute; it may
+    sit outside the repository.
+
+    Args:
+        repo_root: Absolute path of the repository the branch comes from.
+        maybe_worktree_root: Optional absolute configured root, or None.
+
+    Returns:
+        Resolved absolute configured root directory.
+
+    Raises:
+        ValueError: When ``maybe_worktree_root`` is set and is not absolute.
+    """
+    if maybe_worktree_root is None:
+        return repo_root.joinpath(*ALL_REPOSITORY_WORKTREE_ROOT_PARTS).resolve()
+    cleaned_worktree_root = maybe_worktree_root.strip()
+    if not cleaned_worktree_root:
+        return repo_root.joinpath(*ALL_REPOSITORY_WORKTREE_ROOT_PARTS).resolve()
+    configured_root = Path(cleaned_worktree_root)
+    if not configured_root.is_absolute():
+        raise ValueError(ERROR_WORKTREE_ROOT_NOT_ABSOLUTE)
+    return configured_root.resolve()
+
+
+def resolve_agent_worktree_root(
+    repo_root: Path,
+    agent_slug: str,
+    maybe_worktree_root: str | None = None,
+) -> Path:
+    """Return the per-agent directory under the configured worktree root.
 
     ::
 
         # repo_root=/srv/app, agent_slug=grok
         resolve_agent_worktree_root(Path("/srv/app"), "grok")
         # -> /srv/app/.claude/worktrees/grok
+        resolve_agent_worktree_root(
+            Path("/srv/app"), "grok", maybe_worktree_root="/tmp/isolated",
+        )
+        # -> /tmp/isolated/grok
 
-    Every worktree sits under the repository it branches from, so a worktree
-    travels with its repository and each agent keeps its own subdirectory.
+    Each agent keeps its own subdirectory under the configured root so concurrent
+    hosts do not share worktree folders.
 
     Args:
         repo_root: Absolute path of the repository the branch comes from.
         agent_slug: Short host label (one path segment).
+        maybe_worktree_root: Optional absolute configured root, or None.
 
     Returns:
         Directory that should hold per-branch worktree folders.
     """
-    return repo_root.joinpath(*ALL_REPOSITORY_WORKTREE_ROOT_PARTS, agent_slug)
+    configured_root = resolve_configured_worktree_root(
+        repo_root,
+        maybe_worktree_root=maybe_worktree_root,
+    )
+    return configured_root / agent_slug
 
 
 def resolve_unique_worktree_path(preferred_path: Path) -> Path:
@@ -170,38 +227,55 @@ def create_fresh_branch(
     repo_path: Path,
     agent_slug: str,
     base_ref: str,
+    maybe_worktree_root: str | None = None,
 ) -> dict[str, str]:
     """Fetch base_ref and create an isolated worktree branch with no upstream.
 
     ::
 
         create_fresh_branch("fix/x", Path("."), "grok", "origin/main")
+        # worktree under <repo>/.claude/worktrees/grok/fix/x
+        create_fresh_branch(
+            "fix/x", Path("."), "grok", "origin/main",
+            maybe_worktree_root="/tmp/isolated",
+        )
+        # worktree under /tmp/isolated/grok/fix/x
 
-    The caller's working tree is never checked out. The worktree lands under
-    the repository's ``.claude/worktrees/<agent>/<branch>``, suffixed ``-2``,
-    ``-3``, … when that path is already taken.
+    The caller's working tree is never checked out. The configured root is
+    validated before any git fetch so a relative ``--worktree-root`` fails
+    closed with no network I/O. The worktree lands under
+    ``<configured-root>/<agent>/<branch>``, suffixed ``-2``, ``-3``, … when
+    that path is already taken. Every allocated path must resolve beneath the
+    configured root.
 
     Args:
         branch_name: Branch to create; must be a safe relative path.
         repo_path: Any path inside the repository the branch comes from.
         agent_slug: Short host label naming the worktree-root subdirectory.
         base_ref: Ref the branch starts from, such as ``origin/main``.
+        maybe_worktree_root: Optional absolute configured root, or None for
+            the default ``<repo>/.claude/worktrees``.
 
     Returns:
         The success payload: branch, worktree_path, base_ref, base_commit,
         agent, and repo_root.
 
     Raises:
-        ValueError: When the branch name or the agent slug is unsafe.
+        ValueError: When the branch name, agent slug, or worktree root is unsafe.
         RuntimeError: When git refuses the fetch or the worktree add.
     """
     cleaned_branch = _require_safe_branch_name(branch_name)
     normalized_agent_slug = _normalize_agent_slug(agent_slug)
-    resolved_base_ref, repo_root, base_commit = _resolve_branch_base(
-        repo_path, base_ref,
+    repo_root = resolve_repo_root(repo_path)
+    configured_root = resolve_configured_worktree_root(
+        repo_root,
+        maybe_worktree_root=maybe_worktree_root,
     )
+    resolved_base_ref, base_commit = _fetch_resolved_base(repo_root, base_ref)
     worktree_path = _allocate_worktree_path(
-        cleaned_branch, normalized_agent_slug, repo_root,
+        cleaned_branch,
+        normalized_agent_slug,
+        configured_root,
     )
     create_worktree_branch(
         repo_root,
@@ -215,15 +289,11 @@ def create_fresh_branch(
     )
 
 
-def _resolve_branch_base(
-    repo_path: Path,
-    base_ref: str,
-) -> tuple[str, Path, str]:
+def _fetch_resolved_base(repo_root: Path, base_ref: str) -> tuple[str, str]:
     resolved_base_ref = normalize_base_ref(base_ref)
-    repo_root = resolve_repo_root(repo_path)
     fetch_base_ref(repo_root, resolved_base_ref)
     base_commit = resolve_base_commit(repo_root, resolved_base_ref)
-    return resolved_base_ref, repo_root, base_commit
+    return resolved_base_ref, base_commit
 
 
 def main() -> int:
@@ -233,19 +303,24 @@ def main() -> int:
         Process exit code (0 success, 1 failure).
     """
     try:
-        parsed_arguments = _parse_arguments()
-        agent_slug = resolve_agent_slug(parsed_arguments.agent)
-        success_payload = create_fresh_branch(
-            branch_name=parsed_arguments.branch_name,
-            repo_path=Path(parsed_arguments.repo).resolve(),
-            agent_slug=agent_slug,
-            base_ref=parsed_arguments.base,
-        )
+        success_payload = _create_fresh_branch_from_cli_arguments()
         print(json.dumps(success_payload))
         return EXIT_CODE_SUCCESS
     except (ValueError, RuntimeError, OSError) as error:
         print(json.dumps({PAYLOAD_KEY_ERROR: str(error)}))
         return EXIT_CODE_FAILURE
+
+
+def _create_fresh_branch_from_cli_arguments() -> dict[str, str]:
+    parsed_arguments = _parse_arguments()
+    agent_slug = resolve_agent_slug(parsed_arguments.agent)
+    return create_fresh_branch(
+        branch_name=parsed_arguments.branch_name,
+        repo_path=Path(parsed_arguments.repo).resolve(),
+        agent_slug=agent_slug,
+        base_ref=parsed_arguments.base,
+        maybe_worktree_root=parsed_arguments.worktree_root,
+    )
 
 
 def _require_safe_branch_name(branch_name: str) -> str:
@@ -257,19 +332,21 @@ def _require_safe_branch_name(branch_name: str) -> str:
 
 
 def _allocate_worktree_path(
-    branch_name: str, agent_slug: str, repo_root: Path,
+    branch_name: str,
+    agent_slug: str,
+    configured_root: Path,
 ) -> Path:
-    agent_worktree_root = resolve_agent_worktree_root(repo_root, agent_slug)
+    agent_worktree_root = configured_root / agent_slug
     agent_worktree_root.mkdir(parents=True, exist_ok=True)
     preferred_path = agent_worktree_root / branch_name
-    _assert_path_is_under_agent_root(
+    _assert_path_is_under_configured_root(
         candidate_path=preferred_path,
-        agent_worktree_root=agent_worktree_root,
+        configured_root=configured_root,
     )
     worktree_path = resolve_unique_worktree_path(preferred_path)
-    _assert_path_is_under_agent_root(
+    _assert_path_is_under_configured_root(
         candidate_path=worktree_path,
-        agent_worktree_root=agent_worktree_root,
+        configured_root=configured_root,
     )
     return worktree_path
 
@@ -309,12 +386,12 @@ def _validate_branch_name_for_worktree_path(branch_name: str) -> None:
     assert_git_accepts_branch_name(branch_name)
 
 
-def _assert_path_is_under_agent_root(
+def _assert_path_is_under_configured_root(
     candidate_path: Path,
-    agent_worktree_root: Path,
+    configured_root: Path,
 ) -> None:
     resolved_candidate = candidate_path.resolve()
-    resolved_root = agent_worktree_root.resolve()
+    resolved_root = configured_root.resolve()
     if resolved_candidate == resolved_root:
         return
     try:
@@ -342,12 +419,18 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--agent",
         default=None,
-        help="Host label for .claude/worktrees/<agent>/ (default: detect from environment).",
+        help="Host label for <configured-root>/<agent>/ (default: detect from environment).",
     )
     parser.add_argument(
         "--base",
         default=DEFAULT_BASE_REF,
         help=f"Base ref to fetch and branch from (default: {DEFAULT_BASE_REF}).",
+    )
+    parser.add_argument(
+        CLI_FLAG_WORKTREE_ROOT,
+        default=None,
+        dest="worktree_root",
+        help=CLI_HELP_WORKTREE_ROOT,
     )
     try:
         return parser.parse_args()
