@@ -1,13 +1,15 @@
-"""Tests for check_docstring_args_single_line_scope_vs_span — Category O6 drift.
+"""Span-scope tests for docstring checks.
 
-A docstring Args: entry that scopes a finding to one named line ("only when its
-block-anchor line is among the changed lines") while the body builds a range()
-span and routes it through a span-intersection scoper claims a narrower scope
-than the code applies. The body blocks when ANY line of the span is among the
-changed lines, so an edit touching a non-anchor line of the span still blocks —
-contradicting the single-line Args sentence. This is the deterministic slice of
-Category O6 (free-form docstring-vs-implementation drift) for an Args entry whose
-single-line scope claim disagrees with a span-intersection body.
+Covers two surfaces:
+
+1. ``check_docstring_args_single_line_scope_vs_span`` (Category O6) — an Args
+   entry that claims single-line (block-anchor) scope while the body builds a
+   multi-line span and routes it through span intersection.
+
+2. Changed-span grading for ``check_docstring_runon_sentence`` and
+   ``check_docstring_prose_wall_without_illustration`` (issue #237) — far-away
+   no-op grandfathering, introduced-violation blocking, and
+   ``defer_scope_to_caller`` pass-through.
 """
 
 from __future__ import annotations
@@ -230,6 +232,17 @@ def check_docstring_prose_wall_without_illustration(
     )
 
 
+_CLEAN_HELPER_TAIL = (
+    "\n"
+    "def clean_helper() -> str:\n"
+    '    """Return a short status token for the board.\n'
+    "\n"
+    "    Each call names one vessel and its final port.\n"
+    '    """\n'
+    '    return "ok"\n'
+)
+
+
 def _module_with_far_away_runon_and_clean_helper() -> str:
     return (
         '"""Owns the SIGINT install/restore/installability check, the atexit terminal-record\n'
@@ -237,13 +250,7 @@ def _module_with_far_away_runon_and_clean_helper() -> str:
         "machinery that brackets a run so the JSONL artifact always carries a terminal\n"
         "record and an in-flight theme record on interrupt.\n"
         '"""\n'
-        "\n"
-        "def clean_helper() -> str:\n"
-        '    """Return a short status token for the board.\n'
-        "\n"
-        "    Each call names one vessel and its final port.\n"
-        '    """\n'
-        '    return "ok"\n'
+        + _CLEAN_HELPER_TAIL
     )
 
 
@@ -259,13 +266,7 @@ def _module_with_far_away_prose_wall_and_clean_helper() -> str:
         "The tally groups the vessels by their final port for the harbor.\n"
         "The harbor reads the tally and sees every arrival at a glance.\n"
         '"""\n'
-        "\n"
-        "def clean_helper() -> str:\n"
-        '    """Return a short status token for the board.\n'
-        "\n"
-        "    Each call names one vessel and its final port.\n"
-        '    """\n'
-        '    return "ok"\n'
+        + _CLEAN_HELPER_TAIL
     )
 
 
