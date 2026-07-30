@@ -6,8 +6,13 @@ import { join } from 'node:path';
 import {
   CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE,
   loadProfilesManifestDocument,
+  MCP_BUNDLE_FULL,
+  MCP_BUNDLE_LEAN,
 } from './config/profile-isolation-constants.mjs';
-import { validateProfilesManifest } from './lib/profile-manifest.mjs';
+import {
+  resolveProfileDefinition,
+  validateProfilesManifest,
+} from './lib/profile-manifest.mjs';
 import {
   listServerNamesForBundle,
   loadMcpBundlesDocument,
@@ -24,15 +29,11 @@ import {
  */
 export function resolveProfileIdForLauncherName(launcherName) {
   const manifest = validateProfilesManifest(loadProfilesManifestDocument());
-  for (const eachProfile of Object.values(manifest.profileById)) {
-    if (
-      eachProfile.launcherNames.includes(launcherName)
-      || eachProfile.fullLauncherNames.includes(launcherName)
-    ) {
-      return eachProfile.id;
-    }
+  try {
+    return resolveProfileDefinition(manifest, launcherName).id;
+  } catch {
+    throw new Error(`no profile owns launcher name: ${launcherName}`);
   }
-  throw new Error(`no profile owns launcher name: ${launcherName}`);
 }
 
 /**
@@ -97,8 +98,8 @@ export function activateLauncherMcpBundle(parameters) {
  */
 export function describeLeanServerBoundary() {
   const bundlesDocument = loadMcpBundlesDocument();
-  const leanServers = listServerNamesForBundle('lean', bundlesDocument).sort();
-  const fullServers = listServerNamesForBundle('full', bundlesDocument).sort();
+  const leanServers = listServerNamesForBundle(MCP_BUNDLE_LEAN, bundlesDocument).sort();
+  const fullServers = listServerNamesForBundle(MCP_BUNDLE_FULL, bundlesDocument).sort();
   const leanSet = new Set(leanServers);
   const fullOnlyServers = fullServers.filter((eachName) => !leanSet.has(eachName));
   return { leanServers, fullServers, fullOnlyServers };
