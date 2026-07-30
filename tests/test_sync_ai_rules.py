@@ -25,6 +25,52 @@ class TestEffectiveDestinationPaths:
         ) == sync_ai_rules.DESTINATION_PATHS
 
 
+class TestLocalAgentsBugbotParity:
+    def should_return_zero_when_bugbot_body_matches_agents(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        agents_body = "# Canonical agents body\n\nPolicy line.\n"
+        agents_path = tmp_path / "AGENTS.md"
+        agents_path.write_text(agents_body, encoding="utf-8")
+        bugbot_path = tmp_path / ".cursor" / "BUGBOT.md"
+        bugbot_path.parent.mkdir(parents=True, exist_ok=True)
+        bugbot_path.write_text(
+            sync_ai_rules.build_destination_content(
+                agents_body, "deadbeef", "2026-01-01T00:00:00+00:00"
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        assert sync_ai_rules.check_local_agents_bugbot_parity() == 0
+
+    def should_return_nonzero_when_bugbot_body_drifts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        agents_path = tmp_path / "AGENTS.md"
+        agents_path.write_text("# Agents A\n", encoding="utf-8")
+        bugbot_path = tmp_path / ".cursor" / "BUGBOT.md"
+        bugbot_path.parent.mkdir(parents=True, exist_ok=True)
+        bugbot_path.write_text(
+            sync_ai_rules.build_destination_content(
+                "# Agents B\n", "deadbeef", "2026-01-01T00:00:00+00:00"
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        assert sync_ai_rules.check_local_agents_bugbot_parity() == 1
+
+
+class TestRunListenerSync:
+    def should_return_zero_when_opt_out_sentinel_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        opt_out_path = tmp_path / sync_ai_rules.OPT_OUT_SENTINEL_PATH
+        opt_out_path.parent.mkdir(parents=True, exist_ok=True)
+        opt_out_path.write_text("opt out\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        assert sync_ai_rules.run_listener_sync() == 0
+
+
 class TestCanonicalRepositoryMain:
     def should_write_only_bugbot_and_leave_agents_untouched(
         self, git_repo: Path, sync_env: None

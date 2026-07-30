@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.9.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.8.0...claude-dev-env-v2.9.0) (2026-07-30)
+
+
+### Features
+
+* **grok-batch:** unique per-worker Opus-high advisor sessions ([eb51eeb](https://github.com/jl-cmd/claude-dev-env/commit/eb51eeb9e2dc316ee1d02b9771a7b284842df930))
+* **grok-batch:** unique per-worker Opus-high advisor sessions ([40b7fbb](https://github.com/jl-cmd/claude-dev-env/commit/40b7fbbbf5932c3ecd60d3d138fc141c9e085cd6)), closes [#743](https://github.com/jl-cmd/claude-dev-env/issues/743)
+* **package:** assert prompt-surface activation and ship output-styles ([4544483](https://github.com/jl-cmd/claude-dev-env/commit/45444835be065c85b3d6d956dbcc267376764d86))
+* **package:** assert prompt-surface activation and ship output-styles ([22367f9](https://github.com/jl-cmd/claude-dev-env/commit/22367f9d8f17397f5348ada0d577935786a27883)), closes [#762](https://github.com/jl-cmd/claude-dev-env/issues/762)
+* **policy:** make AGENTS.md canonical with CODE_RULES projection ([c5d6d8f](https://github.com/jl-cmd/claude-dev-env/commit/c5d6d8f9ddca2e156c45da24b4d210d17a1da278))
+* **policy:** make AGENTS.md canonical with CODE_RULES projection ([b381e7e](https://github.com/jl-cmd/claude-dev-env/commit/b381e7e97941b272fef3a672d7a0aefa9ae627ea))
+* **scripts:** Grok medium-review discovery and verification ([4140976](https://github.com/jl-cmd/claude-dev-env/commit/4140976ebbcf702cf95a516452a190abe51e1d57)), closes [#747](https://github.com/jl-cmd/claude-dev-env/issues/747)
+* **scripts:** host-neutral Grok run ledger and patch manifests ([2f33bc8](https://github.com/jl-cmd/claude-dev-env/commit/2f33bc868ef506f2ce172104efc2fcfe4a3f06a8))
+* **scripts:** host-neutral Grok run ledger and patch manifests ([cddf32e](https://github.com/jl-cmd/claude-dev-env/commit/cddf32ec0b0ae87e45eec6363f8f7cc487ce228a)), closes [#745](https://github.com/jl-cmd/claude-dev-env/issues/745)
+
+
+### Bug Fixes
+
+* **agents:** task-local clean-coder discovery without dotenv preload ([7f3f46f](https://github.com/jl-cmd/claude-dev-env/commit/7f3f46ff784feff07990c49f4f4c22d27b23dd7b))
+* **agents:** task-local clean-coder discovery without dotenv preload ([43dfb4f](https://github.com/jl-cmd/claude-dev-env/commit/43dfb4fcd918a782dceb1f67767feca7d523ed61))
+* **e-code-review:** unique constants package avoids config import shadow ([925978a](https://github.com/jl-cmd/claude-dev-env/commit/925978a6ad455e9e7ad0529ec676e9c33c9551e0))
+* **grok-batch:** advisor timeout, failure type, inventory ([0146105](https://github.com/jl-cmd/claude-dev-env/commit/01461051e78e7d38c5c5aff8125edb927a8722eb))
+* **package:** drop package.json reindent noise on OP-09C ([5efcadf](https://github.com/jl-cmd/claude-dev-env/commit/5efcadfab5453fbe9b7ea980ee956e27272c9b0f))
+* **skills:** scan every installer Markdown root for relative links ([adeede5](https://github.com/jl-cmd/claude-dev-env/commit/adeede50aa82777dac7df7d4a57e1e13b7e1e0a8))
+* **skills:** scan every installer Markdown root for relative links ([c0c0401](https://github.com/jl-cmd/claude-dev-env/commit/c0c0401480cde3db4a1b007bef2e246979d226d2)), closes [#753](https://github.com/jl-cmd/claude-dev-env/issues/753)
+* **team-advisor:** restore FABLE-SPAWN-AUTHORIZED pin in skill ([7ba04f7](https://github.com/jl-cmd/claude-dev-env/commit/7ba04f79828758890a063c428f54046a8f35fedf))
+
+
+### Documentation
+
+* **scripts:** broaden spawn_grok_batch inventory for worker advisors ([72ed086](https://github.com/jl-cmd/claude-dev-env/commit/72ed086048678031f898e972d84ad14d03f2179c))
+* **skills:** add shared end-of-run gotcha recommendations ref ([74c1e52](https://github.com/jl-cmd/claude-dev-env/commit/74c1e52c9c7e7497cd2fa68372571931d34be0db))
+* **skills:** add skills/_shared redirects + end-of-run gotcha protocol ([a232130](https://github.com/jl-cmd/claude-dev-env/commit/a23213009ef1c40ca121011eef15cff38921960c))
+* **skills:** cap each gotcha at broke+fix (two prose sentences) ([f4e03cc](https://github.com/jl-cmd/claude-dev-env/commit/f4e03cca9f088adac3715c42be5b62eceb375d50))
+* **skills:** cold-reader frame for end-of-run gotcha close-out ([476efe1](https://github.com/jl-cmd/claude-dev-env/commit/476efe14eec725d34b32952443870ef539df9197))
+* **skills:** enforce one-sentence lines and required ASCII for gotcha chat ([5aa07b8](https://github.com/jl-cmd/claude-dev-env/commit/5aa07b847c754b9902f65f7114aef0f578f40246))
+* **skills:** force rendered line breaks so one sentence stays one line ([8a6372b](https://github.com/jl-cmd/claude-dev-env/commit/8a6372bf51af3560e5af028be6dce713660ebaa1))
+* **skills:** hard-enforce one sentence per prose line in gotcha close-out ([3d0220d](https://github.com/jl-cmd/claude-dev-env/commit/3d0220de34316dbc56120e212a98864ba6c3eaf3))
+* **skills:** keep [#899](https://github.com/jl-cmd/claude-dev-env/issues/899) to path stubs only; drop end-of-run gotcha for stacked PR ([8e30292](https://github.com/jl-cmd/claude-dev-env/commit/8e30292e978f00fee46ecfea1c4df75777732b0a))
+* **skills:** offer AskUserQuestion to file gotcha GitHub issues ([810b611](https://github.com/jl-cmd/claude-dev-env/commit/810b611a6e92dc76c980433fdd58acf10baa985b))
+* **skills:** one-sentence chat lines; lean AskUserQuestion; ASCII OK in chat ([952bbff](https://github.com/jl-cmd/claude-dev-env/commit/952bbff52ec3a760e4b27316bf74d745bb67ec9d))
+* **skills:** print ELI11 gotcha findings in chat before AskUserQuestion ([6c2ea23](https://github.com/jl-cmd/claude-dev-env/commit/6c2ea232ae3690ca740378c0e4360f2aa923745f))
+* **skills:** require what-broke + fix on each File-issue option ([576d687](https://github.com/jl-cmd/claude-dev-env/commit/576d68746892489d456dfc007667a3e78ca3c51a))
+* **skills:** shared end-of-run gotcha recommendations ref ([b61c0b6](https://github.com/jl-cmd/claude-dev-env/commit/b61c0b604f6d08ac3bb9b6cc9f46b144f17197fd))
+* **skills:** skills/_shared redirects + end-of-run gotcha protocol ([6c861b9](https://github.com/jl-cmd/claude-dev-env/commit/6c861b98f23572578d211356ce48e30907a7bd89))
+* **skills:** state canonical homes positively in skills/_shared stubs ([1cf02b5](https://github.com/jl-cmd/claude-dev-env/commit/1cf02b5f130a760f30d4aa0bf02d99cf55f4ecd6))
+* **team-advisor:** hone skill to official advisor-tool bones ([07904da](https://github.com/jl-cmd/claude-dev-env/commit/07904daff5e8aa94008e3a2038e399e2712225e9))
+* **team-advisor:** hone skill to official advisor-tool bones ([154ad93](https://github.com/jl-cmd/claude-dev-env/commit/154ad9343036b0a3ed5cc66d0ad196dd934c3529))
+* **team-advisor:** pin protocol path to ~/.claude/_shared ([470fc2c](https://github.com/jl-cmd/claude-dev-env/commit/470fc2c7fd061a665d0ae4ef0af7b61f7d44f819))
+* **team-advisor:** state protocol path without exclusion clauses ([9426816](https://github.com/jl-cmd/claude-dev-env/commit/942681625c196129048253d35a842f10160810e3))
+
+
+### Refactoring
+
+* **e-code-review:** drop nested constants package and inventory noise ([c9a09d1](https://github.com/jl-cmd/claude-dev-env/commit/c9a09d135b71aa04cd87ee75c25f7f514861b6eb))
+* **e-code-review:** house Grok medium review under skill scripts ([34569a9](https://github.com/jl-cmd/claude-dev-env/commit/34569a90fae2c75e490537b6c3939252dcbe8e91))
+* **e-code-review:** house Grok medium review under skill scripts ([2c2db35](https://github.com/jl-cmd/claude-dev-env/commit/2c2db355b316f40e4c58b6503fda89b888874220))
+
 ## [2.8.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.7.1...claude-dev-env-v2.8.0) (2026-07-30)
 
 
