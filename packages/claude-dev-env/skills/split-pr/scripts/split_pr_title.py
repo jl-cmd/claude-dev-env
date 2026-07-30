@@ -13,10 +13,10 @@ import re
 
 from config.plan_constants import (
     CONVENTIONAL_PREFIX_PATTERN,
+    DEFAULT_EMPTY_TITLE_REMAINDER,
     DEFAULT_TITLE_PREFIX,
     TITLE_PREFIX_SEPARATOR,
 )
-
 
 def normalize_split_title(raw_title: str) -> str:
     """Return a title with exactly one conventional-commit prefix.
@@ -37,5 +37,5 @@ def normalize_split_title(raw_title: str) -> str:
         chosen_prefix = match.group("prefix").lower()
         remainder = remainder[match.end() :].lstrip()
     if not remainder:
-        remainder = "split slice"
+        remainder = DEFAULT_EMPTY_TITLE_REMAINDER
     return f"{chosen_prefix}{TITLE_PREFIX_SEPARATOR}{remainder}"

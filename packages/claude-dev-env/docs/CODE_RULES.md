@@ -1,6 +1,8 @@
 # Code Rules Reference
 
-Compact reference for agents. ⚡ marks rules enforced by `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only.
+Compact **projection** of the repository-root canonical policy [`AGENTS.md`](../../../AGENTS.md). When this file and `AGENTS.md` disagree, **`AGENTS.md` wins** — update this projection in the same change.
+
+⚡ marks rules enforced by hand-maintained `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only. Session policy (question routing, task tracking) lives in `rules/*.md`; see [`code-standards.md`](../rules/code-standards.md).
 
 ---
 
@@ -46,7 +48,7 @@ Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` fo
 
 ## 6. COMPLETE TYPE HINTS
 
-ALL parameters typed, ALL returns typed. No `Any`, no `# type: ignore` (also enforced by the mypy_validator.py hook).
+ALL parameters typed, ALL returns typed. No `Any`. A `# type: ignore` is allowed only with a second trailing `#` justification of at least five characters (e.g. `# type: ignore[misc]  # stubs missing in foo library`); bare ignores are blocked by `code_rules_enforcer.py`. Prefer fixing the type over an ignore when a real annotation is available.
 
 ## 6.5 FILE LENGTH GUIDANCE
 

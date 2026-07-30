@@ -6,7 +6,7 @@
     python analyze_pr.py --files-json files.json --pretty
     {"hand_written_lines": 200, "requires_split_analysis": true, ...}
 
-Uses ``gh pr view --json`` unless ``--files-json`` supplies an offline list.
+Uses paginated ``gh api .../pulls/N/files`` unless ``--files-json`` is offline.
 """
 
 from __future__ import annotations
@@ -19,23 +19,28 @@ from pathlib import Path
 
 from categorize_files import annotate_files, sum_churn_by_class
 from config.split_pr_constants import (
-    ALL_EXCLUDED_CHURN_CLASSES,
     CHURN_CLASS_HAND_WRITTEN,
     DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD,
     EXIT_CODE_FAILURE,
     EXIT_CODE_SUCCESS,
     FILE_KEY_ADDITIONS,
+    FILE_KEY_CHANGED_LINES,
+    FILE_KEY_CHURN_CLASS,
     FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
+    GH_API_SUBCOMMAND,
     GH_COMMAND,
-    GH_FIELD_FILES,
     GH_FILE_ADDITIONS,
     GH_FILE_DELETIONS,
+    GH_FILE_FILENAME,
     GH_FILE_PATH,
     GH_JSON_FLAG,
-    GH_PR_JSON_FIELDS,
-    GH_PR_VIEW,
-    GH_REPO_FLAG,
+    GH_NAME_WITH_OWNER_FIELD,
+    GH_PAGINATE_FLAG,
+    GH_PULLS_FILES_PATH_TEMPLATE,
+    GH_REPO_SUBCOMMAND,
+    GH_SLURP_FLAG,
+    GH_VIEW,
     JSON_INDENT_SPACES,
     PAYLOAD_KEY_ALL_FILES,
     PAYLOAD_KEY_ATOMIC_EXCEPTION,
@@ -78,10 +83,11 @@ def build_analysis_from_files(
         all_annotated, churn_class=CHURN_CLASS_HAND_WRITTEN
     )
     excluded_churn_lines = 0
-    for each_class in ALL_EXCLUDED_CHURN_CLASSES:
-        excluded_churn_lines += sum_churn_by_class(
-            all_annotated, churn_class=each_class
-        )
+    for each_record in all_annotated:
+        if each_record.get(FILE_KEY_CHURN_CLASS) != CHURN_CLASS_HAND_WRITTEN:
+            excluded_churn_lines += int(
+                each_record.get(FILE_KEY_CHANGED_LINES, 0) or 0
+            )
     file_count = len(all_annotated)
     requires_split_analysis = (
         hand_written_lines >= SPLIT_ANALYSIS_HAND_WRITTEN_LINE_THRESHOLD
@@ -117,7 +123,7 @@ def _file_records_from_gh(raw_files: object) -> list[JsonObject]:
     for each_file in raw_files:
         if not isinstance(each_file, dict):
             continue
-        path = each_file.get(GH_FILE_PATH)
+        path = each_file.get(GH_FILE_PATH) or each_file.get(GH_FILE_FILENAME)
         if not path:
             continue
         all_file_records.append(
@@ -130,6 +136,18 @@ def _file_records_from_gh(raw_files: object) -> list[JsonObject]:
     return all_file_records
 
 
+def _flatten_paginated_file_pages(payload: object) -> list[object]:
+    if not isinstance(payload, list):
+        return []
+    all_files: list[object] = []
+    for each_page in payload:
+        if isinstance(each_page, list):
+            all_files.extend(each_page)
+        elif isinstance(each_page, dict):
+            all_files.append(each_page)
+    return all_files
+
+
 def _load_files_json(files_json_path: Path) -> list[JsonObject]:
     payload = json.loads(files_json_path.read_text(encoding=UTF8_ENCODING))
     if not isinstance(payload, list):
@@ -137,16 +155,47 @@ def _load_files_json(files_json_path: Path) -> list[JsonObject]:
     return _file_records_from_gh(payload)
 
 
+def _resolve_repo_name(repo: str | None) -> str:
+    if repo:
+        return repo
+    completed = subprocess.run(
+        [
+            GH_COMMAND,
+            GH_REPO_SUBCOMMAND,
+            GH_VIEW,
+            GH_JSON_FLAG,
+            GH_NAME_WITH_OWNER_FIELD,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding=UTF8_ENCODING,
+    )
+    if completed.returncode != EXIT_CODE_SUCCESS:
+        raise RuntimeError(
+            completed.stderr.strip()
+            or "gh repo view failed; pass --repo owner/name"
+        )
+    payload = json.loads(completed.stdout)
+    name_with_owner = payload.get(GH_NAME_WITH_OWNER_FIELD)
+    if not name_with_owner:
+        raise RuntimeError("gh repo view returned no nameWithOwner; pass --repo")
+    return str(name_with_owner)
+
+
 def _fetch_pr_files(pr_number: int, repo: str | None) -> list[JsonObject]:
+    resolved_repo = _resolve_repo_name(repo)
+    api_path = GH_PULLS_FILES_PATH_TEMPLATE.format(
+        repo=resolved_repo,
+        pr_number=pr_number,
+    )
     all_command = [
         GH_COMMAND,
-        GH_PR_VIEW,
-        str(pr_number),
-        GH_JSON_FLAG,
-        GH_PR_JSON_FIELDS,
+        GH_API_SUBCOMMAND,
+        api_path,
+        GH_PAGINATE_FLAG,
+        GH_SLURP_FLAG,
     ]
-    if repo:
-        all_command.extend([GH_REPO_FLAG, repo])
     completed = subprocess.run(
         all_command,
         capture_output=True,
@@ -155,9 +204,9 @@ def _fetch_pr_files(pr_number: int, repo: str | None) -> list[JsonObject]:
         encoding=UTF8_ENCODING,
     )
     if completed.returncode != EXIT_CODE_SUCCESS:
-        raise RuntimeError(completed.stderr.strip() or "gh pr view failed")
+        raise RuntimeError(completed.stderr.strip() or "gh api pulls files failed")
     payload = json.loads(completed.stdout)
-    return _file_records_from_gh(payload.get(GH_FIELD_FILES))
+    return _file_records_from_gh(_flatten_paginated_file_pages(payload))
 
 
 def _analysis_for_cli(
@@ -165,7 +214,7 @@ def _analysis_for_cli(
     exception_reason: str | None,
     standing_verdict: str | None,
 ) -> JsonObject:
-    """Build analysis for CLI flags without acting as a kwargs-forwarding wrapper."""
+    """Map CLI flag values onto the analysis builder kwargs."""
     return build_analysis_from_files(
         all_file_records,
         atomic_exception_reason=exception_reason,

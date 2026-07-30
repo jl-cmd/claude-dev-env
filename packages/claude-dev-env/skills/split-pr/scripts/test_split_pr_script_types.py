@@ -54,3 +54,20 @@ def test_validate_rejects_unassigned_path() -> None:
     )
     with pytest.raises(ValueError, match="missing"):
         validate_split_plan(plan)
+
+
+def test_validate_rejects_empty_slice_id() -> None:
+    plan = build_split_plan(
+        source_commit="abc123",
+        all_changed_paths=["a.py"],
+        all_slices=[
+            {
+                "id": "  ",
+                "title": "feat: bare",
+                "layer": "backend",
+                "all_paths": ["a.py"],
+            }
+        ],
+    )
+    with pytest.raises(ValueError, match="slice id"):
+        validate_split_plan(plan)

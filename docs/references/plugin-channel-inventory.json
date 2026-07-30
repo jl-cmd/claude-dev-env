@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "generated_from_ref": "7f3f46ff784feff07990c49f4f4c22d27b23dd7b",
+  "package_name": "claude-dev-env",
+  "package_version": "2.8.0",
+  "plugin_manifest_version": "1.0.0",
+  "marketplace_entry_version": "1.0.0",
+  "selected_live_consumer_collision": false,
+  "consumers": [
+    {"id": "committed-plugin-manifest", "channel": "plugin", "classification": "active", "probe_path": ".claude-plugin/plugin.json", "probe_result": "registered", "observed_at": "source", "notes": "version 1.0.0"},
+    {"id": "committed-marketplace-manifest", "channel": "plugin", "classification": "active", "probe_path": ".claude-plugin/marketplace.json", "probe_result": "registered", "observed_at": "source", "notes": "entry version 1.0.0"},
+    {"id": "readme-plugin-entry", "channel": "plugin", "classification": "active", "probe_path": "README.md", "probe_result": "registered", "observed_at": "source", "notes": "claude plugin install jl-cmd/claude-dev-env"},
+    {"id": "readme-npx-entry", "channel": "npx", "classification": "active", "probe_path": "README.md", "probe_result": "registered", "observed_at": "source", "notes": "npx claude-dev-env"},
+    {"id": "github-release-package", "channel": "npx", "classification": "active", "probe_path": "release:claude-dev-env-v2.8.0", "probe_result": "registered", "observed_at": "github", "notes": "target_commitish=b74fab73849601b828342399a0d47d54554d22d1"},
+    {"id": "external-marketplace-registration", "channel": "plugin", "classification": "unresolved", "probe_path": "external:marketplace", "probe_result": "unreadable", "observed_at": "external", "notes": "No verified external marketplace registration for this inventory run.", "owner": "R2C", "blocker": "External marketplace registration remains unverified without a supported read API."},
+    {"id": "selected-profile-main", "channel": "plugin", "classification": "migrated", "probe_path": "profile:main/plugins/installed_plugins.json", "probe_result": "absent", "observed_at": "selected-profile", "notes": "plugin_count=16; no claude-dev-env key"},
+    {"id": "selected-profile-editor", "channel": "plugin", "classification": "migrated", "probe_path": "profile:editor/plugins/installed_plugins.json", "probe_result": "absent", "observed_at": "selected-profile", "notes": "plugin_count=5; no claude-dev-env key"},
+    {"id": "selected-profile-mel", "channel": "plugin", "classification": "migrated", "probe_path": "profile:mel/plugins/installed_plugins.json", "probe_result": "absent", "observed_at": "selected-profile", "notes": "plugin_count=16; no claude-dev-env key"}
+  ],
+  "evidence": [
+    {"claim": "selected_live_consumer_collision", "source_path": "selected-profiles", "source_line": 0, "verbatim": "main:absent; editor:absent; mel:absent"},
+    {"claim": "plugin_manifest_version", "source_path": ".claude-plugin/plugin.json", "source_line": 7, "verbatim": "1.0.0"},
+    {"claim": "package_version", "source_path": "packages/claude-dev-env/package.json", "source_line": 3, "verbatim": "2.8.0"},
+    {"claim": "version_channel_drift", "source_path": ".claude-plugin/plugin.json", "source_line": 7, "verbatim": "plugin=1.0.0; package=2.8.0"},
+    {"claim": "readme_plugin_entry", "source_path": "README.md", "source_line": 266, "verbatim": "claude plugin install jl-cmd/claude-dev-env"},
+    {"claim": "github_release", "source_path": "release:claude-dev-env-v2.8.0", "source_line": 0, "verbatim": "tag=claude-dev-env-v2.8.0; target_commitish=b74fab73849601b828342399a0d47d54554d22d1"}
+  ]
+}

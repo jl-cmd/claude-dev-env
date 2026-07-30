@@ -74,6 +74,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
+| `shell_command_pipeline.py` | Quote-aware shell pipeline parsing: operator-paired segments after line-continuation join, comment strip, heredoc body drop, and parenthesis-group join |
 | `shell_command_segments.py` | Shell tokenization helpers shared by the segment-walking blockers: segment splitting on control operators, a segment's effective leading program, and a token's basename |
 | `shell_substitution_blocker_constants.py` | Tool name, payload keys, the four substitution-detection patterns, the deny decision shape, and the corrective message for the shell-substitution blocker |
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
