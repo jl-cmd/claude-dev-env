@@ -15,13 +15,26 @@ const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const GLOBAL_RULE_PROBE_SCRIPT_PATH = join(THIS_DIRECTORY, 'global-rule-probe-cli.mjs');
 
 /**
+ * Write one rule file under profileRoot/rules.
+ *
+ * @param {string} profileRoot
+ * @param {string} fileName
+ * @param {string} body
+ * @returns {string} absolute rule path
+ */
+export function writeRuleFile(profileRoot, fileName, body) {
+    const rulesDirectory = join(profileRoot, 'rules');
+    mkdirSync(rulesDirectory, { recursive: true });
+    const rulePath = join(rulesDirectory, fileName);
+    writeFileSync(rulePath, body, 'utf8');
+    return rulePath;
+}
+
+/**
  * @param {string} profileRoot
  * @returns {{ rulePath: string, markerToken: string }}
  */
 export function installGlobalRuleFixture(profileRoot) {
-    const rulesDirectory = join(profileRoot, 'rules');
-    mkdirSync(rulesDirectory, { recursive: true });
-    const rulePath = join(rulesDirectory, GLOBAL_RULE_FILE_NAME);
     const body = [
         '---',
         'description: Disposable global-rule activation fixture (C2)',
@@ -34,7 +47,7 @@ export function installGlobalRuleFixture(profileRoot) {
         `Global rule marker: ${GLOBAL_RULE_MARKER_TOKEN}`,
         '',
     ].join('\n');
-    writeFileSync(rulePath, body, 'utf8');
+    const rulePath = writeRuleFile(profileRoot, GLOBAL_RULE_FILE_NAME, body);
     return { rulePath, markerToken: GLOBAL_RULE_MARKER_TOKEN };
 }
 
@@ -72,9 +85,11 @@ export function runGlobalRuleActivationSession(parameters) {
         [GLOBAL_RULE_PROBE_SCRIPT_PATH, '--probe', 'global-rule'],
         { env: environment, encoding: 'utf8' },
     );
+    const stderrFromSpawn = result.stderr ?? '';
+    const stderrFromError = result.error ? String(result.error.message) : '';
 
     const filePresent = isGlobalRuleFilePresent(profileRoot);
-    /** @type {{ activation?: { loadedMarkers?: string[], isActivated?: boolean, simulation?: boolean, channel?: string } }} */
+    /** @type {{ activation?: { loadedMarkers?: string[], isActivated?: boolean, simulation?: boolean, channel?: string, allLoadedRuleNames?: string[] } }} */
     let evidence = {};
     if (existsSync(evidencePath)) {
         evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
@@ -99,7 +114,7 @@ export function runGlobalRuleActivationSession(parameters) {
         evidencePath,
         exitStatus: result.status,
         stdout: result.stdout ?? '',
-        stderr: result.stderr ?? '',
+        stderr: stderrFromSpawn || stderrFromError,
     };
 }
 
@@ -114,5 +129,5 @@ export function countRuleFilesPresent(profileRoot) {
     if (!existsSync(rulesDirectory)) {
         return 0;
     }
-    return readdirSync(rulesDirectory).filter((each) => each.endsWith('.md')).length;
+    return readdirSync(rulesDirectory).filter((eachName) => eachName.endsWith('.md')).length;
 }
