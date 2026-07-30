@@ -46,6 +46,7 @@ contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`. End-of-run gotchas
 - `recall` — retrieves facts from memory files
 - `remember` — saves a decision, gotcha, or architectural choice to the Obsidian vault
 - `everything-search` — file-system search via the Everything `es.exe` CLI
+- `beat-sheet` — reformats a reply as short single-line beats
 
 **Session and workflow management**
 - `session-log` — logs a session report to the Obsidian vault
