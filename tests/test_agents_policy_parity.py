@@ -169,7 +169,11 @@ def test_question_routing_and_task_tracking_rule_files_exist() -> None:
 def test_clean_coder_does_not_instruct_reading_dotenv() -> None:
     clean_coder_text = _read_text(CLEAN_CODER_PATH)
     assert "AGENTS.md" in clean_coder_text or "canonical" in clean_coder_text.lower()
-    assert "Never open `.env`" in clean_coder_text
+    has_dotenv_ban = (
+        "Never open `.env`" in clean_coder_text
+        or "Do **not** glob or open `.env`" in clean_coder_text
+    )
+    assert has_dotenv_ban
     assert "`**/.env`" not in clean_coder_text
     assert "`**/.env.*`" not in clean_coder_text
 
