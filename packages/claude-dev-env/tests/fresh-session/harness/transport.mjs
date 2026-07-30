@@ -78,7 +78,7 @@ function isolationEnvironmentSnapshot(environment) {
  * @param {{shell?: boolean}} [spawnOptions]
  * @returns {{exitStatus: number|null, stdout: string, stderr: string}}
  */
-function spawnCliProcess(binary, args, environment, spawnOptions = {}) {
+export function spawnCliProcess(binary, args, environment, spawnOptions = {}) {
     const result = spawnSync(binary, args, {
         env: environment,
         encoding: 'utf8',
