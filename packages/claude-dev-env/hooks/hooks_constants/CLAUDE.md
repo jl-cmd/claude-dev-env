@@ -77,6 +77,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_start_injector_constants.py` | Known SessionStart source values, injection status codes, enable env var, default timeout for the shared injector |
 | `test_session_start_injector.py` | Behavioral tests for every known source, disabled, timeout, and unknown-source paths |
 | `orchestrator_auto_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the orchestrator auto-starter |
+| `issue_tracker_session_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the repository-gated issue-tracker starter |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `shell_command_pipeline.py` | Quote-aware shell pipeline parsing: operator-paired segments after line-continuation join, comment strip, heredoc body drop, and parenthesis-group join |
