@@ -51,6 +51,10 @@ never a hard gate.
 | `scripts/pack_files_into_slices.py` | Pack annotated files into ≤200 hand-written-line slices by layer |
 | `scripts/config/packing_constants.py` | Review budget, hard cap, path→layer markers for packing |
 | `scripts/test_categorize_files_packing.py` | Budget packing and layer inference tests |
+| `scripts/verify_plan.py` | Coverage verification: unique path assignment, path normalization, title contract |
+| `scripts/test_verify_plan.py` | Full-coverage and gap rejection tests |
+| `scripts/test_verify_plan_contract.py` | source_commit and title-normalization contract tests |
+| `scripts/test_verify_plan_path_normalization.py` | Unsafe-path fail-closed tests |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/config/plan_constants.py` | Plan schema keys, layer order, title-prefix tokens |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
