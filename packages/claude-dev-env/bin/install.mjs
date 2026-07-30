@@ -40,6 +40,14 @@ import {
     buildInstallPlan,
     InstallPlanPreflightError,
 } from './install-plan.mjs';
+import {
+    FAULT_PHASES,
+    InstallTransactionFaultError,
+    TRANSACTION_JOURNAL_DIRECTORY_NAME,
+    capturePriorInstallSnapshot,
+    resolveFaultPhaseFromEnvironment,
+    runWithInstallTransaction,
+} from './install-transaction.mjs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
@@ -1742,13 +1750,59 @@ function install(selectedGroups, options = {}) {
 }
 
 /**
- * Apply one preflighted installation plan. All filesystem and settings writes
- * start here so E2 can wrap the same executor with recovery.
+ * Apply one preflighted installation plan inside a snapshot/restore transaction.
+ *
+ * Captures the prior managed installation before any purge or write, then
+ * restores settings, manifest, managed files, and core.hooksPath on failure.
  *
  * @param {ReturnType<typeof buildInstallPlan>} plan
  * @returns {void}
  */
 function executeInstallPlan(plan) {
+    const faultPhase = resolveFaultPhaseFromEnvironment(process.env);
+    const snapshot = capturePriorInstallSnapshot({
+        managedRoot: CLAUDE_HOME,
+        manifestFilePath: MANIFEST_FILE,
+        settingsPath: plan.settingsPath,
+        priorManifestFiles: plan.priorManifest.files,
+        journalParentDirectory: join(CLAUDE_HOME, TRANSACTION_JOURNAL_DIRECTORY_NAME),
+    });
+
+    try {
+        runWithInstallTransaction({
+            snapshot,
+            faultPhase,
+            runMutations: ({ throwIfFault, syncWrittenPaths }) => {
+                executeInstallPlanMutations(plan, { throwIfFault, syncWrittenPaths });
+            },
+        });
+    } catch (mutationError) {
+        if (mutationError instanceof InstallTransactionFaultError) {
+            console.error(
+                `ERROR: install aborted at ${mutationError.phase}; prior installation restored.`,
+            );
+            process.exit(1);
+        }
+        const message = mutationError instanceof Error
+            ? mutationError.message
+            : String(mutationError);
+        console.error(`ERROR: install failed (${message}); prior installation restored.`);
+        process.exit(1);
+    }
+}
+
+/**
+ * Mutation body for one preflighted plan. Invoked inside the transaction wrapper.
+ *
+ * @param {ReturnType<typeof buildInstallPlan>} plan
+ * @param {{
+ *   throwIfFault: (phase: string) => void,
+ *   syncWrittenPaths: (allPaths: string[]) => void,
+ * }} transactionHelpers
+ * @returns {void}
+ */
+function executeInstallPlanMutations(plan, transactionHelpers) {
+    const { throwIfFault, syncWrittenPaths } = transactionHelpers;
     const selectedGroups = plan.selectedGroups;
     const priorManifestFiles = plan.priorManifest.files;
     const priorManifestSkills = plan.priorManifest.skills;
@@ -1866,6 +1920,9 @@ function executeInstallPlan(plan) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
+    syncWrittenPaths(allInstalledFiles);
+    throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
+    throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
     if (shouldInstallAnyHooks) {
         let totalHooksCreated = 0;
@@ -1898,6 +1955,8 @@ function executeInstallPlan(plan) {
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
+        syncWrittenPaths(allInstalledFiles);
+        throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
         console.warn(
             '  Warning: git hook installation sets core.hooksPath globally — '
@@ -1918,6 +1977,9 @@ function executeInstallPlan(plan) {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
         }
         console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
+        syncWrittenPaths(allInstalledFiles);
+        throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
+        throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
 
         const mypyIniInstallResult = installMypyIniForClaudeHooks({
             homeDirectory: homedir(),
@@ -1934,6 +1996,11 @@ function executeInstallPlan(plan) {
             console.warn(`    To enable mypy for Claude hooks, add this line under [mypy]:`);
             console.warn(`      ${mypyIniInstallResult.expectedLine}`);
         }
+    } else {
+        syncWrittenPaths(allInstalledFiles);
+        throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
+        throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
+        throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
     }
 
     const permissionMerge = mergeManagedPermissions();
@@ -1999,6 +2066,8 @@ function executeInstallPlan(plan) {
             ? { deny: managedPermissionDenyEntries }
             : null,
     );
+    syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath]);
+    throwIfFault(FAULT_PHASES.AFTER_MANIFEST_WRITE);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
         if (summary[directory]) {
