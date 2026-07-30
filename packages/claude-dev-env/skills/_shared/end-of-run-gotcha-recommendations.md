@@ -26,53 +26,56 @@ Keep only items that **bit this run**:
 
 **Order (hard):**
 
-1. **Show findings in chat** (cold-reader, user-friendly).
+1. **Show findings in chat** (cold-reader, ASCII-heavy).
 2. **Then** `AskUserQuestion` (one brief sentence + short options).
 3. **On confirm only** — file via **`issue-tracker`**.
 
 ### Cold-reader frame (required)
 
 Assume the user **was away** and has **zero context**.
-Open chat with **one or two lines** that answer:
 
-- **What we were doing** (the job in plain words).
-- **Why these notes matter** (so the next run does not re-hit the same traps).
+Chat open (exactly **two** lines, **one sentence each**):
 
-Use everyday words.
-Name tools and paths only when the reader needs them to act.
+1. **What we were doing** in plain words.
+2. **Why these notes matter** for the next run.
 
 ### 1. Chat findings (always first)
 
 Print **before** any `AskUserQuestion`.
-**One sentence per line. Max.**
-ELI11: bold lead, short lines, scannable.
 
-Each gotcha:
+**Line rules (hard):**
 
-- **Plain name** a stranger understands (not an in-joke code word).
-- **What went wrong** in full English.
-- **Exact fix** they can do next time.
+- **One sentence per line. Max. No exceptions.**
+- **Bold lead** on each line that names a fact.
+- **No multi-clause bullets** that smuggle a second sentence.
 
-Prefer a **user-friendly layout**:
+**Each gotcha is a mini-block:**
 
-- Bold names + short lines
-- Optional **ASCII** when it clarifies (flow, before/after)
-- Links to `reference/<slug>.md` when the walkthrough is longer
+1. One line: **plain name** a stranger understands.
+2. One line: **what went wrong.**
+3. One line: **exact fix.**
+4. **ASCII diagram** (required when a path, flag, or before/after is involved).
+
+Prefer boxes, arrows, and before/after maps over extra prose.
 
 ```text
 ## Session close-out
 
-We built Midjourney theme prompts that attach style codes from a catalog file.
-These traps cost time this run — keep them for the next one.
+We built phone-theme image prompts that pull style codes from a project catalog.
+These traps burned time this run — keep them for the next one.
 
 ## Gotcha recommendations
 
-- **Wrong folder for the catalog file.**
-  The style-code picker looked for the catalog outside the project and failed.
-  Fix: open a terminal at the project root and use data/midjourney_sref_catalog.json.
+### Wrong folder for the catalog file
 
-  wrong folder  -->  picker fails
-  project root  -->  data/midjourney_sref_catalog.json  OK
+The style-code picker looked outside the project and failed.
+Fix: run from the project root and use data/midjourney_sref_catalog.json.
+
+  +------------------+      +----------------------------------+
+  | wrong folder     | ---> | picker fails                     |
+  +------------------+      +----------------------------------+
+  | project root     | ---> | data/midjourney_sref_catalog.json|
+  +------------------+      +----------------------------------+
 ```
 
 Paste-ready for skill `## Gotchas` when the user wants it in the skill.
@@ -84,29 +87,28 @@ Paste-ready for skill `## Gotchas` when the user wants it in the skill.
 **Hard limits on the widget:**
 
 - **Question:** **one sentence**, brief
-  (e.g. `File a GitHub issue for any of these so we keep the fix?`)
 - **Header:** `File issues`
 - **multiSelect:** `true` when more than one gotcha
-- **label:** plain name a cold reader gets (`File: Wrong catalog folder`)
+- **label:** plain cold-reader name
 - **description:** **one short sentence** = what went wrong + fix
-  (still readable with no chat history)
 
-**Everything longer stays in chat** (setup lines, ASCII, refs).
+**Everything longer stays in chat** (setup, ASCII, refs).
 The form is the decision only.
 
 **On confirm:** file selected gotchas through **`issue-tracker`**.
 One issue per selection.
-Body written for a **cold reader**: what the job was, what broke, exact fix, evidence.
+Body written for a **cold reader**.
 
 Clean run: skip chat block and offer.
 
 ## Rules
 
-- **Cold-reader first** — frame the job before naming traps.
+- **Cold-reader first.**
 - **Chat first, then ask.**
 - **One sentence per chat line.**
+- **ASCII for every path/flag/before-after gotcha.**
 - **AskUserQuestion = one brief sentence** + plain short labels.
-- **Detail and ASCII live in chat**, not in the form tree.
+- **Detail and ASCII live in chat.**
 - **Recommend only** — skill edits when the user asks.
 - **File only on confirm** via `issue-tracker`.
 - **Lived issues only.**
