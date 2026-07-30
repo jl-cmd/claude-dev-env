@@ -6,7 +6,8 @@
         source_commit="abc",
         all_file_records=[{"path": "a.py", "additions": 50, "deletions": 0}],
     )
-    # plan["all_slices"] each stays under the 200 hand-written budget
+    # multi-file slices stay under the 200 hand-written budget;
+    # a single file may reach the 600 hard cap alone
 """
 
 from __future__ import annotations
