@@ -312,3 +312,21 @@ def test_should_block_second_identical_string_magic_per_occurrence() -> None:
     assert any("Line 7" in each_issue for each_issue in magic_issues), (
         f"second occurrence must keep proposed-fragment line, got: {magic_issues}"
     )
+
+
+def test_should_surface_magic_when_gate_defers_scope_with_head_as_old() -> None:
+    source = (
+        "def compute() -> int:\n"
+        "    old_number = 9999\n"
+        "    return old_number\n"
+    )
+    issues = code_rules_enforcer.validate_content(
+        source,
+        PRODUCTION_FILE_PATH,
+        source,
+        defer_scope_to_caller=True,
+    )
+    assert any("9999" in each_issue for each_issue in issues), (
+        f"gate path must still surface whole-file magic when old_content equals content, "
+        f"got: {issues}"
+    )

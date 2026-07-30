@@ -287,8 +287,12 @@ def validate_content(
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_naive_datetime_construction(content, file_path))
         all_issues.extend(
-            _issues_introduced_in_fragment(
-                check_magic_values, old_content, content, file_path
+            _fragment_or_deferred_check(
+                check_magic_values,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(check_fstring_structural_literals(content, file_path))
@@ -526,13 +530,21 @@ def validate_content(
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
         all_issues.extend(
-            _issues_introduced_in_fragment(
-                check_join_separator_string_magic, old_content, content, file_path
+            _fragment_or_deferred_check(
+                check_join_separator_string_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(
-            _issues_introduced_in_fragment(
-                check_string_literal_magic, old_content, content, file_path
+            _fragment_or_deferred_check(
+                check_string_literal_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
             )
         )
         all_issues.extend(check_whitespace_indentation_magic(content, file_path))
@@ -781,6 +793,47 @@ def _issues_absent_from_prior_bodies(
             continue
         all_uncovered_issues.append(each_issue)
     return all_uncovered_issues
+
+
+def _fragment_or_deferred_check(
+    check_function: Callable[[str, str], list[str]],
+    old_content: str,
+    new_content: str,
+    file_path: str,
+    defer_scope_to_caller: bool,
+) -> list[str]:
+    """Run a check with fragment baselining, or full-file when the gate owns scope.
+
+    The commit/push gate sets ``defer_scope_to_caller`` and passes HEAD as
+    ``old_content`` while scanning the current file (often the same blob on a
+    clean worktree). Fragment baselining would grandfather every finding there,
+    so the gate path runs the check on ``new_content`` alone and classifies by
+    added line afterward. PreToolUse Edit keeps baselining against the prior
+    fragment.
+
+    ::
+
+        defer=True, old==new with magic 9999
+            -> [Line 2: Magic value 9999 ...]  gate still sees it
+        defer=False, old and new both carry the same magic
+            -> []  grandfathered for wide Edit
+
+    Args:
+        check_function: A ``(content, file_path) -> list[str]`` check.
+        old_content: Prior fragment or gate HEAD blob.
+        new_content: Proposed fragment or current full file.
+        file_path: Destination path used for path-based exemptions.
+        defer_scope_to_caller: True when the gate will scope by added line.
+
+    Returns:
+        Findings from the check, baselined against ``old_content`` only when
+        ``defer_scope_to_caller`` is False.
+    """
+    if defer_scope_to_caller:
+        return check_function(new_content, file_path)
+    return _issues_introduced_in_fragment(
+        check_function, old_content, new_content, file_path
+    )
 
 
 def _issues_introduced_in_fragment(
