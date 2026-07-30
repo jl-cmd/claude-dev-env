@@ -154,16 +154,6 @@ export function formatCompatibilityPreflightFailure(result) {
 }
 
 /**
- * True when a classified result must stop launch before profile mutation.
- *
- * @param {import('./version-compatibility.mjs').CompatibilityResult} result
- * @returns {boolean}
- */
-export function mustBlockLaunchForCompatibility(result) {
-  return shouldBlockLaunch(result);
-}
-
-/**
  * Path helpers for tests and pack verification.
  *
  * @param {string} packageRoot
