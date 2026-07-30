@@ -358,9 +358,21 @@ def validate_content(
         all_issues.extend(
             check_class_docstring_names_public_methods(effective_content, file_path)
         )
-        all_issues.extend(check_docstring_runon_sentence(effective_content, file_path))
         all_issues.extend(
-            check_docstring_prose_wall_without_illustration(effective_content, file_path)
+            check_docstring_runon_sentence(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            check_docstring_prose_wall_without_illustration(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
         )
         all_issues.extend(
             check_module_docstring_names_public_checks(effective_content, file_path)
