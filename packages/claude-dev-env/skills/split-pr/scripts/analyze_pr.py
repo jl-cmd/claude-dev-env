@@ -37,6 +37,7 @@ from config.split_pr_constants import (
     GH_PR_JSON_FIELDS,
     GH_PR_VIEW,
     GH_REPO_FLAG,
+    GH_VIEW,
     JSON_INDENT_SPACES,
     PAYLOAD_KEY_ALL_FILES,
     PAYLOAD_KEY_ATOMIC_EXCEPTION,
@@ -143,6 +144,7 @@ def _fetch_pr_files(pr_number: int, repo: str | None) -> list[JsonObject]:
     all_command = [
         GH_COMMAND,
         GH_PR_VIEW,
+        GH_VIEW,
         str(pr_number),
         GH_JSON_FLAG,
         GH_PR_JSON_FIELDS,

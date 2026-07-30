@@ -13,13 +13,14 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from analyze_pr import build_analysis_from_files
+from analyze_pr import _fetch_pr_files, build_analysis_from_files
 from config.split_pr_constants import (
     DEFAULT_SPLIT_HAND_WRITTEN_LINE_THRESHOLD,
     EXIT_CODE_SUCCESS,
     FILE_KEY_ADDITIONS,
     FILE_KEY_DELETIONS,
     FILE_KEY_PATH,
+    GH_VIEW,
     PAYLOAD_KEY_ATOMIC_EXCEPTION,
     PAYLOAD_KEY_DEFAULT_SPLIT,
     PAYLOAD_KEY_EXCLUDED_CHURN_LINES,
@@ -138,6 +139,35 @@ def test_file_count_is_reported_but_not_a_hard_gate() -> None:
     assert analysis[PAYLOAD_KEY_FILE_COUNT] == 20
     assert analysis[PAYLOAD_KEY_HAND_WRITTEN_LINES] == 20
     assert analysis[PAYLOAD_KEY_REQUIRES_SPLIT_ANALYSIS] is False
+
+
+def test_fetch_pr_files_invokes_gh_pr_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    all_captured_commands: list[list[str]] = []
+
+    def _fake_run(all_command: list[str], **_kwargs: object) -> object:
+        all_captured_commands.append(list(all_command))
+
+        class _Completed:
+            returncode = EXIT_CODE_SUCCESS
+            stdout = json.dumps(
+                {
+                    "files": [
+                        {"path": "src/a.py", "additions": 3, "deletions": 1},
+                    ]
+                }
+            )
+            stderr = ""
+
+        return _Completed()
+
+    monkeypatch.setattr("analyze_pr.subprocess.run", _fake_run)
+    all_records = _fetch_pr_files(898, "jl-cmd/claude-dev-env")
+    assert len(all_captured_commands) == 1
+    assert GH_VIEW in all_captured_commands[0]
+    assert all_captured_commands[0][:3] == ["gh", "pr", "view"]
+    assert all_records[0][FILE_KEY_PATH] == "src/a.py"
+    assert all_records[0][FILE_KEY_ADDITIONS] == 3
+    assert all_records[0][FILE_KEY_DELETIONS] == 1
 
 
 def test_analyze_pr_cli_files_json(tmp_path: Path) -> None:
