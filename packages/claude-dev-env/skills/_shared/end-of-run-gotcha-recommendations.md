@@ -1,6 +1,7 @@
 # End-of-run gotcha recommendations
 
 **Shared close-out** for every skill.
+
 After the deliverable, recommend pasteable gotchas from issues **this run** hit.
 
 ## When
@@ -34,7 +35,7 @@ Keep only items that **bit this run**:
 
 Assume zero context.
 
-**Exactly two setup lines** (one sentence each):
+**Exactly two setup sentences**, each on its **own rendered line**:
 
 1. What we were doing.
 2. Why these notes matter.
@@ -45,27 +46,33 @@ Assume zero context.
 
 | Rule | Required |
 |---|---|
-| **One sentence per prose line** | Exactly one terminal `.` `?` or `!` |
-| **No clause glue** | No em-dash, semicolon, or colon joining two clauses |
-| **One idea** | If you can split it, split it — or delete the extra idea |
-| **Short** | Prefer under ~12 words |
+| **One sentence per rendered line** | Exactly one terminal `.` `?` or `!` on that line |
+| **No collapsed pairs** | A single markdown newline is **not** a line break — it joins sentences |
+| **Force the break** | Blank line between every prose sentence, **or** one list item per sentence |
+| **No clause glue** | No em-dash or semicolon joining two clauses |
+| **One idea** | If you can split it, split it |
+| **Heavy detail** | Prefer an **ASCII infographic** over a stack of sentences |
+
+**Self-check before send:** paste the chat into a viewer that collapses soft breaks.
+
+If two periods appear on one visual line, **split or diagram**.
 
 #### Per gotcha (HARD shape)
 
 | Part | Form |
 |---|---|
-| **Title** | Heading fragment only (not a sentence) |
-| **Broke** | **One** sentence |
-| **Fix** | **One** sentence |
+| **Title** | Heading fragment only |
+| **Broke** | One sentence alone on its rendered line |
+| **Fix** | One sentence alone on its rendered line |
 | **ASCII** | Required for path, flag, or before/after |
 
 **Cap: two prose sentences per gotcha.**
-No third line of prose.
 
-```text
+```markdown
 ## Session close-out
 
 We built phone-theme prompts from a project style catalog.
+
 Keep these traps for the next run.
 
 ## Gotcha recommendations
@@ -73,10 +80,37 @@ Keep these traps for the next run.
 ### Wrong catalog folder
 
 The style picker failed outside the project.
+
 Run from the project root with data/midjourney_sref_catalog.json.
 
-  wrong folder  -->  fail
-  project root  -->  data/midjourney_sref_catalog.json
+```text
+wrong folder --> fail
+project root --> data/midjourney_sref_catalog.json
+```
+```
+
+**Wrong (soft break joins sentences into one line):**
+
+```markdown
+The style picker failed outside the project.
+Run from the project root with data/midjourney_sref_catalog.json.
+```
+
+Renders as one line with **two** sentences.
+
+**Right (blank line forces two lines):**
+
+```markdown
+The style picker failed outside the project.
+
+Run from the project root with data/midjourney_sref_catalog.json.
+```
+
+**Right (list items):**
+
+```markdown
+- The style picker failed outside the project.
+- Run from the project root with data/midjourney_sref_catalog.json.
 ```
 
 ### 2. Issue offer (`AskUserQuestion`)
@@ -93,15 +127,30 @@ Only after the chat block.
 Detail and ASCII stay in chat.
 
 **On confirm:** file via `issue-tracker`.
+
 Cold-reader issue body.
+
 Clean run: skip.
+
+## Built-in skill gotcha
+
+**Two sentences on one rendered line.**
+
+Markdown soft-breaks join prose.
+
+Review the close-out before send.
+
+Split with a blank line or a list item.
+
+Or move the detail into an ASCII infographic.
 
 ## Rules
 
 - Cold-reader first.
 - Chat first, then ask.
-- Two prose sentences per gotcha max (broke + fix).
-- One sentence per prose line.
+- One sentence per **rendered** line.
+- Blank line or list item between prose sentences.
+- Two prose sentences per gotcha max.
 - ASCII for path, flag, or before/after.
 - File only on confirm.
 - Lived issues only.
