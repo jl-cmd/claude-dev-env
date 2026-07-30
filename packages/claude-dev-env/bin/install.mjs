@@ -2089,6 +2089,7 @@ Usage:
   npx ${PACKAGE_NAME}              Install everything
   npx ${PACKAGE_NAME} --update     Full install: remove prior manifest-tracked files first, then reinstall
   npx ${PACKAGE_NAME} --only X     Install specific groups
+  npx ${PACKAGE_NAME} --target DIR Install into DIR instead of ~/.claude (overrides CLAUDE_CONFIG_DIR)
   npx ${PACKAGE_NAME} --uninstall  Remove installed files
   npx ${PACKAGE_NAME} --help       Show this help
 
