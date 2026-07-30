@@ -53,16 +53,35 @@ const HARNESS_LOAD_SKILL_ARGUMENT = '--harness-load-skill';
  */
 
 /**
- * Install the disposable fixture skill into one profile root.
+ * Absolute path to the installed fixture SKILL.md under a profile root.
  *
  * @param {string} profileRoot
  * @returns {string}
  */
+function fixtureSkillMarkdownPath(profileRoot) {
+    return join(
+        profileRoot,
+        SKILLS_DIRECTORY_NAME,
+        FIXTURE_SKILL_NAME,
+        SKILL_FILE_NAME,
+    );
+}
+
+/**
+ * Install the disposable fixture skill into one profile root.
+ *
+ * @param {string} profileRoot
+ * @returns {string} Path to the installed SKILL.md
+ */
 function installFixtureSkill(profileRoot) {
-    const destination = join(profileRoot, SKILLS_DIRECTORY_NAME, FIXTURE_SKILL_NAME);
-    mkdirSync(dirname(destination), { recursive: true });
-    cpSync(FIXTURE_SKILL_SOURCE_DIRECTORY, destination, { recursive: true });
-    return destination;
+    const destinationDirectory = join(
+        profileRoot,
+        SKILLS_DIRECTORY_NAME,
+        FIXTURE_SKILL_NAME,
+    );
+    mkdirSync(join(profileRoot, SKILLS_DIRECTORY_NAME), { recursive: true });
+    cpSync(FIXTURE_SKILL_SOURCE_DIRECTORY, destinationDirectory, { recursive: true });
+    return fixtureSkillMarkdownPath(profileRoot);
 }
 
 /**
@@ -97,12 +116,7 @@ function splitSkillMarkdown(skillMarkdownPath) {
  * @returns {SkillStateRecord}
  */
 function buildSkillStateRecord(profileRoot, flags) {
-    const skillPath = join(
-        profileRoot,
-        SKILLS_DIRECTORY_NAME,
-        FIXTURE_SKILL_NAME,
-        SKILL_FILE_NAME,
-    );
+    const skillPath = fixtureSkillMarkdownPath(profileRoot);
     const installed = existsSync(skillPath);
     if (!installed) {
         return {
@@ -130,13 +144,17 @@ function buildSkillStateRecord(profileRoot, flags) {
 }
 
 test('fixture skill separates metadata marker from body-load marker', () => {
-    const skillPath = join(FIXTURE_SKILL_SOURCE_DIRECTORY, SKILL_FILE_NAME);
-    const parts = splitSkillMarkdown(skillPath);
+    const parts = splitSkillMarkdown(join(FIXTURE_SKILL_SOURCE_DIRECTORY, SKILL_FILE_NAME));
     assert.equal(parts.name, FIXTURE_SKILL_NAME);
+    assert.ok(parts.body.includes(METADATA_MARKER), 'metadata marker lives in body text');
     assert.ok(parts.body.includes(BODY_MARKER), 'body marker lives outside frontmatter');
     assert.ok(
         !parts.frontmatter.includes(BODY_MARKER),
         'body marker must not appear in frontmatter alone',
+    );
+    assert.ok(
+        !parts.frontmatter.includes(METADATA_MARKER),
+        'metadata marker is body content, not frontmatter name/description',
     );
 });
 
@@ -146,15 +164,6 @@ test('metadata discovery does not require body-load activation', () => {
         for (const eachProfileId of ALL_PROFILE_IDS) {
             const profileRoot = roots.profileRootById[eachProfileId];
             installFixtureSkill(profileRoot);
-
-            const skillPath = join(
-                profileRoot,
-                SKILLS_DIRECTORY_NAME,
-                FIXTURE_SKILL_NAME,
-                SKILL_FILE_NAME,
-            );
-            const parts = splitSkillMarkdown(skillPath);
-            assert.equal(parts.name, FIXTURE_SKILL_NAME);
 
             const discoveryResult = runProfileSession({
                 roots,
@@ -174,6 +183,7 @@ test('metadata discovery does not require body-load activation', () => {
             assert.equal(state.discovered, true);
             assert.equal(state.activated, false);
             assert.equal(state.behaviorally_verified, false);
+            assert.equal(state.hasMetadataMarker, true);
             assert.equal(state.hasBodyMarker, true);
         }
     } finally {
@@ -187,14 +197,6 @@ test('full-body load records body marker activation separately from metadata dis
         for (const eachProfileId of ALL_PROFILE_IDS) {
             const profileRoot = roots.profileRootById[eachProfileId];
             installFixtureSkill(profileRoot);
-            const skillPath = join(
-                profileRoot,
-                SKILLS_DIRECTORY_NAME,
-                FIXTURE_SKILL_NAME,
-                SKILL_FILE_NAME,
-            );
-            const parts = splitSkillMarkdown(skillPath);
-            assert.ok(parts.body.includes(BODY_MARKER));
 
             const loadResult = runProfileSession({
                 roots,
@@ -212,12 +214,13 @@ test('full-body load records body marker activation separately from metadata dis
 
             const state = buildSkillStateRecord(profileRoot, {
                 activated: true,
-                behaviorally_verified: parts.body.includes(BODY_MARKER),
+                behaviorally_verified: true,
             });
             assert.equal(state.installed, true);
             assert.equal(state.discovered, true);
             assert.equal(state.activated, true);
             assert.equal(state.behaviorally_verified, true);
+            assert.equal(state.hasMetadataMarker, true);
             assert.equal(state.hasBodyMarker, true);
 
             writeFileSync(
