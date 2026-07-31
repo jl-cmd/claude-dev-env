@@ -1,6 +1,6 @@
 ---
 name: beat-sheet
-description: "Formats a reply as single-line beats in plain everyday words. Use for '/beat-sheet', 'beat sheet this', 'give me the beats', or 'write this as beats'."
+description: "Formats a reply as single-line beats in plain everyday words. Triggers: '/beat-sheet', 'beat sheet this', 'give me the beats', 'write this as beats', 'too long', 'shorter', 'what?', 'english', 'no sense', 'jargon', 'huh?'."
 ---
 
 # beat-sheet
