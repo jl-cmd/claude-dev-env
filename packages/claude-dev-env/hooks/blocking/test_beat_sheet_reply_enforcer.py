@@ -246,7 +246,9 @@ def test_find_jargon_violations_honors_the_project_allowlist(tmp_path: Path) -> 
     either helper breaks this test with an import error, not a silent runtime
     gap, and the allowlisted term is proven to actually clear the reply.
     """
-    (tmp_path / ".git").mkdir()
+    git_directory = tmp_path / ".git"
+    git_directory.mkdir()
+    (git_directory / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
     claude_directory = tmp_path / ".claude"
     claude_directory.mkdir()
     (claude_directory / "plain-language-allow.json").write_text(
