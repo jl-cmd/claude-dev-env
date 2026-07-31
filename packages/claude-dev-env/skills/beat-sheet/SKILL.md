@@ -5,12 +5,12 @@ description: "Formats a reply as single-line beats in plain everyday words. Use 
 
 # beat-sheet
 
-Write in single-line beats. Every line is one complete thought,
-under 12 words. Blank line between every line. Never write a
-paragraph. Ten lines at most. Never repeat a point. Order:
-situation, problem, fix, how it works. Put any command in its own
-code fence. Start with one short bold title line. Use plain
-everyday words a tired reader can skim.
+Write in single-line beats. Make each line one complete thought,
+under 12 words, with a blank line between lines. Keep it to ten
+lines, each one covering a new point. Order: situation, problem,
+fix, how it works. Put any command in its own code fence. Start
+with one short bold title line. Use plain everyday words a tired
+reader can skim.
 
 ## Plain words
 
@@ -49,8 +49,8 @@ that needs a glossary with the thing itself.
 
 ## Visual beats
 
-One visual per reply, at most. It sits between beats and takes the
-place of the beat it would explain.
+Use one visual per reply, at most, sitting between beats in place
+of the beat it explains.
 
 Build it with `rich` (`pip install rich`), then paste the printed
 text into a fenced block. Set `no_color=True` and a fixed `width`
@@ -77,5 +77,5 @@ table.add_row("tests", "200")
 console.print(table)
 ```
 
-Leave the visual out when the beats already stand on their own. A
-picture of three words costs more space than it returns.
+Add a visual only when it earns its space beyond what the beats
+already show on their own.
