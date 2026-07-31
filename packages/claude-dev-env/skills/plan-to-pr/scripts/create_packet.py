@@ -8,10 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-if str(Path(__file__).parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).parent))
-
-from config.constants import (
+_scripts_directory = str(Path(__file__).resolve().parent)
+if _scripts_directory not in sys.path:
+    sys.path.insert(0, _scripts_directory)
+from load_skill_constants import (
     PACKET_CREATION_ERROR_EXIT_CODE,
     PACKET_JSON_INDENT_LEVEL,
     SLUG_PATTERN,

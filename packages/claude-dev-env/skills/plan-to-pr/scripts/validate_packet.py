@@ -9,10 +9,10 @@ import shlex
 import sys
 from pathlib import Path
 
-if str(Path(__file__).parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).parent))
-
-from config.constants import (
+_scripts_directory = str(Path(__file__).resolve().parent)
+if _scripts_directory not in sys.path:
+    sys.path.insert(0, _scripts_directory)
+from load_skill_constants import (
     COMMAND_SEPARATOR,
     HANDOFF_ACCEPTANCE_PREFIX,
     HANDOFF_ALLOWED_FILES_PREFIX,
