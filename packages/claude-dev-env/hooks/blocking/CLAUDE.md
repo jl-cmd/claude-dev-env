@@ -72,6 +72,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `orchestrator_refresh_reschedule_gate.py` | PreToolUse (ScheduleWakeup/CronCreate) | `/orchestrator-refresh` re-arm when run status is not `active` |
 | `block_main_commit.py` | PreToolUse (Bash) | `git commit`/`git push` directly to `main` |
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
+| `beat_sheet_reply_enforcer.py` | Stop | A reply breaking the `beat-sheet` skill's shape after that skill ran earlier in the same turn — a beat over the 12-word cap, more than 10 beats, a beat with no blank line before it, or a heavy word the shared plain-language wordlist flags. Silent when beat-sheet was not invoked this turn, and a reply opening with `Long form:` opts out entirely |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |
 | `code_review_pr_create_gate.py` | PreToolUse (Bash/MCP GitHub) | `gh pr create` or the MCP `create_pull_request` tool without a clean `xhigh` code-review stamp covering the branch surface |
 | `code_review_push_gate.py` | PreToolUse (Bash/PowerShell) | `git push` without a clean `low` code-review stamp covering the branch surface |
