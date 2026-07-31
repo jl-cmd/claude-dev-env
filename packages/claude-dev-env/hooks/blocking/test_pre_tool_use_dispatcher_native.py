@@ -13,9 +13,12 @@ equivalence holds across both outcomes.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
@@ -43,6 +46,19 @@ _STATE_DESCRIPTION_DENY_CONTENT = "# Guide\n\nPreviously the system used port 80
 _PLAIN_LANGUAGE_ALLOW_CONTENT = "# Guide\n\nStart the build to make the report.\n"
 _PLAIN_LANGUAGE_DENY_CONTENT = "# Guide\n\nUtilize this to commence the process.\n"
 
+_PROSE_STYLE_ENV_VAR = "CLAUDE_PROSE_STYLE_ENFORCEMENT"
+_PROSE_STYLE_ENV_VALUE = "1"
+
+@pytest.fixture(autouse=True)
+def enable_prose_style_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Opinionated prose gates are default-off; native-equivalence tests arm them."""
+    monkeypatch.setenv(_PROSE_STYLE_ENV_VAR, _PROSE_STYLE_ENV_VALUE)
+
+def _subprocess_environment() -> dict[str, str]:
+    """Return process env with opinionated prose gates enabled."""
+    environment_by_key = os.environ.copy()
+    environment_by_key[_PROSE_STYLE_ENV_VAR] = _PROSE_STYLE_ENV_VALUE
+    return environment_by_key
 
 def _write_payload_dictionary(file_path: str, content: str) -> dict[str, object]:
     """Build a Write tool payload dict.
@@ -58,7 +74,6 @@ def _write_payload_dictionary(file_path: str, content: str) -> dict[str, object]
         "tool_name": WRITE_TOOL_NAME,
         "tool_input": {"file_path": file_path, "content": content},
     }
-
 
 def _edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, object]:
     """Build an Edit tool payload dict.
@@ -79,7 +94,6 @@ def _edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, objec
         },
     }
 
-
 def _multi_edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, object]:
     """Build a MultiEdit tool payload dict.
 
@@ -98,7 +112,6 @@ def _multi_edit_payload_dictionary(file_path: str, new_string: str) -> dict[str,
         },
     }
 
-
 def _run_script_subprocess(script_path: str, payload_dictionary: dict[str, object]) -> str:
     """Run a hook script as a subprocess and return its stripped stdout.
 
@@ -116,9 +129,9 @@ def _run_script_subprocess(script_path: str, payload_dictionary: dict[str, objec
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_subprocess_environment(),
     )
     return completed_process.stdout.strip()
-
 
 def _deny_reason_from_script_stdout(stdout_text: str) -> str | None:
     """Parse a script's stdout into its deny-reason text, or None for allow.
@@ -139,7 +152,6 @@ def _deny_reason_from_script_stdout(stdout_text: str) -> str | None:
     reason_text = hook_specific.get("permissionDecisionReason", "")
     return reason_text if isinstance(reason_text, str) else None
 
-
 def _deny_reason_from_dispatcher(payload_dictionary: dict[str, object]) -> str | None:
     """Run the dispatcher as a subprocess and return its deny-reason text.
 
@@ -157,9 +169,9 @@ def _deny_reason_from_dispatcher(payload_dictionary: dict[str, object]) -> str |
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_subprocess_environment(),
     )
     return _deny_reason_from_script_stdout(completed_process.stdout.strip())
-
 
 def _deny_payload_from_dispatcher(payload_dictionary: dict[str, object]) -> dict[str, object]:
     """Run the dispatcher as a subprocess and return its parsed deny payload.
@@ -177,11 +189,11 @@ def _deny_payload_from_dispatcher(payload_dictionary: dict[str, object]) -> dict
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_subprocess_environment(),
     )
     parsed_payload = json.loads(completed_process.stdout.strip())
     assert isinstance(parsed_payload, dict)
     return parsed_payload
-
 
 def test_state_description_native_allows_match_script() -> None:
     """state_description_blocker native allow matches the script's allow."""
@@ -192,7 +204,6 @@ def test_state_description_native_allows_match_script() -> None:
     assert native_reason is None
     assert script_reason is None
 
-
 def test_state_description_native_deny_matches_script_reason() -> None:
     """state_description_blocker native deny reason matches the script's reason."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT)
@@ -201,7 +212,6 @@ def test_state_description_native_deny_matches_script_reason() -> None:
     script_reason = _deny_reason_from_script_stdout(script_stdout)
     assert native_reason is not None
     assert native_reason == script_reason
-
 
 def test_state_description_native_edit_deny_matches_script_reason() -> None:
     """state_description_blocker native and script agree on an Edit denial."""
@@ -214,7 +224,6 @@ def test_state_description_native_edit_deny_matches_script_reason() -> None:
     assert native_reason is not None
     assert native_reason == script_reason
 
-
 def test_state_description_native_non_target_tool_allows_match_script() -> None:
     """state_description_blocker native allows MultiEdit, matching the script."""
     payload_dictionary = _multi_edit_payload_dictionary(
@@ -226,7 +235,6 @@ def test_state_description_native_non_target_tool_allows_match_script() -> None:
     assert native_reason is None
     assert script_reason is None
 
-
 def test_plain_language_native_allows_match_script() -> None:
     """plain_language_blocker native allow matches the script's allow."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_ALLOW_CONTENT)
@@ -236,7 +244,6 @@ def test_plain_language_native_allows_match_script() -> None:
     assert native_reason is None
     assert script_reason is None
 
-
 def test_plain_language_native_deny_matches_script_reason() -> None:
     """plain_language_blocker native deny reason matches the script's reason."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
@@ -245,7 +252,6 @@ def test_plain_language_native_deny_matches_script_reason() -> None:
     script_reason = _deny_reason_from_script_stdout(script_stdout)
     assert native_reason is not None
     assert native_reason == script_reason
-
 
 def test_plain_language_native_multi_edit_deny_matches_script_reason() -> None:
     """plain_language_blocker native and script agree on a MultiEdit denial."""
@@ -258,7 +264,6 @@ def test_plain_language_native_multi_edit_deny_matches_script_reason() -> None:
     assert native_reason is not None
     assert native_reason == script_reason
 
-
 def test_plain_language_native_non_markdown_allows_match_script() -> None:
     """plain_language_blocker native allows a non-markdown Write, matching the script."""
     payload_dictionary = _write_payload_dictionary(_PYTHON_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
@@ -268,7 +273,6 @@ def test_plain_language_native_non_markdown_allows_match_script() -> None:
     assert native_reason is None
     assert script_reason is None
 
-
 def test_dispatcher_native_path_denies_state_description() -> None:
     """The dispatcher's native path denies a state_description_blocker violation."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT)
@@ -277,7 +281,6 @@ def test_dispatcher_native_path_denies_state_description() -> None:
     assert native_reason is not None
     assert dispatcher_reason is not None
     assert native_reason in dispatcher_reason
-
 
 def test_dispatcher_native_path_denies_plain_language() -> None:
     """The dispatcher's native path denies a plain_language_blocker violation."""
@@ -289,7 +292,6 @@ def test_dispatcher_native_path_denies_plain_language() -> None:
     assert native_reason is not None
     assert dispatcher_reason is not None
     assert native_reason in dispatcher_reason
-
 
 def test_dispatcher_native_plain_language_carries_system_message() -> None:
     """The dispatcher's plain-language deny carries the standalone systemMessage."""
@@ -304,13 +306,11 @@ def test_dispatcher_native_plain_language_carries_system_message() -> None:
     assert isinstance(dispatcher_system_message, str)
     assert expected_system_message in dispatcher_system_message
 
-
 def test_dispatcher_native_plain_language_carries_suppress_output() -> None:
     """The dispatcher's plain-language deny carries the standalone suppressOutput flag."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
     dispatcher_payload = _deny_payload_from_dispatcher(payload_dictionary)
     assert dispatcher_payload.get("suppressOutput") is True
-
 
 def test_dispatcher_native_state_description_carries_additional_context() -> None:
     """The dispatcher's state-description deny carries the standalone additionalContext."""
@@ -325,7 +325,6 @@ def test_dispatcher_native_state_description_carries_additional_context() -> Non
     dispatcher_hook_specific = dispatcher_payload.get("hookSpecificOutput", {})
     assert isinstance(dispatcher_hook_specific, dict)
     assert dispatcher_hook_specific.get("additionalContext") == expected_additional_context
-
 
 def test_dispatcher_native_state_description_carries_system_message() -> None:
     """The dispatcher's state-description deny carries the standalone systemMessage."""

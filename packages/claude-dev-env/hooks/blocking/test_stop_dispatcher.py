@@ -166,6 +166,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env={**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"},
     )
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
