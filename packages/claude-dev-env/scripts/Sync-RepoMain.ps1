@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 7.0
 <#
 .SYNOPSIS
   Fast-forward a local main-tracking mirror to its remote main.
@@ -34,7 +34,10 @@
   <remote>/<branch>" right before the fast-forward, and the stash is left in
   the stash list for a human to inspect. Untracked files are never stashed.
   The stash runs only when the fast-forward is going to happen, so an
-  already-up-to-date or diverged run creates no stash entry.
+  already-up-to-date or diverged run creates no stash entry. If the
+  fast-forward then fails, the stash is popped back so the edits do not go
+  missing; when that pop also fails, the log names the stash entry so the
+  operator can recover it by hand.
 
 .PARAMETER LogPath
   Absolute path to the run log (default: $HOME\.claude\logs\sync-repo-main.log).
@@ -156,6 +159,7 @@ try {
         exit 4
     }
 
+    $didStash = $false
     if ($trackedDirtyLines.Count -gt 0) {
         $stashMessage = 'pre-sync stash {0}: uncommitted other-stream edits before ff to {1}/{2}' -f (Get-Date -Format 'yyyy-MM-dd'), $Remote, $Branch
         $stashResult = Invoke-Git -Arguments @('stash', 'push', '-m', $stashMessage)
@@ -163,12 +167,22 @@ try {
             Write-SyncLog -Level 'ERROR' -Message "stash push failed; fast-forward abandoned: $($stashResult.Output)"
             exit 1
         }
+        $didStash = $true
         Write-SyncLog -Level 'STASH' -Message ("stashed tracked changes as '" + $stashMessage + "' (left in stash list): " + ($trackedDirtyLines -join '; '))
     }
 
     $mergeResult = Invoke-Git -Arguments @('merge', '--ff-only', "$Remote/$Branch")
     if ($mergeResult.ExitCode -ne 0) {
         Write-SyncLog -Level 'ERROR' -Message "merge --ff-only failed: $($mergeResult.Output)"
+        if ($didStash) {
+            $popResult = Invoke-Git -Arguments @('stash', 'pop')
+            if ($popResult.ExitCode -eq 0) {
+                Write-SyncLog -Level 'OK' -Message "restored the stashed edits to the working tree after the failed fast-forward"
+            }
+            else {
+                Write-SyncLog -Level 'ERROR' -Message ("stash pop failed after the failed fast-forward; the edits are still stashed as '" + $stashMessage + "' — recover them with git stash list and git stash pop: " + $popResult.Output)
+            }
+        }
         exit 1
     }
 
