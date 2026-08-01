@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from ._path_setup import hooks_directory_on_path  # noqa: F401
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
@@ -29,22 +30,16 @@ from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
 from .ruff_integration import check_ruff_available, run_ruff_check
-
+from blocking.code_rules_shared import is_ephemeral_path
+from hooks_constants.hook_block_logger import log_hook_block
+from hooks_constants.multi_edit_reconstruction import (
+    apply_edits,
+    edits_for_tool,
+)
 
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
-
-_hooks_directory_on_path = str(hooks_dir.resolve())
-if _hooks_directory_on_path not in sys.path:
-    sys.path.insert(0, _hooks_directory_on_path)
-
-from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
-    apply_edits,
-    edits_for_tool,
-)
 
 
 def _windows_non_unc_working_directory_string(
@@ -824,7 +819,7 @@ def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
 
     ::
 
-        ok:   "C:/Users/.../Temp/pytest-of-x/test_foo0/a.py" -> True
+        ok:   "<windows-temp-root>/pytest-of-x/test_foo0/a.py"  -> True
         ok:   "/home/runner/work/_temp/pytest-basetemp/.../a.py" when RUNNER_TEMP
         flag: "packages/demo/test_helpers/worker.py"         -> False (relative)
         flag: "C:/repo/pkg/test_helpers/worker.py"           -> False (project)

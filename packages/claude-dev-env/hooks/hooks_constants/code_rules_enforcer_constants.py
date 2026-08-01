@@ -27,7 +27,8 @@ CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY: str = "tmp"
 EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME: str = "CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT"
 ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})
 LEADING_DRIVE_LETTER_PATTERN: re.Pattern[str] = re.compile(r"^[a-z]:")
-ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/", "/packages/claude-dev-env/hooks/", "\\packages\\claude-dev-env\\hooks\\"}
+ALL_AGENT_HOME_TOOLING_PATTERNS = {"/.grok/", "\\.grok\\", "\\.grok/"}
+ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/", "/packages/claude-dev-env/hooks/", "\\packages\\claude-dev-env\\hooks\\"} | ALL_AGENT_HOME_TOOLING_PATTERNS
 ALL_WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 
