@@ -92,6 +92,25 @@ function Invoke-Git {
     }
 }
 
+function Get-GitDecoration {
+    <#
+      Reads a value used only to decorate a log line. The sync has already
+      succeeded by the time these run, so a failure here returns a placeholder
+      rather than turning a completed sync into a failed run.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory)]
+        [string]$Placeholder
+    )
+    $result = Invoke-Git -Arguments $Arguments
+    if ($result.ExitCode -ne 0 -or -not $result.Output.Trim()) {
+        return $Placeholder
+    }
+    return $result.Output
+}
+
 function Invoke-GitOrExit {
     param(
         [Parameter(Mandatory)]
@@ -146,8 +165,7 @@ try {
     $remoteTip = $tipLines[1].Trim()
 
     if ($localTip -eq $remoteTip) {
-        $remoteUrl = Invoke-GitOrExit -Arguments @('remote', 'get-url', $Remote) `
-            -FailureMessage "remote '$Remote' missing" -FailureExitCode 2
+        $remoteUrl = Get-GitDecoration -Arguments @('remote', 'get-url', $Remote) -Placeholder '<url unavailable>'
         Write-SyncLog -Level 'OK' -Message "already up to date at $localTip ($Remote/$Branch $remoteUrl)"
         exit 0
     }
@@ -186,10 +204,8 @@ try {
         exit 1
     }
 
-    $subject = Invoke-GitOrExit -Arguments @('log', '-1', '--format=%h %s') `
-        -FailureMessage 'reading the new tip subject failed' -FailureExitCode 1
-    $remoteUrl = Invoke-GitOrExit -Arguments @('remote', 'get-url', $Remote) `
-        -FailureMessage "remote '$Remote' missing" -FailureExitCode 2
+    $subject = Get-GitDecoration -Arguments @('log', '-1', '--format=%h %s') -Placeholder '<subject unavailable>'
+    $remoteUrl = Get-GitDecoration -Arguments @('remote', 'get-url', $Remote) -Placeholder '<url unavailable>'
     Write-SyncLog -Level 'OK' -Message "$Branch $localTip -> $remoteTip | $subject | $Remote/$Branch $remoteUrl"
     exit 0
 }
