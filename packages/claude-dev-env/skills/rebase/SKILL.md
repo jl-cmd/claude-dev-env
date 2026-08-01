@@ -93,7 +93,9 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 
 ## Phase 3 — Verification gates (mandatory before push)
 
-`py_compile`, `tsc --noEmit`, `cargo check`, etc. validate **syntax and types**, not **import resolution and runtime correctness**. Run real checks:
+`py_compile`, `tsc --noEmit`, `cargo check`, etc. validate **syntax and types**, not **import resolution and runtime correctness**. Run real checks.
+
+Before each gate command, state in one line which gate it is and why it applies to this rebase ("post-rebase gate: `pkg_x` carried a conflict resolution, running its suite"). The operator watching the session must never have to ask why a check is running.
 
 8. **Real import check.** For Python:
 
@@ -105,7 +107,16 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 
 9. **Test collection.** `pytest --collect-only -q` on the changed packages catches NameError, AttributeError, and ImportError surfaces beyond plain imports.
 
-10. **Targeted test run.** Run the test suite for every package the rebase touched. Do not push a rebase that dropped or broke test coverage that was passing pre-rebase.
+10. **Targeted test run — scoped by content diff.** First check, per candidate package, whether the rebase changed its content at all:
+
+    ```
+    git diff <pre-rebase-tip> HEAD -- <package>
+    ```
+
+    - **Empty diff:** the package's files are byte-for-byte what the branch already carried before the rebase, and that state was verified pre-rebase. The compile and collect-only gates (steps 8–9) cover the remaining import-level risk; skip the package's full suite.
+    - **Non-empty diff, a conflict resolution, or an auto-merged file (step 6) in the package:** run its full suite. Do not push a rebase that dropped or broke test coverage that was passing pre-rebase.
+
+    The pre-rebase tip SHA is the one recorded before starting (step 15 pins the lease to it), so capture it before the rebase begins.
 
 11. **Reference scan for removals/renames.** For every symbol the rebase deleted or renamed (per the commit messages from step 4), scan the post-rebase tree using the same tool-preference order as step 4:
 
@@ -145,6 +156,7 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 - **Auditing only `git diff --name-only`.** Files unchanged by the rebase can still break if their imports depended on what the rebase removed.
 - **Force-pushing under "the user asked me to fix the conflicts" interpretation.** Force-push is a separate authorization from "fix this." Ask.
 - **Bare `--force` instead of `--force-with-lease=<branch>:<sha>`.** Loses the safety net against concurrent pushes.
+- **Running full suites for packages the rebase left byte-for-byte the same.** The step-10 content diff is the cheap check that settles it; a long suite on unchanged content stalls the session and proves nothing new.
 
 ## Quick decision flowchart
 
@@ -157,7 +169,7 @@ Solo, ≤5 commits ahead?     ──► straight rebase
 After rebase, BEFORE push:
   python -c "import …"      ──► must succeed
   pytest --collect-only     ──► must succeed
-  targeted pytest run       ──► must pass
+  pytest, packages w/ diff  ──► must pass
   symbol scan (serena → Grep) ──► no stale references
 
 Push:
