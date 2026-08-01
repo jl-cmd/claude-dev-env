@@ -1,25 +1,25 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Fast-forward a local main checkout to origin/main when the tree is clean.
+  Fast-forward a local main-tracking mirror to its remote main.
 
 .DESCRIPTION
-  Designed for the always-main mirror at:
-    C:\dev\Projects\LLM Plugins\claude-code-config
-
-  Remote origin for that path is:
-    https://github.com/jl-cmd/claude-dev-env.git
+  Runs against any working tree that is meant to stay on one branch and follow
+  a remote, such as a read-only mirror kept current by a scheduled task.
 
   Safety rules:
-  - Only runs when the checked-out branch is main
+  - Only runs when the checked-out branch is the named branch
   - Only runs when there are no tracked changes (untracked files are fine),
     unless -StashDirty is passed
   - Uses merge --ff-only only (never force, never hard reset, never clean)
   - Logs and exits non-zero on skip, diverge, or failure so a Task Scheduler
     history row can surface a problem instead of a silent no-op
 
+  Exit codes: 0 success, 1 git operation failed, 2 configuration or repo
+  problem, 3 skipped by a safety rule, 4 diverged from the remote.
+
 .PARAMETER RepoPath
-  Absolute path to the git working tree.
+  Absolute path to the git working tree. Required.
 
 .PARAMETER Remote
   Remote name whose main is the source of truth (default: origin).
@@ -41,7 +41,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoPath = 'C:\dev\Projects\LLM Plugins\claude-code-config',
+    [Parameter(Mandatory)]
+    [string]$RepoPath,
     [string]$Remote = 'origin',
     [string]$Branch = 'main',
     [switch]$StashDirty,
@@ -50,8 +51,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$logPath = $LogPath
-$logDirectory = Split-Path -Parent $logPath
+$logDirectory = Split-Path -Parent $LogPath
 if (-not (Test-Path -LiteralPath $logDirectory)) {
     New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 }
@@ -64,40 +64,46 @@ function Write-SyncLog {
         [string]$Message
     )
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'o'), $Level, $Message
-    Add-Content -LiteralPath $logPath -Value $line -Encoding utf8
+    Add-Content -LiteralPath $LogPath -Value $line -Encoding utf8
     Write-Host $line
 }
 
 function Get-GitExecutable {
     $command = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Source
+    if ($null -eq $command) {
+        throw 'git executable not found on PATH'
     }
-    $candidates = @(
-        'C:\Program Files\Git\cmd\git.exe',
-        'C:\Program Files\Git\bin\git.exe'
-    )
-    foreach ($each_path in $candidates) {
-        if (Test-Path -LiteralPath $each_path) {
-            return $each_path
-        }
-    }
-    throw 'git executable not found on PATH or under Program Files\Git'
+    return $command.Source
 }
 
 function Invoke-Git {
     param(
         [Parameter(Mandatory)]
-        [string]$GitPath,
-        [Parameter(Mandatory)]
         [string[]]$Arguments
     )
-    $output = & $GitPath -C $RepoPath @Arguments 2>&1
+    $output = & $script:gitPath -C $RepoPath @Arguments 2>&1
     $exitCode = $LASTEXITCODE
     return [pscustomobject]@{
         ExitCode = $exitCode
         Output   = ($output | Out-String).Trim()
     }
+}
+
+function Invoke-GitOrExit {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory)]
+        [string]$FailureMessage,
+        [Parameter(Mandatory)]
+        [int]$FailureExitCode
+    )
+    $result = Invoke-Git -Arguments $Arguments
+    if ($result.ExitCode -ne 0) {
+        Write-SyncLog -Level 'ERROR' -Message "${FailureMessage}: $($result.Output)"
+        exit $FailureExitCode
+    }
+    return $result.Output
 }
 
 try {
@@ -106,77 +112,53 @@ try {
         exit 2
     }
 
-    $gitPath = Get-GitExecutable
-    $remoteUrlResult = Invoke-Git -GitPath $gitPath -Arguments @('remote', 'get-url', $Remote)
-    if ($remoteUrlResult.ExitCode -ne 0) {
-        Write-SyncLog -Level 'ERROR' -Message "remote '$Remote' missing: $($remoteUrlResult.Output)"
-        exit 2
-    }
-    $remoteUrl = $remoteUrlResult.Output
+    $script:gitPath = Get-GitExecutable
 
-    $currentBranchResult = Invoke-Git -GitPath $gitPath -Arguments @('branch', '--show-current')
-    if ($currentBranchResult.ExitCode -ne 0) {
-        Write-SyncLog -Level 'ERROR' -Message "cannot read current branch: $($currentBranchResult.Output)"
-        exit 2
-    }
-    $currentBranch = $currentBranchResult.Output
+    $currentBranch = Invoke-GitOrExit -Arguments @('branch', '--show-current') `
+        -FailureMessage 'cannot read current branch' -FailureExitCode 2
     if ($currentBranch -ne $Branch) {
-        Write-SyncLog -Level 'SKIP' -Message "checkout is '$currentBranch', not '$Branch' (remote=$Remote url=$remoteUrl)"
+        Write-SyncLog -Level 'SKIP' -Message "checkout is '$currentBranch', not '$Branch' (remote=$Remote)"
         exit 3
     }
 
-    $statusResult = Invoke-Git -GitPath $gitPath -Arguments @('status', '--porcelain')
-    if ($statusResult.ExitCode -ne 0) {
-        Write-SyncLog -Level 'ERROR' -Message "status failed: $($statusResult.Output)"
-        exit 2
-    }
-    $trackedDirtyLines = @()
-    if ($statusResult.Output) {
-        foreach ($each_line in ($statusResult.Output -split "`r?`n")) {
-            if ([string]::IsNullOrWhiteSpace($each_line)) {
-                continue
-            }
-            if ($each_line.StartsWith('??')) {
-                continue
-            }
-            $trackedDirtyLines += $each_line
-        }
-    }
+    $statusOutput = Invoke-GitOrExit -Arguments @('status', '--porcelain') `
+        -FailureMessage 'status failed' -FailureExitCode 2
+    $trackedDirtyLines = @($statusOutput -split "`r?`n" | Where-Object { $_.Trim() -and -not $_.StartsWith('??') })
     if ($trackedDirtyLines.Count -gt 0 -and -not $StashDirty) {
         Write-SyncLog -Level 'SKIP' -Message ("tracked changes present; refusing sync: " + ($trackedDirtyLines -join '; '))
         exit 3
     }
 
-    $fetchResult = Invoke-Git -GitPath $gitPath -Arguments @('fetch', $Remote, $Branch)
-    if ($fetchResult.ExitCode -ne 0) {
-        Write-SyncLog -Level 'ERROR' -Message "fetch $Remote $Branch failed: $($fetchResult.Output)"
-        exit 1
-    }
+    $null = Invoke-GitOrExit -Arguments @('fetch', $Remote, $Branch) `
+        -FailureMessage "fetch $Remote $Branch failed" -FailureExitCode 1
 
-    $localTipResult = Invoke-Git -GitPath $gitPath -Arguments @('rev-parse', $Branch)
-    $remoteTipResult = Invoke-Git -GitPath $gitPath -Arguments @('rev-parse', "$Remote/$Branch")
-    if ($localTipResult.ExitCode -ne 0 -or $remoteTipResult.ExitCode -ne 0) {
-        Write-SyncLog -Level 'ERROR' -Message "rev-parse failed local=$($localTipResult.Output) remote=$($remoteTipResult.Output)"
+    $tipOutput = Invoke-GitOrExit -Arguments @('rev-parse', $Branch, "$Remote/$Branch") `
+        -FailureMessage 'rev-parse of branch tips failed' -FailureExitCode 2
+    $tipLines = @($tipOutput -split "`r?`n" | Where-Object { $_.Trim() })
+    if ($tipLines.Count -ne 2) {
+        Write-SyncLog -Level 'ERROR' -Message "rev-parse returned $($tipLines.Count) tip(s), expected 2: $tipOutput"
         exit 2
     }
-    $localTip = $localTipResult.Output
-    $remoteTip = $remoteTipResult.Output
+    $localTip = $tipLines[0].Trim()
+    $remoteTip = $tipLines[1].Trim()
 
     if ($localTip -eq $remoteTip) {
+        $remoteUrl = Invoke-GitOrExit -Arguments @('remote', 'get-url', $Remote) `
+            -FailureMessage "remote '$Remote' missing" -FailureExitCode 2
         Write-SyncLog -Level 'OK' -Message "already up to date at $localTip ($Remote/$Branch $remoteUrl)"
         exit 0
     }
 
-    $ancestorResult = Invoke-Git -GitPath $gitPath -Arguments @('merge-base', '--is-ancestor', $Branch, "$Remote/$Branch")
+    $ancestorResult = Invoke-Git -Arguments @('merge-base', '--is-ancestor', $Branch, "$Remote/$Branch")
     if ($ancestorResult.ExitCode -ne 0) {
-        $countResult = Invoke-Git -GitPath $gitPath -Arguments @('rev-list', '--left-right', '--count', "${Branch}...${Remote}/${Branch}")
+        $countResult = Invoke-Git -Arguments @('rev-list', '--left-right', '--count', "${Branch}...${Remote}/${Branch}")
         Write-SyncLog -Level 'ERROR' -Message "diverged from $Remote/$Branch (counts=$($countResult.Output)); fast-forward refused. local=$localTip remote=$remoteTip"
         exit 4
     }
 
     if ($trackedDirtyLines.Count -gt 0) {
         $stashMessage = 'pre-sync stash {0}: uncommitted other-stream edits before ff to {1}/{2}' -f (Get-Date -Format 'yyyy-MM-dd'), $Remote, $Branch
-        $stashResult = Invoke-Git -GitPath $gitPath -Arguments @('stash', 'push', '-m', $stashMessage)
+        $stashResult = Invoke-Git -Arguments @('stash', 'push', '-m', $stashMessage)
         if ($stashResult.ExitCode -ne 0) {
             Write-SyncLog -Level 'ERROR' -Message "stash push failed; fast-forward abandoned: $($stashResult.Output)"
             exit 1
@@ -184,15 +166,17 @@ try {
         Write-SyncLog -Level 'STASH' -Message ("stashed tracked changes as '" + $stashMessage + "' (left in stash list): " + ($trackedDirtyLines -join '; '))
     }
 
-    $mergeResult = Invoke-Git -GitPath $gitPath -Arguments @('merge', '--ff-only', "$Remote/$Branch")
+    $mergeResult = Invoke-Git -Arguments @('merge', '--ff-only', "$Remote/$Branch")
     if ($mergeResult.ExitCode -ne 0) {
         Write-SyncLog -Level 'ERROR' -Message "merge --ff-only failed: $($mergeResult.Output)"
         exit 1
     }
 
-    $newTipResult = Invoke-Git -GitPath $gitPath -Arguments @('rev-parse', 'HEAD')
-    $subjectResult = Invoke-Git -GitPath $gitPath -Arguments @('log', '--oneline', '-1')
-    Write-SyncLog -Level 'OK' -Message "main $localTip -> $($newTipResult.Output) | $($subjectResult.Output) | $Remote/$Branch $remoteUrl"
+    $subject = Invoke-GitOrExit -Arguments @('log', '-1', '--format=%h %s') `
+        -FailureMessage 'reading the new tip subject failed' -FailureExitCode 1
+    $remoteUrl = Invoke-GitOrExit -Arguments @('remote', 'get-url', $Remote) `
+        -FailureMessage "remote '$Remote' missing" -FailureExitCode 2
+    Write-SyncLog -Level 'OK' -Message "$Branch $localTip -> $remoteTip | $subject | $Remote/$Branch $remoteUrl"
     exit 0
 }
 catch {
