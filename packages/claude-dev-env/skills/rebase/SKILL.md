@@ -95,7 +95,7 @@ When in doubt, ask. Both work; the choice affects history shape, not correctness
 
 `py_compile`, `tsc --noEmit`, `cargo check`, etc. validate **syntax and types**, not **import resolution and runtime correctness**. Run real checks.
 
-Before each gate command, state in one line which gate it is and why it applies to this rebase ("post-rebase gate: `pkg_x` carried a conflict resolution, running its suite"). The operator watching the session must never have to ask why a check is running.
+Before each gate command, state in one line which gate it is and why it applies to this rebase ("post-rebase gate: `pkg_x` carried a conflict resolution, running its suite").
 
 8. **Real import check.** For Python:
 
@@ -116,7 +116,7 @@ Before each gate command, state in one line which gate it is and why it applies 
     - **Empty diff:** the package's files are byte-for-byte what the branch already carried before the rebase, and that state was verified pre-rebase. The compile and collect-only gates (steps 8–9) cover the remaining import-level risk; skip the package's full suite.
     - **Non-empty diff, a conflict resolution, or an auto-merged file (step 6) in the package:** run its full suite. Do not push a rebase that dropped or broke test coverage that was passing pre-rebase.
 
-    The pre-rebase tip SHA is the one recorded before starting (step 15 pins the lease to it), so capture it before the rebase begins.
+    Capture the pre-rebase tip SHA before the rebase begins; step 15 pins the force-with-lease to that same SHA.
 
 11. **Reference scan for removals/renames.** For every symbol the rebase deleted or renamed (per the commit messages from step 4), scan the post-rebase tree using the same tool-preference order as step 4:
 
@@ -156,7 +156,7 @@ Before each gate command, state in one line which gate it is and why it applies 
 - **Auditing only `git diff --name-only`.** Files unchanged by the rebase can still break if their imports depended on what the rebase removed.
 - **Force-pushing under "the user asked me to fix the conflicts" interpretation.** Force-push is a separate authorization from "fix this." Ask.
 - **Bare `--force` instead of `--force-with-lease=<branch>:<sha>`.** Loses the safety net against concurrent pushes.
-- **Running full suites for packages the rebase left byte-for-byte the same.** The step-10 content diff is the cheap check that settles it; a long suite on unchanged content stalls the session and proves nothing new.
+- **Running full suites for packages the rebase left byte-for-byte the same.** The step-10 content diff settles it in seconds; a long suite on unchanged content stalls the session.
 
 ## Quick decision flowchart
 
