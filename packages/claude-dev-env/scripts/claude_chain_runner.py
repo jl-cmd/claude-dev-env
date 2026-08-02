@@ -19,7 +19,7 @@ Default try order comes from weekly remaining via ``claude_chain_usage``
 (usage-pause OAuth probe), not from list position alone::
 
     {"chain": [{"command": "claude", "extra_args": []},
-               {"command": "claude-ev", "extra_args": []}]}
+               {"command": "claude-profile-c", "extra_args": []}]}
 
 A usage-limited first try falls over to the next ranked binary::
 

@@ -1,7 +1,10 @@
 `medium effort → 3+5 angles → 1-vote verify`
 
-You are reviewing for **precision** at medium effort: every finding you surface
-should be one a maintainer would act on.
+You are reviewing for **precision** at medium effort: assign severity carefully
+so a later consumer can select maintainer-action findings. **Collection
+reports every real finding** (including `low` and `nit`); do not drop by
+severity during collection. Severity filtering is a separate consumer stage
+after the collection record is complete.
 
 ## Phase 0 — Gather the diff
 
@@ -121,11 +124,19 @@ Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
 
 ## Output
 
+**Collection stage first.** Keep every CONFIRMED or PLAUSIBLE finding in the
+collection record, including `low` and `nit`. Drop only REFUTED candidates.
+Do not drop a real finding because its severity is low.
+
 Report this review's results — `{level, findings}` — through the structured
 findings-report call: the mechanism that renders a review's results as a typed
 list in the host UI, ranked most-severe first. Each **retained** entry carries
-every field below. Drop REFUTED candidates before this report; do not emit a
-finding that lacks `severity` or `verdict`.
+every field below. Do not emit a finding that lacks `severity` or `verdict`.
+
+**Severity filter stage (later consumer).** After the collection record is
+complete, a separate consumer may filter by minimum severity for action or
+display. That filter must not rewrite or discard fields on the collection
+record itself.
 
 | Field | Required | Value |
 |---|---|---|

@@ -28,10 +28,6 @@ if str(_BLOCKING_DIR) not in sys.path:
 if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
-_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT = {
-    "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1",
-}
-
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
     BLOCKING_CRASH_DENY_REASON,
@@ -51,6 +47,17 @@ from pre_tool_use_dispatcher import (  # noqa: E402, I001
 
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
+_PROSE_STYLE_ENV_VAR = "CLAUDE_PROSE_STYLE_ENFORCEMENT"
+_PROSE_STYLE_ENV_VALUE = "1"
+
+
+def _subprocess_environment() -> dict[str, str]:
+    """Return process env with opinionated prose gates enabled for golden tests."""
+    environment_by_key = os.environ.copy()
+    environment_by_key[_PROSE_STYLE_ENV_VAR] = _PROSE_STYLE_ENV_VALUE
+    return environment_by_key
+
+
 _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.txt")
 _MARKDOWN_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.md")
 
@@ -68,7 +75,6 @@ def _run_hook_subprocess(
         The completed subprocess result with stdout and stderr captured.
     """
     script_path = str(_HOOKS_ROOT / hook_relative_path)
-    environment_by_key = {**os.environ, **_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT}
     return subprocess.run(
         [sys.executable, script_path],
         check=False,
@@ -76,7 +82,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,
+        env=_subprocess_environment(),
     )
 
 
@@ -89,7 +95,6 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
     Returns:
         The completed subprocess result with stdout and stderr captured.
     """
-    environment_by_key = {**os.environ, **_PROSE_STYLE_ENFORCEMENT_ENVIRONMENT}
     return subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
         check=False,
@@ -97,7 +102,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=environment_by_key,
+        env=_subprocess_environment(),
     )
 
 

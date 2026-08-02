@@ -7,9 +7,7 @@ reply to lead with the action when the user must act, keep findings to a few
 bullets, and stay scannable. This hook reads the final assistant message,
 strips code fences, inline code, blockquotes, table rows, and link targets,
 then judges shape only: multi-line instructions need numbered steps first,
-bullet count stays bounded, and list lines stay one-idea short. There is no
-minimum-word floor and no universal word ceiling — a concise answer and a
-requested full report both pass when shape is clean.
+bullet count stays bounded, and list lines stay one-idea short. 
 """
 
 import json
@@ -363,8 +361,6 @@ def find_reply_shape_violations(assistant_message: str) -> list[str]:
         ok:   a short outcome sentence              -> []
         ok:   a long requested audit with few bullets -> []
         flag: prose then buried "Install the package." -> [action-first]
-
-    There is no minimum-word floor and no universal word ceiling.
 
     Args:
         assistant_message: The raw final assistant message.

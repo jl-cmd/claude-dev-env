@@ -93,6 +93,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `volatile_path_in_post_blocker_constants.py` | Volatile path markers, affected `gh` post subcommands, MCP body param names, and the corrective message for the volatile-path post blocker |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
 | `workflow_substitution_slot_blocker_constants.py` | Per-iteration token patterns for the workflow-slot blocker |
+| `working_style_prompt_constants.py` | The fixed multi-paragraph working-style prompt text for the SessionStart working_style_prompt hook |
 
 ## Conventions
 

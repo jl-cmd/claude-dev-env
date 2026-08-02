@@ -3,7 +3,7 @@
  * Fresh-session harness entrypoint.
  *
  * Usage:
- *   node tests/fresh-session/harness/run-fresh-session.mjs --profiles main,editor,mel --check transport
+ *   node tests/fresh-session/harness/run-fresh-session.mjs --profiles main,profile-a,profile-b --check transport
  *   node tests/fresh-session/harness/run-fresh-session.mjs --profiles main --real-cli
  *
  * Default transport is the fake CLI. Real CLI is opt-in.
@@ -63,7 +63,7 @@ export function parseHarnessArguments(argv) {
             index += 1;
         } else if (token === '--help' || token === '-h') {
             process.stdout.write(
-                'Usage: node run-fresh-session.mjs --profiles main,editor,mel [--check transport] [--real-cli]\n',
+                'Usage: node run-fresh-session.mjs --profiles main,profile-a,profile-b [--check transport] [--real-cli]\n',
             );
             process.exit(0);
         }

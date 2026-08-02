@@ -26,6 +26,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `Audit-ShellPolicy.ps1` | Audits Bash tool calls in session transcripts against the `pwsh`-only shell policy |
 | `Migrate-ShellPolicy.ps1` | Applies automated fixes for common shell-policy violations found by the audit script |
 | `Install-SweepEmptyDirs.ps1` | Registers `sweep_empty_dirs.py` as a scheduled task on Windows |
+| `Sync-RepoMain.ps1` | Fast-forwards a main-tracking mirror (`-RepoPath`, required) to its remote main using `merge --ff-only`; refuses a different checkout or a diverged branch, logs each run to `-LogPath`, and exits non-zero so a scheduled-task history row surfaces the problem. `-StashDirty` stashes tracked changes right before the fast-forward under a dated `pre-sync stash` message and leaves the stash in the list |
 | `check.ps1` | Runs the full code-quality check suite |
 | `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
 | `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |

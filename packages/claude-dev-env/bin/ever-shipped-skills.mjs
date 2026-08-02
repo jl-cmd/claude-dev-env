@@ -21,6 +21,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'auditing-claude-config',
     'autoconverge',
     'bdd-protocol',
+    'beat-sheet',
     'bg-agent',
     'bugteam',
     'caveman',

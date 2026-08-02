@@ -54,12 +54,12 @@ foreach ($eachShortcut in $manifest.allManagedShortcuts) {
     }
 }
 
-# Native and Chrome variants retain distinct grouping identity for editor and mel.
-$editorNative = $manifest.allManagedShortcuts | Where-Object { $_.id -eq 'desktop-editor-native' }
-$editorChrome = $manifest.allManagedShortcuts | Where-Object { $_.id -eq 'start-editor-chrome' }
-Assert-True ($editorNative.groupingIdentity -ne $editorChrome.groupingIdentity) 'editor native/chrome grouping differs'
-Assert-True ($editorNative.source -eq 'native-desktop') 'editor desktop source is native-desktop'
-Assert-True ($editorChrome.source -eq 'chrome-start-menu') 'editor start-menu source is chrome-start-menu'
+# Native and Chrome variants retain distinct grouping identity for profile-a and profile-b.
+$profileANative = $manifest.allManagedShortcuts | Where-Object { $_.id -eq 'desktop-profile-a-native' }
+$profileAChrome = $manifest.allManagedShortcuts | Where-Object { $_.id -eq 'start-profile-a-chrome' }
+Assert-True ($profileANative.groupingIdentity -ne $profileAChrome.groupingIdentity) 'profile-a native/chrome grouping differs'
+Assert-True ($profileANative.source -eq 'native-desktop') 'profile-a desktop source is native-desktop'
+Assert-True ($profileAChrome.source -eq 'chrome-start-menu') 'profile-a start-menu source is chrome-start-menu'
 
 # Inventory is read-only against disposable paths.
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("shortcut-contract-" + [guid]::NewGuid().ToString('n'))

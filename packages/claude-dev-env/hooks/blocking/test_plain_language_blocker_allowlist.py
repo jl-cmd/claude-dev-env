@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+
+import pytest
 from types import ModuleType
 from unittest.mock import patch
 
@@ -26,6 +28,12 @@ def _load_blocker() -> ModuleType:
 
 
 _BLOCKER = _load_blocker()
+
+@pytest.fixture(autouse=True)
+def enable_prose_style_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Opinionated heavy-word scan is default-off; these tests arm it."""
+    monkeypatch.setenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", "1")
+
 
 
 def _evaluate(payload_by_key: dict[str, object]) -> str | None:

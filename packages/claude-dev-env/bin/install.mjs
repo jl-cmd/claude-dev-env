@@ -76,6 +76,7 @@ export const CORE_SKILLS = [
     'privacy-hygiene',
     'issue-tracker',
     'recall', 'remember', 'task-build',
+    'show',
 ];
 
 export function collectPackageSourceConflicts(packageDirectory) {
