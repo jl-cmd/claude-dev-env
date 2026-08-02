@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1900" role="img" width="1400" height="1900">
+  <title>Pull request 1262: the in-submit checkpoint skip was dead code, and this removes it</title>
+  <desc>Three panels. Panel one shows submit() stamping every tracked product back to not_started, so each of the five downstream skip gates always answers False and its skip branch never runs. Panel two shows the fix: the gates are gone, each tab stage runs straight through and still records its checkpoint, and three identifiers are deleted. Panel three shows that cross-run resume already lives upstream in the batch orchestrator and the product filter, and lists the test files swapped in and out.</desc>
+
+  <defs>
+    <marker id="ah-green" viewBox="0 0 12 12" refX="10" refY="6" markerUnits="userSpaceOnUse" markerWidth="22" markerHeight="22" orient="auto-start-reverse">
+      <polygon points="1,1 11,6 1,11" fill="#1E7A45"/>
+    </marker>
+    <marker id="ah-red" viewBox="0 0 12 12" refX="10" refY="6" markerUnits="userSpaceOnUse" markerWidth="22" markerHeight="22" orient="auto-start-reverse">
+      <polygon points="1,1 11,6 1,11" fill="#B3261E"/>
+    </marker>
+    <marker id="ah-amber" viewBox="0 0 12 12" refX="10" refY="6" markerUnits="userSpaceOnUse" markerWidth="22" markerHeight="22" orient="auto-start-reverse">
+      <polygon points="1,1 11,6 1,11" fill="#9A6700"/>
+    </marker>
+    <marker id="ah-gray" viewBox="0 0 12 12" refX="10" refY="6" markerUnits="userSpaceOnUse" markerWidth="22" markerHeight="22" orient="auto-start-reverse">
+      <polygon points="1,1 11,6 1,11" fill="#4A4A46"/>
+    </marker>
+    <style>
+      .h  { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-weight: 500; font-size: 52px; }
+      .b  { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 36px; fill: #2B2B28; }
+      .bs { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-weight: 500; font-size: 36px; fill: #2B2B28; }
+      .m  { font-family: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace; font-weight: 400; font-size: 33px; }
+      .mb { font-family: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace; font-weight: 500; font-size: 33px; }
+      .cap{ font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-weight: 400; font-size: 33px; fill: #55554E; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="1900" fill="#FAF7EF"/>
+
+  <!-- ============ PANEL 1 ============ -->
+  <text class="h" x="82" y="120" fill="#B3261E">1 · Today — the skip gate can never say yes</text>
+
+  <!-- submit() machine -->
+  <rect x="82" y="170" width="330" height="160" rx="14" fill="#EDEAE1" stroke="#4A4A46" stroke-width="4"/>
+  <text class="bs" x="110" y="228">submit()</text>
+  <text class="m" x="110" y="278" fill="#55554E">submission_</text>
+  <text class="m" x="110" y="316" fill="#55554E">service.py:173</text>
+
+  <!-- arrow to stamp -->
+  <path d="M 412 250 L 486 250" fill="none" stroke="#B3261E" stroke-width="6" marker-end="url(#ah-red)"/>
+
+  <!-- stamp object -->
+  <rect x="540" y="236" width="26" height="52" fill="#B3261E"/>
+  <rect x="500" y="286" width="106" height="26" rx="6" fill="#B3261E"/>
+  <rect x="496" y="188" width="114" height="48" rx="8" fill="#F6E3E1" stroke="#B3261E" stroke-width="4"/>
+  <text class="cap" x="500" y="360" fill="#B3261E">reset stamp</text>
+
+  <path d="M 618 250 L 700 250" fill="none" stroke="#B3261E" stroke-width="6" marker-end="url(#ah-red)"/>
+
+  <!-- tracker card -->
+  <rect x="716" y="170" width="602" height="160" rx="14" fill="#FFFFFF" stroke="#4A4A46" stroke-width="4"/>
+  <text class="cap" x="744" y="220">tracker record, every product</text>
+  <rect x="744" y="240" width="546" height="62" rx="8" fill="#F6E3E1" stroke="#B3261E" stroke-width="3"/>
+  <text class="mb" x="762" y="282" fill="#B3261E">checkpoint = not_started</text>
+
+  <!-- funnel of the same answer -->
+  <text class="b" x="82" y="410">Every tab stage then asks the same question and gets:</text>
+  <text class="m" x="82" y="456" fill="#B3261E">should_skip_checkpoint(...)  →  False</text>
+
+  <!-- five gate chips -->
+  <g>
+    <rect x="82"   y="490" width="220" height="86" rx="10" fill="#FFFFFF" stroke="#B3261E" stroke-width="4"/>
+    <text class="mb" x="118" y="542" fill="#B3261E">BINARY</text>
+    <rect x="336"  y="490" width="220" height="86" rx="10" fill="#FFFFFF" stroke="#B3261E" stroke-width="4"/>
+    <text class="mb" x="358" y="542" fill="#B3261E">APP INFO</text>
+    <rect x="590"  y="490" width="220" height="86" rx="10" fill="#FFFFFF" stroke="#B3261E" stroke-width="4"/>
+    <text class="mb" x="632" y="542" fill="#B3261E">PRICE</text>
+    <rect x="844"  y="490" width="220" height="86" rx="10" fill="#FFFFFF" stroke="#B3261E" stroke-width="4"/>
+    <text class="mb" x="874" y="542" fill="#B3261E">PUBLISH</text>
+    <rect x="1098" y="490" width="220" height="86" rx="10" fill="#FFFFFF" stroke="#B3261E" stroke-width="4"/>
+    <text class="mb" x="1138" y="542" fill="#B3261E">REVIEW</text>
+  </g>
+
+  <path d="M 192 576 L 192 626" fill="none" stroke="#B3261E" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#ah-red)"/>
+  <path d="M 446 576 L 446 626" fill="none" stroke="#B3261E" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#ah-red)"/>
+  <path d="M 700 576 L 700 626" fill="none" stroke="#B3261E" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#ah-red)"/>
+  <path d="M 954 576 L 954 626" fill="none" stroke="#B3261E" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#ah-red)"/>
+  <path d="M 1208 576 L 1208 626" fill="none" stroke="#B3261E" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#ah-red)"/>
+
+  <rect x="82" y="632" width="1236" height="76" rx="10" fill="#FBF0EF" stroke="#B3261E" stroke-width="4" stroke-dasharray="14 10"/>
+  <text class="bs" x="196" y="682" fill="#B3261E">skip branch behind every gate — unreachable in production</text>
+
+  <line fill="none" x1="82" y1="768" x2="1318" y2="768" stroke="#D9D4C6" stroke-width="3"/>
+
+  <!-- ============ PANEL 2 ============ -->
+  <text class="h" x="82" y="856" fill="#1E7A45">2 · The fix — gates out, recording kept</text>
+
+  <rect x="82" y="906" width="270" height="150" rx="14" fill="#EDEAE1" stroke="#4A4A46" stroke-width="4"/>
+  <text class="bs" x="110" y="962">submit()</text>
+  <text class="cap" x="110" y="1012">unchanged</text>
+
+  <!-- green pipe -->
+  <path d="M 352 981 L 1290 981" fill="none" stroke="#1E7A45" stroke-width="14" marker-end="url(#ah-green)"/>
+
+  <!-- five stamping stations on the pipe -->
+  <g>
+    <rect x="392"  y="928" width="176" height="106" rx="10" fill="#E7F3EA" stroke="#1E7A45" stroke-width="4"/>
+    <text class="mb" x="418" y="972" fill="#1E7A45">BINARY</text>
+    <text class="m"  x="418" y="1012" fill="#55554E">line 142</text>
+
+    <rect x="590"  y="928" width="176" height="106" rx="10" fill="#E7F3EA" stroke="#1E7A45" stroke-width="4"/>
+    <text class="mb" x="600" y="972" fill="#1E7A45">APP INFO</text>
+    <text class="m"  x="616" y="1012" fill="#55554E">line 172</text>
+
+    <rect x="788"  y="928" width="176" height="106" rx="10" fill="#E7F3EA" stroke="#1E7A45" stroke-width="4"/>
+    <text class="mb" x="828" y="972" fill="#1E7A45">PRICE</text>
+    <text class="m"  x="814" y="1012" fill="#55554E">line 199</text>
+
+    <rect x="986"  y="928" width="176" height="106" rx="10" fill="#E7F3EA" stroke="#1E7A45" stroke-width="4"/>
+    <text class="mb" x="1010" y="972" fill="#1E7A45">PUBLISH</text>
+    <text class="m"  x="1012" y="1012" fill="#55554E">line 235</text>
+
+    <rect x="1142" y="1060" width="176" height="106" rx="10" fill="#E7F3EA" stroke="#1E7A45" stroke-width="4"/>
+    <text class="mb" x="1170" y="1104" fill="#1E7A45">REVIEW</text>
+    <text class="m"  x="1152" y="1144" fill="#55554E">line 294</text>
+  </g>
+  <path d="M 1230 981 L 1230 1054" fill="none" stroke="#1E7A45" stroke-width="6" marker-end="url(#ah-green)"/>
+  <text class="cap" x="82" y="1104">every stage runs, every stage still records — file is</text>
+  <text class="m"  x="82" y="1146" fill="#55554E">submission_tab_pipeline.py</text>
+
+  <!-- removed tray -->
+  <rect x="82" y="1186" width="1236" height="186" rx="12" fill="#FBF0EF" stroke="#B3261E" stroke-width="4" stroke-dasharray="14 10"/>
+  <text class="bs" x="112" y="1240" fill="#B3261E">deleted</text>
+  <text class="m" x="112" y="1294" fill="#B3261E">should_skip_checkpoint()</text>
+  <text class="cap" x="112" y="1334">submission_checkpoints.py</text>
+  <text class="m" x="600" y="1294" fill="#B3261E">capture_content_id</text>
+  <text class="cap" x="600" y="1334">live-wallpaper branch</text>
+  <text class="m" x="1000" y="1294" fill="#B3261E">content_type arg</text>
+  <text class="cap" x="1000" y="1334">_upload_binary_tab</text>
+
+  <line fill="none" x1="82" y1="1428" x2="1318" y2="1428" stroke="#D9D4C6" stroke-width="3"/>
+
+  <!-- ============ PANEL 3 ============ -->
+  <text class="h" x="82" y="1512" fill="#9A6700">3 · Resume was never here — it lives upstream</text>
+
+  <rect x="82" y="1560" width="560" height="128" rx="12" fill="#FFFFFF" stroke="#9A6700" stroke-width="4"/>
+  <text class="bs" x="108" y="1612" fill="#9A6700">batch item checkpoints</text>
+  <text class="m"  x="108" y="1656" fill="#55554E">ReliableBatchOrchestrator</text>
+
+  <rect x="82" y="1712" width="560" height="128" rx="12" fill="#FFFFFF" stroke="#9A6700" stroke-width="4"/>
+  <text class="bs" x="108" y="1764" fill="#9A6700">product-level skip</text>
+  <text class="m"  x="108" y="1808" fill="#55554E">_filter_already_submitted</text>
+
+  <path d="M 642 1624 L 706 1668" fill="none" stroke="#9A6700" stroke-width="6" marker-end="url(#ah-amber)"/>
+  <path d="M 642 1776 L 706 1732" fill="none" stroke="#9A6700" stroke-width="6" marker-end="url(#ah-amber)"/>
+
+  <rect x="726" y="1640" width="200" height="120" rx="12" fill="#EDEAE1" stroke="#4A4A46" stroke-width="4"/>
+  <text class="bs" x="754" y="1712">submit()</text>
+
+  <!-- test ledger -->
+  <rect x="946" y="1560" width="372" height="280" rx="12" fill="#FFFFFF" stroke="#4A4A46" stroke-width="4"/>
+  <text class="bs" x="972" y="1610">tests swapped</text>
+  <text class="m" x="972" y="1660" fill="#B3261E">−639 resume suite</text>
+  <text class="m" x="972" y="1704" fill="#1E7A45">+217 recording</text>
+  <text class="m" x="972" y="1748" fill="#1E7A45">+155 checkpoints</text>
+  <text class="m" x="972" y="1792" fill="#1E7A45">+133 tab pipeline</text>
+  <text class="m" x="972" y="1836" fill="#1E7A45">+24  enum</text>
+</svg>

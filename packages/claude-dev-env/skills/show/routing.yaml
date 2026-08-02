@@ -1,0 +1,46 @@
+version: 1
+shared_references:
+  - references/core-design.md
+  - references/accessibility.md
+  - references/quality-gates.md
+routes:
+  flowchart:
+    module: diagram
+    references: [references/diagram-routing.md, references/svg-contract.md, references/subject-inventory.md, references/flowcharts.md]
+    workflow: workflows/create-visual.md
+    template: templates/svg-base.svg
+  structural:
+    module: diagram
+    references: [references/diagram-routing.md, references/svg-contract.md, references/subject-inventory.md, references/structural-diagrams.md]
+    workflow: workflows/create-visual.md
+    template: templates/svg-base.svg
+  illustrative:
+    module: diagram
+    references: [references/diagram-routing.md, references/svg-contract.md, references/subject-inventory.md, references/illustrative-diagrams.md]
+    workflow: workflows/create-visual.md
+    template: templates/svg-base.svg
+  erd:
+    module: diagram
+    references: [references/diagram-routing.md, references/host-and-html.md, references/subject-inventory.md, references/erds.md]
+    workflow: workflows/create-visual.md
+    template: templates/html-widget.html
+  interactive:
+    module: interactive
+    references: [references/host-and-html.md, references/interaction.md]
+    workflow: workflows/create-visual.md
+    template: templates/html-widget.html
+  mockup:
+    module: mockup
+    references: [references/host-and-html.md, references/mockups.md]
+    workflow: workflows/create-visual.md
+    template: templates/html-widget.html
+  chart:
+    module: chart
+    references: [references/host-and-html.md, references/charts.md]
+    workflow: workflows/create-visual.md
+    template: templates/html-widget.html
+  art:
+    module: art
+    references: [references/art.md]
+    workflow: workflows/create-visual.md
+    template: templates/html-widget.html
