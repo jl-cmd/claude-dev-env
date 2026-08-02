@@ -11,6 +11,7 @@ tag_pattern = re.compile(r"<(/?)([a-zA-Z][\w:.-]*)([^>]*?)(/?)>", re.DOTALL)
 fill_pattern = re.compile(r'\bfill=["\']([^"\']*)["\']')
 style_fill_pattern = re.compile(r'style=["\'][^"\']*\bfill\s*:\s*([^;"\']+)')
 marker_pattern = re.compile(r"\bmarker-(?:start|mid|end)=")
+comment_pattern = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 def find_unfilled_connectors(markup: str) -> list[str]:
@@ -50,7 +51,7 @@ if len(sys.argv[1:]) != 1:
 path = Path(sys.argv[1])
 if not path.is_file():
     raise SystemExit(f"missing artifact: {path}")
-text = path.read_text(encoding="utf-8")
+text = comment_pattern.sub("", path.read_text(encoding="utf-8"))
 errors = []
 warnings = []
 defined_properties = set(re.findall(r'(--[\w-]+)\s*:', text))
@@ -68,8 +69,10 @@ if path.suffix.lower() == ".svg":
     is_large_canvas = large_canvas_minimum_width <= canvas_width <= large_canvas_maximum_width
     if not is_standard_canvas and not is_large_canvas: errors.append("SVG viewBox width must be 680 or 1360-2000")
     if not re.search(r'<svg[^>]*>\s*<title>.*?</title>\s*<desc>', text, re.DOTALL): errors.append("SVG title and desc must be first")
-    if find_unfilled_connectors(text): errors.append("connectors need fill=none")
-    text_floor = round(text_floor_at_standard_width * canvas_width / standard_canvas_width)
+    unfilled_connectors = find_unfilled_connectors(text)
+    if unfilled_connectors: errors.append(f"connectors need fill=none: {', '.join(sorted(set(unfilled_connectors)))}")
+    floor_width = max(canvas_width, standard_canvas_width)
+    text_floor = round(text_floor_at_standard_width * floor_width / standard_canvas_width)
     sizes = [float(x) for x in re.findall(r'font-size=["\']([0-9.]+)', text)]
     if any(size < text_floor for size in sizes): errors.append(f"text below {text_floor}px")
     for each_marker in re.findall(r'<marker\b[^>]*>', text):
