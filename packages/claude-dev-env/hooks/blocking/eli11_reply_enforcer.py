@@ -362,8 +362,6 @@ def find_reply_shape_violations(assistant_message: str) -> list[str]:
         ok:   a long requested audit with few bullets -> []
         flag: prose then buried "Install the package." -> [action-first]
 
-    There is no minimum-word floor and no universal word ceiling.
-
     Args:
         assistant_message: The raw final assistant message.
 
