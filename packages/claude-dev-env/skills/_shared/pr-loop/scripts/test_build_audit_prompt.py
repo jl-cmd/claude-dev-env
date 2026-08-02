@@ -424,3 +424,24 @@ def test_precatch_rubric_adversarial_lane_uses_a_through_q() -> None:
     rubric_text = _PRECATCH_RUBRIC_PATH.read_text(encoding="utf-8")
     assert _A_THROUGH_Q_PATTERN.search(rubric_text) is not None
     assert _STALE_A_THROUGH_P_PATTERN.search(rubric_text) is None
+
+
+def test_audit_prompt_constraints_require_collection_before_severity_filter() -> None:
+    root = _build_audit_root()
+    constraints = root.find("constraints")
+    assert constraints is not None
+    all_constraint_texts = [
+        each_constraint.text or "" for each_constraint in constraints
+    ]
+    joined = "\n".join(all_constraint_texts)
+    assert "Report every real finding" in joined
+    assert "Do not drop findings by severity during collection" in joined
+    assert "separate consumer stage" in joined
+    assert "P0" in joined and "P1" in joined and "P2" in joined
+
+
+def test_audit_contract_documents_collection_before_severity_filtering() -> None:
+    contract_text = _AUDIT_CONTRACT_PATH.read_text(encoding="utf-8")
+    assert "## Collection before severity filtering" in contract_text
+    assert "separate consumer stage" in contract_text
+    assert "Do not drop a real finding because its severity is low" in contract_text

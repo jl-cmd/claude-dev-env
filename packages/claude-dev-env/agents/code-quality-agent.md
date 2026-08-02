@@ -113,6 +113,14 @@ A bare verified-clean label is inadequate: every Shape B entry lists the files o
 | P1 | Regression, silent failure, or behavior change that escapes existing tests. |
 | P2 | Dead code, minor smell, style issue, category J finding without runtime impact. |
 
+## Collection before filtering
+
+Report every real finding at its true severity. Collection retains P0, P1, and
+P2 findings with file, line, evidence (`excerpt` / `failure_mode`), and
+category. Do not drop lower-severity real findings during collection so a later
+consumer can filter. Severity or action filtering is a separate stage after the
+collection record is complete.
+
 ## Per-Category Expectation
 
 Every category A through Q is investigated. The output for each category is one of:

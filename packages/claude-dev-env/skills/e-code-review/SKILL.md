@@ -14,8 +14,9 @@ description: >-
 ## Gotchas
 
 - **`low` stays single-pass.** No subagents, no full-file reads: one read pass per target item, one findings pass.
-- **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) surface only findings a maintainer would act on. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
-- **Every retained finding carries `severity` and `verdict`.** Severity is one of `blocker`, `high`, `medium`, `low`, `nit`. Verdict is `CONFIRMED` or `PLAUSIBLE`. Drop REFUTED candidates; never emit an unclassified retained finding.
+- **Collection reports every real finding.** Keep every CONFIRMED or PLAUSIBLE finding at its assigned severity (`blocker`, `high`, `medium`, `low`, `nit`). Do not drop low or nit findings during collection. Severity or action filtering is a separate consumer stage after the collection record is complete (`scripts/finding_pipeline.py`).
+- **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) assign severity carefully so a later filter can pick maintainer-action findings. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
+- **Every retained finding carries `severity` and `verdict`.** Severity is one of `blocker`, `high`, `medium`, `low`, `nit`. Verdict is `CONFIRMED` or `PLAUSIBLE`. Drop REFUTED candidates only; never emit an unclassified retained finding.
 - **`--fix` applies findings once.** Load `reference/fix.md` and follow it — it owns the fix agent, the code-rules gate, skip logging, and outcome reporting. Commits are lead-owned; fix agents never commit or push.
 - **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. Terminals are exactly `clean`, `nits_fixed`, and `advisor_blocked`. There is no reviewed-head count limit; a new head increments the count once, a re-review of the same head does not. Load `reference/loop.md` and follow it.
 - **`--fix` and `loop` combine.** With both, each loop round runs the level file, and the round's fixing happens inside `reference/loop.md`'s gate sequence, which loads `reference/fix.md` for the mechanics. There is no separate fix pass around the round.
@@ -62,6 +63,9 @@ Detail: `reference/effort-evaluation.md`.
 | `reference/loop.md` | Repeat review/fix rounds until clean |
 | `reference/effort-evaluation.md` | Effort evaluation fixtures, evidence, and skill defaults |
 | `reference/runner-selection.md` | Runner selection map |
+| `scripts/finding_pipeline.py` | Collect every real finding; filter severity only later |
+| `scripts/test_finding_pipeline.py` | Collection and filter-stage behavioral tests |
+| `scripts/e_code_review_scripts_constants/finding_pipeline_constants.py` | Named constants for the collect-then-filter pipeline |
 | `scripts/effort_evaluation.py` | Effort rows, recommendation, skill default resolver |
 | `scripts/effort_defaults_evidence.json` | Committed evaluation rows + e-code-review skill defaults |
 | `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
@@ -72,4 +76,4 @@ Detail: `reference/effort-evaluation.md`.
 
 - `SKILL.md` — route and dispatch.
 - `reference/` — level procedures, fix/loop, effort evaluation, runner selection.
-- `scripts/` — effort evaluation, medium-review module, tests, `e_code_review_scripts_constants/`.
+- `scripts/` — collect-then-filter finding pipeline, effort evaluation, Grok medium-review module, tests, and `e_code_review_scripts_constants/`.

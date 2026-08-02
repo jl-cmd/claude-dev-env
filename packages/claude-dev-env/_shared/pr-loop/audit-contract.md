@@ -11,6 +11,17 @@ Shared output schema and audit-loop contract used by `/bugteam`, `/qbug`, `/find
 - De-dup and merge
 - Persistence (loop-<L>-audit.json, loop-<L>-diagnostics.json)
 
+## Collection before severity filtering
+
+Audit collection reports every real finding. The collection record retains all
+seeded severities (`P0`, `P1`, `P2`) and every Shape A field (`file`, `line`,
+`category`, `severity`, `excerpt`, `failure_mode`, `evidence_files`). Do not drop a real finding because its severity is low.
+
+Severity or action filtering is a **separate consumer stage** after collection
+is complete. A consumer may select a subset for fix or posting; it must not
+rewrite the collection record or strip file, line, evidence, or category from
+retained entries.
+
 ## Finding schema
 
 Each finding an audit produces MUST be one of exactly two shapes.
