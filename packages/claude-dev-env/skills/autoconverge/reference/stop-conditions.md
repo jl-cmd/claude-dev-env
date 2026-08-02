@@ -88,10 +88,12 @@ Each reviewer-down condition below skips its own convergence-check gate. The fla
   `--copilot-down` (the Copilot review gate and the pending-requested-reviews
   gate bypassed), then mark-ready. `copilotNote` records the bypass for the
   final report.
-- **Terminal Codex gate skipped (opt-out, usage, or `codex_down`)** — the
+- **Terminal Codex gate skipped (no opt-in, opt-out, usage, or `codex_down`)** — the
   conditional-required Codex gate runs after Bugbot and Copilot. When
-  `CLAUDE_REVIEWS_DISABLED` lists `codex` (`reviews_disabled.py --reviewer codex`
-  exit 0), the gate sets `codexDown` and advances with no review. When the weekly
+  `reviews_disabled.py --reviewer codex` exits 0 — which it does whenever
+  `CLAUDE_REVIEWS_ENABLED` omits `codex`, the default, and whenever
+  `CLAUDE_REVIEWS_DISABLED` lists it — the gate sets `codexDown` and advances
+  with no review. When the weekly
   usage probe reports `percent_left` null or at/below the shared threshold
   (`is_codex_review_required` false), the gate skips without a stamp; the
   convergence check applies the same rule. When the codex-review wrapper
