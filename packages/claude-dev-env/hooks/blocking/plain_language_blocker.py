@@ -44,6 +44,8 @@ from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
     DOT_CLAUDE_DIRECTORY_NAME,
     FENCED_CODE_BLOCK_PATTERN,
     FILE_PATH_PATTERN,
+    GIT_FILE_GITDIR_PREFIX,
+    GIT_HEAD_MARKER_FILENAME,
     INLINE_CODE_PATTERN,
     INLINE_CODE_PLACEHOLDER,
     INLINE_CODE_SPAN_PATTERN,
@@ -146,6 +148,43 @@ def _allowlist_start_directory(
     return None
 
 
+def _is_real_git_root_marker(git_marker_path: Path) -> bool:
+    """Return True when a `.git` path is shaped like a real repository marker.
+
+    ::
+
+        ok:   repo/.git/HEAD exists              -> True  (a real repo checkout)
+        ok:   worktree/.git carries "gitdir: ..." -> True  (a worktree/submodule gitlink)
+        flag: stray/.git/ exists, no HEAD inside  -> False (never went through git init)
+        flag: junk/.git carries other text        -> False (not a gitlink)
+
+    A directory or file merely named `.git` is not proof of a repository —
+    an empty leftover directory with that name carries no `HEAD`, and a
+    stray file with that name carries no `gitdir:` line. Git itself treats
+    a real repo directory as one with a `HEAD` entry and a real worktree or
+    submodule gitlink as a file whose content starts with `gitdir:`; this
+    mirrors that minimum so an ancestor walk cannot mistake a stray `.git`
+    for a repository boundary.
+
+    Args:
+        git_marker_path: The candidate `.git` path to judge.
+
+    Returns:
+        True when the path is a directory carrying a `HEAD` entry, or a file
+        whose stripped content starts with `gitdir:`; False otherwise,
+        including when the path does not exist.
+    """
+    if git_marker_path.is_dir():
+        return (git_marker_path / GIT_HEAD_MARKER_FILENAME).exists()
+    if git_marker_path.is_file():
+        try:
+            file_content = git_marker_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return False
+        return file_content.strip().startswith(GIT_FILE_GITDIR_PREFIX)
+    return False
+
+
 def _find_project_allowlist_file(start_directory: Path) -> Path | None:
     """Walk ancestors from start_directory for a repo-scoped project allowlist file.
 
@@ -157,12 +196,15 @@ def _find_project_allowlist_file(start_directory: Path) -> Path | None:
 
     The allowlist must live inside the repository so it is reviewed like any
     other committed config. The walk checks each directory for the allowlist,
-    then for the ``.git`` repository marker; it accepts an allowlist at or below
-    the first ``.git``-bearing directory, stops at that repository root, and
-    never ascends past it. When no ``.git`` marker appears within the walk
-    limit, the directory is not inside a repository and no allowlist applies, so
-    a global file such as ``~/.claude/plain-language-allow.json`` never loosens
-    the gate for every project.
+    then for a real ``.git`` repository marker (a directory carrying ``HEAD``,
+    or a gitlink file starting with ``gitdir:`` — see `_is_real_git_root_marker`);
+    it accepts an allowlist at or below the first such directory, stops at that
+    repository root, and never ascends past it. A stray ``.git`` entry with
+    neither shape does not count as a repository root. When no real ``.git``
+    marker appears within the walk limit, the directory is not inside a
+    repository and no allowlist applies, so a global file such as
+    ``~/.claude/plain-language-allow.json`` never loosens the gate for every
+    project.
 
     Args:
         start_directory: The directory to begin the upward walk from.
@@ -178,7 +220,7 @@ def _find_project_allowlist_file(start_directory: Path) -> Path | None:
         candidate = current_directory / DOT_CLAUDE_DIRECTORY_NAME / PROJECT_ALLOWLIST_FILENAME
         if nearest_allowlist is None and candidate.is_file():
             nearest_allowlist = candidate
-        if (current_directory / REPOSITORY_MARKER_NAME).exists():
+        if _is_real_git_root_marker(current_directory / REPOSITORY_MARKER_NAME):
             return nearest_allowlist
         if current_directory.parent == current_directory:
             break

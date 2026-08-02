@@ -314,6 +314,8 @@ DOT_CLAUDE_DIRECTORY_NAME: str = ".claude"
 PROJECT_ALLOWLIST_FILENAME: str = "plain-language-allow.json"
 PROJECT_ROOT_WALK_LIMIT: int = 40
 REPOSITORY_MARKER_NAME: str = ".git"
+GIT_HEAD_MARKER_FILENAME: str = "HEAD"
+GIT_FILE_GITDIR_PREFIX: str = "gitdir:"
 
 USER_FACING_PLAIN_LANGUAGE_NOTICE: str = (
     "Plain-language check: replace each flagged formal word with the simpler "
