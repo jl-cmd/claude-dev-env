@@ -1,6 +1,6 @@
 ---
 name: show
-description: Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations.
+description: Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations. Triggers on "/show", "show me", "draw", "diagram this", "visualize", "map this out", "make it interactive", or a request for a mockup, chart, or illustration.
 ---
 
 # Show
@@ -29,22 +29,16 @@ Use this skill when a user asks to show, draw, map, visualize, explain visually,
 | Quantitative or geographic data | `chart` | HTML/SVG |
 | Illustration or generative art | `art` | HTML or raster |
 
-Every route reads `references/core-design.md`, `references/accessibility.md`, and `references/quality-gates.md`.
-
-The flowchart, structural, illustrative, and erd routes also read `references/subject-inventory.md`.
+Each route's reference list lives in `routing.yaml`.
 
 ## Invariants
 
-- Use sentence case, flat surfaces, restrained color, and transparent outer containers.
-- Hold the smallest caption at the 16-at-680 scaled text floor set in `references/svg-contract.md`, and use font weights 400 or 500.
-- Support light and dark appearance modes.
-- Use color to encode meaning, with a short legend when meaning is not self-evident.
+- Use sentence case, flat surfaces, and a flat colorful palette in the style of `samples/` — three to four fixed hues, tinted fills, and neutral grays, per `references/core-design.md`.
+- Use color to encode meaning, with a short legend when the meaning needs one.
+- SVG output follows the canvas tiers, text floor, and opaque warm-white background rect set in `references/svg-contract.md`, with `title` and `desc` as its first children, and uses font weights 400 or 500.
 - Prefer multiple focused visuals over one dense canvas.
-- SVG output uses one of two canvas tiers, with `title` and `desc` as its first children: the standard tier `viewBox="0 0 680 H"` for a single small explainer, and the large tier `viewBox="0 0 W H"` with `W` from 1360 to 2000. The large tier is the default for anything with two or more panels or more than about 6 labeled elements.
 - When the visual shows code, a diff, or a plan that lives in a repo, read the real lines and tie every arrow to a `path:line` citation before drawing. When the picture and the source disagree, the picture is wrong.
 - HTML output begins with a visually hidden `h2` summary.
-- Examples demonstrate valid output; references define the rules.
-
 - `samples/` holds good examples the user has picked out. Read them on demand to study what works; the rules stay in the references.
 
 ## Workflows

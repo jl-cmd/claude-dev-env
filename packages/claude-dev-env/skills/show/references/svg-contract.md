@@ -19,4 +19,4 @@ The safe area scales with the canvas the same way: `40 × (width / 680)` units, 
 
 ## Background
 
-Standard-tier visuals stay transparent. A large-tier illustrative scene that uses fixed scene colors may draw its own background rect.
+Every SVG draws its own opaque warm-white background rect (for example `#F2EFE6` or `#FFFFFF`) as the first shape after `<defs>`, covering the full viewBox. The visual carries a fixed palette (see `references/core-design.md`), so an owned background keeps it legible on light and dark hosts alike.

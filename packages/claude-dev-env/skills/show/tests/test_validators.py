@@ -13,8 +13,13 @@ def test_package() -> None:
     assert finished.returncode == 0, finished.stdout + finished.stderr
 
 
-def test_example_svg() -> None:
-    finished = run("scripts/validate-artifact.py", "examples/flowchart.svg")
+def test_template_svg() -> None:
+    finished = run("scripts/validate-artifact.py", "templates/svg-base.svg")
+    assert finished.returncode == 0, finished.stdout + finished.stderr
+
+
+def test_valid_html_passes() -> None:
+    finished = run("scripts/validate-artifact.py", "tests/fixtures/valid.html")
     assert finished.returncode == 0, finished.stdout + finished.stderr
 
 

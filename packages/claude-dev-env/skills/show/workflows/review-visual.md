@@ -17,21 +17,4 @@
 
 ## Optional advisor audit
 
-One pass, no loop. Hand a single Fable subagent or one headless Sol call the artifact plus the A–E checklist above, and ask for this reply shape:
-
-```json
-{
-  "strengths": ["what the visual already does well"],
-  "issues": [
-    {
-      "rank": 1,
-      "dimension": "D",
-      "problem": "what is wrong",
-      "fix": "what to change"
-    }
-  ],
-  "top_moves": ["the highest-value change to make first"]
-}
-```
-
-Apply the ranked fixes once, then run step 4 again.
+One pass, no loop. Hand one subagent the artifact plus the A–E checklist above, ask for ranked issues each with a fix, apply the fixes once, then run step 4 again.

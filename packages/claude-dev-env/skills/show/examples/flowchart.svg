@@ -1,7 +1,0 @@
-<svg width="100%" viewBox="0 0 680 180" role="img">
-  <title>Review flow</title>
-  <desc>A three-step flow from request to review to result.</desc>
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5"/></marker></defs>
-  <g fill="none" stroke="currentColor" stroke-width="1"><rect x="40" y="40" width="160" height="44" rx="8"/><line x1="200" y1="62" x2="260" y2="62" fill="none" marker-end="url(#arrow)"/><rect x="260" y="40" width="160" height="44" rx="8"/><line x1="420" y1="62" x2="480" y2="62" fill="none" marker-end="url(#arrow)"/><rect x="480" y="40" width="160" height="44" rx="8"/></g>
-  <g fill="currentColor" font-family="sans-serif" font-size="16" text-anchor="middle"><text x="120" y="62" dominant-baseline="central">Request</text><text x="340" y="62" dominant-baseline="central">Review</text><text x="560" y="62" dominant-baseline="central">Result</text></g>
-</svg>
