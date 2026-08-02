@@ -30,14 +30,22 @@ CLEAN_MESSAGE = "This is verified by the source document."
 EMPTY_MESSAGE = ""
 
 
-def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
+def run_hook_with_message(
+    assistant_message: str, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess:
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
         input=hook_input_payload,
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
@@ -58,6 +66,8 @@ def run_hook_with_patched_search_paths(
         wrapper_file_path = wrapper_file.name
 
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    environment_by_key = os.environ.copy()
+    environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
     try:
         completed_process = subprocess.run(
             [sys.executable, wrapper_file_path],
@@ -65,6 +75,7 @@ def run_hook_with_patched_search_paths(
             capture_output=True,
             text=True,
             check=False,
+            env=environment_by_key,
         )
     finally:
         os.unlink(wrapper_file_path)
@@ -78,6 +89,15 @@ def test_user_facing_notice_matches_config_messages_module():
     specification.loader.exec_module(module)
 
     assert module.USER_FACING_NOTICE == USER_FACING_NOTICE
+
+
+def test_hedging_scan_is_default_off() -> None:
+    completed_process = run_hook_with_message(
+        HEDGING_MESSAGE, is_prose_style_enabled=False
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
 
 
 def test_hedging_message_emits_block_with_short_user_notice():

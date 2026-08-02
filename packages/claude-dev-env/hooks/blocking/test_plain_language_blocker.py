@@ -42,18 +42,31 @@ strip_non_prose_regions = hook_module.strip_non_prose_regions
 build_block_reason = hook_module.build_block_reason
 find_question_block_violations = hook_module.find_question_block_violations
 build_lean_block_reason = hook_module.build_lean_block_reason
-evaluate = hook_module.evaluate
+
+
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Call evaluate with opinionated prose enforcement enabled."""
+    with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+        return hook_module.evaluate(payload_by_key)
 
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 
 
-def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
+def _run_hook_with_payload(
+    payload: dict, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess[str]:
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, str(HOOK_SCRIPT_PATH)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
@@ -66,6 +79,33 @@ def _decision_from(completed: subprocess.CompletedProcess[str]) -> str | None:
 
 def test_canonical_hook_script_exists_at_expected_path() -> None:
     assert HOOK_SCRIPT_PATH.is_file()
+
+
+def test_heavy_word_scan_is_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert hook_module.evaluate(payload) is None
+    completed = _run_hook_with_payload(payload, is_prose_style_enabled=False)
+    assert _decision_from(completed) is None
+
+
+def test_heavy_word_scan_opt_in_denies_banned_term() -> None:
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert evaluate(payload) is not None
+    completed = _run_hook_with_payload(payload, is_prose_style_enabled=True)
+    assert _decision_from(completed) == "deny"
 
 
 def test_bare_prose_banned_term_is_detected() -> None:
@@ -291,7 +331,10 @@ def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
     )
 
     with patch.object(Path, "home", return_value=tmp_path):
-        hosted_result = run_native_hook(native_hook, deny_payload, is_blocking=True)
+        with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+            hosted_result = run_native_hook(
+                native_hook, deny_payload, is_blocking=True
+            )
 
     assert hosted_result.captured_stdout
     log_path = tmp_path / ".claude" / "logs" / "hook-blocks.log"

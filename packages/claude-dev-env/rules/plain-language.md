@@ -2,7 +2,7 @@
 
 All prose a person reads (chat, `AskUserQuestion`, docs, PR/issue bodies, commits): everyday words, short active sentences, lead with the answer, define jargon on first use, and give only the detail the reader needs to act (progressive disclosure). Aim for first-pass readability by a non-specialist. Exact identifiers, file paths, and API names stay exact; code is out of scope.
 
-The `plain_language_blocker` PreToolUse hook (AskUserQuestion + `.md` Write/Edit/MultiEdit) blocks a heavy word and names the everyday swap; code fences, inline code, blockquotes, URLs, and file paths are skipped.
+The `plain_language_blocker` PreToolUse hook (AskUserQuestion + `.md` Write/Edit/MultiEdit) blocks a heavy word and names the everyday swap when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off). AskUserQuestion lean-block structure stays always on. Code fences, inline code, blockquotes, URLs, and file paths are skipped.
 
 [`eli11-replies`](eli11-replies.md) governs reply length and shape; [`opus5-communication-contract`](opus5-communication-contract.md) governs progress and finals; this rule governs word choice.
 

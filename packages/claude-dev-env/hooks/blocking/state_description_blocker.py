@@ -20,6 +20,9 @@ if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
 from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
+from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
+    prose_style_enforcement_enabled_in_environment,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 from hooks_constants.state_description_blocker_constants import (  # noqa: E402
@@ -278,7 +281,8 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
 
     Applies the same tool-name gate, file-extension gate, content selection, and
     pattern scan the standalone hook applies. Returns the deny-reason text when a
-    historical phrase is found, or None to allow.
+    historical phrase is found, or None to allow. Opinionated prose enforcement
+    is default-off via ``prose_style_enforcement_enabled_in_environment()``.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
@@ -287,6 +291,8 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         The permissionDecisionReason text when the write is denied, or None when
         the write is allowed.
     """
+    if not prose_style_enforcement_enabled_in_environment():
+        return None
     raw_tool_name = payload_by_key.get("tool_name", "")
     tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
     if tool_name not in ("Write", "Edit"):

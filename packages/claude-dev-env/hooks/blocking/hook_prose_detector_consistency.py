@@ -39,6 +39,9 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
+    prose_style_enforcement_enabled_in_environment,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.hook_prose_detector_consistency_constants import (  # noqa: E402
     CONSTANTS_MODULE_SUFFIX,
@@ -116,6 +119,9 @@ def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:
+        sys.exit(0)
+
+    if not prose_style_enforcement_enabled_in_environment():
         sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")

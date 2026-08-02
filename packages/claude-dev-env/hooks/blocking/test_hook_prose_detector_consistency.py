@@ -3,6 +3,7 @@
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import sys
 from unittest import mock
@@ -192,14 +193,33 @@ def test_written_content_reads_edit_new_string() -> None:
     assert written_content("Edit", edit_input) == "edited body"
 
 
-def _run_main_with_io(input_text: str) -> str:
-    with mock.patch("sys.stdin", io.StringIO(input_text)):
-        with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            try:
-                hook_module.main()
-            except SystemExit:
-                pass
-            return mock_stdout.getvalue()
+def _run_main_with_io(
+    input_text: str, *, is_prose_style_enabled: bool = True
+) -> str:
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
+    with mock.patch.dict(os.environ, environment_by_key, clear=True):
+        with mock.patch("sys.stdin", io.StringIO(input_text)):
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+                try:
+                    hook_module.main()
+                except SystemExit:
+                    pass
+                return mock_stdout.getvalue()
+
+
+def test_main_is_default_off_for_overstated_hook_module_write() -> None:
+    hook_input = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/repo/hooks/hooks_constants/some_blocker_constants.py",
+            "content": _OVERSTATED_MESSAGE_MODULE,
+        },
+    }
+    assert _run_main_with_io(json.dumps(hook_input), is_prose_style_enabled=False) == ""
 
 
 def test_main_blocks_overstated_hook_module_write() -> None:
