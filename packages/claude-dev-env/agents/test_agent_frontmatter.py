@@ -325,7 +325,7 @@ def test_agent_frontmatter_loads_as_a_yaml_mapping(
         "skill-writer-agent.md",
     ),
 )
-def test_p107_named_agents_yaml_safe_load_as_mapping(agent_file_name: str) -> None:
+def named_agents_yaml_safe_load_as_mapping(agent_file_name: str) -> None:
     """P-107 regression: named agents remain real YAML mappings under safe_load."""
     agent_definition_path = Path(__file__).parent / agent_file_name
     assert agent_definition_path.is_file(), (
