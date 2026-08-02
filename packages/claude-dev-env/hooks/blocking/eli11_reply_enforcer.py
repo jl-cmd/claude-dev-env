@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Stop hook that blocks a final reply breaking the short action-first reply shape.
+Stop hook that blocks egregious reply-shape failures (action-first, bullets).
 
-The `eli11-replies` rule asks every chat reply to lead with the action, keep
-findings to a few bullets, and stay short. This hook reads the final assistant
-message, strips code fences, inline code, blockquotes, table rows, and link
-targets, then judges what a reader actually sees: the word count against a hard
-cap, whether numbered steps lead a reply that tells the user to act, the number
-of bullet lines, and how many lines pack more than one idea's worth of words.
-A reply opening with "Long form:" opts out, so a user-requested full report
-still goes through.
+The `eli11-replies` and `opus5-communication-contract` rules ask every chat
+reply to lead with the action when the user must act, keep findings to a few
+bullets, and stay scannable. This hook reads the final assistant message,
+strips code fences, inline code, blockquotes, table rows, and link targets,
+then judges shape only: multi-line instructions need numbered steps first,
+bullet count stays bounded, and list lines stay one-idea short. 
 """
 
 import json
@@ -30,13 +28,10 @@ from hooks_constants.eli11_reply_enforcer_constants import (  # noqa: E402
     IMPERATIVE_OBJECT_TOKEN_PATTERN,
     LINK_TARGET_PATTERN,
     LIST_MARKER_PREFIX_PATTERN,
-    LONG_FORM_ESCAPE_PREFIX,
     MARKDOWN_LEAD_MARKER_PATTERN,
     MAXIMUM_BULLET_LINE_COUNT,
-    MAXIMUM_OVERPACKED_LINE_COUNT,
-    MAXIMUM_REPLY_WORD_COUNT,
-    MAXIMUM_WORDS_PER_LINE,
-    MINIMUM_ENFORCED_WORD_COUNT,
+    MAXIMUM_OVERPACKED_LIST_LINE_COUNT,
+    MAXIMUM_WORDS_PER_LIST_LINE,
     NUMBERED_STEP_PATTERN,
     TABLE_ROW_PATTERN,
     TARGET_BULLET_LINE_COUNT,
@@ -67,18 +62,6 @@ def extract_reply_prose(assistant_message: str) -> str:
     prose_text = strip_code_and_quotes(assistant_message)
     prose_text = TABLE_ROW_PATTERN.sub("", prose_text)
     return LINK_TARGET_PATTERN.sub("", prose_text)
-
-
-def count_reply_words(prose_text: str) -> int:
-    """Return the number of reader-visible words in the stripped prose.
-
-    Args:
-        prose_text: Prose already cleaned of code, quotes, tables, and links.
-
-    Returns:
-        The count of whitespace-separated tokens carrying a letter or digit.
-    """
-    return len(COUNTABLE_WORD_PATTERN.findall(prose_text))
 
 
 def collect_non_empty_lines(prose_text: str) -> list[str]:
@@ -249,29 +232,13 @@ def count_words_in_line(prose_line: str) -> int:
     return len(COUNTABLE_WORD_PATTERN.findall(unmarked_line))
 
 
-def count_overpacked_lines(all_prose_lines: list[str]) -> int:
-    """Return how many lines carry more words than one idea needs.
-
-    Args:
-        all_prose_lines: The non-empty lines of reply prose.
-
-    Returns:
-        The count of lines over the per-line word cap.
-    """
-    return sum(
-        1
-        for each_line in all_prose_lines
-        if count_words_in_line(each_line) > MAXIMUM_WORDS_PER_LINE
-    )
-
-
 def strip_markdown_lead_markers(prose_line: str) -> str:
     """Return a line with its opening blockquote, heading, and bold markers off.
 
     ::
 
-        in:  "> **Long form:** the report follows"
-        out: "Long form:** the report follows"
+        in:  "> **Bold lead:** the report follows"
+        out: "Bold lead:** the report follows"
 
     Args:
         prose_line: One line of raw reply text.
@@ -282,34 +249,37 @@ def strip_markdown_lead_markers(prose_line: str) -> str:
     return MARKDOWN_LEAD_MARKER_PATTERN.sub("", prose_line.strip(), count=1)
 
 
-def opens_with_long_form_escape(assistant_message: str) -> bool:
-    """Return True when the reply opts out through the Long form prefix.
-
-    ::
-
-        ok:   "**Long form:** the report follows" -> True
-        flag: "The report follows"                -> False
-
-    A bold, blockquote, or heading wrapper around the prefix still opts out.
+def is_list_item_line(prose_line: str) -> bool:
+    """Return True when a line is a bullet or numbered list item.
 
     Args:
-        assistant_message: The raw final assistant message.
+        prose_line: One non-empty line of reply prose.
 
     Returns:
-        True when the first line with content starts with the escape prefix.
+        True when the line opens with a bullet or numbered-step marker.
     """
-    for each_line in assistant_message.splitlines():
-        if not each_line.strip():
-            continue
-        unwrapped_line = strip_markdown_lead_markers(each_line)
-        return unwrapped_line.lower().startswith(LONG_FORM_ESCAPE_PREFIX)
-    return False
+    if BULLET_LINE_PATTERN.match(prose_line):
+        return True
+    return NUMBERED_STEP_PATTERN.match(prose_line) is not None
 
 
-def describe_word_cap_violation(reply_word_count: int) -> str:
-    """Return the violation text naming the reply length and the cap."""
-    return (
-        f"{reply_word_count} words, over the {MAXIMUM_REPLY_WORD_COUNT}-word cap"
+def count_overpacked_list_lines(all_prose_lines: list[str]) -> int:
+    """Return how many list lines carry more words than one idea needs.
+
+    Plain paragraphs are not counted so a requested full report can use long
+    prose lines without a word ceiling.
+
+    Args:
+        all_prose_lines: The non-empty lines of reply prose.
+
+    Returns:
+        The count of bullet/numbered lines over the per-list-line word cap.
+    """
+    return sum(
+        1
+        for each_line in all_prose_lines
+        if is_list_item_line(each_line)
+        and count_words_in_line(each_line) > MAXIMUM_WORDS_PER_LIST_LINE
     )
 
 
@@ -317,70 +287,68 @@ def describe_bullet_cap_violation(bullet_line_count: int) -> str:
     """Return the violation text naming the bullet count and the target."""
     return (
         f"{bullet_line_count} bullets, over the {MAXIMUM_BULLET_LINE_COUNT}-bullet "
-        f"cap - cut findings to {TARGET_BULLET_LINE_COUNT} bullets"
+        f"cap - put findings in at most {TARGET_BULLET_LINE_COUNT} bullets"
     )
 
 
-def describe_overpacked_line_violation(overpacked_line_count: int) -> str:
-    """Return the violation text naming how many lines pack too much in."""
+def describe_overpacked_list_line_violation(overpacked_line_count: int) -> str:
+    """Return the violation text for overpacked list lines."""
     return (
-        f"{overpacked_line_count} lines carry too many words - one idea per line, "
-        f"at most {MAXIMUM_WORDS_PER_LINE} words each"
+        f"{overpacked_line_count} list lines carry too many words - one idea per "
+        f"bullet or step, at most {MAXIMUM_WORDS_PER_LIST_LINE} words each"
     )
 
 
 def describe_action_first_violation() -> str:
     """Return the violation text for instructions buried under prose."""
     return (
-        "the reply tells the user to act but leads with prose - put the steps "
-        "first, as a numbered list"
+        "the reply tells the user to act but leads with prose - open with "
+        "numbered steps, one short line each"
     )
 
 
-def is_action_first_violation(
-    reply_word_count: int, all_prose_lines: list[str]
-) -> bool:
-    """Return True when instructions sit below the lead of a long reply.
+def is_action_first_violation(all_prose_lines: list[str]) -> bool:
+    """Return True when multi-line instructions lack leading numbered steps.
+
+    ::
+
+        ok:   single-line "Run the migration." -> False
+        ok:   numbered steps first, then prose -> False
+        flag: prose then "Install the package." -> True
 
     Args:
-        reply_word_count: The reader-visible word count of the reply.
         all_prose_lines: The non-empty lines of reply prose.
 
     Returns:
-        True when the reply is long, carries instruction lines, and shows no
-        numbered step among its lead lines.
+        True when the reply has more than one line, carries instruction
+        lines, and shows no numbered step among its lead lines.
     """
-    if reply_word_count < MINIMUM_ENFORCED_WORD_COUNT:
+    if len(all_prose_lines) <= 1:
         return False
     if not has_imperative_instruction_line(all_prose_lines):
         return False
     return not has_leading_numbered_step(all_prose_lines)
 
 
-def collect_shape_violations(
-    reply_word_count: int, all_prose_lines: list[str]
-) -> list[str]:
+def collect_shape_violations(all_prose_lines: list[str]) -> list[str]:
     """Return the violation texts for every reply-shape rule the reply breaks.
 
     Args:
-        reply_word_count: The reader-visible word count of the reply.
         all_prose_lines: The non-empty lines of reply prose.
 
     Returns:
         One violation text per broken rule, empty when the reply is in shape.
     """
     all_violations: list[str] = []
-    if reply_word_count > MAXIMUM_REPLY_WORD_COUNT:
-        all_violations.append(describe_word_cap_violation(reply_word_count))
-    if is_action_first_violation(reply_word_count, all_prose_lines):
+    if is_action_first_violation(all_prose_lines):
         all_violations.append(describe_action_first_violation())
     bullet_line_count = count_bullet_lines(all_prose_lines)
     if bullet_line_count > MAXIMUM_BULLET_LINE_COUNT:
         all_violations.append(describe_bullet_cap_violation(bullet_line_count))
-    overpacked_line_count = count_overpacked_lines(all_prose_lines)
-    if overpacked_line_count > MAXIMUM_OVERPACKED_LINE_COUNT:
+    overpacked_list_line_count = count_overpacked_list_lines(all_prose_lines)
+    if overpacked_list_line_count > MAXIMUM_OVERPACKED_LIST_LINE_COUNT:
         all_violations.append(
-            describe_overpacked_line_violation(overpacked_line_count)
+            describe_overpacked_list_line_violation(overpacked_list_line_count)
         )
     return all_violations
 
@@ -390,11 +358,9 @@ def find_reply_shape_violations(assistant_message: str) -> list[str]:
 
     ::
 
-        ok:   a 40-word outcome sentence -> []
-        flag: a 260-word wall            -> ["260 words, over the 120-word cap"]
-
-    A reply opening with the escape prefix, and a reply under the enforced word
-    floor, are both returned as in shape.
+        ok:   a short outcome sentence              -> []
+        ok:   a long requested audit with few bullets -> []
+        flag: prose then buried "Install the package." -> [action-first]
 
     Args:
         assistant_message: The raw final assistant message.
@@ -402,19 +368,12 @@ def find_reply_shape_violations(assistant_message: str) -> list[str]:
     Returns:
         One violation text per broken rule, empty when the reply is in shape.
     """
-    if opens_with_long_form_escape(assistant_message):
-        return []
     prose_text = extract_reply_prose(assistant_message)
-    reply_word_count = count_reply_words(prose_text)
-    if reply_word_count < MINIMUM_ENFORCED_WORD_COUNT:
-        return []
-    return collect_shape_violations(
-        reply_word_count, collect_non_empty_lines(prose_text)
-    )
+    return collect_shape_violations(collect_non_empty_lines(prose_text))
 
 
 def build_block_reason(all_violations: list[str]) -> str:
-    """Return the corrective message naming each violation and the escape hatch.
+    """Return the corrective message naming each violation and the rewrite path.
 
     Args:
         all_violations: The violation texts the reply earned.
@@ -424,16 +383,14 @@ def build_block_reason(all_violations: list[str]) -> str:
     """
     formatted_violation_list = VIOLATION_SEPARATOR.join(all_violations)
     return (
-        f"ELI11 REPLY SHAPE: Your reply breaks the short action-first shape "
+        f"ELI11 REPLY SHAPE: Rewrite the reply into a short action-first shape "
         f"({formatted_violation_list}).\n\n"
-        f"Rewrite it short. When the user must act, open with numbered "
-        f"click-by-click steps, one short line each. When nothing is needed, open "
-        f"with the outcome in one sentence. Keep findings to at most "
-        f"{TARGET_BULLET_LINE_COUNT} short bullets and stay under "
-        f"{MAXIMUM_REPLY_WORD_COUNT} words. Code fences, blockquotes, tables, and "
-        f"links are already exempt from the count.\n\n"
-        f"When the user asked for a full report, start the reply with "
-        f'"Long form:" to opt out of this check.\n\n'
+        f"When the user must act, open with numbered click-by-click steps, one "
+        f"short line each. When nothing is needed, open with the outcome in one "
+        f"sentence. Keep findings to at most {TARGET_BULLET_LINE_COUNT} short "
+        f"bullets. A requested full report may run long; keep list lines short "
+        f"and lead with the outcome. Code fences, blockquotes, tables, and "
+        f"links are already exempt from shape counting.\n\n"
         f"You MUST re-output the complete, revised response with the correction "
         f"applied."
     )
