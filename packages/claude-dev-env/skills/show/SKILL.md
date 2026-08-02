@@ -7,38 +7,30 @@ description: Create and review inline visual explanations, diagrams, interactive
 
 Use this skill when a user asks to show, draw, map, visualize, explain visually, or build an interactive visual.
 
-## Operating sequence
-
-1. Identify the user’s intent and choose the closest route in `routing.yaml`.
-2. Read the route’s references and workflow.
-3. Start from the route template when one exists.
-4. Keep explanatory prose outside the visual.
-5. Run the route validators before returning the result.
-6. Split dense visuals into focused visuals with connective prose.
-
 ## Routes
 
-| Intent | Route | Primary output |
-|---|---|---|
-| Steps, decisions, lifecycle, transformation | `flowchart` | SVG |
-| Architecture, containment, hierarchy | `structural` | SVG |
-| Mechanism, intuition, spatial metaphor | `illustrative` | SVG or HTML |
-| Entity or class relationships | `erd` | HTML/SVG |
-| Controls that change a visual explanation | `interactive` | HTML |
-| UI surface, form, card, dashboard | `mockup` | HTML |
-| Quantitative or geographic data | `chart` | HTML/SVG |
-| Illustration or generative art | `art` | HTML or raster |
+Pick the row whose intent matches the request, then follow `workflows/create-visual.md`.
 
-Each route's reference list lives in `routing.yaml`.
+| Intent | Route |
+|---|---|
+| Steps, decisions, lifecycle, transformation | `flowchart` |
+| Architecture, containment, hierarchy | `structural` |
+| Mechanism, intuition, spatial metaphor | `illustrative` |
+| Entity or class relationships | `erd` |
+| Controls that change a visual explanation | `interactive` |
+| UI surface, form, card, dashboard | `mockup` |
+| Quantitative or geographic data | `chart` |
+| Illustration or generative art | `art` |
+
+Each route's references and template live in `routing.yaml`; the template sets the output type.
 
 ## Invariants
 
-- Use sentence case, flat surfaces, and a flat colorful palette in the style of `samples/` — three to four fixed hues, tinted fills, and neutral grays, per `references/core-design.md`.
-- Use color to encode meaning, with a short legend when the meaning needs one.
-- SVG output follows the canvas tiers, text floor, and opaque warm-white background rect set in `references/svg-contract.md`, with `title` and `desc` as its first children, and uses font weights 400 or 500.
-- Prefer multiple focused visuals over one dense canvas.
+- Design, palette, and color meaning follow `references/core-design.md`.
+- SVG output follows `references/svg-contract.md`; HTML output follows `references/host-and-html.md`.
+- Prefer multiple focused visuals over one dense canvas, and keep explanatory prose outside the visual.
+- Keep one diagram family per visual.
 - When the visual shows code, a diff, or a plan that lives in a repo, read the real lines and tie every arrow to a `path:line` citation before drawing. When the picture and the source disagree, the picture is wrong.
-- HTML output begins with a visually hidden `h2` summary.
 - `samples/` holds good examples the user has picked out. Read them on demand to study what works; the rules stay in the references.
 
 ## Workflows

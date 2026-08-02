@@ -9,6 +9,6 @@ Color is the default, in the style of `samples/`: pick a palette of three to fou
 - Paint category and state surfaces with light tinted fills of the palette hues (for example `#DFF0E4` under a `#1E8449` stroke), with white or warm-white cards for plain content.
 - Draw strokes and text in strong fixed colors: near-black `#1A1A1A` for primary text, mid-gray for secondary, a palette hue for anything whose color carries meaning.
 - Use each hue for one meaning and keep that meaning consistent across the visual; a short legend explains any pairing the reader cannot work out alone.
-- Every SVG draws its own opaque warm-white background rect (see `references/svg-contract.md`), so the fixed palette stays legible on light and dark hosts alike.
+- The palette is fixed rather than host-derived, so every SVG owns its background rect — see `references/svg-contract.md`.
 - Keep contrast strong: text and strokes hold up against the fill behind them.
 - Reserve a monochrome outline style for the rare case the user asks for it.
