@@ -45,6 +45,8 @@ from pr_loop_shared_constants.copilot_quota_constants import (
 )
 from pr_loop_shared_constants.reviews_disabled_constants import (
     CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
+    CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN,
     CLAUDE_REVIEWS_DISABLED_COPILOT_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
     CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR,
@@ -147,18 +149,52 @@ def _is_copilot_disabled_via_resolved_settings() -> bool:
     )
 
 
+def _is_off_by_default_reviewer_disabled(reviewer_token: str) -> bool:
+    """Return True when the resolved settings leave an opt-in reviewer off.
+
+    ::
+
+        enabled names the token, disabled empty  -> False  (gate runs)
+        neither list names the token             -> True   (off by default)
+        both lists name the token                -> True   (opt-out wins)
+
+    Args:
+        reviewer_token: The lowercase reviewer token to look up in both lists.
+
+    Returns:
+        True when the reviewer stays off for this run.
+    """
+    reviews_settings = _resolve_reviews_settings()
+    is_opted_out = reviewer_token in reviews_settings.disabled_tokens
+    is_opted_in = reviewer_token in reviews_settings.enabled_tokens
+    return is_opted_out or not is_opted_in
+
+
 def _is_bugbot_disabled_via_resolved_settings() -> bool:
     """Return True when the resolved settings disable the bugbot reviewer.
 
     Bugbot is off by default. It is disabled when the disabled list names it, or
     when the enabled list does not name it.
     """
-    reviews_settings = _resolve_reviews_settings()
-    is_opted_out = (
-        CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN in reviews_settings.disabled_tokens
-    )
-    is_opted_in = CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN in reviews_settings.enabled_tokens
-    return is_opted_out or not is_opted_in
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN)
+
+
+def _is_bugteam_disabled_via_resolved_settings() -> bool:
+    """Return True when the resolved settings disable the bug-audit family.
+
+    Bugteam is off by default. It is disabled when the disabled list names it,
+    or when the enabled list does not name it.
+    """
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN)
+
+
+def _is_codex_disabled_via_resolved_settings() -> bool:
+    """Return True when the resolved settings disable the Codex reviewer.
+
+    Codex is off by default. It is disabled when the disabled list names it, or
+    when the enabled list does not name it.
+    """
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN)
 
 
 def _unavailable_note(reviewer_token: str, message: str) -> str:

@@ -16,17 +16,16 @@ Each bypass flag closes one reviewer gate when that reviewer is unavailable.
 the Copilot review and pending-review gates. ``--bugteam-post-blocked`` skips
 the bugteam CLEAN-review gate. ``--codex-down`` skips the Codex review gate.
 
-Each flag also honors its own reviews-disabled token: "bugbot", "copilot",
-"bugteam", or "codex". A caller that cannot pass the flag reaches the same
-bypass by exporting the token. The mark-ready blocker hook re-runs this script
-with no flags, so its convergence re-check reads the bypass from the exported
-token instead. For Codex, sticky job-dir state ``codex_down: true`` is a third
-bypass source when the original run could not re-pass ``--codex-down``.
+Bugbot, bugteam, and codex are off by default. Each gate runs only when
+``CLAUDE_REVIEWS_ENABLED`` lists its token, and a token in
+``CLAUDE_REVIEWS_DISABLED`` forces one off even when the opt-in lists it.
+Copilot runs by default and stops only when the disabled list names it. For
+Codex, sticky job-dir state ``codex_down: true`` is a further bypass source
+when the original run could not re-pass ``--codex-down``.
 
-Copilot and Bugbot waivers are disk-authoritative.
+Every reviewer waiver is disk-authoritative.
 When ``~/.claude/settings.json`` is readable, its env block is the single source.
 The frozen process env is only a fallback when that disk read fails (logged once).
-Bugteam's opt-out is env-only via ``_resolve_bugteam_post_blocked``.
 A probe error does not waive the gate; the live GitHub checks still run.
 
 The Codex gate is conditional-required: it demands
@@ -105,11 +104,11 @@ from pr_converge_skill_constants.constants import (
 )
 from reviews_disabled import (
     is_bugbot_disabled_via_env,
-    is_bugteam_disabled_via_env,
-    is_codex_disabled_via_env,
     is_copilot_disabled_via_env,
 )
 from check_convergence_availability import (
+    _is_bugteam_disabled_via_resolved_settings as is_bugteam_disabled_via_env,
+    _is_codex_disabled_via_resolved_settings as is_codex_disabled_via_env,
     _resolve_bugbot_waiver,
     _resolve_copilot_waiver,
     _waiver_from_cli_flag,
@@ -815,16 +814,19 @@ def _resolve_copilot_down(is_copilot_down_flag: bool) -> bool:
 
 
 def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
-    """Combine the --bugteam-post-blocked flag with the bugteam env opt-out.
+    """Combine the --bugteam-post-blocked flag with the resolved bugteam opt-in.
 
     ::
 
-        flag True, env unset                        -> True   (caller passed the flag)
-        flag False, reviews-disabled lists bugteam  -> True   (exported token)
-        flag False, env unset                       -> False  (gate runs)
+        flag True                                   -> True   (caller passed the flag)
+        flag False, reviews-enabled lists bugteam   -> False  (gate runs)
+        flag False, neither list names bugteam      -> True   (off by default)
+        flag False, reviews-disabled lists bugteam  -> True   (opt-out wins)
 
-    The mark-ready blocker hook re-runs this script with no flags, so the env
-    fallback lets an exported bugteam token carry the bypass into that re-check.
+    Bugteam is off by default and runs only on an explicit opt-in. Settings on
+    disk are the source when readable, so a settings.json opt-in reaches the
+    mark-ready blocker hook, which re-runs this script with no flags. The
+    process env is the fallback when that disk read fails.
     """
     return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
 
