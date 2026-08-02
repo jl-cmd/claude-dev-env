@@ -107,8 +107,8 @@ from reviews_disabled import (
     is_copilot_disabled_via_env,
 )
 from check_convergence_availability import (
-    _is_bugteam_disabled_via_resolved_settings as is_bugteam_disabled_via_env,
-    _is_codex_disabled_via_resolved_settings as is_codex_disabled_via_env,
+    _is_bugteam_disabled_via_resolved_settings,
+    _is_codex_disabled_via_resolved_settings,
     _resolve_bugbot_waiver,
     _resolve_copilot_waiver,
     _waiver_from_cli_flag,
@@ -828,7 +828,7 @@ def _resolve_bugteam_post_blocked(is_bugteam_post_blocked_flag: bool) -> bool:
     mark-ready blocker hook, which re-runs this script with no flags. The
     process env is the fallback when that disk read fails.
     """
-    return is_bugteam_post_blocked_flag or is_bugteam_disabled_via_env()
+    return is_bugteam_post_blocked_flag or _is_bugteam_disabled_via_resolved_settings()
 
 
 def _resolve_codex_down(
@@ -856,7 +856,7 @@ def _resolve_codex_down(
     """
     return (
         is_codex_down_flag
-        or is_codex_disabled_via_env()
+        or _is_codex_disabled_via_resolved_settings()
         or _read_codex_down_from_job_state(all_job_state_fields)
     )
 
