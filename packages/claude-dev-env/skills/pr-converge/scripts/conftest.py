@@ -17,11 +17,11 @@ from pr_loop_shared_constants.reviews_disabled_constants import (  # noqa: E402
     CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
 )
 
-_MISSING_SETTINGS_FILENAME = "settings-absent-in-tests.json"
+_MISSING_SETTINGS_PATH = Path("settings-absent-in-tests.json")
 
 
 @pytest.fixture(autouse=True)
-def opt_gated_reviewers_in(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def opt_gated_reviewers_in(monkeypatch: pytest.MonkeyPatch) -> None:
     """Point settings at an absent file and opt bugteam and codex in.
 
     Bugteam and codex are off by default, and the resolver reads the real
@@ -31,10 +31,11 @@ def opt_gated_reviewers_in(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     the gate it was written for. A case that tests the lists themselves
     overrides this from its own body.
     """
+    check_convergence_availability._resolve_reviews_settings.cache_clear()
     monkeypatch.setattr(
         check_convergence_availability,
         "get_claude_user_settings_path",
-        lambda: tmp_path / _MISSING_SETTINGS_FILENAME,
+        lambda: _MISSING_SETTINGS_PATH,
     )
     all_opted_in_tokens = CLAUDE_REVIEWS_DISABLED_TOKEN_SEPARATOR.join(
         (CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN, CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN)

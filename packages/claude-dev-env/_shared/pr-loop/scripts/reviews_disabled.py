@@ -48,9 +48,7 @@ __all__ = [
     "is_bugbot_disabled_via_env",
     "is_bugbot_opted_out_via_env",
     "is_bugteam_disabled_via_env",
-    "is_bugteam_opted_out_via_env",
     "is_codex_disabled_via_env",
-    "is_codex_opted_out_via_env",
     "is_copilot_disabled_via_env",
     "main",
 ]
@@ -119,22 +117,6 @@ def is_bugteam_disabled_via_env() -> bool:
     return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN)
 
 
-def is_bugteam_opted_out_via_env() -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED opts the bug-audit family out.
-
-    The opt-out forces the family off even when ``CLAUDE_REVIEWS_ENABLED``
-    lists ``bugteam``. This reports only the opt-out signal, where
-    ``is_bugteam_disabled_via_env`` also reports off for the default case in
-    which neither env var names ``bugteam``.
-
-    Returns:
-        True when ``CLAUDE_REVIEWS_DISABLED`` lists the ``bugteam`` token.
-    """
-    return _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
-    )
-
-
 def is_bugbot_disabled_via_env() -> bool:
     """Check whether Cursor Bugbot is disabled for this run.
 
@@ -188,22 +170,6 @@ def is_codex_disabled_via_env() -> bool:
         ``CLAUDE_REVIEWS_ENABLED`` does not list ``codex``.
     """
     return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN)
-
-
-def is_codex_opted_out_via_env() -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED opts the Codex reviewer out.
-
-    The opt-out forces Codex off even when ``CLAUDE_REVIEWS_ENABLED`` lists
-    ``codex``. This reports only the opt-out signal, where
-    ``is_codex_disabled_via_env`` also reports off for the default case in
-    which neither env var names ``codex``.
-
-    Returns:
-        True when ``CLAUDE_REVIEWS_DISABLED`` lists the ``codex`` token.
-    """
-    return _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN
-    )
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:

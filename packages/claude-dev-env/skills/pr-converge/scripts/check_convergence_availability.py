@@ -122,8 +122,15 @@ def _log_disk_settings_fallback_once() -> None:
     )
 
 
+@functools.lru_cache(maxsize=1)
 def _resolve_reviews_settings() -> _ReviewsSettings:
-    """Return disabled and enabled tokens from disk, or env when disk is unreadable."""
+    """Return disabled and enabled tokens from disk, or env when disk is unreadable.
+
+    Cached for the process. Four reviewer gates ask for these tokens in one
+    run, and settings cannot change under a running check, so the disk read
+    and JSON parse happen once. A test that rebinds the settings path calls
+    ``_resolve_reviews_settings.cache_clear()`` first.
+    """
     all_disk_env_entries = _try_read_disk_env_block()
     if all_disk_env_entries is not None:
         return _ReviewsSettings(
