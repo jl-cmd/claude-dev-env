@@ -4,6 +4,6 @@ All prose a person reads (chat, `AskUserQuestion`, docs, PR/issue bodies, commit
 
 The `plain_language_blocker` PreToolUse hook (AskUserQuestion + `.md` Write/Edit/MultiEdit) blocks a heavy word and names the everyday swap; code fences, inline code, blockquotes, URLs, and file paths are skipped.
 
-[`eli11-replies`](eli11-replies.md) governs reply length and shape; this rule governs word choice.
+[`eli11-replies`](eli11-replies.md) governs reply length and shape; [`opus5-communication-contract`](opus5-communication-contract.md) governs progress and finals; this rule governs word choice.
 
 A project can keep its own domain words out of the check with a `.claude/plain-language-allow.json` file: a JSON array of terms. An exact, case-insensitive, whole-word match on any term passes. The hook reads this file only from inside the project tree, up to the repository root, so each project's allowlist stays with its own code.
