@@ -159,6 +159,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
             "last_assistant_message": "This is probably correct without a source.",
         }
     )
+    environment_by_key = {**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}
     completed = subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
         check=False,
@@ -166,7 +167,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env={**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"},
+        env=environment_by_key,
     )
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
