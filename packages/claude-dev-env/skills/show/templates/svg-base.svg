@@ -1,0 +1,19 @@
+<svg width="100%" viewBox="0 0 680 180" role="img">
+  <title>Accessible visual title</title>
+  <desc>One-sentence description of the visual.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#3A3A3A" stroke-width="1.5" />
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="680" height="180" fill="#F2EFE6" />
+  <g stroke-width="1">
+    <rect x="40" y="40" width="180" height="44" rx="8" fill="#FFFFFF" stroke="#9A9A9A" />
+    <line x1="220" y1="62" x2="300" y2="62" fill="none" stroke="#3A3A3A" marker-end="url(#arrow)" />
+    <rect x="300" y="40" width="180" height="44" rx="8" fill="#DFF0E4" stroke="#1E8449" />
+  </g>
+  <g fill="#1A1A1A" font-family="sans-serif" font-size="16" text-anchor="middle">
+    <text x="130" y="62" dominant-baseline="central">Start</text>
+    <text x="390" y="62" dominant-baseline="central">Next step</text>
+  </g>
+</svg>

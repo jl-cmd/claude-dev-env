@@ -1,0 +1,222 @@
+<svg viewBox="0 0 1340 1680" xmlns="http://www.w3.org/2000/svg" width="1340" height="1680" role="img">
+  <title>PR 1262: unreachable checkpoint-skip branches removed</title>
+  <desc>Three panels. One: submit() stamps not_started, a value absent from workflow_order, so every should_skip_checkpoint reading is False and all five skip outlets are dead ends. Two: the four valves, the review bypass, and the LIVE_WALLPAPER spur are deleted; the checkpoint stamps remain on the straight pipe. Three: real resume is a product-level sieve in the orchestrator that turns THEME, WALLPAPER into WALLPAPER.</desc>
+  <defs>
+    <marker id="aRed" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="14" refX="15" refY="7" orient="auto">
+      <path d="M0,0 L16,7 L0,14 Z" fill="#C0392B"/>
+    </marker>
+    <marker id="aGrn" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="14" refX="15" refY="7" orient="auto">
+      <path d="M0,0 L16,7 L0,14 Z" fill="#1E8449"/>
+    </marker>
+    <marker id="aAmb" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="14" refX="15" refY="7" orient="auto">
+      <path d="M0,0 L16,7 L0,14 Z" fill="#B9770E"/>
+    </marker>
+    <marker id="aGry" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="12" refX="13" refY="6" orient="auto">
+      <path d="M0,0 L14,6 L0,12 Z" fill="#7A7A7A"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1340" height="1680" fill="#FAF7EF"/>
+
+  <!-- ================= PANEL 1 ================= -->
+  <text x="60" y="56" font-family="Helvetica,Arial,sans-serif" font-size="30" font-weight="bold" fill="#C0392B">1 · TODAY — every gate reads a blank stamp</text>
+
+  <rect x="58" y="94" width="286" height="230" rx="12" fill="#EDEAE1" stroke="#3A3A3A" stroke-width="3"/>
+  <text x="201" y="128" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="23" font-weight="bold" fill="#1A1A1A">submit()</text>
+  <rect x="175" y="144" width="52" height="32" fill="#8A8A8A" stroke="#3A3A3A" stroke-width="3"/>
+  <rect x="191" y="176" width="20" height="24" fill="#8A8A8A" stroke="#3A3A3A" stroke-width="3"/>
+  <rect x="147" y="200" width="108" height="26" fill="#C0392B" stroke="#7B241C" stroke-width="3"/>
+  <rect x="96" y="248" width="212" height="52" rx="6" fill="#FFFFFF" stroke="#C0392B" stroke-width="3"/>
+  <text x="202" y="281" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="22" fill="#C0392B">not_started</text>
+  <text x="201" y="346" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">submission_service.py:173</text>
+
+  <line x1="348" y1="274" x2="404" y2="274" stroke="#C0392B" stroke-width="6" marker-end="url(#aRed)"/>
+
+  <rect x="416" y="94" width="308" height="268" rx="12" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="3"/>
+  <text x="570" y="124" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="21" font-weight="bold" fill="#1A1A1A">workflow_order()</text>
+  <rect x="438" y="136" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="159" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">binary_apks_uploaded</text>
+  <rect x="438" y="172" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="195" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">app_info_saved</text>
+  <rect x="438" y="208" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="231" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">country_price_saved</text>
+  <rect x="438" y="244" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="267" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">publication_saved</text>
+  <rect x="438" y="280" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="303" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">review_saved</text>
+  <rect x="438" y="316" width="264" height="32" rx="5" fill="#F2EFE6" stroke="#9A9A9A" stroke-width="2"/>
+  <text x="570" y="339" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#3A3A3A">submitted_for_review</text>
+
+  <rect x="740" y="130" width="152" height="40" rx="6" fill="#FFFFFF" stroke="#C0392B" stroke-width="3" stroke-dasharray="7 5"/>
+  <text x="816" y="158" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#C0392B">not_started</text>
+  <rect x="740" y="214" width="152" height="40" rx="6" fill="#FFFFFF" stroke="#C0392B" stroke-width="3" stroke-dasharray="7 5" opacity="0.5"/>
+  <text x="816" y="242" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#C0392B" opacity="0.5">not_started</text>
+  <rect x="740" y="298" width="152" height="40" rx="6" fill="#FFFFFF" stroke="#C0392B" stroke-width="3" stroke-dasharray="7 5" opacity="0.26"/>
+  <text x="816" y="326" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#C0392B" opacity="0.26">not_started</text>
+  <line x1="816" y1="174" x2="816" y2="356" stroke="#C0392B" stroke-width="5" stroke-dasharray="10 8" marker-end="url(#aRed)"/>
+  <text x="816" y="394" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="28" font-weight="bold" fill="#C0392B">False</text>
+
+  <text x="944" y="196" font-family="Menlo,Consolas,monospace" font-size="20" fill="#C0392B">no slot matches</text>
+  <text x="944" y="222" font-family="Menlo,Consolas,monospace" font-size="20" fill="#C0392B">not_started</text>
+  <text x="944" y="254" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">checkpoint.py · workflow_order</text>
+  <text x="944" y="276" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">excludes NOT_STARTED</text>
+  <text x="944" y="326" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">should_skip_checkpoint</text>
+  <text x="944" y="350" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">submission_checkpoints.py:47</text>
+
+  <line x1="816" y1="402" x2="816" y2="426" stroke="#C0392B" stroke-width="5"/>
+  <line x1="210" y1="426" x2="1170" y2="426" stroke="#C0392B" stroke-width="5"/>
+
+  <rect x="86" y="480" width="1204" height="56" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+  <line x1="86" y1="508" x2="1312" y2="508" stroke="#1E8449" stroke-width="8" marker-end="url(#aGrn)"/>
+
+  <g>
+    <line x1="210" y1="426" x2="210" y2="460" stroke="#C0392B" stroke-width="5" marker-end="url(#aRed)"/>
+    <rect x="166" y="462" width="88" height="92" rx="8" fill="#FFFFFF" stroke="#C0392B" stroke-width="3"/>
+    <circle cx="210" cy="508" r="16" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+    <line x1="210" y1="554" x2="210" y2="584" stroke="#C0392B" stroke-width="5" stroke-dasharray="8 6"/>
+    <rect x="176" y="584" width="68" height="30" fill="#F6DDD9" stroke="#C0392B" stroke-width="3"/>
+    <line x1="188" y1="590" x2="232" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <line x1="232" y1="590" x2="188" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <text x="210" y="648" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#1A1A1A">binary_apks_uploaded</text>
+    <text x="210" y="672" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="#6E6E6E">pipeline.py:114</text>
+  </g>
+  <g>
+    <line x1="450" y1="426" x2="450" y2="460" stroke="#C0392B" stroke-width="5" marker-end="url(#aRed)"/>
+    <rect x="406" y="462" width="88" height="92" rx="8" fill="#FFFFFF" stroke="#C0392B" stroke-width="3"/>
+    <circle cx="450" cy="508" r="16" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+    <line x1="450" y1="554" x2="450" y2="584" stroke="#C0392B" stroke-width="5" stroke-dasharray="8 6"/>
+    <rect x="416" y="584" width="68" height="30" fill="#F6DDD9" stroke="#C0392B" stroke-width="3"/>
+    <line x1="428" y1="590" x2="472" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <line x1="472" y1="590" x2="428" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <text x="450" y="648" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#1A1A1A">app_info_saved</text>
+    <text x="450" y="672" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="#6E6E6E">pipeline.py:174</text>
+  </g>
+  <g>
+    <line x1="690" y1="426" x2="690" y2="460" stroke="#C0392B" stroke-width="5" marker-end="url(#aRed)"/>
+    <rect x="646" y="462" width="88" height="92" rx="8" fill="#FFFFFF" stroke="#C0392B" stroke-width="3"/>
+    <circle cx="690" cy="508" r="16" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+    <line x1="690" y1="554" x2="690" y2="584" stroke="#C0392B" stroke-width="5" stroke-dasharray="8 6"/>
+    <rect x="656" y="584" width="68" height="30" fill="#F6DDD9" stroke="#C0392B" stroke-width="3"/>
+    <line x1="668" y1="590" x2="712" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <line x1="712" y1="590" x2="668" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <text x="690" y="648" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#1A1A1A">country_price_saved</text>
+    <text x="690" y="672" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="#6E6E6E">pipeline.py:208</text>
+  </g>
+  <g>
+    <line x1="930" y1="426" x2="930" y2="460" stroke="#C0392B" stroke-width="5" marker-end="url(#aRed)"/>
+    <rect x="886" y="462" width="88" height="92" rx="8" fill="#FFFFFF" stroke="#C0392B" stroke-width="3"/>
+    <circle cx="930" cy="508" r="16" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+    <line x1="930" y1="554" x2="930" y2="584" stroke="#C0392B" stroke-width="5" stroke-dasharray="8 6"/>
+    <rect x="896" y="584" width="68" height="30" fill="#F6DDD9" stroke="#C0392B" stroke-width="3"/>
+    <line x1="908" y1="590" x2="952" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <line x1="952" y1="590" x2="908" y2="608" stroke="#C0392B" stroke-width="4"/>
+    <text x="930" y="648" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#1A1A1A">publication_saved</text>
+    <text x="930" y="672" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="#6E6E6E">pipeline.py:242</text>
+  </g>
+  <g>
+    <line x1="1170" y1="426" x2="1170" y2="460" stroke="#C0392B" stroke-width="5" marker-end="url(#aRed)"/>
+    <rect x="1126" y="462" width="88" height="92" rx="8" fill="#FFFFFF" stroke="#C0392B" stroke-width="3" stroke-dasharray="8 6"/>
+    <circle cx="1170" cy="508" r="16" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+    <path d="M 1170 554 L 1170 588 L 1272 588 L 1272 540" fill="none" stroke="#C0392B" stroke-width="5" stroke-dasharray="8 6"/>
+    <line x1="1248" y1="562" x2="1280" y2="582" stroke="#C0392B" stroke-width="4"/>
+    <line x1="1280" y1="562" x2="1248" y2="582" stroke="#C0392B" stroke-width="4"/>
+    <text x="1170" y="648" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#1A1A1A">review_saved</text>
+    <text x="1170" y="672" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="#6E6E6E">pipeline.py:314 · early return</text>
+  </g>
+
+  <line x1="60" y1="712" x2="1280" y2="712" stroke="#D5D0C2" stroke-width="3"/>
+
+  <!-- ================= PANEL 2 ================= -->
+  <text x="60" y="774" font-family="Helvetica,Arial,sans-serif" font-size="30" font-weight="bold" fill="#B9770E">2 · THE CUT — the gates come off, the stamps stay</text>
+
+  <path d="M 92 820 L 566 820 L 530 1058 L 128 1058 Z" fill="#FDF3E0" stroke="#B9770E" stroke-width="4"/>
+  <text x="329" y="856" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="22" font-weight="bold" fill="#B9770E">should_skip_checkpoint</text>
+  <text x="329" y="882" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#B9770E">−993 lines</text>
+
+  <rect x="126" y="900" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3"/>
+  <text x="217" y="928" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">valve :114</text>
+  <rect x="326" y="900" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3"/>
+  <text x="417" y="928" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">valve :174</text>
+  <rect x="138" y="954" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3"/>
+  <text x="229" y="982" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">valve :208</text>
+  <rect x="338" y="954" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3"/>
+  <text x="429" y="982" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">valve :242</text>
+  <rect x="150" y="1008" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3" stroke-dasharray="7 5"/>
+  <text x="241" y="1036" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">bypass :314</text>
+  <rect x="350" y="1008" width="182" height="42" rx="8" fill="#FFFFFF" stroke="#B9770E" stroke-width="3" stroke-dasharray="7 5"/>
+  <text x="441" y="1036" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="18" fill="#B9770E">spur :124</text>
+
+  <rect x="92" y="1084" width="474" height="98" rx="10" fill="#FFFFFF" stroke="#B9770E" stroke-width="3"/>
+  <text x="114" y="1118" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">elif LIVE_WALLPAPER:</text>
+  <text x="140" y="1146" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">capture_content_id()</text>
+  <text x="114" y="1172" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">its only inlet was the valve above it</text>
+  <line x1="478" y1="1112" x2="518" y2="1140" stroke="#C0392B" stroke-width="5"/>
+  <line x1="518" y1="1112" x2="478" y2="1140" stroke="#C0392B" stroke-width="5"/>
+
+  <path d="M 706 946 L 624 900" fill="none" stroke="#B9770E" stroke-width="6" marker-end="url(#aAmb)"/>
+
+  <rect x="732" y="820" width="68" height="332" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+  <line x1="766" y1="820" x2="766" y2="1188" stroke="#1E8449" stroke-width="8" marker-end="url(#aGrn)"/>
+
+  <g>
+    <rect x="814" y="828" width="40" height="40" rx="6" fill="#1E8449"/>
+    <text x="834" y="857" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">✓</text>
+    <text x="870" y="844" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">binary_apks_uploaded</text>
+    <text x="870" y="866" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">binary_devices_configured</text>
+  </g>
+  <g>
+    <rect x="814" y="894" width="40" height="40" rx="6" fill="#1E8449"/>
+    <text x="834" y="923" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">✓</text>
+    <text x="870" y="922" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">app_info_saved</text>
+  </g>
+  <g>
+    <rect x="814" y="960" width="40" height="40" rx="6" fill="#1E8449"/>
+    <text x="834" y="989" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">✓</text>
+    <text x="870" y="988" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">country_price_saved</text>
+  </g>
+  <g>
+    <rect x="814" y="1026" width="40" height="40" rx="6" fill="#1E8449"/>
+    <text x="834" y="1055" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">✓</text>
+    <text x="870" y="1054" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">publication_saved</text>
+  </g>
+  <g>
+    <rect x="814" y="1092" width="40" height="40" rx="6" fill="#FFFFFF" stroke="#1E8449" stroke-width="3"/>
+    <text x="834" y="1121" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="bold" fill="#1E8449">✓</text>
+    <text x="870" y="1120" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">review_saved</text>
+    <text x="870" y="1144" font-family="Menlo,Consolas,monospace" font-size="17" fill="#6E6E6E">withheld when the save is unverified</text>
+  </g>
+
+  <line x1="60" y1="1226" x2="1280" y2="1226" stroke="#D5D0C2" stroke-width="3"/>
+
+  <!-- ================= PANEL 3 ================= -->
+  <text x="60" y="1288" font-family="Helvetica,Arial,sans-serif" font-size="30" font-weight="bold" fill="#1E8449">3 · RESUME LIVES ONE FLOOR UP — a sieve, not a valve</text>
+
+  <rect x="80" y="1338" width="300" height="118" rx="10" fill="#FFFFFF" stroke="#1E8449" stroke-width="3"/>
+  <text x="230" y="1370" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#6E6E6E">detected order</text>
+  <rect x="104" y="1386" width="118" height="46" rx="6" fill="#EDEAE1" stroke="#3A3A3A" stroke-width="2"/>
+  <text x="163" y="1417" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">THEME</text>
+  <rect x="234" y="1386" width="126" height="46" rx="6" fill="#EDEAE1" stroke="#3A3A3A" stroke-width="2"/>
+  <text x="297" y="1417" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1A1A1A">WALLPAPER</text>
+
+  <line x1="388" y1="1396" x2="452" y2="1396" stroke="#1E8449" stroke-width="6" marker-end="url(#aGrn)"/>
+
+  <path d="M 464 1328 L 792 1328 L 690 1458 L 566 1458 Z" fill="#DFF0E4" stroke="#1E8449" stroke-width="4"/>
+  <text x="628" y="1364" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="21" font-weight="bold" fill="#1A1A1A">is_product_submitted</text>
+  <text x="628" y="1392" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="17" fill="#1E8449">_orchestrator_theme_runner.py:253</text>
+  <line x1="528" y1="1418" x2="726" y2="1418" stroke="#1E8449" stroke-width="3" stroke-dasharray="6 8"/>
+
+  <path d="M 566 1462 L 566 1538 L 476 1538" fill="none" stroke="#7A7A7A" stroke-width="5" marker-end="url(#aGry)"/>
+  <rect x="304" y="1514" width="150" height="48" rx="6" fill="#EDEAE1" stroke="#7A7A7A" stroke-width="3"/>
+  <text x="379" y="1546" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#7A7A7A">THEME</text>
+  <text x="304" y="1598" font-family="Menlo,Consolas,monospace" font-size="18" fill="#7A7A7A">already submitted per tracker</text>
+
+  <line x1="798" y1="1388" x2="860" y2="1388" stroke="#1E8449" stroke-width="6" marker-end="url(#aGrn)"/>
+  <rect x="874" y="1338" width="300" height="118" rx="10" fill="#FFFFFF" stroke="#1E8449" stroke-width="3"/>
+  <text x="1024" y="1370" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="19" fill="#6E6E6E">order sent to submit()</text>
+  <rect x="960" y="1386" width="126" height="46" rx="6" fill="#DFF0E4" stroke="#1E8449" stroke-width="3"/>
+  <text x="1023" y="1417" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="20" fill="#1E8449">WALLPAPER</text>
+
+  <text x="874" y="1518" font-family="Menlo,Consolas,monospace" font-size="22" fill="#1A1A1A">[THEME, WALLPAPER] → [WALLPAPER]</text>
+  <text x="874" y="1548" font-family="Menlo,Consolas,monospace" font-size="18" fill="#6E6E6E">product granularity · one submit() per product</text>
+  <text x="874" y="1598" font-family="Menlo,Consolas,monospace" font-size="18" fill="#6E6E6E">PR #1262 · base 5b40e42</text>
+</svg>
