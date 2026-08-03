@@ -11,6 +11,7 @@ Pointer documents to external sources, standard terminology, and internal tool o
 | `prose-style-enforcement.md` | How `CLAUDE_PROSE_STYLE_ENFORCEMENT` arms opinionated prose gates (default off) while AskUserQuestion lean-block stays always on |
 | `advisor-tool.md` | Canonical consult bones for any stronger reviewer: when to call, hard rule before first write, how to treat advice; maps to the Anthropic advisor tool |
 | `team-advisor-skill.md` | `/team-advisor` map: sole-consumer warm bind, ref index, and how it pairs with `advisor()` |
+| `weak-executor-advisor.md` | Consult profile a below-advisor-tier executor (Sonnet, Haiku) follows on top of `advisor-tool.md`: spawn-prompt steering, context packaging, two-timing rule, consult budget, failure branches |
 
 ## Role
 
