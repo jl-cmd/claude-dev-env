@@ -1,8 +1,8 @@
 /**
- * Read-only installation plan and preflight for claude-dev-env.
+ * Read-only install and uninstall plans for claude-dev-env.
  *
- * Builds a frozen plan before any write. E2 consumes it through the install
- * executor. Plan construction performs zero writes.
+ * Builds a frozen plan before any write. E2 consumes the install plan; F consumes
+ * the uninstall plan. Plan construction performs zero writes.
  *
  * ::
  *
@@ -10,7 +10,10 @@
  *     // preflight failed: InstallPlanPreflightError, disk unchanged
  *     // ok: frozen plan with pythonCommand, priorManifest, mutation kinds
  *
- * Manifest parse stays tolerant. Settings JSON is checked only when hooks install.
+ *     uninstallPlan = buildUninstallPlan({ managedRoot, manifestFilePath, ... })
+ *     // malformed settings: fail before any removal
+ *
+ * Install manifest parse stays tolerant. Uninstall validates settings when present.
  */
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -22,6 +25,8 @@ export const PREFLIGHT_ERROR_CODES = Object.freeze({
     MISSING_PYTHON: 'missing_python',
     MALFORMED_SETTINGS: 'malformed_settings',
     INVALID_MANAGED_ROOT: 'invalid_managed_root',
+    MISSING_MANIFEST: 'missing_manifest',
+    MALFORMED_MANIFEST: 'malformed_manifest',
 });
 
 export const MISSING_PYTHON_ERROR_MESSAGE =
@@ -33,8 +38,15 @@ export const MALFORMED_SETTINGS_ERROR_MESSAGE =
 export const SETTINGS_NOT_OBJECT_ERROR_MESSAGE =
     'ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.';
 
+export const MISSING_MANIFEST_ERROR_MESSAGE =
+    'No installation manifest found. Nothing to uninstall.';
+
+export const MALFORMED_MANIFEST_ERROR_MESSAGE =
+    'ERROR: installation manifest is malformed JSON. Fix it and rerun.';
+
 const MANIFEST_FILES_KEY = 'files';
 const MANIFEST_SKILLS_KEY = 'skills';
+const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
 /**
  * Preflight failure that leaves the managed installation untouched.
@@ -288,4 +300,103 @@ export function describeInstallMutations(plan) {
     }
     allMutations.push('write_manifest');
     return Object.freeze(allMutations);
+}
+
+/**
+ * Build a frozen uninstall plan after read-only preflight.
+ *
+ * Validates settings.json when present so a malformed file fails before any
+ * managed file is removed. Classifies each manifest path through the caller's
+ * removable-record predicate.
+ *
+ * ::
+ *
+ *     plan = buildUninstallPlan({ managedRoot, manifestFilePath, isRemovableRecord })
+ *     // malformed settings → InstallPlanPreflightError, disk unchanged
+ *     // ok: frozen removableFiles / skippedFiles for the executor
+ *
+ * @param {{
+ *   managedRoot: string,
+ *   manifestFilePath: string,
+ *   requireManifest: boolean,
+ *   isRemovableRecord: (absolutePath: string) => boolean,
+ *   io?: {
+ *     existsSync?: typeof existsSync,
+ *     readFileSync?: typeof readFileSync,
+ *   },
+ * }} input
+ * @returns {Readonly<object>}
+ */
+export function buildUninstallPlan(input) {
+    const io = input.io || {};
+    const exists = io.existsSync || existsSync;
+    const readFile = io.readFileSync || readFileSync;
+    const requireManifest = Boolean(input.requireManifest);
+    const settingsPath = join(input.managedRoot, SETTINGS_FILE_NAME);
+
+    if (!input.manifestFilePath || !exists(input.manifestFilePath)) {
+        if (requireManifest) {
+            throw new InstallPlanPreflightError(MISSING_MANIFEST_ERROR_MESSAGE, {
+                code: PREFLIGHT_ERROR_CODES.MISSING_MANIFEST,
+            });
+        }
+        return Object.freeze({
+            managedRoot: input.managedRoot,
+            manifestFilePath: input.manifestFilePath,
+            settingsPath,
+            manifestExisted: false,
+            removableFiles: Object.freeze([]),
+            skippedFiles: Object.freeze([]),
+            allManifestFiles: Object.freeze([]),
+            managedPermissionDenyEntries: Object.freeze([]),
+            isNoOp: true,
+        });
+    }
+
+    let manifest;
+    try {
+        manifest = JSON.parse(readFile(input.manifestFilePath, 'utf8'));
+    } catch {
+        throw new InstallPlanPreflightError(MALFORMED_MANIFEST_ERROR_MESSAGE, {
+            code: PREFLIGHT_ERROR_CODES.MALFORMED_MANIFEST,
+        });
+    }
+
+    preflightSettingsIfNeeded(settingsPath, true, io);
+
+    const isManifestObject = manifest && typeof manifest === 'object' && !Array.isArray(manifest);
+    const rawFiles = isManifestObject ? manifest[MANIFEST_FILES_KEY] : null;
+    const allManifestFiles = Array.isArray(rawFiles)
+        ? rawFiles.filter((eachPath) => typeof eachPath === 'string' && eachPath.trim() !== '')
+        : [];
+    const rawManagedDeny = isManifestObject
+        ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny
+        : null;
+    const managedPermissionDenyEntries = Array.isArray(rawManagedDeny)
+        ? rawManagedDeny.filter((eachEntry) => typeof eachEntry === 'string' && eachEntry.trim() !== '')
+        : [];
+
+    /** @type {string[]} */
+    const removableFiles = [];
+    /** @type {string[]} */
+    const skippedFiles = [];
+    for (const eachPath of allManifestFiles) {
+        if (input.isRemovableRecord(eachPath)) {
+            removableFiles.push(eachPath);
+        } else {
+            skippedFiles.push(eachPath);
+        }
+    }
+
+    return Object.freeze({
+        managedRoot: input.managedRoot,
+        manifestFilePath: input.manifestFilePath,
+        settingsPath,
+        manifestExisted: true,
+        removableFiles: Object.freeze(removableFiles),
+        skippedFiles: Object.freeze(skippedFiles),
+        allManifestFiles: Object.freeze(allManifestFiles),
+        managedPermissionDenyEntries: Object.freeze(managedPermissionDenyEntries),
+        isNoOp: false,
+    });
 }
