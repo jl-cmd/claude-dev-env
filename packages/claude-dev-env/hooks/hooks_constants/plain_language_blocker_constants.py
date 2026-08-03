@@ -352,6 +352,7 @@ OPTION_DESCRIPTION_SURFACE_NAME: str = "an option description"
 
 LEAN_QUESTION_BLOCK_PREFIX: str = "BLOCKED: [LEAN_QUESTION] Question block carries chat detail -- "
 LEAN_QUESTION_VIOLATION_SEPARATOR: str = "; "
+HEAVY_WORD_SWAP_LIST_SEPARATOR: str = ", "
 LEAN_QUESTION_BLOCK_GUIDANCE: str = (
     "AskUserQuestion renders as one plain text block. Print the plan, the counts, "
     "and the tradeoffs in chat text before the call, keep the question block to a "

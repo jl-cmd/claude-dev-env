@@ -24,6 +24,10 @@ ALL_AUDIT_CONSTRAINT_TEXTS = [
     "Work exclusively within the worktree directory.",
     "Every finding must cite file:line.",
     "Document each finding with severity, file, line, and suggested fix.",
+    "Report every real finding. Collection retains all severities "
+    "(P0, P1, P2). Do not drop findings by severity during collection; "
+    "severity or action filtering is a separate consumer stage after the "
+    "collection record is complete.",
     "Read each file in the diff before reporting on it.",
     "Double-quote every path in shell commands and write paths with "
     "forward slashes (e.g. C:/Users/...), even on Windows.",

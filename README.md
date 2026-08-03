@@ -149,7 +149,7 @@ Specialized agent prompts for common development tasks. Claude Code automaticall
 
 **Other:** clasp-deployment-orchestrator, project-context-loader
 
-### Commands (10)
+### Commands (8)
 
 Slash commands for common workflows.
 
@@ -160,10 +160,8 @@ Slash commands for common workflows.
 | `/implement` | Execute plans with TDD workflow |
 | `/review-plan` | Review and critique implementation plans |
 | `/right-size` | Check for over/under-engineering |
-| `/stubcheck` | Find stubs, TODOs, and NotImplementedError |
 | `/pr-comments` | Process PR review comments systematically |
 | `/docupdate` | Update documentation after changes |
-| `/initialize` | Session initialization with protocol review |
 | `/sum` | Summarize current work context |
 
 ### Skills (12)
@@ -213,6 +211,7 @@ Slash commands for common workflows.
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 | `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
 | `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
+| `show` | Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations: routed by `routing.yaml`, held to a two-tier SVG canvas contract, and checked by `validate-artifact.py` for accessibility, dead references, undefined CSS variables, and text size |
 
 ### Hooks
 
