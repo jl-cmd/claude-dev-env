@@ -74,6 +74,9 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
+| `session_start_injector.py` | Pure SessionStart context injector: normalize `source` (`startup`/`resume`/`clear`/`compact`), honor enable/timeout, return structured injection results for starter hooks |
+| `session_start_injector_constants.py` | Known SessionStart source values, injection status codes, enable env var, default timeout for the shared injector |
+| `test_session_start_injector.py` | Behavioral tests for every known source, disabled, timeout, and unknown-source paths |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `shell_command_pipeline.py` | Quote-aware shell pipeline parsing: operator-paired segments after line-continuation join, comment strip, heredoc body drop, and parenthesis-group join |
