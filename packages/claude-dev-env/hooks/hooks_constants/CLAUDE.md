@@ -8,6 +8,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 |---|---|
 | `__init__.py` | Package marker (`# pragma: no-tdd-gate`) |
 | `any_type_config.py` | Config for the `Any`-type escape-hatch check |
+| `ask_user_question_shape.py` | Pure AskUserQuestion lean-block shape analyzer: grades question and option-description prose against shared chat-detail markers and sentence/word caps with no hook I/O |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
 | `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |
 | `blocking_check_limits.py` | Max issue counts and preview lengths for blocking hooks |

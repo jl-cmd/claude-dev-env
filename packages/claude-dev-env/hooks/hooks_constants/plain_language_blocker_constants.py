@@ -18,7 +18,9 @@ strippers the word scan runs first, and the lean-question-block tunables: the
 block-level chat-detail markers that belong in chat text, the line-ending
 spellings normalized before those markers run, the inline-code span the length
 counts collapse to one word, and the sentence and word caps a question and an
-option description each answer to.
+option description each answer to. The pure analyzer in
+``ask_user_question_shape`` reads the same lean-block tunables so shape grading
+and the runtime hook share one contract.
 """
 
 from __future__ import annotations
