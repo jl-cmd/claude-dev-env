@@ -367,9 +367,16 @@ def test_find_stale_inventory_returns_survey_for_omission(tmp_path: Path):
     assert survey.named_basenames == {"dialer_compose.py", "compose_dialer_cli.py"}
 
 
-def test_find_stale_inventory_skips_prose_only_directory():
-    audit_rubrics_directory = (
-        Path(__file__).resolve().parent.parent.parent / "audit-rubrics"
+def test_find_stale_inventory_skips_directory_below_minimum_named_entries(
+    tmp_path: Path,
+) -> None:
+    """Skip a package inventory that names fewer than the minimum on-disk siblings."""
+    package_directory = tmp_path / "prose_package"
+    package_directory.mkdir()
+    (package_directory / "CLAUDE.md").write_text(
+        "| File | Role |\n|---|---|\n| `only_one.py` | sole entry |\n",
+        encoding="utf-8",
     )
-    new_file_path = audit_rubrics_directory / "new_helper.py"
+    (package_directory / "only_one.py").write_text("FLAG = 1\n", encoding="utf-8")
+    new_file_path = package_directory / "new_helper.py"
     assert find_stale_inventory(str(new_file_path)) is None
