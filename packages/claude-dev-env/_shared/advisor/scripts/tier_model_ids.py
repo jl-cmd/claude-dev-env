@@ -45,6 +45,9 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_LADDER_NAME_ERROR,
 )
+from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
+    ALL_CODEX_MODEL_ID_BY_TIER,
+)
 
 
 def canonical_tier_name(tier_name: str) -> str | None:
@@ -109,6 +112,27 @@ def resolve_cli_model_id(tier: str) -> str:
     if maybe_model_alias is None:
         raise ValueError(UNKNOWN_LADDER_NAME_ERROR.format(tier))
     return maybe_model_alias
+
+
+def resolve_codex_model_id(tier: str) -> str:
+    """Return the dated Codex model id for a Codex-backed advisor tier.
+
+    Args:
+        tier: Ladder tier name whose Codex model id should be resolved.
+
+    Returns:
+        The configured Codex model id.
+
+    Raises:
+        ValueError: When ``tier`` is not a known Codex-backed tier.
+    """
+    maybe_canonical_tier = canonical_tier_name(tier)
+    if maybe_canonical_tier is None:
+        raise ValueError(UNKNOWN_LADDER_NAME_ERROR.format(tier))
+    maybe_model_id = ALL_CODEX_MODEL_ID_BY_TIER.get(maybe_canonical_tier)
+    if maybe_model_id is None:
+        raise ValueError(UNKNOWN_LADDER_NAME_ERROR.format(tier))
+    return maybe_model_id
 
 
 def detect_host_profile(

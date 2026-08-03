@@ -1,16 +1,10 @@
 """Constants for the model-tier-run validator and CLI / Agent alias map.
 
 They name the parts of a spawn-walk log: the tier ladder (strongest
-first), the two host profiles, the spawn-log dict keys, and the tokens
-that mark a bind.
+first), the two host profiles, and the validation messages. Shared log
+keys and bind-result tokens live in ``advisor_route_constants``.
 
 ::
-
-    attempt = {"tier": "Opus", "result": "spawned"}
-                       ^^^^^^           ^^^^^^^^^
-                       a ladder tier    SPAWN_SUCCESS_TOKEN
-    ok:   "cli" marks a CLI Claude-chain bind (CLI_BIND_SUCCESS_TOKEN)
-    flag: any other result token counts as no bind
 
 The alias map turns each tier into its short CLI / Agent name (``opus``,
 ``third-party``), never a dated full model ID.
@@ -24,6 +18,11 @@ Host-profile detection (see ``detect_host_profile``):
 
 from __future__ import annotations
 
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_FALLBACK_TIER,
+    ADVISOR_MODEL_TIER,
+)
+
 HOST_PROFILE_CLAUDE: str = "Claude"
 HOST_PROFILE_THIRD_PARTY: str = "ThirdParty"
 ALL_HOST_PROFILES: tuple[str, ...] = (
@@ -31,31 +30,34 @@ ALL_HOST_PROFILES: tuple[str, ...] = (
     HOST_PROFILE_THIRD_PARTY,
 )
 
-ALL_MODEL_TIERS: tuple[str, ...] = ("Fable", "Opus", "Sonnet", "Haiku")
+ALL_MODEL_TIERS: tuple[str, ...] = (
+    ADVISOR_FALLBACK_TIER,
+    "Opus",
+    "Sonnet",
+    "Haiku",
+)
 THIRD_PARTY_MODEL_TIER: str = "ThirdParty"
-ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (*ALL_MODEL_TIERS, THIRD_PARTY_MODEL_TIER)
+ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (
+    ADVISOR_MODEL_TIER,
+    *ALL_MODEL_TIERS,
+    THIRD_PARTY_MODEL_TIER,
+)
 THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
 
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
 
 ALL_CLI_MODEL_ID_BY_TIER: dict[str, str] = {
-    "Fable": "fable",
+    ADVISOR_FALLBACK_TIER: "fable",
     "Opus": "opus",
     "Sonnet": "sonnet",
     "Haiku": "haiku",
     THIRD_PARTY_MODEL_TIER: "third-party",
 }
-
 HOST_PROFILE_ENV_VAR: str = "ADVISOR_HOST_PROFILE"
 THIRD_PARTY_ENV_VAR: str = "THIRD_PARTY"
 ALL_THIRD_PARTY_TRUTHY_VALUES: frozenset[str] = frozenset(
     {"1", "true", "yes", "on"}
 )
-
-TIER_KEY: str = "tier"
-SPAWN_OUTCOME_KEY: str = "result"
-SPAWN_SUCCESS_TOKEN: str = "spawned"
-CLI_BIND_SUCCESS_TOKEN: str = "cli"
 
 UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
 UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"
