@@ -14,25 +14,26 @@ Detection order:
 2. `THIRD_PARTY=1` (or `true` / `yes` / `on`) — a third-party (non-Claude) harness.
 3. Default: Claude.
 
+### Sol rung — any host
+
+An optional **sol xhigh** rung sits above the Claude ladder on every host, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
+Flag off: the walk starts at the host's Claude ladder, Fable first.
+Flag on: run the Codex preflight first — `python ~/.claude/skills/codex-review/scripts/codex_usage_probe.py` (repo home: `packages/claude-dev-env/skills/codex-review/scripts/`).
+Preflight pass — exit 0 with `percent_left` above the gate threshold, or null — bind one Codex CLI session at the sol model with xhigh reasoning effort, chartered with the same standing-reviewer contract (ENDORSE / CORRECTION / PLAN / STOP, reply-only).
+Preflight fail — non-zero exit or an exhausted meter — fall back to the Claude ladder and continue the normal walk.
+
 ### Claude host
 
 Use the **Model floor** ladder below (sol when flagged, then Fable → Opus).
 Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
-When every candidate down to the floor fails, take the CLI Claude-chain fallback.
-Assemble each executor's Advisor block from the **Advisor block** section: the Claude transport preamble, the shared core, and the weak-executor add-on for a Sonnet-or-below executor.
-
-An optional **sol xhigh** rung sits above Fable, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
-Flag off: the walk starts at Fable.
-Flag on: run the Codex preflight first — `python ~/.claude/skills/codex-review/scripts/codex_usage_probe.py` (repo home: `packages/claude-dev-env/skills/codex-review/scripts/`).
-Preflight pass — exit 0 with `percent_left` above the gate threshold, or null — bind one Codex CLI session at the sol model with xhigh reasoning effort, chartered with the same standing-reviewer contract (ENDORSE / CORRECTION / PLAN / STOP, reply-only).
-Preflight fail — non-zero exit or an exhausted meter — fall back to Fable and continue the normal ladder.
+Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Third-party host
 
 A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` through the Agent tool. Bind a **max-tier Claude advisor** through the shared CLI Claude-chain. Do **not** treat this third-party session as the advisor.
 
 1. Detect host profile first (this section).
-2. Set the advisor floor to **Opus** so the walk is `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. When `ADVISOR_SOL_XHIGH` and the Codex preflight open the sol rung (see **Claude host**), bind sol xhigh first; the CLI Claude-chain walk below it starts at Fable.
+2. Set the advisor floor to **Opus** so the walk is `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. The **Sol rung — any host** section governs whether sol xhigh binds ahead of the chain.
 3. **CLI bind (primary path):** for each candidate top-down, pipe a charter file into:
 
    ```
@@ -50,7 +51,7 @@ A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` throu
    Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field).
    Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
 5. **Fail closed:** when every candidate fails (chain exhausted, `advisor_blocked`, or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
-6. Assemble each executor's Advisor block from the **Advisor block** section: the third-party transport preamble, the shared core, and the weak-executor add-on for a Sonnet-or-below executor. Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
+6. Assemble and paste each executor's Advisor block per the **Advisor block** section. Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 
 Resolve a third-party session's own model field with `resolve_cli_model_id("ThirdParty")` → `third-party` when a host model alias is required. The **advisor** bind uses Fable/Opus aliases only.
 
@@ -67,9 +68,9 @@ Whatever the consumer set, the floor sits at Opus or above — use the stronger 
 Ladder, strongest first: sol (flag-gated, Codex CLI) → `Fable` → `Opus`.
 Advisors bind at Opus or above; `Sonnet` and `Haiku` are executor tiers only.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
-The sol rung binds per **Host profiles → Claude host** (`ADVISOR_SOL_XHIGH` plus the Codex preflight); the Claude walk below it starts at Fable.
+The sol rung binds per **Host profiles → Sol rung — any host**.
 Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier.
-On a Claude host, each walk try sets the Agent tool `model:` field to the short alias for that candidate tier (`resolve_cli_model_id(candidate_tier)` — for example `opus`, not Title Case `Opus`).
+On a Claude host, each walk try sets the Agent tool `model:` field to the short alias for that candidate tier (`resolve_cli_model_id(candidate_tier)`).
 On a third-party host, each walk try uses the CLI chain with that alias and the effort flags in **Host profiles → Third-party host**.
 The advisor is created at `selected_tier` — the first ladder tier that binds — which may sit above the floor.
 When even the floor tier fails on a Claude host, move to the CLI fallback below.
@@ -78,7 +79,7 @@ On a third-party host the CLI chain is already the primary path, so floor failur
 Emit a structured spawn-walk log so the walk can be checked mechanically.
 Record shape, log path, the validator command, and its exit codes: [`reference/spawn-walk-log.md`](reference/spawn-walk-log.md).
 The validator checks ladder shape only.
-Host policy sits on top: a third-party host with `selected_tier=null` after an exhausted Fable→Opus walk fails closed — report unreachable and leave the four signals to a bound advisor.
+Host policy sits on top — the fail-closed rule in **Host profiles → Third-party host**.
 
 **Equal-tier pairings.** Bind a same-tier advisor when the goal is an independent second pass.
 For irreversible or security-sensitive work, pair a top-tier executor with a top-tier advisor for independent frontier review.
@@ -86,7 +87,7 @@ The floor rule holds — the advisor sits at or above the strongest consumer's t
 
 ## Warm-up (once per session)
 
-On a **third-party host**, follow **Host profiles → Third-party host** (CLI Claude-chain bind at Fable then Opus; no Agent-tool `session-advisor` spawn). Charter the CLI session as a standing reviewer that only answers with ENDORSE / CORRECTION / PLAN / STOP — same consult contract as the Agent path, without SendMessage.
+On a **third-party host**, bind per **Host profiles → Third-party host** and charter the CLI session with the charter below — the reply contract is the same, and consults travel through the CLI runner.
 
 On a **Claude host**, the consuming skill's session walks the candidate tiers top-down. For each attempt, spawn with:
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../agents/session-advisor.md) for the full signal contract).
@@ -95,7 +96,7 @@ On a **Claude host**, the consuming skill's session walks the candidate tiers to
 - `run_in_background: true`.
 - `prompt`: the charter below. A **Fable**-tier attempt carries the exact token `FABLE-SPAWN-AUTHORIZED` in that prompt — `hooks/blocking/fable_spawn_gate.py` denies every `Agent` or `Task` spawn at `model: fable` whose prompt lacks that token. An attempt at any other tier needs no token.
 
-Stop at the first successful spawn. That attempt's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session. If every candidate down to the floor fails, take the CLI fallback below.
+Stop at the first successful spawn. That try's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session.
 
 Charter (the spawn prompt): the agent's role — standing reviewer, answers only via SendMessage, with file edits and commands out of its scope — the repo path, and the session's current goal in two or three sentences.
 On a Fable-tier try, include the exact token `FABLE-SPAWN-AUTHORIZED` as plain text in this prompt (substring match; the gate reads the token alone, wherever it came from).
@@ -109,16 +110,12 @@ The agent finishes its first turn standing by. `SendMessage` alone is what resum
 
 ## Consulting the warm agent
 
-Send a consult whenever one of these holds:
-- A nontrivial plan is about to be locked in and acted on.
-- The consumer believes its assigned work is finished.
-- A commit, push, or other hard-to-reverse action is about to run.
-- The same failure has come back more than once, or progress has stalled.
-- The chosen approach is being reconsidered.
+Send a consult at the trigger points `docs/references/advisor-tool.md` **When to call** defines — plan lock-in, believed completion, hard-to-reverse actions, repeated failure or stalled progress, and reconsidered approach.
+The paste parts in **Advisor block** restate them for executors.
 
 Each consult carries, in order: who you are and your assignment (needed on a shared advisor with multiple consumers; a single-consumer team-advisor session skips it), the delta since your last consult (what was done, in order, with real output where it matters), the live decision or blocker, and any paths or excerpts needed to answer well.
 
-Consult briefs embed the parenthesized brevity line addressed to the advisor — `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)` — and cap requests at roughly 80 percent of the true ceiling.
+Consult briefs embed the `docs/references/advisor-tool.md` **Brevity cue** line, sized per that section.
 
 **New-evidence rule.** Re-raise a question the advisor already answered only when you have something new to attach — the result of attempting the advised step, fresh tool output, or a changed constraint. Without new evidence, act on the standing answer.
 
@@ -127,13 +124,14 @@ Consult briefs embed the parenthesized brevity line addressed to the advisor —
 Treat the reply as a serious second opinion: a CORRECTION — whether it names a wrong step or a risk worth closing — is something to address before treating the plan or the work as done.
 Report a STOP, or a consult that finds the advisor unreachable, upward: team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides.
 When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn (Claude Agent or third-party CLI re-bind).
-A third-party host that cannot re-bind fails closed and reports to the user; the four signals come only from a bound advisor.
+A third-party host that cannot re-bind follows the fail-closed rule in **Host profiles → Third-party host**.
 
 ## Advisor block — assemble and paste into every executor spawn prompt
 
 Assemble each executor's block from the parts below, in order: one transport preamble picked by host profile, then the shared core, then — for an executor at Sonnet or below — the weak-executor add-on.
 Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
 The assembled block is self-contained — the executor receives only this text, not the rest of this document.
+The parts restate consult rules from **Consulting the warm agent** on purpose: pasted text reaches executors who see nothing else.
 
 ### Transport preamble — Claude host
 
@@ -186,8 +184,7 @@ Executors keep reporting to the orchestrating session; advisor binding stays wit
 The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" [--routing-mode usage_ranked|ordered_account] -- <claude args...>`.
 Modes and failover, the tier-to-alias table, brief piping, and `--resume` session handling: [`reference/cli-chain.md`](reference/cli-chain.md).
 
-**Third-party host:** this runner is the **primary** advisor bind and consult path.
-Root advisor bind and consult use ordered-account mode; when the walk exhausts or returns `advisor_blocked`, fail closed.
+**Third-party host:** the primary bind and consult path; the walk order and fail-closed rule live in **Host profiles → Third-party host**.
 
 **Claude host:** fall back to this runner when any of these holds, rather than on judgment call:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself, not just the top tier, is unavailable.

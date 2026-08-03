@@ -13,7 +13,9 @@ section live in
 ## Scope
 
 Applies to any executor running below the advisor's tier. A same-tier or
-stronger executor follows `advisor-tool.md` alone.
+stronger executor follows `advisor-tool.md` alone. The paste-ready form of
+this profile is the **Weak-executor add-on** block in
+`~/.claude/_shared/advisor/advisor-protocol.md`.
 
 ## Steering lives in the spawn prompt
 

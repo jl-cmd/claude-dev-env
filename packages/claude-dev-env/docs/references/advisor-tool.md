@@ -57,6 +57,8 @@ When the consult path supports a free-text brief, append:
 
 `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
 
+Size the ask at roughly 80 percent of the true ceiling; direct address to the advisor lands more reliably than a third-person description.
+
 ## Related
 
 | Doc | Holds |
