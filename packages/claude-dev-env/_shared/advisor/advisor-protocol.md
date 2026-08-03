@@ -16,7 +16,7 @@ Detection order:
 
 ### Claude host
 
-Use the **Model floor** ladder below (Fable → Opus → Sonnet → Haiku). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback. Paste the **Claude host** Advisor block into every executor spawn prompt.
+Use the **Model floor** ladder below (sol when flagged, then Fable → Opus). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback. Paste the **Claude host** Advisor block into every executor spawn prompt.
 
 An optional **sol xhigh** rung sits above Fable, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
 Flag off: the walk starts at Fable.
@@ -29,7 +29,7 @@ Preflight fail — non-zero exit or an exhausted meter — fall back to Fable an
 A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` through the Agent tool. Bind a **max-tier Claude advisor** through the shared CLI Claude-chain. Do **not** treat this third-party session as the advisor.
 
 1. Detect host profile first (this section).
-2. Set the advisor floor to **Opus** so the walk is `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. The walk never drops to Sonnet or Haiku on a third-party host.
+2. Set the advisor floor to **Opus** so the walk is `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. When `ADVISOR_SOL_XHIGH` and the Codex preflight open the sol rung (see **Claude host**), bind sol xhigh first; the CLI Claude-chain walk below it starts at Fable.
 3. **CLI bind (primary path):** for each candidate top-down, pipe a charter file into:
 
    ```
@@ -54,10 +54,13 @@ Resolve a third-party session's own model field with `resolve_cli_model_id("Thir
 - `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
 - `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the max of those.
 
+Whatever the consumer set, the floor sits at Opus or above — use the stronger of Opus and the strongest consumer tier.
+
 **Third-party host:** the CLI advisor floor is fixed at **Opus** (walk Fable → Opus only). The third-party session's own tier is not the advisor floor — see **Host profiles → Third-party host**.
 
-Ladder, strongest first: sol (flag-gated, Codex CLI) → `Fable` → `Opus` → `Sonnet` → `Haiku`.
-The four Claude tiers are canonical Title Case names; the validator accepts any letter case and normalizes to Title Case.
+Ladder, strongest first: sol (flag-gated, Codex CLI) → `Fable` → `Opus`.
+Advisors bind at Opus or above; `Sonnet` and `Haiku` are executor tiers only.
+Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
 The sol rung binds per **Host profiles → Claude host** (`ADVISOR_SOL_XHIGH` plus the Codex preflight); the Claude walk below it starts at Fable.
 Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier.
 On a Claude host, each walk try sets the Agent tool `model:` field to the short alias for that candidate tier (`resolve_cli_model_id(candidate_tier)` — for example `opus`, not Title Case `Opus`).
@@ -131,7 +134,15 @@ This variant applies when the executor's own tier is Sonnet or below. Paste it a
 
 ### Third-party host (Claude CLI advisor; report to orchestrating session)
 
-> The orchestrating session owns a standing **Claude** advisor bound through the CLI Claude-chain (max tier: Fable high, then Opus xhigh). There is no Agent-tool `session-advisor` and no SendMessage path to one. Report blockers and hard decisions to the **orchestrating session** (the session that assigned you) before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered. Open each report with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer. After a CORRECTION or PLAN, your next report on that topic opens with what happened when you followed it. The orchestrating session consults the Claude CLI advisor and relays one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the orchestrating session reports the advisor unreachable, stop work and surface that upward; do not spawn a `session-advisor` agent yourself, and do not treat the third-party orchestrator's own judgment as an advisor signal.
+> The orchestrating session owns a standing advisor for this run.
+> The advisor chain, strongest first: sol xhigh through the Codex CLI when the sol flag and its preflight open that rung, then Claude Fable at effort high, then Claude Opus at effort xhigh through the CLI Claude-chain.
+> The orchestrating session is your one path to it: report blockers and hard decisions to the session that assigned you, and it relays the advisor's reply.
+> Report before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
+> Open each report with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
+> Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer.
+> After a CORRECTION or PLAN, your next report on that topic opens with what happened when you followed it.
+> Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
+> On STOP, or when the orchestrating session reports the advisor unreachable, stop work and surface that upward; advisor binding and the four signals stay with the orchestrating session and its bound advisor.
 
 ## Lifecycle ownership
 
