@@ -81,7 +81,7 @@ export function resolveInstallRoot(options = {}) {
 
 /**
  * True when candidatePath is the managed root or a descendant of it.
- * Requires a separator boundary so `.claude-evil` is not inside `.claude`.
+ * Requires a separator boundary so `.claude-extra` is not inside `.claude`.
  *
  * @param {string} candidatePath
  * @param {string} managedRoot

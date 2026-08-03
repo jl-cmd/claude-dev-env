@@ -36,6 +36,15 @@ const ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'lib/profile-manifest.mjs',
 ]);
 
+/** J1 MCP activation sources allowed beside the A1a contract surface. */
+const ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS = Object.freeze([
+  'config/mcp-bundles.json',
+  'mcp-bundles.mjs',
+  'launcher-runtime.mjs',
+  'tests/mcp-bundles.test.mjs',
+  'tests/launcher-runtime.test.mjs',
+]);
+
 const ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'tests/shortcut-contract.test.ps1',
   'windows/shortcut-inventory.ps1',
@@ -166,6 +175,7 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   walk(CONTRACT_ROOT_DIRECTORY_PATH);
   const allExpectedPaths = new Set([
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
     ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
     'profile-isolation-contract.test.mjs',
   ]);
@@ -174,6 +184,7 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   }
   for (const eachRequiredPath of [
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
     ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
   ]) {
     const absolutePath = join(CONTRACT_ROOT_DIRECTORY_PATH, ...eachRequiredPath.split('/'));

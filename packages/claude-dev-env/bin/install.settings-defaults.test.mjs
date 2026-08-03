@@ -59,6 +59,15 @@ test('package settings.json publishes exactly the four managed deny entries', ()
     assert.deepEqual(denyEntries, EXPECTED_DENY_ENTRIES);
 });
 
+test('an array-valued permissions field is replaced so managed denies survive a round trip', () => {
+    const targetSettings = { permissions: [] };
+    const result = mergeManagedPermissionsIntoSettings(targetSettings, EXPECTED_DENY_ENTRIES);
+    assert.equal(result.addedCount, EXPECTED_DENY_ENTRIES.length);
+    assert.equal(Array.isArray(targetSettings.permissions), false);
+    const roundTripped = JSON.parse(JSON.stringify(targetSettings));
+    assert.deepEqual(roundTripped.permissions.deny, EXPECTED_DENY_ENTRIES);
+});
+
 test('npm pack includes package settings.json in the published artifact', () => {
     const packResult = spawnSync('npm', ['pack', '--dry-run', '--json'], {
         cwd: PACKAGE_ROOT,

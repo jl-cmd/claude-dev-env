@@ -197,21 +197,30 @@ def run_medium_review(
             batch.is_rejected = True
             batch.rejection_reason = "finder_head_mismatch"
             return batch
-    all_angles = [each.angle for each in all_finder_candidates]
+    all_angles = sorted({each.angle for each in all_finder_candidates})
+    finder_count = len(all_angles)
+    all_identities = {
+        (
+            each.angle,
+            each.leader_socket,
+            each.advisor_session_id,
+            each.worktree_path,
+        )
+        for each in all_finder_candidates
+    }
     all_sockets = {each.leader_socket for each in all_finder_candidates}
     all_sessions = {each.advisor_session_id for each in all_finder_candidates}
     all_worktrees = {each.worktree_path for each in all_finder_candidates}
     if (
-        len(all_sockets) != len(all_finder_candidates)
-        or len(all_sessions) != len(all_finder_candidates)
-        or len(all_worktrees) != len(all_finder_candidates)
+        len(all_identities) != finder_count
+        or len(all_sockets) != finder_count
+        or len(all_sessions) != finder_count
+        or len(all_worktrees) != finder_count
     ):
         batch.is_rejected = True
         batch.rejection_reason = "non_unique_finder_identity"
         return batch
-    require_exact_finder_set(tuple(sorted(set(all_angles))))
-    if len(set(all_angles)) != MEDIUM_REVIEW_FINDER_COUNT:
-        raise ValueError("each finder angle must run exactly once")
+    require_exact_finder_set(tuple(all_angles))
     deduped = deduplicate_candidates(all_finder_candidates)
     batch.all_retained_findings = retain_verified_findings(
         all_candidates=deduped,
