@@ -163,10 +163,12 @@ function normalizeOptionalPath(maybePath) {
 }
 
 /**
+ * Compare-key for a filesystem path: resolve, forward-slash, case-fold on win32.
+ *
  * @param {string} filesystemPath
  * @returns {string}
  */
-function normalizePathForComparison(filesystemPath) {
+export function normalizePathForComparison(filesystemPath) {
     const resolved = resolve(normalize(filesystemPath));
     let withForwardSlashes = resolved.split(sep).join('/');
     if (process.platform === 'win32') {
