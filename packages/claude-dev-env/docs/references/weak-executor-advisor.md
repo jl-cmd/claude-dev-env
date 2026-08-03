@@ -83,5 +83,5 @@ holds at that tier whichever executor joins the pairing.
 | Doc | Holds |
 |---|---|
 | `advisor-tool.md` | Canonical consult cadence, hard rule, brevity cue |
-| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, "Claude host, Sonnet-or-below executor" section, executor paste blocks |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, and the Advisor block parts — transport preambles, shared core, weak-executor add-on |
 | `skills/team-advisor/reference/advisor-docs-review.md` | Distilled source facts behind each section above |

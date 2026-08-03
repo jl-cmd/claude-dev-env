@@ -8,7 +8,7 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 
 | File | Purpose |
 |---|---|
-| `advisor-protocol.md` | Host profiles first, model floor, warm-up / CLI bind procedure and charter, consult format and cadence, lifecycle ownership (Agent spawn on Claude / CLI re-bind on a third-party host), host-matched Advisor blocks for executor spawns, and the shared CLI Claude-chain |
+| `advisor-protocol.md` | Host profiles first, model floor, warm-up / CLI bind procedure and charter, consult format and cadence, lifecycle ownership (Agent spawn on Claude / CLI re-bind on a third-party host), assembled Advisor block parts (transport preambles, shared core, weak-executor add-on) for executor spawns, and the shared CLI Claude-chain |
 
 ## Subdirectory
 

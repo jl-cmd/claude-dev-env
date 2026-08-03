@@ -19,7 +19,7 @@ Detection order:
 Use the **Model floor** ladder below (sol when flagged, then Fable → Opus).
 Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
 When every candidate down to the floor fails, take the CLI Claude-chain fallback.
-Paste the **Claude host** Advisor block into every executor spawn prompt.
+Assemble each executor's Advisor block from the **Advisor block** section: the Claude transport preamble, the shared core, and the weak-executor add-on for a Sonnet-or-below executor.
 
 An optional **sol xhigh** rung sits above Fable, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
 Flag off: the walk starts at Fable.
@@ -50,7 +50,7 @@ A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` throu
    Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field).
    Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
 5. **Fail closed:** when every candidate fails (chain exhausted, `advisor_blocked`, or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
-6. Paste the **Third-party host** Advisor block into every executor spawn prompt — never the Claude SendMessage block. Executors report to the orchestrating session; that session consults the bound Claude CLI advisor and relays the four-signal reply.
+6. Assemble each executor's Advisor block from the **Advisor block** section: the third-party transport preamble, the shared core, and the weak-executor add-on for a Sonnet-or-below executor. Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 
 Resolve a third-party session's own model field with `resolve_cli_model_id("ThirdParty")` → `third-party` when a host model alias is required. The **advisor** bind uses Fable/Opus aliases only.
 
@@ -129,48 +129,40 @@ Report a STOP, or a consult that finds the advisor unreachable, upward: team-adv
 When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn (Claude Agent or third-party CLI re-bind).
 A third-party host that cannot re-bind fails closed and reports to the user; the four signals come only from a bound advisor.
 
-## Advisor block — paste the host-matched block into every executor spawn prompt
+## Advisor block — assemble and paste into every executor spawn prompt
 
-Each paragraph is self-contained — the executor receives only this text, not the rest of this document, so it carries everything it needs on its own. Paste **exactly one** block, chosen by host profile.
+Assemble each executor's block from the parts below, in order: one transport preamble picked by host profile, then the shared core, then — for an executor at Sonnet or below — the weak-executor add-on.
+Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
+The assembled block is self-contained — the executor receives only this text, not the rest of this document.
 
-### Claude host (SendMessage to warm advisor)
+### Transport preamble — Claude host
 
-> A shared session advisor named `<name>` is reachable via SendMessage.
-> Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
-> Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
-> Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer.
-> After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
-> Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
-> On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
+> A shared session advisor named `<name>` is reachable via SendMessage; send each consult to it directly by that name.
 
-### Claude host, Sonnet-or-below executor
-
-This variant applies when the executor's own tier is Sonnet or below. Paste it at the **top** of the executor spawn prompt, ahead of any other sentence that mentions the advisor.
-
-> A shared session advisor named `<name>` is reachable via SendMessage.
-> Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one.
-> Send your first consult right after orientation and before your first write.
-> Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
-> Consult before locking in a nontrivial approach, once you believe your assignment is done, before reaching for any task-list tool, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
-> Budget two to three consults for the task, at every material fork.
-> Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
-> Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer.
-> After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
-> Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
-> On a transient failure, retry once, then carry on with the evidence you have and record that you did.
-> If the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions and the four signals to the session that owns the advisor.
-
-### Third-party host (Claude CLI advisor; report to orchestrating session)
+### Transport preamble — third-party host
 
 > The orchestrating session owns a standing advisor for this run.
 > The advisor chain, strongest first: sol xhigh through the Codex CLI when the sol flag and its preflight open that rung, then Claude Fable at effort high, then Claude Opus at effort xhigh through the CLI Claude-chain.
-> The orchestrating session is your one path to it: report blockers and hard decisions to the session that assigned you, and it relays the advisor's reply.
-> Report before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
-> Open each report with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
+> The orchestrating session is your one path to it: send each consult as a report to the session that assigned you, and it relays the advisor's reply.
+
+### Shared core — every host
+
+> Consult before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
+> Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
 > Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer.
-> After a CORRECTION or PLAN, your next report on that topic opens with what happened when you followed it.
+> After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
 > Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
-> On STOP, or when the orchestrating session reports the advisor unreachable, stop work and surface that upward; advisor binding and the four signals stay with the orchestrating session and its bound advisor.
+> On STOP, or when the advisor is unreachable, stop and report that back to whoever assigned you; advisor binding and the four signals stay with the session that owns the advisor.
+
+### Weak-executor add-on — Sonnet or below, either host
+
+> Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one.
+> Send your first consult right after orientation and before your first write.
+> Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
+> Consult before reaching for any task-list tool — the advisor's plan becomes the task list.
+> Budget two to three consults for the task, at every material fork.
+> Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
+> On a transient failure, retry once, then carry on with the evidence you have and record that you did.
 
 ## Lifecycle ownership
 
