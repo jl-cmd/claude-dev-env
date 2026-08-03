@@ -1,6 +1,6 @@
 # Team-Advisor Skill
 
-`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. Use it when `advisor()` is absent, or when you want a standing four-signal reviewer across many decision points.
+`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. This skill is the selected custom reproduction path for advisor behavior: it forwards explicit packets to a warm Agent/SendMessage advisor or the read-only `codex_sol_advisor.py` path across many decision points.
 
 ## Refs
 
@@ -17,4 +17,4 @@ Follow the call rules in `advisor-tool.md` (orientation first, then consult befo
 
 ## Relation to `advisor()`
 
-`/team-advisor` works with no `advisor()` tool. When both exist: `advisor()` for a fast history-forwarded check; `/team-advisor` for a standing named reviewer consulted at the same cadence.
+`/team-advisor` is the deliberately selected path for this repository. It reproduces the advisor contract with explicit first-consult packets, delta consults, a standing warm reviewer, and a read-only Sol CLI option; native `advisor()` mechanics remain source context and are not invoked by this skill.

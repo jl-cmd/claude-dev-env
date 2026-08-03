@@ -43,7 +43,7 @@ The user types `/grokify`, alone or with guidance.
 
 - **Bind once, first:** charter + findings + constraints + plan piped from a temp file into `claude -p --model fable --effort high --output-format json`; parse and save `session_id` from the JSON reply.
 - **Consult:** brief piped into `claude -p --resume <session_id> --model fable --effort high --output-format json`.
-- **ConsultB** If fable is unavailable, use opus with max effort: `claude -p --resume <session_id> --model opus --effort max --output-format json`.
+- **ConsultB** If fable is unavailable, use opus with xhigh effort: `claude -p --resume <session_id> --model opus --effort xhigh --output-format json`.
 - **Signals:** every advisor reply opens with exactly one of ENDORSE, CORRECTION, PLAN, or STOP. CORRECTION and PLAN are actions to take, with a report-back in the next consult on that topic. STOP halts that line of work and surfaces it to the user. When the CLI is unreachable, Grok stops and says so — it never self-endorses in the advisor's place.
 - **Cadence, mandatory:** after planning and before any edit; per phase before implementation (TDD red + approach) and after (diff, tests, acceptance evidence); before every `git commit` and `git push`; on every user-facing fork before asking; on any twice-repeated failure or stall.
 
