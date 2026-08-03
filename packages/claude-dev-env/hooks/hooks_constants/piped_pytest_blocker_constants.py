@@ -13,7 +13,10 @@ flags from its first operand, the wrapper commands whose run passes through to
 the program behind them, the separator that rejoins a wrapper's argument
 tokens, the empty commenter set that leaves ``#`` to the comment-start pattern,
 the quote characters stripped before a basename read, and the deny message.
-Segment helpers come from ``shell_command_segments.py``.
+Segment helpers come from ``shell_command_segments.py``. Quote-aware pipeline
+parsing lives in ``shell_command_pipeline``. Pytest invocation classification
+that consumes these program, wrapper, and option constants lives in
+``pytest_invocation``.
 
 Two wrapper shapes reach the program behind them differently. ``sudo`` and
 ``uvx`` take their own option flags and then the command, so the step-over drops
