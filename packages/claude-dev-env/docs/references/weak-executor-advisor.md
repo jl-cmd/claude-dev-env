@@ -52,7 +52,8 @@ becomes the task list, not the other way around.
 ## Consult budget
 
 Two to three consults per task. Every material fork consults the advisor
-rather than the executor judging alone.
+rather than the executor judging alone. Of the two or three, the third is
+reserved for recovery or reconciliation — not spent on routine confirmation.
 
 ## Advice weight
 

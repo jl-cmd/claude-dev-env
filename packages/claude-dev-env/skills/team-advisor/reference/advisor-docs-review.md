@@ -231,7 +231,11 @@ forwards the full transcript itself.
 
 Fable, Opus 5, and Mythos advisors return `advisor_redacted_result`
 (encrypted, round-trips verbatim). Opus 4.8 and below return plaintext
-`advisor_result`.
+`advisor_result`. A native Fable-class advisor's encrypted block carries no
+guidance the client can read; when logging or auditing the guidance matters,
+pick a plaintext-returning advisor instead — the hand-rolled CLI and
+warm-agent paths always yield a readable transcript, an accountability
+advantage worth choosing them for.
 
 Pairing invariant: "The advisor must be at least as capable as the
 executor." Claude Code enforces the same check per subagent — subagents
@@ -271,3 +275,12 @@ server tool. Three inversions apply:
    byte-stable at the top of the consult stream; volatile detail goes last.
 3. **Hooks apply.** Consult payloads travel through ordinary tools, so each
    payload stays hook-safe.
+
+## Measuring the advisor's lift
+
+Benchmark three routes on one representative workload: the executor alone,
+the executor plus advisor, and the strongest model throughout. Route future
+work by measured cost per successful task, not by assumption.
+
+Track, per route: completion rate, regression rate, tool calls, tokens by
+tier, and latency.

@@ -18,7 +18,7 @@ If the task needs orientation first (find files, fetch a source, see what exists
 
 Also call:
 
-- **When you believe the task is complete.** Before this call, make the deliverable durable: write the file, save the result, commit the change. The call takes time; if the session ends during it, a durable result survives and an unwritten one does not.
+- **When you believe the task is complete.** Before this call, make the deliverable durable: write the file, save the result, commit the change. The call takes time; if the session ends during it, a durable result survives and an unwritten one does not. Ask the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
 - **When stuck** — errors recur, approach does not converge, results do not fit.
 - **When considering a change of approach.**
 
@@ -35,6 +35,21 @@ Your first write, edit, or state-changing shell call on a task must be preceded 
 Give the advice serious weight. If a step fails empirically, or primary-source evidence contradicts a claim (the file says X, the paper states Y), adapt. A passing self-test is not evidence the advice is wrong — it is evidence the test does not check what the advice is checking.
 
 If your data points one way and the advisor points another: do not silently switch. Surface the conflict in one more call — "I found X, you suggest Y, which constraint breaks the tie?" A reconcile call is cheaper than the wrong branch.
+
+Work a disagreement in this order: keep the observed evidence in the record, name the conflict plainly, ask the advisor which constraint breaks the tie, then act on the reconciled plan.
+
+## Escalation shapes
+
+Four shapes cover how a harder task gets more strength behind it. Route to the one that matches the work, not by default to the advisor.
+
+| Shape | Fits when |
+|---|---|
+| Advisor | The task needs intermittent strategy and review, and one executor keeps the task from start to finish. |
+| Subagent | A piece of the task is a bounded subtask that benefits from its own context and its own loop. |
+| Stronger-model planning phase | The plan needs the strong model's judgment; the fast model can carry it out once written. |
+| Full model switch | Every step of the task needs the stronger tier, not just the hard decisions. |
+
+The advisor is not the answer when the work is a delegable bounded subtask — spawn a subagent instead — or when every turn needs the strongest tier — switch the whole task to that model instead.
 
 ## Brevity cue
 
