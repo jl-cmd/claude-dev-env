@@ -86,6 +86,7 @@ def _write_settings(
 def _reset_probe_cache_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
     availability._probe_copilot_quota.cache_clear()
     availability._log_disk_settings_fallback_once.cache_clear()
+    availability._resolve_reviews_settings.cache_clear()
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
     monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
     monkeypatch.setattr(
@@ -324,3 +325,67 @@ def should_probe_copilot_when_neither_flag_env_nor_disk_disable_it(
     waiver = availability._resolve_copilot_waiver(False)
     assert waiver.is_waived is True
     assert waiver.bypass_note == "copilot unavailable: quota exhausted"
+
+
+def should_disable_bugteam_when_neither_disk_list_names_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings_path = _write_settings(
+        tmp_path, reviews_disabled_value="", reviews_enabled_value=""
+    )
+    monkeypatch.setattr(
+        availability, "get_claude_user_settings_path", lambda: settings_path
+    )
+    assert availability._is_bugteam_disabled_via_resolved_settings() is True
+
+
+def should_enable_bugteam_when_disk_enables_it_even_if_env_omits_opt_in(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    settings_path = _write_settings(
+        tmp_path, reviews_disabled_value="", reviews_enabled_value="bugteam"
+    )
+    monkeypatch.setattr(
+        availability, "get_claude_user_settings_path", lambda: settings_path
+    )
+    assert availability._is_bugteam_disabled_via_resolved_settings() is False
+
+
+def should_disable_bugteam_when_disk_disables_and_enables_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings_path = _write_settings(
+        tmp_path, reviews_disabled_value="bugteam", reviews_enabled_value="bugteam"
+    )
+    monkeypatch.setattr(
+        availability, "get_claude_user_settings_path", lambda: settings_path
+    )
+    assert availability._is_bugteam_disabled_via_resolved_settings() is True
+
+
+def should_disable_codex_when_neither_disk_list_names_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings_path = _write_settings(
+        tmp_path, reviews_disabled_value="", reviews_enabled_value=""
+    )
+    monkeypatch.setattr(
+        availability, "get_claude_user_settings_path", lambda: settings_path
+    )
+    assert availability._is_codex_disabled_via_resolved_settings() is True
+
+
+def should_enable_codex_when_disk_enables_it_even_if_env_omits_opt_in(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    settings_path = _write_settings(
+        tmp_path, reviews_disabled_value="", reviews_enabled_value="codex"
+    )
+    monkeypatch.setattr(
+        availability, "get_claude_user_settings_path", lambda: settings_path
+    )
+    assert availability._is_codex_disabled_via_resolved_settings() is False
+
+

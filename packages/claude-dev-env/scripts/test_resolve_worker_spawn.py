@@ -1141,7 +1141,7 @@ def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
         "load_chain",
         lambda _config_path: [
             chain_runner.ChainEntry(command="claude", extra_args=()),
-            chain_runner.ChainEntry(command="claude-ev", extra_args=()),
+            chain_runner.ChainEntry(command="claude-profile-c", extra_args=()),
         ],
     )
     prompt_text_by_command: dict[str, str] = {}
@@ -1179,6 +1179,6 @@ def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
     )
 
     assert prompt_text_by_command["claude"] == FIXTURE_PROMPT_TEXT
-    assert prompt_text_by_command["claude-ev"] == FIXTURE_PROMPT_TEXT
+    assert prompt_text_by_command["claude-profile-c"] == FIXTURE_PROMPT_TEXT
     assert outcome.tier_used == TIER_CLAUDE_HEADLESS
     assert outcome.is_ok is True

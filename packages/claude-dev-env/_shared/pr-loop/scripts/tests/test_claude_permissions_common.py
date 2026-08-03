@@ -200,9 +200,9 @@ def test_is_valid_project_root_uses_extracted_directory_marker_constants() -> No
 
 def test_permission_rule_tool_name_extracts_tool_prefix() -> None:
     assert common.permission_rule_tool_name("Edit(/repo/.claude/**)") == "Edit"
-    assert common.permission_rule_tool_name("Write(c:/Users/jon/.claude/worktrees/x/**)") == (
-        "Write"
-    )
+    assert common.permission_rule_tool_name(
+        "Write(c:/Users/example/.claude/worktrees/x/**)"
+    ) == ("Write")
     assert common.permission_rule_tool_name(None) is None
     assert common.permission_rule_tool_name("not-a-rule") is None
 
@@ -217,13 +217,13 @@ def test_is_inert_file_permission_rule_for_write_glob_notebookedit() -> None:
 
 def test_all_project_path_aliases_for_reap_adds_home_alias_when_project_is_home() -> None:
     all_aliases = common.all_project_path_aliases_for_reap(
-        "C:/Users/jon", home_directory_path="C:/Users/jon"
+        "C:/Users/example", home_directory_path="C:/Users/example"
     )
-    assert all_aliases == ("C:/Users/jon", "$HOME")
+    assert all_aliases == ("C:/Users/example", "$HOME")
 
 
 def test_all_project_path_aliases_for_reap_skips_home_alias_for_other_projects() -> None:
     all_aliases = common.all_project_path_aliases_for_reap(
-        "C:/dev/other", home_directory_path="C:/Users/jon"
+        "C:/dev/other", home_directory_path="C:/Users/example"
     )
     assert all_aliases == ("C:/dev/other",)

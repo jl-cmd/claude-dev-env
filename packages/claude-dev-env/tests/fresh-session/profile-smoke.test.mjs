@@ -1,5 +1,5 @@
 /**
- * Fresh-session profile smoke tests (main, editor, mel).
+ * Fresh-session profile smoke tests (main, profile-a, profile-b).
  *
  * Uses the fake CLI transport by default so CI never touches live profiles.
  */
@@ -65,23 +65,23 @@ test('fake transport records command, version, profile root, exit status, and ev
 });
 
 test('failed profile produces profile-specific diagnostic and nonzero exit status', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor', 'mel'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a', 'profile-b'] });
     try {
         const failed = runProfileSession({
             roots,
-            profileId: 'editor',
+            profileId: 'profile-a',
             realCli: false,
-            failProfile: 'editor',
+            failProfile: 'profile-a',
         });
         assert.notEqual(failed.exitStatus, 0);
         assert.ok(failed.diagnostic);
-        assert.match(failed.diagnostic, /editor/);
+        assert.match(failed.diagnostic, /profile-a/);
 
         const passed = runProfileSession({
             roots,
-            profileId: 'mel',
+            profileId: 'profile-b',
             realCli: false,
-            failProfile: 'editor',
+            failProfile: 'profile-a',
         });
         assert.equal(passed.exitStatus, 0);
         assert.equal(passed.diagnostic, null);
@@ -90,7 +90,7 @@ test('failed profile produces profile-specific diagnostic and nonzero exit statu
     }
 });
 
-test('repeated harness runs produce equivalent evidence shape for main, editor, and mel', () => {
+test('repeated harness runs produce equivalent evidence shape for main, profile-a, and profile-b', () => {
     const first = runFreshSessionHarness({
         profileIds: [...ALL_PROFILE_IDS],
         checkTransport: true,
@@ -128,11 +128,11 @@ test('repeated harness runs produce equivalent evidence shape for main, editor, 
 test('parseHarnessArguments reads --profiles and --check transport', () => {
     const parsed = parseHarnessArguments([
         '--profiles',
-        'main,editor,mel',
+        'main,profile-a,profile-b',
         '--check',
         'transport',
     ]);
-    assert.deepEqual(parsed.profileIds, ['main', 'editor', 'mel']);
+    assert.deepEqual(parsed.profileIds, ['main', 'profile-a', 'profile-b']);
     assert.equal(parsed.checkTransport, true);
     assert.equal(shouldUseRealCli({ realCli: false }), false);
 });

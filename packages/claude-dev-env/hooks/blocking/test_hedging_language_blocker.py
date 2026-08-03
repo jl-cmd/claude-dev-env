@@ -197,3 +197,65 @@ def test_empty_message_passes_through_with_no_output():
 
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
+
+
+def test_explicit_unverified_label_in_same_sentence_passes() -> None:
+    completed_process = run_hook_with_message(
+        "This claim is unverified; the deploy is probably blocked."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_i_dont_know_label_in_same_sentence_passes() -> None:
+    completed_process = run_hook_with_message(
+        "I don't know whether the port is probably open."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_supported_probability_without_hedge_word_passes() -> None:
+    completed_process = run_hook_with_message(
+        "The suite reports 0.92 precision on the labeled fixture set in "
+        "test_prose_matcher_advisory.py."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_label_in_one_sentence_does_not_exempt_bare_hedge_in_another() -> None:
+    completed_process = run_hook_with_message(
+        "This claim is unverified. The deploy is probably blocked."
+    )
+
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "probably" in parsed_response["reason"]
+    assert "explicit uncertainty label" in parsed_response["reason"]
+
+
+def test_bare_probably_still_blocks_with_positive_corrective() -> None:
+    completed_process = run_hook_with_message("The deploy is probably blocked.")
+
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "probably" in parsed_response["reason"]
+    assert "label that claim unverified" in parsed_response["reason"]
+    assert "AskUserQuestion" in parsed_response["reason"]
+
+
+def test_find_blocking_hedging_terms_is_sentence_scoped() -> None:
+    bare = hedging_language_blocker.find_blocking_hedging_terms(
+        "This claim is unverified. The deploy is probably blocked."
+    )
+    labeled = hedging_language_blocker.find_blocking_hedging_terms(
+        "This claim is unverified; the deploy is probably blocked."
+    )
+    assert bare == ["probably"]
+    assert labeled == []

@@ -31,13 +31,13 @@ def _body_names_volatile_path(tool_name: str, tool_input: dict[str, object]) -> 
 
 
 def test_scan_detects_job_scratch_path_backslash() -> None:
-    text = r"See C:\Users\example\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"
-    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+    text = r"See C:\Users\example\.claude-profile-a\jobs\95762cea\tmp\staging\contact_sheet.png"
+    assert scan_text_for_volatile_marker(text) == ".claude-profile-a/jobs/"
 
 
 def test_scan_detects_job_scratch_path_forward_slash() -> None:
-    text = "artifact at /home/user/.claude-editor/jobs/abc/tmp/out.png"
-    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+    text = "artifact at /home/user/.claude-profile-a/jobs/abc/tmp/out.png"
+    assert scan_text_for_volatile_marker(text) == ".claude-profile-a/jobs/"
 
 
 def test_scan_detects_worktree_path() -> None:
@@ -92,12 +92,12 @@ def test_scan_home_anchored_worktree_path_is_detected() -> None:
 
 
 def test_scan_posix_absolute_job_scratch_path_is_detected() -> None:
-    text = "/home/me/.claude-editor/jobs/j1/log.txt"
-    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+    text = "/home/me/.claude-profile-a/jobs/j1/log.txt"
+    assert scan_text_for_volatile_marker(text) == ".claude-profile-a/jobs/"
 
 
 def test_scan_bare_parenthesized_job_scratch_mention_is_allowed() -> None:
-    text = "(.claude-editor/jobs/) as a directory name in prose"
+    text = "(.claude-profile-a/jobs/) as a directory name in prose"
     assert scan_text_for_volatile_marker(text) is None
 
 
@@ -139,8 +139,8 @@ def test_scan_markdown_link_relative_worktree_target_is_detected() -> None:
 
 
 def test_scan_space_prefixed_relative_job_scratch_path_is_detected() -> None:
-    text = "see .claude-editor/jobs/j1/log.txt"
-    assert scan_text_for_volatile_marker(text) == ".claude-editor/jobs/"
+    text = "see .claude-profile-a/jobs/j1/log.txt"
+    assert scan_text_for_volatile_marker(text) == ".claude-profile-a/jobs/"
 
 
 def test_scan_backslash_relative_worktree_path_is_detected() -> None:
@@ -171,7 +171,7 @@ def test_scan_sentence_final_marker_period_is_allowed() -> None:
 def test_gh_comment_with_job_scratch_path_is_blocked() -> None:
     command = (
         'gh pr comment 669 --body "Contact sheet at '
-        r'C:\Users\example\.claude-editor\jobs\95762cea\tmp\staging\contact_sheet.png"'
+        r'C:\Users\example\.claude-profile-a\jobs\95762cea\tmp\staging\contact_sheet.png"'
     )
     assert _body_names_volatile_path("Bash", {"command": command})
 
@@ -223,7 +223,7 @@ def test_substring_mention_of_gh_post_does_not_classify() -> None:
 
 
 def test_gh_word_not_first_token_does_not_classify() -> None:
-    command = r'echo gh pr comment 42 --body "see C:\.claude-editor\jobs\x"'
+    command = r'echo gh pr comment 42 --body "see C:\.claude-profile-a\jobs\x"'
     assert not _body_names_volatile_path("Bash", {"command": command})
 
 
@@ -279,7 +279,7 @@ def test_gh_issue_edit_quoting_bare_constant_is_allowed(tmp_path: pathlib.Path) 
     body_file.write_text(
         "The manifest skips these tooling-state prefixes:\n"
         '    ".claude/worktrees/",\n'
-        '    ".claude-editor/jobs/",\n'
+        '    ".claude-profile-a/jobs/",\n'
         "Neither is a machine-local path.",
         encoding="utf-8",
     )

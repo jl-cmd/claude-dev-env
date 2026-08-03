@@ -214,19 +214,19 @@ test('duplicate SessionStart fails independently of InstructionsLoaded', () => {
 });
 
 test('missing InstructionsLoaded fails independently of SessionStart', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        const sinkPath = createEventSinkPath(roots.profileRootById.editor);
+        const sinkPath = createEventSinkPath(roots.profileRootById['profile-a']);
         appendHookEvent(sinkPath, {
             eventName: SESSION_START_EVENT,
-            profileId: 'editor',
+            profileId: 'profile-a',
             sessionId: 'missing-il',
             sequence: 1,
         });
         const events = readHookEvents(sinkPath);
-        assert.equal(countEvents(events, SESSION_START_EVENT, 'editor'), 1);
+        assert.equal(countEvents(events, SESSION_START_EVENT, 'profile-a'), 1);
         assert.equal(
-            countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'editor'),
+            countEvents(events, INSTRUCTIONS_LOADED_EVENT, 'profile-a'),
             0,
             'missing InstructionsLoaded is a failure signal',
         );
@@ -236,11 +236,11 @@ test('missing InstructionsLoaded fails independently of SessionStart', () => {
 });
 
 test('intended red evidence stores missing registration shape', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['mel'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-b'] });
     try {
         const redPath = join(roots.evidenceRoot, 'missing-session-start.json');
         const redRecord = {
-            profileId: 'mel',
+            profileId: 'profile-b',
             eventName: SESSION_START_EVENT,
             expectedCount: 1,
             actualCount: 0,
