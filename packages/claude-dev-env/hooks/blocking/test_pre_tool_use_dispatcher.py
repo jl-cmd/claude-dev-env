@@ -286,8 +286,8 @@ def test_clean_write_allows_on_multi_edit_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
-def test_plain_language_denial_on_write_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies a Write of heavy prose."""
+def test_plain_language_heavy_prose_allows_on_write_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose allows (OP-07D advisory)."""
     payload_text = _write_payload(
         _MARKDOWN_FILE_PATH,
         "# Guide\n\nPlease utilize this functionality to commence the process.\n",
@@ -295,8 +295,8 @@ def test_plain_language_denial_on_write_of_markdown_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
 
-def test_plain_language_denial_on_edit_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies an Edit with heavy prose."""
+def test_plain_language_heavy_prose_allows_on_edit_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose Edit allows (OP-07D)."""
     payload_text = _edit_payload(
         _MARKDOWN_FILE_PATH,
         "old line",
@@ -305,8 +305,8 @@ def test_plain_language_denial_on_edit_of_markdown_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
 
 
-def test_plain_language_denial_on_multi_edit_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies a MultiEdit with heavy prose."""
+def test_plain_language_heavy_prose_allows_on_multi_edit_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose MultiEdit allows (OP-07D)."""
     payload_text = _multi_edit_payload(
         _MARKDOWN_FILE_PATH,
         [{"old_string": "old", "new_string": "Please utilize this functionality to commence."}],
@@ -326,13 +326,11 @@ def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
 def test_multi_edit_runs_only_group_b_hooks() -> None:
     """Dispatcher invokes only Group-B hooks on MultiEdit, not Group-A hooks.
 
-    A plain_language_blocker denial on a MultiEdit proves Group B runs.
     The write_existing_file_blocker (Group A only) must not run on MultiEdit,
     so a MultiEdit to any path that would trip a Group-A hook must still allow.
-    This test proves Group A does not run on MultiEdit by asserting:
-    1. Group-B (plain_language_blocker) fires on MultiEdit for a markdown file
-       with heavy prose.
-    2. The set of applicable entries for MultiEdit contains no Group-A entries.
+    Heavy prose no longer denies (OP-07D); this test proves Group A is absent
+    from MultiEdit and that plain_language_blocker stays in the MultiEdit set
+    and still runs (allow-with-advisory on heavy prose).
     """
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
     all_write_only_entries = [
@@ -348,15 +346,20 @@ def test_multi_edit_runs_only_group_b_hooks() -> None:
             f"Group-A hook {each_group_a_entry.script_relative_path!r} "
             "appears in the MultiEdit applicable set — it must not"
         )
+    assert "blocking/plain_language_blocker.py" in all_multi_edit_script_paths, (
+        "plain_language_blocker (Group B) must stay in the MultiEdit applicable set"
+    )
     heavy_prose_payload = _multi_edit_payload(
         _MARKDOWN_FILE_PATH,
         [{"old_string": "old line", "new_string": "Utilize this to commence the process."}],
     )
     dispatcher_result = _run_dispatcher(heavy_prose_payload)
     dispatcher_is_deny, _reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny, (
-        "Dispatcher should deny a MultiEdit with heavy prose (plain_language_blocker "
-        "is a Group-B hook and must run on MultiEdit)"
+    assert not dispatcher_is_deny, (
+        "Dispatcher should allow MultiEdit heavy prose (OP-07D advisory path)"
+    )
+    assert dispatcher_result.stdout.strip(), (
+        "plain_language_blocker should emit an allow advisory on MultiEdit heavy prose"
     )
 
 
@@ -445,16 +448,17 @@ def test_context_survives_alongside_deny_reason(
 def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
     """When two or more hooks deny, all their reasons appear in the dispatcher output.
 
-    Uses a Write to a .md file carrying both a historical phrase ("previously")
-    and a heavy word ("utilize") so state_description_blocker (Group A) and
-    plain_language_blocker (Group B) both deny deterministically with no
-    real-filesystem dependency.
+    Uses a Write to an existing markdown path with a historical phrase
+    ("previously") so write_existing_file_blocker and state_description_blocker
+    both deny. Heavy words no longer hard-deny (OP-07D), so plain_language is
+    not a denier.
     """
+    existing_markdown_path = str(Path(__file__).resolve().parent / "CLAUDE.md")
     multi_deny_content = (
         "# Guide\n\n"
-        "Previously the system utilized a different mechanism.\n"
+        "Previously the system used a different mechanism.\n"
     )
-    payload_text = _write_payload(_MARKDOWN_FILE_PATH, multi_deny_content)
+    payload_text = _write_payload(existing_markdown_path, multi_deny_content)
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
     dispatcher_result = _run_dispatcher(payload_text)
@@ -471,8 +475,8 @@ def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
 
     assert len(all_expected_deny_reasons) >= 2, (
         f"Test payload must trip at least two hooks — got {len(all_expected_deny_reasons)}. "
-        "Check that 'previously' triggers state_description_blocker and 'utilized' "
-        "triggers plain_language_blocker on a .md Write."
+        "Check that an existing path triggers write_existing_file_blocker and "
+        "'previously' triggers state_description_blocker on a Write."
     )
     for each_reason in all_expected_deny_reasons:
         assert each_reason in dispatcher_reason, (
@@ -630,13 +634,14 @@ def test_aggregate_explicit_allow_is_overridden_by_a_deny() -> None:
 def test_later_hook_deny_survives_early_hook_exit() -> None:
     """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
 
-    plain_language_blocker (Group B, last in order) denies a markdown write with heavy
-    prose. Earlier hooks exit 0 (allow). The dispatcher must catch each hook's
-    SystemExit and continue, so the later denial reaches the aggregator.
+    state_description_blocker denies a markdown write with a historical phrase.
+    Earlier hooks exit 0 (allow). Heavy words no longer hard-deny (OP-07D). The
+    dispatcher must catch each hook's SystemExit and continue, so the later
+    denial reaches the aggregator.
     """
     payload_text = _write_payload(
         _MARKDOWN_FILE_PATH,
-        "# Doc\n\nThis section attempts to facilitate the utilization of this functionality.\n",
+        "# Doc\n\nPreviously this section used a different mechanism.\n",
     )
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 

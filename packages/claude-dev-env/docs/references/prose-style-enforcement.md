@@ -19,3 +19,7 @@ When the flag is off, heavy-word and hedging hits still emit privacy-safe adviso
 ## Explicit uncertainty (OP-07C)
 
 With enforcement on, a hedge word in a sentence that also labels the claim (`unverified`, `I don't know`, `no source for this claim`, …) passes. A bare hedge in a different sentence still blocks. Detail: `rules/hedging-claims.md`.
+
+## Plain-language advisory (OP-07D)
+
+Heavy-word matches never hard-deny a Write/Edit or AskUserQuestion. With enforcement on, the hook allows the call and returns a `systemMessage` that names everyday swaps for both AskUserQuestion and `.md` writes. Lean-block structure denials stay hard. Detail: `rules/plain-language.md`.

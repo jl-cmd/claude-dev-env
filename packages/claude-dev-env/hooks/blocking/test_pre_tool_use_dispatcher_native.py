@@ -258,25 +258,42 @@ def test_plain_language_native_allows_match_script() -> None:
     assert native_reason is None
     assert script_reason is None
 
-def test_plain_language_native_deny_matches_script_reason() -> None:
-    """plain_language_blocker native deny reason matches the script's reason."""
+
+def test_plain_language_native_heavy_word_advisory_matches_script() -> None:
+    """plain_language_blocker native and script agree: no deny, allow advisory."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
-    native_reason = _evaluate_with_prose_style_opt_in(plain_language_blocker.evaluate, payload_dictionary)
+    with patch.dict(os.environ, _PROSE_STYLE_ENFORCEMENT_ENVIRONMENT):
+        native_deny, native_advisory = plain_language_blocker.evaluate_with_advisory(
+            payload_dictionary
+        )
     script_stdout = _run_script_subprocess(_PLAIN_LANGUAGE_SCRIPT, payload_dictionary)
     script_reason = _deny_reason_from_script_stdout(script_stdout)
-    assert native_reason is not None
-    assert native_reason == script_reason
+    assert native_deny is None
+    assert script_reason is None
+    assert native_advisory is not None
+    assert "utilize" in native_advisory.lower() or "commence" in native_advisory.lower()
+    script_payload = json.loads(script_stdout)
+    assert script_payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert native_advisory in script_payload["systemMessage"]
 
-def test_plain_language_native_multi_edit_deny_matches_script_reason() -> None:
-    """plain_language_blocker native and script agree on a MultiEdit denial."""
+
+def test_plain_language_native_multi_edit_heavy_word_advisory_matches_script() -> None:
+    """plain_language_blocker native and script agree on MultiEdit heavy-word allow."""
     payload_dictionary = _multi_edit_payload_dictionary(
         _MARKDOWN_PATH, "Utilize this to commence the process.\n"
     )
-    native_reason = _evaluate_with_prose_style_opt_in(plain_language_blocker.evaluate, payload_dictionary)
+    with patch.dict(os.environ, _PROSE_STYLE_ENFORCEMENT_ENVIRONMENT):
+        native_deny, native_advisory = plain_language_blocker.evaluate_with_advisory(
+            payload_dictionary
+        )
     script_stdout = _run_script_subprocess(_PLAIN_LANGUAGE_SCRIPT, payload_dictionary)
     script_reason = _deny_reason_from_script_stdout(script_stdout)
-    assert native_reason is not None
-    assert native_reason == script_reason
+    assert native_deny is None
+    assert script_reason is None
+    assert native_advisory is not None
+    script_payload = json.loads(script_stdout)
+    assert script_payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert native_advisory in script_payload["systemMessage"]
 
 def test_plain_language_native_non_markdown_allows_match_script() -> None:
     """plain_language_blocker native allows a non-markdown Write, matching the script."""
@@ -296,35 +313,42 @@ def test_dispatcher_native_path_denies_state_description() -> None:
     assert dispatcher_reason is not None
     assert native_reason in dispatcher_reason
 
-def test_dispatcher_native_path_denies_plain_language() -> None:
-    """The dispatcher's native path denies a plain_language_blocker violation."""
+
+def test_dispatcher_native_path_allows_plain_language_heavy_word() -> None:
+    """The dispatcher's native path allows heavy words and does not deny."""
     payload_dictionary = _multi_edit_payload_dictionary(
         _MARKDOWN_PATH, "Utilize this to commence the process.\n"
     )
-    native_reason = _evaluate_with_prose_style_opt_in(plain_language_blocker.evaluate, payload_dictionary)
+    native_reason = _evaluate_with_prose_style_opt_in(
+        plain_language_blocker.evaluate, payload_dictionary
+    )
     dispatcher_reason = _deny_reason_from_dispatcher(payload_dictionary)
-    assert native_reason is not None
-    assert dispatcher_reason is not None
-    assert native_reason in dispatcher_reason
+    assert native_reason is None
+    assert dispatcher_reason is None
 
-def test_dispatcher_native_plain_language_carries_system_message() -> None:
-    """The dispatcher's plain-language deny carries the standalone systemMessage."""
+
+def test_dispatcher_native_plain_language_carries_advisory_system_message() -> None:
+    """The dispatcher's plain-language allow carries the advisory systemMessage."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
-    deny_reason = _evaluate_with_prose_style_opt_in(plain_language_blocker.evaluate, payload_dictionary)
-    assert deny_reason is not None
-    standalone_payload = plain_language_blocker.build_deny_payload(deny_reason)
-    expected_system_message = standalone_payload["systemMessage"]
-    assert isinstance(expected_system_message, str)
+    with patch.dict(os.environ, _PROSE_STYLE_ENFORCEMENT_ENVIRONMENT):
+        deny_reason, advisory_message = plain_language_blocker.evaluate_with_advisory(
+            payload_dictionary
+        )
+    assert deny_reason is None
+    assert advisory_message is not None
     dispatcher_payload = _deny_payload_from_dispatcher(payload_dictionary)
+    assert dispatcher_payload["hookSpecificOutput"]["permissionDecision"] == "allow"
     dispatcher_system_message = dispatcher_payload.get("systemMessage")
     assert isinstance(dispatcher_system_message, str)
-    assert expected_system_message in dispatcher_system_message
+    assert advisory_message in dispatcher_system_message
 
-def test_dispatcher_native_plain_language_carries_suppress_output() -> None:
-    """The dispatcher's plain-language deny carries the standalone suppressOutput flag."""
+
+def test_dispatcher_native_plain_language_allow_does_not_suppress_output() -> None:
+    """The dispatcher's plain-language advisory allow leaves suppressOutput off."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _PLAIN_LANGUAGE_DENY_CONTENT)
     dispatcher_payload = _deny_payload_from_dispatcher(payload_dictionary)
-    assert dispatcher_payload.get("suppressOutput") is True
+    assert dispatcher_payload.get("suppressOutput") is not True
+    assert dispatcher_payload["hookSpecificOutput"]["permissionDecision"] == "allow"
 
 def test_dispatcher_native_state_description_carries_additional_context() -> None:
     """The dispatcher's state-description deny carries the standalone additionalContext."""
