@@ -27,9 +27,15 @@ from pathlib import Path
 import _path_setup  # noqa: F401
 
 from plain_language_blocker import (
+    build_allow_advisory_payload as build_plain_language_allow_advisory_payload,
+)
+from plain_language_blocker import (
     build_deny_payload as build_plain_language_deny_payload,
 )
 from plain_language_blocker import evaluate as evaluate_plain_language
+from plain_language_blocker import (
+    evaluate_with_advisory as evaluate_plain_language_with_advisory,
+)
 from state_description_blocker import (
     build_deny_payload as build_state_description_deny_payload,
 )
@@ -40,32 +46,46 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALLOW_DECISION,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
+    CONTEXT_JOIN_SEPARATOR,
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
     HOOK_EVENT_NAME,
     PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
+    REASON_JOIN_SEPARATOR,
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
+    SYSTEM_MESSAGE_JOIN_SEPARATOR,
     HostedHookEntry,
 )
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 
 NativeEvaluator = Callable[[dict[str, object]], str | None]
 DenyPayloadBuilder = Callable[[str], dict[str, object]]
+AdvisoryEvaluator = Callable[
+    [dict[str, object]], tuple[str | None, str | None]
+]
+AllowAdvisoryPayloadBuilder = Callable[[str], dict[str, object]]
 
 
 @dataclass(frozen=True)
 class NativeHook:
-    """A nativized hook's evaluator paired with its full deny-payload builder.
+    """A nativized hook's evaluator paired with its full payload builders.
 
     Attributes:
         evaluate: The hook's evaluate function returning a deny-reason or None.
         build_deny_payload: The hook's builder that turns a deny-reason into the
             full deny payload the standalone hook writes (carrying systemMessage,
             additionalContext, and suppressOutput).
+        evaluate_with_advisory: Optional evaluator that returns
+            ``(deny_reason, advisory_system_message)`` so allow-path notices
+            match the standalone hook (plain_language OP-07D).
+        build_allow_advisory_payload: Optional builder for an allow payload that
+            carries the advisory systemMessage without denying.
     """
 
     evaluate: NativeEvaluator
     build_deny_payload: DenyPayloadBuilder
+    evaluate_with_advisory: AdvisoryEvaluator | None = None
+    build_allow_advisory_payload: AllowAdvisoryPayloadBuilder | None = None
 
 
 _native_hook_by_module_name: dict[str, NativeHook] = {
@@ -76,6 +96,8 @@ _native_hook_by_module_name: dict[str, NativeHook] = {
     PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
         evaluate=evaluate_plain_language,
         build_deny_payload=build_plain_language_deny_payload,
+        evaluate_with_advisory=evaluate_plain_language_with_advisory,
+        build_allow_advisory_payload=build_plain_language_allow_advisory_payload,
     ),
 }
 
@@ -180,19 +202,28 @@ def run_native_hook(
     Calls the evaluator directly with the payload dict, builds the full deny JSON
     via the hook's own deny-payload builder so the captured stdout matches the
     standalone hook's deny shape (carrying systemMessage, additionalContext, and
-    suppressOutput), and catches a non-SystemExit crash to log and classify it.
+    suppressOutput), emits an allow-with-systemMessage payload when the hook
+    returns an advisory without a deny, and catches a non-SystemExit crash to
+    log and classify it.
 
     Args:
-        native_hook: The hook's evaluator paired with its deny-payload builder.
+        native_hook: The hook's evaluator paired with its payload builders.
         payload_by_key: The parsed payload dict to pass to the evaluator.
         is_blocking: Whether a crash from this hook surfaces a blocking signal.
 
     Returns:
-        A HostedHookResult carrying the captured deny JSON (empty when allowed),
-        the crash flag, and the blocking classification.
+        A HostedHookResult carrying the captured deny or allow-advisory JSON
+        (empty when the payload is clean), the crash flag, and the blocking
+        classification.
     """
     try:
-        deny_reason = native_hook.evaluate(payload_by_key)
+        if native_hook.evaluate_with_advisory is not None:
+            deny_reason, advisory_system_message = native_hook.evaluate_with_advisory(
+                payload_by_key
+            )
+        else:
+            deny_reason = native_hook.evaluate(payload_by_key)
+            advisory_system_message = None
     except Exception as error:
         _log_hook_crash(native_hook.evaluate.__module__, error)
         return HostedHookResult(
@@ -202,9 +233,17 @@ def run_native_hook(
             is_blocking=is_blocking,
         )
 
-    captured_stdout = (
-        json.dumps(native_hook.build_deny_payload(deny_reason)) if deny_reason is not None else ""
-    )
+    if deny_reason is not None:
+        captured_stdout = json.dumps(native_hook.build_deny_payload(deny_reason))
+    elif (
+        advisory_system_message is not None
+        and native_hook.build_allow_advisory_payload is not None
+    ):
+        captured_stdout = json.dumps(
+            native_hook.build_allow_advisory_payload(advisory_system_message)
+        )
+    else:
+        captured_stdout = ""
     return HostedHookResult(
         exit_code=0,
         captured_stdout=captured_stdout,
@@ -394,40 +433,79 @@ def aggregate_hosted_hook_results(
     )
 
 
+def unique_first_seen_strings(all_values: list[str]) -> list[str]:
+    """Return values in first-seen order with exact-string duplicates dropped.
+
+    ::
+
+        unique_first_seen_strings(["a", "b", "a"])  ->  ["a", "b"]
+
+    Comparison is exact full-string equality only (no case fold, no trim).
+    Each field of the deny payload (reasons, systemMessage, additionalContext)
+    is collapsed separately so a deny reason identical to a context string never
+    cross-collapses.
+
+    Args:
+        all_values: Strings collected from hosted hooks in run order.
+
+    Returns:
+        A new list with the first occurrence of each exact string kept.
+    """
+    seen_values: set[str] = set()
+    unique_values: list[str] = []
+    for each_value in all_values:
+        if each_value in seen_values:
+            continue
+        seen_values.add(each_value)
+        unique_values.append(each_value)
+    return unique_values
+
+
 def _emit_deny_decision(decision: DispatcherDecision) -> None:
     """Write one deny JSON object to stdout carrying all deny reasons and context.
 
-    Carries every hook's systemMessage and additionalContext and the
-    suppressOutput flag so the dispatched deny matches the standalone hooks'
-    full deny shape.
+    Collapses exact-duplicate reasons, systemMessage lines, and additionalContext
+    lines at emit time (first-seen order) so the final payload is compact while
+    aggregate_hosted_hook_results still records every firing for logging.
 
     Args:
         decision: The aggregated dispatcher decision with deny reasons, context,
             and the suppressOutput flag.
     """
-    combined_reason = " | ".join(decision.all_deny_reasons)
+    all_unique_deny_reasons = unique_first_seen_strings(decision.all_deny_reasons)
+    all_unique_system_messages = unique_first_seen_strings(decision.all_system_messages)
+    all_unique_additional_context = unique_first_seen_strings(
+        decision.all_additional_context
+    )
+    combined_reason = REASON_JOIN_SEPARATOR.join(all_unique_deny_reasons)
     hook_specific: dict[str, object] = {
         "hookEventName": HOOK_EVENT_NAME,
         "permissionDecision": DENY_DECISION,
         "permissionDecisionReason": combined_reason,
     }
-    if decision.all_additional_context:
-        hook_specific["additionalContext"] = "\n".join(decision.all_additional_context)
+    if all_unique_additional_context:
+        hook_specific["additionalContext"] = CONTEXT_JOIN_SEPARATOR.join(
+            all_unique_additional_context
+        )
     deny_payload: dict[str, object] = {"hookSpecificOutput": hook_specific}
-    if decision.all_system_messages:
-        deny_payload["systemMessage"] = "\n".join(decision.all_system_messages)
+    if all_unique_system_messages:
+        deny_payload["systemMessage"] = CONTEXT_JOIN_SEPARATOR.join(
+            all_unique_system_messages
+        )
     if decision.should_suppress_output:
         deny_payload["suppressOutput"] = True
     sys.stdout.write(json.dumps(deny_payload) + "\n")
     sys.stdout.flush()
 
 
-def _emit_allow_decision() -> None:
+def _emit_allow_decision(decision: DispatcherDecision) -> None:
     """Write one explicit allow JSON object to stdout.
 
     Matches the shape a standalone hosted hook emits when it auto-approves the
     write, so a write a hosted hook allows explicitly is auto-approved under the
-    dispatcher rather than falling back to the default permission flow.
+    dispatcher rather than falling back to the default permission flow. When a
+    hook also carried an advisory systemMessage (plain-language heavy words),
+    that notice rides on the allow payload without denying.
     """
     allow_payload: dict[str, object] = {
         "hookSpecificOutput": {
@@ -435,6 +513,10 @@ def _emit_allow_decision() -> None:
             "permissionDecision": ALLOW_DECISION,
         }
     }
+    if decision.all_system_messages:
+        allow_payload["systemMessage"] = SYSTEM_MESSAGE_JOIN_SEPARATOR.join(
+            decision.all_system_messages
+        )
     sys.stdout.write(json.dumps(allow_payload) + "\n")
     sys.stdout.flush()
 
@@ -522,7 +604,7 @@ def dispatch(
         _emit_deny_decision(aggregated_decision)
         return
     if aggregated_decision.should_allow:
-        _emit_allow_decision()
+        _emit_allow_decision(aggregated_decision)
 
 
 def main() -> None:

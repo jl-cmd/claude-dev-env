@@ -16,6 +16,8 @@ __all__ = [
     "BLOCKING_CRASH_EXIT_CODE",
     "EXIT_CODE_TWO_DENY_REASON",
     "BLOCKING_CRASH_DENY_REASON",
+    "REASON_JOIN_SEPARATOR",
+    "CONTEXT_JOIN_SEPARATOR",
     "WRITE_TOOL_NAME",
     "EDIT_TOOL_NAME",
     "MULTI_EDIT_TOOL_NAME",
@@ -23,6 +25,7 @@ __all__ = [
     "ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES",
     "STATE_DESCRIPTION_BLOCKER_MODULE_NAME",
     "PLAIN_LANGUAGE_BLOCKER_MODULE_NAME",
+    "SYSTEM_MESSAGE_JOIN_SEPARATOR",
     "HostedHookEntry",
     "ALL_HOSTED_HOOK_ENTRIES",
 ]
@@ -30,9 +33,12 @@ __all__ = [
 DENY_DECISION = "deny"
 ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
+SYSTEM_MESSAGE_JOIN_SEPARATOR = "\n"
 BLOCKING_CRASH_EXIT_CODE = 2
 EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"
 BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"
+REASON_JOIN_SEPARATOR = " | "
+CONTEXT_JOIN_SEPARATOR = "\n"
 
 WRITE_TOOL_NAME = "Write"
 EDIT_TOOL_NAME = "Edit"

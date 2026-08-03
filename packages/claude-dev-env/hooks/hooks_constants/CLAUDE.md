@@ -36,6 +36,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
+| `hedging_uncertainty_constants.py` | Sentence-boundary pattern, explicit uncertainty label patterns, hedge-term list separator, and positive corrective block text for OP-07C sentence-scoped hedging |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
@@ -98,6 +99,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `volatile_path_in_post_blocker_constants.py` | Volatile path markers, affected `gh` post subcommands, MCP body param names, and the corrective message for the volatile-path post blocker |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
 | `workflow_substitution_slot_blocker_constants.py` | Per-iteration token patterns for the workflow-slot blocker |
+| `working_style_prompt_constants.py` | The fixed multi-paragraph working-style prompt text for the SessionStart working_style_prompt hook |
 
 ## Conventions
 

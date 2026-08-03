@@ -29,11 +29,28 @@ def test_is_bugteam_disabled_via_env_returns_true_when_env_lists_bugteam(
     assert reviews_disabled.is_bugteam_disabled_via_env() is True
 
 
-def test_is_bugteam_disabled_via_env_returns_false_when_env_is_empty(
+def test_is_bugteam_disabled_via_env_returns_true_when_no_env_vars_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert reviews_disabled.is_bugteam_disabled_via_env() is True
+
+
+def test_is_bugteam_disabled_via_env_returns_false_when_enabled_lists_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugteam")
     assert reviews_disabled.is_bugteam_disabled_via_env() is False
+
+
+def test_is_bugteam_disabled_via_env_true_when_disabled_overrides_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugteam")
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugteam")
+    assert reviews_disabled.is_bugteam_disabled_via_env() is True
 
 
 def test_is_bugbot_disabled_via_env_returns_true_when_env_lists_bugbot(
@@ -150,18 +167,28 @@ def test_is_codex_disabled_via_env_returns_true_when_env_lists_codex(
     assert reviews_disabled.is_codex_disabled_via_env() is True
 
 
-def test_is_codex_disabled_via_env_returns_false_when_env_is_empty(
+def test_is_codex_disabled_via_env_returns_true_when_no_env_vars_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
-    assert reviews_disabled.is_codex_disabled_via_env() is False
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert reviews_disabled.is_codex_disabled_via_env() is True
 
 
-def test_is_codex_disabled_via_env_returns_false_when_only_bugbot_listed(
+def test_is_codex_disabled_via_env_returns_false_when_enabled_lists_codex(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "codex")
     assert reviews_disabled.is_codex_disabled_via_env() is False
+
+
+def test_is_codex_disabled_via_env_true_when_only_bugbot_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugbot")
+    assert reviews_disabled.is_codex_disabled_via_env() is True
 
 
 def test_is_codex_disabled_via_env_true_when_listed_among_other_tokens(
@@ -223,8 +250,25 @@ def test_cli_main_supports_codex_reviewer(
     assert reviews_disabled.main(["--reviewer", "codex"]) == 0
 
 
-def test_cli_main_returns_one_for_codex_when_only_bugbot_disabled(
+def test_cli_main_returns_one_for_codex_when_enabled_via_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "bugbot")
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "codex")
     assert reviews_disabled.main(["--reviewer", "codex"]) == 1
+
+
+def test_cli_main_returns_one_for_bugteam_when_enabled_via_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.setenv("CLAUDE_REVIEWS_ENABLED", "bugteam")
+    assert reviews_disabled.main(["--reviewer", "bugteam"]) == 1
+
+
+def test_cli_main_returns_zero_for_bugteam_when_no_env_vars_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert reviews_disabled.main(["--reviewer", "bugteam"]) == 0

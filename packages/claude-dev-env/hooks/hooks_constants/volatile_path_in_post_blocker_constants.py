@@ -24,7 +24,7 @@ PATH_ANCHOR_CHARACTER: str = "/"
 PATH_SEGMENT_START_CHARACTERS: str = "_-"
 
 ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
-    ".claude-editor/jobs/",
+    ".claude-profile-a/jobs/",
     ".claude/worktrees/",
 )
 

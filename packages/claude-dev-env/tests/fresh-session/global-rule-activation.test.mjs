@@ -19,7 +19,7 @@ import {
     writeRuleFile,
 } from './fixtures/global-rule-marker.mjs';
 
-test('seeded global rule activates independently in main, editor, and mel', () => {
+test('seeded global rule activates independently in main, profile-a, and profile-b', () => {
     const roots = createDisposableRunRoots({ profileIds: [...ALL_PROFILE_IDS] });
     try {
         for (const eachProfileId of ALL_PROFILE_IDS) {
@@ -80,10 +80,10 @@ test('file presence alone cannot satisfy activation: empty global rule is red', 
 });
 
 test('path-scoped rules are not loaded as global activation', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
         writeRuleFile(
-            roots.profileRootById.editor,
+            roots.profileRootById['profile-a'],
             'scoped-only.md',
             [
                 '---',
@@ -95,7 +95,7 @@ test('path-scoped rules are not loaded as global activation', () => {
                 '',
             ].join('\n'),
         );
-        const result = runGlobalRuleActivationSession({ roots, profileId: 'editor' });
+        const result = runGlobalRuleActivationSession({ roots, profileId: 'profile-a' });
         assert.equal(result.activation.isActivated, false);
         assert.ok(!result.activation.allLoadedRuleNames.includes('scoped-only.md'));
     } finally {

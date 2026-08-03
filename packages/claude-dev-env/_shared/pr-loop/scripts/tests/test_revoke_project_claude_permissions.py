@@ -114,7 +114,7 @@ def test_revoke_strips_inert_write_glob_notebookedit_on_foreign_worktree_paths(
     (project_directory / ".git").mkdir()
     settings_path = tmp_path / "home" / ".claude" / "settings.json"
     foreign_worktree = (
-        "c:/Users/jon/.claude/worktrees/claude-dev-env-702a0c2055d2/other-wt"
+        "c:/Users/example/.claude/worktrees/claude-dev-env-702a0c2055d2/other-wt"
     )
     live_other_project = "C:/dev/live-other-project"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
