@@ -5,13 +5,17 @@
     enabled lists bugbot, disabled empty    -> bugbot   ok:   runs
     no lists set                            -> bugbot   flag: off (default)
     enabled lists bugbot, disabled bugbot   -> bugbot   flag: off (opt-out wins)
-    disabled empty                          -> bugteam  ok:   runs
+    enabled lists bugteam, disabled empty   -> bugteam  ok:   runs
+    no lists set                            -> bugteam  flag: off (default)
+    no lists set                            -> codex    flag: off (default)
+    disabled empty                          -> copilot  ok:   runs
     disabled lists copilot                  -> copilot  flag: off
-    disabled lists codex                    -> codex    flag: off
 
-Bugbot is off by default and runs only when the enabled list names it.
-Bugteam, copilot, and codex run by default and stop only when the disabled
-list names them; both lists parse case-insensitively and tolerate whitespace.
+Bugbot, bugteam, and codex are off by default. Each runs only when the
+enabled list names it. A token in the disabled list forces one off even
+when the enabled list names it too. Copilot runs by default and stops only
+when the disabled list names it. Both lists parse case-insensitively and
+tolerate whitespace.
 """
 
 from __future__ import annotations
@@ -75,15 +79,42 @@ def _is_reviewer_listed_in_env(
     return reviewer_token in all_listed_tokens
 
 
-def is_bugteam_disabled_via_env() -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED opts the bug-audit family out.
+def _is_off_by_default_reviewer_disabled(reviewer_token: str) -> bool:
+    """Decide whether an opt-in reviewer stays off for this run.
+
+    ::
+
+        enabled lists the token, disabled empty  -> False  (runs)
+        neither list names the token             -> True   (off by default)
+        both lists name the token                -> True   (opt-out wins)
+
+    Args:
+        reviewer_token: The lowercase reviewer token to look up in both lists.
 
     Returns:
-        True when the env var lists the ``bugteam`` token.
+        True when the reviewer stays off for this run.
     """
-    return _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
+    is_opted_out = _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, reviewer_token
     )
+    is_opted_in = _is_reviewer_listed_in_env(
+        CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME, reviewer_token
+    )
+    return is_opted_out or not is_opted_in
+
+
+def is_bugteam_disabled_via_env() -> bool:
+    """Check whether the bug-audit family stays off for this run.
+
+    The bug-audit family is off by default. It runs only when
+    ``CLAUDE_REVIEWS_ENABLED`` lists ``bugteam``, and a ``bugteam`` token in
+    ``CLAUDE_REVIEWS_DISABLED`` forces it off even when the opt-in lists it.
+
+    Returns:
+        True when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugteam`` or when
+        ``CLAUDE_REVIEWS_ENABLED`` does not list ``bugteam``.
+    """
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN)
 
 
 def is_bugbot_disabled_via_env() -> bool:
@@ -97,13 +128,7 @@ def is_bugbot_disabled_via_env() -> bool:
         True when ``CLAUDE_REVIEWS_DISABLED`` lists ``bugbot`` or when
         ``CLAUDE_REVIEWS_ENABLED`` does not list ``bugbot``.
     """
-    is_opted_out = _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
-    )
-    is_opted_in = _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN
-    )
-    return is_opted_out or not is_opted_in
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_BUGBOT_TOKEN)
 
 
 def is_bugbot_opted_out_via_env() -> bool:
@@ -134,14 +159,17 @@ def is_copilot_disabled_via_env() -> bool:
 
 
 def is_codex_disabled_via_env() -> bool:
-    """Check whether CLAUDE_REVIEWS_DISABLED opts the Codex reviewer out.
+    """Check whether the Codex reviewer stays off for this run.
+
+    Codex is off by default. It runs only when ``CLAUDE_REVIEWS_ENABLED``
+    lists ``codex``, and a ``codex`` token in ``CLAUDE_REVIEWS_DISABLED``
+    forces it off even when the opt-in lists it.
 
     Returns:
-        True when the env var lists the ``codex`` token.
+        True when ``CLAUDE_REVIEWS_DISABLED`` lists ``codex`` or when
+        ``CLAUDE_REVIEWS_ENABLED`` does not list ``codex``.
     """
-    return _is_reviewer_listed_in_env(
-        CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME, CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN
-    )
+    return _is_off_by_default_reviewer_disabled(CLAUDE_REVIEWS_DISABLED_CODEX_TOKEN)
 
 
 def parse_arguments(all_argv: list[str]) -> argparse.Namespace:

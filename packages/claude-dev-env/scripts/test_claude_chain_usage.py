@@ -84,7 +84,7 @@ def test_remaining_percent_is_full_scale_minus_utilization(
         tmp_path,
         [
             _entry("claude", credentials_path=PLACEHOLDER_CREDENTIALS_PRIMARY),
-            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+            _entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
         ],
     )
     monkeypatch.setattr(
@@ -100,7 +100,7 @@ def test_remaining_percent_is_full_scale_minus_utilization(
     all_reports = usage.report_chain_weekly_usage(config_path=config_file)
     assert [each_report.command for each_report in all_reports] == [
         "claude",
-        "claude-ev",
+        "claude-profile-c",
     ]
     assert all_reports[0].weekly_remaining_percent == pytest.approx(
         FULL_WEEKLY_PERCENT - 42.0
@@ -143,7 +143,7 @@ def test_probe_failure_yields_null_remaining_and_error_string(
         tmp_path,
         [
             _entry("claude", credentials_path=PLACEHOLDER_CREDENTIALS_PRIMARY),
-            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+            _entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
         ],
     )
     monkeypatch.setattr(
@@ -217,7 +217,7 @@ def test_entry_credentials_path_is_passed_to_probe(
 ) -> None:
     config_file = _write_chain_config(
         tmp_path,
-        [_entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_TERTIARY)],
+        [_entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_TERTIARY)],
     )
     probed_paths: list[Path] = []
 
@@ -236,7 +236,7 @@ def test_entry_credentials_path_expands_user_home(
     tilde_credentials_path = "~/.claude-accounts/secondary/.credentials.json"
     config_file = _write_chain_config(
         tmp_path,
-        [_entry("claude-ev", credentials_path=tilde_credentials_path)],
+        [_entry("claude-profile-c", credentials_path=tilde_credentials_path)],
     )
     probed_paths: list[Path] = []
 
@@ -254,7 +254,7 @@ def test_load_chain_carries_optional_credentials_path(tmp_path: Path) -> None:
         tmp_path,
         [
             _entry("claude"),
-            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+            _entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
         ],
     )
     all_entries = chain_runner.load_chain(config_file)
@@ -286,7 +286,7 @@ def test_reports_to_json_payload_matches_cli_contract() -> None:
     all_reports = [
         usage.AccountUsageReport(command="claude", weekly_remaining_percent=58.0),
         usage.AccountUsageReport(
-            command="claude-ev",
+            command="claude-profile-c",
             weekly_remaining_percent=None,
             error="probe failed",
         ),
@@ -299,7 +299,7 @@ def test_reports_to_json_payload_matches_cli_contract() -> None:
                 JSON_WEEKLY_REMAINING_PERCENT_KEY: 58.0,
             },
             {
-                JSON_COMMAND_KEY: "claude-ev",
+                JSON_COMMAND_KEY: "claude-profile-c",
                 JSON_WEEKLY_REMAINING_PERCENT_KEY: None,
                 JSON_ERROR_KEY: "probe failed",
             },
@@ -314,7 +314,7 @@ def test_cli_writes_json_accounts_report(
         tmp_path,
         [
             _entry("claude", credentials_path=PLACEHOLDER_CREDENTIALS_PRIMARY),
-            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+            _entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
         ],
     )
     monkeypatch.setattr(
@@ -341,7 +341,7 @@ def test_cli_writes_json_accounts_report(
                 JSON_WEEKLY_REMAINING_PERCENT_KEY: FULL_WEEKLY_PERCENT - 42.0,
             },
             {
-                JSON_COMMAND_KEY: "claude-ev",
+                JSON_COMMAND_KEY: "claude-profile-c",
                 JSON_WEEKLY_REMAINING_PERCENT_KEY: None,
                 JSON_ERROR_KEY: "no token",
             },
@@ -428,7 +428,7 @@ def test_probe_ignores_ingress_when_credential_token_missing(
 ) -> None:
     config_file = _write_chain_config(
         tmp_path,
-        [_entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY)],
+        [_entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY)],
     )
 
     class _FakeResolver:
@@ -462,7 +462,7 @@ def test_load_failure_yields_per_account_error_and_cli_exits_zero(
         tmp_path,
         [
             _entry("claude", credentials_path=PLACEHOLDER_CREDENTIALS_PRIMARY),
-            _entry("claude-ev", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
+            _entry("claude-profile-c", credentials_path=PLACEHOLDER_CREDENTIALS_SECONDARY),
         ],
     )
 

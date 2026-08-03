@@ -186,7 +186,7 @@ def test_should_return_false_for_pytest_tmp_path_when_job_dir_elsewhere(
     temp directory was an ephemeral source: pytest tmp_path fixtures live
     under tempfile.gettempdir(), so the enforcer's own test targets must not
     classify as ephemeral. CLAUDE_JOB_DIR points elsewhere (its scratch dir
-    lives under .claude-ev/jobs, not %TEMP%).
+    lives under .claude-profile-c/jobs, not %TEMP%).
     """
     monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
     monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path / "elsewhere"))

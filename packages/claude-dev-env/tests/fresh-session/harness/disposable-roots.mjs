@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-export const ALL_PROFILE_IDS = Object.freeze(['main', 'editor', 'mel']);
+export const ALL_PROFILE_IDS = Object.freeze(['main', 'profile-a', 'profile-b']);
 
 /**
  * @typedef {{

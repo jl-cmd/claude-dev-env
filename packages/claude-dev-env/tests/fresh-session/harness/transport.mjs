@@ -18,8 +18,8 @@ export const FAKE_CLI_PATH = join(HARNESS_DIRECTORY, 'fake-cli.mjs');
 
 const REAL_CLI_DEFAULT_BY_PROFILE = Object.freeze({
     main: 'claude',
-    editor: 'claude-editor',
-    mel: 'claude-mel',
+    'profile-a': 'claude-profile-a',
+    'profile-b': 'claude-profile-b',
 });
 
 /**
@@ -47,13 +47,13 @@ export function resolveRealCliBinary(profileId) {
             ?? process.env.CLAUDE_CLI_BINARY
             ?? REAL_CLI_DEFAULT_BY_PROFILE.main;
     }
-    if (profileId === 'editor') {
-        return process.env.FRESH_SESSION_EDITOR_CLI
-            ?? REAL_CLI_DEFAULT_BY_PROFILE.editor;
+    if (profileId === 'profile-a') {
+        return process.env.FRESH_SESSION_PROFILE_A_CLI
+            ?? REAL_CLI_DEFAULT_BY_PROFILE['profile-a'];
     }
-    if (profileId === 'mel') {
-        return process.env.FRESH_SESSION_MEL_CLI
-            ?? REAL_CLI_DEFAULT_BY_PROFILE.mel;
+    if (profileId === 'profile-b') {
+        return process.env.FRESH_SESSION_PROFILE_B_CLI
+            ?? REAL_CLI_DEFAULT_BY_PROFILE['profile-b'];
     }
     throw new Error(`No real CLI mapping for profile ${profileId}`);
 }

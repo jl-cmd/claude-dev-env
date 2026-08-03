@@ -317,6 +317,29 @@ def test_agent_frontmatter_loads_as_a_yaml_mapping(
     )
 
 
+@pytest.mark.parametrize(
+    "agent_file_name",
+    (
+        "docs-agent.md",
+        "issue-tracker.md",
+        "skill-writer-agent.md",
+    ),
+)
+def named_agents_yaml_safe_load_as_mapping(agent_file_name: str) -> None:
+    """P-107 regression: named agents remain real YAML mappings under safe_load."""
+    agent_definition_path = Path(__file__).parent / agent_file_name
+    assert agent_definition_path.is_file(), (
+        f"{agent_file_name} missing from agents/ — P-107 surface gone"
+    )
+    parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
+    field_problem = _required_field_problem(parsed_frontmatter)
+    assert field_problem is None, f"{agent_file_name} {field_problem}"
+    name_problem = _agent_name_problem(
+        parsed_frontmatter, agent_definition_path.stem
+    )
+    assert name_problem is None, f"{agent_file_name} {name_problem}"
+
+
 def test_every_agent_definition_yields_a_frontmatter_block() -> None:
     covered_names = {each_path.name for each_path in _agent_definition_paths()}
     uncovered_names = sorted(
