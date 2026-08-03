@@ -46,10 +46,12 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALLOW_DECISION,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
+    CONTEXT_JOIN_SEPARATOR,
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
     HOOK_EVENT_NAME,
     PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
+    REASON_JOIN_SEPARATOR,
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
     SYSTEM_MESSAGE_JOIN_SEPARATOR,
     HostedHookEntry,
@@ -431,28 +433,65 @@ def aggregate_hosted_hook_results(
     )
 
 
+def unique_first_seen_strings(all_values: list[str]) -> list[str]:
+    """Return values in first-seen order with exact-string duplicates dropped.
+
+    ::
+
+        unique_first_seen_strings(["a", "b", "a"])  ->  ["a", "b"]
+
+    Comparison is exact full-string equality only (no case fold, no trim).
+    Each field of the deny payload (reasons, systemMessage, additionalContext)
+    is collapsed separately so a deny reason identical to a context string never
+    cross-collapses.
+
+    Args:
+        all_values: Strings collected from hosted hooks in run order.
+
+    Returns:
+        A new list with the first occurrence of each exact string kept.
+    """
+    seen_values: set[str] = set()
+    unique_values: list[str] = []
+    for each_value in all_values:
+        if each_value in seen_values:
+            continue
+        seen_values.add(each_value)
+        unique_values.append(each_value)
+    return unique_values
+
+
 def _emit_deny_decision(decision: DispatcherDecision) -> None:
     """Write one deny JSON object to stdout carrying all deny reasons and context.
 
-    Carries every hook's systemMessage and additionalContext and the
-    suppressOutput flag so the dispatched deny matches the standalone hooks'
-    full deny shape.
+    Collapses exact-duplicate reasons, systemMessage lines, and additionalContext
+    lines at emit time (first-seen order) so the final payload is compact while
+    aggregate_hosted_hook_results still records every firing for logging.
 
     Args:
         decision: The aggregated dispatcher decision with deny reasons, context,
             and the suppressOutput flag.
     """
-    combined_reason = " | ".join(decision.all_deny_reasons)
+    all_unique_deny_reasons = unique_first_seen_strings(decision.all_deny_reasons)
+    all_unique_system_messages = unique_first_seen_strings(decision.all_system_messages)
+    all_unique_additional_context = unique_first_seen_strings(
+        decision.all_additional_context
+    )
+    combined_reason = REASON_JOIN_SEPARATOR.join(all_unique_deny_reasons)
     hook_specific: dict[str, object] = {
         "hookEventName": HOOK_EVENT_NAME,
         "permissionDecision": DENY_DECISION,
         "permissionDecisionReason": combined_reason,
     }
-    if decision.all_additional_context:
-        hook_specific["additionalContext"] = "\n".join(decision.all_additional_context)
+    if all_unique_additional_context:
+        hook_specific["additionalContext"] = CONTEXT_JOIN_SEPARATOR.join(
+            all_unique_additional_context
+        )
     deny_payload: dict[str, object] = {"hookSpecificOutput": hook_specific}
-    if decision.all_system_messages:
-        deny_payload["systemMessage"] = "\n".join(decision.all_system_messages)
+    if all_unique_system_messages:
+        deny_payload["systemMessage"] = CONTEXT_JOIN_SEPARATOR.join(
+            all_unique_system_messages
+        )
     if decision.should_suppress_output:
         deny_payload["suppressOutput"] = True
     sys.stdout.write(json.dumps(deny_payload) + "\n")
