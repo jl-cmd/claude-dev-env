@@ -44,7 +44,6 @@ never a hard gate.
 | `SKILL.md` | Analyzer contract and 200/600 gates |
 | `scripts/analyze_pr.py` | Emit analysis JSON from gh or offline files |
 | `scripts/categorize_files.py` | Path churn class (hand-written vs excluded) |
-| `scripts/verify_plan.py` | Vertical-slice plan coverage and test co-location gate |
 | `scripts/split_pr_script_types.py` | Canonical split-plan build and path-assignment validation |
 | `scripts/split_pr_title.py` | Collapse titles to exactly one conventional prefix |
 | `scripts/split_pr_layer_order.py` | Deterministic config→other layer sort |
@@ -52,11 +51,14 @@ never a hard gate.
 | `scripts/pack_files_into_slices.py` | Pack annotated files into ≤200 hand-written-line slices by layer |
 | `scripts/config/packing_constants.py` | Review budget, hard cap, path→layer markers for packing |
 | `scripts/test_categorize_files_packing.py` | Budget packing and layer inference tests |
+| `scripts/verify_plan.py` | Coverage verification: unique path assignment, path normalization, title contract |
+| `scripts/test_verify_plan.py` | Full-coverage and gap rejection tests |
+| `scripts/test_verify_plan_contract.py` | source_commit and title-normalization contract tests |
+| `scripts/test_verify_plan_path_normalization.py` | Unsafe-path fail-closed tests |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
 | `scripts/config/plan_constants.py` | Plan schema keys, layer order, title-prefix tokens |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
 | `scripts/test_categorize_files.py` | Exclusion classification tests |
-| `scripts/test_verify_plan.py` | Vertical-slice plan validation tests |
 | `scripts/test_split_pr_script_types.py` | Plan schema and full path assignment |
 | `scripts/test_split_pr_title.py` | One-prefix title normalization |
 | `scripts/test_split_pr_layer_order.py` | Layer order ranking |

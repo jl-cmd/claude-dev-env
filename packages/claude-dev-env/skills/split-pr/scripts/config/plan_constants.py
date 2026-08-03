@@ -45,3 +45,5 @@ FILE_KEY_ADDITIONS: str = "additions"
 FILE_KEY_DELETIONS: str = "deletions"
 FILE_KEY_SHA: str = "sha"
 EXIT_CODE_SUCCESS: int = 0
+PATH_SEPARATOR: str = "/"
+VERIFY_PAYLOAD_KEY_OK: str = "ok"
