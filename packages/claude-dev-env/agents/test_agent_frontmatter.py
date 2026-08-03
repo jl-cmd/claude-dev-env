@@ -23,22 +23,19 @@ a plain scalar reads as a mapping key and makes the whole block unloadable::
     flag: description: ... constraints. Examples:   <- block no longer loads
 
 Two parsers read these files, and a block that satisfies one can still be
-unreadable by the other. `scripts/codex_compat_materializer.py` reads the
-block line by line, so every field fits on the line that names it::
+unreadable by the other. `scripts/codex_compat_materializer.py` loads the
+block through YAML with duplicate-key rejection, so block-scalar descriptions
+and empty `tools: []` lists parse::
 
-    ok:   description: "Use this agent ... Examples:\\n\\n  <example> ..."
-    flag: description: |        <- the line scan cannot follow the block scalar
+    ok:   description: |
+            multi-line body
+    ok:   tools: []
 
-That reader also counts fence lines across the whole file, so a bare `---`
+That reader still counts fence lines across the whole file, so a bare `---`
 anywhere in the body reads as a second frontmatter fence::
 
     ok:   ```yaml ... ``` example blocks in the body
     flag: a `---` line inside a body example  <- counted as a fence
-
-That reader also cannot express an empty `tools: []` list, which is a defect
-in the reader rather than in the one definition that declares it, so that
-definition is named in `_codex_materializable_paths` and covered by every
-other check here.
 
 Each definition also has to carry a `name` and a `description` bound to a
 non-empty string, and a `name` equal to its file stem — a mapping that loads
@@ -82,7 +79,6 @@ import pytest
 import yaml
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
-EMPTY_TOOLS_LIST_FILENAME = "code-advisor.md"
 EXEMPT_MARKDOWN_FILENAME = "CLAUDE.md"
 FRONTMATTER_FENCE_LINE = "---"
 MATERIALIZER_MODULE_NAME = "codex_compat_materializer"
@@ -157,35 +153,8 @@ def _top_level_keys(frontmatter_block: str) -> set[str]:
 
 
 @cache
-def _codex_materializable_paths() -> tuple[Path, ...]:
-    """Return the definitions the Codex materializer is expected to read.
-
-    `code-advisor.md` declares `tools: []`, and its body states the agent has
-    zero tools, so the empty list is the field saying what the author meant.
-    The materializer's list parser raises on an empty list, so it cannot
-    express a correct declaration::
-
-        tools: Read, Bash  -> ok:   parsed
-        tools: []          -> flag: MaterializerError, though the file is right
-
-    The gap belongs to that parser, so the definition stays as written and only
-    this one check steps around it. The YAML-load, required-field, accepted-key,
-    model-ban, and name checks all still cover the file.
-
-    Returns:
-        Every agent definition path except the one whose correct frontmatter
-        the materializer's list parser cannot express.
-    """
-    return tuple(
-        each_path
-        for each_path in _agent_definition_paths()
-        if each_path.name != EMPTY_TOOLS_LIST_FILENAME
-    )
-
-
-@cache
 def _codex_materializer_module() -> ModuleType:
-    """Load the package's own line-oriented frontmatter parser from disk.
+    """Load the package's YAML frontmatter materializer from disk.
 
     Returns:
         The imported `codex_compat_materializer` module.
@@ -356,7 +325,7 @@ def test_every_agent_definition_yields_a_frontmatter_block() -> None:
 
 @pytest.mark.parametrize(
     "agent_definition_path",
-    _codex_materializable_paths(),
+    _agent_definition_paths(),
     ids=lambda each_path: each_path.name,
 )
 def test_agent_frontmatter_parses_with_the_codex_materializer(
