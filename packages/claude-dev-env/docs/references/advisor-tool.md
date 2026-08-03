@@ -34,7 +34,7 @@ Your first write, edit, or state-changing shell call on a task must be preceded 
 
 Give the advice serious weight. If a step fails empirically, or primary-source evidence contradicts a claim (the file says X, the paper states Y), adapt. A passing self-test is not evidence the advice is wrong — it is evidence the test does not check what the advice is checking.
 
-If your data points one way and the advisor points another: do not silently switch. Surface the conflict in one more call — "I found X, you suggest Y, which constraint breaks the tie?" A reconcile call is cheaper than the wrong branch.
+If your data points one way and the advisor points another: do not silently switch. Surface the conflict in one more call — "I found X, you suggest Y, which constraint breaks the tie?" The advisor saw the evidence but may have underweighted it; a reconcile call is cheaper than the wrong branch.
 
 ## Brevity cue
 
