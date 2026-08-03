@@ -275,17 +275,20 @@ def _validate_prompt_skeleton_count(
             break
         all_skeleton_lines.append(each_line)
     skeleton_text = NEWLINE.join(all_skeleton_lines)
+    if SKELETON_PLACEHOLDER_FRAGMENT in skeleton_text:
+        return [
+            f"{category_id}: prompt skeleton still uses [N] placeholder; "
+            f"use numeric count {sub_bucket_count}"
+        ]
     count_match = SKELETON_COUNT_PATTERN.search(skeleton_text)
-    if count_match is not None:
-        skeleton_count = int(count_match.group(HEADING_LETTER_GROUP))
-        if skeleton_count != sub_bucket_count:
-            return [
-                f"{category_id}: prompt skeleton count {skeleton_count} "
-                f"!= schema {sub_bucket_count}"
-            ]
-        return []
-    if SKELETON_PLACEHOLDER_FRAGMENT not in skeleton_text:
+    if count_match is None:
         return [f"{category_id}: prompt skeleton missing sub-bucket count form"]
+    skeleton_count = int(count_match.group(HEADING_LETTER_GROUP))
+    if skeleton_count != sub_bucket_count:
+        return [
+            f"{category_id}: prompt skeleton count {skeleton_count} "
+            f"!= schema {sub_bucket_count}"
+        ]
     return []
 
 
