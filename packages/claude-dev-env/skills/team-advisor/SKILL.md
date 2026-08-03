@@ -18,6 +18,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 | [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
 | [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up or CLI bind, charter, drift re-bind, CLI fallback, executor paste blocks. |
 | [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
+| [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool doc facts: consult timing, Sonnet steering, cost levers, failure modes. |
 
 ## Bind
 
