@@ -8,7 +8,10 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from config.constants import (
+_scripts_directory = str(Path(__file__).resolve().parent)
+if _scripts_directory not in sys.path:
+    sys.path.insert(0, _scripts_directory)
+from load_skill_constants import (
     COMMIT_RANGE_ARGUMENT_INDEX,
     COMMIT_RANGE_SEPARATOR,
     EXIT_CODE_INVALID_SET,
