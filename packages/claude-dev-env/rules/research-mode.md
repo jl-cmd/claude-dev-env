@@ -30,4 +30,4 @@ Creative thinking, brainstorming, and novel ideas don't require citation. You ca
 
 - [`explore-thoroughly.md`](explore-thoroughly.md) — grounds an implementation plan in the codebase, as this rule grounds a factual claim in a source.
 - [`verify-runtime-state.md`](verify-runtime-state.md) — a runtime verdict needs a live probe from this session, not a citation.
-- [`hedging-claims.md`](hedging-claims.md) — the Stop hook that catches an unverified claim wearing a hedge word.
+- [`hedging-claims.md`](hedging-claims.md) — the Stop hook that catches a bare hedge word; an explicit uncertainty label in the same sentence is the allowed alternative to a citation.

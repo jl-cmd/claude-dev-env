@@ -156,7 +156,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     payload_text = json.dumps(
         {
             "stop_hook_active": False,
-            "last_assistant_message": "This is probably correct without a source.",
+            "last_assistant_message": "This is probably correct.",
         }
     )
     environment_by_key = {**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}
