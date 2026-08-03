@@ -193,7 +193,7 @@ Touch only: <files or globs>
 Done when: <one mechanical check — a command, a test, a diff scope>
 Return: status, artifact paths, blockers — nothing else.
 
-<Advisor block assembled from advisor-protocol.md — transport preamble + shared core + weak-executor add-on when the executor runs at Sonnet or below — advisor name filled in>
+<Advisor block assembled from _shared/advisor/reference/advisor-block.md — transport preamble + shared core + weak-executor add-on when the executor runs at Sonnet or below — advisor name filled in>
 ```
 
 - **Size the task by its done-check.** The right task is the largest
@@ -219,9 +219,11 @@ Return: status, artifact paths, blockers — nothing else.
   discipline. The ticket adds the task, the pointers, and the Advisor
   block only.
 - **The Advisor block is pasted, assembled text.** Assemble it at bind
-  time from the protocol's Advisor block parts — transport preamble by
-  host, shared core, and the weak-executor add-on for a Sonnet-or-below
-  executor — and paste the assembled text itself into the ticket.
+  time from the parts in
+  [`_shared/advisor/reference/advisor-block.md`](../../_shared/advisor/reference/advisor-block.md)
+  — transport preamble by host, shared core, and the weak-executor add-on
+  for a Sonnet-or-below executor — and paste the assembled text itself
+  into the ticket.
 
 ## Workflow Agent Routing
 

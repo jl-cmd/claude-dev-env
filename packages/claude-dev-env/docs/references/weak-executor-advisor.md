@@ -15,7 +15,7 @@ section live in
 Applies to any executor running below the advisor's tier. A same-tier or
 stronger executor follows `advisor-tool.md` alone. The paste-ready form of
 this profile is the **Weak-executor add-on** block in
-`~/.claude/_shared/advisor/advisor-protocol.md`.
+`~/.claude/_shared/advisor/reference/advisor-block.md`.
 
 ## Steering lives in the spawn prompt
 
@@ -85,5 +85,6 @@ holds at that tier whichever executor joins the pairing.
 | Doc | Holds |
 |---|---|
 | `advisor-tool.md` | Canonical consult cadence, hard rule, brevity cue |
-| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, and the Advisor block parts — transport preambles, shared core, weak-executor add-on |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, and the Advisor-block assembly rule |
+| `~/.claude/_shared/advisor/reference/advisor-block.md` | The paste parts — transport preambles, shared core, weak-executor add-on |
 | `skills/team-advisor/reference/advisor-docs-review.md` | Distilled source facts behind each section above |

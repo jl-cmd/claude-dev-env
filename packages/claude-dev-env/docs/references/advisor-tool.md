@@ -65,5 +65,5 @@ Size the ask at roughly 80 percent of the true ceiling; direct address to the ad
 |---|---|
 | [Anthropic Advisor tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool) | API shape, model pairs, cost, caching, full best practices |
 | `team-advisor-skill.md` | Standing warm advisor when `advisor()` is missing |
-| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, floor walk, lifecycle, executor paste blocks |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, floor walk, lifecycle — a read map routes each bind or consult moment to its `reference/` detail file |
 | `weak-executor-advisor.md` | Consult deltas for an executor spawned below the advisor's own tier |

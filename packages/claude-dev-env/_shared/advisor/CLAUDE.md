@@ -8,14 +8,14 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 
 | File | Purpose |
 |---|---|
-| `advisor-protocol.md` | Host profiles first, model floor, warm-up / CLI bind procedure and charter, consult format and cadence, lifecycle ownership (Agent spawn on Claude / CLI re-bind on a third-party host), assembled Advisor block parts (transport preambles, shared core, weak-executor add-on) for executor spawns, and the shared CLI Claude-chain |
+| `advisor-protocol.md` | Router with a moment-keyed read map: host profiles first, model floor, warm-up and consult standing rules, lifecycle ownership, Advisor-block assembly rule, and the shared CLI Claude-chain — each with a stub pointing at its `reference/` detail file |
 
 ## Subdirectory
 
 | Entry | Description |
 |---|---|
 | `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks), `tier_model_ids.py` (`resolve_cli_model_id` / short CLI/Agent aliases / `detect_host_profile`), and `advisor_scripts_constants` under `scripts/config/` (ladder, short-alias map, host profiles, SendMessage wait bound) |
-| `reference/` | Progressive-disclosure detail behind protocol stub sections: `cli-chain.md` (runner modes, alias table, brief piping, `--resume` handling) and `spawn-walk-log.md` (record shape, log path, validator command and exit codes) |
+| `reference/` | Progressive-disclosure detail behind protocol stub sections: `warm-up.md` (Claude spawn fields, Fable token, charter template), `third-party-bind.md` (CLI bind steps, fail-closed rule), `sol-rung.md` (flag, Codex preflight, bind and fallback), `consult-format.md` (packet shape, new-evidence and report-back rules, reply handling), `advisor-block.md` (transport preambles, shared core, weak-executor add-on paste parts), `lifecycle.md` (per-host drift re-spawn / re-bind), `cli-chain.md` (runner modes, alias table, brief piping, `--resume` handling), and `spawn-walk-log.md` (record shape, log path, validator command and exit codes) |
 
 ## Breaking-change rule
 
