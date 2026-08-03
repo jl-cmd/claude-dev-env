@@ -53,6 +53,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
     CLI_BIND_SUCCESS_TOKEN,
+    CODEX_BIND_SUCCESS_TOKEN,
     CLI_INVALID_JSON_EXIT_CODE,
     CLI_MISSING_PATH_EXIT_CODE,
     CLI_SUCCESS_EXIT_CODE,
@@ -64,6 +65,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     SELECTED_TIER_NOT_NULL_MESSAGE,
     SPAWN_OUTCOME_KEY,
     SPAWN_SUCCESS_TOKEN,
+    SOL_MODEL_TIER,
     THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER,
     THIRD_PARTY_MODEL_TIER,
     TIER_KEY,
@@ -79,6 +81,7 @@ class ModelTierRun:
     attempts: list[dict[str, str]]
     selected_tier: str | None
     fallback_reason: str | None = None
+    is_sol_enabled: bool = False
 
 
 class ModelTierRunError(ValueError):
@@ -95,15 +98,25 @@ def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
     return all_canonical_tiers
 
 
-def _expected_candidate_tiers(own_tier: str) -> list[str]:
+def _expected_candidate_tiers(
+    own_tier: str, is_sol_enabled: bool = False
+) -> list[str]:
     maybe_canonical_own_tier = canonical_tier_name(own_tier)
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
+    if maybe_canonical_own_tier == SOL_MODEL_TIER:
+        raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     if maybe_canonical_own_tier == THIRD_PARTY_MODEL_TIER:
         floor_index = ALL_MODEL_TIERS.index(THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER)
-        return list(ALL_MODEL_TIERS[: floor_index + 1])
+        all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
+        if is_sol_enabled:
+            all_expected_candidates.insert(0, SOL_MODEL_TIER)
+        return all_expected_candidates
     floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
-    return list(ALL_MODEL_TIERS[: floor_index + 1])
+    all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
+    if is_sol_enabled:
+        all_expected_candidates.insert(0, SOL_MODEL_TIER)
+    return all_expected_candidates
 
 
 def _is_successful_attempt_outcome(
@@ -111,6 +124,10 @@ def _is_successful_attempt_outcome(
     outcome_token: str,
 ) -> bool:
     if canonical_tier == THIRD_PARTY_MODEL_TIER:
+        return False
+    if canonical_tier == SOL_MODEL_TIER:
+        return outcome_token == CODEX_BIND_SUCCESS_TOKEN
+    if outcome_token == CODEX_BIND_SUCCESS_TOKEN:
         return False
     if outcome_token == SPAWN_SUCCESS_TOKEN:
         return True
@@ -144,7 +161,10 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
     Raises:
         ModelTierRunError: When any invariant is violated.
     """
-    all_expected_candidates = _expected_candidate_tiers(run.own_tier)
+    all_expected_candidates = _expected_candidate_tiers(
+        run.own_tier,
+        is_sol_enabled=run.is_sol_enabled,
+    )
     maybe_canonical_candidates = _canonical_tier_list(run.candidate_tiers)
     if maybe_canonical_candidates != all_expected_candidates:
         raise ModelTierRunError(CANDIDATE_TIERS_MISMATCH_MESSAGE)
@@ -215,12 +235,16 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         TypeError: When a field has the wrong shape.
     """
     parsed_payload = json.loads(from_path.read_text(encoding="utf-8"))
+    raw_sol_enabled = parsed_payload.get("sol_enabled", False)
+    if not isinstance(raw_sol_enabled, bool):
+        raise TypeError("sol_enabled must be a boolean")
     return ModelTierRun(
         own_tier=parsed_payload["own_tier"],
         candidate_tiers=list(parsed_payload["candidate_tiers"]),
         attempts=list(parsed_payload["attempts"]),
         selected_tier=parsed_payload.get("selected_tier"),
         fallback_reason=parsed_payload.get("fallback_reason"),
+        is_sol_enabled=raw_sol_enabled,
     )
 
 
