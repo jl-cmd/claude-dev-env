@@ -45,15 +45,25 @@ never a hard gate.
 | `scripts/analyze_pr.py` | Emit analysis JSON from gh or offline files |
 | `scripts/categorize_files.py` | Path churn class (hand-written vs excluded) |
 | `scripts/verify_plan.py` | Vertical-slice plan coverage and test co-location gate |
+| `scripts/split_pr_script_types.py` | Canonical split-plan build and path-assignment validation |
+| `scripts/split_pr_title.py` | Collapse titles to exactly one conventional prefix |
+| `scripts/split_pr_layer_order.py` | Deterministic config→other layer sort |
+| `scripts/split_pr_paginate.py` | Paginated PR file intake via gh api --slurp |
 | `scripts/config/split_pr_constants.py` | Thresholds and excluded path markers |
+| `scripts/config/plan_constants.py` | Plan schema keys, layer order, title-prefix tokens |
 | `scripts/test_analyze_pr.py` | Boundary tests at 199/200/599/600 |
 | `scripts/test_categorize_files.py` | Exclusion classification tests |
 | `scripts/test_verify_plan.py` | Vertical-slice plan validation tests |
+| `scripts/test_split_pr_script_types.py` | Plan schema and full path assignment |
+| `scripts/test_split_pr_title.py` | One-prefix title normalization |
+| `scripts/test_split_pr_layer_order.py` | Layer order ranking |
+| `scripts/test_split_pr_paginate.py` | Slurp page flattening |
+| `reference/proposal-format.md` | Human-readable plan field contract |
 | `reference/splitting-principles.md` | Vertical-slice invariants |
 | `reference/path-layers.md` | Layer hints (context only) |
 | `reference/split-further-loop.md` | Re-split loop until leaves fit review |
 
 ## Folder map
 
-- `scripts/` — analyzer, categorize helpers, plan verifier, constants, tests
-- `reference/` — vertical-slice principles and layer hints
+- `scripts/` — analyzer, categorize helpers, plan verifier, plan contract, constants, tests
+- `reference/` — vertical-slice principles, layer hints, plan field contract
