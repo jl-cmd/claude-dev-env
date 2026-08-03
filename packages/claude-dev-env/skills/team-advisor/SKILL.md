@@ -29,13 +29,15 @@ One warm advisor at the strongest tier this session can reach. This session is t
 5. Skip the multi-consumer "who you are" opener — sole consumer.
 6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
-Full walk, charter, consult message shape, and drift re-bind live in the protocol.
+Full walk, charter, consult packet, Sol routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
 
 ## Consult
 
 Follow **When to call**, **Hard rule**, and **How to treat advice** in `advisor-tool.md`.
 
-Each brief: delta since last consult, live decision or blocker, paths or excerpts needed. Protocol owns the full consult format.
+Build every first brief with [`_shared/advisor/reference/consult-format.md`](../../_shared/advisor/reference/consult-format.md). Later briefs carry only the delta and changed evidence.
+
+Aim for two consults on a normal task: one after orientation and one after writes and validation. Reserve a third for advisory recovery or reconciliation guidance, and add a consult when a material fork produces new evidence. This is an advisory target owned by the task, not a cap or gate.
 
 ## Constraints
 

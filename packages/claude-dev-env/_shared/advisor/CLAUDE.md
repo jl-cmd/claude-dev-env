@@ -14,8 +14,8 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 
 | Entry | Description |
 |---|---|
-| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks), `tier_model_ids.py` (`resolve_cli_model_id` / short CLI/Agent aliases / `detect_host_profile`), and `advisor_scripts_constants` under `scripts/config/` (ladder, short-alias map, host profiles, SendMessage wait bound) |
-| `reference/` | Progressive-disclosure detail behind protocol stub sections: `warm-up.md` (Claude spawn fields, Fable token, charter template), `third-party-bind.md` (CLI bind steps, fail-closed rule), `sol-rung.md` (flag, Codex preflight, bind and fallback), `consult-format.md` (packet shape, new-evidence and report-back rules, reply handling), `advisor-block.md` (transport preambles, shared core, weak-executor add-on paste parts), `lifecycle.md` (per-host drift re-spawn / re-bind), `cli-chain.md` (runner modes, alias table, brief piping, `--resume` handling), and `spawn-walk-log.md` (record shape, log path, validator command and exit codes) |
+| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks, including optional Sol), `codex_sol_advisor.py` (read-only Sol xhigh bind and resume), `tier_model_ids.py` (Claude aliases, Codex model ids, and host detection), and `advisor_scripts_constants` under `scripts/config/` (ladder, bind tokens, aliases, host profiles, and SendMessage wait bound) |
+| `reference/` | Progressive-disclosure detail behind protocol stub sections: `warm-up.md`, `third-party-bind.md`, `sol-rung.md`, `consult-format.md`, `advisor-block.md`, `lifecycle.md`, `cli-chain.md`, and `spawn-walk-log.md` |
 
 ## Breaking-change rule
 

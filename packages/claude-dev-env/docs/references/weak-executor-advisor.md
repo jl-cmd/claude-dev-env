@@ -28,9 +28,11 @@ surface with measured effect on Sonnet.
 Everything the advisor learns arrives inside the consult. Each consult
 carries its own packet:
 
-- **First consult** — a complete, self-contained packet: the task, the
-  actions taken in order, real output, the live decision, and the
-  load-bearing excerpts the decision rests on.
+- **First consult** — use the complete packet in
+  `~/.claude/_shared/advisor/reference/consult-format.md`: assignment,
+  desired outcome, constraints and exclusions, actions taken in order, real
+  output and current state, decision or blocker, validation evidence,
+  unresolved risks, and load-bearing paths or excerpts.
 - **Later consults** — the delta since the last consult.
 - **Ordering** — stable role and charter text first, volatile detail last.
 
@@ -52,8 +54,7 @@ becomes the task list.
 
 ## Consult budget
 
-Two to three consults per task. Every material fork consults the advisor.
-Of the two or three, the third is reserved for recovery or reconciliation.
+Aim for two consults per task: early orientation and completion review. Reserve a third for advisory recovery or reconciliation guidance, and add a consult when a material fork produces new evidence. This is a planning target that leaves the task free to follow its evidence.
 
 ## Advice weight
 

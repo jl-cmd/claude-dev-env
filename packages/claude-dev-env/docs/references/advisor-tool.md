@@ -1,14 +1,14 @@
 # Advisor Tool
 
-Canonical consult timing and weight for any stronger-reviewer path: the native `advisor()` tool, `/team-advisor`, and the shared warm advisor.
+Canonical consult timing and weight for the repository custom advisor path: `/team-advisor` and the shared warm advisor. Native `advisor()` documentation supplies the source guidance for packet shape and review timing.
 
 Source bones: [Anthropic Advisor tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool) (Suggested system prompt for coding tasks). API shape, model pairs, cost, and caching live there. This file carries only the call rules a session needs every time.
 
 ## What it is
 
-`advisor()` is a no-parameter review call. The platform forwards the full conversation (task, tool calls, results) to a stronger model. The executor continues with that guidance.
+`advisor()` is the native reference model: the platform forwards the full conversation to a stronger model. This repository uses `/team-advisor` to reproduce that review contract when the native tool is unavailable or outside the selected execution path.
 
-When `advisor()` is absent, use `/team-advisor` (see `team-advisor-skill.md`).
+`/team-advisor` carries the full first packet explicitly, sends later deltas, and owns the warm Agent/SendMessage or read-only Sol CLI lifecycle (see `team-advisor-skill.md`).
 
 ## When to call
 
@@ -22,7 +22,7 @@ Also call:
 - **When stuck** — errors recur, approach does not converge, results do not fit.
 - **When considering a change of approach.**
 
-On tasks longer than a few steps, call at least once before committing to an approach and once before declaring done. On short reactive tasks where the next action is dictated by tool output you just read, you do not need repeated calls — most value is on the first call, before the approach hardens.
+On tasks longer than a few steps, aim for an early approach consult and a completion review. Reserve a third consult for recovery or reconciliation, and add consults when material new evidence or forks arise. This cadence guides planning and leaves the task free to follow its evidence. Short reactive tasks may use the single consult that best fits the live decision.
 
 Call for design, architecture, and risk questions where you will not touch a file. If the response would be analysis or a recommendation with no other tool calls, call first. That judgment is where a second opinion is highest value. Simple factual lookups and arithmetic do not need a call.
 

@@ -31,9 +31,14 @@ ALL_HOST_PROFILES: tuple[str, ...] = (
     HOST_PROFILE_THIRD_PARTY,
 )
 
+SOL_MODEL_TIER: str = "Sol"
 ALL_MODEL_TIERS: tuple[str, ...] = ("Fable", "Opus", "Sonnet", "Haiku")
 THIRD_PARTY_MODEL_TIER: str = "ThirdParty"
-ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (*ALL_MODEL_TIERS, THIRD_PARTY_MODEL_TIER)
+ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (
+    SOL_MODEL_TIER,
+    *ALL_MODEL_TIERS,
+    THIRD_PARTY_MODEL_TIER,
+)
 THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
 
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
@@ -44,6 +49,9 @@ ALL_CLI_MODEL_ID_BY_TIER: dict[str, str] = {
     "Sonnet": "sonnet",
     "Haiku": "haiku",
     THIRD_PARTY_MODEL_TIER: "third-party",
+}
+ALL_CODEX_MODEL_ID_BY_TIER: dict[str, str] = {
+    SOL_MODEL_TIER: "gpt-5.6-sol",
 }
 
 HOST_PROFILE_ENV_VAR: str = "ADVISOR_HOST_PROFILE"
@@ -56,6 +64,7 @@ TIER_KEY: str = "tier"
 SPAWN_OUTCOME_KEY: str = "result"
 SPAWN_SUCCESS_TOKEN: str = "spawned"
 CLI_BIND_SUCCESS_TOKEN: str = "cli"
+CODEX_BIND_SUCCESS_TOKEN: str = "codex"
 
 UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
 UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"

@@ -21,7 +21,7 @@ The parts restate consult rules from the protocol's **Consulting the warm agent*
 ## Shared core — every host
 
 > Consult before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
-> Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
+> Build the first consult with the complete format in `reference/consult-format.md`: assignment, desired outcome, constraints and exclusions, actions taken in order, real output and current state, live decision or blocker, validation evidence, unresolved risks, and load-bearing paths or excerpts. Later consults carry only changed evidence.
 > Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer.
 > After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
 > Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
@@ -33,6 +33,6 @@ The parts restate consult rules from the protocol's **Consulting the warm agent*
 > Send your first consult right after orientation and before your first write.
 > Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
 > Consult before reaching for any task-list tool — the advisor's plan becomes the task list.
-> Budget two to three consults for the task, at every material fork.
+> Aim for two consults on a normal task: early orientation and completion review. Reserve a third for recovery or reconciliation, and add a consult when a material fork produces new evidence. This target guides planning and leaves the task free to follow its evidence.
 > Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
 > On a transient failure, retry once, then carry on with the evidence you have and record that you did.

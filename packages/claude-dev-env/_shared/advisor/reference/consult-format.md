@@ -5,7 +5,22 @@ Open this when composing a consult or handling its reply.
 
 ## Packet
 
-Each consult carries, in order: who you are and your assignment (needed on a shared advisor with multiple consumers; a single-consumer team-advisor session skips it), the delta since your last consult (what was done, in order, with real output where it matters), the live decision or blocker, and any paths or excerpts needed to answer well.
+The first consult is complete and self-contained. It carries:
+
+- Assignment and desired outcome
+- Constraints and exclusions
+- Actions taken in order
+- Real output and current state
+- Live decision or blocker
+- Validation evidence
+- Unresolved risks
+- Load-bearing paths or excerpts
+
+On a shared advisor with multiple consumers, open with who is asking and the assignment. A single-consumer team-advisor session may omit the identity opener while keeping the assignment.
+
+Later consults carry only the delta: changed actions, new output, changed decisions, new validation, and newly discovered risks.
+
+The completion consult carries the durable deliverable, test output, unresolved risks, evidence gaps, and any claim that the task is ready to close.
 
 Consult briefs embed the `docs/references/advisor-tool.md` **Brevity cue** line, sized per that section.
 

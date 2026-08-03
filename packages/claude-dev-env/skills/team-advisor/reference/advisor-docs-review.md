@@ -48,7 +48,7 @@ deliverable durable first — write the file, save the result, commit the
 change); a stuck state (errors recurring, an approach not converging, results
 that do not fit); considering a change of approach.
 
-Two-consult floor, page 1:
+Two-consult source guidance, page 1:
 
 ```text
 On tasks longer than a few steps, call advisor at least once before
@@ -62,6 +62,11 @@ Two timings drive the measured gain, page 1 (Best practices):
 transcript. 2. For difficult tasks, a final advisor call after file writes
 and test outputs are in the transcript.
 ```
+
+Repository decision: treat this source guidance as an advisory cadence. Aim
+for an early orientation consult and a completion review, reserve a third for
+recovery or reconciliation, and add consults when material new evidence or a
+fork changes the decision. The cadence remains evidence-led.
 
 Planner funnel, page 1:
 
@@ -242,16 +247,17 @@ executor." Claude Code enforces the same check per subagent — subagents
 inherit the configured advisor and apply the same pairing check against
 their own model.
 
-Claude Code silent-disable paths: a blocked `advisorModel` disables the
-advisor for the session; `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` ignores all
-advisor config; an LLM gateway that does not forward the tool intact drops
-it silently; Claude Code attaches no advisor for a saved `"fable"` value and
-raises no error. Native availability covers the first-party Claude API and
-Claude Platform on AWS only.
+Native Claude Code Advisor availability depends on the configured first-party
+API path and its documented disable conditions. This skill deliberately
+selects a custom reproduction path: `team-advisor/SKILL.md` binds a warm
+Agent/SendMessage reviewer or `codex_sol_advisor.py`, forwards a complete first
+packet and later deltas, and keeps the reviewer read-only and reply-only.
+Direct Messages API and Claude Platform on AWS Advisor availability remains
+source context for API consumers; it does not control this skill's bind.
 
 The native advisor is a server tool with no name a permission rule or hook
-matcher can reference — it bypasses hooks. A hand-rolled advisor path goes
-through ordinary tools and does not.
+matcher can reference — it bypasses hooks. The custom path uses ordinary
+tools, an explicit packet contract, and a mechanically validated bind log.
 
 Consults run slow enough to look like stalls: changelog 2.1.214 fixes a
 spurious "check your network" warning that appeared while the advisor was
@@ -268,9 +274,10 @@ server tool. Three inversions apply:
 
 1. **Context forwarding is manual.** The native tool auto-forwards the full
    transcript. Everything a hand-rolled advisor sees arrives in the consult —
-   the first carries a complete self-contained packet (task, actions in order,
-   real output, live decision, load-bearing excerpts); later consults carry
-   only the delta.
+   the first carries a complete self-contained packet (assignment, desired
+   outcome, constraints and exclusions, actions in order, real output and
+   current state, live decision or blocker, validation evidence, unresolved
+   risks, and load-bearing excerpts); later consults carry only the delta.
 2. **Caching becomes prefix stability.** The charter and role text stay
    byte-stable at the top of the consult stream; volatile detail goes last.
 3. **Hooks apply.** Consult payloads travel through ordinary tools, so each
