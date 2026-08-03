@@ -16,7 +16,10 @@ Detection order:
 
 ### Claude host
 
-Use the **Model floor** ladder below (sol when flagged, then Fable → Opus). Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent. When every candidate down to the floor fails, take the CLI Claude-chain fallback. Paste the **Claude host** Advisor block into every executor spawn prompt.
+Use the **Model floor** ladder below (sol when flagged, then Fable → Opus).
+Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
+When every candidate down to the floor fails, take the CLI Claude-chain fallback.
+Paste the **Claude host** Advisor block into every executor spawn prompt.
 
 An optional **sol xhigh** rung sits above Fable, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
 Flag off: the walk starts at Fable.
@@ -42,7 +45,10 @@ A third-party (non-Claude) harness cannot spawn a Claude `session-advisor` throu
    **Root advisor bind** uses `--routing-mode ordered_account`: the runner walks `~/.claude/claude-chain.json` in **config order** (primary launcher first, secondary next), and fails over to the next entry **only** on a usage-limit signature.
    Authentication, timeout, configuration, and other non-usage process errors stop at once with `terminal_status=advisor_blocked` (exit code 4 on the CLI) — they do **not** fall through to the next launcher.
    General (non-root) chain calls keep the default `--routing-mode usage_ranked`, which probes weekly remaining via `claude_chain_usage` / the usage-pause OAuth probe and ranks highest remaining first.
-4. Stop at the first successful bind. Record `{tier, result: "cli"}` and set `selected_tier` to that tier. Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field). Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
+4. Stop at the first successful bind.
+   Record `{tier, result: "cli"}` and set `selected_tier` to that tier.
+   Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field).
+   Run every bind and every later consult with cwd set to the repo root the work is for — Claude sessions are project-scoped by working directory.
 5. **Fail closed:** when every candidate fails (chain exhausted, `advisor_blocked`, or model unavailable), set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. Do **not** answer ENDORSE / CORRECTION / PLAN / STOP as this third-party session. Do **not** self-endorse.
 6. Paste the **Third-party host** Advisor block into every executor spawn prompt — never the Claude SendMessage block. Executors report to the orchestrating session; that session consults the bound Claude CLI advisor and relays the four-signal reply.
 
@@ -91,7 +97,9 @@ On a **Claude host**, the consuming skill's session walks the candidate tiers to
 
 Stop at the first successful spawn. That attempt's tier is `selected_tier`; the warm agent lives at that tier for the rest of the session. If every candidate down to the floor fails, take the CLI fallback below.
 
-Charter (the spawn prompt): the agent's role — standing reviewer, never edits files or runs commands, only answers via SendMessage — the repo path, and the session's current goal in two or three sentences. On a Fable-tier attempt, include the exact token `FABLE-SPAWN-AUTHORIZED` as plain text in this prompt (substring match; the gate does not verify who placed it). State plainly:
+Charter (the spawn prompt): the agent's role — standing reviewer, answers only via SendMessage, with file edits and commands out of its scope — the repo path, and the session's current goal in two or three sentences.
+On a Fable-tier try, include the exact token `FABLE-SPAWN-AUTHORIZED` as plain text in this prompt (substring match; the gate reads the token alone, wherever it came from).
+State plainly:
 - Every consult carries: who is asking (name and assignment), what changed since their last consult, the live decision or question, and any load-bearing paths or excerpts.
 - Reply via SendMessage to whoever sent the consult, by name — never route a reply through the spawning session or "main." Many different consumers may reach this one agent; each reply goes back to its own sender.
 - Treat each consult on its own terms, keyed to the sender's stated assignment. Different consumers' consults will interleave in this one transcript — don't blend context across consumers unless a consult explicitly asks for that.
@@ -108,7 +116,7 @@ Send a consult whenever one of these holds:
 - The same failure has come back more than once, or progress has stalled.
 - The chosen approach is being reconsidered.
 
-Each consult carries, in order: who you are and your assignment (only needed on a shared advisor with multiple consumers — skip this for a single-consumer team-advisor session), the delta since your last consult (what was done, in order, with real output where it matters — never a full recap), the live decision or blocker, and any paths or excerpts needed to answer well.
+Each consult carries, in order: who you are and your assignment (needed on a shared advisor with multiple consumers; a single-consumer team-advisor session skips it), the delta since your last consult (what was done, in order, with real output where it matters), the live decision or blocker, and any paths or excerpts needed to answer well.
 
 Consult briefs embed the parenthesized brevity line addressed to the advisor — `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)` — and cap requests at roughly 80 percent of the true ceiling.
 
@@ -116,7 +124,10 @@ Consult briefs embed the parenthesized brevity line addressed to the advisor —
 
 **Report-back rule.** After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
 
-Treat the reply as a serious second opinion: a CORRECTION — whether it names a wrong step or a risk worth closing — is something to address before treating the plan or the work as done. A STOP, or a consult that finds the advisor unreachable, is reported up rather than retried — team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides. When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn (Claude Agent or third-party CLI re-bind). A third-party host that cannot re-bind fails closed and reports to the user — it does not answer the four signals as itself.
+Treat the reply as a serious second opinion: a CORRECTION — whether it names a wrong step or a risk worth closing — is something to address before treating the plan or the work as done.
+Report a STOP, or a consult that finds the advisor unreachable, upward: team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides.
+When the advisor becomes unreachable, report that to the session that owns its lifecycle (see below); that session alone decides whether to respawn (Claude Agent or third-party CLI re-bind).
+A third-party host that cannot re-bind fails closed and reports to the user; the four signals come only from a bound advisor.
 
 ## Advisor block — paste the host-matched block into every executor spawn prompt
 
@@ -124,13 +135,30 @@ Each paragraph is self-contained — the executor receives only this text, not t
 
 ### Claude host (SendMessage to warm advisor)
 
-> A shared session advisor named `<name>` is reachable via SendMessage. Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered. Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts. Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
+> A shared session advisor named `<name>` is reachable via SendMessage.
+> Consult it before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
+> Open each consult with who you are and your assignment, then: what you tried, the exact decision or blocker, and relevant paths or excerpts.
+> Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer.
+> After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
+> Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
+> On STOP, or if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions to the session that owns the advisor.
 
 ### Claude host, Sonnet-or-below executor
 
 This variant applies when the executor's own tier is Sonnet or below. Paste it at the **top** of the executor spawn prompt, ahead of any other sentence that mentions the advisor.
 
-> A shared session advisor named `<name>` is reachable via SendMessage. Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one. Send your first consult right after orientation and before your first write, and send a completion consult once your writes and test output exist — that completion consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims. Consult before locking in a nontrivial approach, once you believe your assignment is done, before reaching for any task-list tool, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered — budget two to three consults for the task, at every material fork. Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)` Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On a transient failure, retry once, then carry on with the evidence you have and record that you did; if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions and the four signals to the session that owns the advisor.
+> A shared session advisor named `<name>` is reachable via SendMessage.
+> Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one.
+> Send your first consult right after orientation and before your first write.
+> Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
+> Consult before locking in a nontrivial approach, once you believe your assignment is done, before reaching for any task-list tool, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
+> Budget two to three consults for the task, at every material fork.
+> Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
+> Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer.
+> After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
+> Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
+> On a transient failure, retry once, then carry on with the evidence you have and record that you did.
+> If the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions and the four signals to the session that owns the advisor.
 
 ### Third-party host (Claude CLI advisor; report to orchestrating session)
 
@@ -150,13 +178,16 @@ This variant applies when the executor's own tier is Sonnet or below. Paste it a
 
 The session that spawns the shared advisor owns its whole lifecycle — spawn, drift-respawn, and shutdown. Every other consumer (executors, or any other consulting session) only ever sends it messages; none of them spawn, respawn, or shut it down themselves. One shared advisor exists per orchestrated session, owned by the session that spawned it.
 
-**Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter, rather than forcing the old context to stretch across two different jobs. A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in that fresh prompt, as a Fable-tier warm-up attempt does.
+**Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter.
+A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in that fresh prompt, as a Fable-tier warm-up try does.
 
 ### Third-party host
 
 The orchestrating session owns the Claude CLI advisor bind for the whole run — first bind, re-bind on drift or lost `session_id`, and fail-closed report when the chain cannot serve.
 
-**Re-bind on drift.** If a reply shows a stale picture, the task pivots, or `--resume` fails after a usage-limit failover (session stores are per binary/account), re-bind through `claude_chain_runner.py` with the charter plus a compact recap of consults so far, capture the new `session_id`, and log a fresh Fable→Opus walk with `result: "cli"` on success. Executors keep reporting to the orchestrating session; they never bind a replacement advisor themselves.
+**Re-bind on drift.** If a reply shows a stale picture, the task pivots, or `--resume` fails after a usage-limit failover (session stores are per binary/account), re-bind through `claude_chain_runner.py` with the charter plus a compact recap of consults so far.
+Capture the new `session_id`, and log a fresh Fable→Opus walk with `result: "cli"` on success.
+Executors keep reporting to the orchestrating session; advisor binding stays with that session alone.
 
 ## CLI chain
 
