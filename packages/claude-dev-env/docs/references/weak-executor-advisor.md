@@ -17,20 +17,19 @@ stronger executor follows `advisor-tool.md` alone.
 
 ## Steering lives in the spawn prompt
 
-A runtime nudge carries no measured effect on Sonnet. The advisor rules sit
-at the top of the spawn prompt, ahead of every other sentence that mentions
-the advisor.
+The advisor rules sit at the top of the spawn prompt, ahead of every other
+sentence that mentions the advisor — the spawn prompt is the one steering
+surface with measured effect on Sonnet.
 
 ## Context packaging
 
-The advisor never sees the executor's own transcript. Each consult carries
-its own packet:
+Everything the advisor learns arrives inside the consult. Each consult
+carries its own packet:
 
 - **First consult** — a complete, self-contained packet: the task, the
   actions taken in order, real output, the live decision, and the
   load-bearing excerpts the decision rests on.
-- **Later consults** — the delta only, not a restatement of the first
-  packet.
+- **Later consults** — the delta since the last consult.
 - **Ordering** — stable role and charter text first, volatile detail last.
 
 ## Two-timing rule
@@ -47,39 +46,37 @@ Two consult moments carry the measured gain:
 ## Planner funnel
 
 Consult the advisor before any task-list or planner tool. The advisor's plan
-becomes the task list, not the other way around.
+becomes the task list.
 
 ## Consult budget
 
-Two to three consults per task. Every material fork consults the advisor
-rather than the executor judging alone. Of the two or three, the third is
-reserved for recovery or reconciliation — not spent on routine confirmation.
+Two to three consults per task. Every material fork consults the advisor.
+Of the two or three, the third is reserved for recovery or reconciliation.
 
 ## Advice weight
 
 Advice is binding absent empirical contradiction. A conflict between the
 executor's own evidence and the advisor's guidance goes back to the advisor
-as a reconcile consult — never a silent switch. See `advisor-tool.md` §How
-to treat advice for the full weighing rule.
+as a reconcile consult. See `advisor-tool.md` §How to treat advice for the
+full weighing rule.
 
 ## Long-run reminder
 
 On a run past roughly 20 advisor-free turns, the executor re-reads its
-advisor rules before the next substantive step. A long-horizon executor does
-not reliably recall the advisor exists on its own.
+advisor rules before the next substantive step — the re-read keeps the
+advisor visible across a long horizon.
 
 ## Failure branches
 
-- **Transient advisor failure** — retry once, then carry on without advice
-  and record that gap in the result.
-- **Advisor unreachable** — report upward. Never self-endorse a decision in
-  the advisor's place, and never bind a replacement advisor without
-  instruction.
+- **Transient advisor failure** — retry once, then carry on with the
+  evidence in hand and record the gap in the result.
+- **Advisor unreachable** — report upward and hold the decision for the
+  owning session; re-binding belongs to that session alone.
 
 ## Pairing invariant
 
-The advisor binds at or above the strongest consumer's tier. A weak
-executor joining the pairing never lowers that floor.
+The advisor binds at or above the strongest consumer's tier. The floor
+holds at that tier whichever executor joins the pairing.
 
 ## Related
 

@@ -1,7 +1,7 @@
 # Spawn-walk log
 
 Detail behind the **Model floor** section of [`advisor-protocol.md`](../advisor-protocol.md).
-The log makes the bind walk checkable mechanically rather than inferred from a transcript.
+The log makes the bind walk checkable mechanically.
 
 ## Record shape
 

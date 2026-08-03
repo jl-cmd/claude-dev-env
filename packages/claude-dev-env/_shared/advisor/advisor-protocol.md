@@ -21,9 +21,8 @@ Use the **Model floor** ladder below (Fable → Opus → Sonnet → Haiku). Warm
 An optional **sol xhigh** rung sits above Fable, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
 Flag off: the walk starts at Fable.
 Flag on: run the Codex preflight first — `python ~/.claude/skills/codex-review/scripts/codex_usage_probe.py` (repo home: `packages/claude-dev-env/skills/codex-review/scripts/`).
-Preflight pass — exit 0 with `percent_left` above the gate threshold, or null — bind one Codex CLI session at the sol model with xhigh reasoning effort, chartered with the same standing-reviewer contract (ENDORSE / CORRECTION / PLAN / STOP, reply-only, no tools on the repo).
+Preflight pass — exit 0 with `percent_left` above the gate threshold, or null — bind one Codex CLI session at the sol model with xhigh reasoning effort, chartered with the same standing-reviewer contract (ENDORSE / CORRECTION / PLAN / STOP, reply-only).
 Preflight fail — non-zero exit or an exhausted meter — fall back to Fable and continue the normal ladder.
-A preflight failure never blocks the walk.
 
 ### Third-party host
 
@@ -60,17 +59,17 @@ Resolve a third-party session's own model field with `resolve_cli_model_id("Thir
 Ladder, strongest first: sol (flag-gated, Codex CLI) → `Fable` → `Opus` → `Sonnet` → `Haiku`.
 The four Claude tiers are canonical Title Case names; the validator accepts any letter case and normalizes to Title Case.
 The sol rung binds per **Host profiles → Claude host** (`ADVISOR_SOL_XHIGH` plus the Codex preflight); the Claude walk below it starts at Fable.
-Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier; never bind below it.
+Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier.
 On a Claude host, each walk try sets the Agent tool `model:` field to the short alias for that candidate tier (`resolve_cli_model_id(candidate_tier)` — for example `opus`, not Title Case `Opus`).
 On a third-party host, each walk try uses the CLI chain with that alias and the effort flags in **Host profiles → Third-party host**.
 The advisor is created at `selected_tier` — the first ladder tier that binds — which may sit above the floor.
 When even the floor tier fails on a Claude host, move to the CLI fallback below.
 On a third-party host the CLI chain is already the primary path, so floor failure fails closed: report unreachable.
 
-Emit a structured spawn-walk log so the walk can be checked mechanically rather than inferred from a transcript.
+Emit a structured spawn-walk log so the walk can be checked mechanically.
 Record shape, log path, the validator command, and its exit codes: [`reference/spawn-walk-log.md`](reference/spawn-walk-log.md).
 The validator checks ladder shape only.
-Host policy sits on top: a third-party host with `selected_tier=null` after an exhausted Fable→Opus walk fails closed (report unreachable; never self-endorse).
+Host policy sits on top: a third-party host with `selected_tier=null` after an exhausted Fable→Opus walk fails closed — report unreachable and leave the four signals to a bound advisor.
 
 **Equal-tier pairings.** Bind a same-tier advisor when the goal is an independent second pass.
 For irreversible or security-sensitive work, pair a top-tier executor with a top-tier advisor for independent frontier review.
@@ -128,7 +127,7 @@ Each paragraph is self-contained — the executor receives only this text, not t
 
 This variant applies when the executor's own tier is Sonnet or below. Paste it at the **top** of the executor spawn prompt, ahead of any other sentence that mentions the advisor.
 
-> A shared session advisor named `<name>` is reachable via SendMessage. The advisor sees no transcript of your work: your first consult is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one. Send your first consult right after orientation and before your first write, and send a completion consult once your writes and test output exist — that completion consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims. Consult before locking in a nontrivial approach, once you believe your assignment is done, before reaching for any task-list tool, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered — budget two to three consults for the task, at every material fork. Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)` Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On a transient failure, retry once, then carry on without advice and record that you did; if the advisor is unreachable, report that back to whoever assigned you, leave lifecycle decisions to the session that owns the advisor, and never self-endorse.
+> A shared session advisor named `<name>` is reachable via SendMessage. Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one. Send your first consult right after orientation and before your first write, and send a completion consult once your writes and test output exist — that completion consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims. Consult before locking in a nontrivial approach, once you believe your assignment is done, before reaching for any task-list tool, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered — budget two to three consults for the task, at every material fork. Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)` Re-raise something it already answered only when you have new evidence to attach — the result of trying its advice, fresh output, or a changed constraint; otherwise act on its standing answer. After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it. Its replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take. On a transient failure, retry once, then carry on with the evidence you have and record that you did; if the advisor is unreachable, report that back to whoever assigned you and leave lifecycle decisions and the four signals to the session that owns the advisor.
 
 ### Third-party host (Claude CLI advisor; report to orchestrating session)
 

@@ -267,8 +267,8 @@ The claude-dev-env advisor is a warm agent or CLI session, not the native
 server tool. Three inversions apply:
 
 1. **Context forwarding is manual.** The native tool auto-forwards the full
-   transcript. A hand-rolled advisor sees nothing automatically — the first
-   consult carries a complete self-contained packet (task, actions in order,
+   transcript. Everything a hand-rolled advisor sees arrives in the consult —
+   the first carries a complete self-contained packet (task, actions in order,
    real output, live decision, load-bearing excerpts); later consults carry
    only the delta.
 2. **Caching becomes prefix stability.** The charter and role text stay

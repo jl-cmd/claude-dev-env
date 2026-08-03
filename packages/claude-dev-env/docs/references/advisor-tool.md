@@ -49,7 +49,7 @@ Four shapes cover how a harder task gets more strength behind it. Route to the o
 | Stronger-model planning phase | The plan needs the strong model's judgment; the fast model can carry it out once written. |
 | Full model switch | Every step of the task needs the stronger tier, not just the hard decisions. |
 
-The advisor is not the answer when the work is a delegable bounded subtask — spawn a subagent instead — or when every turn needs the strongest tier — switch the whole task to that model instead.
+Spawn a subagent when the work is a delegable bounded subtask. Switch the whole task to the stronger model when every turn needs that tier.
 
 ## Brevity cue
 
