@@ -4,6 +4,7 @@ import inspect
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +14,7 @@ if str(_HOOKS_ROOT) not in sys.path:
 
 from hooks_constants import project_paths_reader
 from hooks_constants.project_paths_reader import (
+    find_git_root,
     load_registry,
     registry_contains_path,
     registry_file_path,
@@ -147,3 +149,30 @@ def test_load_registry_uses_shared_utf8_encoding_constant() -> None:
     assert 'encoding="utf-8"' not in source, (
         'load_registry must use UTF8_ENCODING constant, not the bare literal "utf-8"'
     )
+
+
+def test_find_git_root_returns_root_for_nested_path(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "pkg"
+    nested.mkdir(parents=True)
+    (repo_root / ".git").mkdir()
+    found = find_git_root(str(nested))
+    assert found is not None
+    assert Path(found).resolve() == repo_root.resolve()
+
+
+def test_find_git_root_returns_none_without_git(tmp_path: Path) -> None:
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    original_exists = Path.exists
+
+    def exists_without_ambient_git(self_path: Path) -> bool:
+        if self_path.name == ".git":
+            resolved_parent = self_path.resolve().parent
+            if resolved_parent == bare.resolve() or bare.resolve() in resolved_parent.parents:
+                return original_exists(self_path)
+            return False
+        return original_exists(self_path)
+
+    with patch.object(Path, "exists", exists_without_ambient_git):
+        assert find_git_root(str(bare)) is None

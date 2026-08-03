@@ -64,7 +64,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `prose_matcher_precision_constants.py` | Sample floor, keep/narrow precision floors, matcher ids, label decisions, advisory log path, emit caps, and context fingerprint length for OP-07B prose-matcher advisory telemetry |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
-| `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
+| project_paths_reader.py | Loads ~/.claude/project-paths.json and finds a home-bounded git root for registry checks |
 | `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
@@ -78,6 +78,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `session_start_injector_constants.py` | Known SessionStart source values, injection status codes, enable env var, default timeout for the shared injector |
 | `test_session_start_injector.py` | Behavioral tests for every known source, disabled, timeout, and unknown-source paths |
 | `orchestrator_auto_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the orchestrator auto-starter |
+| `issue_tracker_session_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the repository-gated issue-tracker starter |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `shell_command_pipeline.py` | Quote-aware shell pipeline parsing: operator-paired segments after line-continuation join, comment strip, heredoc body drop, and parenthesis-group join |
