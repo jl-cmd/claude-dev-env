@@ -15,6 +15,6 @@
 
 Follow the call rules in `advisor-tool.md` (orientation first, then consult before substantive work; durable deliverable before the completion consult; stuck or reapproach; long tasks twice).
 
-## Relation to `advisor()`
+## Selected path
 
-`/team-advisor` is the deliberately selected path for this repository. It reproduces the advisor contract with explicit first-consult packets, delta consults, a standing warm reviewer, and a read-only Sol CLI option; native `advisor()` mechanics remain source context and are not invoked by this skill.
+`/team-advisor` is the repository's advisor implementation. It provides explicit first-consult packets, delta consults, a standing warm reviewer, and a read-only Sol CLI option.
