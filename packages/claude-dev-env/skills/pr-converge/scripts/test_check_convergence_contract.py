@@ -294,14 +294,21 @@ def test_resolve_bugteam_post_blocked_true_when_env_disables_bugteam(
     assert check_convergence._resolve_bugteam_post_blocked(False) is True
 
 
-def test_resolve_bugteam_post_blocked_false_when_flag_unset_and_env_empty(
+def test_resolve_bugteam_post_blocked_false_when_flag_unset_and_bugteam_opted_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
     assert check_convergence._resolve_bugteam_post_blocked(False) is False
 
 
-def test_resolve_bugteam_post_blocked_false_when_env_disables_only_copilot(
+def test_resolve_bugteam_post_blocked_true_when_neither_list_names_bugteam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    assert check_convergence._resolve_bugteam_post_blocked(False) is True
+
+
+def test_resolve_bugteam_post_blocked_false_when_opted_in_and_env_disables_copilot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "copilot")

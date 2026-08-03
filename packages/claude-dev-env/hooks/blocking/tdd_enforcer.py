@@ -17,6 +17,7 @@ try:
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
     from code_rules_shared import (
+        is_agent_home_tooling,
         is_ephemeral_script_path,
         is_under_session_scratchpad,
     )
@@ -38,6 +39,11 @@ except ImportError as import_error:
 
 def _is_session_scratchpad_write(file_path: str, input_data: dict) -> bool:
     return is_under_session_scratchpad(file_path, input_data)
+
+
+def _is_agent_home_tooling_write(file_path: str) -> bool:
+    """A coding agent's own home-directory tooling is outside the TDD gate."""
+    return is_agent_home_tooling(file_path)
 
 
 production_extensions = path_classification.production_extensions
@@ -68,6 +74,8 @@ def _resolve_payload(input_data: dict) -> tuple[str, dict, str]:
 
 def _is_silently_skipped(file_path: str, extension: str, path: Path) -> bool:
     if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(file_path):
+        return True
+    if _is_agent_home_tooling_write(file_path):
         return True
     if extension in skip_extensions():
         return True

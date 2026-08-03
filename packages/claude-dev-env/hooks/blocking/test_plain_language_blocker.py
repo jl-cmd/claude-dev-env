@@ -42,18 +42,31 @@ strip_non_prose_regions = hook_module.strip_non_prose_regions
 build_block_reason = hook_module.build_block_reason
 find_question_block_violations = hook_module.find_question_block_violations
 build_lean_block_reason = hook_module.build_lean_block_reason
-evaluate = hook_module.evaluate
+
+
+def evaluate(payload_by_key: dict[str, object]) -> str | None:
+    """Call evaluate with opinionated prose enforcement enabled."""
+    with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+        return hook_module.evaluate(payload_by_key)
 
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 
 
-def _run_hook_with_payload(payload: dict) -> subprocess.CompletedProcess[str]:
+def _run_hook_with_payload(
+    payload: dict, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess[str]:
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, str(HOOK_SCRIPT_PATH)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
@@ -64,8 +77,79 @@ def _decision_from(completed: subprocess.CompletedProcess[str]) -> str | None:
     return parsed.get("hookSpecificOutput", {}).get("permissionDecision")
 
 
+def _system_message_from(completed: subprocess.CompletedProcess[str]) -> str | None:
+    if not completed.stdout:
+        return None
+    parsed = json.loads(completed.stdout)
+    system_message = parsed.get("systemMessage")
+    return system_message if isinstance(system_message, str) else None
+
+
 def test_canonical_hook_script_exists_at_expected_path() -> None:
     assert HOOK_SCRIPT_PATH.is_file()
+
+
+def test_heavy_word_scan_is_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert hook_module.evaluate(payload) is None
+    completed = _run_hook_with_payload(payload, is_prose_style_enabled=False)
+    assert _decision_from(completed) is None
+
+
+def test_default_off_emits_privacy_safe_advisory_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
+    all_emitted: list[tuple[str, str, str]] = []
+
+    def _record_advisory(
+        matcher_id: str, surface: str, context_text: str, **_kwargs: object
+    ) -> dict[str, object]:
+        all_emitted.append((matcher_id, surface, context_text))
+        return {}
+
+    monkeypatch.setattr(hook_module, "emit_advisory_candidate", _record_advisory)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert hook_module.evaluate(payload) is None
+    assert all_emitted
+    matcher_id, surface, context_text = all_emitted[0]
+    assert matcher_id == "plain_language_heavy_word"
+    assert surface == "Write"
+    assert "initiate" in context_text
+
+
+def test_heavy_word_scan_opt_in_allows_with_system_message_swaps() -> None:
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "notes.md",
+            "content": "We initiate the worker pool at boot.",
+        },
+    }
+    assert evaluate(payload) is None
+    with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+        deny_reason, advisory_message = hook_module.evaluate_with_advisory(payload)
+    assert deny_reason is None
+    assert advisory_message is not None
+    assert 'use "start" instead of "initiate"' in advisory_message
+    completed = _run_hook_with_payload(payload, is_prose_style_enabled=True)
+    assert _decision_from(completed) == "allow"
+    system_message = _system_message_from(completed)
+    assert system_message is not None
+    assert 'use "start" instead of "initiate"' in system_message
 
 
 def test_bare_prose_banned_term_is_detected() -> None:
@@ -127,7 +211,7 @@ def test_block_reason_names_term_and_replacement() -> None:
     assert "start" in reason
 
 
-def test_ask_user_question_with_banned_term_is_denied() -> None:
+def test_ask_user_question_with_banned_term_is_advisory_allow() -> None:
     payload = {
         "tool_name": "AskUserQuestion",
         "tool_input": {
@@ -141,10 +225,13 @@ def test_ask_user_question_with_banned_term_is_denied() -> None:
         },
     }
     completed = _run_hook_with_payload(payload)
-    assert _decision_from(completed) == "deny"
+    assert _decision_from(completed) == "allow"
+    system_message = _system_message_from(completed)
+    assert system_message is not None
+    assert "utilize" in system_message
 
 
-def test_ask_user_question_banned_term_in_option_label_is_denied() -> None:
+def test_ask_user_question_banned_term_in_option_label_is_advisory_allow() -> None:
     payload = {
         "tool_name": "AskUserQuestion",
         "tool_input": {
@@ -158,7 +245,10 @@ def test_ask_user_question_banned_term_in_option_label_is_denied() -> None:
         },
     }
     completed = _run_hook_with_payload(payload)
-    assert _decision_from(completed) == "deny"
+    assert _decision_from(completed) == "allow"
+    system_message = _system_message_from(completed)
+    assert system_message is not None
+    assert "utilize" in system_message
 
 
 def test_clean_ask_user_question_passes_through() -> None:
@@ -178,7 +268,7 @@ def test_clean_ask_user_question_passes_through() -> None:
     assert _decision_from(completed) is None
 
 
-def test_write_markdown_with_banned_term_is_denied(tmp_path: Path) -> None:
+def test_write_markdown_with_banned_term_is_advisory_allow(tmp_path: Path) -> None:
     target = tmp_path / "notes.md"
     payload = {
         "tool_name": "Write",
@@ -188,7 +278,10 @@ def test_write_markdown_with_banned_term_is_denied(tmp_path: Path) -> None:
         },
     }
     completed = _run_hook_with_payload(payload)
-    assert _decision_from(completed) == "deny"
+    assert _decision_from(completed) == "allow"
+    system_message = _system_message_from(completed)
+    assert system_message is not None
+    assert "utilize" in system_message
 
 
 def test_write_markdown_at_ephemeral_path_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -230,7 +323,7 @@ def test_edit_markdown_clean_content_passes_through(tmp_path: Path) -> None:
     assert _decision_from(completed) is None
 
 
-def test_multiedit_markdown_with_banned_term_is_denied(tmp_path: Path) -> None:
+def test_multiedit_markdown_with_banned_term_is_advisory_allow(tmp_path: Path) -> None:
     target = tmp_path / "notes.md"
     payload = {
         "tool_name": "MultiEdit",
@@ -243,7 +336,10 @@ def test_multiedit_markdown_with_banned_term_is_denied(tmp_path: Path) -> None:
         },
     }
     completed = _run_hook_with_payload(payload)
-    assert _decision_from(completed) == "deny"
+    assert _decision_from(completed) == "allow"
+    system_message = _system_message_from(completed)
+    assert system_message is not None
+    assert "utilize" in system_message
 
 
 def test_other_tool_is_ignored() -> None:
@@ -270,19 +366,24 @@ def test_real_file_path_is_still_stripped() -> None:
 
 
 def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
-    """A deny routed through the dispatcher's native path logs one record.
+    """A lean-block deny routed through the dispatcher's native path logs once.
 
     On the Write|Edit|MultiEdit surface this hook runs only through
     pre_tool_use_dispatcher's native path, which calls evaluate() and
-    build_deny_payload() — never _emit_deny() or main(). The block must still
-    land in the hook-blocks log, so the log call lives on build_deny_payload,
-    the function the native path executes.
+    build_deny_payload() — never _emit_deny() or main(). Heavy words no longer
+    deny (OP-07D), so this probe uses AskUserQuestion lean-block chat detail.
+    The log call still lives on build_deny_payload.
     """
     deny_payload = {
-        "tool_name": "Edit",
+        "tool_name": "AskUserQuestion",
         "tool_input": {
-            "file_path": str(tmp_path / "notes.md"),
-            "new_string": "This guide explains how to utilize the new cache layer.",
+            "questions": [
+                {
+                    "question": "Which gate should run first?\n\nPlan the whole stack.",
+                    "header": "Gate",
+                    "options": [{"label": "Write", "description": "Runs on write."}],
+                }
+            ]
         },
     }
     native_hook = NativeHook(
@@ -291,7 +392,9 @@ def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
     )
 
     with patch.object(Path, "home", return_value=tmp_path):
-        hosted_result = run_native_hook(native_hook, deny_payload, is_blocking=True)
+        hosted_result = run_native_hook(
+            native_hook, deny_payload, is_blocking=True
+        )
 
     assert hosted_result.captured_stdout
     log_path = tmp_path / ".claude" / "logs" / "hook-blocks.log"
@@ -527,7 +630,14 @@ def test_markdown_write_keeps_its_bullets_and_tables(tmp_path: Path) -> None:
         "tool_input": {"file_path": target_path, "content": bulleted_prose},
     }
 
-    assert evaluate(heavy_payload) is not None
+    assert evaluate(heavy_payload) is None
+    with patch.dict(os.environ, {"CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}):
+        _deny_reason, advisory_message = hook_module.evaluate_with_advisory(
+            heavy_payload
+        )
+    assert _deny_reason is None
+    assert advisory_message is not None
+    assert "utilize" in advisory_message
     assert evaluate(clean_payload) is None
 
 

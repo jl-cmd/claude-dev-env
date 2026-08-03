@@ -630,3 +630,36 @@ def test_cli_reports_publication_and_rollback_failure_as_json(
     assert report["reconcile_required"] is True
     assert report["errors"] == 2
     assert all(str(tmp_path) not in message for message in report["error_details"])
+
+def test_frontmatter_accepts_empty_tools_list() -> None:
+    agent = parse_frontmatter(
+        Path("agent.md"),
+        "---\nname: x\ndescription: y\ntools: []\n---\n",
+        "agent.md",
+    )
+    assert agent.tools == ()
+
+
+def test_frontmatter_accepts_block_scalar_description() -> None:
+    source_text = (
+        "---\n"
+        "name: x\n"
+        "description: |\n"
+        "  line one\n"
+        "  line two\n"
+        "---\n"
+        "body\n"
+    )
+    agent = parse_frontmatter(Path("agent.md"), source_text, "agent.md")
+    assert "line one" in agent.description
+    assert "line two" in agent.description
+
+
+def test_frontmatter_rejects_non_string_name() -> None:
+    with pytest.raises(MaterializerError):
+        parse_frontmatter(
+            Path("bad.md"),
+            "---\nname: 1\ndescription: y\n---\n",
+            "bad.md",
+        )
+

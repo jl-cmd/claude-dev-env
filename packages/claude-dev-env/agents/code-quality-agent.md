@@ -80,7 +80,7 @@ For reusable Variant C audit prompts scoped to a single category, see `../audit-
 }
 ```
 
-`id` uses the form `loop<N>-<K>` for /bugteam and /qbug invocations and `find<K>` for /findbugs. The orchestrator supplies the prefix in the prompt; honor whatever it gives you.
+`id` uses the form `loop<N>-<K>` for /bugteam and pr-converge invocations and `find<K>` for standalone audit calls. The orchestrator supplies the prefix in the prompt; honor whatever it gives you.
 
 **The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it self-sufficient.
 
@@ -112,6 +112,14 @@ A bare verified-clean label is inadequate: every Shape B entry lists the files o
 | P0 | Will not run, data corruption, or security breach. |
 | P1 | Regression, silent failure, or behavior change that escapes existing tests. |
 | P2 | Dead code, minor smell, style issue, category J finding without runtime impact. |
+
+## Collection before filtering
+
+Report every real finding at its true severity. Collection retains P0, P1, and
+P2 findings with file, line, evidence (`excerpt` / `failure_mode`), and
+category. Do not drop lower-severity real findings during collection so a later
+consumer can filter. Severity or action filtering is a separate stage after the
+collection record is complete.
 
 ## Per-Category Expectation
 
@@ -175,7 +183,7 @@ Followed by the Shape A finding list, the Shape B proof-of-absence list, and the
 
 ## Caller Context
 
-Callers /bugteam, /qbug, and /findbugs invoke this agent at different models per call (opus for /bugteam, sonnet primary for /findbugs, haiku secondary for both /qbug and /findbugs). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
+Callers /bugteam, /pr-converge, and /autoconverge invoke this agent at different models per call (opus for /bugteam; the PR-loop orchestrators set their own Agent model). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
 
 ## Examples
 

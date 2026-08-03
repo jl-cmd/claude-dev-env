@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "supportedActivationInterface": "claude-config-dir-mcp-json",
+  "mcpConfigFileName": "mcp.json",
+  "bundles": {
+    "lean": {
+      "id": "lean",
+      "allServerNames": ["filesystem-readonly"]
+    },
+    "full": {
+      "id": "full",
+      "allServerNames": ["filesystem-readonly", "github-readonly"]
+    }
+  },
+  "serverByName": {
+    "filesystem-readonly": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${PROFILE_ROOT}"]
+    },
+    "github-readonly": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    }
+  }
+}

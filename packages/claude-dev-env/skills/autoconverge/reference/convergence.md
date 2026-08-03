@@ -152,7 +152,8 @@ existing fix + re-converge path.
 - Runs after Bugbot and Copilot. Honors `reviews_disabled.py --reviewer codex`,
   the weekly usage probe via `is_codex_review_required` (shared threshold
   constant — no inline percent), and the wrapper's `codex_down` class.
-- Opt-out token or `codex_down` → set `codexDown`, no stamp, move to the
+- Missing opt-in (the default), opt-out token, or `codex_down` → set
+  `codexDown`, no stamp, move to the
   convergence check with `--codex-down`. A `codex_down` classification also
   records a `codexNote` so the skip stays visible in the final report.
 - Usage at/below threshold or null → skip with no stamp; the machine checklist

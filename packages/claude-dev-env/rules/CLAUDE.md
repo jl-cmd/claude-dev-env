@@ -39,6 +39,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |
 | `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
+| `opus5-communication-contract.md` | Visible concision, one-sentence first progress, important-change-only updates, outcome-first finals, thinking-disabled tool narration (`opus5-communication-contract-v1`) |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
 | `parallel-tools.md` | Make all independent tool calls in a single response |
 | `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |

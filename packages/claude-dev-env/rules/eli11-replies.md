@@ -7,7 +7,7 @@
 1. **Bold keyword first** — open every line and bullet with its load-bearing words in bold. Eyes land on the first words of a line, then fall down the left edge — the [F-pattern](https://www.nngroup.com/articles/f-shaped-pattern-reading-web-content-discovered/).
 2. **One idea per line** — a second idea in the same line is invisible to a skimmer.
 3. **Conclusion first** — the outcome goes in sentence one. Detail sits below it, or gets cut.
-4. **Half the words** — write it, halve it, halve it again. Cap a reply at about 120 words.
+4. **Half the words** — write it, halve it, halve it again. Stay brief by default; a requested full report may run long.
 
 **Measured gains** ([NN/g eyetracking](https://www.nngroup.com/articles/how-users-read-on-the-web/)): concise +58%, scannable layout +47%, both together +124%.
 
@@ -25,7 +25,12 @@
 - **Cut findings first** — when a reply runs long, drop findings and keep the action steps.
 - **Skim test** — reading only the bold words tells the whole story.
 
+## Progress and finals
+
+Mid-run and closing narration follow [`opus5-communication-contract.md`](opus5-communication-contract.md) (`opus5-communication-contract-v1`): first progress update is one sentence; later updates only for important discoveries or direction changes; the final starts with the outcome.
+
 ## Relationship to other rules
 
 - **[`plain-language`](plain-language.md)** owns word choice; this rule owns reply length and shape.
+- **[`opus5-communication-contract`](opus5-communication-contract.md)** owns progress updates, outcome-first finals, and thinking-disabled tool narration.
 - **`AskUserQuestion`** carries every question to the user, in the same short style.

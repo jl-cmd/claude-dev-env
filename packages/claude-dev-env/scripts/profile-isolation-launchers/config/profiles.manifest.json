@@ -3,7 +3,7 @@
   "profilesRootPlaceholder": "${PROFILES_ROOT}",
   "sharedSourcePlaceholder": "${SHARED_SOURCE_ROOT}",
   "pluginSeedPlaceholder": "${PLUGIN_SEED_ROOT}",
-  "migrationOrder": ["ev", "mel", "editor", "master", "kimi"],
+  "migrationOrder": ["profile-c", "profile-b", "profile-a", "master", "profile-d"],
   "profiles": {
     "master": {
       "id": "master",
@@ -14,39 +14,39 @@
       "migrationMode": "materialize-from-legacy",
       "mcpBundle": "lean"
     },
-    "editor": {
-      "id": "editor",
+    "profile-a": {
+      "id": "profile-a",
       "aliases": [],
-      "directoryName": "editor",
-      "launcherNames": ["claude-editor"],
-      "fullLauncherNames": ["claude-editor-full"],
+      "directoryName": "profile-a",
+      "launcherNames": ["claude-profile-a"],
+      "fullLauncherNames": ["claude-profile-a-full"],
       "migrationMode": "materialize-from-legacy",
       "mcpBundle": "lean"
     },
-    "ev": {
-      "id": "ev",
+    "profile-c": {
+      "id": "profile-c",
       "aliases": [],
-      "directoryName": "ev",
-      "launcherNames": ["claude-ev"],
-      "fullLauncherNames": ["claude-ev-full"],
+      "directoryName": "profile-c",
+      "launcherNames": ["claude-profile-c"],
+      "fullLauncherNames": ["claude-profile-c-full"],
       "migrationMode": "clean-local-runtime",
       "mcpBundle": "lean"
     },
-    "mel": {
-      "id": "mel",
+    "profile-b": {
+      "id": "profile-b",
       "aliases": [],
-      "directoryName": "mel",
-      "launcherNames": ["claude-mel"],
-      "fullLauncherNames": ["claude-mel-full"],
+      "directoryName": "profile-b",
+      "launcherNames": ["claude-profile-b"],
+      "fullLauncherNames": ["claude-profile-b-full"],
       "migrationMode": "clean-local-runtime",
       "mcpBundle": "lean"
     },
-    "kimi": {
-      "id": "kimi",
+    "profile-d": {
+      "id": "profile-d",
       "aliases": [],
-      "directoryName": "kimi",
-      "launcherNames": ["claude-kimi"],
-      "fullLauncherNames": ["claude-kimi-full"],
+      "directoryName": "profile-d",
+      "launcherNames": ["claude-profile-d"],
+      "fullLauncherNames": ["claude-profile-d-full"],
       "migrationMode": "clean-local-runtime",
       "mcpBundle": "lean"
     }

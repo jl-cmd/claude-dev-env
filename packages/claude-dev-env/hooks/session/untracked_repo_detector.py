@@ -21,12 +21,11 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.dynamic_stderr_handler import DynamicStderrHandler  # noqa: E402
 from hooks_constants.project_paths_reader import (  # noqa: E402
+    find_git_root,
     load_registry,
     registry_contains_path,
     registry_file_path,
 )
-from hooks_constants.setup_project_paths_constants import GIT_DIRECTORY_SEGMENT_NAME  # noqa: E402
-
 
 _logger = logging.getLogger("untracked_repo_detector")
 if not _logger.handlers:
@@ -41,28 +40,6 @@ def current_working_directory() -> str:
     """Return the process working directory as a string."""
     return os.getcwd()
 
-
-def find_git_root(start_path: str) -> str | None:
-    """Walk upward from start_path looking for a .git directory.
-
-    The walk is bounded by the user's home directory: once the candidate
-    reaches the home directory without finding ``.git``, the search stops.
-    This prevents a stray ``.git`` above the user's home (for example a
-    parent dotfiles repo) from being falsely reported as the session's repo.
-
-    Returns the absolute path of the repo root, or None if not found.
-    """
-    home_directory = Path.home().resolve()
-    candidate = Path(start_path).resolve()
-    while True:
-        if (candidate / GIT_DIRECTORY_SEGMENT_NAME).exists():
-            return str(candidate)
-        if candidate == home_directory:
-            return None
-        parent = candidate.parent
-        if parent == candidate:
-            return None
-        candidate = parent
 
 
 def _build_confirm_instruction(repo_root: str) -> str:

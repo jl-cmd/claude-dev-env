@@ -11,7 +11,7 @@ consumes that ranking to choose try order.
     python claude_chain_usage.py
     {"accounts": [
       {"command": "claude", "weekly_remaining_percent": 58.0},
-      {"command": "claude-ev", "weekly_remaining_percent": null, "error": "..."}
+      {"command": "claude-profile-c", "weekly_remaining_percent": null, "error": "..."}
     ]}
 """
 

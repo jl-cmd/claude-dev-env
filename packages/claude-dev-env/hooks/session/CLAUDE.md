@@ -1,6 +1,6 @@
 # hooks/session
 
-SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, and clearing PR-author swap state at shutdown.
+SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, injecting working-style guidance, and clearing PR-author swap state at shutdown.
 
 ## Key files
 
@@ -12,11 +12,19 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `plugin_data_dir_cleanup.py` | SessionStart | Removes empty plugin data directories at startup to prevent `EEXIST` when Claude Code recreates them |
 | `untracked_repo_detector.py` | SessionStart | Detects when the session cwd is inside a git repository that is not registered in `~/.claude/project-paths.json` and logs a warning |
 | `task_list_loop_starter.py` | SessionStart | Emits an `additionalContext` directive telling Claude to keep the task list current on a 10-minute cadence, starting the `/loop` skill when one is not already running. Writes nothing and runs no tools itself. |
+| `orchestrator_auto_starter.py` | SessionStart | Opt-in (`CLAUDE_ORCHESTRATOR_AUTO_STARTER_ENABLED`) consumer of the shared SessionStart injector; emits orchestrator skill context when enabled. Manual `/orchestrator` unchanged. |
+| `issue_tracker_session_starter.py` | SessionStart | Opt-in (`CLAUDE_ISSUE_TRACKER_SESSION_STARTER_ENABLED`) and repository-gated (git root in `~/.claude/project-paths.json`) issue-tracker skill context. |
+| `_path_setup.py` | — | Inserts the hooks directory on `sys.path` so SessionStart scripts import `hooks_constants` with top-level imports. |
+| `test_orchestrator_auto_starter.py` | — | Tests for `orchestrator_auto_starter.py` |
+| `test_issue_tracker_session_starter.py` | — | Tests for `issue_tracker_session_starter.py` |
+| `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, plain English, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
 | `test_session_env_cleanup.py` | — | Tests for `session_env_cleanup.py` |
 | `test_untracked_repo_detector.py` | — | Tests for `untracked_repo_detector.py` |
 | `test_task_list_loop_starter.py` | — | Tests for `task_list_loop_starter.py` |
+| `test__path_setup.py` | — | Tests for `_path_setup.py` |
+| `test_working_style_prompt.py` | — | Tests for `working_style_prompt.py` |
 
 ## Conventions
 

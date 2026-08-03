@@ -20,7 +20,7 @@ import {
     runClaudeMdActivationSession,
 } from './fixtures/claude-md-marker.mjs';
 
-test('harness self-check: seeded marker activates in main, editor, and mel', () => {
+test('harness self-check: seeded marker activates in main, profile-a, and profile-b', () => {
     const roots = createDisposableRunRoots({ profileIds: [...ALL_PROFILE_IDS] });
     try {
         for (const eachProfileId of ALL_PROFILE_IDS) {
@@ -58,8 +58,8 @@ test('missing CLAUDE.md records reproducible red-missing-activation for each pro
         }
         assert.deepEqual(allClassifications, [
             'main:red-missing-activation',
-            'editor:red-missing-activation',
-            'mel:red-missing-activation',
+            'profile-a:red-missing-activation',
+            'profile-b:red-missing-activation',
         ]);
     } finally {
         removeDisposableRunRoots(roots.runRoot);
@@ -86,10 +86,10 @@ test('file presence alone cannot satisfy activation: empty CLAUDE.md is red', ()
 });
 
 test('activation.simulation is load-bearing for the green path', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        installClaudeMdMarkerFixture(roots.profileRootById.editor);
-        const result = runClaudeMdActivationSession({ roots, profileId: 'editor' });
+        installClaudeMdMarkerFixture(roots.profileRootById['profile-a']);
+        const result = runClaudeMdActivationSession({ roots, profileId: 'profile-a' });
         assert.equal(result.activation.isActivated, true);
         assert.equal(result.activation.simulation, true);
     } finally {

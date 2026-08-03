@@ -23,19 +23,13 @@ Adds:
 - `pre_fix_sha` — `git rev-parse HEAD` immediately before each FIX
 - `gate_round_count` — consecutive pre-audit gate failures (cap: 5 → exit `error`)
 
-State lives inline in the lead session (orchestrator). Cleared on TeamDelete.
-
-### qbug
-
-Adds nothing beyond common. Single subagent loops internally and returns a final summary; orchestrator discards intermediate state. Subagent's loop counter and findings return in the exit payload (`{exit_reason, loop_count, final_commit_sha, audit_log, unresolved}`).
+State lives inline in the lead session (orchestrator). Cleared on TeamDelete. A single-subagent cycle returns its loop counter and findings in the exit payload (`{exit_reason, loop_count, final_commit_sha, audit_log, unresolved}`); the orchestrator discards intermediate state.
 
 ### pr-converge
 
 Normative field list, phase enum, dual persistence, and reset semantics: [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md). File-backed multi-PR `status` enum: [`../../skills/pr-converge/reference/multi-pr-orchestration.md`](../../skills/pr-converge/reference/multi-pr-orchestration.md).
 
-### monitor-many
-
-Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<repo>-<pr_number>.json`:
+Multi-PR runs also keep a per-PR JSON state file at `~/.claude/skills/pr-converge/state/<owner>-<repo>-<pr_number>.json`:
 
 | Field | Type | Description |
 |---|---|---|
@@ -51,12 +45,9 @@ Adds per-PR JSON state file at `~/.claude/skills/monitor-many/state/<owner>-<rep
 ## Reset semantics
 
 - bugteam: cleared on each new `/bugteam` invocation
-- qbug: cleared on each new `/qbug` invocation
-- pr-converge: see [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md)
-- monitor-many: persists across orchestrator runs; only `last_seen_comment_id` advances monotonically
+- pr-converge: see [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md); multi-PR file state persists across orchestrator runs and only `last_seen_comment_id` advances monotonically
 
 ## Convergence checks
 
-- bugteam, qbug: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: see [`../../skills/pr-converge/reference/convergence-gates.md`](../../skills/pr-converge/reference/convergence-gates.md)
-- monitor-many: no unresolved comments requiring code changes AND required checks green AND review policy satisfied → `gh pr ready`
+- bugteam: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
+- pr-converge: see [`../../skills/pr-converge/reference/convergence-gates.md`](../../skills/pr-converge/reference/convergence-gates.md); multi-PR ready when no unresolved comments require code changes, required checks are green, and review policy is satisfied → `gh pr ready`

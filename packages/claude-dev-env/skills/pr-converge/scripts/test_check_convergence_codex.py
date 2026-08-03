@@ -370,7 +370,7 @@ def should_resolve_codex_down_true_when_env_disables_codex(
     ) is True
 
 
-def should_resolve_codex_down_false_when_flag_unset_and_env_empty(
+def should_resolve_codex_down_false_when_flag_unset_and_codex_opted_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_REVIEWS_DISABLED", raising=False)
@@ -378,6 +378,16 @@ def should_resolve_codex_down_false_when_flag_unset_and_env_empty(
     assert check_convergence._resolve_codex_down(
         False, check_convergence._read_job_state()
     ) is False
+
+
+def should_resolve_codex_down_true_when_neither_list_names_codex(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLAUDE_REVIEWS_ENABLED", raising=False)
+    monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
+    assert check_convergence._resolve_codex_down(
+        False, check_convergence._read_job_state()
+    ) is True
 
 
 def should_resolve_codex_down_true_when_job_state_sticky_down(

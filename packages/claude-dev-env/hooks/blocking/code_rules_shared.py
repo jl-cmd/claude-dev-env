@@ -3,19 +3,12 @@
 import ast
 import difflib
 import os
-import sys
 import tempfile
 from collections.abc import Collection, Iterator
 from pathlib import Path
 
-_blocking_directory = str(Path(__file__).resolve().parent)
-_hooks_directory = str(Path(__file__).resolve().parent.parent)
-if _blocking_directory not in sys.path:
-    sys.path.insert(0, _blocking_directory)
-if _hooks_directory not in sys.path:
-    sys.path.insert(0, _hooks_directory)
-
-from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
+from hooks_constants.code_rules_enforcer_constants import (
+    ALL_AGENT_HOME_TOOLING_PATTERNS,
     ALL_DIFF_CHANGED_OPCODE_TAGS,
     ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES,
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
@@ -30,14 +23,14 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     LEADING_DRIVE_LETTER_PATTERN,
     STRICT_TEST_FILE_BASENAME_PATTERN,
 )
-from hooks_constants.harness_scratchpad_constants import (  # noqa: E402
+from hooks_constants.harness_scratchpad_constants import (
     CLAUDE_SESSION_ID_ENVIRONMENT_VARIABLE_NAME,
     HARNESS_SCRATCHPAD_LEAF_DIRECTORY_NAME,
     HARNESS_SCRATCHPAD_USER_DIRECTORY_NAME,
     HARNESS_SCRATCHPAD_USER_DIRECTORY_PREFIX,
     HOOK_PAYLOAD_SESSION_ID_KEY,
 )
-from hooks_constants.unused_module_import_constants import (  # noqa: E402
+from hooks_constants.unused_module_import_constants import (
     TYPE_CHECKING_IDENTIFIER,
 )
 
@@ -54,6 +47,27 @@ def is_hook_infrastructure(file_path: str) -> bool:
     """Check if file is a Claude Code hook (standalone infrastructure, not project code)."""
     path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
     return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_HOOK_INFRASTRUCTURE_PATTERNS)
+
+
+def is_agent_home_tooling(file_path: str) -> bool:
+    """Check whether a path sits under a coding agent's home-directory tooling.
+
+    A coding agent installs helper scripts under a dot-directory in the home
+    tree, such as ``~/.grok/runs/``. That tree is vendored tooling rather than
+    project code, so the repository code rules do not govern it. The leading dot
+    is load-bearing: a project directory named ``grok/`` stays governed.
+
+    Args:
+        file_path: The candidate path to classify.
+
+    Returns:
+        True when the path sits under a recognized agent home directory.
+    """
+    path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
+    return any(
+        each_pattern.replace("\\", "/") in path_lower
+        for each_pattern in ALL_AGENT_HOME_TOOLING_PATTERNS
+    )
 
 
 def is_test_file(file_path: str) -> bool:
@@ -405,17 +419,18 @@ def is_under_session_scratchpad(file_path: str, hook_payload: dict) -> bool:
 
 
 def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
-    """Return True when file_path is a throwaway scratch path exempt from repo gates.
+    """Return True when file_path is exempt from the repository gates.
 
-    Combines the two throwaway-path families a repo gate skips: the root-anchored
-    ephemeral scratch directories (``/tmp`` and ``$CLAUDE_JOB_DIR/tmp``) and the
-    harness session scratchpad. The session scratchpad match reads the session id
-    from the payload when one is supplied, and from the harness environment
-    variable otherwise, so a caller that holds no payload still gets the match.
-    The run_all_validators PreToolUse gate calls this predicate to skip a scratch
-    target before it validates. The code-rules and TDD gates call the two path
-    predicates ``is_ephemeral_script_path`` and ``is_under_session_scratchpad``
-    directly.
+    Combines the path families a repo gate skips: the root-anchored ephemeral
+    scratch directories (``/tmp`` and ``$CLAUDE_JOB_DIR/tmp``), the harness
+    session scratchpad, and a coding agent's own home-directory tooling such as
+    ``~/.grok/runs/``. The session scratchpad match reads the session id from the
+    payload when one is supplied, and from the harness environment variable
+    otherwise, so a caller that holds no payload still gets the match. The
+    run_all_validators PreToolUse gate calls this predicate to skip an exempt
+    target before it validates. The code-rules and TDD gates call the underlying
+    predicates ``is_ephemeral_script_path``, ``is_agent_home_tooling``, and
+    ``is_under_session_scratchpad`` directly.
 
     Args:
         file_path: The candidate path to classify.
@@ -423,9 +438,11 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
             read the session id from the environment alone.
 
     Returns:
-        True when the path is ephemeral scratch or under the session scratchpad.
+        True when the path is scratch, agent tooling, or the session scratchpad.
     """
     if is_ephemeral_script_path(file_path):
+        return True
+    if is_agent_home_tooling(file_path):
         return True
     return is_under_session_scratchpad(file_path, hook_payload or {})
 

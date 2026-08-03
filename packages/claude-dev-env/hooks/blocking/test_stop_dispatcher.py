@@ -156,9 +156,10 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     payload_text = json.dumps(
         {
             "stop_hook_active": False,
-            "last_assistant_message": "This is probably correct without a source.",
+            "last_assistant_message": "This is probably correct.",
         }
     )
+    environment_by_key = {**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}
     completed = subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],
         check=False,
@@ -166,6 +167,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=environment_by_key,
     )
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
@@ -173,14 +175,16 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
 
 
-def test_dispatcher_blocks_overlong_reply_matching_standalone() -> None:
-    """An overlong last_assistant_message blocks through the dispatcher."""
-    overlong_message = "\n".join(
-        " ".join(f"finding{each_index}" for each_index in range(10))
-        for _ in range(30)
+def test_dispatcher_blocks_eli11_shape_violation_matching_standalone() -> None:
+    """An ELI11 shape violation (too many bullets) blocks through the dispatcher."""
+    too_many_bullets_message = "\n".join(
+        f"- finding{each_index} detail for this line" for each_index in range(7)
     )
     payload_text = json.dumps(
-        {"stop_hook_active": False, "last_assistant_message": overlong_message}
+        {
+            "stop_hook_active": False,
+            "last_assistant_message": too_many_bullets_message,
+        }
     )
     completed = subprocess.run(
         [sys.executable, _DISPATCHER_SCRIPT],

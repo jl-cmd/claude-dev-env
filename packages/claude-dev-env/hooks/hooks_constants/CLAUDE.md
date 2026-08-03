@@ -8,6 +8,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 |---|---|
 | `__init__.py` | Package marker (`# pragma: no-tdd-gate`) |
 | `any_type_config.py` | Config for the `Any`-type escape-hatch check |
+| `ask_user_question_shape.py` | Pure AskUserQuestion lean-block shape analyzer: grades question and option-description prose against shared chat-detail markers and sentence/word caps with no hook I/O |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
 | `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |
 | `blocking_check_limits.py` | Max issue counts and preview lengths for blocking hooks |
@@ -31,11 +32,12 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
 | `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
-| `eli11_reply_enforcer_constants.py` | Reply-shape thresholds (word cap, enforced word floor, bullet cap, lead-line window, per-line word cap, over-packed line cap), the `Long form:` escape prefix, the bullet / numbered-step / table-row / link-target / word patterns, the imperative instruction verbs, and the user-facing notice for the ELI11 reply-shape Stop hook |
+| `eli11_reply_enforcer_constants.py` | Reply-shape thresholds (bullet cap, lead-line window, per-list-line word cap, overpacked list-line cap), the bullet / numbered-step / table-row / link-target / word patterns, the imperative instruction verbs, and the user-facing notice for the ELI11 reply-shape Stop hook |
 | `fable_spawn_gate_constants.py` | The spawn tool-name set, the fable model alias and the model-id segment split pattern, the `FABLE-SPAWN-AUTHORIZED` authorization token, the advisor-protocol document path, payload field names, the deny message, and the deny `additionalContext` recovery text for the fable-tier spawn gate |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
+| `hedging_uncertainty_constants.py` | Sentence-boundary pattern, explicit uncertainty label patterns, hedge-term list separator, and positive corrective block text for OP-07C sentence-scoped hedging |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
@@ -60,9 +62,10 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |
 | `pr_description_enforcer_constants.py` | PR-description shape rules and command patterns |
 | `pr_description_proof_of_work_constants.py` | Proof-part detection patterns, gh command tokens, and corrective messages for the proof-of-work comment audit |
+| `prose_matcher_precision_constants.py` | Sample floor, keep/narrow precision floors, matcher ids, label decisions, advisory log path, emit caps, and context fingerprint length for OP-07B prose-matcher advisory telemetry |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
-| `project_paths_reader.py` | Loads `~/.claude/project-paths.json` — the per-user project-path registry |
+| project_paths_reader.py | Loads ~/.claude/project-paths.json and finds a home-bounded git root for registry checks |
 | `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
@@ -72,6 +75,11 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
+| `session_start_injector.py` | Pure SessionStart context injector: normalize `source` (`startup`/`resume`/`clear`/`compact`), honor enable/timeout, return structured injection results for starter hooks |
+| `session_start_injector_constants.py` | Known SessionStart source values, injection status codes, enable env var, default timeout for the shared injector |
+| `test_session_start_injector.py` | Behavioral tests for every known source, disabled, timeout, and unknown-source paths |
+| `orchestrator_auto_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the orchestrator auto-starter |
+| `issue_tracker_session_starter_constants.py` | Opt-in env var, enable values, timeout, and SessionStart directive text for the repository-gated issue-tracker starter |
 | `session_handoff_blocker_constants.py` | Trigger phrases for the session-handoff blocker |
 | `setup_project_paths_constants.py` | Encoding policy, BOM marker, and registry meta-key used across multiple hooks |
 | `shell_command_pipeline.py` | Quote-aware shell pipeline parsing: operator-paired segments after line-continuation join, comment strip, heredoc body drop, and parenthesis-group join |
@@ -92,6 +100,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `volatile_path_in_post_blocker_constants.py` | Volatile path markers, affected `gh` post subcommands, MCP body param names, and the corrective message for the volatile-path post blocker |
 | `windows_rmtree_blocker_constants.py` | The unsafe `shutil.rmtree` pattern and the safe replacement pattern |
 | `workflow_substitution_slot_blocker_constants.py` | Per-iteration token patterns for the workflow-slot blocker |
+| `working_style_prompt_constants.py` | The fixed multi-paragraph working-style prompt text for the SessionStart working_style_prompt hook |
 
 ## Conventions
 

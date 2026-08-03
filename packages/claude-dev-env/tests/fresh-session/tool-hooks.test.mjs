@@ -208,17 +208,17 @@ test('exactly-once dispatch: one pre and one post for a correlation id', () => {
 });
 
 test('eventsForCorrelation keeps mismatched pre/post ids separate', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['editor'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-a'] });
     try {
-        const sinkPath = createToolEventSinkPath(roots.profileRootById.editor);
+        const sinkPath = createToolEventSinkPath(roots.profileRootById['profile-a']);
         appendToolHookEvent(sinkPath, {
             eventName: PRE_TOOL_USE_EVENT,
-            profileId: 'editor',
+            profileId: 'profile-a',
             correlationId: 'corr-a',
         });
         appendToolHookEvent(sinkPath, {
             eventName: POST_TOOL_USE_EVENT,
-            profileId: 'editor',
+            profileId: 'profile-a',
             correlationId: 'corr-b',
         });
         const events = readToolHookEvents(sinkPath);
@@ -232,10 +232,10 @@ test('eventsForCorrelation keeps mismatched pre/post ids separate', () => {
 });
 
 test('disposable tool action does not target live project paths', () => {
-    const roots = createDisposableRunRoots({ profileIds: ['mel'] });
+    const roots = createDisposableRunRoots({ profileIds: ['profile-b'] });
     try {
-        const outcome = runDisposableToolAction(roots, 'mel', 'corr-safety');
-        assert.equal(outcome.harnessResult.profileRoot, roots.profileRootById.mel);
+        const outcome = runDisposableToolAction(roots, 'profile-b', 'corr-safety');
+        assert.equal(outcome.harnessResult.profileRoot, roots.profileRootById['profile-b']);
         const configDir = String(outcome.harnessResult.profileRoot).replace(/\\/gu, '/').toLowerCase();
         const runRoot = roots.runRoot.replace(/\\/gu, '/').toLowerCase();
         assert.ok(configDir.startsWith(runRoot));

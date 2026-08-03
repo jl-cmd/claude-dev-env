@@ -26,6 +26,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `Audit-ShellPolicy.ps1` | Audits Bash tool calls in session transcripts against the `pwsh`-only shell policy |
 | `Migrate-ShellPolicy.ps1` | Applies automated fixes for common shell-policy violations found by the audit script |
 | `Install-SweepEmptyDirs.ps1` | Registers `sweep_empty_dirs.py` as a scheduled task on Windows |
+| `Sync-RepoMain.ps1` | Fast-forwards a main-tracking mirror (`-RepoPath`, required) to its remote main using `merge --ff-only`; refuses a different checkout or a diverged branch, logs each run to `-LogPath`, and exits non-zero so a scheduled-task history row surfaces the problem. `-StashDirty` stashes tracked changes right before the fast-forward under a dated `pre-sync stash` message and leaves the stash in the list |
 | `check.ps1` | Runs the full code-quality check suite |
 | `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions (scaled to fit the screen); non-image files open in their default application |
 | `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |
@@ -37,7 +38,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 |---|---|
 | `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
 | `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
-| `profile-isolation-launchers/` | Profile-launcher contract plus Windows shortcut source semantics: profiles manifest, shared-path allowlist, profile resolver, read-only shortcut inventory and preview reconcile under `windows/`. Live shortcut mutation waits on owner authorization; L1 deploy stays residual |
+| `profile-isolation-launchers/` | Profile-launcher contract plus MCP activation, Windows shortcut source semantics, and version preflight: profiles manifest, shared-path allowlist, profile resolver, `CLAUDE_CONFIG_DIR` authority, lean/full MCP bundle materialization into profile `mcp.json`, pure CLI/Desktop version-compatibility classifier consumed by launcher preflight, read-only shortcut inventory and preview reconcile under `windows/`. Live launcher execution, provenance pin, live shortcut mutation, and L1 deploy stay residual |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 

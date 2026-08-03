@@ -18,6 +18,9 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
+    prose_style_enforcement_enabled_in_environment,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.messages import USER_FACING_INTENT_ENDING_NOTICE  # noqa: E402
 from hooks_constants.text_stripping import strip_code_and_quotes  # noqa: E402
@@ -108,6 +111,9 @@ def main() -> None:
         sys.exit(0)
 
     if hook_input.get("stop_hook_active", False):
+        sys.exit(0)
+
+    if not prose_style_enforcement_enabled_in_environment():
         sys.exit(0)
 
     assistant_message = hook_input.get("last_assistant_message", "")

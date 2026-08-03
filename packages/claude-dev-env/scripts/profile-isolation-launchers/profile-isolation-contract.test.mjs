@@ -36,6 +36,17 @@ const ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'lib/profile-manifest.mjs',
 ]);
 
+/** J1 MCP activation and K1 version-preflight sources allowed beside the A1a contract surface. */
+const ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS = Object.freeze([
+  'config/mcp-bundles.json',
+  'mcp-bundles.mjs',
+  'launcher-runtime.mjs',
+  'version-compatibility.mjs',
+  'tests/mcp-bundles.test.mjs',
+  'tests/launcher-runtime.test.mjs',
+  'tests/version-compatibility.test.mjs',
+]);
+
 const ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS = Object.freeze([
   'tests/shortcut-contract.test.ps1',
   'windows/shortcut-inventory.ps1',
@@ -58,11 +69,11 @@ test('resolveProfileDefinition accepts id, alias, and launcher names', () => {
   assert.equal(resolveProfileDefinition(validatedManifest, 'default').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude').id, 'master');
   assert.equal(resolveProfileDefinition(validatedManifest, 'claude-full').id, 'master');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-ev').id, 'ev');
-  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-mel-full').id, 'mel');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-c').id, 'profile-c');
+  assert.equal(resolveProfileDefinition(validatedManifest, 'claude-profile-b-full').id, 'profile-b');
   assert.equal(resolveProfileDefinition(validatedManifest, 'Master').id, 'master');
-  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-EV ').id, 'ev');
+  assert.equal(resolveProfileDefinition(validatedManifest, ' CLAUDE-PROFILE-C ').id, 'profile-c');
   assert.throws(
     () => resolveProfileDefinition(validatedManifest, 'not-a-profile'),
     /Unknown profile id or alias/,
@@ -102,13 +113,13 @@ test('validators reject duplicate launcher identities across profiles', () => {
   const profiles = {
     .../** @type {Record<string, object>} */ (rawManifest.profiles),
   };
-  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-ev'] };
-  const evProfile = { ...profiles.ev };
+  const masterProfile = { ...profiles.master, launcherNames: ['claude', 'claude-profile-c'] };
+  const profileC = { ...profiles['profile-c'] };
   assert.throws(
     () =>
       validateProfilesManifest({
         ...rawManifest,
-        profiles: { ...profiles, master: masterProfile, ev: evProfile },
+        profiles: { ...profiles, master: masterProfile, 'profile-c': profileC },
       }),
     /duplicate profile identity/,
   );
@@ -128,10 +139,10 @@ test('CLAUDE_CONFIG_DIR is the sole authoritative profile-root variable name', (
 
 test('resolveProfileRootDirectoryPath joins profiles root with directoryName', () => {
   const validatedManifest = loadAndValidateProfilesManifest();
-  const evProfile = resolveProfileDefinition(validatedManifest, 'ev');
+  const profileC = resolveProfileDefinition(validatedManifest, 'profile-c');
   assert.equal(
-    resolveProfileRootDirectoryPath('/profiles', evProfile),
-    join('/profiles', 'ev'),
+    resolveProfileRootDirectoryPath('/profiles', profileC),
+    join('/profiles', 'profile-c'),
   );
 });
 
@@ -166,6 +177,7 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   walk(CONTRACT_ROOT_DIRECTORY_PATH);
   const allExpectedPaths = new Set([
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
     ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
     'profile-isolation-contract.test.mjs',
   ]);
@@ -174,6 +186,7 @@ test('package ships contract under scripts/, reserves live deploy for L1, and ho
   }
   for (const eachRequiredPath of [
     ...ALL_REQUIRED_CONTRACT_SOURCE_RELATIVE_PATHS,
+    ...ALL_ALLOWED_MCP_ACTIVATION_RELATIVE_PATHS,
     ...ALL_N1_SHORTCUT_SOURCE_RELATIVE_PATHS,
   ]) {
     const absolutePath = join(CONTRACT_ROOT_DIRECTORY_PATH, ...eachRequiredPath.split('/'));

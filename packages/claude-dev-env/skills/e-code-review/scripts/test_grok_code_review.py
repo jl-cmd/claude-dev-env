@@ -134,6 +134,83 @@ def test_run_medium_review_happy_path() -> None:
     assert len(batch.all_retained_findings) == MEDIUM_REVIEW_FINDER_COUNT - 1
 
 
+def _one_candidate_per_angle(head: str) -> list[FinderCandidate]:
+    return [
+        FinderCandidate(
+            angle=each_angle,
+            file_path=f"{each_angle}.py",
+            line_number=1,
+            mechanism="m",
+            scenario=f"scenario {each_angle}",
+            worktree_path=f"/wt/{each_angle}",
+            leader_socket=f"sock-{each_angle}",
+            advisor_session_id=f"adv-{each_angle}",
+            reviewed_head=head,
+        )
+        for each_angle in ALL_MEDIUM_FINDER_ANGLES
+    ]
+
+
+def test_a_finder_reporting_several_candidates_is_not_a_identity_clash() -> None:
+    head = "abc123"
+    all_finders = _one_candidate_per_angle(head)
+    first = all_finders[0]
+    second_from_first_finder = FinderCandidate(
+        angle=first.angle,
+        file_path="second.py",
+        line_number=9,
+        mechanism="m",
+        scenario="a second finding from the same finder",
+        worktree_path=first.worktree_path,
+        leader_socket=first.leader_socket,
+        advisor_session_id=first.advisor_session_id,
+        reviewed_head=head,
+    )
+    all_finders.append(second_from_first_finder)
+    all_keys = [
+        (each.file_path, each.line_number, each.mechanism) for each in all_finders
+    ]
+    batch = run_medium_review(
+        target_head=head,
+        diff_base="base",
+        all_finder_candidates=all_finders,
+        verdict_by_key={each_key: VERDICT_CONFIRMED for each_key in all_keys},
+        severity_by_key={each_key: "medium" for each_key in all_keys},
+        live_head=head,
+    )
+    assert batch.is_rejected is False
+    assert batch.rejection_reason is None
+    assert len(batch.all_retained_findings) == len(all_finders)
+
+
+def test_two_finders_sharing_one_socket_reject_the_batch() -> None:
+    head = "abc123"
+    all_finders = _one_candidate_per_angle(head)
+    first = all_finders[0]
+    second = all_finders[1]
+    all_finders[1] = FinderCandidate(
+        angle=second.angle,
+        file_path=second.file_path,
+        line_number=second.line_number,
+        mechanism=second.mechanism,
+        scenario=second.scenario,
+        worktree_path=second.worktree_path,
+        leader_socket=first.leader_socket,
+        advisor_session_id=second.advisor_session_id,
+        reviewed_head=head,
+    )
+    batch = run_medium_review(
+        target_head=head,
+        diff_base="base",
+        all_finder_candidates=all_finders,
+        verdict_by_key={},
+        severity_by_key={},
+        live_head=head,
+    )
+    assert batch.is_rejected is True
+    assert batch.rejection_reason == "non_unique_finder_identity"
+
+
 def test_head_drift_rejects_batch() -> None:
     head = "h1"
     all_finders = [

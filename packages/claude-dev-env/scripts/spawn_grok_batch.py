@@ -240,7 +240,7 @@ def invoke_advisor_launcher(
         ``(session_id_or_none, advisor_body_text, returncode)``.
 
     Raises:
-        AdvisorFailureError: When the launcher binary is missing or times out.
+        AdvisorFailureError: When the launcher is missing or times out.
     """
     all_command_arguments = [
         launcher,
