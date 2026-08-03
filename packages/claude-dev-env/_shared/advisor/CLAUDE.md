@@ -15,6 +15,7 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 | Entry | Description |
 |---|---|
 | `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks), `tier_model_ids.py` (`resolve_cli_model_id` / short CLI/Agent aliases / `detect_host_profile`), and `advisor_scripts_constants` under `scripts/config/` (ladder, short-alias map, host profiles, SendMessage wait bound) |
+| `reference/` | Progressive-disclosure detail behind protocol stub sections: `cli-chain.md` (runner modes, alias table, brief piping, `--resume` handling) and `spawn-walk-log.md` (record shape, log path, validator command and exit codes) |
 
 ## Breaking-change rule
 
