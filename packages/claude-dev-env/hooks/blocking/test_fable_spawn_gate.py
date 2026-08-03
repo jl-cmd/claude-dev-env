@@ -11,8 +11,9 @@ field, pass whether or not the marker is present. One test reads
 spawn tool names.
 
 Token pins read the warm-up section and each consuming skill. Two doc-gate
-agreement tests assemble a spawn prompt out of the advisor-protocol wording a
-warm-up bind and a drift re-spawn follow, and run each through the gate, so
+agreement tests assemble a spawn prompt out of the advisor reference wording a
+warm-up bind (``reference/warm-up.md``) and a drift re-spawn
+(``reference/lifecycle.md``) follow, and run each through the gate, so
 wording that stops naming the marker fails here. Two deny-path tests read the
 preview the gate hands the block logger and hold it bounded and scoped to the
 model field.
@@ -64,6 +65,13 @@ _FULL_SONNET_MODEL_ID = "claude-sonnet-4-5"
 _PACKAGE_ROOT = _HOOKS_TREE.parent
 _ADVISOR_PROTOCOL_PATH = _PACKAGE_ROOT / "_shared" / "advisor" / "advisor-protocol.md"
 _ADVISOR_PROTOCOL_TEXT = _ADVISOR_PROTOCOL_PATH.read_text(encoding="utf-8")
+_ADVISOR_REFERENCE_DIR = _PACKAGE_ROOT / "_shared" / "advisor" / "reference"
+_ADVISOR_LIFECYCLE_TEXT = (_ADVISOR_REFERENCE_DIR / "lifecycle.md").read_text(
+    encoding="utf-8"
+)
+_ADVISOR_WARM_UP_TEXT = (_ADVISOR_REFERENCE_DIR / "warm-up.md").read_text(
+    encoding="utf-8"
+)
 _ALL_CONSUMING_SKILL_NAMES = ("team-advisor", "orchestrator", "orchestrator-refresh")
 _ALL_CONSUMING_SKILL_PATHS = tuple(
     _PACKAGE_ROOT / "skills" / each_skill_name / "SKILL.md"
@@ -321,19 +329,18 @@ def test_consuming_skill_names_the_marker_token(skill_path: pathlib.Path) -> Non
     assert FABLE_SPAWN_AUTHORIZATION_MARKER in skill_path.read_text(encoding="utf-8")
 
 
-def _paragraph_starting_at(paragraph_marker: str) -> str:
-    """Return the advisor-protocol paragraph that opens with a marker.
+def _paragraph_starting_at(source_text: str, paragraph_marker: str) -> str:
+    """Return the advisor-doc paragraph that opens with a marker.
 
     Args:
+        source_text: The advisor document text holding the paragraph.
         paragraph_marker: The literal text opening the paragraph.
 
     Returns:
         The paragraph text, running from that marker to the blank line that
         closes it.
     """
-    paragraph_body = _ADVISOR_PROTOCOL_TEXT[
-        _ADVISOR_PROTOCOL_TEXT.index(paragraph_marker) :
-    ]
+    paragraph_body = source_text[source_text.index(paragraph_marker) :]
     paragraph_end = paragraph_body.find(_PARAGRAPH_SEPARATOR)
     if paragraph_end < 0:
         return paragraph_body
@@ -341,7 +348,7 @@ def _paragraph_starting_at(paragraph_marker: str) -> str:
 
 
 def _respawn_spawn_prompt() -> str:
-    """Assemble the spawn prompt a drift re-spawn writes from the protocol.
+    """Assemble the spawn prompt a drift re-spawn writes from the lifecycle doc.
 
     The prompt comes from the re-spawn paragraph alone, so the gate reads
     what that one paragraph tells a session to send.
@@ -349,7 +356,7 @@ def _respawn_spawn_prompt() -> str:
     Returns:
         The spawn prompt text a session following that paragraph sends.
     """
-    return _paragraph_starting_at(_RESPAWN_PARAGRAPH_MARKER)
+    return _paragraph_starting_at(_ADVISOR_LIFECYCLE_TEXT, _RESPAWN_PARAGRAPH_MARKER)
 
 
 def test_respawn_paragraph_prompt_passes_the_gate_at_the_fable_tier() -> None:
@@ -358,7 +365,7 @@ def test_respawn_paragraph_prompt_passes_the_gate_at_the_fable_tier() -> None:
 
 
 def _warm_up_spawn_prompt() -> str:
-    """Assemble the spawn prompt a warm-up bind writes from the protocol.
+    """Assemble the spawn prompt a warm-up bind writes from the warm-up doc.
 
     The prompt comes from the spawn-field prompt bullet alone, so the gate
     reads what that one bullet tells a session to send.
@@ -366,7 +373,7 @@ def _warm_up_spawn_prompt() -> str:
     Returns:
         The spawn prompt text a session following that bullet sends.
     """
-    return _paragraph_starting_at(_WARM_UP_PROMPT_BULLET_MARKER)
+    return _paragraph_starting_at(_ADVISOR_WARM_UP_TEXT, _WARM_UP_PROMPT_BULLET_MARKER)
 
 
 def test_warm_up_prompt_bullet_passes_the_gate_at_the_fable_tier() -> None:
