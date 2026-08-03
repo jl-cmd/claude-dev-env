@@ -12,7 +12,9 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `plugin_data_dir_cleanup.py` | SessionStart | Removes empty plugin data directories at startup to prevent `EEXIST` when Claude Code recreates them |
 | `untracked_repo_detector.py` | SessionStart | Detects when the session cwd is inside a git repository that is not registered in `~/.claude/project-paths.json` and logs a warning |
 | `task_list_loop_starter.py` | SessionStart | Emits an `additionalContext` directive telling Claude to keep the task list current on a 10-minute cadence, starting the `/loop` skill when one is not already running. Writes nothing and runs no tools itself. |
+| `orchestrator_auto_starter.py` | SessionStart | Opt-in (`CLAUDE_ORCHESTRATOR_AUTO_STARTER_ENABLED`) consumer of the shared SessionStart injector; emits orchestrator skill context when enabled. Manual `/orchestrator` unchanged. |
 | `_path_setup.py` | — | Inserts the hooks directory on `sys.path` so SessionStart scripts import `hooks_constants` with top-level imports. |
+| `test_orchestrator_auto_starter.py` | — | Tests for `orchestrator_auto_starter.py` |
 | `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, plain English, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
