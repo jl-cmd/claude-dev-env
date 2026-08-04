@@ -110,11 +110,8 @@ def _expected_candidate_tiers(
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     if maybe_canonical_own_tier == THIRD_PARTY_MODEL_TIER:
         floor_index = ALL_MODEL_TIERS.index(THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER)
-        all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
-        if is_sol_enabled:
-            all_expected_candidates.insert(0, ADVISOR_MODEL_TIER)
-        return all_expected_candidates
-    floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
+    else:
+        floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
     if is_sol_enabled:
         all_expected_candidates.insert(0, ADVISOR_MODEL_TIER)
