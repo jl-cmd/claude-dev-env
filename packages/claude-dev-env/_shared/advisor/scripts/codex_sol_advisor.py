@@ -99,7 +99,7 @@ def _preflight_fallback(
 def _reply_fallback(
     reason: str,
     is_sol_enabled: bool,
-    fallback_kind: str = SOL_FALLBACK_KIND_BROKEN,
+    fallback_kind: str | None = SOL_FALLBACK_KIND_BROKEN,
 ) -> CodexSolAdvisorReply:
     return CodexSolAdvisorReply(
         session_id=None,
@@ -432,7 +432,7 @@ def run_codex_sol_advisor(
         return _reply_fallback(
             resolved_preflight.reason,
             is_sol_enabled,
-            fallback_kind=resolved_preflight.fallback_kind or SOL_FALLBACK_KIND_BROKEN,
+            fallback_kind=resolved_preflight.fallback_kind,
         )
     try:
         completed_process = process_runner(

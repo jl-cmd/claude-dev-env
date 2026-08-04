@@ -37,6 +37,7 @@ USAGE_PROBE_PATH = (
     / "scripts"
     / "codex_usage_probe.py"
 )
+WINDOWS_SHIM_PATH = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
 ENABLED_SETTING_BY_NAME = {
     sol_advisor.SOL_ENV_VAR: "1",
     sol_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: "codex",
@@ -164,11 +165,10 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
         *expected_common_arguments,
         "-",
     ]
-    windows_launcher_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
     assert sol_advisor.build_codex_arguments(
-        windows_launcher_path, session_id="thread-1"
+        WINDOWS_SHIM_PATH, session_id="thread-1"
     ) == [
-        windows_launcher_path,
+        WINDOWS_SHIM_PATH,
         *expected_common_arguments[1:],
         "resume",
         "thread-1",
@@ -179,31 +179,29 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
 def test_resolve_codex_executable_prefers_the_env_var_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    windows_launcher_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
     monkeypatch.setattr(sol_advisor.shutil, "which", lambda name: None)
 
     resolved_executable = sol_advisor.resolve_codex_executable(
-        {sol_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: windows_launcher_path}
+        {sol_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: WINDOWS_SHIM_PATH}
     )
 
-    assert resolved_executable == windows_launcher_path
+    assert resolved_executable == WINDOWS_SHIM_PATH
 
 
 def test_resolve_codex_executable_falls_back_to_which_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    windows_shim_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
     monkeypatch.setattr(
         sol_advisor.shutil,
         "which",
         lambda name: (
-            windows_shim_path if name == sol_advisor.CODEX_EXECUTABLE else None
+            WINDOWS_SHIM_PATH if name == sol_advisor.CODEX_EXECUTABLE else None
         ),
     )
 
     resolved_executable = sol_advisor.resolve_codex_executable({})
 
-    assert resolved_executable == windows_shim_path
+    assert resolved_executable == WINDOWS_SHIM_PATH
 
 
 def test_resolve_codex_executable_returns_none_when_unresolved(
