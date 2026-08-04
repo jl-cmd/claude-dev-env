@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.11.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.10.0...claude-dev-env-v2.11.0) (2026-08-04)
+
+
+### Features
+
+* add Sol advisor runtime ([d9665b2](https://github.com/jl-cmd/claude-dev-env/commit/d9665b2bc6228bfe56c2ef91002736c1e12dff74))
+* docs: add advisor reference catalog ([3ee0303](https://github.com/jl-cmd/claude-dev-env/commit/3ee0303b059707ae35bfd3b05de35319d96da1ff))
+* docs: align advisor consumer references ([ca504c9](https://github.com/jl-cmd/claude-dev-env/commit/ca504c9d576456bc84e7682278e697a24d89a1fb))
+* docs: publish shared advisor bind contract ([3323baf](https://github.com/jl-cmd/claude-dev-env/commit/3323bafb0987d9b97309b1dd8faa66e5c4500cc7))
+* docs: publish Sol advisor rung ([11dc2b2](https://github.com/jl-cmd/claude-dev-env/commit/11dc2b2b7efe5e824528ba71ce21e57488392554))
+* docs: record official advisor source review ([0988ccf](https://github.com/jl-cmd/claude-dev-env/commit/0988ccf676111621747faa52259699c50e35846f))
+* establish advisor tier contracts ([02afbcd](https://github.com/jl-cmd/claude-dev-env/commit/02afbcd4a61d8d57c1459773c14f1bc5b8e1b9b5))
+* feat: add Sol advisor runtime ([780a70a](https://github.com/jl-cmd/claude-dev-env/commit/780a70ac4e930c06bf0ebcfe21afd46ad842dbca))
+* feat: establish advisor tier contracts ([5185a24](https://github.com/jl-cmd/claude-dev-env/commit/5185a241dfe00378468b68544465e3b823527127))
+
+
+### Bug Fixes
+
+* correct stale sub-Opus floor bullets in advisor-protocol.md ([21732e1](https://github.com/jl-cmd/claude-dev-env/commit/21732e1b2d6d5cfa3b2b652f3ad3193becbeeec4))
+
+
+### Documentation
+
+* add advisor reference catalog ([fd4ec0a](https://github.com/jl-cmd/claude-dev-env/commit/fd4ec0ad88a9fcd5f5ca5df6242d3badcc247750))
+* align advisor consumer references ([8fe2c2f](https://github.com/jl-cmd/claude-dev-env/commit/8fe2c2f836e52421f99a84931fdefb0b55e3a839))
+* point advisor doc review at its canonical homes ([cb8f7cc](https://github.com/jl-cmd/claude-dev-env/commit/cb8f7cccf602588fcfe56c1ab8bbd996e0180aff))
+* point advisor doc review at its canonical homes ([d53822a](https://github.com/jl-cmd/claude-dev-env/commit/d53822a81bbd4902bee6b1db0ec145239971f143))
+* publish shared advisor bind contract ([8109225](https://github.com/jl-cmd/claude-dev-env/commit/8109225d8a7a42b73c7c46854e2d593c9db4e771))
+* publish Sol advisor rung ([1d604e7](https://github.com/jl-cmd/claude-dev-env/commit/1d604e7f2c85dc8837b52b33ba37a6abf2e8f42a))
+* record official advisor source review ([d337bf5](https://github.com/jl-cmd/claude-dev-env/commit/d337bf539d463e1567d398921db6872b8c5b0f28))
+* restore the antecedents the advisor doc trim dropped ([447d720](https://github.com/jl-cmd/claude-dev-env/commit/447d7203753aa011a16ec8ed1cec8c3b3c438033))
+* route advisor guidance through team-advisor ([4371dfc](https://github.com/jl-cmd/claude-dev-env/commit/4371dfcb745d76c3bc4976aa5793876aed694d9b))
+* trim duplication in advisor reference catalog ([8669429](https://github.com/jl-cmd/claude-dev-env/commit/866942980b7d0b24786a6261add2d54b7f1a0d56))
+* trim duplication in advisor reference catalog ([34ad57f](https://github.com/jl-cmd/claude-dev-env/commit/34ad57f2fd7bd7c6f527147688f4f7993a8d075e))
+
+
+### Refactoring
+
+* dedupe candidate-tier computation in model_tier_run_validator ([6f65331](https://github.com/jl-cmd/claude-dev-env/commit/6f653310a29618a8920899251b5e944181cde199))
+* dedupe floor-index computation in model_tier_run_validator ([0804b17](https://github.com/jl-cmd/claude-dev-env/commit/0804b174239c1437ec336844f20ffa76a0ac38de))
+* drop dead branches in codex sol advisor ([5ea9ac9](https://github.com/jl-cmd/claude-dev-env/commit/5ea9ac9609c7d59835ea7235d92d70f2a5ab63b3))
+* drop dead branches in the Sol advisor helper ([6d1908d](https://github.com/jl-cmd/claude-dev-env/commit/6d1908d2786103948f394ef76da2392622bd1daa))
+* route Sol runtime through shared advisor contract ([ecf0f81](https://github.com/jl-cmd/claude-dev-env/commit/ecf0f814e7e47bf3fbbe47c23e7baf3dcf170dc1))
+* simplify codex_sol_advisor cleanup pass ([315e06f](https://github.com/jl-cmd/claude-dev-env/commit/315e06fecd4b52730a4bafd52edf1adfbe112708))
+* trim advisor-protocol duplication, fix stale floor rule ([fd0cf7b](https://github.com/jl-cmd/claude-dev-env/commit/fd0cf7b0549cf41f9b9528c7f76eb0840a725945))
+* trim duplicate advisor-protocol prose ([4bdc206](https://github.com/jl-cmd/claude-dev-env/commit/4bdc206cb0ce353ac0ec7823e6768bc75c994853))
+
 ## [2.10.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.9.0...claude-dev-env-v2.10.0) (2026-08-03)
 
 
