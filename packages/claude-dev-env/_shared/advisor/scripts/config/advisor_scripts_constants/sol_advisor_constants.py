@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 CODEX_EXECUTABLE: str = "codex"
+ADVISOR_CODEX_EXECUTABLE_ENV_VAR: str = "ADVISOR_CODEX_EXECUTABLE"
 CODEX_READ_ONLY_SANDBOX: str = "read-only"
 CODEX_JSON_FLAG: str = "--json"
 CODEX_MODEL_FLAG: str = "--model"
@@ -26,3 +27,4 @@ SOL_CODEX_TIMEOUT_REASON: str = "Codex Sol xhigh request timed out"
 SOL_MALFORMED_JSONL_REASON: str = "Codex Sol xhigh returned malformed JSONL"
 SOL_MISSING_SESSION_REASON: str = "Codex Sol xhigh returned no session id"
 SOL_INVALID_SIGNAL_REASON: str = "Codex Sol xhigh returned an invalid guidance signal"
+SOL_EXECUTABLE_NOT_FOUND_REASON: str = "Codex Sol xhigh could not find the codex executable on PATH"

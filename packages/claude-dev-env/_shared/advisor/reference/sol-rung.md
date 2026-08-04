@@ -7,6 +7,7 @@ Open this when `ADVISOR_SOL_XHIGH` is set and a bind is starting.
 
 `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`) opens the rung, set in the environment or by the consuming skill's invocation.
 Flag off: the walk starts at the host's Claude ladder, Fable first.
+A Windows `setx` write only updates the persisted user environment; only a process started after that write inherits the new value, so an already-running session needs the flag set directly in its own invoking process environment.
 
 ## Preflight
 

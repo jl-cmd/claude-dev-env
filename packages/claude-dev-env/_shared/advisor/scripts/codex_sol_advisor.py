@@ -7,6 +7,7 @@ import importlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -20,6 +21,7 @@ if _config_directory_text not in sys.path:
     sys.path.insert(0, _config_directory_text)
 
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
+    ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
     CODEX_CONFIG_FLAG,
     CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
@@ -35,6 +37,7 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
     SOL_ENV_VAR,
+    SOL_EXECUTABLE_NOT_FOUND_REASON,
     SOL_INVALID_SIGNAL_REASON,
     SOL_MALFORMED_JSONL_REASON,
     SOL_MISSING_SESSION_REASON,
@@ -245,17 +248,44 @@ def run_sol_preflight(
     return SolPreflight(True, percent_left, "usage meter is above the Sol gate")
 
 
-def build_codex_arguments(session_id: str | None = None) -> list[str]:
+def resolve_codex_executable(
+    setting_by_name: Mapping[str, str] | None,
+) -> str | None:
+    """Resolve the Codex CLI executable to an invocable name or path.
+
+    A bare "codex" name fails Windows `CreateProcess`, since the npm shim
+    directory holds only `codex` (a sh script), `codex.cmd`, and `codex.ps1`.
+    `shutil.which` finds `codex.cmd` via `PATHEXT`. An explicit override
+    always wins and is trusted without a `which` check.
+
+    Args:
+        setting_by_name: Optional environment-like settings mapping.
+
+    Returns:
+        An invocable executable name or path, or None when unresolved.
+    """
+    resolved_setting_by_name = os.environ if setting_by_name is None else setting_by_name
+    executable_override = resolved_setting_by_name.get(ADVISOR_CODEX_EXECUTABLE_ENV_VAR, "").strip()
+    if executable_override:
+        return executable_override
+    return shutil.which(CODEX_EXECUTABLE)
+
+
+def build_codex_arguments(
+    session_id: str | None = None,
+    codex_executable: str = CODEX_EXECUTABLE,
+) -> list[str]:
     """Build the installed CLI's shell-free bind or resume argv.
 
     Args:
         session_id: Optional existing session to resume.
+        codex_executable: Resolved executable name or path to invoke.
 
     Returns:
         The shell-free Codex command argument vector.
     """
     command_arguments = [
-        CODEX_EXECUTABLE,
+        codex_executable,
         CODEX_EXEC_SUBCOMMAND,
         CODEX_MODEL_FLAG,
         ADVISOR_CODEX_MODEL_ID,
@@ -333,6 +363,21 @@ def parse_codex_jsonl_reply(
     return _reply_success(discovered_session_id, final_guidance, guidance_signal)
 
 
+def _resolve_sol_preflight(
+    preflight: SolPreflight | None,
+    probe_path: Path | None,
+    process_runner: Callable[..., subprocess.CompletedProcess[str]],
+) -> SolPreflight:
+    if preflight is not None:
+        return preflight
+    resolved_probe_path = (
+        resolve_usage_probe_path(Path.home()) if probe_path is None else probe_path
+    )
+    return run_sol_preflight(
+        probe_path=resolved_probe_path, process_runner=process_runner
+    )
+
+
 def run_codex_sol_advisor(
     prompt: str,
     working_directory: Path,
@@ -359,23 +404,18 @@ def run_codex_sol_advisor(
     is_sol_enabled = is_sol_advisor_enabled(setting_by_name)
     if not is_sol_enabled:
         return _reply_fallback("Sol advisor flag is disabled", False)
-    resolved_preflight = (
-        run_sol_preflight(
-            probe_path=(
-                resolve_usage_probe_path(Path.home())
-                if probe_path is None
-                else probe_path
-            ),
-            process_runner=process_runner,
-        )
-        if preflight is None
-        else preflight
-    )
+    resolved_preflight = _resolve_sol_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return _reply_fallback(resolved_preflight.reason, is_sol_enabled)
+    codex_executable = resolve_codex_executable(setting_by_name)
+    if codex_executable is None:
+        return _reply_fallback(
+            f"{SOL_EXECUTABLE_NOT_FOUND_REASON}: searched PATH for {CODEX_EXECUTABLE!r}",
+            is_sol_enabled,
+        )
     try:
         completed_process = process_runner(
-            build_codex_arguments(session_id=session_id),
+            build_codex_arguments(session_id=session_id, codex_executable=codex_executable),
             cwd=str(working_directory),
             input=prompt,
             capture_output=True,

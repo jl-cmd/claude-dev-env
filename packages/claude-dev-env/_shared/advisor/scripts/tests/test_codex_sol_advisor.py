@@ -167,6 +167,83 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
     ]
 
 
+def test_build_codex_arguments_uses_the_resolved_executable() -> None:
+    windows_launcher_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
+
+    resolved_arguments = sol_advisor.build_codex_arguments(
+        codex_executable=windows_launcher_path
+    )
+
+    assert resolved_arguments[0] == windows_launcher_path
+
+
+def test_resolve_codex_executable_prefers_the_env_var_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    windows_launcher_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
+    monkeypatch.setattr(sol_advisor.shutil, "which", lambda name: None)
+
+    resolved_executable = sol_advisor.resolve_codex_executable(
+        {"ADVISOR_CODEX_EXECUTABLE": windows_launcher_path}
+    )
+
+    assert resolved_executable == windows_launcher_path
+
+
+def test_resolve_codex_executable_falls_back_to_which_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    windows_shim_path = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
+    monkeypatch.setattr(
+        sol_advisor.shutil,
+        "which",
+        lambda name: windows_shim_path if name == "codex" else None,
+    )
+
+    resolved_executable = sol_advisor.resolve_codex_executable({})
+
+    assert resolved_executable == windows_shim_path
+
+
+def test_resolve_codex_executable_returns_none_when_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sol_advisor.shutil, "which", lambda name: None)
+
+    resolved_executable = sol_advisor.resolve_codex_executable({})
+
+    assert resolved_executable is None
+
+
+def test_bind_falls_back_with_a_clear_reason_when_executable_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sol_advisor.shutil, "which", lambda name: None)
+    calls: list[list[str]] = []
+
+    def process_runner(
+        arguments: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(arguments)
+        return _probe_process({"percent_left": 90})
+
+    reply = sol_advisor.run_codex_sol_advisor(
+        prompt="first consult",
+        working_directory=Path("."),
+        preflight=None,
+        probe_path=USAGE_PROBE_PATH,
+        session_id=None,
+        process_runner=process_runner,
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+    )
+
+    assert not reply.successful
+    assert reply.is_fallback
+    assert reply.reason is not None
+    assert "codex" in reply.reason
+    assert len(calls) == 1
+
+
 def test_successful_probe_requires_finite_meter_above_configured_gate() -> None:
     def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         return _probe_process({"percent_left": 90})
@@ -304,7 +381,7 @@ def test_bind_runs_probe_then_codex_with_read_only_xhigh_settings() -> None:
         probe_path=USAGE_PROBE_PATH,
         session_id=None,
         process_runner=process_runner,
-        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1", "ADVISOR_CODEX_EXECUTABLE": "codex"},
     )
 
     assert reply.successful
@@ -331,7 +408,7 @@ def test_team_advisor_path_preserves_sol_routing_fields() -> None:
         probe_path=USAGE_PROBE_PATH,
         session_id=None,
         process_runner=_two_step_process_runner(calls, guidance="PLAN\ninspect"),
-        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1", "ADVISOR_CODEX_EXECUTABLE": "codex"},
     )
 
     assert reply.successful
@@ -358,7 +435,7 @@ def test_team_advisor_path_uses_fable_result_when_sol_gate_is_closed() -> None:
         probe_path=USAGE_PROBE_PATH,
         session_id=None,
         process_runner=process_runner,
-        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1", "ADVISOR_CODEX_EXECUTABLE": "codex"},
     )
 
     assert not reply.successful
@@ -398,7 +475,7 @@ def test_resume_runs_the_usage_gate_before_codex() -> None:
         session_id="thread-1",
         probe_path=USAGE_PROBE_PATH,
         process_runner=_two_step_process_runner(calls, guidance="ENDORSE\nready"),
-        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1", "ADVISOR_CODEX_EXECUTABLE": "codex"},
     )
 
     assert reply.successful
@@ -465,7 +542,7 @@ def test_codex_failure_modes_always_return_fallback(
         probe_path=USAGE_PROBE_PATH,
         session_id=None,
         process_runner=process_runner,
-        setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
+        setting_by_name={"ADVISOR_SOL_XHIGH": "1", "ADVISOR_CODEX_EXECUTABLE": "codex"},
     )
 
     assert not reply.successful
