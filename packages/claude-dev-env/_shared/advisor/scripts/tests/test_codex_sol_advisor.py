@@ -134,6 +134,7 @@ def test_main_serializes_stable_result_field(monkeypatch: pytest.MonkeyPatch, ca
             sol_enabled=True,
         selected_tier=sol_advisor.ADVISOR_MODEL_TIER,
         outcome=sol_advisor.CODEX_BIND_SUCCESS_TOKEN,
+        fallback_kind=None,
         ),
     )
     monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
@@ -241,7 +242,89 @@ def test_bind_falls_back_with_a_clear_reason_when_executable_is_missing(
     assert reply.is_fallback
     assert reply.reason is not None
     assert "codex" in reply.reason
+    assert reply.fallback_kind == sol_advisor.SOL_FALLBACK_KIND_BROKEN
     assert calls == []
+
+
+def test_policy_fallbacks_are_marked_declined() -> None:
+    def gate_closed_runner(
+        arguments: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return _probe_process({"percent_left": 5})
+
+    disabled_reply = sol_advisor.run_codex_sol_advisor(
+        prompt="first consult",
+        working_directory=Path("."),
+        preflight=None,
+        probe_path=USAGE_PROBE_PATH,
+        session_id=None,
+        process_runner=gate_closed_runner,
+        setting_by_name={},
+    )
+    gate_closed_reply = sol_advisor.run_codex_sol_advisor(
+        prompt="first consult",
+        working_directory=Path("."),
+        preflight=None,
+        probe_path=USAGE_PROBE_PATH,
+        session_id=None,
+        process_runner=gate_closed_runner,
+        setting_by_name=ENABLED_SETTING_BY_NAME,
+    )
+
+    assert disabled_reply.fallback_kind == sol_advisor.SOL_FALLBACK_KIND_DECLINED
+    assert gate_closed_reply.fallback_kind == sol_advisor.SOL_FALLBACK_KIND_DECLINED
+
+
+def test_probe_failure_fallback_is_marked_broken() -> None:
+    def failing_probe_runner(
+        arguments: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return _probe_process({}, returncode=3)
+
+    reply = sol_advisor.run_codex_sol_advisor(
+        prompt="first consult",
+        working_directory=Path("."),
+        preflight=None,
+        probe_path=USAGE_PROBE_PATH,
+        session_id=None,
+        process_runner=failing_probe_runner,
+        setting_by_name=ENABLED_SETTING_BY_NAME,
+    )
+
+    assert reply.is_fallback
+    assert reply.fallback_kind == sol_advisor.SOL_FALLBACK_KIND_BROKEN
+
+
+def test_enable_sol_flag_opens_the_rung_without_an_environment_flag(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured_settings: dict[str, str] = {}
+
+    def fake_advisor(**kwargs: object) -> object:
+        captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
+        return sol_advisor.CodexSolAdvisorReply(
+            session_id=None,
+            guidance=None,
+            successful=False,
+            reason="probe declined",
+            is_fallback=True,
+            signal=None,
+            sol_enabled=True,
+            selected_tier=sol_advisor.ADVISOR_FALLBACK_TIER,
+            outcome=sol_advisor.ADVISOR_FALLBACK_RESULT,
+            fallback_kind=sol_advisor.SOL_FALLBACK_KIND_DECLINED,
+        )
+
+    monkeypatch.setattr(sol_advisor, "run_codex_sol_advisor", fake_advisor)
+    monkeypatch.delenv(sol_advisor.SOL_ENV_VAR, raising=False)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
+
+    exit_code = sol_advisor.main(["--bind", "--cwd", ".", "--enable-sol"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert captured_settings[sol_advisor.SOL_ENV_VAR] == "1"
+    assert payload["fallback_kind"] == sol_advisor.SOL_FALLBACK_KIND_DECLINED
 
 
 def test_successful_probe_requires_finite_meter_above_configured_gate() -> None:
@@ -446,7 +529,10 @@ def test_team_advisor_path_uses_fable_result_when_sol_gate_is_closed() -> None:
     assert len(calls) == 1
 
 
-def test_disabled_flag_uses_default_optional_routing_inputs() -> None:
+def test_disabled_flag_uses_default_optional_routing_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(sol_advisor.SOL_ENV_VAR, raising=False)
     reply = sol_advisor.run_codex_sol_advisor(
         prompt="first consult",
         working_directory=Path("."),

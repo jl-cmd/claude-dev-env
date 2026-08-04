@@ -5,9 +5,11 @@ Open this when `ADVISOR_SOL_XHIGH` is set and a bind is starting.
 
 ## Flag
 
-`ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`) opens the rung, set in the environment or by the consuming skill's invocation.
-Flag off: the walk starts at the host's Claude ladder, Fable first.
-A Windows `setx` write only updates the persisted user environment; only a process started after that write inherits the new value, so an already-running session needs the flag set directly in its own invoking process environment.
+`ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`) opens the rung. Two channels exist: set the variable in the helper's process environment, or pass `--enable-sol` on the helper invocation — the CLI flag opens the rung for that run without touching the environment.
+Flag off both ways: the walk starts at the host's Claude ladder, Fable first.
+A Windows `setx` write only updates the persisted user environment; only a process started after that write inherits the new value, so an already-running session either sets the flag in its own invoking process environment or passes `--enable-sol`.
+
+Every fallback reply carries a `fallback_kind` field: `declined` when policy closed the rung (flag off, usage meter at or below the gate) and `broken` when the Sol path itself failed (missing executable, spawn error, timeout, malformed reply). A `broken` fallback is a defect to report, not a routing outcome.
 
 ## Preflight
 

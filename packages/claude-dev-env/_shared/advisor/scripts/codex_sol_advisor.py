@@ -37,7 +37,10 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
     SOL_ENV_VAR,
+    SOL_ENABLE_FLAG,
     SOL_EXECUTABLE_NOT_FOUND_REASON,
+    SOL_FALLBACK_KIND_BROKEN,
+    SOL_FALLBACK_KIND_DECLINED,
     SOL_INVALID_SIGNAL_REASON,
     SOL_MALFORMED_JSONL_REASON,
     SOL_MISSING_SESSION_REASON,
@@ -66,6 +69,7 @@ class SolPreflight:
     eligible: bool
     percent_left: float | None
     reason: str
+    fallback_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -81,17 +85,21 @@ class CodexSolAdvisorReply:
     sol_enabled: bool
     selected_tier: str
     outcome: str
+    fallback_kind: str | None
 
 
 def _preflight_fallback(
-    reason: str, percent_left: float | None
+    reason: str,
+    percent_left: float | None,
+    fallback_kind: str = SOL_FALLBACK_KIND_BROKEN,
 ) -> SolPreflight:
-    return SolPreflight(False, percent_left, reason)
+    return SolPreflight(False, percent_left, reason, fallback_kind)
 
 
 def _reply_fallback(
     reason: str,
     is_sol_enabled: bool,
+    fallback_kind: str = SOL_FALLBACK_KIND_BROKEN,
 ) -> CodexSolAdvisorReply:
     return CodexSolAdvisorReply(
         session_id=None,
@@ -103,6 +111,7 @@ def _reply_fallback(
         sol_enabled=is_sol_enabled,
         selected_tier=ADVISOR_FALLBACK_TIER,
         outcome=ADVISOR_FALLBACK_RESULT,
+        fallback_kind=fallback_kind,
     )
 
 
@@ -121,6 +130,7 @@ def _reply_success(
         sol_enabled=True,
         selected_tier=ADVISOR_MODEL_TIER,
         outcome=CODEX_BIND_SUCCESS_TOKEN,
+        fallback_kind=None,
     )
 
 
@@ -236,6 +246,7 @@ def run_sol_preflight(
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
                 percent_left,
+                fallback_kind=SOL_FALLBACK_KIND_DECLINED,
             )
     except subprocess.TimeoutExpired as probe_error:
         return _preflight_fallback(f"{SOL_PROBE_TIMEOUT_REASON}: {probe_error}", None)
@@ -408,13 +419,21 @@ def run_codex_sol_advisor(
     """
     is_sol_enabled = is_sol_advisor_enabled(setting_by_name)
     if not is_sol_enabled:
-        return _reply_fallback("Sol advisor flag is disabled", False)
+        return _reply_fallback(
+            "Sol advisor flag is disabled",
+            False,
+            fallback_kind=SOL_FALLBACK_KIND_DECLINED,
+        )
     codex_executable = resolve_codex_executable(setting_by_name)
     if codex_executable is None:
         return _reply_fallback(SOL_EXECUTABLE_NOT_FOUND_REASON, is_sol_enabled)
     resolved_preflight = _resolve_sol_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
-        return _reply_fallback(resolved_preflight.reason, is_sol_enabled)
+        return _reply_fallback(
+            resolved_preflight.reason,
+            is_sol_enabled,
+            fallback_kind=resolved_preflight.fallback_kind or SOL_FALLBACK_KIND_BROKEN,
+        )
     try:
         completed_process = process_runner(
             build_codex_arguments(codex_executable, session_id=session_id),
@@ -459,6 +478,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     mode_group.add_argument("--bind", action="store_true")
     mode_group.add_argument("--resume", metavar=SOL_SESSION_ID_METAVAR)
     argument_parser.add_argument("--cwd", required=True, type=Path)
+    argument_parser.add_argument(
+        SOL_ENABLE_FLAG,
+        dest="is_sol_requested",
+        action="store_true",
+        help="Open the Sol rung for this invocation without an environment flag.",
+    )
     return argument_parser
 
 
@@ -472,12 +497,15 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         Zero for a successful Sol response, or one for an explicit fallback.
     """
     parsed_arguments = build_argument_parser().parse_args(list(all_cli_arguments))
+    setting_by_name: Mapping[str, str] = os.environ
+    if parsed_arguments.is_sol_requested:
+        setting_by_name = {**os.environ, SOL_ENV_VAR: "1"}
     advisor_reply = run_codex_sol_advisor(
         prompt=sys.stdin.read(),
         working_directory=parsed_arguments.cwd,
         preflight=None,
         probe_path=None,
-        setting_by_name=os.environ,
+        setting_by_name=setting_by_name,
         session_id=parsed_arguments.resume if not parsed_arguments.bind else None,
         process_runner=subprocess.run,
     )
