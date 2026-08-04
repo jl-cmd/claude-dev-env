@@ -43,7 +43,7 @@ CONFIRM THESE WITH THE USER FIRST, VIA ASKUSERQUESTION, BEFORE EMBEDDING]
    append the full Established findings, Hard constraints, and Plan sections of this
    document to the same file.
 2. Bind: `claude -p --model fable --effort high --output-format json < <charter-file>`
-2a. If 2 fails, replace fable with opus, effort high to max.
+2a. If 2 fails, replace fable with opus, effort high to xhigh.
 3. The JSON output is an array of events, not one object. Take `session_id` from any
    event; the reply text is the `type == "result"` event's `.result` field. Persist
    `session_id`, the repo root, and the cwd to a state file at once.
@@ -56,7 +56,7 @@ CONFIRM THESE WITH THE USER FIRST, VIA ASKUSERQUESTION, BEFORE EMBEDDING]
    session, not a model failure.
 
 **Consult (every time):** write the brief to a temp file, then
-`claude -p --resume <session_id> --model fable (or opus) --effort high (max for opus) --output-format json < <brief-file>`.
+`claude -p --resume <session_id> --model fable (or opus) --effort high (xhigh for opus) --output-format json < <brief-file>`.
 Act on the reply's opening signal: ENDORSE — proceed. CORRECTION — apply it first;
 your next consult on that topic opens with what happened. PLAN — adopt it; same
 report-back rule. STOP — halt that line of work and surface it to the user. Never

@@ -10,7 +10,8 @@ Pointer documents to external sources, standard terminology, and internal tool o
 | `code-review-enforcement.md` | How the code-review gates work: the two required efforts (push at low, PR creation at xhigh), the stamp bound to the branch-surface hash, the single sanctioned minter, the two-layer stamp-directory guard, and the bypass surfaces the gates leave open |
 | `prose-style-enforcement.md` | How `CLAUDE_PROSE_STYLE_ENFORCEMENT` arms opinionated prose gates (default off) while AskUserQuestion lean-block stays always on |
 | `advisor-tool.md` | Canonical consult bones for any stronger reviewer: when to call, hard rule before first write, how to treat advice; maps to the Anthropic advisor tool |
-| `team-advisor-skill.md` | `/team-advisor` map: sole-consumer warm bind, ref index, and how it pairs with `advisor()` |
+| `team-advisor-skill.md` | `/team-advisor` map: sole-consumer warm bind, ref index, and advisor selection |
+| `weak-executor-advisor.md` | Consult profile a below-advisor-tier executor (Sonnet, Haiku) follows on top of `advisor-tool.md`: spawn-prompt steering, context packaging, two-timing rule, consult budget, failure branches |
 
 ## Role
 
