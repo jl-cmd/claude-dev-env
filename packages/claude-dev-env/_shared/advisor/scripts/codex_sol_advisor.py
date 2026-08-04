@@ -218,7 +218,8 @@ def run_sol_preflight(
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: {parse_reason}", None
             )
-        if percent_left is None:
+        usage_gate = _load_usage_gate(probe_path)
+        if not callable(usage_gate) or percent_left is None:
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
             )
