@@ -5,8 +5,8 @@ Open this when assembling the block for an executor spawn prompt.
 
 Assembly order: one transport preamble picked by host profile, then the shared core, then — for an executor at Sonnet or below — the weak-executor add-on.
 Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
-The assembled block is self-contained — the executor receives this text alone.
-The parts restate consult rules from the protocol's **Consulting the warm agent** section on purpose: pasted text reaches executors who see nothing else.
+The assembled block is self-contained — the executor receives this text alone, so every path it names is absolute.
+The consult rules it restates are owned by [`consult-format.md`](consult-format.md); edit that file first and carry the change here.
 
 ## Transport preamble — Claude host
 
@@ -21,7 +21,7 @@ The parts restate consult rules from the protocol's **Consulting the warm agent*
 ## Shared core — every host
 
 > Consult before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
-> Build the first consult with the complete format in `reference/consult-format.md`: assignment, desired outcome, constraints and exclusions, actions taken in order, real output and current state, live decision or blocker, validation evidence, unresolved risks, and load-bearing paths or excerpts. Later consults carry only changed evidence.
+> Build the first consult with the complete format in `$HOME/.claude/_shared/advisor/reference/consult-format.md`: assignment, desired outcome, constraints and exclusions, actions taken in order, real output and current state, live decision or blocker, validation evidence, unresolved risks, and load-bearing paths or excerpts. Later consults carry only changed evidence.
 > Re-raise something already answered only when you have new evidence to attach — the result of trying prior advice, fresh output, or a changed constraint; otherwise act on the standing answer.
 > After a CORRECTION or PLAN, your next consult on that topic opens with what happened when you followed it.
 > Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
@@ -29,10 +29,9 @@ The parts restate consult rules from the protocol's **Consulting the warm agent*
 
 ## Weak-executor add-on — Sonnet or below, either host
 
-> Everything the advisor sees arrives in your consults: the first is a complete, self-contained packet — your assignment, what you tried in order, real output, the live decision, and any load-bearing paths or excerpts — and every later consult carries only the delta since your last one.
 > Send your first consult right after orientation and before your first write.
 > Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.
 > Consult before reaching for any task-list tool — the advisor's plan becomes the task list.
-> Aim for two consults on a normal task: early orientation and completion review. Reserve a third for recovery or reconciliation, and add a consult when a material fork produces new evidence. This target guides planning and leaves the task free to follow its evidence.
+> Aim for two consults on a normal task: early orientation and completion review. Reserve a third for recovery or reconciliation, and add a consult when a material fork produces new evidence.
 > Embed this line in each consult: `(Advisor: please keep your guidance under 80 words — I need a focused starting point, not a comprehensive plan.)`
 > On a transient failure, retry once, then carry on with the evidence you have and record that you did.
