@@ -55,8 +55,8 @@ Executors report to the orchestrating session; that session consults the bound a
 ## Model floor
 
 **Claude host:** the advisor's model tier must be at or above the highest tier of any consumer that will reach it. Each consuming skill supplies its own consumer set when computing the floor:
-- `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
-- `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the max of those.
+- `team-advisor`: the sole consumer is the calling session itself, so the floor is the stronger of Opus and that session's own tier.
+- `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the stronger of Opus and the max of those.
 
 Whatever the consumer set, the floor sits at Opus or above — use the stronger of Opus and the strongest consumer tier.
 
@@ -80,10 +80,9 @@ The floor rule holds — the advisor sits at or above the strongest consumer's t
 
 ## Warm-up (once per session)
 
-On a **Claude host**, walk the candidate tiers top-down, spawning `session-advisor` in the background at each candidate's alias with the charter as its prompt — spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
+On a **Claude host**, walk the candidate tiers top-down, spawning `session-advisor` in the background at each candidate's alias with the charter as its prompt, stopping at the first successful spawn.
 A **Fable**-tier try carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt — `hooks/blocking/fable_spawn_gate.py` denies a Fable-tier spawn without it.
-Stop at the first successful spawn; that try's tier is `selected_tier`, and the warm agent lives at that tier for the rest of the session.
-The agent finishes its first turn standing by. `SendMessage` alone resumes it; between consults it waits quietly.
+Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **third-party host**, bind per [`reference/third-party-bind.md`](reference/third-party-bind.md) and charter the CLI session with the same charter — the reply contract is the same, and consults travel through the CLI runner.
 
@@ -106,9 +105,7 @@ The assembled block is self-contained — the executor receives this text alone.
 
 ## Lifecycle ownership
 
-The session that binds the advisor owns its whole lifecycle — first bind, drift re-spawn or re-bind, and shutdown.
-Every other consumer reaches the advisor by message alone.
-One shared advisor exists per orchestrated session, owned by the session that bound it.
+The session that binds the advisor owns its whole lifecycle — first bind, drift re-spawn or re-bind, and shutdown; every other consumer reaches the advisor by message alone.
 Drift signals and the per-host re-spawn / re-bind steps: [`reference/lifecycle.md`](reference/lifecycle.md).
 
 ## CLI chain
