@@ -135,7 +135,6 @@ def is_blocking_output(completed_process: subprocess.CompletedProcess[str]) -> b
 
 def test_enforcement_defaults_to_off() -> None:
     assert PROSE_STYLE_ENFORCEMENT_ENABLED is False
-    assert isinstance(PROSE_STYLE_ENFORCEMENT_ENABLED, bool)
 
 
 def test_roster_matches_the_hooks_this_suite_exercises() -> None:

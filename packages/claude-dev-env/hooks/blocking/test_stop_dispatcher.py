@@ -49,14 +49,26 @@ def _prose_switch_program(target_script_path: str, is_enabled: bool) -> str:
     )
 
 
-def _prose_switch_enabled_program(target_script_path: str) -> str:
-    """Build a launcher that turns the prose-style switch on, then runs a script."""
-    return _prose_switch_program(target_script_path, True)
+def _run_dispatcher_with_switch(
+    payload_text: str, is_switch_on: bool
+) -> subprocess.CompletedProcess[str]:
+    """Run the Stop dispatcher as a subprocess with the prose-style switch pinned.
 
+    Args:
+        payload_text: The JSON payload to send on stdin.
+        is_switch_on: Value to pin the prose-style switch to.
 
-def _prose_switch_disabled_program(target_script_path: str) -> str:
-    """Build a launcher that pins the prose-style switch off, then runs a script."""
-    return _prose_switch_program(target_script_path, False)
+    Returns:
+        The completed subprocess result with stdout and stderr captured.
+    """
+    return subprocess.run(
+        [sys.executable, "-c", _prose_switch_program(_DISPATCHER_SCRIPT, is_switch_on)],
+        check=False,
+        input=payload_text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
 
 
 def _block_json(
@@ -194,14 +206,7 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
             "last_assistant_message": "This is probably correct without a source.",
         }
     )
-    completed = subprocess.run(
-        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    completed = _run_dispatcher_with_switch(payload_text, True)
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
     assert parsed["decision"] == "block"
@@ -216,14 +221,7 @@ def test_dispatcher_allows_hedging_message_when_the_switch_is_off() -> None:
             "last_assistant_message": "This is probably correct without a source.",
         }
     )
-    completed = subprocess.run(
-        [sys.executable, "-c", _prose_switch_disabled_program(_DISPATCHER_SCRIPT)],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    completed = _run_dispatcher_with_switch(payload_text, False)
     assert completed.returncode == 0
     assert completed.stdout.strip() == ""
 

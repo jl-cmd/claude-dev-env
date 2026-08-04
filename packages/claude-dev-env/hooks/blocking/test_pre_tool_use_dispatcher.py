@@ -75,16 +75,6 @@ def _prose_switch_program(target_script_path: str, is_enabled: bool) -> str:
     )
 
 
-def _prose_switch_enabled_program(target_script_path: str) -> str:
-    """Build a launcher that turns the prose-style switch on, then runs a script."""
-    return _prose_switch_program(target_script_path, True)
-
-
-def _prose_switch_disabled_program(target_script_path: str) -> str:
-    """Build a launcher that pins the prose-style switch off, then runs a script."""
-    return _prose_switch_program(target_script_path, False)
-
-
 def _run_hook_subprocess(
     hook_relative_path: str, payload_text: str
 ) -> subprocess.CompletedProcess[str]:
@@ -99,7 +89,7 @@ def _run_hook_subprocess(
     """
     script_path = str(_HOOKS_ROOT / hook_relative_path)
     return subprocess.run(
-        [sys.executable, "-c", _prose_switch_enabled_program(script_path)],
+        [sys.executable, "-c", _prose_switch_program(script_path, True)],
         check=False,
         input=payload_text,
         capture_output=True,
@@ -108,31 +98,20 @@ def _run_hook_subprocess(
     )
 
 
-def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
-    """Run the dispatcher as a subprocess with the prose-style switch on.
+def _run_dispatcher(
+    payload_text: str, is_switch_on: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """Run the dispatcher as a subprocess with the prose-style switch pinned.
 
     Args:
         payload_text: The JSON payload to send on stdin.
+        is_switch_on: Value to pin the prose-style switch to.
 
     Returns:
         The completed subprocess result with stdout and stderr captured.
     """
     return subprocess.run(
-        [sys.executable, "-c", _prose_switch_enabled_program(_DISPATCHER_SCRIPT)],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-
-
-def _run_dispatcher_with_the_switch_off(
-    payload_text: str,
-) -> subprocess.CompletedProcess[str]:
-    """Run the dispatcher with the prose-style switch pinned off."""
-    return subprocess.run(
-        [sys.executable, "-c", _prose_switch_disabled_program(_DISPATCHER_SCRIPT)],
+        [sys.executable, "-c", _prose_switch_program(_DISPATCHER_SCRIPT, is_switch_on)],
         check=False,
         input=payload_text,
         capture_output=True,
@@ -146,7 +125,7 @@ def test_dispatcher_allows_prose_violations_when_the_switch_is_off() -> None:
     prose_violation_content = "# Guide\n\nPreviously the system utilized a different mechanism.\n"
     payload_text = _write_payload(_MARKDOWN_FILE_PATH, prose_violation_content)
 
-    dispatcher_result = _run_dispatcher_with_the_switch_off(payload_text)
+    dispatcher_result = _run_dispatcher(payload_text, is_switch_on=False)
 
     assert dispatcher_result.returncode == 0
     is_deny, _reason = _parse_hook_decision(dispatcher_result)
