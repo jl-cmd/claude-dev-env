@@ -9,8 +9,10 @@
 
 With no ``--override``, the script resolves a bearer token. On the desktop
 host it uses only the session ingress token. On every other host it reads the
-Claude Code OAuth access token from the CLI credential file, then the session
-ingress token file when that credential is unavailable. It asks the OAuth
+Claude Code OAuth access token from the CLI credential file — under the
+directory ``CLAUDE_CONFIG_DIR`` names when set, else the home-directory
+default — then the session ingress token file when that credential is
+unavailable. It asks the OAuth
 usage endpoint for the ``five_hour`` and ``seven_day`` windows. Exit code 2
 means the probe cannot resolve; the caller then asks the user for a manual
 reset time.
@@ -38,10 +40,12 @@ from usage_pause_constants.resolve_usage_window_constants import (
     BARE_MINUTES_PATTERN,
     CLOCK_HOUR_MAXIMUM,
     CLOCK_PATTERN,
+    CONFIG_DIR_ENV_VAR,
     CONTENT_TYPE_HEADER_NAME,
     CONTENT_TYPE_JSON,
     CREDENTIALS_ACCESS_TOKEN_KEY,
     CREDENTIALS_EXPIRES_AT_KEY,
+    CREDENTIALS_FILE_NAME,
     CREDENTIALS_OAUTH_SECTION_KEY,
     DESKTOP_ENTRYPOINT_VALUE,
     DURATION_PATTERN,
@@ -201,6 +205,27 @@ def plan_wakeup_stages(seconds_until_reset: int) -> list[int]:
         tail_seconds += leftover_seconds
     stages.append(tail_seconds)
     return stages
+
+
+def default_credentials_path() -> Path:
+    """Locate the CLI credential file for the account this session runs as.
+
+    ::
+
+        CLAUDE_CONFIG_DIR=C:/profiles/mel  ->  C:/profiles/mel/.credentials.json
+        (variable unset or empty)          ->  ~/.claude/.credentials.json
+
+    A profile-isolated session keeps its credential under the config-dir
+    directory. On such a machine the home file belongs to a different
+    account. Reading the home file reports that other account's meter.
+
+    Returns:
+        The credential file for the session's own account.
+    """
+    config_directory = os.environ.get(CONFIG_DIR_ENV_VAR)
+    if config_directory:
+        return Path(config_directory) / CREDENTIALS_FILE_NAME
+    return Path.home().joinpath(*ALL_CREDENTIALS_RELATIVE_PATH_PARTS)
 
 
 def read_oauth_access_token(credentials_path: Path, now: datetime) -> str | None:
@@ -523,7 +548,10 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--credentials-path",
         default=None,
-        help="Path to the CLI credential file; defaults to the home-directory location.",
+        help=(
+            "Path to the CLI credential file; defaults to the CLAUDE_CONFIG_DIR "
+            "location when that variable is set, else the home-directory location."
+        ),
     )
     return parser.parse_args()
 
@@ -558,7 +586,7 @@ def main() -> int:
     credentials_path = (
         Path(arguments.credentials_path)
         if arguments.credentials_path
-        else Path.home().joinpath(*ALL_CREDENTIALS_RELATIVE_PATH_PARTS)
+        else default_credentials_path()
     )
     access_token = resolve_access_token(credentials_path, now)
     if access_token is None:
