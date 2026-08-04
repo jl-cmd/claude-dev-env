@@ -2,7 +2,8 @@
 
 Distilled facts from the Anthropic advisor-tool documentation, for the
 Sonnet-executor advisor path and the hand-rolled `/team-advisor` bind. Every
-claim below cites its source page.
+source claim below cites its page; section H is repository practice and says
+so.
 
 Consult timing, the hard rule before a first write, and how to weigh the
 advice live in [`docs/references/advisor-tool.md`](../../../docs/references/advisor-tool.md).
@@ -44,8 +45,12 @@ consult more or less often during a task, say so in your instructions.
 
 ## B. Measured effect of the hard rule
 
-Page 1 reports: the Haiku coding block raises pass rates by roughly 7.5
-points on an internal coding benchmark. On Opus the same checkpoint raises
+The rule itself — an advisor call before the first write, edit, or
+state-changing shell call — lives under **Hard rule** in
+[`advisor-tool.md`](../../../docs/references/advisor-tool.md). Page 1 states
+it inside the Haiku and Opus system-prompt blocks and reports its effect:
+the Haiku coding block raises pass rates by roughly 7.5 points on an
+internal coding benchmark. On Opus the same checkpoint raises
 under-calling tasks 7–10 points and holds roughly flat on a mixed workload
 where plan-free tasks over-call.
 
