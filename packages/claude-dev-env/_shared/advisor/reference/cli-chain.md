@@ -10,13 +10,9 @@ The shared runner is `python "$HOME/.claude/scripts/claude_chain_runner.py" [--r
 | Usage-ranked (default) | `--routing-mode usage_ranked` or omit the flag | Highest weekly remaining first (`claude_chain_usage` / usage-pause OAuth probe) | Usage-limit signature only |
 | Ordered-account | `--routing-mode ordered_account` | Config list order in `~/.claude/claude-chain.json` | Usage-limit signature only; auth / timeout / config / other process errors → `advisor_blocked` |
 
-**Third-party host root advisor bind and consult:** use ordered-account mode.
-The primary launcher from the chain config is tried first.
-A usage-limit result advances to the next config entry.
-Any non-usage failure terminates as `advisor_blocked`.
-Persist `session_id` from a successful bind and pass it to `-p --resume <session_id> --output-format json` on later consults.
+**Root advisor bind and consult** (the third-party host path): ordered-account mode. A non-usage failure terminates with `terminal_status=advisor_blocked`, exit code 4 on the CLI.
 
-**General chain calls** (non-root automation): keep the default usage-ranked mode so spare capacity on other accounts is preferred.
+**General chain calls** (non-root automation): keep the default usage-ranked mode.
 
 ## Tier-to-alias map
 
@@ -33,7 +29,7 @@ Source of truth: `ALL_CLI_MODEL_ID_BY_TIER` and `resolve_cli_model_id(tier)` in 
 | Haiku | `haiku` |
 | ThirdParty (third-party session model field only) | `third-party` |
 
-Resolve in code with `python -c "from tier_model_ids import resolve_cli_model_id; print(resolve_cli_model_id('Opus'))"` from `$HOME/.claude/_shared/advisor/scripts/` (any letter case accepted; unknown tiers raise `ValueError`).
+`resolve_cli_model_id(tier)` accepts any letter case and raises `ValueError` on a tier outside the map.
 
 ## Brief piping
 

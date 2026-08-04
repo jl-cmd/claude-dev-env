@@ -15,10 +15,8 @@ Open this when binding or re-binding the advisor from a third-party (non-Claude)
 
    Use `--model fable --effort high` on Fable; use `--model opus --effort xhigh` on Opus.
    Opus routing follows [`rules/opus5-communication-contract.md`](../../../rules/opus5-communication-contract.md).
-   The caller picks the Fable effort from task scope; when the caller cannot judge scope well enough to pick, it asks the user through AskUserQuestion before binding, and `high` stays the stated default when no caller choice arrives.
-   **Root advisor bind** uses `--routing-mode ordered_account`: the runner walks `~/.claude/claude-chain.json` in **config order** (primary launcher first, secondary next), and fails over to the next entry **only** on a usage-limit signature.
-   Authentication, timeout, configuration, and other non-usage process errors stop at once with `terminal_status=advisor_blocked` (exit code 4 on the CLI).
-   General (non-root) chain calls keep the default `--routing-mode usage_ranked`, which probes weekly remaining via `claude_chain_usage` / the usage-pause OAuth probe and ranks highest remaining first.
+   The caller picks the Fable effort from task scope; when the caller cannot judge scope well enough to pick, it asks the user through AskUserQuestion before binding, and defaults to `high` when no caller choice arrives.
+   A root advisor bind uses `--routing-mode ordered_account` — walk order, failover, and the `advisor_blocked` terminal status are in [`cli-chain.md`](cli-chain.md).
 4. Stop at the first successful bind.
    Record `{tier, result: "cli"}` and set `selected_tier` to that tier.
    Persist `session_id` from the JSON events (any event carries it; the runner also surfaces it on `ChainInvocationOutcome.session_id`; reply text is the `type == "result"` event's `.result` field).
