@@ -24,13 +24,21 @@ tool and repeats it until a pass returns zero new findings.
    previous pass changed only a line or two, a single combined-lens
    confirmation agent may serve as the final pass.
 
-## Phase B — loop code review with fixes
+## Phase B — loop /code-review low --fix
 
-1. Invoke the `e-code-review` skill with arguments `low --fix` on the same
-   target through the Skill tool. (Not the built-in `code-review` skill — it
-   sets `disable-model-invocation`, so the Skill tool cannot start it; only
-   the user typing `/code-review` can.) Let it report findings and apply its
-   fixes.
+1. Run the real built-in `code-review` command through a headless subprocess
+   in the target worktree:
+
+   ```
+   claude -p "/code-review low --fix" --max-turns 40
+   ```
+
+   The skill's `disable-model-invocation` flag blocks only the Skill tool; in
+   a `-p` run the slash command arrives as user input and loads normally
+   (verified live). Give the call a 10-minute timeout and read its final text
+   for the findings and applied fixes. Fallback if the headless run fails:
+   invoke the `e-code-review` skill with `low --fix` through the Skill tool —
+   same review-and-fix contract, no invocation restriction.
 2. After any pass that changed files: test, commit, push as in Phase A.
 3. Repeat until a pass reports zero findings. Phase B usually converges in one
    pass when Phase A ran first.
