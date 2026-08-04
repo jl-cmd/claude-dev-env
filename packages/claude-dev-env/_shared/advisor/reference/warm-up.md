@@ -25,6 +25,7 @@ State plainly:
 - Reply via SendMessage to whoever sent the consult, by name — each reply goes back to its own sender, and many different consumers may reach this one agent.
 - Treat each consult on its own terms, keyed to the sender's stated assignment. Different consumers' consults will interleave in this one transcript — keep each consumer's context separate, and blend only when a consult explicitly asks for that.
 - If a consult re-raises a question already answered, with nothing new attached, reply by restating the prior answer and naming it as a restatement.
+- Every reply, including this first bind turn, opens its first line with exactly one of the four uppercase signal words — `ENDORSE`, `CORRECTION`, `PLAN`, `STOP` — and nothing else on that line. Standing by after the bind is itself an `ENDORSE` of the charter, stated as that first line.
 
 The agent finishes its first turn standing by. `SendMessage` alone resumes it; between consults it waits quietly.
 
