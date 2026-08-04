@@ -24,10 +24,13 @@ tool and repeats it until a pass returns zero new findings.
    previous pass changed only a line or two, a single combined-lens
    confirmation agent may serve as the final pass.
 
-## Phase B — loop /code-review low --fix
+## Phase B — loop code review with fixes
 
-1. Invoke the `code-review` skill with arguments `low --fix` on the same
-   target. Let it report findings and apply its fixes.
+1. Invoke the `e-code-review` skill with arguments `low --fix` on the same
+   target through the Skill tool. (Not the built-in `code-review` skill — it
+   sets `disable-model-invocation`, so the Skill tool cannot start it; only
+   the user typing `/code-review` can.) Let it report findings and apply its
+   fixes.
 2. After any pass that changed files: test, commit, push as in Phase A.
 3. Repeat until a pass reports zero findings. Phase B usually converges in one
    pass when Phase A ran first.
@@ -39,9 +42,8 @@ the standing skip list with reasons.
 
 ## Constraints (observed under headless runs)
 
-- Run this loop in the main session. A wrapper subagent cannot see the
-  `code-review` skill, and a nested agent's own subagent reports route to the
-  main session instead of back to it.
+- Run this loop in the main session. A nested agent's own subagent reports
+  route to the main session instead of back to its spawner.
 - Scope test runs to the touched files; a full-suite run can outlive one
   foreground tool call.
 - A hung or newly slow test suite is a finding to investigate, not an
