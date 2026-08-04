@@ -149,7 +149,7 @@ Specialized agent prompts for common development tasks. Claude Code automaticall
 
 **Other:** clasp-deployment-orchestrator, project-context-loader
 
-### Commands (8)
+### Commands (9)
 
 Slash commands for common workflows.
 
@@ -163,6 +163,7 @@ Slash commands for common workflows.
 | `/pr-comments` | Process PR review comments systematically |
 | `/docupdate` | Update documentation after changes |
 | `/sum` | Summarize current work context |
+| `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
 ### Skills (12)
 
