@@ -16,11 +16,8 @@ from pathlib import Path
 _scripts_directory = Path(__file__).resolve().parent
 _config_directory = _scripts_directory / "config"
 _config_directory_text = str(_config_directory)
-_scripts_directory_text = str(_scripts_directory)
 if _config_directory_text not in sys.path:
     sys.path.insert(0, _config_directory_text)
-if _scripts_directory_text not in sys.path:
-    sys.path.insert(0, _scripts_directory_text)
 
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_CONFIG_FLAG,
@@ -55,6 +52,7 @@ from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
     ADVISOR_MODEL_TIER,
     ALL_ADVISOR_GUIDANCE_SIGNALS,
     CODEX_BIND_SUCCESS_TOKEN,
+    SPAWN_OUTCOME_KEY,
 )
 
 
@@ -65,8 +63,6 @@ class SolPreflight:
     eligible: bool
     percent_left: float | None
     reason: str
-    is_fallback: bool
-    probe_succeeded: bool
 
 
 @dataclass(frozen=True)
@@ -87,7 +83,7 @@ class CodexSolAdvisorReply:
 def _preflight_fallback(
     reason: str, percent_left: float | None
 ) -> SolPreflight:
-    return SolPreflight(False, percent_left, reason, True, False)
+    return SolPreflight(False, percent_left, reason)
 
 
 def _reply_fallback(
@@ -162,12 +158,12 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
     )
 
 
-def _load_usage_gate(probe_path: Path) -> object:
+def _load_usage_gate(probe_path: Path) -> Callable[[float], bool]:
     probe_directory = str(probe_path.parent)
     if probe_directory not in sys.path:
         sys.path.insert(0, probe_directory)
     usage_probe_module = importlib.import_module("codex_usage_probe")
-    return getattr(usage_probe_module, "is_codex_review_required", None)
+    return usage_probe_module.is_codex_review_required
 
 
 def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
@@ -212,18 +208,11 @@ def run_sol_preflight(
             shell=False,
             timeout=SOL_USAGE_PROBE_TIMEOUT_SECONDS,
         )
-    except subprocess.TimeoutExpired as probe_error:
-        return _preflight_fallback(f"{SOL_PROBE_TIMEOUT_REASON}: {probe_error}", None)
-    except (OSError, subprocess.SubprocessError) as probe_error:
-        return _preflight_fallback(
-            f"{SOL_PREFLIGHT_FAILURE_REASON}: {probe_error}", None
-        )
-    if completed_process.returncode != 0:
-        return _preflight_fallback(
-            f"{SOL_PREFLIGHT_FAILURE_REASON}: probe exit {completed_process.returncode}",
-            None,
-        )
-    try:
+        if completed_process.returncode != 0:
+            return _preflight_fallback(
+                f"{SOL_PREFLIGHT_FAILURE_REASON}: probe exit {completed_process.returncode}",
+                None,
+            )
         percent_left, parse_reason = _parse_probe_percent(completed_process.stdout)
         if parse_reason is not None:
             return _preflight_fallback(
@@ -234,22 +223,26 @@ def run_sol_preflight(
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
             )
+        usage_gate = _load_usage_gate(probe_path)
         if not usage_gate(percent_left):
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
                 percent_left,
             )
-    except (ImportError, OSError, TypeError, ValueError) as parse_error:
+    except subprocess.TimeoutExpired as probe_error:
+        return _preflight_fallback(f"{SOL_PROBE_TIMEOUT_REASON}: {probe_error}", None)
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        ImportError,
+        AttributeError,
+        TypeError,
+        ValueError,
+    ) as probe_error:
         return _preflight_fallback(
-            f"{SOL_PREFLIGHT_FAILURE_REASON}: {parse_error}", None
+            f"{SOL_PREFLIGHT_FAILURE_REASON}: {probe_error}", None
         )
-    return SolPreflight(
-        True,
-        percent_left,
-        "usage meter is above the Sol gate",
-        False,
-        True,
-    )
+    return SolPreflight(True, percent_left, "usage meter is above the Sol gate")
 
 
 def build_codex_arguments(session_id: str | None = None) -> list[str]:
@@ -279,17 +272,12 @@ def build_codex_arguments(session_id: str | None = None) -> list[str]:
 
 
 def _guidance_signal(guidance: str) -> str | None:
-    all_guidance_lines = [
-        each_line.strip()
-        for each_line in guidance.splitlines()
-        if each_line.strip()
-    ]
-    if (
-        not all_guidance_lines
-        or all_guidance_lines[0] not in ALL_ADVISOR_GUIDANCE_SIGNALS
-    ):
-        return None
-    return all_guidance_lines[0]
+    for each_line in guidance.splitlines():
+        stripped_line = each_line.strip()
+        if not stripped_line:
+            continue
+        return stripped_line if stripped_line in ALL_ADVISOR_GUIDANCE_SIGNALS else None
+    return None
 
 
 def parse_codex_jsonl_reply(
@@ -383,7 +371,7 @@ def run_codex_sol_advisor(
         if preflight is None
         else preflight
     )
-    if not resolved_preflight.eligible or not resolved_preflight.probe_succeeded:
+    if not resolved_preflight.eligible:
         return _reply_fallback(resolved_preflight.reason, is_sol_enabled)
     try:
         completed_process = process_runner(
@@ -452,7 +440,7 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         process_runner=subprocess.run,
     )
     reply_payload = asdict(advisor_reply)
-    reply_payload["result"] = reply_payload.pop("outcome")
+    reply_payload[SPAWN_OUTCOME_KEY] = reply_payload.pop("outcome")
     print(json.dumps(reply_payload, sort_keys=True))
     return 0 if advisor_reply.successful else 1
 

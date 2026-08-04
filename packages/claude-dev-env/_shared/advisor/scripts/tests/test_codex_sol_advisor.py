@@ -5,10 +5,13 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+_ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def _load_sol_module() -> ModuleType:
@@ -66,6 +69,20 @@ def _event_stream(
             ),
         ]
     )
+
+
+def _two_step_process_runner(calls: list[list[str]], guidance: str) -> _ProcessRunner:
+    def process_runner(
+        arguments: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(arguments)
+        if len(calls) == 1:
+            return _probe_process({"percent_left": 90})
+        return subprocess.CompletedProcess(
+            arguments, 0, _event_stream(guidance=guidance), ""
+        )
+
+    return process_runner
 
 
 def test_sol_flag_accepts_documented_truthy_values() -> None:
@@ -200,7 +217,6 @@ def test_malformed_probe_json_falls_back() -> None:
     preflight = sol_advisor.run_sol_preflight(USAGE_PROBE_PATH, probe_runner)
 
     assert not preflight.eligible
-    assert preflight.is_fallback
 
 
 def test_probe_nonzero_exit_falls_back() -> None:
@@ -210,7 +226,6 @@ def test_probe_nonzero_exit_falls_back() -> None:
     preflight = sol_advisor.run_sol_preflight(USAGE_PROBE_PATH, probe_runner)
 
     assert not preflight.eligible
-    assert preflight.is_fallback
 
 
 def test_probe_timeout_falls_back() -> None:
@@ -309,23 +324,13 @@ def test_team_advisor_path_preserves_sol_routing_fields() -> None:
     assert "--resume <session_id>" in sol_rung
     calls: list[list[str]] = []
 
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(arguments)
-        if len(calls) == 1:
-            return _probe_process({"percent_left": 90})
-        return subprocess.CompletedProcess(
-            arguments, 0, _event_stream(guidance="PLAN\ninspect"), ""
-        )
-
     reply = sol_advisor.run_codex_sol_advisor(
         prompt="first consult",
         working_directory=Path("."),
         preflight=None,
         probe_path=USAGE_PROBE_PATH,
         session_id=None,
-        process_runner=process_runner,
+        process_runner=_two_step_process_runner(calls, guidance="PLAN\ninspect"),
         setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
     )
 
@@ -372,8 +377,6 @@ def test_disabled_flag_uses_default_optional_routing_inputs() -> None:
             eligible=True,
             percent_left=90,
             reason="test preflight",
-            is_fallback=False,
-            probe_succeeded=True,
         ),
         probe_path=None,
         setting_by_name=None,
@@ -388,23 +391,13 @@ def test_disabled_flag_uses_default_optional_routing_inputs() -> None:
 def test_resume_runs_the_usage_gate_before_codex() -> None:
     calls: list[list[str]] = []
 
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(arguments)
-        if len(calls) == 1:
-            return _probe_process({"percent_left": 90})
-        return subprocess.CompletedProcess(
-            arguments, 0, _event_stream(guidance="ENDORSE\nready"), ""
-        )
-
     reply = sol_advisor.run_codex_sol_advisor(
         prompt="resume",
         working_directory=Path("."),
         preflight=None,
         session_id="thread-1",
         probe_path=USAGE_PROBE_PATH,
-        process_runner=process_runner,
+        process_runner=_two_step_process_runner(calls, guidance="ENDORSE\nready"),
         setting_by_name={"ADVISOR_SOL_XHIGH": "1"},
     )
 
