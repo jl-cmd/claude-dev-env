@@ -417,8 +417,7 @@ def run_codex_sol_advisor(
     Returns:
         The parsed Sol guidance or an explicit Fable fallback reply.
     """
-    is_sol_enabled = is_sol_advisor_enabled(setting_by_name)
-    if not is_sol_enabled:
+    if not is_sol_advisor_enabled(setting_by_name):
         return _reply_fallback(
             "Sol advisor flag is disabled",
             False,
@@ -426,12 +425,12 @@ def run_codex_sol_advisor(
         )
     codex_executable = resolve_codex_executable(setting_by_name)
     if codex_executable is None:
-        return _reply_fallback(SOL_EXECUTABLE_NOT_FOUND_REASON, is_sol_enabled)
+        return _reply_fallback(SOL_EXECUTABLE_NOT_FOUND_REASON, True)
     resolved_preflight = _resolve_sol_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return _reply_fallback(
             resolved_preflight.reason,
-            is_sol_enabled,
+            True,
             fallback_kind=resolved_preflight.fallback_kind,
         )
     try:
@@ -446,22 +445,18 @@ def run_codex_sol_advisor(
             timeout=SOL_CODEX_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as bind_error:
-        return _reply_fallback(
-            f"{SOL_CODEX_TIMEOUT_REASON}: {bind_error}", is_sol_enabled
-        )
+        return _reply_fallback(f"{SOL_CODEX_TIMEOUT_REASON}: {bind_error}", True)
     except (OSError, subprocess.SubprocessError) as bind_error:
-        return _reply_fallback(
-            f"{SOL_BIND_FAILURE_REASON}: {bind_error}", is_sol_enabled
-        )
+        return _reply_fallback(f"{SOL_BIND_FAILURE_REASON}: {bind_error}", True)
     if completed_process.returncode != 0:
         return _reply_fallback(
             f"{SOL_BIND_FAILURE_REASON}: process exit {completed_process.returncode}",
-            is_sol_enabled,
+            True,
         )
     return parse_codex_jsonl_reply(
         completed_process.stdout,
         existing_session_id=session_id,
-        is_sol_enabled=is_sol_enabled,
+        is_sol_enabled=True,
     )
 
 

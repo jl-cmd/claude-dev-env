@@ -38,10 +38,16 @@ USAGE_PROBE_PATH = (
     / "codex_usage_probe.py"
 )
 WINDOWS_SHIM_PATH = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
-ENABLED_SETTING_BY_NAME = {
-    sol_advisor.SOL_ENV_VAR: "1",
-    sol_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: "codex",
-}
+ENABLED_SETTING_BY_NAME = {sol_advisor.SOL_ENV_VAR: "1"}
+
+
+@pytest.fixture(autouse=True)
+def _codex_on_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sol_advisor.shutil,
+        "which",
+        lambda name: "codex" if name == sol_advisor.CODEX_EXECUTABLE else None,
+    )
 
 
 def _probe_process(
@@ -300,16 +306,9 @@ def test_enable_sol_flag_opens_the_rung_without_an_environment_flag(
 
     def fake_advisor(**kwargs: object) -> object:
         captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
-        return sol_advisor.CodexSolAdvisorReply(
-            session_id=None,
-            guidance=None,
-            successful=False,
-            reason="probe declined",
-            is_fallback=True,
-            signal=None,
-            sol_enabled=True,
-            selected_tier=sol_advisor.ADVISOR_FALLBACK_TIER,
-            outcome=sol_advisor.ADVISOR_FALLBACK_RESULT,
+        return sol_advisor._reply_fallback(
+            "probe declined",
+            True,
             fallback_kind=sol_advisor.SOL_FALLBACK_KIND_DECLINED,
         )
 
