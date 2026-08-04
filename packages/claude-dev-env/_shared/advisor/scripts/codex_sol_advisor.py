@@ -152,9 +152,8 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
     Returns:
         The path to the installed weekly usage probe.
     """
-    resolved_home_directory = Path.home() if home_directory is None else home_directory
     return (
-        resolved_home_directory
+        home_directory
         / CLAUDE_CONFIG_DIRECTORY_NAME
         / "skills"
         / "codex-review"
@@ -204,10 +203,9 @@ def run_sol_preflight(
     Returns:
         The usage-meter eligibility decision and any fallback reason.
     """
-    resolved_probe_path = probe_path
     try:
         completed_process = process_runner(
-            [sys.executable, str(resolved_probe_path)],
+            [sys.executable, str(probe_path)],
             capture_output=True,
             text=True,
             check=False,
@@ -231,7 +229,7 @@ def run_sol_preflight(
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: {parse_reason}", None
             )
-        usage_gate = _load_usage_gate(resolved_probe_path)
+        usage_gate = _load_usage_gate(probe_path)
         if not callable(usage_gate) or percent_left is None:
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
@@ -339,7 +337,7 @@ def parse_codex_jsonl_reply(
         and discovered_session_id != existing_session_id
     ):
         return _reply_fallback(SOL_MISSING_SESSION_REASON, is_sol_enabled)
-    if final_guidance is None or not final_guidance:
+    if not final_guidance:
         return _reply_fallback(SOL_REPLY_FAILURE_REASON, is_sol_enabled)
     guidance_signal = _guidance_signal(final_guidance)
     if guidance_signal is None:
