@@ -2,8 +2,14 @@
 
 Distilled facts from the Anthropic advisor-tool documentation, for the
 Sonnet-executor advisor path and the hand-rolled `/team-advisor` bind. Every
-claim below cites its source page; every verbatim line sits in a fenced
-`text` block.
+source claim below cites its page; section H is repository practice and says
+so.
+
+Consult timing, the hard rule before a first write, and how to weigh the
+advice live in [`docs/references/advisor-tool.md`](../../../docs/references/advisor-tool.md).
+The consult cadence lives in [`SKILL.md`](../SKILL.md). This file carries the
+source facts those two omit: measured effects, Sonnet steering, cost levers,
+failure modes, and what transfers to a hand-rolled bind.
 
 ## Sources
 
@@ -14,59 +20,10 @@ claim below cites its source page; every verbatim line sits in a fenced
 | 3 | [The advisor strategy — blog](https://claude.com/blog/the-advisor-strategy) |
 | 4 | [Best practices for computer and browser use — blog](https://claude.com/blog/best-practices-for-computer-and-browser-use-with-claude) |
 | 5 | [Claude models explained — blog](https://claude.com/blog/claude-models-explained-choosing-the-best-model-for-your-use-case) |
-| 6 | [Claude Platform on AWS — blog](https://claude.com/blog/claude-platform-on-aws) |
-| 7 | [Tool reference](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-reference) |
-| 8 | [Tool use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) |
-| 9 | [Features overview](https://platform.claude.com/docs/en/build-with-claude/overview) |
-| 10 | [Messages API — beta](https://platform.claude.com/docs/en/api/beta/messages) |
-| 11 | [Count tokens — beta](https://platform.claude.com/docs/en/api/beta/messages/count_tokens) |
-| 12 | [Release notes](https://platform.claude.com/docs/en/release-notes/overview) |
-| 13 | [Claude Code settings](https://code.claude.com/docs/en/settings) |
-| 14 | [Claude Code commands](https://code.claude.com/docs/en/commands) |
-| 15 | [CLI reference](https://code.claude.com/docs/en/cli-reference) |
-| 16 | [Model config](https://code.claude.com/docs/en/model-config) |
-| 17 | [Env vars](https://code.claude.com/docs/en/env-vars) |
-| 18 | [Tools reference](https://code.claude.com/docs/en/tools-reference) |
-| 19 | [Feature availability](https://code.claude.com/docs/en/feature-availability) |
-| 20 | [Claude Code changelog](https://code.claude.com/docs/en/changelog) |
+| 6 | [Messages API — beta](https://platform.claude.com/docs/en/api/beta/messages) |
+| 7 | [Claude Code changelog](https://code.claude.com/docs/en/changelog) |
 
-## A. Consult timing
-
-The canonical timing block (source: page 1, "Suggested system prompt for
-coding tasks"):
-
-```text
-Call advisor BEFORE substantive work — before writing, before committing to an
-interpretation, before building on an assumption. If the task requires
-orientation first (finding files, fetching a source, seeing what's there), do
-that, then call advisor. Orientation is not substantive work. Writing,
-editing, and declaring an answer are.
-```
-
-Extra triggers, verbatim from page 1: a task believed complete (make the
-deliverable durable first — write the file, save the result, commit the
-change); a stuck state (errors recurring, an approach not converging, results
-that do not fit); considering a change of approach.
-
-Two-consult source guidance, page 1:
-
-```text
-On tasks longer than a few steps, call advisor at least once before
-committing to an approach and once before declaring done.
-```
-
-Two timings drive the measured gain, page 1 (Best practices):
-
-```text
-1. An early first advisor call, after a few exploratory reads are in the
-transcript. 2. For difficult tasks, a final advisor call after file writes
-and test outputs are in the transcript.
-```
-
-Repository decision: treat this source guidance as an advisory cadence. Aim
-for an early orientation consult and a completion review, reserve a third for
-recovery or reconciliation, and add consults when material new evidence or a
-fork changes the decision. The cadence remains evidence-led.
+## A. Consult timing the canonical rules omit
 
 Planner funnel, page 1:
 
@@ -86,48 +43,18 @@ There is no setting to cap or force advisor calls; if you want Claude to
 consult more or less often during a task, say so in your instructions.
 ```
 
-## B. Treating the advice
+## B. Measured effect of the hard rule
 
-Page 1 and page 2 set the weight the advice carries:
+The rule itself — an advisor call before the first write, edit, or
+state-changing shell call — lives under **Hard rule** in
+[`advisor-tool.md`](../../../docs/references/advisor-tool.md). Page 1 states
+it inside the Haiku and Opus system-prompt blocks and reports its effect:
+the Haiku coding block raises pass rates by roughly 7.5 points on an
+internal coding benchmark. On Opus the same checkpoint raises
+under-calling tasks 7–10 points and holds roughly flat on a mixed workload
+where plan-free tasks over-call.
 
-```text
-Give the advice serious weight. If you follow a step and it fails
-empirically, or you have primary-source evidence that contradicts a specific
-claim (the file says X, the paper states Y), adapt. A passing self-test is
-not evidence the advice is wrong — it's evidence your test doesn't check what
-the advice is checking.
-```
-
-Conflict rule, page 1: do not silently switch; surface the conflict in one
-more advisor call — "I found X, you suggest Y, which constraint breaks the
-tie?"
-
-Claude Code behavior, page 2:
-
-```text
-Claude generally follows the advisor's guidance, but adapts when its own
-evidence contradicts a specific claim... Claude surfaces the conflict rather
-than following the guidance unconditionally.
-```
-
-## C. Hard rule
-
-Page 1 states the checkpoint in the Haiku and Opus system-prompt blocks:
-
-```text
-Hard rule: your first write_file, edit_file, or state-changing bash call on a
-task must be preceded by an advisor call in the same or an earlier turn.
-Read-only orientation commands (ls, cat, grep, find) are not state-changing.
-This is a checkpoint, not a difficulty judgment. It applies to one-line edits
-too.
-```
-
-Measured effect, page 1: the Haiku coding block raises pass rates by roughly
-7.5 points on an internal coding benchmark. On Opus the same checkpoint
-raises under-calling tasks 7–10 points and holds roughly flat on a mixed
-workload where plan-free tasks over-call.
-
-## D. Sonnet-executor facts
+## C. Sonnet-executor facts
 
 Page 1 marks the startup nudge as dead weight on Sonnet:
 
@@ -162,7 +89,7 @@ Page 3 footnotes the benchmark condition: the Sonnet-plus-advisor SWE-bench
 Multilingual run uses the suggested system prompt "with thinking turned
 off" — a consult substitutes for extended thinking in that run.
 
-## E. Benchmarks
+## D. Benchmarks
 
 Page 3 and page 5 report these results:
 
@@ -182,22 +109,18 @@ signal, and the executor resumes. The advisor never calls tools or produces
 user-facing output.
 ```
 
-## F. Cost levers
+## E. Cost levers
 
 Output size is the advisor's largest cost driver; the top-level `max_tokens`
-parameter does not bound it (pages 1, 4, 10). A tool-definition
+parameter does not bound it (pages 1, 4, 6). A tool-definition
 `max_tokens: 2048` cuts mean advisor output roughly 7x with near-zero
 truncation; `1024` cuts roughly 10x and truncates about 10% of calls. The
 server passes the advisor its remaining budget, so the advisor self-shapes
 its reply length.
 
-Brevity line, placed in the user message and addressed to the advisor
-directly:
-
-```text
-(Advisor: please keep your guidance under 80 words — I need a focused
-starting point, not a comprehensive plan.)
-```
+The brevity line belongs in the user message and addresses the advisor
+directly; the wording lives under **Brevity cue** in
+[`advisor-tool.md`](../../../docs/references/advisor-tool.md).
 
 Direct address works because the advisor reads the executor's prompt as
 quoted context: "instructions that address the advisor directly are followed
@@ -218,9 +141,9 @@ misses.
 requires stripping every `advisor_tool_result` block from history, or the API
 returns 400.
 
-## G. Failure modes and API mechanics
+## F. Failure modes and API mechanics
 
-Error codes the advisor call surfaces (pages 1, 10, 13–20): `max_uses_exceeded`,
+Error codes the advisor call surfaces (pages 1, 6): `max_uses_exceeded`,
 `too_many_requests`, `overloaded`, `prompt_too_long`,
 `execution_time_exceeded`, `unavailable`, `model_not_found`.
 
@@ -238,56 +161,47 @@ Fable, Opus 5, and Mythos advisors return `advisor_redacted_result`
 (encrypted, round-trips verbatim). Opus 4.8 and below return plaintext
 `advisor_result`. A native Fable-class advisor's encrypted block carries no
 guidance the client can read; when logging or auditing the guidance matters,
-pick a plaintext-returning advisor instead — the hand-rolled CLI and
-warm-agent paths always yield a readable transcript, an accountability
-advantage worth choosing them for.
+pick a plaintext-returning advisor — the hand-rolled CLI and warm-agent
+paths always yield a readable transcript.
 
 Pairing invariant: "The advisor must be at least as capable as the
 executor." Claude Code enforces the same check per subagent — subagents
 inherit the configured advisor and apply the same pairing check against
 their own model.
 
-Native Claude Code Advisor availability depends on the configured first-party
-API path and its documented disable conditions. This skill deliberately
-selects a custom reproduction path: `team-advisor/SKILL.md` binds a warm
-Agent/SendMessage reviewer or `codex_sol_advisor.py`, forwards a complete first
-packet and later deltas, and keeps the reviewer read-only and reply-only.
-Direct Messages API and Claude Platform on AWS Advisor availability remains
-source context for API consumers; it does not control this skill's bind.
-
 The native advisor is a server tool with no name a permission rule or hook
-matcher can reference — it bypasses hooks. The custom path uses ordinary
-tools, an explicit packet contract, and a mechanically validated bind log.
+matcher can reference, so it bypasses hooks. The bind this skill uses lives
+in [`SKILL.md`](../SKILL.md) **Bind**.
 
-Consults run slow enough to look like stalls: changelog 2.1.214 fixes a
-spurious "check your network" warning that appeared while the advisor was
-thinking.
+Consults run slow enough to look like stalls: changelog 2.1.214 (page 7)
+fixes a spurious "check your network" warning that appeared while the
+advisor was thinking.
 
 Usage accounting: each consult is an `advisor_message` entry in
 `usage.iterations[]` with its own model and token counts, billed at advisor
 rates.
 
-## H. What transfers to the hand-rolled advisor path
+## G. What transfers to the hand-rolled advisor path
 
-The claude-dev-env advisor is a warm agent or CLI session, not the native
-server tool. Three inversions apply:
+The claude-dev-env advisor is a warm agent or CLI session. Three inversions
+apply against the native server tool:
 
 1. **Context forwarding is manual.** The native tool auto-forwards the full
-   transcript. Everything a hand-rolled advisor sees arrives in the consult —
-   the first carries a complete self-contained packet (assignment, desired
-   outcome, constraints and exclusions, actions in order, real output and
-   current state, live decision or blocker, validation evidence, unresolved
-   risks, and load-bearing excerpts); later consults carry only the delta.
+   transcript. Everything a hand-rolled advisor sees arrives in the consult.
+   Build the first packet with
+   [`_shared/advisor/reference/consult-format.md`](../../../_shared/advisor/reference/consult-format.md);
+   later consults carry only the delta.
 2. **Caching becomes prefix stability.** The charter and role text stay
    byte-stable at the top of the consult stream; volatile detail goes last.
 3. **Hooks apply.** Consult payloads travel through ordinary tools, so each
-   payload stays hook-safe.
+   payload stays hook-safe and the bind log is mechanically validated.
 
-## Measuring the advisor's lift
+## H. Measuring the advisor's lift
 
-Benchmark three routes on one representative workload: the executor alone,
-the executor plus advisor, and the strongest model throughout. Route future
-work by measured cost per successful task, not by assumption.
+Repository practice, sourced to no page: benchmark three routes on one
+representative workload — the executor alone, the executor plus advisor, and
+the strongest model throughout. Route future work by measured cost per
+successful task.
 
 Track, per route: completion rate, regression rate, tool calls, tokens by
 tier, and latency.
