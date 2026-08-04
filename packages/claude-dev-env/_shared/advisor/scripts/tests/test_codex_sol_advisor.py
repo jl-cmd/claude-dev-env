@@ -316,7 +316,9 @@ def test_enable_sol_flag_opens_the_rung_without_an_environment_flag(
     monkeypatch.delenv(sol_advisor.SOL_ENV_VAR, raising=False)
     monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
 
-    exit_code = sol_advisor.main(["--bind", "--cwd", ".", "--enable-sol"])
+    exit_code = sol_advisor.main(
+        ["--bind", "--cwd", ".", sol_advisor.SOL_ENABLE_FLAG]
+    )
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 1
