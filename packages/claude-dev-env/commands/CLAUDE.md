@@ -15,6 +15,7 @@ Slash-command definitions installed into `~/.claude/commands/` by `bin/install.m
 | `pr-comments.md` | `/pr-comments` | Fetches and formats PR review comments for response |
 | `review-plan.md` | `/review-plan` | Reviews the current plan packet against code standards |
 | `right-size.md` | `/right-size` | Checks an implementation against the Right-Sized Engineering rules |
+| `sr-loop.md` | `/sr-loop` | Runs the converging cleanup loop: /simplify passes until clean, then a code-review fix pass |
 | `sum.md` | `/sum` | Generates a formatted session summary for quick pickup in a new session |
 
 ## Format
