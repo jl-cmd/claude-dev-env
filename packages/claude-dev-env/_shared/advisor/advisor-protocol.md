@@ -55,8 +55,8 @@ Executors report to the orchestrating session; that session consults the bound a
 ## Model floor
 
 **Claude host:** the advisor's model tier must be at or above the highest tier of any consumer that will reach it. Each consuming skill supplies its own consumer set when computing the floor:
-- `team-advisor`: the sole consumer is the calling session itself, so the floor is just that session's own tier.
-- `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the max of those.
+- `team-advisor`: the sole consumer is the calling session itself, so the floor is the stronger of Opus and that session's own tier.
+- `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the stronger of Opus and the max of those.
 
 Whatever the consumer set, the floor sits at Opus or above — use the stronger of Opus and the strongest consumer tier.
 
