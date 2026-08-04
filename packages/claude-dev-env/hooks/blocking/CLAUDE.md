@@ -123,12 +123,10 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 
 ### The prose-style switch
 
-Five of the hooks above read one shared flag before they block anything:
-`hedging_language_blocker`, `question_to_user_enforcer`,
-`intent_only_ending_blocker`, `plain_language_blocker`, and
-`state_description_blocker`. The flag is `PROSE_STYLE_ENFORCEMENT_ENABLED` in
-`hooks_constants/prose_style_enforcement_constants.py`, and it ships as
-`False`, which leaves all five silent. Set it to `True` to turn them on. See
+Five of the hooks above — `hedging_language_blocker`,
+`question_to_user_enforcer`, `intent_only_ending_blocker`,
+`plain_language_blocker`, and `state_description_blocker` — read the shared
+`PROSE_STYLE_ENFORCEMENT_ENABLED` switch (default off); see
 `docs/references/prose-style-enforcement.md`.
 
 ## Supporting modules

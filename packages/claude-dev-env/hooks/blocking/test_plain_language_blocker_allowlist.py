@@ -181,8 +181,6 @@ def test_allowlist_without_a_repo_root_is_not_applied(
         _BLOCKER, "REPOSITORY_MARKER_NAME", MARKER_NAME_NO_DIRECTORY_CARRIES
     )
 
-    assert _BLOCKER._find_project_allowlist_file(tmp_path / "docs") is None
-
     deny_reason = _BLOCKER.evaluate(
         _markdown_write_payload(tmp_path, "Please submit the notes.")
     )

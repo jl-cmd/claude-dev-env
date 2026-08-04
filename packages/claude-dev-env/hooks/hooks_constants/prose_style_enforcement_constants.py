@@ -16,8 +16,6 @@ When the flag is ``False`` each hook returns before it inspects any text, so it
 writes nothing at all: it neither blocks nor reports.
 """
 
-from __future__ import annotations
-
 PROSE_STYLE_ENFORCEMENT_ENABLED = False
 ALL_PROSE_STYLE_HOOK_MODULE_NAMES = (
     "hedging_language_blocker",
