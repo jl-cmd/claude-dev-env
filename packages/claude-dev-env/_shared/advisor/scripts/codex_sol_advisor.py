@@ -25,7 +25,6 @@ if _scripts_directory_text not in sys.path:
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_CONFIG_FLAG,
     CODEX_EXECUTABLE,
-    CODEX_RESULT,
     CODEX_EXEC_SUBCOMMAND,
     CODEX_JSON_FLAG,
     CODEX_MODEL_FLAG,
@@ -34,15 +33,11 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_REASONING_CONFIG,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
-    CODEX_SOL_MODEL_ID,
     CLAUDE_CONFIG_DIRECTORY_NAME,
-    FABLE_MODEL_TIER,
-    FABLE_RESULT,
     SOL_BIND_FAILURE_REASON,
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
     SOL_ENV_VAR,
-    ALL_SOL_GUIDANCE_SIGNALS,
     SOL_INVALID_SIGNAL_REASON,
     SOL_MALFORMED_JSONL_REASON,
     SOL_MISSING_SESSION_REASON,
@@ -50,9 +45,16 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_PROBE_TIMEOUT_REASON,
     SOL_REPLY_FAILURE_REASON,
     SOL_SESSION_ID_METAVAR,
-    SOL_MODEL_TIER,
     ALL_SOL_TRUTHY_VALUES,
     SOL_USAGE_PROBE_TIMEOUT_SECONDS,
+)
+from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
+    ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_FALLBACK_RESULT,
+    ADVISOR_FALLBACK_TIER,
+    ADVISOR_MODEL_TIER,
+    ALL_ADVISOR_GUIDANCE_SIGNALS,
+    CODEX_BIND_SUCCESS_TOKEN,
 )
 
 
@@ -100,8 +102,8 @@ def _reply_fallback(
         is_fallback=True,
         signal=None,
         sol_enabled=is_sol_enabled,
-        selected_tier=FABLE_MODEL_TIER,
-        outcome=FABLE_RESULT,
+        selected_tier=ADVISOR_FALLBACK_TIER,
+        outcome=ADVISOR_FALLBACK_RESULT,
     )
 
 
@@ -118,8 +120,8 @@ def _reply_success(
         is_fallback=False,
         signal=signal,
         sol_enabled=True,
-        selected_tier=SOL_MODEL_TIER,
-        outcome=CODEX_RESULT,
+        selected_tier=ADVISOR_MODEL_TIER,
+        outcome=CODEX_BIND_SUCCESS_TOKEN,
     )
 
 
@@ -265,7 +267,7 @@ def build_codex_arguments(session_id: str | None = None) -> list[str]:
         CODEX_EXECUTABLE,
         CODEX_EXEC_SUBCOMMAND,
         CODEX_MODEL_FLAG,
-        CODEX_SOL_MODEL_ID,
+        ADVISOR_CODEX_MODEL_ID,
         CODEX_CONFIG_FLAG,
         CODEX_REASONING_CONFIG,
         CODEX_SANDBOX_FLAG,
@@ -284,7 +286,10 @@ def _guidance_signal(guidance: str) -> str | None:
         for each_line in guidance.splitlines()
         if each_line.strip()
     ]
-    if not all_guidance_lines or all_guidance_lines[0] not in ALL_SOL_GUIDANCE_SIGNALS:
+    if (
+        not all_guidance_lines
+        or all_guidance_lines[0] not in ALL_ADVISOR_GUIDANCE_SIGNALS
+    ):
         return None
     return all_guidance_lines[0]
 

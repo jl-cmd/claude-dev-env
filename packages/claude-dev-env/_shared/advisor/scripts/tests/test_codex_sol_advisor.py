@@ -111,8 +111,8 @@ def test_main_serializes_stable_result_field(monkeypatch: pytest.MonkeyPatch, ca
             is_fallback=False,
             signal="PLAN",
             sol_enabled=True,
-            selected_tier="Sol",
-            outcome="codex",
+        selected_tier=sol_advisor.ADVISOR_MODEL_TIER,
+        outcome=sol_advisor.CODEX_BIND_SUCCESS_TOKEN,
         ),
     )
     monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
@@ -131,7 +131,7 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
         "codex",
         "exec",
         "--model",
-        "gpt-5.6-sol",
+        sol_advisor.ADVISOR_CODEX_MODEL_ID,
         "--config",
         'model_reasoning_effort="xhigh"',
         "--sandbox",
@@ -331,8 +331,8 @@ def test_team_advisor_path_preserves_sol_routing_fields() -> None:
 
     assert reply.successful
     assert reply.sol_enabled
-    assert reply.selected_tier == "Sol"
-    assert reply.outcome == "codex"
+    assert reply.selected_tier == sol_advisor.ADVISOR_MODEL_TIER
+    assert reply.outcome == sol_advisor.CODEX_BIND_SUCCESS_TOKEN
     assert reply.signal == "PLAN"
     assert reply.guidance == "PLAN\ninspect"
 
@@ -359,8 +359,8 @@ def test_team_advisor_path_uses_fable_result_when_sol_gate_is_closed() -> None:
     assert not reply.successful
     assert reply.is_fallback
     assert reply.sol_enabled
-    assert reply.selected_tier == "Fable"
-    assert reply.outcome == "fable"
+    assert reply.selected_tier == sol_advisor.ADVISOR_FALLBACK_TIER
+    assert reply.outcome == sol_advisor.ADVISOR_FALLBACK_RESULT
     assert len(calls) == 1
 
 
