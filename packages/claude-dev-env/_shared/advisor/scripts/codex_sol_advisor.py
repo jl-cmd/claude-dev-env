@@ -124,6 +124,12 @@ def _reply_success(
     )
 
 
+def _resolved_setting_by_name(
+    setting_by_name: Mapping[str, str] | None,
+) -> Mapping[str, str]:
+    return os.environ if setting_by_name is None else setting_by_name
+
+
 def is_sol_advisor_enabled(
     setting_by_name: Mapping[str, str] | None,
 ) -> bool:
@@ -135,7 +141,7 @@ def is_sol_advisor_enabled(
     Returns:
         Whether the Sol feature flag contains a recognized truthy value.
     """
-    resolved_setting_by_name = os.environ if setting_by_name is None else setting_by_name
+    resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
     return (
         resolved_setting_by_name.get(SOL_ENV_VAR, "").strip().lower()
         in ALL_SOL_TRUTHY_VALUES
@@ -226,7 +232,6 @@ def run_sol_preflight(
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
             )
-        usage_gate = _load_usage_gate(probe_path)
         if not usage_gate(percent_left):
             return _preflight_fallback(
                 f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
@@ -264,7 +269,7 @@ def resolve_codex_executable(
     Returns:
         An invocable executable name or path, or None when unresolved.
     """
-    resolved_setting_by_name = os.environ if setting_by_name is None else setting_by_name
+    resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
     executable_override = resolved_setting_by_name.get(ADVISOR_CODEX_EXECUTABLE_ENV_VAR, "").strip()
     if executable_override:
         return executable_override
@@ -272,14 +277,14 @@ def resolve_codex_executable(
 
 
 def build_codex_arguments(
+    codex_executable: str,
     session_id: str | None = None,
-    codex_executable: str = CODEX_EXECUTABLE,
 ) -> list[str]:
     """Build the installed CLI's shell-free bind or resume argv.
 
     Args:
-        session_id: Optional existing session to resume.
         codex_executable: Resolved executable name or path to invoke.
+        session_id: Optional existing session to resume.
 
     Returns:
         The shell-free Codex command argument vector.
@@ -404,18 +409,15 @@ def run_codex_sol_advisor(
     is_sol_enabled = is_sol_advisor_enabled(setting_by_name)
     if not is_sol_enabled:
         return _reply_fallback("Sol advisor flag is disabled", False)
+    codex_executable = resolve_codex_executable(setting_by_name)
+    if codex_executable is None:
+        return _reply_fallback(SOL_EXECUTABLE_NOT_FOUND_REASON, is_sol_enabled)
     resolved_preflight = _resolve_sol_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return _reply_fallback(resolved_preflight.reason, is_sol_enabled)
-    codex_executable = resolve_codex_executable(setting_by_name)
-    if codex_executable is None:
-        return _reply_fallback(
-            f"{SOL_EXECUTABLE_NOT_FOUND_REASON}: searched PATH for {CODEX_EXECUTABLE!r}",
-            is_sol_enabled,
-        )
     try:
         completed_process = process_runner(
-            build_codex_arguments(session_id=session_id, codex_executable=codex_executable),
+            build_codex_arguments(codex_executable, session_id=session_id),
             cwd=str(working_directory),
             input=prompt,
             capture_output=True,
