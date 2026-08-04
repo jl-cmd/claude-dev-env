@@ -9,9 +9,8 @@ before matching so exact identifiers and paths are never flagged.
 
 See the plain-language rule for the full guidance this hook enforces.
 
-Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
-(default off). With the switch off ``evaluate`` allows every payload, which
-covers both the standalone script and the in-process dispatcher path.
+Runs only when the shared switch in
+``hooks_constants.prose_style_enforcement_constants`` is on (default off).
 """
 
 import json

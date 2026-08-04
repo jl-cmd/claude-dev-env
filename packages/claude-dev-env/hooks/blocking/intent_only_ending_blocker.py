@@ -8,8 +8,8 @@ agent is forced to do the work now with tool calls, or - when genuinely blocked
 on input only the user can supply - route through AskUserQuestion and end
 cleanly. The rule name is long-horizon-autonomy.
 
-Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
-(default off). With the switch off the hook exits silently and blocks nothing.
+Runs only when the shared switch in
+``hooks_constants.prose_style_enforcement_constants`` is on (default off).
 """
 
 import json
@@ -107,11 +107,7 @@ def find_intent_only_ending(text: str) -> bool:
 
 
 def main() -> None:
-    """Read the stop-hook payload and block turns that end on a promise of undone work.
-
-    Returns at once when the shared prose-style switch is off, so the hook
-    writes nothing and blocks nothing.
-    """
+    """Read the stop-hook payload and block turns that end on a promise of undone work."""
     if not PROSE_STYLE_ENFORCEMENT_ENABLED:
         sys.exit(0)
 

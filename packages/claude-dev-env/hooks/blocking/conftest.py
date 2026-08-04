@@ -18,6 +18,24 @@ from pathlib import Path
 import pytest
 
 _BLOCKING_SOURCE_DIRECTORY = Path(__file__).resolve().parent
+_PROSE_STYLE_SWITCH_MODULE_NAMES = ("plain_language_blocker", "state_description_blocker")
+
+
+@pytest.fixture(autouse=True)
+def switch_prose_style_enforcement_on():
+    """Turn the shared prose-style switch on for every in-process test.
+
+    Patches the switch on each prose-style hook module a test file has already
+    imported, so in-process ``evaluate`` calls exercise the enforcement path.
+    Uses a private ``MonkeyPatch`` context so the shared ``monkeypatch``
+    fixture's setup and teardown order stays untouched for every other test.
+    """
+    with pytest.MonkeyPatch.context() as private_patch:
+        for module_name in _PROSE_STYLE_SWITCH_MODULE_NAMES:
+            hook_module = sys.modules.get(module_name)
+            if hook_module is not None:
+                private_patch.setattr(hook_module, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
+        yield
 _HOOKS_CONSTANTS_SOURCE_DIRECTORY = _BLOCKING_SOURCE_DIRECTORY.parent / "hooks_constants"
 _SUBPROCESS_TIMEOUT_SECONDS = 60
 _MIRRORED_BLOCKING_FILE_NAMES = (

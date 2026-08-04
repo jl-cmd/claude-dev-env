@@ -17,8 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
@@ -44,13 +42,6 @@ _STATE_DESCRIPTION_ALLOW_CONTENT = "# Guide\n\nThe API uses port 8080.\n"
 _STATE_DESCRIPTION_DENY_CONTENT = "# Guide\n\nPreviously the system used port 8080.\n"
 _PLAIN_LANGUAGE_ALLOW_CONTENT = "# Guide\n\nStart the build to make the report.\n"
 _PLAIN_LANGUAGE_DENY_CONTENT = "# Guide\n\nUtilize this to commence the process.\n"
-
-
-@pytest.fixture(autouse=True)
-def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Turn the shared prose-style switch on for every in-process test."""
-    monkeypatch.setattr(plain_language_blocker, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
-    monkeypatch.setattr(state_description_blocker, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
 
 
 def _prose_switch_enabled_program(target_script_path: str) -> str:

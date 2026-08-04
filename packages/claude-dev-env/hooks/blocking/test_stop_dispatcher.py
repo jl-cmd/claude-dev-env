@@ -24,15 +24,16 @@ from stop_dispatcher import dispatch, select_first_block_stdout  # noqa: E402
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "stop_dispatcher.py")
 
 
-def _prose_switch_enabled_program(target_script_path: str) -> str:
-    """Build a launcher that turns the prose-style switch on, then runs a script.
+def _prose_switch_program(target_script_path: str, is_enabled: bool) -> str:
+    """Build a launcher that pins the prose-style switch, then runs a script.
 
     The launcher patches the shared switch module in ``sys.modules`` before the
     target runs, so every hook the dispatcher executes through runpy reads the
-    switch as on.
+    switch as pinned, whatever the shipped constant holds.
 
     Args:
         target_script_path: Absolute path of the script to run as ``__main__``.
+        is_enabled: Value to pin the switch to inside the shared module.
 
     Returns:
         The program text to pass to the interpreter's ``-c`` flag.
@@ -42,34 +43,20 @@ def _prose_switch_enabled_program(target_script_path: str) -> str:
         f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
         f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
         "from hooks_constants import prose_style_enforcement_constants as switch_module;"
-        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = True;"
+        f"switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = {is_enabled};"
         f"sys.argv = [{repr(target_script_path)}];"
         f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
     )
+
+
+def _prose_switch_enabled_program(target_script_path: str) -> str:
+    """Build a launcher that turns the prose-style switch on, then runs a script."""
+    return _prose_switch_program(target_script_path, True)
 
 
 def _prose_switch_disabled_program(target_script_path: str) -> str:
-    """Build a launcher that pins the prose-style switch off, then runs a script.
-
-    The launcher patches the shared switch module in ``sys.modules`` before the
-    target runs, so every hook the dispatcher executes through runpy reads the
-    switch as off whatever the shipped constant holds.
-
-    Args:
-        target_script_path: Absolute path of the script to run as ``__main__``.
-
-    Returns:
-        The program text to pass to the interpreter's ``-c`` flag.
-    """
-    return (
-        "import sys, runpy;"
-        f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
-        f"sys.path.insert(0, {repr(str(_BLOCKING_DIR))});"
-        "from hooks_constants import prose_style_enforcement_constants as switch_module;"
-        "switch_module.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
-        f"sys.argv = [{repr(target_script_path)}];"
-        f"runpy.run_path({repr(target_script_path)}, run_name='__main__')"
-    )
+    """Build a launcher that pins the prose-style switch off, then runs a script."""
+    return _prose_switch_program(target_script_path, False)
 
 
 def _block_json(

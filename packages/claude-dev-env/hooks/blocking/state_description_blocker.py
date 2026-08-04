@@ -7,9 +7,8 @@ documentation should describe what IS, not what WAS or what CHANGED. Inside a
 docstring, a phrase wrapped in double quotes or backticks is a mention rather
 than a use, so quoted spans are stripped before the scan.
 
-Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
-(default off). With the switch off ``evaluate`` allows every write, which
-covers both the standalone script and the in-process dispatcher path.
+Runs only when the shared switch in
+``hooks_constants.prose_style_enforcement_constants`` is on (default off).
 """
 
 import ast

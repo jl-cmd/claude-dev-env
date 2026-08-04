@@ -38,15 +38,6 @@ ENFORCEMENT_ENABLED_PROGRAM = (
     "hook_module.main()"
 )
 
-ENFORCEMENT_DISABLED_PROGRAM = (
-    "import sys;"
-    f"sys.path.insert(0, {repr(_HOOKS_DIR)});"
-    "import hedging_language_blocker as hook_module;"
-    "hook_module.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
-    "hook_module.main()"
-)
-
-
 def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
     """Run the hook with the prose-style switch turned on."""
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
@@ -57,27 +48,6 @@ def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess
         text=True,
         check=False,
     )
-
-
-def run_hook_with_enforcement_switched_off(
-    assistant_message: str,
-) -> subprocess.CompletedProcess:
-    """Run the hook with the prose-style switch pinned off."""
-    hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
-    return subprocess.run(
-        [sys.executable, "-c", ENFORCEMENT_DISABLED_PROGRAM],
-        input=hook_input_payload,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def test_hedging_message_passes_when_the_switch_is_off() -> None:
-    completed_process = run_hook_with_enforcement_switched_off(HEDGING_MESSAGE)
-
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
 
 
 def run_hook_with_patched_search_paths(

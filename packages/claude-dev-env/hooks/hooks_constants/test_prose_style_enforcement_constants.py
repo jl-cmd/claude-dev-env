@@ -15,7 +15,6 @@ hook module before calling ``main()``, so the shipped constant never decides
 the outcome.
 """
 
-import importlib.util
 import json
 import pathlib
 import subprocess
@@ -25,18 +24,14 @@ import pytest
 
 _CONSTANTS_DIRECTORY = pathlib.Path(__file__).parent
 _BLOCKING_DIRECTORY = _CONSTANTS_DIRECTORY.parent / "blocking"
+_HOOKS_ROOT = str(_CONSTANTS_DIRECTORY.parent)
+if _HOOKS_ROOT not in sys.path:
+    sys.path.insert(0, _HOOKS_ROOT)
 
-_constants_spec = importlib.util.spec_from_file_location(
-    "prose_style_enforcement_constants",
-    _CONSTANTS_DIRECTORY / "prose_style_enforcement_constants.py",
+from hooks_constants.prose_style_enforcement_constants import (  # noqa: E402
+    ALL_PROSE_STYLE_HOOK_MODULE_NAMES,
+    PROSE_STYLE_ENFORCEMENT_ENABLED,
 )
-assert _constants_spec is not None
-assert _constants_spec.loader is not None
-_constants_module = importlib.util.module_from_spec(_constants_spec)
-_constants_spec.loader.exec_module(_constants_module)
-
-PROSE_STYLE_ENFORCEMENT_ENABLED = _constants_module.PROSE_STYLE_ENFORCEMENT_ENABLED
-ALL_PROSE_STYLE_HOOK_MODULE_NAMES = _constants_module.ALL_PROSE_STYLE_HOOK_MODULE_NAMES
 
 BLOCK_DECISION = "block"
 DENY_DECISION = "deny"
@@ -126,8 +121,6 @@ def is_blocking_output(completed_process: subprocess.CompletedProcess[str]) -> b
         deny decision, and False for silent or unparsable output.
     """
     stdout_text = completed_process.stdout.strip()
-    if not stdout_text:
-        return False
     try:
         parsed_output = json.loads(stdout_text)
     except json.JSONDecodeError:
@@ -145,14 +138,10 @@ def test_enforcement_defaults_to_off() -> None:
     assert isinstance(PROSE_STYLE_ENFORCEMENT_ENABLED, bool)
 
 
-def test_roster_names_the_five_prose_hooks() -> None:
-    assert set(ALL_PROSE_STYLE_HOOK_MODULE_NAMES) == {
-        "hedging_language_blocker",
-        "question_to_user_enforcer",
-        "intent_only_ending_blocker",
-        "plain_language_blocker",
-        "state_description_blocker",
-    }
+def test_roster_matches_the_hooks_this_suite_exercises() -> None:
+    assert set(ALL_PROSE_STYLE_HOOK_MODULE_NAMES) == set(
+        VIOLATING_PAYLOAD_BY_HOOK_MODULE_NAME
+    )
 
 
 @pytest.mark.parametrize("hook_module_name", ALL_PROSE_STYLE_HOOK_MODULE_NAMES)

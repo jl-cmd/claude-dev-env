@@ -5,8 +5,8 @@ Stop hook that blocks Claude responses containing hedging language.
 Words like "likely", "probably", "presumably" signal unverified claims.
 When detected, Claude is forced to re-check and respond with verified facts.
 
-Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
-(default off). With the switch off the hook exits silently and blocks nothing.
+Runs only when the shared switch in
+``hooks_constants.prose_style_enforcement_constants`` is on (default off).
 """
 
 import json

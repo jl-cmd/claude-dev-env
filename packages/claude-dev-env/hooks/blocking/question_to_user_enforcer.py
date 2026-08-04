@@ -9,8 +9,8 @@ ends with a question mark or contains a recognized preamble phrase
 forced to re-output the response with the ask moved into an AskUserQuestion
 tool call.
 
-Runs only when the shared ``PROSE_STYLE_ENFORCEMENT_ENABLED`` switch is on
-(default off). With the switch off the hook exits silently and blocks nothing.
+Runs only when the shared switch in
+``hooks_constants.prose_style_enforcement_constants`` is on (default off).
 """
 
 import json

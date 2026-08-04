@@ -16,18 +16,11 @@ if _BLOCKING_DIR not in sys.path:
 if _HOOKS_ROOT not in sys.path:
     sys.path.insert(0, _HOOKS_ROOT)
 
-import state_description_blocker  # noqa: E402
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 from state_description_blocker import (  # noqa: E402
     build_deny_payload,
     evaluate,
 )
-
-
-@pytest.fixture(autouse=True)
-def switch_prose_style_enforcement_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Turn the shared prose-style switch on for every in-process test."""
-    monkeypatch.setattr(state_description_blocker, "PROSE_STYLE_ENFORCEMENT_ENABLED", True)
 
 HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "state_description_blocker.py"
@@ -54,15 +47,6 @@ ENFORCEMENT_ENABLED_PROGRAM = (
     "hook_script.main()"
 )
 
-ENFORCEMENT_DISABLED_PROGRAM = (
-    "import sys;"
-    f"sys.path.insert(0, {repr(_BLOCKING_DIR)});"
-    "import state_description_blocker as hook_script;"
-    "hook_script.PROSE_STYLE_ENFORCEMENT_ENABLED = False;"
-    "hook_script.main()"
-)
-
-
 class _RunHook:
     """Helper to test the hook via subprocess with the switch turned on."""
 
@@ -78,28 +62,6 @@ class _RunHook:
 
 
 _run_hook = _RunHook()
-
-
-def test_historical_comment_passes_when_the_switch_is_off() -> None:
-    payload = json.dumps(
-        {
-            "tool_name": "Write",
-            "tool_input": {
-                "file_path": "src/main.py",
-                "content": VIOLATION_INSTEAD_OF_COMMENT,
-            },
-        }
-    )
-    completed_process = subprocess.run(
-        [sys.executable, "-c", ENFORCEMENT_DISABLED_PROGRAM],
-        input=payload,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed_process.returncode == 0
-    assert completed_process.stdout == ""
 
 
 def test_block_clean_python_comment_passes():

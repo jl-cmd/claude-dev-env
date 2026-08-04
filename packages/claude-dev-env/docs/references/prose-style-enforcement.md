@@ -25,9 +25,6 @@ Set it to `True` to turn all five checks back on:
 PROSE_STYLE_ENFORCEMENT_ENABLED = True
 ```
 
-The flag takes the `True` and `False` literals alone. Each hook reads it for
-truthiness, so any other value — the string `"False"` included — counts as on.
-
 ## What off means
 
 Off means silent. Each hook reads the flag before it looks at any text, and
@@ -40,19 +37,10 @@ plain-language, no-historical-clutter, ask-user-question-required, and
 long-horizon-autonomy, and agents still follow them. The flag governs
 mechanical enforcement alone.
 
-## Where each hook reads the flag
+## Coverage
 
-Two of the five run both as a standalone script and in-process through
-`pre_tool_use_dispatcher`, so each reads the flag at the point both paths
-cross:
-
-| Hook | Flag read at |
-|---|---|
-| `hedging_language_blocker` | `main()` |
-| `question_to_user_enforcer` | `main()` |
-| `intent_only_ending_blocker` | `main()` |
-| `plain_language_blocker` | `evaluate()` |
-| `state_description_blocker` | `evaluate()` |
+The two PreToolUse hooks read the flag inside `evaluate()`, so both their
+standalone-script and in-process dispatcher paths obey it.
 
 `ALL_PROSE_STYLE_HOOK_MODULE_NAMES` in the constants module lists the five, and
 `test_prose_style_enforcement_constants.py` walks that roster: it runs each hook
@@ -63,5 +51,4 @@ the same payload with the flag forced off and asserts silence.
 
 `session_handoff_blocker` runs on the same Stop dispatcher and enforces the same
 long-horizon-autonomy rule on reply prose, and it sits outside this switch by
-design: it protects run continuity rather than word choice. Treat this placement
-as provisional pending the owner's confirmation.
+design: it protects run continuity rather than word choice.
