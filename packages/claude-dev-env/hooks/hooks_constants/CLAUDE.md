@@ -11,6 +11,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `ask_user_question_shape.py` | Pure AskUserQuestion lean-block shape analyzer: grades question and option-description prose against shared chat-detail markers and sentence/word caps with no hook I/O |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
 | `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |
+| `beat_sheet_reply_enforcer_constants.py` | Beat-line word cap and line-count cap, the `beat-sheet` skill-install search paths, the `Skill` tool-use transcript-record keys, and the user-facing notice for the beat-sheet reply-shape Stop hook |
 | `blocking_check_limits.py` | Max issue counts and preview lengths for blocking hooks |
 | `bot_mention_comment_blocker_constants.py` | Patterns for detecting bot @-mentions in PR comments |
 | `claude_md_orphan_file_blocker_constants.py` | Table patterns, file extensions, scan budget, and block-message text for the CLAUDE.md orphan-file blocker |
