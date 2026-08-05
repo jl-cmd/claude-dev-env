@@ -16,6 +16,7 @@ and constants-location enforcer rules.
 
 from __future__ import annotations
 
+import argparse
 import http.server
 import json
 import os
@@ -69,15 +70,52 @@ from pr_loop_shared_constants.post_audit_thread_constants import (  # noqa: E402
     SKILL_BUGTEAM,
     STATE_CLEAN,
     STATE_DIRTY,
+    GITHUB_REVIEW_EVENT_APPROVE,
+    GITHUB_REVIEW_EVENT_COMMENT,
+    GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+    HTTP_STATUS_UNPROCESSABLE_ENTITY,
+    REVIEW_REQUEST_FIELD_BODY,
+    REVIEW_REQUEST_FIELD_COMMENTS,
+    REVIEW_REQUEST_FIELD_EVENT,
+    SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN,
+    SELF_APPROVAL_DOWNGRADE_DISCLOSURE_DIRTY,
+    SELF_APPROVAL_DOWNGRADE_STDOUT_MARKER,
+    AUDIT_BODY_SKELETON_CLOSE_MARKER,
+    AUDIT_BODY_SKELETON_OPEN_MARKER,
+    PLACEHOLDER_SKILL,
+    SHORT_SHA_LENGTH,
+    TEMPLATE_FENCE_TOKEN,
 )
 from post_audit_thread import (  # noqa: E402
+    AuditFinding,
+    AuditReviewOutcome,
+    RetryExhaustedError,
+    ReviewerCredentials,
     UserInputError,
+    append_self_approval_disclosure,
+    build_details_block,
+    build_inline_comments_payload,
+    build_review_request_payload,
     build_reviews_endpoint_url,
+    execute_review_post_attempt,
+    extract_audit_body_skeleton,
+    extract_html_url_field,
     fetch_gh_token_for_account,
+    fill_audit_body_skeleton,
     list_authenticated_gh_account_logins,
+    load_audit_body_skeleton,
+    parse_command_line_arguments,
+    parse_findings_json_file,
+    post_audit_review,
+    post_review_with_retries,
     query_active_gh_user_login,
     query_pull_request_author_login,
-    resolve_reviewer_token,
+    resolve_github_token,
+    resolve_reviewer_credentials,
+    review_event_for_state,
+    severity_counts_by_tag,
+    short_commit_sha,
+    skill_display_name,
 )
 
 LIVE_TEST_OWNER = "JonEcho"
@@ -452,11 +490,7 @@ STUB_502_RESPONSE_BODY_BYTES = json.dumps(
     {"message": "stub server: simulated transient 502 for retry test"}
 ).encode("utf-8")
 STUB_200_RESPONSE_BODY_BYTES = json.dumps(
-    {
-        "html_url": (
-            "https://github.com/stub-host/stub-repo/pull/0#pullrequestreview-1"
-        )
-    }
+    {"html_url": ("https://github.com/stub-host/stub-repo/pull/0#pullrequestreview-1")}
 ).encode("utf-8")
 STUB_SERVER_SHUTDOWN_JOIN_TIMEOUT_SECONDS = 5.0
 
@@ -804,9 +838,7 @@ class LivePostAuditThreadTests(unittest.TestCase):
         emitted_html_url = self._run_script_capturing_html_url(
             state_argument=STATE_DIRTY, findings_payload=findings_payload
         )
-        self._assert_review_state_for_url(
-            emitted_html_url, GH_EVENT_CHANGES_REQUESTED
-        )
+        self._assert_review_state_for_url(emitted_html_url, GH_EVENT_CHANGES_REQUESTED)
         review_comments = self._fetch_comments_for_review(emitted_html_url)
         self.assertEqual(
             len(review_comments),
@@ -941,9 +973,7 @@ class LivePostAuditThreadTests(unittest.TestCase):
             os.environ.pop(each_name, None)
         return previous_env_state
 
-    def _restore_auth_env_vars(
-        self, previous_env_state: dict[str, str | None]
-    ) -> None:
+    def _restore_auth_env_vars(self, previous_env_state: dict[str, str | None]) -> None:
         for each_name, prior_value in previous_env_state.items():
             if prior_value is None:
                 os.environ.pop(each_name, None)
@@ -965,7 +995,9 @@ class LivePostAuditThreadTests(unittest.TestCase):
             repo=LIVE_TEST_REPO,
             pr_number=self.pr_number,
         )
-        pr_detail_path = f"repos/{LIVE_TEST_OWNER}/{LIVE_TEST_REPO}/pulls/{self.pr_number}"
+        pr_detail_path = (
+            f"repos/{LIVE_TEST_OWNER}/{LIVE_TEST_REPO}/pulls/{self.pr_number}"
+        )
         pr_detail_object = gh_api_object_json(pr_detail_path)
         user_field_object = pr_detail_object.get("user")
         self.assertIsInstance(user_field_object, dict)
@@ -980,32 +1012,38 @@ class LivePostAuditThreadTests(unittest.TestCase):
         self.assertIn(active_login, all_logins)
         self.assertIn(LIVE_TEST_AUDIT_ACCOUNT_NAME, all_logins)
 
-    def test_fetch_gh_token_for_account_returns_audit_account_cached_token(self) -> None:
+    def test_fetch_gh_token_for_account_returns_audit_account_cached_token(
+        self,
+    ) -> None:
         fetched_token = fetch_gh_token_for_account(LIVE_TEST_AUDIT_ACCOUNT_NAME)
         self.assertEqual(fetched_token, self.audit_account_token)
 
-    def test_resolve_reviewer_token_returns_env_var_when_gh_token_is_set(self) -> None:
+    def test_resolve_reviewer_credentials_returns_env_var_when_gh_token_is_set(
+        self,
+    ) -> None:
         sentinel_env_token = "sentinel-gh-token-from-env-var-precedence-test"
         previous_env_state = self._isolate_auth_env_vars()
         try:
             os.environ[GH_TOKEN_ENV_VAR_NAME] = sentinel_env_token
-            returned_token = resolve_reviewer_token(
+            returned_token = resolve_reviewer_credentials(
                 owner=LIVE_TEST_OWNER,
                 repo=LIVE_TEST_REPO,
                 pr_number=self.pr_number,
-            )
+            ).token
             self.assertEqual(returned_token, sentinel_env_token)
         finally:
             self._restore_auth_env_vars(previous_env_state)
 
-    def test_resolve_reviewer_token_toggles_to_alternate_token_on_self_pr(self) -> None:
+    def test_resolve_reviewer_credentials_toggles_to_alternate_token_on_self_pr(
+        self,
+    ) -> None:
         previous_env_state = self._isolate_auth_env_vars()
         try:
-            returned_token = resolve_reviewer_token(
+            returned_token = resolve_reviewer_credentials(
                 owner=LIVE_TEST_OWNER,
                 repo=LIVE_TEST_REPO,
                 pr_number=self.pr_number,
-            )
+            ).token
             active_login = query_active_gh_user_login()
             pr_author_login = query_pull_request_author_login(
                 owner=LIVE_TEST_OWNER,
@@ -1040,7 +1078,9 @@ class LivePostAuditThreadTests(unittest.TestCase):
         finally:
             self._restore_auth_env_vars(previous_env_state)
 
-    def test_resolve_reviewer_token_honors_bugteam_reviewer_account_pin(self) -> None:
+    def test_resolve_reviewer_credentials_honors_bugteam_reviewer_account_pin(
+        self,
+    ) -> None:
         previous_env_state = self._isolate_auth_env_vars()
         try:
             pr_author_login = query_pull_request_author_login(
@@ -1060,17 +1100,17 @@ class LivePostAuditThreadTests(unittest.TestCase):
             )
             chosen_pin_login = all_alternates_excluding_pr_author[0]
             os.environ[BUGTEAM_REVIEWER_ACCOUNT_ENV_VAR_NAME] = chosen_pin_login
-            returned_token = resolve_reviewer_token(
+            returned_token = resolve_reviewer_credentials(
                 owner=LIVE_TEST_OWNER,
                 repo=LIVE_TEST_REPO,
                 pr_number=self.pr_number,
-            )
+            ).token
             expected_pinned_token = fetch_gh_token_for_account(chosen_pin_login)
             self.assertEqual(returned_token, expected_pinned_token)
         finally:
             self._restore_auth_env_vars(previous_env_state)
 
-    def test_resolve_reviewer_token_error_excludes_pr_author_from_candidate_set(
+    def test_resolve_reviewer_credentials_error_excludes_pr_author_from_candidate_set(
         self,
     ) -> None:
         unauthenticated_account_name = "intentionally-not-authenticated-account-zzz"
@@ -1080,7 +1120,7 @@ class LivePostAuditThreadTests(unittest.TestCase):
                 unauthenticated_account_name
             )
             with self.assertRaises(UserInputError) as raised_context:
-                resolve_reviewer_token(
+                resolve_reviewer_credentials(
                     owner=LIVE_TEST_OWNER,
                     repo=LIVE_TEST_REPO,
                     pr_number=self.pr_number,
@@ -1109,6 +1149,558 @@ class LivePostAuditThreadTests(unittest.TestCase):
             )
         finally:
             self._restore_auth_env_vars(previous_env_state)
+
+
+OFFLINE_DUMMY_TOKEN = "offline-dummy-token"
+OFFLINE_OWNER = "offline-owner"
+OFFLINE_REPO = "offline-repo"
+OFFLINE_PR_NUMBER = 1
+OFFLINE_COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567"
+STUB_OK_REVIEW_HTML_URL = (
+    "https://github.com/offline-owner/offline-repo/pull/1#pullrequestreview-1"
+)
+SELF_APPROVAL_422_MESSAGE = "Can not approve your own pull request"
+MALFORMED_COMMENT_422_TOP_MESSAGE = "Validation Failed"
+MALFORMED_COMMENT_422_DETAIL = "line must be part of the diff"
+POST_AUDIT_THREAD_MODULE_NAME = "post_audit_thread"
+GITHUB_API_BASE_URL_ATTRIBUTE = "GITHUB_API_BASE_URL"
+
+
+class _SequencedReviewsServer(http.server.HTTPServer):
+    """Serves a fixed response sequence and records each POST's JSON payload."""
+
+    all_canned_responses: list[tuple[int, bytes]]
+    next_response_index: int
+    all_recorded_payloads: list[dict[str, object]]
+
+
+class _SequencedReviewsHandler(http.server.BaseHTTPRequestHandler):
+    """Records the POST body, then serves the next canned response in order."""
+
+    def do_POST(self) -> None:
+        owning_server = self.server
+        if not isinstance(owning_server, _SequencedReviewsServer):
+            raise AssertionError("handler bound to a non-sequenced server")
+        content_length = int(self.headers.get(STUB_RESPONSE_HEADER_CONTENT_LENGTH, "0"))
+        parsed_body: object = json.loads(
+            self.rfile.read(content_length).decode("utf-8")
+        )
+        if isinstance(parsed_body, dict):
+            owning_server.all_recorded_payloads.append(parsed_body)
+        response_index = min(
+            owning_server.next_response_index,
+            len(owning_server.all_canned_responses) - 1,
+        )
+        owning_server.next_response_index += 1
+        response_status, response_body_bytes = owning_server.all_canned_responses[
+            response_index
+        ]
+        self.send_response(response_status)
+        self.send_header(
+            STUB_RESPONSE_HEADER_CONTENT_TYPE, STUB_RESPONSE_CONTENT_TYPE_VALUE
+        )
+        self.send_header(
+            STUB_RESPONSE_HEADER_CONTENT_LENGTH, str(len(response_body_bytes))
+        )
+        self.end_headers()
+        self.wfile.write(response_body_bytes)
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+def _json_response_bytes(response_payload: dict[str, object]) -> bytes:
+    return json.dumps(response_payload).encode("utf-8")
+
+
+def _ok_review_response() -> tuple[int, bytes]:
+    return STUB_HTTP_STATUS_OK, _json_response_bytes(
+        {"html_url": STUB_OK_REVIEW_HTML_URL}
+    )
+
+
+def _self_approval_422_response() -> tuple[int, bytes]:
+    return HTTP_STATUS_UNPROCESSABLE_ENTITY, _json_response_bytes(
+        {"message": SELF_APPROVAL_422_MESSAGE}
+    )
+
+
+def _malformed_comment_422_response() -> tuple[int, bytes]:
+    return HTTP_STATUS_UNPROCESSABLE_ENTITY, _json_response_bytes(
+        {
+            "message": MALFORMED_COMMENT_422_TOP_MESSAGE,
+            "errors": [{"message": MALFORMED_COMMENT_422_DETAIL}],
+        }
+    )
+
+
+def _bad_gateway_response() -> tuple[int, bytes]:
+    return STUB_HTTP_STATUS_BAD_GATEWAY, _json_response_bytes(
+        {"message": "stub simulated transient 502"}
+    )
+
+
+def _offline_findings_payload() -> list[dict[str, object]]:
+    return [
+        {
+            JSON_FIELD_PATH: "offline-fixture.md",
+            JSON_FIELD_LINE: 1,
+            JSON_FIELD_SIDE: INLINE_COMMENT_SIDE_RIGHT,
+            JSON_FIELD_SEVERITY: SEVERITY_TAG_P0,
+            JSON_FIELD_DESCRIPTION: "Offline finding one.",
+            JSON_FIELD_FIX_SUMMARY: "Offline fix one.",
+        }
+    ]
+
+
+def _offline_namespace(state_argument: str, findings_path: Path) -> argparse.Namespace:
+    return argparse.Namespace(
+        skill=SKILL_BUGTEAM,
+        owner=OFFLINE_OWNER,
+        repo=OFFLINE_REPO,
+        pr_number=OFFLINE_PR_NUMBER,
+        commit=OFFLINE_COMMIT_SHA,
+        state=state_argument,
+        findings_json=findings_path,
+    )
+
+
+def _restore_env_var(env_var_name: str, previous_value: str | None) -> None:
+    if previous_value is None:
+        os.environ.pop(env_var_name, None)
+    else:
+        os.environ[env_var_name] = previous_value
+
+
+def _payload_field_text(payload: dict[str, object], field_name: str) -> str:
+    field_value = payload[field_name]
+    if not isinstance(field_value, str):
+        raise AssertionError(
+            f"expected str for {field_name!r}, got {type(field_value).__name__}"
+        )
+    return field_value
+
+
+def _call_post_audit_review_capturing(
+    parsed_arguments: argparse.Namespace,
+) -> tuple[AuditReviewOutcome | None, BaseException | None]:
+    try:
+        return post_audit_review(parsed_arguments), None
+    except (UserInputError, RetryExhaustedError) as raised_error:
+        return None, raised_error
+
+
+def spawn_sequenced_reviews_server(
+    all_canned_responses: list[tuple[int, bytes]],
+) -> tuple[_SequencedReviewsServer, threading.Thread]:
+    stub_server = _SequencedReviewsServer(
+        (STUB_SERVER_HOST, STUB_SERVER_PORT_DYNAMIC), _SequencedReviewsHandler
+    )
+    stub_server.all_canned_responses = list(all_canned_responses)
+    stub_server.next_response_index = 0
+    stub_server.all_recorded_payloads = []
+    stub_thread = threading.Thread(target=stub_server.serve_forever, daemon=True)
+    stub_thread.start()
+    return stub_server, stub_thread
+
+
+def _run_review_capturing(
+    state_argument: str,
+    findings_payload: list[dict[str, object]],
+    all_canned_responses: list[tuple[int, bytes]],
+) -> tuple[AuditReviewOutcome | None, BaseException | None, _SequencedReviewsServer]:
+    findings_path = write_findings_json(findings_payload)
+    stub_server, stub_thread = spawn_sequenced_reviews_server(all_canned_responses)
+    post_audit_module = sys.modules[POST_AUDIT_THREAD_MODULE_NAME]
+    previous_base_url: str = getattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE)
+    previous_token = os.environ.get(GH_TOKEN_ENV_VAR_NAME)
+    stub_base_url = stub_reviews_server_base_url(stub_server)
+    try:
+        setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, stub_base_url)
+        os.environ[GH_TOKEN_ENV_VAR_NAME] = OFFLINE_DUMMY_TOKEN
+        captured_outcome, captured_error = _call_post_audit_review_capturing(
+            _offline_namespace(state_argument, findings_path)
+        )
+    finally:
+        setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, previous_base_url)
+        _restore_env_var(GH_TOKEN_ENV_VAR_NAME, previous_token)
+        shutdown_stub_reviews_server(stub_server, stub_thread)
+        findings_path.unlink(missing_ok=True)
+    return captured_outcome, captured_error, stub_server
+
+
+class OfflinePostAuditThreadDowngradeTests(unittest.TestCase):
+    """Offline coverage of the self-approval COMMENT downgrade via a localhost stub.
+
+    Each test drives the real ``post_audit_thread`` pipeline against a sequenced
+    localhost stub, with ``GH_TOKEN`` set so token resolution short-circuits and
+    the 422 self-approval path runs through the real ``urlopen``.
+    """
+
+    def test_review_event_for_state_maps_state_and_downgrade(self) -> None:
+        self.assertEqual(
+            review_event_for_state(STATE_CLEAN, False), GITHUB_REVIEW_EVENT_APPROVE
+        )
+        self.assertEqual(
+            review_event_for_state(STATE_DIRTY, False),
+            GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+        )
+        self.assertEqual(
+            review_event_for_state(STATE_CLEAN, True), GITHUB_REVIEW_EVENT_COMMENT
+        )
+        self.assertEqual(
+            review_event_for_state(STATE_DIRTY, True), GITHUB_REVIEW_EVENT_COMMENT
+        )
+
+    def test_build_review_request_payload_downgrade_sets_comment_event(self) -> None:
+        request_payload = build_review_request_payload(
+            state_argument=STATE_CLEAN,
+            commit_sha=OFFLINE_COMMIT_SHA,
+            review_body_text="review body",
+            all_inline_comments=[],
+            did_downgrade=True,
+        )
+        self.assertEqual(
+            request_payload[REVIEW_REQUEST_FIELD_EVENT], GITHUB_REVIEW_EVENT_COMMENT
+        )
+        self.assertEqual(request_payload[REVIEW_REQUEST_FIELD_BODY], "review body")
+
+    def test_append_disclosure_keeps_first_line_and_adds_clean_sentence(self) -> None:
+        original_body = "**Bugteam audit completed** —— Clean — no findings\n\nbody"
+        appended_body = append_self_approval_disclosure(original_body, STATE_CLEAN)
+        self.assertEqual(appended_body.splitlines()[0], original_body.splitlines()[0])
+        self.assertTrue(
+            appended_body.endswith(SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN)
+        )
+
+    def test_env_token_resolves_credentials_without_downgrade(self) -> None:
+        previous_token = os.environ.get(GH_TOKEN_ENV_VAR_NAME)
+        try:
+            os.environ[GH_TOKEN_ENV_VAR_NAME] = OFFLINE_DUMMY_TOKEN
+            credentials = resolve_reviewer_credentials(
+                owner=OFFLINE_OWNER, repo=OFFLINE_REPO, pr_number=OFFLINE_PR_NUMBER
+            )
+        finally:
+            _restore_env_var(GH_TOKEN_ENV_VAR_NAME, previous_token)
+        self.assertIsInstance(credentials, ReviewerCredentials)
+        self.assertEqual(credentials.token, OFFLINE_DUMMY_TOKEN)
+        self.assertFalse(credentials.did_downgrade)
+
+    def test_clean_self_pr_422_downgrades_to_comment_event(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN, [], [_self_approval_422_response(), _ok_review_response()]
+        )
+        self.assertIsNone(error)
+        assert isinstance(outcome, AuditReviewOutcome)
+        self.assertIsInstance(outcome, AuditReviewOutcome)
+        self.assertTrue(outcome.did_downgrade)
+        self.assertEqual(len(stub_server.all_recorded_payloads), 2)
+        first_payload = stub_server.all_recorded_payloads[0]
+        downgrade_payload = stub_server.all_recorded_payloads[1]
+        self.assertEqual(
+            first_payload[REVIEW_REQUEST_FIELD_EVENT], GITHUB_REVIEW_EVENT_APPROVE
+        )
+        self.assertEqual(
+            downgrade_payload[REVIEW_REQUEST_FIELD_EVENT], GITHUB_REVIEW_EVENT_COMMENT
+        )
+
+    def test_clean_downgrade_appends_disclosure_below_the_first_line(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN, [], [_self_approval_422_response(), _ok_review_response()]
+        )
+        self.assertIsNone(error)
+        first_body = _payload_field_text(
+            stub_server.all_recorded_payloads[0], REVIEW_REQUEST_FIELD_BODY
+        )
+        downgrade_body = _payload_field_text(
+            stub_server.all_recorded_payloads[1], REVIEW_REQUEST_FIELD_BODY
+        )
+        self.assertEqual(downgrade_body.splitlines()[0], first_body.splitlines()[0])
+        self.assertTrue(
+            downgrade_body.endswith(SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN)
+        )
+
+    def test_dirty_self_pr_422_downgrades_to_comment_with_findings(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_DIRTY,
+            _offline_findings_payload(),
+            [_self_approval_422_response(), _ok_review_response()],
+        )
+        self.assertIsNone(error)
+        assert isinstance(outcome, AuditReviewOutcome)
+        self.assertTrue(outcome.did_downgrade)
+        downgrade_payload = stub_server.all_recorded_payloads[1]
+        self.assertEqual(
+            downgrade_payload[REVIEW_REQUEST_FIELD_EVENT], GITHUB_REVIEW_EVENT_COMMENT
+        )
+        downgrade_body = _payload_field_text(
+            downgrade_payload, REVIEW_REQUEST_FIELD_BODY
+        )
+        self.assertIn(SELF_APPROVAL_DOWNGRADE_DISCLOSURE_DIRTY, downgrade_body)
+        all_inline_comments = downgrade_payload[REVIEW_REQUEST_FIELD_COMMENTS]
+        self.assertIsInstance(all_inline_comments, list)
+        assert isinstance(all_inline_comments, list)
+        self.assertEqual(len(all_inline_comments), 1)
+
+    def test_non_downgrade_clean_posts_approve_without_disclosure(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN, [], [_ok_review_response()]
+        )
+        self.assertIsNone(error)
+        assert isinstance(outcome, AuditReviewOutcome)
+        self.assertFalse(outcome.did_downgrade)
+        self.assertEqual(len(stub_server.all_recorded_payloads), 1)
+        only_payload = stub_server.all_recorded_payloads[0]
+        self.assertEqual(
+            only_payload[REVIEW_REQUEST_FIELD_EVENT], GITHUB_REVIEW_EVENT_APPROVE
+        )
+        approve_body = _payload_field_text(only_payload, REVIEW_REQUEST_FIELD_BODY)
+        self.assertNotIn(SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN, approve_body)
+
+    def test_self_approval_422_downgrades_once_without_laddering(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN, [], [_self_approval_422_response(), _ok_review_response()]
+        )
+        self.assertIsNone(error)
+        assert isinstance(outcome, AuditReviewOutcome)
+        self.assertTrue(outcome.did_downgrade)
+        self.assertEqual(len(stub_server.all_recorded_payloads), 2)
+
+    def test_malformed_comment_422_raises_without_downgrade_or_retry(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN,
+            [],
+            [_malformed_comment_422_response(), _ok_review_response()],
+        )
+        self.assertIsNone(outcome)
+        self.assertIsInstance(error, RetryExhaustedError)
+        self.assertEqual(len(stub_server.all_recorded_payloads), 1)
+        self.assertIn(MALFORMED_COMMENT_422_DETAIL, str(error))
+
+    def test_five_hundred_response_still_ladders_before_success(self) -> None:
+        outcome, error, stub_server = _run_review_capturing(
+            STATE_CLEAN, [], [_bad_gateway_response(), _ok_review_response()]
+        )
+        self.assertIsNone(error)
+        assert isinstance(outcome, AuditReviewOutcome)
+        self.assertFalse(outcome.did_downgrade)
+        self.assertEqual(len(stub_server.all_recorded_payloads), 2)
+
+    def test_post_review_with_retries_returns_posted_review_on_success(self) -> None:
+        stub_server, stub_thread = spawn_sequenced_reviews_server(
+            [_ok_review_response()]
+        )
+        post_audit_module = sys.modules[POST_AUDIT_THREAD_MODULE_NAME]
+        previous_base_url: str = getattr(
+            post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE
+        )
+        stub_base_url = stub_reviews_server_base_url(stub_server)
+        try:
+            setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, stub_base_url)
+            endpoint_url = build_reviews_endpoint_url(
+                OFFLINE_OWNER, OFFLINE_REPO, OFFLINE_PR_NUMBER
+            )
+            posted_review = post_review_with_retries(
+                endpoint_url,
+                OFFLINE_DUMMY_TOKEN,
+                {},
+                should_downgrade_on_self_approval=False,
+            )
+        finally:
+            setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, previous_base_url)
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+        self.assertEqual(posted_review.html_url, STUB_OK_REVIEW_HTML_URL)
+
+    def _invoke_main_against_stub(
+        self,
+        state_argument: str,
+        all_canned_responses: list[tuple[int, bytes]],
+    ) -> subprocess.CompletedProcess[str]:
+        findings_path = write_findings_json([])
+        stub_server, stub_thread = spawn_sequenced_reviews_server(all_canned_responses)
+        try:
+            completion = invoke_post_audit_thread_with_url_override(
+                pr_number=OFFLINE_PR_NUMBER,
+                head_sha=OFFLINE_COMMIT_SHA,
+                state_argument=state_argument,
+                findings_json_path=findings_path,
+                audit_token=OFFLINE_DUMMY_TOKEN,
+                overridden_base_url=stub_reviews_server_base_url(stub_server),
+            )
+        finally:
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+            findings_path.unlink(missing_ok=True)
+        return completion
+
+    def test_main_stdout_is_one_line_without_downgrade(self) -> None:
+        completion = self._invoke_main_against_stub(
+            STATE_CLEAN, [_ok_review_response()]
+        )
+        self.assertEqual(completion.returncode, EXIT_CODE_SUCCESS)
+        self.assertEqual(len(completion.stdout.strip().splitlines()), 1)
+
+    def test_main_stdout_adds_marker_line_on_downgrade(self) -> None:
+        completion = self._invoke_main_against_stub(
+            STATE_CLEAN, [_self_approval_422_response(), _ok_review_response()]
+        )
+        self.assertEqual(completion.returncode, EXIT_CODE_SUCCESS)
+        all_stdout_lines = completion.stdout.strip().splitlines()
+        self.assertEqual(len(all_stdout_lines), 2)
+        self.assertEqual(all_stdout_lines[1], SELF_APPROVAL_DOWNGRADE_STDOUT_MARKER)
+
+
+def _two_severity_findings() -> list[AuditFinding]:
+    return [
+        AuditFinding(
+            path="alpha.md",
+            line=1,
+            side=INLINE_COMMENT_SIDE_RIGHT,
+            severity=SEVERITY_TAG_P0,
+            description="Finding alpha.",
+            fix_summary="Fix alpha.",
+        ),
+        AuditFinding(
+            path="beta.md",
+            line=2,
+            side=INLINE_COMMENT_SIDE_RIGHT,
+            severity=SEVERITY_TAG_P1,
+            description="Finding beta.",
+            fix_summary="Fix beta.",
+        ),
+    ]
+
+
+class PublicFunctionCoverageTests(unittest.TestCase):
+    """Behavioral coverage for the remaining public helpers of post_audit_thread."""
+
+    def test_parse_command_line_arguments_binds_every_flag(self) -> None:
+        parsed_arguments = parse_command_line_arguments(
+            [
+                CLI_FLAG_SKILL,
+                SKILL_BUGTEAM,
+                CLI_FLAG_OWNER,
+                OFFLINE_OWNER,
+                CLI_FLAG_REPO,
+                OFFLINE_REPO,
+                CLI_FLAG_PR_NUMBER,
+                str(OFFLINE_PR_NUMBER),
+                CLI_FLAG_COMMIT,
+                OFFLINE_COMMIT_SHA,
+                CLI_FLAG_STATE,
+                STATE_CLEAN,
+                CLI_FLAG_FINDINGS_JSON,
+                "findings.json",
+            ]
+        )
+        self.assertEqual(parsed_arguments.skill, SKILL_BUGTEAM)
+        self.assertEqual(parsed_arguments.pr_number, OFFLINE_PR_NUMBER)
+        self.assertEqual(parsed_arguments.state, STATE_CLEAN)
+
+    def test_parse_findings_json_file_reads_findings_and_empty_array(self) -> None:
+        findings_path = write_findings_json(_offline_findings_payload())
+        empty_path = write_findings_json([])
+        try:
+            all_findings = parse_findings_json_file(findings_path)
+            no_findings = parse_findings_json_file(empty_path)
+        finally:
+            findings_path.unlink(missing_ok=True)
+            empty_path.unlink(missing_ok=True)
+        self.assertEqual(len(all_findings), 1)
+        self.assertIsInstance(all_findings[0], AuditFinding)
+        self.assertEqual(all_findings[0].path, "offline-fixture.md")
+        self.assertEqual(no_findings, [])
+
+    def test_extract_audit_body_skeleton_returns_text_between_markers(self) -> None:
+        skeleton_text = "body <Skill> line"
+        template_markdown = (
+            f"intro\n{AUDIT_BODY_SKELETON_OPEN_MARKER}\n"
+            f"{TEMPLATE_FENCE_TOKEN}\n{skeleton_text}\n{TEMPLATE_FENCE_TOKEN}\n"
+            f"{AUDIT_BODY_SKELETON_CLOSE_MARKER}\nrest"
+        )
+        self.assertEqual(extract_audit_body_skeleton(template_markdown), skeleton_text)
+
+    def test_load_audit_body_skeleton_reads_the_shipped_template(self) -> None:
+        loaded_skeleton = load_audit_body_skeleton()
+        self.assertIn(PLACEHOLDER_SKILL, loaded_skeleton)
+        self.assertTrue(loaded_skeleton.strip())
+
+    def test_short_commit_sha_truncates_to_the_short_length(self) -> None:
+        shortened = short_commit_sha(OFFLINE_COMMIT_SHA)
+        self.assertEqual(len(shortened), SHORT_SHA_LENGTH)
+        self.assertTrue(OFFLINE_COMMIT_SHA.startswith(shortened))
+
+    def test_skill_display_name_title_cases_the_skill(self) -> None:
+        self.assertEqual(skill_display_name(SKILL_BUGTEAM), "Bugteam")
+
+    def test_severity_counts_by_tag_tallies_each_supported_tag(self) -> None:
+        counts_by_tag = severity_counts_by_tag(_two_severity_findings())
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P0], 1)
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P1], 1)
+        self.assertEqual(counts_by_tag[SEVERITY_TAG_P2], 0)
+
+    def test_build_details_block_renders_bullets_and_empties_on_no_findings(
+        self,
+    ) -> None:
+        details_markdown = build_details_block(_two_severity_findings())
+        self.assertIn("alpha.md", details_markdown)
+        self.assertIn("<details>", details_markdown)
+        self.assertEqual(build_details_block([]), "")
+
+    def test_fill_audit_body_skeleton_substitutes_the_skill_placeholder(self) -> None:
+        filled_body = fill_audit_body_skeleton(
+            skeleton_text=f"skill: {PLACEHOLDER_SKILL}",
+            skill_argument=SKILL_BUGTEAM,
+            state_argument=STATE_CLEAN,
+            commit_sha=OFFLINE_COMMIT_SHA,
+            all_findings=[],
+        )
+        self.assertIn("Bugteam", filled_body)
+        self.assertNotIn(PLACEHOLDER_SKILL, filled_body)
+
+    def test_build_inline_comments_payload_maps_each_finding(self) -> None:
+        all_comments = build_inline_comments_payload(
+            SKILL_BUGTEAM, _two_severity_findings()
+        )
+        self.assertEqual(len(all_comments), 2)
+        self.assertEqual(all_comments[0]["path"], "alpha.md")
+        self.assertEqual(all_comments[0]["line"], 1)
+        self.assertEqual(all_comments[0]["side"], INLINE_COMMENT_SIDE_RIGHT)
+
+    def test_resolve_github_token_returns_the_env_token(self) -> None:
+        previous_token = os.environ.get(GH_TOKEN_ENV_VAR_NAME)
+        try:
+            os.environ[GH_TOKEN_ENV_VAR_NAME] = OFFLINE_DUMMY_TOKEN
+            resolved_token = resolve_github_token()
+        finally:
+            _restore_env_var(GH_TOKEN_ENV_VAR_NAME, previous_token)
+        self.assertEqual(resolved_token, OFFLINE_DUMMY_TOKEN)
+
+    def test_execute_review_post_attempt_returns_status_and_body(self) -> None:
+        stub_server, stub_thread = spawn_sequenced_reviews_server(
+            [_ok_review_response()]
+        )
+        post_audit_module = sys.modules[POST_AUDIT_THREAD_MODULE_NAME]
+        previous_base_url: str = getattr(
+            post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE
+        )
+        stub_base_url = stub_reviews_server_base_url(stub_server)
+        try:
+            setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, stub_base_url)
+            endpoint_url = build_reviews_endpoint_url(
+                OFFLINE_OWNER, OFFLINE_REPO, OFFLINE_PR_NUMBER
+            )
+            status_code, response_text = execute_review_post_attempt(
+                endpoint_url, OFFLINE_DUMMY_TOKEN, {}
+            )
+        finally:
+            setattr(post_audit_module, GITHUB_API_BASE_URL_ATTRIBUTE, previous_base_url)
+            shutdown_stub_reviews_server(stub_server, stub_thread)
+        self.assertEqual(status_code, STUB_HTTP_STATUS_OK)
+        self.assertIn(STUB_OK_REVIEW_HTML_URL, response_text)
+
+    def test_extract_html_url_field_reads_the_html_url(self) -> None:
+        response_text = json.dumps({"html_url": STUB_OK_REVIEW_HTML_URL})
+        self.assertEqual(extract_html_url_field(response_text), STUB_OK_REVIEW_HTML_URL)
 
 
 if __name__ == "__main__":
