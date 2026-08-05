@@ -1,7 +1,8 @@
 """Constants for the TDD-enforcer hook and its decomposed parts modules.
 
 Centralizes the freshness window, the ancestor-walk limit, the git-tracking
-command tokens, the source-file extension sets, and the join separator.
+command tokens, the source-file extension sets, the split-test-family naming
+pieces, and the join separator.
 """
 
 from __future__ import annotations
@@ -13,6 +14,10 @@ GIT_EXECUTABLE_NAME: str = "git"
 GIT_LS_FILES_SUBCOMMAND: str = "ls-files"
 GIT_PATHSPEC_SEPARATOR: str = "--"
 PYTHON_SOURCE_EXTENSION: str = ".py"
+TEST_FILE_NAME_PREFIX: str = "test_"
+SPLIT_TEST_FAMILY_GLOB_SUFFIX: str = "_*.py"
+SPLIT_TEST_FAMILY_ANCHOR_STEM: str = "code_rules_enforcer"
+SPLIT_MODULE_STEM_PREFIX: str = "code_rules_"
 ENTRY_HOOK_FILE_NAME: str = "tdd_enforcer.py"
 NEWLINE_JOIN_SEPARATOR: str = "\n"
 ALL_PRODUCTION_EXTENSIONS: frozenset[str] = frozenset({".py", ".ts", ".tsx", ".js", ".jsx"})
