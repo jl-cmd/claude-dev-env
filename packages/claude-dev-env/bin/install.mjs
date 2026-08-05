@@ -103,8 +103,24 @@ export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     MANAGED_HOOKS_DIRECTORY_NAME,
 ];
 
-const SKILL_MANIFEST_FILENAME = 'SKILL.md';
 const NEVER_PRUNED_SKILL_DIRECTORIES = new Set(['_shared']);
+
+/**
+ * Skill-root directory names that stay out of `manifest.skills`.
+ *
+ * Every other directory the copy loop writes is recorded, so the manifest names
+ * what landed on disk and the next install's prune can retire a directory the
+ * package stops shipping. Two families are held back. `_shared` is the shared
+ * body every skill reads rather than a skill of its own, and
+ * `pruneRetiredSkills` never moves it, so recording it would add a name no prune
+ * can ever act on. The skipped source entries are tool caches — `__pycache__`
+ * and the ruff, pytest, and mypy caches — that the source walk already refuses
+ * to copy, so no installed directory answers to those names.
+ */
+const MANIFEST_EXCLUDED_SKILL_DIRECTORIES = new Set([
+    ...NEVER_PRUNED_SKILL_DIRECTORIES,
+    ...SKIPPED_SOURCE_ENTRY_NAMES,
+]);
 const PRUNED_SKILLS_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
@@ -1903,7 +1919,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     let skillsCreated = 0;
     let skillsUpdated = 0;
     const skillPaths = [];
-    const installedSkillNames = new Set();
+    const manifestRecordedSkillNames = new Set();
     const copiedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
         const skillsSource = join(sourceRoot, MANAGED_SKILLS_DIRECTORY_NAME);
@@ -1918,8 +1934,8 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             skillsUpdated += stats.updated;
             skillPaths.push(...stats.paths);
             copiedSkillNames.add(skillDir.name);
-            if (existsSync(join(skillSourceDirectory, SKILL_MANIFEST_FILENAME))) {
-                installedSkillNames.add(skillDir.name);
+            if (!MANIFEST_EXCLUDED_SKILL_DIRECTORIES.has(skillDir.name)) {
+                manifestRecordedSkillNames.add(skillDir.name);
             }
         }
     }
@@ -2058,8 +2074,8 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         }
     }
     const manifestSkillNames = didPruneFinish
-        ? [...installedSkillNames].sort()
-        : unionOfSkillNames(priorManifestSkills || [], [...installedSkillNames]).sort();
+        ? [...manifestRecordedSkillNames].sort()
+        : unionOfSkillNames(priorManifestSkills || [], [...manifestRecordedSkillNames]).sort();
     const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
