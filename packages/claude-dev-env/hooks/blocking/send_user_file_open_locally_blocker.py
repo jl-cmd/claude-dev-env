@@ -3,7 +3,7 @@
 
 SendUserFile attaches a file to the session. While the user is at the terminal
 (status "normal" or unset) an attach does not let them see the file — it must
-open on screen in its own viewer via Show-Asset.ps1. The one attach allowed
+open on screen in its native Windows app. The one attach allowed
 through is an away-from-desk phone push (status "proactive").
 """
 
