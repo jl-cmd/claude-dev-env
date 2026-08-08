@@ -8,4 +8,4 @@ registered under `hooks` in `.claude/settings.json`.
 | File | Role |
 |---|---|
 | `session_start_refresh.py` | SessionStart hook: in a cloud session, compares the installed claude-dev-env manifest version against the npm registry and reinstalls on a difference. Fail-open — every failure path exits 0. |
-| `config/` | Constants package for these hooks (see its own `CLAUDE.md`). |
+| `config/` | Constants package for these hooks. Its `__init__.py` declares a regular package so it wins `config` resolution on `sys.path` over any other `config` package. |

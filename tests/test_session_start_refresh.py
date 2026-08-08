@@ -1,10 +1,12 @@
 """Behavior checks for the cloud SessionStart refresh hook.
 
-Each check runs `.claude/hooks/session_start_refresh.py` as a real subprocess
+Six checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
 against a sandbox home directory, with fake `npm` and `npx` executables on
 `PATH` that record their arguments to a log file. The assertions read that log:
 a refresh run shows an `npx -y claude-dev-env@<version>` line, a quiet run
-shows none.
+shows none. Two static checks bind the `.claude/settings.json` registration to
+the hook: the registered command names the script on disk, and the probe and
+install budgets stay inside the registered timeout.
 """
 
 import importlib.util
@@ -37,7 +39,8 @@ def _refresh_constants() -> ModuleType:
     return module
 
 
-MANIFEST_FILE_NAME: str = _refresh_constants().MANIFEST_FILE_NAME
+REFRESH_CONSTANTS = _refresh_constants()
+MANIFEST_FILE_NAME: str = REFRESH_CONSTANTS.MANIFEST_FILE_NAME
 
 
 def _session_start_registration() -> dict[str, object]:
@@ -49,19 +52,22 @@ def _session_start_registration() -> dict[str, object]:
     return entry
 
 
+SESSION_START_REGISTRATION = _session_start_registration()
+
+
 def should_register_a_hook_command_that_names_the_existing_script() -> None:
-    command = _session_start_registration()["command"]
+    command = SESSION_START_REGISTRATION["command"]
     assert isinstance(command, str)
     assert HOOK_SCRIPT.name in command
     assert HOOK_SCRIPT.is_file()
 
 
 def should_keep_the_subprocess_budgets_inside_the_registered_timeout() -> None:
-    registered_timeout = _session_start_registration()["timeout"]
+    registered_timeout = SESSION_START_REGISTRATION["timeout"]
     assert isinstance(registered_timeout, int)
-    constants = _refresh_constants()
     subprocess_budget = (
-        constants.REGISTRY_PROBE_TIMEOUT_SECONDS + constants.INSTALL_TIMEOUT_SECONDS
+        REFRESH_CONSTANTS.REGISTRY_PROBE_TIMEOUT_SECONDS
+        + REFRESH_CONSTANTS.INSTALL_TIMEOUT_SECONDS
     )
     assert subprocess_budget < registered_timeout
 
