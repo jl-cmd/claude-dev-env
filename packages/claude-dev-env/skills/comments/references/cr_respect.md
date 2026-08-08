@@ -10,9 +10,9 @@ __[Respectful Changes](cl_respect.md)__._
 
 We attract competent people - and that means even when they're wrong, it most likely comes from lack of information, not from inability. A "bad" CL usually means one of the parties is in possession of information the other one isn't aware of.
 
-#### Discuss in person
+#### Consolidate the discussion
 
-If there is a disagreement, have a quick in-person/video/IM chat to sort out what is going on - it's much easier to address all the little "Oh, I didn't know"s in a single face-to-face, instead of back-and-forth via e-mail with long delays. "In person" doubly applies if you are disagreeing with another reviewer. And please make sure to record the outcomes on the review.
+If there is a disagreement, gather it into one focused exchange that lays out the full context and reasoning in a single message - it's much easier to address all the little "Oh, I didn't know"s in one consolidated thread than across many short comments with long gaps between them. That doubly applies if you are disagreeing with another reviewer. And please make sure to record the outcomes on the review.
 
 #### Explain why
 
@@ -28,9 +28,7 @@ If you like things neat, it's tempting to go over a code review over and over un
 
 #### Reply within a reasonable timeframe
 
-Please don't leave the reviewee waiting for a long time, keeping in mind timezones and different working hours. If you cannot get to a review within ~24h, please leave a short comment on the CL saying so (and when you can). And if you missed that window, please be courteous if the reviewee IMs you a reminder.
-
-If you will be on vacation or otherwise OOO for more than a few days, please set your nickname in the Chromium code review tool to indicate this (e.g. adding '(OOO until <date>)'). Remember that not everyone sending you code reviews can see your calendar!
+Please don't leave the reviewee waiting: an AI reviewer responds on demand, so start the review when the request arrives. If the review cannot be finished in one pass - a tool limit, missing context, or a partial run - leave a short comment on the CL saying what remains and when the rest will land.
 
 #### Mention the positives
 

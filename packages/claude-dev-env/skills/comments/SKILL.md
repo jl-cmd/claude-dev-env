@@ -2,7 +2,7 @@
 name: comments
 description: >-
   Google's engineering-practices guides to writing code review comments and
-  handling reviewer comments, reproduced in whole. Use when 'review comments'
+  handling reviewer comments, adapted for an AI reviewer. Use when 'review comments'
   or 'PR comments' is typed.
 ---
 
@@ -120,9 +120,8 @@ When a reviewer provides a critique of your code, think of it as their attempt
 to help you, the codebase, and Google, rather than as a personal attack on you
 or your abilities.
 
-Sometimes reviewers feel frustrated and they express that frustration in their
-comments. This isn't a good practice for reviewers, but as a developer you
-should be prepared for this. Ask yourself, "What is the constructive thing that
+Sometimes review comments come out blunt or read as frustration. This isn't
+good review output, but as a developer you should be prepared for this. Ask yourself, "What is the constructive thing that
 the reviewer is trying to communicate to me?" and then operate as though that's
 what they actually said.
 
@@ -133,12 +132,10 @@ for a while, or work on something else until you feel calm enough to reply
 politely.
 
 In general, if a reviewer isn't providing feedback in a way that's constructive
-and polite, explain this to them in person. If you can't talk to them in person
-or on a video call, then send them a private email. Explain to them in a kind
-way what you don't like and what you'd like them to do differently. If they also
-respond in a non-constructive way to this private discussion, or it doesn't have
-the intended effect, then
-escalate to your manager as
+and polite, say so directly in the review thread. Explain in a kind way what you
+don't like and what you'd like the reviewer to do differently. If the follow-up
+responses are also non-constructive, or the feedback stays unusable, then
+escalate to a human maintainer or lead as
 appropriate.
 
 ## Fix the Code {#code}

@@ -1,8 +1,7 @@
 ---
 name: emergencies
 description: >-
-  Google's engineering-practices guide to emergency changes, reproduced in
-  whole. Use when 'emergency fix' or 'hotfix' is typed.
+  Google's engineering-practices guide to emergency changes, adapted for an AI reviewer. Use when 'emergency fix' or 'hotfix' is typed.
 ---
 
 # Emergencies
@@ -37,8 +36,8 @@ To be clear, the following cases are *not* an emergency:
     actual [hard deadline](#deadlines) for launch such as a partner agreement).
 -   The developer has worked on a feature for a very long time and they really
     want to get the CL in.
--   The reviewers are all in another timezone where it is currently nighttime or
-    they are away on an off-site.
+-   The reviewer is mid-way through other work and the review would sit for a
+    short while.
 -   It is the end of the day on a Friday and it would just be great to get this
     CL in before the developer leaves for the weekend.
 -   A manager says that this review has to be complete and the CL checked in

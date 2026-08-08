@@ -92,10 +92,9 @@ There are a few situations in which large changes aren't as bad:
 If you write a small CL and then you wait for your reviewer to approve it before
 you write your next CL, then you're going to waste a lot of time. So you want to
 find some way to work that won't block you while you're waiting for review. This
-could involve having multiple projects to work on simultaneously, finding
-reviewers who agree to be immediately available, doing in-person reviews, pair
-programming, or splitting your CLs in a way that allows you to continue working
-immediately.
+could involve having multiple work streams going at once, requesting review the
+moment a CL is ready (an AI reviewer responds on demand), or splitting your CLs
+in a way that allows you to continue working right away.
 
 ## Splitting CLs {#splitting}
 

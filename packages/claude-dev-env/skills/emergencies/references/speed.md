@@ -30,29 +30,20 @@ When code reviews are slow, several things happen:
 
 ## How Fast Should Code Reviews Be? {#fast}
 
-If you are not in the middle of a focused task, **you should do a code review
-shortly after it comes in.**
+**Start the review as soon as the request comes in.** An AI reviewer responds
+on demand; a review request should never sit in a queue.
 
-**One business day is the maximum time it should take to respond** to a code
-review request (i.e., first thing the next morning).
-
-Following these guidelines means that a typical CL should get multiple rounds of
-review (if needed) within a single day.
+Following this guideline means that a typical CL should get multiple rounds of
+review (if needed) within a single working session.
 
 ## Speed vs. Interruption {#interruption}
 
-There is one time where the consideration of personal velocity trumps team
-velocity. **If you are in the middle of a focused task, such as writing code,
-don't interrupt yourself to do a code review.**
-Research has shown that it can
-take a long time for a developer to get back into a smooth flow of development
-after being interrupted. So interrupting yourself while coding is actually
-*more* expensive to the team than making another developer wait a bit for a code
-review.
+There is one time when a review should wait. **If you are in the middle of
+another task, finish the step you are on before picking up the review**, so
+partial work is not lost or left in a broken state.
 
-Instead, wait for a break point in your work before you respond to a request for
-review. This could be when your current coding task is completed, after lunch,
-returning from a meeting, coming back from the breakroom, etc.
+A review then starts at the next clean break point: when the current task
+completes, or when its state is saved well enough to resume.
 
 ## Fast Responses {#responses}
 
@@ -67,23 +58,20 @@ Even if it sometimes takes a long time to get through the entire review
 significantly eases the frustration developers can feel with "slow" code
 reviews.
 
-If you are too busy to do a full review on a CL when it comes in, you can still
-send a quick response that lets the developer know when you will get to it,
-suggest other reviewers who might be able to respond more quickly, or
-[provide some initial broad comments](navigate.md). (Note: none of this means
-you should interrupt coding even to send a response like this&mdash;send the
-response at a reasonable break point in your work.)
+If a full review cannot happen right away&mdash;the CL is queued behind other
+work, or it needs context that is still being gathered&mdash;you can still send
+a quick response that lets the developer know when the review will happen, or
+[provide some initial broad comments](navigate.md).
 
 **It is important that reviewers spend enough time on review that they are
 certain their "LGTM" means "this code meets [our standards](standard.md)."**
 However, individual responses should still ideally be [fast](#fast).
 
-## Cross-Time-Zone Reviews {#tz}
+## The Author's Clock {#tz}
 
-When dealing with time zone differences, try to get back to the author while
-they have time to respond before the end of their working hours. If they have
-already finished work for the day, then try to make sure your review is done
-before they start work the next day.
+An AI reviewer has no time zone; the author's clock is the one that matters.
+Return the review while the author still has time to respond in their current
+working stretch, so no round of the review costs them a day.
 
 ## LGTM With Comments {#lgtm-with-comments}
 
@@ -101,15 +89,15 @@ applies:
 The reviewer should specify which of these options they intend, if it is not
 otherwise clear.
 
-LGTM With Comments is especially worth considering when the developer and
-reviewer are in different time zones and otherwise the developer would be
-waiting for a whole day just to get "LGTM, Approval".
+LGTM With Comments is especially worth considering when the remaining comments
+are mechanical and one more round of review would only confirm they were
+applied.
 
 ## Large CLs {#large}
 
-If somebody sends you a code review that is so large you're not sure when you
-will be able to have time to review it, your typical response should be to ask
-the developer to
+If somebody sends you a code review that is too large to review well in one
+pass&mdash;for an AI reviewer, one that overflows the review context&mdash;your
+typical response should be to ask the developer to
 [split the CL into several smaller CLs](../developer/small-cls.md) that build on
 each other, instead of one huge CL that has to be reviewed all at once. This is
 usually possible and very helpful to reviewers, even if it takes additional work

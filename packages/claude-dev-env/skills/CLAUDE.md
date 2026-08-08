@@ -42,7 +42,7 @@ contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`. End-of-run gotchas
 - `pr-loop-lifecycle` — opens and closes a PR-loop run (grant, teardown, PR description, revoke, report)
 - `pr-loop-cloud-transport` — six-step transport workflow that lets any PR-loop skill run in a session whose `gh` CLI is absent or cannot act on the PR (MCP schema load, origin/HEAD fix, identity rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check)
 
-**Code review guides (Google eng-practices, word-for-word)**
+**Code review guides (Google eng-practices, adapted for an AI reviewer)**
 - `small-cl` — the Small CLs guide; refs: handling reviewer comments
 - `comments` — writing review comments and handling reviewer comments; refs: the review standard, pushback, respectful code reviews
 - `reviews` — the reviewer guide: standard, what to look for, navigating a CL, speed, pushback; refs: CL descriptions, review comments, emergencies, style guides, the two guide indexes
