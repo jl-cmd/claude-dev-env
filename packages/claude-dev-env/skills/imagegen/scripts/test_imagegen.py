@@ -21,6 +21,7 @@ from imagegen_core import (
     ImageSize,
     build_oauth_environment,
     decode_image,
+    download_https_image,
     generate_image,
     parse_size,
     publish_artifact,
@@ -118,6 +119,11 @@ def test_library_validates_square_size_and_png_destination(tmp_path: Path, monke
         generate_image("prompt", "openai-api", ImageSize(1028, 1024), tmp_path / "artifact.png", "forbid", False)
     with pytest.raises(ImagegenError, match=".png"):
         generate_image("prompt", "openai-api", ImageSize(2880, 2880), tmp_path / "artifact.jpg", "forbid", False)
+
+
+def test_http_provider_image_url_is_rejected() -> None:
+    with pytest.raises(ImagegenError, match="HTTPS"):
+        download_https_image("http://example.invalid/image.png")
 
 
 def test_non_png_provider_bytes_are_rejected() -> None:

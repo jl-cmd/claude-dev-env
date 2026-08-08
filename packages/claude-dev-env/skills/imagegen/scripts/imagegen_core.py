@@ -113,7 +113,7 @@ def validate_final_size(image_size: ImageSize) -> None:
         or image_size.width > MAXIMUM_IMAGE_EDGE
         or image_size.width * image_size.height > MAXIMUM_PIXEL_COUNT
     ):
-        raise ImagegenError("size exceeds GPT Image 2 limits")
+        raise ImagegenError("size exceeds output limits")
 
 
 def is_native_openai_size(image_size: ImageSize) -> bool:
@@ -227,8 +227,7 @@ def request_openai_image(prompt: str, requested_size: ImageSize, transport: Tran
         if image_record.get("b64_json"):
             image_bytes = base64.b64decode(image_record["b64_json"], validate=True)
         elif image_record.get("url"):
-            with urllib.request.urlopen(image_record["url"], timeout=OPENAI_TIMEOUT_SECONDS) as image_download:
-                image_bytes = image_download.read(MAXIMUM_PROVIDER_BYTES + 1)
+            image_bytes = download_https_image(image_record["url"])
         else:
             raise ImagegenError("OpenAI returned no image artifact")
     except ImagegenError:
@@ -236,6 +235,29 @@ def request_openai_image(prompt: str, requested_size: ImageSize, transport: Tran
     except (AttributeError, binascii.Error, IndexError, KeyError, OSError, TypeError, ValueError, urllib.error.URLError, json.JSONDecodeError) as error:
         raise ImagegenError("OpenAI returned an invalid image response") from error
     return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, OPENAI_MODEL, OPENAI_API_KEY_NAME)
+
+
+def download_https_image(image_url: str) -> bytes:
+    """Download provider image bytes from an HTTPS URL only.
+
+    Args:
+        image_url: Provider-returned image location.
+    Returns:
+        Raw image bytes capped by the provider byte limit.
+    Raises:
+        ImagegenError: If the URL is not HTTPS, download fails, or bytes exceed the limit.
+    """
+    if not image_url.casefold().startswith("https://"):
+        raise ImagegenError("OpenAI image URL must use HTTPS")
+    request = urllib.request.Request(image_url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=OPENAI_TIMEOUT_SECONDS) as image_download:
+            image_bytes = image_download.read(MAXIMUM_PROVIDER_BYTES + 1)
+    except (OSError, TimeoutError, urllib.error.URLError) as error:
+        raise ImagegenError("OpenAI image download failed") from error
+    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
+        raise ImagegenError("provider image exceeds the byte limit")
+    return image_bytes
 
 
 def build_oauth_environment() -> dict[str, str]:
@@ -299,19 +321,24 @@ def resize_image(image_bytes: bytes, target_size: ImageSize) -> bytes:
     Raises:
         ImagegenError: If the source is invalid or has a mismatched aspect ratio.
     """
+    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
+        raise ImagegenError("provider image exceeds the byte limit")
     try:
-        source_size = decode_image(image_bytes)
-        if source_size.width != source_size.height:
-            raise ImagegenError("provider image must be square")
         with Image.open(BytesIO(image_bytes)) as source_image:
+            if source_image.format != PNG_FORMAT:
+                raise ImagegenError("provider image must be PNG")
+            if source_image.width * source_image.height > MAXIMUM_PIXEL_COUNT:
+                raise ImagegenError("provider image exceeds the pixel limit")
             source_image.load()
+            if source_image.width != source_image.height:
+                raise ImagegenError("provider image must be square")
             resized_image = source_image.resize((target_size.width, target_size.height), Image.Resampling.LANCZOS)
             destination = BytesIO()
-            resized_image.save(destination, format="PNG")
+            resized_image.save(destination, format=PNG_FORMAT)
             return destination.getvalue()
     except ImagegenError:
         raise
-    except (OSError, TypeError, ValueError) as error:
+    except (OSError, TypeError, ValueError, Image.DecompressionBombError) as error:
         raise ImagegenError("image resize failed") from error
 
 
@@ -340,6 +367,18 @@ def build_receipt(prompt: str, backend: str, artifact: ProviderArtifact, request
     return {"prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "backend": backend, "model_or_tool": artifact.model_or_tool, "requested_size": requested_size.as_text(), "provider_size": provider_size, "source_size": artifact.source_size.as_text(), "final_size": final_size.as_text(), "transformation": transformation, "transformations": transformations, "source_sha256": source_digest, "final_sha256": final_digest, "credential_source": artifact.credential_source}
 
 
+def require_png_destination(destination_path: Path) -> None:
+    """Require a destination path that ends with ``.png``.
+
+    Args:
+        destination_path: Candidate final image path.
+    Raises:
+        ImagegenError: If the path does not use a ``.png`` suffix.
+    """
+    if destination_path.suffix.casefold() != PNG_SUFFIX:
+        raise ImagegenError("destination must use a .png suffix")
+
+
 def publish_artifact(destination_path: Path, image_bytes: bytes, all_receipt: dict[str, object], should_overwrite: bool) -> None:
     """Publish image and receipt atomically after overwrite checks.
 
@@ -351,8 +390,7 @@ def publish_artifact(destination_path: Path, image_bytes: bytes, all_receipt: di
     Raises:
         ImagegenError: If publication cannot proceed safely.
     """
-    if destination_path.suffix.casefold() != PNG_SUFFIX:
-        raise ImagegenError("destination must use a .png suffix")
+    require_png_destination(destination_path)
     receipt_path = destination_path.with_suffix(RECEIPT_SUFFIX)
     if receipt_path == destination_path:
         raise ImagegenError("destination and receipt paths must differ")
@@ -416,14 +454,16 @@ def generate_image(prompt: str, backend: str, requested_size: ImageSize, destina
         ImagegenError: If provider, validation, transformation, or publication fails.
     """
     validate_final_size(requested_size)
-    if destination_path.suffix.casefold() != PNG_SUFFIX:
-        raise ImagegenError("destination must use a .png suffix")
+    require_png_destination(destination_path)
     if backend not in ALL_SUPPORTED_BACKENDS or resize_policy not in ALL_SUPPORTED_RESIZE_POLICIES:
         raise ImagegenError("unsupported backend or resize policy")
-    provider_size = select_provider_size(requested_size)
-    if backend == "openai-api" and provider_size != requested_size and resize_policy == "forbid":
-        raise ImagegenError("requested size is not supported natively; use --resize-policy allow")
-    artifact = request_openai_image(prompt, provider_size, transport or build_openai_transport()) if backend == "openai-api" else request_oauth_image(prompt, runner or run_codex)
+    if backend == "openai-api":
+        provider_size = select_provider_size(requested_size)
+        if provider_size != requested_size and resize_policy == "forbid":
+            raise ImagegenError("requested size is not supported natively; use --resize-policy allow")
+        artifact = request_openai_image(prompt, provider_size, transport or build_openai_transport())
+    else:
+        artifact = request_oauth_image(prompt, runner or run_codex)
     if artifact.source_size != requested_size and resize_policy == "forbid":
         raise ImagegenError("provider dimensions differ from requested size")
     final_bytes = artifact.image_bytes if artifact.source_size == requested_size else resize_image(artifact.image_bytes, requested_size)
