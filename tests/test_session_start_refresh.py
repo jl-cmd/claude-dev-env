@@ -1,6 +1,6 @@
 """Behavior checks for the cloud SessionStart refresh hook.
 
-Seven checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
+Nine checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
 against a sandbox home directory, with fake `npm` and `npx` executables on
 `PATH` that record their arguments to a log file. The assertions read that log:
 a refresh run shows an `npx -y claude-dev-env@<version>` line, a quiet run
@@ -163,6 +163,15 @@ def _hook_environment(
     return environment
 
 
+def _run_hook_script(sandbox: Path, environment: dict[str, str]) -> str:
+    completed = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPT)],
+        env=environment, capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return (sandbox / "tool-log.txt").read_text(encoding="utf-8")
+
+
 def run_hook(
     sandbox: Path,
     *,
@@ -180,12 +189,7 @@ def run_hook(
         registry_failure=registry_failure,
         config_dir_version=config_dir_version,
     )
-    completed = subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT)],
-        env=environment, capture_output=True, text=True, check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    return (sandbox / "tool-log.txt").read_text(encoding="utf-8")
+    return _run_hook_script(sandbox, environment)
 
 
 def should_stay_quiet_when_the_remote_flag_is_absent(tmp_path: Path) -> None:
@@ -251,12 +255,7 @@ def should_exit_zero_and_reinstall_when_the_manifest_is_not_an_object(
         registry_failure=False,
         config_dir_version=None,
     )
-    completed = subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT)],
-        env=environment, capture_output=True, text=True, check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
+    tool_log = _run_hook_script(tmp_path, environment)
     assert "npx -y claude-dev-env@2.12.0" in tool_log
 
 
@@ -270,12 +269,7 @@ def should_pass_the_resolved_config_dir_to_the_reinstall(tmp_path: Path) -> None
         config_dir_version=None,
     )
     environment["CLAUDE_CONFIG_DIR"] = "~/profile"
-    completed = subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT)],
-        env=environment, capture_output=True, text=True, check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
+    tool_log = _run_hook_script(tmp_path, environment)
     resolved_config_dir = tmp_path / "home" / "profile"
     assert "cfg=" + str(resolved_config_dir) + " " in tool_log, tool_log
 
@@ -307,11 +301,6 @@ def should_anchor_a_relative_config_dir_override_to_the_home_directory(
         config_dir_version=None,
     )
     environment["CLAUDE_CONFIG_DIR"] = "profile"
-    completed = subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT)],
-        env=environment, capture_output=True, text=True, check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
+    tool_log = _run_hook_script(tmp_path, environment)
     assert "npm view claude-dev-env version" in tool_log
     assert "npx" not in tool_log

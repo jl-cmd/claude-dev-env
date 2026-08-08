@@ -23,18 +23,32 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-from config.session_start_refresh_constants import (
-    CLAUDE_HOME_DIRECTORY_NAME,
-    CONFIG_DIR_OVERRIDE_VARIABLE_NAME,
-    INSTALL_TIMEOUT_SECONDS,
-    MANIFEST_FILE_NAME,
-    PACKAGE_NAME,
-    REGISTRY_PROBE_TIMEOUT_SECONDS,
-    REMOTE_SESSION_ACTIVE_VALUE,
-    REMOTE_SESSION_VARIABLE_NAME,
-)
+try:
+    from config.session_start_refresh_constants import (
+        CLAUDE_HOME_DIRECTORY_NAME,
+        CONFIG_DIR_OVERRIDE_VARIABLE_NAME,
+        INSTALL_TIMEOUT_SECONDS,
+        MANIFEST_FILE_NAME,
+        PACKAGE_NAME,
+        REGISTRY_PROBE_TIMEOUT_SECONDS,
+        REMOTE_SESSION_ACTIVE_VALUE,
+        REMOTE_SESSION_VARIABLE_NAME,
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from config.session_start_refresh_constants import (
+        CLAUDE_HOME_DIRECTORY_NAME,
+        CONFIG_DIR_OVERRIDE_VARIABLE_NAME,
+        INSTALL_TIMEOUT_SECONDS,
+        MANIFEST_FILE_NAME,
+        PACKAGE_NAME,
+        REGISTRY_PROBE_TIMEOUT_SECONDS,
+        REMOTE_SESSION_ACTIVE_VALUE,
+        REMOTE_SESSION_VARIABLE_NAME,
+    )
 
 
 def claude_config_directory() -> Path:
@@ -69,6 +83,7 @@ def _run_tool_from_home(
     try:
         return subprocess.run(
             [tool_path, *all_arguments],
+            stdin=subprocess.DEVNULL,
             stdout=output_target,
             stderr=output_target,
             text=True,
