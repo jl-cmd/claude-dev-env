@@ -18,7 +18,6 @@ from types import ModuleType
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 HOOK_SCRIPT = REPOSITORY_ROOT / ".claude" / "hooks" / "session_start_refresh.py"
-MANIFEST_FILE_NAME = ".claude-dev-env-manifest.json"
 
 
 def _refresh_constants() -> ModuleType:
@@ -36,6 +35,9 @@ def _refresh_constants() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+MANIFEST_FILE_NAME: str = _refresh_constants().MANIFEST_FILE_NAME
 
 
 def _session_start_registration() -> dict[str, object]:
@@ -155,7 +157,7 @@ def run_hook(
     registry_version: str,
     registry_failure: bool = False,
     config_dir_version: str | None = None,
-) -> tuple[subprocess.CompletedProcess[str], str]:
+) -> str:
     _seed_sandbox(sandbox, installed_version, config_dir_version)
     environment = _hook_environment(
         sandbox,
@@ -168,25 +170,23 @@ def run_hook(
         [sys.executable, str(HOOK_SCRIPT)],
         env=environment, capture_output=True, text=True, check=False,
     )
-    tool_log = (sandbox / "tool-log.txt").read_text(encoding="utf-8")
-    return completed, tool_log
+    assert completed.returncode == 0, completed.stderr
+    return (sandbox / "tool-log.txt").read_text(encoding="utf-8")
 
 
 def should_stay_quiet_when_the_remote_flag_is_absent(tmp_path: Path) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path, remote=False, installed_version="2.9.0", registry_version="2.12.0"
     )
-    assert completed.returncode == 0, completed.stderr
     assert tool_log == ""
 
 
 def should_reinstall_from_the_home_directory_when_the_registry_is_ahead(
     tmp_path: Path,
 ) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path, remote=True, installed_version="2.9.0", registry_version="2.12.0"
     )
-    assert completed.returncode == 0, completed.stderr
     assert "npm view claude-dev-env version" in tool_log
     assert "npx -y claude-dev-env@2.12.0" in tool_log
     logged_lines = tool_log.strip().splitlines()
@@ -198,42 +198,38 @@ def should_reinstall_from_the_home_directory_when_the_registry_is_ahead(
 
 
 def should_leave_a_current_install_in_place(tmp_path: Path) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path, remote=True, installed_version="2.12.0", registry_version="2.12.0"
     )
-    assert completed.returncode == 0, completed.stderr
     assert "npm view claude-dev-env version" in tool_log
     assert "npx" not in tool_log
 
 
 def should_fail_open_when_the_registry_probe_fails(tmp_path: Path) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path,
         remote=True,
         installed_version="2.9.0",
         registry_version="2.12.0",
         registry_failure=True,
     )
-    assert completed.returncode == 0, completed.stderr
     assert "npx" not in tool_log
 
 
 def should_reinstall_when_no_manifest_is_present(tmp_path: Path) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path, remote=True, installed_version=None, registry_version="2.12.0"
     )
-    assert completed.returncode == 0, completed.stderr
     assert "npx -y claude-dev-env@2.12.0" in tool_log
 
 
 def should_read_the_manifest_from_a_config_dir_override(tmp_path: Path) -> None:
-    completed, tool_log = run_hook(
+    tool_log = run_hook(
         tmp_path,
         remote=True,
         installed_version=None,
         registry_version="2.12.0",
         config_dir_version="2.12.0",
     )
-    assert completed.returncode == 0, completed.stderr
     assert "npm view claude-dev-env version" in tool_log
     assert "npx" not in tool_log
