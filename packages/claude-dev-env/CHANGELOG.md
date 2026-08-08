@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.13.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.12.0...claude-dev-env-v2.13.0) (2026-08-08)
+
+
+### Features
+
+* adapt review guides for an AI reviewer ([470ff0a](https://github.com/jl-cmd/claude-dev-env/commit/470ff0aa060e6a63c4f043e3efee722d35fa03e5))
+* add Google review-guide skills, one per category ([477da0c](https://github.com/jl-cmd/claude-dev-env/commit/477da0c4dfa776570c0cb0511129c7f58ed8f0f5))
+* add referenced review-guide docs under small-cl references ([3957fd5](https://github.com/jl-cmd/claude-dev-env/commit/3957fd5163060acb5f990628c99685976d6ef7b5))
+* add small-cl skill with Google's small CLs guide ([7a5acee](https://github.com/jl-cmd/claude-dev-env/commit/7a5acee45a213a885f014bf3efb8dcbc875517bf))
+* **commands:** converge /sr-loop on a nit-only pass ([3645760](https://github.com/jl-cmd/claude-dev-env/commit/3645760595d8027bab9f3039665235d02f44e2ce))
+* **commands:** converge /sr-loop on a nit-only pass ([19fd767](https://github.com/jl-cmd/claude-dev-env/commit/19fd767c71077c48750504ec69b61192d33d770f))
+* extract linked docs into per-skill and shared references ([7698d60](https://github.com/jl-cmd/claude-dev-env/commit/7698d604b515b408b597891174c43dd0ec7e5001))
+* one skill per review-guide category ([d289af9](https://github.com/jl-cmd/claude-dev-env/commit/d289af93b426ed8f2cfa84813fa4a71b649bf6d3))
+* reframe people-nature passages for AI participants ([82913a1](https://github.com/jl-cmd/claude-dev-env/commit/82913a1370246154e57b64b37841e48519c31625))
+
+
+### Maintenance
+
+* use native apps for local file opening ([696b658](https://github.com/jl-cmd/claude-dev-env/commit/696b658f9b8100e832bd24a147df423227e894d7))
+* use native apps for local file opening ([fb8d768](https://github.com/jl-cmd/claude-dev-env/commit/fb8d768f9c0e31bd323bde0bee2d2b5828568cfd))
+
 ## [2.12.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.11.0...claude-dev-env-v2.12.0) (2026-08-07)
 
 
