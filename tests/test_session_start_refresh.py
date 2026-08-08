@@ -12,7 +12,6 @@ import os
 import stat
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
@@ -63,44 +62,39 @@ def _seed_sandbox(
     sandbox: Path,
     installed_version: str | None,
     config_dir_version: str | None = None,
-) -> tuple[Path, Path | None]:
+) -> None:
     shim_directory = sandbox / "bin"
     shim_directory.mkdir()
     _write_probe_shims(shim_directory)
     (sandbox / "tool-log.txt").write_text("", encoding="utf-8")
-    home_directory = sandbox / "home"
-    (home_directory / ".claude").mkdir(parents=True)
+    (sandbox / "home" / ".claude").mkdir(parents=True)
     if installed_version is not None:
-        _write_manifest(home_directory / ".claude", installed_version)
-    config_dir: Path | None = None
+        _write_manifest(sandbox / "home" / ".claude", installed_version)
     if config_dir_version is not None:
-        config_dir = sandbox / "config-override"
-        config_dir.mkdir()
-        _write_manifest(config_dir, config_dir_version)
-    return home_directory, config_dir
+        (sandbox / "config-override").mkdir()
+        _write_manifest(sandbox / "config-override", config_dir_version)
 
 
 def _hook_environment(
     sandbox: Path,
-    home_directory: Path,
     *,
     remote: bool,
     registry_version: str,
     registry_failure: bool,
-    config_dir: Path | None = None,
+    use_config_dir: bool = False,
 ) -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop("CLAUDE_CODE_REMOTE", None)
     environment.pop("CLAUDE_CONFIG_DIR", None)
     if remote:
         environment["CLAUDE_CODE_REMOTE"] = "true"
-    if config_dir is not None:
-        environment["CLAUDE_CONFIG_DIR"] = str(config_dir)
+    if use_config_dir:
+        environment["CLAUDE_CONFIG_DIR"] = str(sandbox / "config-override")
     environment["PATH"] = os.pathsep.join(
         [str(sandbox / "bin"), environment.get("PATH", "")]
     )
-    environment["HOME"] = str(home_directory)
-    environment["USERPROFILE"] = str(home_directory)
+    environment["HOME"] = str(sandbox / "home")
+    environment["USERPROFILE"] = str(sandbox / "home")
     environment["FAKE_TOOL_LOG"] = str(sandbox / "tool-log.txt")
     environment["FAKE_NPM_VERSION"] = registry_version
     if registry_failure:
@@ -109,45 +103,43 @@ def _hook_environment(
 
 
 def run_hook(
+    sandbox: Path,
     *,
     remote: bool,
     installed_version: str | None,
     registry_version: str,
     registry_failure: bool = False,
     config_dir_version: str | None = None,
-) -> tuple[subprocess.CompletedProcess[str], str, str]:
-    with tempfile.TemporaryDirectory() as sandbox_name:
-        sandbox = Path(sandbox_name)
-        home_directory, config_dir = _seed_sandbox(
-            sandbox, installed_version, config_dir_version
-        )
-        environment = _hook_environment(
-            sandbox,
-            home_directory,
-            remote=remote,
-            registry_version=registry_version,
-            registry_failure=registry_failure,
-            config_dir=config_dir,
-        )
-        completed = subprocess.run(
-            [sys.executable, str(HOOK_SCRIPT)],
-            env=environment, capture_output=True, text=True, check=False,
-        )
-        tool_log = (sandbox / "tool-log.txt").read_text(encoding="utf-8")
-        return completed, tool_log, str(home_directory)
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    _seed_sandbox(sandbox, installed_version, config_dir_version)
+    environment = _hook_environment(
+        sandbox,
+        remote=remote,
+        registry_version=registry_version,
+        registry_failure=registry_failure,
+        use_config_dir=config_dir_version is not None,
+    )
+    completed = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPT)],
+        env=environment, capture_output=True, text=True, check=False,
+    )
+    tool_log = (sandbox / "tool-log.txt").read_text(encoding="utf-8")
+    return completed, tool_log
 
 
-def should_stay_quiet_when_the_remote_flag_is_absent() -> None:
-    completed, tool_log, _home_directory = run_hook(
-        remote=False, installed_version="2.9.0", registry_version="2.12.0"
+def should_stay_quiet_when_the_remote_flag_is_absent(tmp_path: Path) -> None:
+    completed, tool_log = run_hook(
+        tmp_path, remote=False, installed_version="2.9.0", registry_version="2.12.0"
     )
     assert completed.returncode == 0, completed.stderr
     assert tool_log == ""
 
 
-def should_reinstall_from_the_home_directory_when_the_registry_is_ahead() -> None:
-    completed, tool_log, home_directory = run_hook(
-        remote=True, installed_version="2.9.0", registry_version="2.12.0"
+def should_reinstall_from_the_home_directory_when_the_registry_is_ahead(
+    tmp_path: Path,
+) -> None:
+    completed, tool_log = run_hook(
+        tmp_path, remote=True, installed_version="2.9.0", registry_version="2.12.0"
     )
     assert completed.returncode == 0, completed.stderr
     assert "npm view claude-dev-env version" in tool_log
@@ -155,20 +147,23 @@ def should_reinstall_from_the_home_directory_when_the_registry_is_ahead() -> Non
     logged_lines = tool_log.strip().splitlines()
     assert len(logged_lines) == 2, tool_log
     for logged_line in logged_lines:
-        assert "cwd=" + home_directory in logged_line, logged_line
+        assert logged_line.rstrip().endswith("cwd=" + str(tmp_path / "home")), (
+            logged_line
+        )
 
 
-def should_leave_a_current_install_in_place() -> None:
-    completed, tool_log, _home_directory = run_hook(
-        remote=True, installed_version="2.12.0", registry_version="2.12.0"
+def should_leave_a_current_install_in_place(tmp_path: Path) -> None:
+    completed, tool_log = run_hook(
+        tmp_path, remote=True, installed_version="2.12.0", registry_version="2.12.0"
     )
     assert completed.returncode == 0, completed.stderr
     assert "npm view claude-dev-env version" in tool_log
     assert "npx" not in tool_log
 
 
-def should_fail_open_when_the_registry_probe_fails() -> None:
-    completed, tool_log, _home_directory = run_hook(
+def should_fail_open_when_the_registry_probe_fails(tmp_path: Path) -> None:
+    completed, tool_log = run_hook(
+        tmp_path,
         remote=True,
         installed_version="2.9.0",
         registry_version="2.12.0",
@@ -178,16 +173,17 @@ def should_fail_open_when_the_registry_probe_fails() -> None:
     assert "npx" not in tool_log
 
 
-def should_reinstall_when_no_manifest_is_present() -> None:
-    completed, tool_log, _home_directory = run_hook(
-        remote=True, installed_version=None, registry_version="2.12.0"
+def should_reinstall_when_no_manifest_is_present(tmp_path: Path) -> None:
+    completed, tool_log = run_hook(
+        tmp_path, remote=True, installed_version=None, registry_version="2.12.0"
     )
     assert completed.returncode == 0, completed.stderr
     assert "npx -y claude-dev-env@2.12.0" in tool_log
 
 
-def should_read_the_manifest_from_a_config_dir_override() -> None:
-    completed, tool_log, _home_directory = run_hook(
+def should_read_the_manifest_from_a_config_dir_override(tmp_path: Path) -> None:
+    completed, tool_log = run_hook(
+        tmp_path,
         remote=True,
         installed_version=None,
         registry_version="2.12.0",

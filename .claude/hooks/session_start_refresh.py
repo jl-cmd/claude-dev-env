@@ -52,15 +52,21 @@ def read_installed_version() -> str:
 
 
 def _run_tool_from_home(
-    tool_name: str, all_arguments: list[str], timeout_seconds: int
+    tool_name: str,
+    all_arguments: list[str],
+    timeout_seconds: int,
+    *,
+    capture: bool,
 ) -> subprocess.CompletedProcess[str] | None:
     tool_path = shutil.which(tool_name)
     if tool_path is None:
         return None
+    output_target = subprocess.PIPE if capture else subprocess.DEVNULL
     try:
         return subprocess.run(
             [tool_path, *all_arguments],
-            capture_output=True,
+            stdout=output_target,
+            stderr=output_target,
             text=True,
             timeout=timeout_seconds,
             check=False,
@@ -72,7 +78,10 @@ def _run_tool_from_home(
 
 def read_registry_version() -> str:
     completed = _run_tool_from_home(
-        "npm", ["view", PACKAGE_NAME, "version"], REGISTRY_PROBE_TIMEOUT_SECONDS
+        "npm",
+        ["view", PACKAGE_NAME, "version"],
+        REGISTRY_PROBE_TIMEOUT_SECONDS,
+        capture=True,
     )
     if completed is None or completed.returncode != 0:
         return ""
@@ -81,7 +90,10 @@ def read_registry_version() -> str:
 
 def reinstall(registry_version: str) -> None:
     _run_tool_from_home(
-        "npx", ["-y", PACKAGE_NAME + "@" + registry_version], INSTALL_TIMEOUT_SECONDS
+        "npx",
+        ["-y", PACKAGE_NAME + "@" + registry_version],
+        INSTALL_TIMEOUT_SECONDS,
+        capture=False,
     )
 
 

@@ -29,9 +29,9 @@ change is needed.
 
 ## Keeping the cached install fresh
 
-The setup script's filesystem result is cached: a later session in the same
-environment boots from that cache and skips the script, so a release published
-after the cache was built never reaches `~/.claude`.
+The setup script's result is cached once per environment, so a release
+published after the cache was built never reaches `~/.claude` in later
+sessions.
 
 The repo-committed SessionStart hook `.claude/hooks/session_start_refresh.py`
 closes that gap for sessions on this repository: at cloud session start it
