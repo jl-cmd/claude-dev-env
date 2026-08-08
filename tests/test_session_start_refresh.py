@@ -246,6 +246,18 @@ def should_stay_quiet_when_the_registry_output_is_not_a_version(
     assert "npx" not in tool_log
 
 
+def should_reinstall_on_a_prerelease_and_build_registry_version(
+    tmp_path: Path,
+) -> None:
+    tool_log = run_hook(
+        tmp_path,
+        remote=True,
+        installed_version="2.9.0",
+        registry_version="2.12.0-rc.1+build.5",
+    )
+    assert "npx -y claude-dev-env@2.12.0-rc.1+build.5" in tool_log
+
+
 def should_reinstall_when_no_manifest_is_present(tmp_path: Path) -> None:
     tool_log = run_hook(
         tmp_path, remote=True, installed_version=None, registry_version="2.12.0"

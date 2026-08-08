@@ -21,10 +21,13 @@ outage, probe timeout, missing npm — exits 0, so the hook never blocks a
 session from starting.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -76,6 +79,38 @@ def read_installed_version() -> str:
     return version if isinstance(version, str) else ""
 
 
+def _spawn_tool_from_home(
+    tool_path: str,
+    all_arguments: list[str],
+    output_target: int,
+    all_environment_variables: dict[str, str] | None,
+) -> subprocess.Popen[str] | None:
+    try:
+        return subprocess.Popen(
+            [tool_path, *all_arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=output_target,
+            stderr=output_target,
+            text=True,
+            cwd=Path.home(),
+            env=all_environment_variables,
+            start_new_session=os.name == "posix",
+        )
+    except OSError:
+        return None
+
+
+def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            process.kill()
+    else:
+        process.kill()
+    process.wait()
+
+
 def _run_tool_from_home(
     tool_name: str,
     all_arguments: list[str],
@@ -88,20 +123,19 @@ def _run_tool_from_home(
     if tool_path is None:
         return None
     output_target = subprocess.PIPE if capture else subprocess.DEVNULL
-    try:
-        return subprocess.run(
-            [tool_path, *all_arguments],
-            stdin=subprocess.DEVNULL,
-            stdout=output_target,
-            stderr=output_target,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-            cwd=Path.home(),
-            env=all_environment_variables,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+    process = _spawn_tool_from_home(
+        tool_path, all_arguments, output_target, all_environment_variables
+    )
+    if process is None:
         return None
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(process)
+        return None
+    return subprocess.CompletedProcess(
+        process.args, process.returncode, stdout, stderr
+    )
 
 
 def read_registry_version() -> str:
