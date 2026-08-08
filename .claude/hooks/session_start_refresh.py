@@ -98,7 +98,7 @@ def reinstall(registry_version: str) -> None:
 
 
 def main() -> None:
-    if os.environ.get(REMOTE_SESSION_VARIABLE_NAME, "") != REMOTE_SESSION_ACTIVE_VALUE:
+    if os.environ.get(REMOTE_SESSION_VARIABLE_NAME) != REMOTE_SESSION_ACTIVE_VALUE:
         return
     registry_version = read_registry_version()
     if not registry_version:

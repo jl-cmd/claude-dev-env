@@ -7,16 +7,61 @@ a refresh run shows an `npx -y claude-dev-env@<version>` line, a quiet run
 shows none.
 """
 
+import importlib.util
 import json
 import os
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 HOOK_SCRIPT = REPOSITORY_ROOT / ".claude" / "hooks" / "session_start_refresh.py"
 MANIFEST_FILE_NAME = ".claude-dev-env-manifest.json"
+
+
+def _refresh_constants() -> ModuleType:
+    constants_path = (
+        REPOSITORY_ROOT
+        / ".claude"
+        / "hooks"
+        / "config"
+        / "session_start_refresh_constants.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "session_start_refresh_constants", constants_path
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _session_start_registration() -> dict[str, object]:
+    settings = json.loads(
+        (REPOSITORY_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    [group] = settings["hooks"]["SessionStart"]
+    [entry] = group["hooks"]
+    return entry
+
+
+def should_register_a_hook_command_that_names_the_existing_script() -> None:
+    command = _session_start_registration()["command"]
+    assert isinstance(command, str)
+    assert HOOK_SCRIPT.name in command
+    assert HOOK_SCRIPT.is_file()
+
+
+def should_keep_the_subprocess_budgets_inside_the_registered_timeout() -> None:
+    registered_timeout = _session_start_registration()["timeout"]
+    assert isinstance(registered_timeout, int)
+    constants = _refresh_constants()
+    subprocess_budget = (
+        constants.REGISTRY_PROBE_TIMEOUT_SECONDS + constants.INSTALL_TIMEOUT_SECONDS
+    )
+    assert subprocess_budget < registered_timeout
 
 POSIX_NPM_SHIM = """#!/bin/bash
 printf 'npm %s cwd=%s\\n' "$*" "$PWD" >> "$FAKE_TOOL_LOG"
@@ -61,7 +106,7 @@ def _write_manifest(directory: Path, version: str) -> None:
 def _seed_sandbox(
     sandbox: Path,
     installed_version: str | None,
-    config_dir_version: str | None = None,
+    config_dir_version: str | None,
 ) -> None:
     shim_directory = sandbox / "bin"
     shim_directory.mkdir()
@@ -81,14 +126,14 @@ def _hook_environment(
     remote: bool,
     registry_version: str,
     registry_failure: bool,
-    use_config_dir: bool = False,
+    config_dir_version: str | None,
 ) -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop("CLAUDE_CODE_REMOTE", None)
     environment.pop("CLAUDE_CONFIG_DIR", None)
     if remote:
         environment["CLAUDE_CODE_REMOTE"] = "true"
-    if use_config_dir:
+    if config_dir_version is not None:
         environment["CLAUDE_CONFIG_DIR"] = str(sandbox / "config-override")
     environment["PATH"] = os.pathsep.join(
         [str(sandbox / "bin"), environment.get("PATH", "")]
@@ -117,7 +162,7 @@ def run_hook(
         remote=remote,
         registry_version=registry_version,
         registry_failure=registry_failure,
-        use_config_dir=config_dir_version is not None,
+        config_dir_version=config_dir_version,
     )
     completed = subprocess.run(
         [sys.executable, str(HOOK_SCRIPT)],
