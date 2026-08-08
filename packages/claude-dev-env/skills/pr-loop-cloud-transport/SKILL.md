@@ -89,7 +89,7 @@ Skip the `gh api copilot_internal/user` quota read; treat Copilot quota as unkno
 The `gh`-text hooks read risk from literal `gh ...` command text, and an MCP post carries none, so those checks go quiet in cloud. Before each MCP post, check by hand:
 
 - No volatile scratch path in a post body (job dirs, temp roots, worktrees).
-- A proof-of-work comment carries all five parts the proof standard names.
+- Review comments follow the [comment guide](../comments/SKILL.md#writing-useful-review-comments).
 - A PR title follows Conventional Commits.
 - Markdown bodies go through the structured `body` parameter so backticks show as formatting.
 

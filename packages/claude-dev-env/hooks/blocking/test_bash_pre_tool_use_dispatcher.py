@@ -221,9 +221,6 @@ def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
     assert powershell_paths == [
         "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
-        "blocking/code_review_push_gate.py",
-        "blocking/code_review_pr_create_gate.py",
-        "blocking/code_review_stamp_directory_write_blocker.py",
     ]
 
 

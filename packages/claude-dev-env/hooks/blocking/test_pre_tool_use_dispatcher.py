@@ -715,8 +715,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 21, (
-        f"Write tool must apply to all 21 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 19, (
+        f"Write tool must apply to all 19 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -732,16 +732,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "advisory/refactor_guard.py" in all_edit_script_paths, (
         "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 24, (
-        f"expected 24 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 22, (
+        f"expected 22 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
     """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 10, (
-        f"MultiEdit tool must apply to exactly 10 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 9, (
+        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -969,7 +969,6 @@ def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
         "blocking/state_description_blocker.py",
         "blocking/subprocess_budget_completeness.py",
         "blocking/hook_prose_detector_consistency.py",
-        "blocking/verified_commit_message_accuracy_blocker.py",
         "blocking/workflow_substitution_slot_blocker.py",
         "blocking/claude_md_orphan_file_blocker.py",
         "blocking/pytest_testpaths_orphan_blocker.py",

@@ -232,7 +232,7 @@ workflow resume is available.
 | Work | Agent type | Model |
 |---|---|---|
 | Feature, bug, and refactor coding | `clean-coder` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
-| Verification passes | `code-verifier` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Review and verification | `code-quality-agent` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
 | Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
 | PR descriptions | `pr-description-writer` | `haiku`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
@@ -265,8 +265,7 @@ Routing rules:
   system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
-- `clean-coder` owns code edits. `code-verifier` owns verification. The
-  same workflow agent never grades work it wrote.
+- Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).
 - PR-description workflows include the actual changed-file list in the
   prompt and verify the final body against that file list before posting
   or returning it.
@@ -363,4 +362,3 @@ no open work remains, run `set --status done` before any re-arm attempt.
 ## File-backed run ledger
 
 When host task tools are absent, reconcile delegated work through `scripts/grok_run_ledger.py` under the run-state directory (stable task ids, one live owner, unique advisor sessions, dependency blocking, snapshot-drift reopening).
-

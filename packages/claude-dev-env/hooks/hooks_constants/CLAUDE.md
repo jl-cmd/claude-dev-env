@@ -18,10 +18,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `enter_worktree_prefetch_constants.py` | Tool name, origin-remote ref names, and git-command timeouts for the EnterWorktree origin-prefetch hook |
 | `env_var_table_code_drift_constants.py` | Table patterns, env-var-name and code-file recognizers, scan budget, and block-message text for the env-var-table code-drift blocker |
 | `code_rules_path_utils_constants.py` | Path-matching helpers used by the code-rules check modules |
-| `code_verifier_spawn_preflight_gate_constants.py` | Subagent type, merge-tree command flags, timeouts, and deny-message text for the code-verifier spawn pre-flight gate |
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
-| `convergence_branch_constants.py` | Branch and worktree naming patterns for the convergence gate |
-| `convergence_gate_blocker_constants.py` | The full-PR-URL and `--repo`/`-R` flag parse patterns that key the convergence gate to the PR its command names |
 | `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
@@ -59,10 +56,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `piped_pytest_blocker_constants.py` | Bash tool name, pytest program basenames and the python-interpreter basename pattern, the pipe and segment-reset operator token sets, and the deny message for the piped-pytest blocker; classification that consumes those program and wrapper constants lives in `pytest_invocation.py` |
 | `pytest_invocation.py` | Pure parsed-segment classifier for pytest runs through interpreters, shims, wrappers, and shell string-exec forms; no pipeline deny decision |
 | `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements |
-| `pr_converge_bugteam_enforcer_constants.py` | State keys and timing config for the bugteam-parallel enforcer |
-| `pr_converge_bugteam_enforcer_state.py` | State-file helpers for the bugteam enforcer |
-| `pr_description_enforcer_constants.py` | PR-description shape rules and command patterns |
-| `pr_description_proof_of_work_constants.py` | Proof-part detection patterns, gh command tokens, and corrective messages for the proof-of-work comment audit |
 | `prose_matcher_precision_constants.py` | Sample floor, keep/narrow precision floors, matcher ids, label decisions, advisory log path, emit caps, and context fingerprint length for OP-07B prose-matcher advisory telemetry |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
@@ -70,7 +63,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
-| `reviewer_spawn_gate_constants.py` | Bash tool name, the sentinel marker, the Copilot and Bugbot trigger markers, the availability-script relative path and override env-var name, and the deny-message template for the reviewer-spawn gate |
 | `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
@@ -110,4 +102,3 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 - Tests for these modules live beside them as `test_<module>.py`. Run with `python -m pytest hooks_constants/test_<name>.py`.
 - `dynamic_stderr_handler.py`, `pre_tool_use_stdin.py`, `multi_edit_reconstruction.py`, `hosted_hook_runner.py`, and `text_stripping.py` are utility modules (not pure constants) but live here because they hold logic shared across hook surfaces.
 - `local_identity.py` is a loader: it reads the environment or `~/.claude/local-identity.json` (its path overridable via `CLAUDE_LOCAL_IDENTITY_PATH`) to resolve private NAS values (with committed placeholder defaults), the PII commit-scan exempt-repo slug set (`CLAUDE_PII_EXEMPT_REPOS` / `pii_exempt_repositories`), and the per-repository allowlisted-values mapping (`pii_allowlisted_values`).
-

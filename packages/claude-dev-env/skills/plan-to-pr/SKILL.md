@@ -57,8 +57,7 @@ Refuse the first matching case and stop:
 - A requested change spans files outside the packet's allowed file set.
 - A task contains more than one deliverable, acceptance check, or commit.
 - A required task tool, verifier, model tier, advisor, review path, or gate is unavailable.
-- The user asks to bypass verification, `verified_commit_gate`, independent
-  review, final validation, or a publication gate.
+- The user asks to bypass verification, review under the [review guide](../reviews/SKILL.md#review-workflow), final validation, or a publication gate.
 
 Return exactly: `Plan-to-PR blocked: <missing input or capability>.`
 
@@ -105,8 +104,8 @@ For each seeded task:
 1. The orchestrator issues the standalone task ticket.
 2. One worker implements one deliverable within the ticket's allowed files.
 3. The worker runs the one acceptance check and reports exact output and blockers.
-4. A fresh verifier checks the task diff, baseline, named gates, and ticket-to-diff
-   scope. It must pass `verified_commit_gate` for the exact surface.
+4. Review and verify the task diff, baseline, named checks, and ticket-to-diff
+   scope under the [review guide](../reviews/SKILL.md#review-workflow).
 5. The orchestrator creates exactly one commit and records its hash.
 
 No task borrows files, acceptance checks, or commit history from another task.
@@ -114,7 +113,7 @@ Unrelated changes remain untouched and uncommitted.
 
 ## Review and repair
 
-Before every commit, require fresh verification and `verified_commit_gate`.
+Before every commit, record fresh verification and review under the [review guide](../reviews/SKILL.md#review-workflow).
 After the commit, a separate fast low-effort Luna review worker runs native
 findings-only correctness review at `/e-code-review low`. The review returns
 findings only and has no repair flag.
@@ -128,8 +127,8 @@ gate after cleanup.
 ## Final validation and publication
 
 The Luna max final validator maps every commit to one packet task and checks
-cumulative behavior, the allowed-file ledger, acceptance checks, verifier
-output, `verified_commit_gate` evidence, and post-commit review records. Any
+cumulative behavior, the allowed-file ledger, acceptance checks, verification
+output, and post-commit review records. Any
 unmapped commit, missing record, failed gate, or unresolved finding blocks
 publication.
 

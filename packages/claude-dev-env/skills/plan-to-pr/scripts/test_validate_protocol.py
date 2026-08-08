@@ -20,7 +20,7 @@ validate_record = VALIDATE_PROTOCOL_MODULE.validate_record
 
 
 def valid_record() -> dict[str, object]:
-    verification = {"acceptance_output": "passed: pytest", "verifier_output": "passed: clean", "verified_commit_gate": "passed: exact surface", "surface_hash": "a" * 64}
+    verification = {"acceptance_output": "passed: pytest", "verification_output": "passed: clean", "surface_hash": "a" * 64}
     return {
         "task_identity": "task-3", "deliverable": "validator", "allowed_files": ["validator.py"],
         "acceptance_check": "pytest", "baseline": "clean", "worker_route": "implementation worker; effort=low", "commit": "a1b2c3d",

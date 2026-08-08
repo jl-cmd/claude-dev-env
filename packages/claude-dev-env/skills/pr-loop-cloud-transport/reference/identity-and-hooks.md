@@ -26,14 +26,14 @@ Author-keyed logic accounts for the split: a self-PR check keys on the login tha
 
 ## Hooks that still gate a cloud run
 
-The commit and push gates read git commands, which a cloud run still issues through Bash, so they fire normally and the run follows them: `verified_commit_gate`, `session_edit_stage_gate`, `block_main_commit`, `precommit_code_rules_gate`, `test_preflight_check`, and the pre-push base-ref check that needs `origin/HEAD` set (SKILL.md Step 2).
+The commit and push gates read git commands, which a cloud run still issues through Bash, so they fire normally and the run follows them: `session_edit_stage_gate`, `block_main_commit`, `precommit_code_rules_gate`, `test_preflight_check`, and the pre-push base-ref check that needs `origin/HEAD` set (SKILL.md Step 2).
 
 ## Hooks that go quiet on the MCP path
 
-The `gh`-text hooks read risk from literal `gh ...` command text: `pr_description_enforcer`, `gh_body_arg_blocker`, `conventional_pr_title_gate`, `gh_pr_author_enforcer`, the `gh` branch of `volatile_path_in_post_blocker`, and the `gh pr ready` branch of `convergence_gate_blocker`. An MCP post carries no `gh` text, so these checks see nothing to gate while the settings matchers name only the local tool prefix. The run covers the gap by hand before each MCP post — the Step 6 self-check in SKILL.md:
+The `gh`-text hooks read risk from literal `gh ...` command text: `gh_body_arg_blocker`, `conventional_pr_title_gate`, `gh_pr_author_enforcer`, and the `gh` branch of `volatile_path_in_post_blocker`. An MCP post carries no `gh` text, so these checks see nothing to gate while the settings matchers name only the local tool prefix. The run covers the gap by hand before each MCP post — the Step 6 self-check in SKILL.md:
 
 - No volatile scratch path in a post body (job dirs, temp roots, worktrees).
-- A proof-of-work comment carries all five parts the proof standard names.
+- Review comments follow the [review guide](../../reviews/SKILL.md#review-workflow).
 - A PR title follows Conventional Commits.
 - Markdown bodies go through the structured `body` parameter so backticks show as formatting.
 

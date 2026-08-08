@@ -6,9 +6,9 @@ State both of these to the user, in these terms, whenever a proof-of-concept is 
 
 `code_rules_enforcer` is a Write/Edit gate: it checks content as it is written. Prototype code is built under `--bare`, so that gate never fired, and content brought into promotion as a git diff (apply, checkout, cherry-pick) does not pass through it either.
 
-Standards re-engage on promotion through three surfaces that stand in for the write-time hook:
+Promotion records the controls applied to the real diff:
 
-- the `code-verifier` agent, in a fresh context, deriving and running the named gates against the real diff;
+- review and verification under the [review guide](../../reviews/SKILL.md#review-workflow);
 - the `privacy-hygiene` sweep for personal data and secrets;
 - the pull-request review (AGENTS.md criteria and any PR-loop reviewers).
 
@@ -18,6 +18,6 @@ Say plainly: the write-time rule engine did not see this code; the verifier and 
 
 The sandbox agent wrote code first and tests, if any, after. Red-green-refactor ordering did not happen. So the honest claim on promoted prototype code is exactly this, and nothing more:
 
-> code-verifier passed, privacy swept, review passed — TDD ordering waived.
+> Review and verification completed, privacy swept — TDD ordering waived.
 
-Do not claim red-green compliance on these lines. A prototype is a reference build, not a test-first build. Fred Brooks: plan to throw one away. Promotion re-verifies the code and often rewrites it to standard; expect real work in the verifier repair loop, not a rubber stamp.
+Do not claim red-green compliance on these lines. A prototype is a reference build, not a test-first build. Promotion reviews and verifies the code against the current standards.

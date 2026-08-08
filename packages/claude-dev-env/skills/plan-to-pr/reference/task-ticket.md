@@ -17,13 +17,12 @@ commits.
 | Worker route | The model role and selected route from `reference/model-routing.md`; planner and final-validator records include Luna max plus Sol xhigh advisor evidence, and orchestrator records the max route |
 | Commit record | Exactly one commit hash for this ticket |
 | Review record | Separate fast low-effort Luna review output that invokes native `/e-code-review low` and returns findings only, followed by separate fast low-effort Luna repair output, including resolved model, effort, command, findings, repair status, and surface hash |
-| Verification record | Fresh verifier output and `verified_commit_gate` result for the exact surface |
+| Verification record | Fresh verification output for the exact surface and review under the [review guide](../../reviews/SKILL.md#review-workflow) |
 
 ## Execution contract
 
 The worker changes only the allowed files, runs the acceptance check, and reports
-the exact output. A fresh verifier checks the ticket against the diff before one
-commit is created. The commit hash is recorded before the separate review pass.
+the exact output. Review and verification follow the [review guide](../../reviews/SKILL.md#review-workflow) before one commit is created. The commit hash is recorded before the separate review pass.
 
 ## Review and completion contract
 
@@ -33,6 +32,6 @@ repair flag. A separate fast low-effort Luna repair worker applies only confirme
 the resolved model, effort, command, findings, repair status, and surface hash.
 Confirmed repairs require the acceptance check and fresh exact-surface verification
 again; amend the task commit and repeat the native review until clean. Missing
-native review or required verifier capability fails closed. The
+native review fails closed. The
 final validator maps the commit to this ticket and rejects missing or extra
 records.

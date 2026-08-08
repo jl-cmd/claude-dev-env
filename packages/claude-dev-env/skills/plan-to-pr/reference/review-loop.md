@@ -6,7 +6,7 @@ Run this loop for every committed task. Store each pass in the task record.
 2. It invokes the native findings-only `/e-code-review low` correctness
    capability; the review has no repair flag.
 3. Record resolved model, effort, command, findings, repair status, and surface
-   hash. Missing native review or verifier capability fails closed.
+   hash. Apply the [review guide](../../reviews/SKILL.md#review-workflow) to every finding.
 4. A separate fast low-effort Luna repair worker applies only confirmed findings.
 5. Rerun the task acceptance check and fresh exact-surface verification.
 6. Amend the task commit and repeat the native review until clean.
@@ -14,7 +14,7 @@ Run this loop for every committed task. Store each pass in the task record.
 ## Accepted records
 
 Clean means the native review reports no findings for the exact committed
-surface. A repaired pass is not accepted until acceptance and fresh verifier
+surface. A repaired pass is not accepted until acceptance and fresh verification
 output are recorded against the amended commit.
 
 ## Example

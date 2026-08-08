@@ -7,7 +7,7 @@ PASS, FAIL plus file and line evidence, or N/A plus a reason.
 2. Confirm every task record has required identity, files, acceptance, and commit fields.
 3. Confirm every committed task has native findings-only review and separate repair records.
 4. Confirm every repair has acceptance output, fresh exact-surface verification, and an amended commit before the next review.
-5. Confirm all review records are clean and all verifier records pass.
+5. Confirm all review records are clean and all verification records are present.
 6. Confirm the complete allowed-file ledger contains no extra changed files.
 7. Confirm final validation and workflow self-audit evidence are present before release.
 8. Confirm the finalized PR branch receives Luna max `/e-simplify` cleanup with

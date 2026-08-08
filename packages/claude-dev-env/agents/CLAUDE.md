@@ -11,13 +11,12 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 | `clean-coder.md` | Clean Coder | Primary code-writing agent; links AGENTS.md / CODE_RULES / enforcer; task-local discovery and gate-clean first writes |
 | `code-advisor.md` | Code Advisor | Single-executor mid-run advisor (PLAN/CORRECTION/STOP as final text); distinct from session-advisor |
 | `code-quality-agent.md` | Code Quality Agent | Multi-file code quality review across an entire diff or set of files |
-| `code-verifier.md` | Code Verifier | Post-hoc verification, run only when the task owner asks for a pass; never edits files in the verified tree, with one exception, a deliberate break at an off-tree break site outside it, defined in the agent body; fresh context, puts the draft verdict through one strongest-tier validation subagent, ends with a fenced verdict; `all_pass` true needs a complete shown-red table as well as clean layers |
 | `deep-research.md` | Deep Research | Citation-grounded research with web search |
 | `docs-agent.md` | Docs Agent | Documentation authoring and maintenance |
 | `git-commit-crafter.md` | Git Commit Crafter | Stages changes, writes conventional commit messages, creates commits |
 | `issue-tracker.md` | Issue Tracker | Primary handler for one GitHub issue action per spawn; loads the issue-tracker skill (plain-brief); returns issue numbers and URLs |
 | `plan-packet-validator.md` | Plan Packet Validator | Fresh-context validator for workflow-generated plan packets under `docs/plans/` |
-| `pr-description-writer.md` | PR Description Writer | Authors PR descriptions in Anthropic-style shapes that pass the `pr_description_enforcer` hook's body audit |
+| `pr-description-writer.md` | PR Description Writer | Drafts PR descriptions and comments from the current diff using the canonical description and comment guides |
 | `session-advisor.md` | Session Advisor | Standing multi-consumer reviewer; SendMessage only; returns endorse/correction/plan/stop |
 | `skill-writer-agent.md` | Skill Writer Agent | Authors SKILL.md and companion files to skill-builder conventions; caller-agnostic authoring specialist |
 

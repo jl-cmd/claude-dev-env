@@ -6,10 +6,7 @@ PreToolUse hooks that deny (block) tool calls when a rule is violated. The main 
 
 | Directory | Role |
 |---|---|
-| `config/` | Shared constants for the verified-commit gate family (`verified_commit_constants.py`) |
 | `tdd_enforcer_parts/` | Concern modules the `tdd_enforcer.py` entry hook wires together: path classification, content analysis, candidate-path resolution, freshness, git-tracking restore detection, decisions, and constants |
-| `verified_commit_gate_parts/` | Concern modules the `verified_commit_gate.py` entry hook wires together: command tokenization, directory-change resolution, gated git-invocation resolution, deny-reason resolution, and deny-payload assembly |
-| `code_review_stamp_write_blocker_parts/` | Concern modules the `code_review_stamp_directory_write_blocker.py` entry hook wires together: the split directory-change-into-stamp matcher and the obfuscated-stamp-path-write matcher |
 | `claude_md_orphan_file_blocker_parts/` | Concern modules the `claude_md_orphan_file_blocker.py` entry hook wires together: reference extraction, subtree scan, scan plan, decision, and constants |
 | `package_inventory_stale_blocker_parts/` | Concern modules the `package_inventory_stale_blocker.py` entry hook wires together: inventory detection, decision, and constants |
 | `inventory_intent_records/` | The shared per-session pending-intent store both inventory blockers read to break the file/row add-order deadlock |
@@ -73,11 +70,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `block_main_commit.py` | PreToolUse (Bash) | `git commit`/`git push` directly to `main` |
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |
-| `code_review_pr_create_gate.py` | PreToolUse (Bash/MCP GitHub) | `gh pr create` or the MCP `create_pull_request` tool without a clean `xhigh` code-review stamp covering the branch surface |
-| `code_review_push_gate.py` | PreToolUse (Bash/PowerShell) | `git push` without a clean `low` code-review stamp covering the branch surface |
-| `code_review_stamp_directory_write_blocker.py` | PreToolUse (Bash/PowerShell/Write/Edit/MultiEdit) | Shell or file-tool writes into `~/.claude/code-review-stamps/`, and shell references to the stamp store module or its mint call, outside the sanctioned invoker |
-| `code_verifier_spawn_preflight_gate.py` | PreToolUse (Agent) | Spawning the `code-verifier` subagent when the branch has a merge conflict vs its base or a CODE_RULES violation on a working-tree-added line, or the CODE_RULES engine fails to load |
-| `convergence_gate_blocker.py` | PreToolUse (Bash) | Convergence workflow actions on a conflicting PR |
 | `conventional_pr_title_gate.py` | PreToolUse (Bash) | `gh pr create`/`gh pr edit` with a `--title` that is not a Conventional Commit, in a repo whose CI runs a semantic-pull-request title check |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
 | `docstring_rule_gate_count_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A stale spelled-out gate-validator count in `docstring-prose-matches-implementation.md` — the "N more gate validators" / "M gated slices" count drifting from the `check_docstring_*` validators the prose names |
@@ -101,12 +93,9 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `piped_pytest_blocker.py` | PreToolUse (Bash) | A pytest run whose output feeds a pipe, where the pipeline reports the exit code of the command on the right |
 | `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off); AskUserQuestion lean-block structure stays always on |
-| `pr_converge_bugteam_enforcer.py` | PreToolUse | Enforces that bugteam runs in parallel with bugbot in pr-converge loops |
-| `pr_description_enforcer.py` | PreToolUse (Bash) | `gh pr create`/`edit`/`comment` bodies that fail the Anthropic claude-code style audit, proof-shaped `gh pr comment` bodies missing proof-of-work parts, and `gh pr ready` while the PR carries no passing proof comment |
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
-| `reviewer_spawn_gate.py` | PreToolUse (Bash) | A sentinel-marked autoconverge reviewer-spawn command (Copilot review request, Bugbot rerun comment) run while `reviewer_availability.py` reports that reviewer down or out of quota |
 | `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to opening the file with its native Windows app |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit) | Writes to sensitive credential or config files |
 | `session_edit_stage_gate.py` | PreToolUse (Bash) | A `git commit` that would drop files edited this session because they are tracked but left unstaged |
@@ -117,10 +106,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |
 | `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, bare home, or a network share root |
-| `verdict_directory_write_blocker.py` | PreToolUse (Bash/PowerShell) | Shell writes into `~/.claude/verification/` |
-| `verified_commit_gate.py` | PreToolUse (Bash/PowerShell) | `git commit`/`git push` without a passing verifier verdict |
-| `verified_commit_message_accuracy_blocker.py` | PreToolUse | Commit messages that misstate what the diff has |
-| `verifier_verdict_minter.py` | SubagentStop | Mints a passing verdict file when a `code-verifier` agent finishes cleanly |
 | `volatile_path_in_post_blocker.py` | PreToolUse (Bash/MCP GitHub) | `gh` post commands and GitHub MCP post tools whose body references a volatile path (job scratch dir, worktree, or system temp) that outlives the durable post |
 | `windows_rmtree_blocker.py` | PreToolUse (Write/Edit) | `shutil.rmtree` with `ignore_errors=True` on Windows |
 | `workflow_substitution_slot_blocker.py` | PreToolUse (Write/Edit) | Workflow templates with bare per-iteration tokens missing angle-bracket slots |
@@ -131,18 +116,8 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | File | Role |
 |---|---|
 | `_gh_body_arg_utils.py` | Parsing helpers for `gh_body_arg_blocker.py` |
-| `code_review_enforcement_config_bootstrap.py` | Binds `config.code_review_enforcement_constants` to the sibling `config/` file by explicit location, so the code-review gate family resolves its constants regardless of a foreign `config` package's `sys.path` order |
-| `code_review_gate_deny.py` | Shared deny scaffold for the push and PR-create code-review gates: the `hookSpecificOutput` deny-payload builder and the log-and-emit helper, so both gates share one deny shape |
-| `code_review_stamp_store.py` | Reads and writes the per-work-tree code-review stamp files under `~/.claude/code-review-stamps/`, and decides whether a clean stamp at the needed effort covers the live branch surface |
-| `pr_description_body_audit.py` | Body audit logic for `pr_description_enforcer.py` |
-| `pr_description_command_parser.py` | `gh` command parsing for `pr_description_enforcer.py` |
-| `pr_description_pr_number.py` | PR number extraction logic |
-| `pr_description_proof_of_work.py` | Proof-of-work comment audit and `gh pr ready` gate logic for `pr_description_enforcer.py` |
-| `pr_description_readability.py` | Readability checks on PR description bodies |
-| `verification_verdict_store.py` | Reads and writes verdict files under `~/.claude/verification/` |
-| `verified_commit_config_bootstrap.py` | Binds `config.verified_commit_constants` to the sibling `config/` file by explicit location, so the gate family resolves its constants regardless of a foreign `config` package's `sys.path` order |
 
 ## Conventions
 
 - Tests live beside each hook as `test_<hookname>.py` or `test_<hookname>_<suffix>.py`. Run with `python -m pytest <test_file>`.
-- Tunable constants live in `hooks_constants/<hook_name>_constants.py`; the verified-commit family uses `blocking/config/verified_commit_constants.py`.
+- Tunable constants live in `hooks_constants/<hook_name>_constants.py`.

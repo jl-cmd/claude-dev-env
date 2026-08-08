@@ -104,12 +104,12 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Evidence:** The settings.json matcher for `bot_mention_comment_blocker` names the tool-specific `mcp__plugin_github_github__add_issue_comment`, and the MCP branch of `volatile_path_in_post_blocker` names the wildcard `mcp__plugin_github_github__.*`. Cloud tool calls carry the `mcp__github__*` prefix, which neither matcher names.
 - **Fix summary:** Phase C adds `mcp__github__.*` matchers beside the plugin-prefix ones. Phase B tells skills to name the operation and resolve the tool by `ToolSearch`, or to name both prefixes.
 
-### RC7 — Hardcoded Windows interpreter path
+### RC7 — Portable review tooling
 
-- **Symptom:** In cloud, the verifier can never compute `manifest_sha256`, so the verification verdict is never minted, and `verified_commit_gate` blocks every code commit.
-- **Cause:** `autoconverge/workflow/converge.mjs` hardcodes `"C:\\Python313\\python.exe"` for `verification_verdict_store.py` in two verify prompts: the `buildVerdictFenceSteps` helper and a separate inline hardening-verify prompt that repeats the verdict-fence text.
-- **Evidence:** `converge.mjs` carries the literal `"C:\\Python313\\python.exe"` at line 712 (inside `buildVerdictFenceSteps`) and at line 418 (inside the separate hardening-verify prompt). The cloud image has no such path. `Start-Process chrome` in the autoconverge SKILL.md teardown and the `.ahk`, `.ps1`, and `.cmd` operator tooling under `skills/pr-converge/scripts/` are Windows-only and stay unused in cloud.
-- **Fix summary:** Phase A changes the fence step to a resolved interpreter (`python3` on PATH / a `sys.executable` pattern).
+- **Symptom:** A cloud review step fails when it assumes a Windows-only executable path.
+- **Cause:** Cloud sessions provide their own runtime paths and do not expose local Windows tool locations.
+- **Evidence:** Cloud compatibility work runs through MCP and the available shell runtime; local desktop tooling remains unavailable to that session.
+- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow) format.
 
 ### RC8 — Copilot quota gap
 
@@ -249,19 +249,18 @@ git -C <repo-root> remote set-head origin -a
 ### 5.6 Hook-denial notes
 
 The commit and push gates still fire on cloud Bash git commands and gate the
-run: `verified_commit_gate`, `session_edit_stage_gate`, `block_main_commit`,
+run: `session_edit_stage_gate`, `block_main_commit`,
 `precommit_code_rules_gate`, `test_preflight_check`. Follow them normally.
 
 The `gh`-text hooks read risk from literal `gh ...` command text
-(`pr_description_enforcer`, `gh_body_arg_blocker`, `conventional_pr_title_gate`,
-`gh_pr_author_enforcer`, the `gh` branch of `volatile_path_in_post_blocker`,
-and the `gh pr ready` branch of `convergence_gate_blocker`). An MCP-path post
+(`gh_body_arg_blocker`, `conventional_pr_title_gate`, `gh_pr_author_enforcer`,
+and the `gh` branch of `volatile_path_in_post_blocker`). An MCP-path post
 carries no `gh` text, so these hooks stay quiet. Cloud loses those checks
 until Phase C lands the MCP matchers. Meanwhile, self-check by hand before an
 MCP post:
 
 - No volatile scratch path in a post body (job dirs, `/tmp`, worktrees).
-- A proof-of-work comment carries the five parts the proof standard names.
+- Review comments follow the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow).
 - A PR title follows Conventional Commits.
 - A body with markdown goes through the structured `body` parameter, so
   backticks show as formatting.
@@ -352,15 +351,12 @@ search, or have the SKILL.md call `mcp__github__search_pull_requests` with
 *Acceptance:* discovery lists open PRs for an owner in cloud; the test file
 is green.
 
-**A10. `skills/autoconverge/workflow/converge.mjs` — resolved interpreter.**
-Change both hardcoded `"C:\\Python313\\python.exe"` tokens to a resolved
-interpreter (`python3` on PATH, or a value the workflow reads at runtime):
-line 712 inside `buildVerdictFenceSteps`, and line 418 inside the separate
-hardening-verify prompt that repeats the verdict-fence text. Both verdict
-fence steps then run in cloud, so the verifier computes `manifest_sha256` and
-`verified_commit_gate` can mint a verdict.
+**A10. `skills/autoconverge/workflow/converge.mjs` — portable review runtime.**
+Resolve the review runtime at execution time instead of requiring a local
+desktop path.
 *Acceptance:* `cd packages/claude-dev-env && npm test` passes the converge
-workflow tests, and the emitted fence names a portable interpreter.
+workflow tests. The cloud `review_task_source` resolves to an available runtime
+that reports `REVIEW_RESULT: PASS` or `REVIEW_RESULT: FINDINGS`.
 
 ### Phase B — Make SKILL.md prose cloud-aware
 
@@ -436,13 +432,12 @@ hook-merge step, so a cloud MCP post routes through the guard.
 *Acceptance:* a hook unit test drives the guard with a `mcp__github__*` tool
 name and sees it fire; `python3 -m pytest` covers the new matcher.
 
-**C2. Decide MCP-side gates for PR create and edit (decision item).**
-Decide whether `conventional_pr_title_gate` and `pr_description_enforcer`
-need MCP-side equivalents that match `mcp__github__create_pull_request` and
-`mcp__github__update_pull_request`, so a cloud PR create or edit gets the same title and
-body checks the `gh` path gets. Record the decision and, if yes, add the
-matchers and checks.
-*Acceptance:* a written decision; if the decision is yes, the matchers exist
+**C2. Decide MCP-side title validation for PR create and edit (decision item).**
+Decide whether `conventional_pr_title_gate` needs an MCP-side equivalent that
+matches `mcp__github__create_pull_request` and
+`mcp__github__update_pull_request`, so cloud PR create or edit gets the same
+title check as the `gh` path. Record the decision and, if yes, add the matcher
+and check.
 and a hook test covers them.
 
 ### Phase D — Session bootstrap

@@ -24,4 +24,3 @@ Single-object endpoints (`pulls/<n>`, `issues/<n>`) skip pagination and may use 
 
 - [`destructive-commands.md`](destructive-commands.md) — why a body describing `rm -rf` must travel by file path.
 - [`durable-post-artifacts.md`](durable-post-artifacts.md) — what a post body may reference.
-- [`proof-of-work-pr-comments.md`](proof-of-work-pr-comments.md) — what the proof comment must contain.

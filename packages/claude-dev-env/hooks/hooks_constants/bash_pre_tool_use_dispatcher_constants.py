@@ -67,21 +67,10 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
         "blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
     ),
     BashHostedHookEntry("blocking/conventional_pr_title_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/reviewer_spawn_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/block_main_commit.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/precommit_code_rules_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/session_edit_stage_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/pr_description_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/test_preflight_check.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/convergence_gate_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/windows_rmtree_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_pr_author_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/code_review_push_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/code_review_pr_create_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
-    BashHostedHookEntry(
-        "blocking/code_review_stamp_directory_write_blocker.py",
-        ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
-    ),
 )

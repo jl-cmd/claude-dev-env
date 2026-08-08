@@ -17,8 +17,6 @@ SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 REAL_RUN_GIT_TEXT_COMMAND = pre_push.run_git_text_command
 
 
-CODE_REVIEW_ENFORCEMENT_ENV_VAR: str = "CLAUDE_CODE_REVIEW_ENFORCEMENT"
-ENFORCEMENT_CONSTANTS_MODULE_NAME: str = "config.code_review_enforcement_constants"
 ALL_ZEROS_OBJECT_NAME: str = "0" * 40
 NON_ZERO_LOCAL_SHA: str = "a" * 40
 NON_ZERO_REMOTE_SHA_ONE: str = "1" * 40
@@ -111,7 +109,6 @@ def _write_gate_that_allows_every_push(
     passing_gate_path = tmp_path / "code_rules_gate.py"
     passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "stdin", io.StringIO(NEW_BRANCH_PUSH_STDIN))
 
 
@@ -244,11 +241,6 @@ def resolve_remote_head_reference(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pre_push, "run_git_text_command", fake_run_git_text_command)
 
 
-def _isolate_code_review_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "CODE_REVIEW_PUSH_GATE_PATH", str(tmp_path / "no_code_review_gate.py")
-    )
-
 
 def test_resolve_base_reference_from_stdin_uses_remote_object_when_non_zero() -> None:
     stdin_text = (
@@ -295,7 +287,6 @@ def test_main_exits_zero_when_gate_script_missing(
         "CODE_RULES_GATE_PATH",
         str(tmp_path / "does_not_exist.py"),
     )
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
 
     exit_code = pre_push.main()
@@ -317,7 +308,6 @@ def test_main_invokes_gate_with_resolved_base_reference(
         encoding="utf-8",
     )
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     remote_sha = "9" * 40
     monkeypatch.setattr(
@@ -345,7 +335,6 @@ def test_main_passes_the_pushed_remote_name_to_base_resolution(
     # No default-branch ref so the gate base is the stdin remote object, not a
     # merge-base skip; usable-base resolution then sees the pushed remote name.
     _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     all_recorded_remote_names: list[str] = []
 
     def recording_resolve_usable_base_reference(
@@ -566,7 +555,6 @@ def test_invoke_gate_uses_resolved_path(
     symlink_gate_path.symlink_to(real_gate_path)
     resolved_path = symlink_gate_path.resolve()
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(symlink_gate_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "stdin", io.StringIO(
         f"refs/heads/feature {NON_ZERO_LOCAL_SHA} refs/heads/feature {NON_ZERO_REMOTE_SHA_ONE}\n"
@@ -684,7 +672,6 @@ def test_main_allows_main_onto_main_push(
     passing_gate_path = tmp_path / "gate.py"
     passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.setattr(
         sys,
         "stdin",
@@ -697,8 +684,6 @@ def test_main_allows_main_onto_main_push(
 
     assert exit_code == 0
 
-
-CODE_REVIEW_STUB_BLOCK_REASON: str = "CODE_REVIEW_STUB_BLOCK_REASON"
 
 
 def _write_passing_code_rules_gate(
@@ -723,83 +708,6 @@ def _isolate_repository_and_write_passing_code_rules_gate(
     """Move into a repository without origin refs, then install a passing gate."""
     _isolate_from_default_branch_refs(tmp_path, monkeypatch)
     _write_passing_code_rules_gate(tmp_path, monkeypatch)
-
-
-def _write_code_review_gate_stub(tmp_path: Path, returned_reason_literal: str) -> Path:
-    stub_gate_path = tmp_path / "code_review_push_gate.py"
-    stub_gate_path.write_text(
-        "def deny_reason_for_directory(target_directory):\n"
-        f"    return {returned_reason_literal}\n",
-        encoding="utf-8",
-    )
-    return stub_gate_path
-
-
-def test_main_blocks_when_code_review_gate_returns_reason(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
-    stub_gate_path = _write_code_review_gate_stub(
-        tmp_path, repr(CODE_REVIEW_STUB_BLOCK_REASON)
-    )
-    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
-
-    exit_code = pre_push.main()
-
-    assert exit_code == git_hooks_constants.CODE_REVIEW_STAMP_BLOCK_EXIT_CODE
-    captured = capsys.readouterr()
-    assert CODE_REVIEW_STUB_BLOCK_REASON in captured.err
-
-
-def test_main_allows_when_code_review_gate_returns_none(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
-    stub_gate_path = _write_code_review_gate_stub(tmp_path, "None")
-    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
-
-    exit_code = pre_push.main()
-
-    assert exit_code == 0
-
-
-def test_main_code_review_check_fails_open_when_gate_module_absent(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
-    monkeypatch.setenv(
-        "CODE_REVIEW_PUSH_GATE_PATH", str(tmp_path / "does_not_exist.py")
-    )
-
-    exit_code = pre_push.main()
-
-    assert exit_code == 0
-
-
-def test_main_allows_deletion_push_even_when_code_review_gate_would_block(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    passing_gate_path = tmp_path / "code_rules_gate.py"
-    passing_gate_path.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
-    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(passing_gate_path))
-    stub_gate_path = _write_code_review_gate_stub(
-        tmp_path, repr(CODE_REVIEW_STUB_BLOCK_REASON)
-    )
-    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(stub_gate_path))
-    deletion_stdin = (
-        f"refs/heads/feature {ALL_ZEROS_OBJECT_NAME} "
-        f"refs/heads/feature {ALL_ZEROS_OBJECT_NAME}\n"
-    )
-    monkeypatch.setattr(sys, "stdin", io.StringIO(deletion_stdin))
-
-    exit_code = pre_push.main()
-
-    assert exit_code == 0
 
 
 DEFAULT_BRANCH_NAME: str = "main"
@@ -1267,7 +1175,6 @@ def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
         encoding="utf-8",
     )
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1307,7 +1214,6 @@ def test_main_skips_the_gate_when_no_merge_base_resolves(
         encoding="utf-8",
     )
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1342,7 +1248,6 @@ def test_main_allows_default_branch_file_the_rebase_replayed_onto(
     )
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1370,7 +1275,6 @@ def test_main_blocks_violation_the_branch_itself_adds(
     )
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1407,7 +1311,6 @@ def test_main_uses_remote_object_when_no_default_branch_reference_resolves(
         encoding="utf-8",
     )
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1446,7 +1349,6 @@ def test_main_uses_remote_object_when_the_default_branch_is_pushed(
     )
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1481,7 +1383,6 @@ def test_main_uses_merge_base_when_a_default_named_local_branch_updates_a_topic_
     )
     _set_origin_head(repository, ORIGIN_UNPROTECTED_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1517,7 +1418,6 @@ def test_main_uses_remote_object_when_a_renamed_local_branch_updates_the_default
     )
     _set_origin_head(repository, ORIGIN_UNPROTECTED_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1547,7 +1447,6 @@ def test_main_reads_default_branch_tracking_reference_when_origin_head_is_unset(
         branch_file_name=BRANCH_FILE_NAME,
     )
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     monkeypatch.setattr(
         sys,
@@ -1575,7 +1474,6 @@ def test_main_skips_a_deletion_line_to_reach_the_branch_update(
     )
     _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
     _write_diff_scoped_gate(tmp_path, monkeypatch)
-    _isolate_code_review_gate(tmp_path, monkeypatch)
     monkeypatch.chdir(repository)
     deletion_line = (
         f"(delete) {ALL_ZEROS_OBJECT_NAME} refs/heads/retired {NON_ZERO_REMOTE_SHA_ONE}\n"
@@ -1590,34 +1488,6 @@ def test_main_skips_a_deletion_line_to_reach_the_branch_update(
             )
         ),
     )
-
-    exit_code = pre_push.main()
-
-    assert exit_code == 0
-
-
-def test_main_allows_when_code_review_enforcement_flag_is_off(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Native pre-push honors the real gate with enforcement off.
-
-    Points at the production push gate (not a reason stub). The gate resolves
-    its flag when its config module first executes, so this test clears the
-    environment variable and evicts that one module if a sibling suite cached
-    it earlier in the same session. The gate then returns no deny reason and
-    the backstop allows the push.
-    """
-    monkeypatch.delenv(CODE_REVIEW_ENFORCEMENT_ENV_VAR, raising=False)
-    monkeypatch.delitem(sys.modules, ENFORCEMENT_CONSTANTS_MODULE_NAME, raising=False)
-    _isolate_repository_and_write_passing_code_rules_gate(tmp_path, monkeypatch)
-    real_gate_path = (
-        Path(__file__).resolve().parent.parent
-        / "blocking"
-        / "code_review_push_gate.py"
-    )
-    assert real_gate_path.is_file()
-    monkeypatch.setenv("CODE_REVIEW_PUSH_GATE_PATH", str(real_gate_path))
 
     exit_code = pre_push.main()
 

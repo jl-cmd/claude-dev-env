@@ -37,6 +37,13 @@ const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cp
 const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
 const DEPENDENCY_SUPPLIED_SKILL_DIRECTORY = 'dependency-supplied-skill';
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
+const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
+    'small-cl',
+    'comments',
+    'reviews',
+    'descriptions',
+    'emergencies',
+];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',
     '2021-06-15T12-30-45-123Z',
@@ -824,6 +831,25 @@ test('a scoped --only install records the skill names it installed', () => {
             true,
             'the skill the scoped run installed reaches the record uninstall reads',
         );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a scoped core install ships the canonical review guide skills', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+
+        const missingGuideSkillNames = CORE_REVIEW_GUIDE_SKILL_DIRECTORIES.filter(
+            eachSkillName => !existsSync(join(sandbox.skillsDirectory, eachSkillName, 'SKILL.md')),
+        );
+        assert.deepEqual(missingGuideSkillNames, []);
+
+        const recordedSkillNames = new Set(readManifest(sandbox.manifestPath).skills);
+        for (const eachSkillName of CORE_REVIEW_GUIDE_SKILL_DIRECTORIES) {
+            assert.equal(recordedSkillNames.has(eachSkillName), true);
+        }
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }
