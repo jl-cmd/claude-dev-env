@@ -38,6 +38,7 @@ try:
         REMOTE_SESSION_VARIABLE_NAME,
     )
 except ImportError:
+    sys.modules.pop("config", None)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config.session_start_refresh_constants import (
         CLAUDE_HOME_DIRECTORY_NAME,
