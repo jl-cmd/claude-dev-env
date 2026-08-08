@@ -7,7 +7,8 @@ so the session is missing the commands, rules, and hooks that release ships.
 
 This SessionStart hook closes that gap: it reads the installed version from
 the manifest in the Claude config directory (`CLAUDE_CONFIG_DIR` when set,
-`~/.claude` otherwise), asks the npm registry for the current version, and
+`~/.claude` otherwise; a relative override anchors to the home directory the
+install runs from), asks the npm registry for the current version, and
 reinstalls when the two differ. Both npm calls run from the home directory:
 hooks start in the project directory, and inside the repository that develops
 this very package, npx resolves the package name to the local workspace
@@ -37,7 +38,7 @@ from config.session_start_refresh_constants import (
 def claude_config_directory() -> Path:
     override = os.environ.get(CONFIG_DIR_OVERRIDE_VARIABLE_NAME, "").strip()
     if override:
-        return Path(override).expanduser()
+        return (Path.home() / Path(override).expanduser()).resolve()
     return Path.home() / CLAUDE_HOME_DIRECTORY_NAME
 
 

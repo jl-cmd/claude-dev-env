@@ -1,6 +1,6 @@
 """Behavior checks for the cloud SessionStart refresh hook.
 
-Six checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
+Seven checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
 against a sandbox home directory, with fake `npm` and `npx` executables on
 `PATH` that record their arguments to a log file. The assertions read that log:
 a refresh run shows an `npx -y claude-dev-env@<version>` line, a quiet run
@@ -237,5 +237,30 @@ def should_read_the_manifest_from_a_config_dir_override(tmp_path: Path) -> None:
         registry_version="2.12.0",
         config_dir_version="2.12.0",
     )
+    assert "npm view claude-dev-env version" in tool_log
+    assert "npx" not in tool_log
+
+
+def should_anchor_a_relative_config_dir_override_to_the_home_directory(
+    tmp_path: Path,
+) -> None:
+    _seed_sandbox(tmp_path, None, None)
+    profile_directory = tmp_path / "home" / "profile"
+    profile_directory.mkdir()
+    _write_manifest(profile_directory, "2.12.0")
+    environment = _hook_environment(
+        tmp_path,
+        remote=True,
+        registry_version="2.12.0",
+        registry_failure=False,
+        config_dir_version=None,
+    )
+    environment["CLAUDE_CONFIG_DIR"] = "profile"
+    completed = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPT)],
+        env=environment, capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
     assert "npm view claude-dev-env version" in tool_log
     assert "npx" not in tool_log
