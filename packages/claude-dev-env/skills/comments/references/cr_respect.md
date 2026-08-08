@@ -8,7 +8,7 @@ __[Respectful Changes](cl_respect.md)__._
 
 #### Assume competence & goodwill
 
-We attract competent people - and that means even when they're wrong, it most likely comes from lack of information, not from inability. A "bad" CL usually means one of the parties is in possession of information the other one isn't aware of.
+Our AI models are competent coders - and that means even when they're wrong, it usually comes from missing information, not from inability. A "bad" CL usually means one of the parties holds information the other one isn't aware of.
 
 #### Consolidate the discussion
 
@@ -24,7 +24,7 @@ If it is unclear why the author is doing things a certain way, feel free to ask 
 
 #### Find an end
 
-If you like things neat, it's tempting to go over a code review over and over until it's perfect, dragging it out for longer than necessary. It's soul-deadening for the recipient, though. Keep in mind that "LGTM" does not mean "I vouch my immortal soul this will never fail", but "looks good to me". If it looks good, move on. (That doesn't mean you shouldn't be thorough. It's a judgment call.) And if there are bigger refactorings to be done, move them to a new CL.
+If you like things neat, it's tempting to go over a code review over and over until it's perfect, dragging it out for longer than necessary. It burns review rounds without making the CL meaningfully better, though. Keep in mind that "LGTM" does not mean "I vouch my immortal soul this will never fail", but "looks good to me". If it looks good, move on. (That doesn't mean you shouldn't be thorough. It's a judgment call.) And if there are bigger refactorings to be done, move them to a new CL.
 
 #### Reply within a reasonable timeframe
 
@@ -32,17 +32,17 @@ Please don't leave the reviewee waiting: an AI reviewer responds on demand, so s
 
 #### Mention the positives
 
-It's very easy to get into the mindset of "find ALL the flaws", but acknowledging the positives both helps keep things civil, and brightens the recipient's day. No need to be all fake smiles, but if there's a good decision, or if somebody takes on a really grungy task, acknowledging that is a nice thing to do. And on the converse, a "thank you" to the reviewers is occasionally a nice thing, too.
+It's very easy to get into the mindset of "find ALL the flaws", but acknowledging the positives keeps the thread civil and marks the good decisions so they carry forward. If there's a good decision, or if the author takes on a really grungy task, acknowledging that on the review is worth doing - it tells the author, and every later reader, what to keep doing.
 
 ## Don't
 
 #### Don't shame people
 
-"How could you not see this" is a very unhelpful thing to say. Assume that your colleagues do their best, but occasionally make mistakes. That's why we have code reviews - to spot those mistakes. While flawless CLs are awesome, flawed ones are the norm.
+"How could you not see this" is a very unhelpful thing to say. Assume that the author - model or maintainer - did its best with the context it had, and still sometimes makes mistakes. That's why we have code reviews - to spot those mistakes. While flawless CLs are awesome, flawed ones are the norm.
 
 #### Don't use extreme or very negative language
 
-Please don't say things like "no sane person would ever do this" or "this algorithm is terrible", whether it's about the change you're reviewing or about the surrounding code. While it might intimidate the reviewee into doing what you want, it's not helpful in the long run - they will feel incapable, and there is not much info in there to help them improve. "This is a good start, but it could use some work" or "This needs some cleanup" are nicer ways of saying it. Discuss the code, not the person.
+Please don't say things like "no sane person would ever do this" or "this algorithm is terrible", whether it's about the change you're reviewing or about the surrounding code. Extreme language carries almost no information about what to change - it fills the thread with judgment where the fix should be. "This is a good start, but it could use some work" or "This needs some cleanup" say the same thing and leave room for the fix. Discuss the code, not the author.
 
 #### Don't discourage tool use
 

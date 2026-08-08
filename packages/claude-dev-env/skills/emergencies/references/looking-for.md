@@ -68,8 +68,8 @@ same CL as the production code unless the CL is handling an
 [emergency](../emergencies.md).
 
 Make sure that the tests in the CL are correct, sensible, and useful. Tests do
-not test themselves, and we rarely write tests for our tests—a human must ensure
-that tests are valid.
+not test themselves, and we rarely write tests for our tests—the reviewer must
+ensure that tests are valid.
 
 Will the tests actually fail when the code is broken? If the code changes
 beneath them, will they start producing false positives? Does each test make
@@ -154,7 +154,7 @@ missing, ask for it.
 
 In the general case, look at *every* line of code that you have been assigned to
 review. Some things like data files, generated code, or large data structures
-you can scan over sometimes, but don't scan over a human-written class,
+you can scan over sometimes, but don't scan over an authored class,
 function, or block of code and assume that what's inside of it is okay.
 Obviously some code deserves more careful scrutiny than other code&mdash;that's
 a judgment call that you have to make&mdash;but you should at least be sure that

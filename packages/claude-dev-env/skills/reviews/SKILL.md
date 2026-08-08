@@ -189,8 +189,8 @@ same CL as the production code unless the CL is handling an
 [emergency](../emergencies.md).
 
 Make sure that the tests in the CL are correct, sensible, and useful. Tests do
-not test themselves, and we rarely write tests for our tests—a human must ensure
-that tests are valid.
+not test themselves, and we rarely write tests for our tests—the reviewer must
+ensure that tests are valid.
 
 Will the tests actually fail when the code is broken? If the code changes
 beneath them, will they start producing false positives? Does each test make
@@ -275,7 +275,7 @@ missing, ask for it.
 
 In the general case, look at *every* line of code that you have been assigned to
 review. Some things like data files, generated code, or large data structures
-you can scan over sometimes, but don't scan over a human-written class,
+you can scan over sometimes, but don't scan over an authored class,
 function, or block of code and assume that what's inside of it is okay.
 Obviously some code deserves more careful scrutiny than other code&mdash;that's
 a judgment call that you have to make&mdash;but you should at least be sure that
@@ -605,14 +605,13 @@ Sometimes it takes a few rounds of explaining a suggestion before it really
 sinks in. Just make sure to always stay [polite](comments.md#courtesy) and let
 the developer know that you *hear* what they're saying, you just don't *agree*.
 
-## Upsetting Developers {#upsetting_developers}
+## Fear of Friction {#upsetting_developers}
 
-Reviewers sometimes believe that the developer will be upset if the reviewer
-insists on an improvement. Sometimes developers do become upset, but it is
-usually brief and they become very thankful later that you helped them improve
-the quality of their code. Usually, if you are [polite](comments.md#courtesy) in
-your comments, developers actually don't become upset at all, and the worry is
-just in the reviewer's mind. Upsets are usually more about
+Reviewers sometimes soften or drop a needed improvement to avoid friction with
+the developer. Don't: insisting on an improvement costs at most one more round
+of review, and the codebase keeps the benefit. If you are
+[polite](comments.md#courtesy) in your comments, insistence rarely causes
+friction at all. Friction is usually more about
 [the way comments are written](comments.md#courtesy) than about the reviewer's
 insistence on code quality.
 

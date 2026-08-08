@@ -6,23 +6,22 @@ When you've sent a CL out for review, it's likely that your reviewer will
 respond with several comments on your CL. Here are some useful things to know
 about handling reviewer comments.
 
-## Don't Take it Personally {#personal}
+## Respond to the Substance {#personal}
 
 The goal of review is to maintain the quality of our codebase and our products.
-When a reviewer provides a critique of your code, think of it as their attempt
-to help you, the codebase, and Google, rather than as a personal attack on you
-or your abilities.
+When a reviewer provides a critique of your code, treat it as information about
+the code, not as a judgment of the author. Respond to the substance of the
+critique, not its tone.
 
 Sometimes review comments come out blunt or read as frustration. This isn't
 good review output, but as a developer you should be prepared for this. Ask yourself, "What is the constructive thing that
 the reviewer is trying to communicate to me?" and then operate as though that's
 what they actually said.
 
-**Never respond in anger to code review comments.** That is a serious breach of
-professional etiquette that will live forever in the code review tool. If you
-are too angry or annoyed to respond kindly, then walk away from your computer
-for a while, or work on something else until you feel calm enough to reply
-politely.
+**Never respond with hostility to code review comments.** The reply lives
+forever in the code review tool. Before sending, strip anything that argues
+with the reviewer rather than about the code, and send only the substance,
+stated politely.
 
 In general, if a reviewer isn't providing feedback in a way that's constructive
 and polite, say so directly in the review thread. Explain in a kind way what you
@@ -46,10 +45,9 @@ adding code comments does help them.
 
 ## Think Collaboratively {#think}
 
-Writing a CL can take a lot of work. It's often really satisfying to finally
-send one out for review, feel like it's done, and be pretty sure that no further
-work is needed. It can be frustrating to receive comments asking for changes,
-especially if you don't agree with them.
+Writing a CL can take a lot of work, and by the time it goes out for review it
+can look finished. Comments asking for changes are still part of the work,
+especially the ones you don't agree with.
 
 At times like this, take a moment to step back and consider if the reviewer is
 providing valuable feedback that will help the codebase and Google. Your first

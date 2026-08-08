@@ -28,14 +28,13 @@ Sometimes it takes a few rounds of explaining a suggestion before it really
 sinks in. Just make sure to always stay [polite](comments.md#courtesy) and let
 the developer know that you *hear* what they're saying, you just don't *agree*.
 
-## Upsetting Developers {#upsetting_developers}
+## Fear of Friction {#upsetting_developers}
 
-Reviewers sometimes believe that the developer will be upset if the reviewer
-insists on an improvement. Sometimes developers do become upset, but it is
-usually brief and they become very thankful later that you helped them improve
-the quality of their code. Usually, if you are [polite](comments.md#courtesy) in
-your comments, developers actually don't become upset at all, and the worry is
-just in the reviewer's mind. Upsets are usually more about
+Reviewers sometimes soften or drop a needed improvement to avoid friction with
+the developer. Don't: insisting on an improvement costs at most one more round
+of review, and the codebase keeps the benefit. If you are
+[polite](comments.md#courtesy) in your comments, insistence rarely causes
+friction at all. Friction is usually more about
 [the way comments are written](comments.md#courtesy) than about the reviewer's
 insistence on code quality.
 
