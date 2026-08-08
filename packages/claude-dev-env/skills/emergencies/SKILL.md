@@ -1,3 +1,10 @@
+---
+name: emergencies
+description: >-
+  Google's engineering-practices guide to emergency changes, reproduced in
+  whole. Use when 'emergency fix' or 'hotfix' is typed.
+---
+
 # Emergencies
 
 Sometimes there are emergency CLs that must pass through the entire code review

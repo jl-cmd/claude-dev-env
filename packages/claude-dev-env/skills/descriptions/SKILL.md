@@ -1,3 +1,10 @@
+---
+name: descriptions
+description: >-
+  Google's engineering-practices guide to writing good CL descriptions,
+  reproduced in whole. Use when 'PR description' or 'CL description' is typed.
+---
+
 # Writing good CL descriptions
 
 
