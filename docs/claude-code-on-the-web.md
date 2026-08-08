@@ -34,14 +34,12 @@ environment boots from that cache and skips the script, so a release published
 after the cache was built never reaches `~/.claude`.
 
 The repo-committed SessionStart hook `.claude/hooks/session_start_refresh.py`
-closes that gap for sessions on this repository. At each cloud session start it
-compares the version in `~/.claude/.claude-dev-env-manifest.json` with the npm
-registry and reinstalls on a version difference. A matching version costs one
-`npm view` call, about a second; a reinstall runs once per release. Every
-failure path exits 0, so a registry outage never blocks a session from
-starting. Local sessions exit at the `CLAUDE_CODE_REMOTE` guard, and the hook
-runs npm from the home directory so the workspace in this repository — the
-package developing itself — never shadows the registry copy.
+closes that gap for sessions on this repository: at cloud session start it
+compares the installed manifest version against the npm registry and
+reinstalls on a difference. A matching version costs one `npm view` call,
+about a second; a reinstall runs once per release. The full mechanism — the
+`CLAUDE_CONFIG_DIR` override, the fail-open guarantee, the home-directory
+rule — lives in the hook's module docstring.
 
 A session on another repository keeps the cached install until its environment
 is rebuilt. Committing the same hook and `settings.json` entry into that

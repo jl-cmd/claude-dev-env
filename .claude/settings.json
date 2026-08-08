@@ -13,10 +13,12 @@
   "hooks": {
     "SessionStart": [
       {
+        "matcher": "startup|resume|clear",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\"",
+            "timeout": 630
           }
         ]
       }
