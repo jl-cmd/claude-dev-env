@@ -14,13 +14,16 @@ resolved directory through `CLAUDE_CONFIG_DIR`, so the manifest the installer
 writes lands where this hook reads. Both npm calls run from the home directory:
 hooks start in the project directory, and inside the repository that develops
 this very package, npx resolves the package name to the local workspace
-instead of the registry. Local sessions exit at the remote guard. Every
-failure path — registry outage, probe timeout, missing npm — exits 0, so the
-hook never blocks a session from starting.
+instead of the registry. Local sessions exit at the remote guard. A probe
+response that is not a bare semver string (an npmrc ``json=true`` wraps the
+version in quotes) reads as a failed probe. Every failure path — registry
+outage, probe timeout, missing npm — exits 0, so the hook never blocks a
+session from starting.
 """
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +37,7 @@ try:
         MANIFEST_FILE_NAME,
         PACKAGE_NAME,
         REGISTRY_PROBE_TIMEOUT_SECONDS,
+        REGISTRY_VERSION_PATTERN,
         REMOTE_SESSION_ACTIVE_VALUE,
         REMOTE_SESSION_VARIABLE_NAME,
     )
@@ -47,9 +51,12 @@ except ImportError:
         MANIFEST_FILE_NAME,
         PACKAGE_NAME,
         REGISTRY_PROBE_TIMEOUT_SECONDS,
+        REGISTRY_VERSION_PATTERN,
         REMOTE_SESSION_ACTIVE_VALUE,
         REMOTE_SESSION_VARIABLE_NAME,
     )
+
+_registry_version_matcher = re.compile(REGISTRY_VERSION_PATTERN)
 
 
 def claude_config_directory() -> Path:
@@ -107,7 +114,8 @@ def read_registry_version() -> str:
     )
     if completed is None or completed.returncode != 0:
         return ""
-    return completed.stdout.strip()
+    version = completed.stdout.strip()
+    return version if _registry_version_matcher.fullmatch(version) else ""
 
 
 def reinstall(registry_version: str) -> None:
