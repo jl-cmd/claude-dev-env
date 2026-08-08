@@ -23,6 +23,7 @@ from PIL import Image
 from config.constants import (
     ALL_SUPPORTED_BACKENDS,
     ALL_SUPPORTED_RESIZE_POLICIES,
+    CODEX_DEFAULT_REASONING_EFFORT,
     CODEX_REASONING_EFFORT_CONFIG_KEY,
     CODEX_TIMEOUT_SECONDS,
     CODEX_TOOL_NAME,
@@ -482,15 +483,25 @@ def build_codex_arguments(codex_command: str, work_directory: Path, contract: st
     return tuple(all_arguments)
 
 
-def request_oauth_image(prompt: str, runner: Runner, all_reference_images: Sequence[ReferenceImage] = (), model: str | None = None, reasoning_effort: str | None = None) -> ProviderArtifact:
+def request_oauth_image(
+    prompt: str,
+    runner: Runner,
+    requested_size: ImageSize,
+    all_reference_images: Sequence[ReferenceImage] = (),
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+) -> ProviderArtifact:
     """Run Codex in an isolated directory and measure its PNG artifact.
 
     Args:
         prompt: Image-generation prompt.
         runner: Injected Codex process runner.
+        requested_size: Exact dimensions stated in the Codex contract.
         all_reference_images: Validated reference images attached with ``-i``.
         model: Requested Codex model name, passed through with ``-m``.
-        reasoning_effort: Requested Codex reasoning effort, passed through as a ``-c`` override.
+        reasoning_effort: Requested Codex reasoning effort, or ``None`` to omit
+            the override. ``generate_image`` resolves an absent value to
+            ``CODEX_DEFAULT_REASONING_EFFORT`` before calling this function.
     Returns:
         Provider artifact with runtime-observed dimensions.
     Raises:
@@ -499,13 +510,14 @@ def request_oauth_image(prompt: str, runner: Runner, all_reference_images: Seque
     with tempfile.TemporaryDirectory(prefix=TEMPORARY_DIRECTORY_PREFIX) as temporary_directory:
         work_directory = Path(temporary_directory)
         artifact_path = work_directory / f"generated{PNG_SUFFIX}"
+        size_clause = f" The image must be exactly {requested_size.as_text()} pixels — generate at exactly that size."
         reference_clause = " Use the attached reference image(s) as visual guidance." if all_reference_images else ""
-        contract = f"Generate exactly one PNG image for this prompt: {prompt}.{reference_clause} Save it at {artifact_path}."
+        contract = f"Generate exactly one PNG image for this prompt: {prompt}.{size_clause}{reference_clause} Save it at {artifact_path}."
         codex_command = shutil.which("codex") or "codex"
         all_arguments = build_codex_arguments(codex_command, work_directory, contract, all_reference_images, model, reasoning_effort)
         runner(all_arguments, work_directory, build_oauth_environment())
         image_bytes = discover_oauth_artifact(work_directory, artifact_path)
-    return ProviderArtifact(image_bytes, decode_image(image_bytes), None, CODEX_TOOL_NAME, "codex OAuth")
+    return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, CODEX_TOOL_NAME, "codex OAuth")
 
 
 def resize_image(image_bytes: bytes, target_size: ImageSize) -> bytes:
@@ -661,7 +673,8 @@ def generate_image(
         runner: Optional injected Codex runner.
         all_reference_images: Reference image paths, validated before any backend spawn.
         model: Requested model name, passed through to the selected backend.
-        reasoning_effort: Requested reasoning effort, passed through to ``codex-oauth`` only.
+        reasoning_effort: Requested reasoning effort, passed through to ``codex-oauth``
+            only. ``codex-oauth`` defaults an absent value to ``CODEX_DEFAULT_REASONING_EFFORT``.
     Returns:
         Published receipt fields.
     Raises:
@@ -685,7 +698,8 @@ def generate_image(
         else:
             artifact = request_openai_image(prompt, provider_size, active_transport, request_model)
     else:
-        artifact = request_oauth_image(prompt, runner or run_codex, all_reference_images=all_verified_reference_images, model=model, reasoning_effort=reasoning_effort)
+        reasoning_effort = reasoning_effort or CODEX_DEFAULT_REASONING_EFFORT
+        artifact = request_oauth_image(prompt, runner or run_codex, requested_size, all_reference_images=all_verified_reference_images, model=model, reasoning_effort=reasoning_effort)
     if artifact.source_size != requested_size and resize_policy == "forbid":
         raise ImagegenError("provider dimensions differ from requested size")
     final_bytes = artifact.image_bytes if artifact.source_size == requested_size else resize_image(artifact.image_bytes, requested_size)

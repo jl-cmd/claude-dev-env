@@ -348,3 +348,84 @@ def test_receipt_records_absent_reference_model_and_reasoning_effort(tmp_path: P
     assert receipt["reference_image_sha256"] == []
     assert receipt["model"] is None
     assert receipt["reasoning_effort"] is None
+
+
+def test_codex_contract_states_the_exact_requested_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    captured_arguments: list[Sequence[str]] = []
+
+    def runner(all_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        captured_arguments.append(all_arguments)
+        (work_directory / "generated.png").write_bytes(make_png((1024, 1024)))
+
+    receipt = generate_image("prompt", "codex-oauth", ImageSize(1024, 1024), tmp_path / "artifact.png", "forbid", False, runner=runner)
+
+    contract = captured_arguments[0][-1]
+    assert "1024x1024" in contract
+    assert "exactly" in contract
+    assert receipt["provider_size"] == "1024x1024"
+    assert receipt["source_size"] == "1024x1024"
+    assert receipt["transformation"] == "native"
+
+
+def test_request_oauth_image_records_provider_requested_size() -> None:
+    def runner(_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        (work_directory / "generated.png").write_bytes(make_png((1024, 1024)))
+
+    artifact = imagegen_core.request_oauth_image("prompt", runner, ImageSize(1024, 1024))
+
+    assert artifact.provider_requested_size == ImageSize(1024, 1024)
+
+
+def test_codex_default_reasoning_effort_is_max(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    captured_arguments: list[Sequence[str]] = []
+
+    def runner(all_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        captured_arguments.append(all_arguments)
+        (work_directory / "generated.png").write_bytes(make_png((2880, 2880)))
+
+    receipt = generate_image("prompt", "codex-oauth", ImageSize(2880, 2880), tmp_path / "artifact.png", "forbid", False, runner=runner)
+
+    all_arguments = captured_arguments[0]
+    assert ("-c", "model_reasoning_effort=max") == tuple(all_arguments[all_arguments.index("-c") : all_arguments.index("-c") + 2])
+    assert receipt["reasoning_effort"] == "max"
+
+
+def test_codex_explicit_reasoning_effort_overrides_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    captured_arguments: list[Sequence[str]] = []
+
+    def runner(all_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        captured_arguments.append(all_arguments)
+        (work_directory / "generated.png").write_bytes(make_png((2880, 2880)))
+
+    receipt = generate_image("prompt", "codex-oauth", ImageSize(2880, 2880), tmp_path / "artifact.png", "forbid", False, runner=runner, reasoning_effort="low")
+
+    all_arguments = captured_arguments[0]
+    assert ("-c", "model_reasoning_effort=low") == tuple(all_arguments[all_arguments.index("-c") : all_arguments.index("-c") + 2])
+    assert receipt["reasoning_effort"] == "low"
+
+
+def test_codex_off_size_provider_output_resizes_under_allow_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def runner(_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        (work_directory / "generated.png").write_bytes(make_png((1254, 1254)))
+
+    receipt = generate_image("prompt", "codex-oauth", ImageSize(2880, 2880), tmp_path / "artifact.png", "allow", False, runner=runner)
+
+    assert receipt["source_size"] == "1254x1254"
+    assert receipt["final_size"] == "2880x2880"
+    assert receipt["transformation"] == "resized"
+    assert decode_image((tmp_path / "artifact.png").read_bytes()) == ImageSize(2880, 2880)
+
+
+def test_codex_off_size_provider_output_fails_under_forbid_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def runner(_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        (work_directory / "generated.png").write_bytes(make_png((1254, 1254)))
+
+    with pytest.raises(ImagegenError, match="differ from requested size"):
+        generate_image("prompt", "codex-oauth", ImageSize(2880, 2880), tmp_path / "artifact.png", "forbid", False, runner=runner)

@@ -20,6 +20,6 @@ Native provider dimensions publish unchanged source bytes. A mismatch fails with
 
 Up to two `--reference-image path.png` flags attach reference images. Each is validated (exists, decodes with Pillow) before any backend spawns; a third reference fails loudly before either backend runs. `codex-oauth` attaches references with the Codex CLI's own `-i`/`--image` flag. `openai-api` sends them through the OpenAI image-edit endpoint.
 
-`--model name` passes through to both backends. `--reasoning-effort level` passes through to `codex-oauth` only (as a `model_reasoning_effort` config override); `openai-api` has no reasoning-effort control and fails loudly if the flag is given.
+`--model name` passes through to both backends. `--reasoning-effort level` passes through to `codex-oauth` only (as a `model_reasoning_effort` config override); `openai-api` has no reasoning-effort control and fails loudly if the flag is given. When `--reasoning-effort` is omitted, `codex-oauth` defaults to `max`; the receipt records the effective value. The Codex contract states the exact requested pixel dimensions.
 
 The receipt sits beside the PNG with a `.json` suffix. It contains hashes, observed dimensions, backend, model or tool, transformation classification, prompt hash, credential source name, the reference image paths and their sha256 hashes, and the requested model and reasoning effort (`null` when not given). Existing output or receipt files require `--overwrite`.
