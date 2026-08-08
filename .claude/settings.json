@@ -9,5 +9,17 @@
   },
   "worktree": {
     "bgIsolation": "none"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\""
+          }
+        ]
+      }
+    ]
   }
 }

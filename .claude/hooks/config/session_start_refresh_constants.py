@@ -1,0 +1,9 @@
+"""Constants for the cloud SessionStart refresh hook."""
+
+PACKAGE_NAME = "claude-dev-env"
+MANIFEST_FILE_NAME = ".claude-dev-env-manifest.json"
+CLAUDE_HOME_DIRECTORY_NAME = ".claude"
+REMOTE_SESSION_VARIABLE_NAME = "CLAUDE_CODE_REMOTE"
+REMOTE_SESSION_ACTIVE_VALUE = "true"
+REGISTRY_PROBE_TIMEOUT_SECONDS = 30
+INSTALL_TIMEOUT_SECONDS = 600
