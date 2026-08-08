@@ -97,6 +97,7 @@ matching list under `.github/ci/` with an owner disposition for that node ID.
 | `test_bugteam_permission_scripts.py` | Verifies the bugteam grant/revoke permission scripts exist, are runnable, and produce expected exit codes. |
 | `test_bugteam_preflight.py` | Checks the bugteam preflight script logic. |
 | `test_doc_cross_references.py` | Walks Python docstrings and Markdown files for repo-relative path references and confirms each path exists on disk. |
+| `test_session_start_refresh.py` | Runs the `.claude/hooks/session_start_refresh.py` SessionStart hook as a subprocess against a sandbox home with fake `npm`/`npx` shims, plus static checks binding the `.claude/settings.json` registration and timeout budget to the hook's constants. |
 
 ## Fixtures
 

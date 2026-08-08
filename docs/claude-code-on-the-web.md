@@ -27,6 +27,24 @@ merged `settings.json` — exactly as a local `npx claude-dev-env` does. Default
 **Trusted** network access already reaches `registry.npmjs.org`, so no allowlist
 change is needed.
 
+## Keeping the cached install fresh
+
+The setup script's result is cached once per environment, so a release
+published after the cache was built never reaches `~/.claude` in later
+sessions.
+
+The repo-committed SessionStart hook `.claude/hooks/session_start_refresh.py`
+closes that gap for sessions on this repository: at cloud session start it
+compares the installed manifest version against the npm registry and
+reinstalls on a difference. A matching version costs one `npm view` call,
+about a second; a reinstall runs once per release. The full mechanism — the
+`CLAUDE_CONFIG_DIR` override, the fail-open guarantee, the home-directory
+rule — lives in the hook's module docstring.
+
+A session on another repository keeps the cached install until its environment
+is rebuilt. Committing the same hook and `settings.json` entry into that
+repository gives it the same refresh.
+
 ## Personal umbrella package
 
 To install the shared config alongside personal overrides in one command, wrap
