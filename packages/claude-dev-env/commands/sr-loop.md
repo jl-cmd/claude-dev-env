@@ -20,17 +20,21 @@ tool and repeats it until a pass returns zero new findings.
 3. Repeat the invocation. **Skips are sticky:** carry every adjudicated skip
    forward into the next pass as "already adjudicated — do not re-report: ..."
    context, or the loop never converges.
-4. Phase A converges when a full pass returns zero new findings. When the
-   previous pass changed only a line or two, a single combined-lens
-   confirmation agent may serve as the final pass.
+4. Phase A converges when a full pass returns zero new findings, or when a
+   pass's new findings are all nits — doc phrasing, naming, comment altitude,
+   or any fix below a behavior change. On a nit-only pass: apply the fixes,
+   test, commit, push, and stop with no confirming pass. When the previous
+   pass changed only a line or two, a single combined-lens confirmation agent
+   may serve as the final pass.
 
 ## Phase B — loop /code-review low --fix
 
 1. Invoke the `code-review` skill with arguments `low --fix` on the same
    target. Let it report findings and apply its fixes.
 2. After any pass that changed files: test, commit, push as in Phase A.
-3. Repeat until a pass reports zero findings. Phase B usually converges in one
-   pass when Phase A ran first.
+3. Repeat until a pass reports zero findings, or until a pass reports only
+   nits — then fix, test, commit, push, and stop with no confirming pass.
+   Phase B usually converges in one pass when Phase A ran first.
 
 ## Finish
 
