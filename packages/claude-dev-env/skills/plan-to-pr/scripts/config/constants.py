@@ -174,8 +174,7 @@ ALL_REPAIR_FIELDS: tuple[str, ...] = (
 )
 ALL_VERIFICATION_FIELDS: tuple[str, ...] = (
     "acceptance_output",
-    "verifier_output",
-    "verified_commit_gate",
+    "verification_output",
     "surface_hash",
 )
 ALL_REVIEW_TEXT_FIELDS: tuple[str, ...] = (

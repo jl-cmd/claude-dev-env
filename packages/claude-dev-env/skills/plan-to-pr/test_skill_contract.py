@@ -90,7 +90,7 @@ def test_skill_contract_enforces_task_commit_and_review_order() -> None:
     skill_text = read_skill_text()
 
     assert EXPECTED_TASK_PROTOCOL_HEADING in skill_text
-    assert "fresh verification and `verified_commit_gate`" in skill_text
+    assert "fresh verification and review under the [review guide]" in skill_text
     assert (
         "native\nfindings-only correctness review at `/e-code-review low`" in skill_text
     )
@@ -163,7 +163,7 @@ def test_skill_contract_references_future_fixed_artifacts_without_copying_tables
 
 def test_skill_contract_companion_reference_paths_exist() -> None:
     skill_text = read_skill_text()
-    local_reference_paths = re.findall(r"\]\(([^)]+)\)", skill_text)
+    local_reference_paths = [each_path.split("#", maxsplit=1)[0] for each_path in re.findall(r"\]\(([^)]+)\)", skill_text)]
     repository_paths = [
         each_path
         for each_path in local_reference_paths

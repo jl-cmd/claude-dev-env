@@ -148,5 +148,5 @@ test('COMMIT_RECOVERY_MAX_ATTEMPTS is one and bounds the commitWithRecovery loop
   assert.match(convergeSource, /const COMMIT_RECOVERY_MAX_ATTEMPTS = 1/, 'expected a dedicated commit-recovery cap of one');
   assert.match(convergeSource, /const FIX_RECOVERY_MAX_ATTEMPTS = 2/, 'expected the wider verify-recovery cap to stay at two');
   const commitBody = functionSource('commitWithRecovery');
-  assert.match(commitBody, /attempt < COMMIT_RECOVERY_MAX_ATTEMPTS/, 'expected commitWithRecovery to bound its loop by the dedicated cap');
+  assert.match(commitBody, /attempt <= COMMIT_RECOVERY_MAX_ATTEMPTS/, 'expected commitWithRecovery to bound its loop by the dedicated cap');
 });

@@ -953,7 +953,6 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/state_description_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/subprocess_budget_completeness.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/hook_prose_detector_consistency.py', timeout: 10 },
-                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/verified_commit_message_accuracy_blocker.py', timeout: 10 },
                 ],
             },
             {
@@ -971,8 +970,8 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 16 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 17);
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
@@ -992,7 +991,6 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         'blocking/state_description_blocker.py',
         'blocking/subprocess_budget_completeness.py',
         'blocking/hook_prose_detector_consistency.py',
-        'blocking/verified_commit_message_accuracy_blocker.py',
         'blocking/workflow_substitution_slot_blocker.py',
         'blocking/claude_md_orphan_file_blocker.py',
         'blocking/env_var_table_code_drift_blocker.py',

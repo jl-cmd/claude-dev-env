@@ -35,7 +35,6 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
     GIT_BINARY,
-    RECORD_STAMP_FLAG,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     CLI_TIMEOUT_FLAG,
@@ -106,19 +105,6 @@ def _initialize_repository(repository_directory: Path) -> None:
 def write_dirty_tree(working_directory: Path) -> None:
     dirty_file = working_directory / DIRTY_FILE_NAME
     dirty_file.write_text(DIRTY_FILE_CONTENTS, encoding="utf-8")
-
-
-def run_record_stamp_cli(working_directory: Path, *, effort: str) -> int:
-    return invoker.main(
-        [
-            CWD_FLAG,
-            str(working_directory),
-            CLI_SESSION_MODEL_FLAG,
-            CODE_REVIEW_MODEL_ALIAS,
-            RECORD_STAMP_FLAG,
-            effort,
-        ]
-    )
 
 
 def claude_served(
@@ -327,84 +313,3 @@ def install_seams(
 EFFORT_LOW = "low"
 REJECTED_ULTRA_EFFORT = "ultra"
 SINGLE_PASS_CAP = 1
-MISSING_STORE_FILE_NAME = "code_review_stamp_store_absent.py"
-SURFACE_SOURCE = "def add(left: int, right: int) -> int:\n    return left + right\n"
-SURFACE_CHANGE_SOURCE = (
-    "def add(left: int, right: int) -> int:\n    return left - right\n"
-)
-
-
-def _make_repo_with_change_surface(tmp_path: Path) -> Path:
-    origin_directory = tmp_path / "origin.git"
-    work_directory = tmp_path / "work"
-    _run_git(
-        "init",
-        "--bare",
-        "--initial-branch",
-        PINNED_INITIAL_BRANCH,
-        str(origin_directory),
-    )
-    _initialize_repository(work_directory)
-    (work_directory / "app.py").write_text(SURFACE_SOURCE, encoding="utf-8")
-    _run_git("add", "-A", working_directory=work_directory)
-    _run_git("commit", "-m", "base", working_directory=work_directory)
-    _run_git(
-        "remote",
-        "add",
-        "origin",
-        str(origin_directory),
-        working_directory=work_directory,
-    )
-    _run_git(
-        "push", "-u", "origin", PINNED_INITIAL_BRANCH, working_directory=work_directory
-    )
-    (work_directory / "app.py").write_text(SURFACE_CHANGE_SOURCE, encoding="utf-8")
-    return work_directory
-
-
-def _isolate_home(monkeypatch: pytest.MonkeyPatch, fake_home: Path) -> None:
-    home_text = str(fake_home)
-    monkeypatch.setenv("HOME", home_text)
-    monkeypatch.setenv("USERPROFILE", home_text)
-    monkeypatch.delenv("HOMEDRIVE", raising=False)
-    monkeypatch.delenv("HOMEPATH", raising=False)
-
-
-def prepared_surface_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    _isolate_home(monkeypatch, fake_home)
-    return _make_repo_with_change_surface(tmp_path)
-
-
-def _chain_clean_outcome() -> invoker.CodeReviewOutcome:
-    return invoker.CodeReviewOutcome(
-        mode=invoker.MODE_CHAIN,
-        served_command=FIXTURE_SERVED_COMMAND,
-        returncode=FIXTURE_CHAIN_RETURNCODE,
-        is_dirty_tree=True,
-    )
-
-
-def stable_clean_review(**_review_keywords: object) -> invoker.CodeReviewOutcome:
-    return _chain_clean_outcome()
-
-
-def surface_changing_review(
-    *, working_directory: Path, **_review_keywords: object
-) -> invoker.CodeReviewOutcome:
-    write_dirty_tree(working_directory)
-    return _chain_clean_outcome()
-
-
-class DriftingReview:
-    def __init__(self) -> None:
-        self.pass_count = 0
-
-    def __call__(
-        self, *, working_directory: Path, **_review_keywords: object
-    ) -> invoker.CodeReviewOutcome:
-        self.pass_count += 1
-        drift_path = working_directory / f"fix_{self.pass_count}.txt"
-        drift_path.write_text(str(self.pass_count), encoding="utf-8")
-        return _chain_clean_outcome()

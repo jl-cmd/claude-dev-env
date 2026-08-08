@@ -720,12 +720,14 @@ function loadStandardsFollowUpRuntime(recordedCalls, standardsEditResult, harden
     "  if (taskName === 'hardening-commit') return hardeningCommitResult;\n" +
     '  return {};\n' +
     '}\n' +
-    'async function runVerifierTask() {\n' +
+    'async function runReviewTask() {\n' +
     '  return { passed: true };\n' +
     '}\n' +
-    'function verdictPassed() {\n' +
+    'function reviewPassed() {\n' +
     '  return true;\n' +
     '}\n' +
+    "async function captureReviewedSurfaceHash() { return 'a'.repeat(64); }\n" +
+    'async function rebindReviewedSurface({ reviewedSurfaceHash }) { return reviewedSurfaceHash; }\n' +
     'function log() {}\n' +
     `${convergeSource.match(/const GITHUB_ISSUE_URL_PATTERN = .+/)[0]}\n` +
     `${extractCallableSource('canonicalizeIssueUrl')}\n` +
@@ -1005,4 +1007,3 @@ test('resolveReviewerDown reports available (fail-open) when the probe entry is 
 test('resolveReviewerDown reports available when the probe entry explicitly reports available', () => {
   assert.equal(resolveReviewerDown({ down: false, reason: 'available' }, false), false);
 });
-

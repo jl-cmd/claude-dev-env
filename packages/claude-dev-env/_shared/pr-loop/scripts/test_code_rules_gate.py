@@ -250,29 +250,3 @@ def _gate_import_names_in_source(module_source: str) -> set[str]:
         for each_line in import_block.splitlines()
         if each_line.strip() and not each_line.strip().startswith("#")
     }
-
-
-def test_entry_exposes_every_symbol_the_preflight_hook_imports() -> None:
-    """The gate entry re-exports the whole surface the spawn-preflight hook uses.
-
-    The code-verifier spawn-preflight hook imports gate helpers by name at
-    runtime; a name the entry drops breaks that hook's import and silently
-    turns its deny paths into allows.
-    """
-    hook_path = (
-        Path(__file__).resolve().parents[3]
-        / "hooks"
-        / "blocking"
-        / "code_verifier_spawn_preflight_gate.py"
-    )
-    hook_imported_names = _gate_import_names_in_source(
-        hook_path.read_text(encoding="utf-8")
-    )
-
-    assert hook_imported_names, "hook no longer imports from code_rules_gate"
-    missing_names = sorted(
-        each_name
-        for each_name in hook_imported_names
-        if not hasattr(gate_module, each_name)
-    )
-    assert not missing_names, f"gate entry drops hook imports: {missing_names}"

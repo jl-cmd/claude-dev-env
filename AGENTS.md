@@ -31,7 +31,7 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 - [Scope of review](#scope-of-review)
 - [Hook enforcement](#hook-enforcement)
 
-Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` registers that script alongside `tdd_enforcer.py`, `windows_rmtree_blocker.py`, the `run_all_validators` entrypoint, and others; the `Bash` chain registers `destructive_command_blocker.py`, `gh_body_arg_blocker.py`, `block_main_commit.py`, and `pr_description_enforcer.py`. **Hook enforcement** below maps each rule to its **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
+Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` registers that script alongside `tdd_enforcer.py`, `windows_rmtree_blocker.py`, the `run_all_validators` entrypoint, and others; the `Bash` chain registers `destructive_command_blocker.py`, `gh_body_arg_blocker.py`, and `block_main_commit.py`. **Hook enforcement** below maps each rule to its **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
 
 ---
 

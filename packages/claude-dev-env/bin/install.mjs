@@ -117,6 +117,7 @@ export const CORE_INCLUDE_DIRECTORIES = [
 export const CORE_SKILLS = [
     'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
     'grok-spawn',
+    'small-cl', 'comments', 'reviews', 'descriptions', 'emergencies',
     'anthropic-plan', 'everything-search',
     'privacy-hygiene',
     'issue-tracker',
@@ -928,7 +929,6 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/state_description_blocker.py',
     'blocking/subprocess_budget_completeness.py',
     'blocking/hook_prose_detector_consistency.py',
-    'blocking/verified_commit_message_accuracy_blocker.py',
     'blocking/workflow_substitution_slot_blocker.py',
     'blocking/claude_md_orphan_file_blocker.py',
     'blocking/env_var_table_code_drift_blocker.py',
@@ -1491,23 +1491,58 @@ function loadPackageManagedDenyEntries() {
 }
 
 /**
- * Merge package-owned permission defaults into ~/.claude/settings.json.
+ * Load deny entries an earlier manifest records as package-managed.
  *
- * @returns {{addedCount: number, alreadyPresentCount: number, managedDenyEntries: string[]}}
+ * @returns {string[]}
+ */
+function loadPriorManagedDenyEntries() {
+    if (!existsSync(MANIFEST_FILE)) return [];
+    try {
+        const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
+        return managedDenyEntriesFromPackageSettings({
+            permissions: priorManifest?.[MANIFEST_MANAGED_PERMISSIONS_KEY],
+        });
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Reconcile package-managed permission defaults with ~/.claude/settings.json.
+ *
+ * @returns {{addedCount: number, alreadyPresentCount: number, removedCount: number, managedDenyEntries: string[]}}
  */
 function mergeManagedPermissions() {
-    const managedDenyEntries = loadPackageManagedDenyEntries();
-    if (managedDenyEntries.length === 0) {
-        return { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
+    const allCurrentManagedDenyEntries = loadPackageManagedDenyEntries();
+    const allPriorManagedDenyEntries = loadPriorManagedDenyEntries();
+    const allCurrentManagedDenyEntrySet = new Set(allCurrentManagedDenyEntries);
+    const allRetiredManagedDenyEntries = allPriorManagedDenyEntries.filter(
+        eachEntry => !allCurrentManagedDenyEntrySet.has(eachEntry),
+    );
+    const hasCurrentManagedDenyEntries = allCurrentManagedDenyEntries.length > 0;
+    const hasRetiredManagedDenyEntries = allRetiredManagedDenyEntries.length > 0;
+    if (!hasCurrentManagedDenyEntries && !hasRetiredManagedDenyEntries) {
+        return {
+            addedCount: 0,
+            alreadyPresentCount: 0,
+            removedCount: 0,
+            managedDenyEntries: [],
+        };
     }
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     const settingsExisted = existsSync(settingsPath);
     const settings = loadClaudeSettingsObjectOrExit(settingsPath);
-    const mergeOutcome = mergeManagedPermissionsIntoSettings(settings, managedDenyEntries);
-    if (mergeOutcome.addedCount > 0 || !settingsExisted) {
+    const pruneOutcome = pruneManagedPermissionsFromSettings(settings, allRetiredManagedDenyEntries);
+    const mergeOutcome = hasCurrentManagedDenyEntries
+        ? mergeManagedPermissionsIntoSettings(settings, allCurrentManagedDenyEntries)
+        : { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
+    const shouldWriteSettings = pruneOutcome.removedCount > 0
+        || mergeOutcome.addedCount > 0
+        || (!settingsExisted && hasCurrentManagedDenyEntries);
+    if (shouldWriteSettings) {
         writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     }
-    return mergeOutcome;
+    return { ...mergeOutcome, removedCount: pruneOutcome.removedCount };
 }
 
 /**
@@ -2010,6 +2045,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
 
     const permissionMerge = mergeManagedPermissions();
     summary.managedPermissions = permissionMerge;
+    if (permissionMerge.removedCount > 0) {
+        console.log(`  Permissions: ${permissionMerge.removedCount} retired managed deny(s) removed`);
+    }
     if (permissionMerge.managedDenyEntries.length > 0) {
         console.log(
             `  Permissions: ${permissionMerge.addedCount} managed deny(s) added, `

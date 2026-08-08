@@ -11,7 +11,6 @@ Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. T
 | `BDD_DISCOVERY_PROTOCOL.md` | Example Mapping algorithm for discovery before implementation; based on Smart & Molak *BDD in Action* §6.4 |
 | `BDD_SCENARIO_QUALITY.md` | Seven scenario quality patterns (§7.6-style catalog) |
 | `BDD_TEST_LAYOUT.md` | `describe/when/should` test layout and soap-opera personas |
-| `PR_DESCRIPTION_GUIDE.md` | Authoritative reference for the `pr-description-writer` agent; PR body shapes derived from a 120-PR Anthropic corpus |
 | `DJANGO_PATTERNS.md` | Django-specific coding patterns |
 | `REACT_PATTERNS.md` | React-specific coding patterns |
 | `agent-spawn-protocol.md` | Full agent-spawn protocol behind the `rules/agent-spawn-protocol.md` kernel: context-sufficiency check, `/prompt-generator` prompt crafting, and the spawn step |

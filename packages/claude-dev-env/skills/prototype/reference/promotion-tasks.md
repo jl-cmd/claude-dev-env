@@ -14,9 +14,9 @@ Promotion runs in the **normal, fully-hooked session** — never inside the `--b
 
 5. **Privacy sweep.** Run the `privacy-hygiene` skill over the full applied working tree, not only the diff — a POC that pulled live data can leave a secret in a file the diff view hides. Evidence: its clean report, or the leak it found and how it was removed. If the skill is missing, do a manual PII and secret review and say so.
 
-6. **Verify in a fresh context.** Spawn the `code-verifier` agent against the real diff. Expect findings and a repair loop — the code was un-TDD'd. Evidence: the verifier's clean verdict, and a note of what it made you fix. Do not skip this on the belief that the sandbox agent already tested it.
+6. **Review and verify the real diff.** Apply the [review guide](../../reviews/SKILL.md#review-workflow). Evidence: the checks run and each required finding repaired. Do not rely on sandbox testing as promotion evidence.
 
-7. **Commit and open a draft PR.** Only on a clean verdict, run `/commit` (which mints the commit-gate verdict and pushes), then open a draft PR per the `git-workflow` rule. Evidence: the commit hash and the PR URL.
+7. **Commit and open a draft PR.** After the review and verification record is complete, run `/commit`, then open a draft PR per the `git-workflow` rule. Evidence: the commit hash and the PR URL.
 
 8. **State the honest limitations.** Post the two statements from `reference/honest-limitations.md` — write-time rules never ran; TDD ordering waived — in the PR body or to the user. Evidence: the text was included.
 

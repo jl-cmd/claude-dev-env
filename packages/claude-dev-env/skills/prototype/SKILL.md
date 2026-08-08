@@ -10,8 +10,8 @@ description: >-
 
 Give a build the freedom to move fast, then make it earn the right to ship. Two phases, one hard wall between them:
 
-- **Sandbox** — an isolated worktree where an agent runs under `claude --bare`, so none of the standards gates (TDD, code rules, verified-commit, plain-language, stage) fire. The agent builds a proof-of-concept with zero friction.
-- **Promotion** — back in the normal, fully-hooked session, the successful POC goes through a clean-room re-verification before it becomes a commit and a pull request. Nothing from the sandbox rides along un-checked.
+- **Sandbox** — an isolated worktree where an agent runs under `claude --bare`, so the normal TDD, code-rules, plain-language, and stage hooks do not run. The agent builds a proof-of-concept with zero friction.
+- **Promotion** — back in the normal, fully-hooked session, the successful POC receives clean-room review and verification under the [review guide](../reviews/SKILL.md#review-workflow) before it becomes a commit and a pull request.
 
 Two safety gates stay live even in the sandbox: personal-data blocking and destructive-command blocking. A worktree shares the real repo's `.git` store and `rm` reaches the whole disk, so these are containment, not the "delays" the sandbox is meant to shed.
 
@@ -45,7 +45,7 @@ Follow `workflows/sandbox.md`. In short:
 
 ### Phase 2 — Promotion
 
-Run only in the normal, fully-hooked session — never inside the sandbox. Follow `workflows/promotion.md`, which drives the clean-room task seeds in `reference/promotion-tasks.md`: fresh branch off live `origin/main`, POC content as an uncommitted diff, cleanup and privacy sweep, `code-verifier` in a fresh context, then `/commit` and a draft PR handed to a PR-loop skill. State the two honest limitations from `reference/honest-limitations.md`.
+Run only in the normal, fully-hooked session — never inside the sandbox. Follow `workflows/promotion.md`, which drives the clean-room task seeds in `reference/promotion-tasks.md`: fresh branch off live `origin/main`, POC content as an uncommitted diff, cleanup and privacy sweep, review and verification under the [review guide](../reviews/SKILL.md#review-workflow), then `/commit` and a draft PR handed to a PR-loop skill. State the two honest limitations from `reference/honest-limitations.md`.
 
 ## Task seeding
 
@@ -57,7 +57,7 @@ At the start of Phase 2, register every item in `reference/promotion-tasks.md` a
 |---|---|---|---|
 | `fresh-branch` | Sandbox step 1; Promotion step 2 | isolated worktree JSON (`worktree_path`, `base_commit`, `repo_root`) | Refuse — see refusal cases |
 | `privacy-hygiene` | Promotion step 5 | personal-data and secret sweep of the diff | Warn; do a manual review before continuing |
-| `code-verifier` (agent) | Promotion step 6 | fresh-context verdict against the real diff; mints the commit-gate verdict | Stop; the commit gate will block anyway |
+| [Review guide](../reviews/SKILL.md#review-workflow) | Promotion step 6 | review and verification of the real diff | Stop and report the incomplete promotion |
 | `/commit` (command) | Promotion step 7 | conventional commit + push | Commit and push by hand per `git-workflow` |
 | `autoconverge` (default; `pr-converge` or `bugteam` as alternatives) | Promotion step 9 | the PR converged to ready | Stop after the draft PR; tell the user to converge manually |
 

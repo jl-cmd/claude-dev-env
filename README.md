@@ -123,7 +123,6 @@ Reference documents that rules and agents point to for detailed standards.
 | `TEST_QUALITY.md` | Test writing standards, mock completeness, assertion patterns |
 | `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
-| `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
 
 ### Agents (28)
 
@@ -233,7 +232,6 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Edit | `migration-safety-advisor` | Warns about risky database migration patterns |
 | Bash | `destructive-command-blocker` | Blocks rm -rf, git reset --hard, and other destructive commands |
 | Bash | `block-main-commit` | Blocks direct commits to main/master branch |
-| Bash | `pr-description-enforcer` | Enforces PR description structure and style |
 | Bash | `test-preflight-check` | Validates server health and database before test runs |
 | Task\|Agent | `parallel-task-blocker` | Limits concurrent Task/Agent delegations |
 | AskUserQuestion | `attention-needed-notify` | Desktop notification when Claude needs your input |

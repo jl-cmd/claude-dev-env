@@ -116,9 +116,8 @@ def _report_partitioned_violations(
 ) -> int:
     """Print the violation sections and return the gate exit code.
 
-    Importers outside this directory (the code-verifier spawn-preflight hook)
-    call this surface with the partition spread across positional arguments,
-    so this wrapper keeps that calling shape and folds the pieces into the
+    External callers pass the partition across positional arguments, so this
+    wrapper keeps that calling shape and folds the pieces into the
     ``PartitionedViolations`` tuple the gate-running module consumes.
 
     Args:

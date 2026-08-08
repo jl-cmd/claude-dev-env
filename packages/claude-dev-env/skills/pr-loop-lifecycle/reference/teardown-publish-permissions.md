@@ -35,7 +35,7 @@ When the run exits (any reason), run these steps in order from **this** session 
 
 After teardown and before permission revoke, the lead rewrites the PR body to the PR's **final cumulative state** — what the change delivers, not the loop's process. This is the **only** PR-write the lead performs (audit and fix comments stay with the agents that produced them).
 
-The lead composes the body text directly against `docs/PR_DESCRIPTION_GUIDE.md` — no agent spawn — so the body passes the `pr_description_enforcer` hook's style audit on the `gh pr edit` that follows.
+The lead composes the body against the [description guide](../../descriptions/SKILL.md#required-content) and publishes it through the GitHub client.
 
 **Steps:**
 

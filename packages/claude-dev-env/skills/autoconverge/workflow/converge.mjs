@@ -48,6 +48,11 @@ const CONFIG = {
 }
 
 const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '
+const REVIEW_GUIDE_REFERENCE = 'skills/reviews/SKILL.md#review-workflow'
+const REVIEW_RESULT_PASS_MARKER = 'REVIEW_RESULT: PASS'
+const REVIEW_RESULT_FINDINGS_MARKER = 'REVIEW_RESULT: FINDINGS'
+const REVIEW_RESULT_INSTRUCTION =
+  `3. State every required finding before the result line. End with exactly one standalone terminal ${REVIEW_RESULT_PASS_MARKER} when no required finding remains, or ${REVIEW_RESULT_FINDINGS_MARKER} when findings remain. Include no other REVIEW_RESULT: text.`
 
 const TIERS = {
   opusMedium: { model: 'opus', effort: 'medium' },
@@ -179,10 +184,9 @@ function runGitTask(task) {
 }
 
 /**
- * Spawn a fresh fixer clean-coder agent for a commit or recovery edit. The fixer
- * never verifies; a separate verifier agent emits the verdict, so the verdict
- * that gates the commit comes from a different agent than the one that commits
- * and recovers.
+ * Spawn a fresh fixer clean-coder agent for a commit or recovery edit. The
+ * review step completes before the commit step, and the fixer preserves that
+ * reviewed working tree while it commits or recovers.
  * @param {string} task the short task name
  * @param {object} context task-specific context
  * @returns {Promise<object>} the structured output
@@ -191,9 +195,9 @@ function runFixerTask(task, context) {
   const label = `fixer:${context.sourceLabel}`
   if (task === 'commit') {
     return convergeAgent(
-      `You are the COMMIT step for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+       `You are the COMMIT step for fixes (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree and the review step completed under ${REVIEW_GUIDE_REFERENCE}.\n\n` +
         `Rules:\n` +
-        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the commit would be blocked. Do not run a formatter, do not touch a test, do not re-fix anything — only commit and push what is already there.\n` +
+        `- Make no further file edits. Preserve the reviewed working tree; only commit and push what is already there.\n` +
         `- Make ONE commit for all the working-tree fixes, then push to the PR branch.\n\n` +
         `Return values:\n` +
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
@@ -210,7 +214,7 @@ function runFixerTask(task, context) {
         `Rules:\n` +
         `- Confirm the working tree is on the PR branch at HEAD ${context.head} with the prior fixes still present.\n` +
         `- Fix ONLY the violation named above, test-first (failing test, then minimum code to pass) per CODE_RULES. Do not re-open the original findings, and do not touch GitHub review threads — the edit step already handled those.\n` +
-        `- Leave the corrected fixes in the working tree. Do NOT commit and do NOT push — the verify step re-binds a verdict and the commit step pushes after you.\n\n` +
+        `- Leave the corrected fixes in the working tree. Do not commit or push; the review and commit steps run after you.\n\n` +
         `Return values: edited=true with a one-line summary when you changed code to clear the block; edited=false, resolvedWithoutCommit=false when the block cannot be cleared with a code change.` +
         PRE_COMMIT_GATE_STEP,
       { label, phase: 'Converge', schema: EDIT_SCHEMA, agentType: 'clean-coder', ...TIERS.sonnetMedium },
@@ -232,14 +236,10 @@ function runFixerTask(task, context) {
 }
 
 /**
- * Joined fixer recovery loop: the verify step spawns a code-verifier agent to
- * grade the working-tree fixes while the commit and recovery steps spawn
- * clean-coder fixer agents, so the verdict that gates the commit comes from a
- * different agent than the one that edits and pushes — the same editor/verifier
- * separation the repair and conflict paths use. The verify step routes through
- * verifyWithRecovery (verify on the verifier, recover on the fixer); the commit
- * step routes through commitWithRecovery (commit and commit-recover on the fixer,
- * re-verify on the verifier). A failed verdict returns the unchanged HEAD so the
+ * Joined fixer recovery loop: the verify step applies the canonical review guide
+ * to the working-tree fixes while the commit and recovery steps spawn clean-coder
+ * fixer agents. The verify step routes through verifyWithRecovery; the commit
+ * step routes through commitWithRecovery. A failed review returns the unchanged HEAD so the
  * round reads as not-progressed.
  * @param {string} head PR HEAD SHA
  * @param {Array<object>} findings the findings to fix
@@ -248,10 +248,10 @@ function runFixerTask(task, context) {
  */
 async function fixerWithRecovery(head, findings, sourceLabel) {
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => runVerifierTask('fix-verify', { head, findings, sourceLabel }),
+    runVerify: () => runReviewTask('fix-verify', { head, findings, sourceLabel }),
     runRecoverEdit: (objection, attempt) => runFixerTask('verify-recover', { head, findings, sourceLabel, objection, attempt }),
   })
-  if (!verdictPassed(verifyTranscript)) {
+  if (!reviewPassed(verifyTranscript)) {
     return {
       newSha: head,
       pushed: false,
@@ -261,9 +261,15 @@ async function fixerWithRecovery(head, findings, sourceLabel) {
       blockerDetail: '',
     }
   }
+  const captureReviewedSurface = () => captureReviewedSurfaceHash({ sourceLabel, phase: 'Converge' })
+  const reviewedSurfaceHash = await captureReviewedSurface()
+  if (reviewedSurfaceHash === null) return reviewedSurfaceUnavailableResult(head)
   return commitWithRecovery({
+    head,
+    reviewedSurfaceHash,
+    captureReviewedSurface,
     runCommit: () => runFixerTask('commit', { head, findings, sourceLabel }),
-    runVerify: () => runVerifierTask('fix-verify', { head, findings, sourceLabel }),
+    runVerify: () => runReviewTask('fix-verify', { head, findings, sourceLabel }),
     runRecoverEdit: (detail, attempt) => runFixerTask('commit-recover', { head, findings, sourceLabel, blockerDetail: detail, attempt }),
   })
 }
@@ -337,9 +343,9 @@ function runCodeEditorTask(task, context) {
       ? 'The edit step rebased the branch, so push with git push --force-with-lease.'
       : 'Push to the PR branch with a plain git push.'
     return convergeAgent(
-      `You are the COMMIT step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree.\n\n` +
+       `You are the COMMIT step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree and the review step completed under ${REVIEW_GUIDE_REFERENCE}.\n\n` +
         `Rules:\n` +
-        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Do not run a formatter, do not re-fix anything — only commit and push what is already there.\n` +
+        `- Make no further file edits. Preserve the reviewed working tree; only commit and push what is already there.\n` +
         `- Commit any uncommitted bot-thread fix in ONE commit (skip the commit when the working tree carries only already-committed rebase results). ${pushInstruction}\n\n` +
         `Return values:\n` +
         `- On a successful push: newSha=the new HEAD SHA after your push, pushed=true, resolvedWithoutCommit=false, blockedNeedingEdit=false, blockerDetail="", and a one-line summary.\n` +
@@ -357,7 +363,7 @@ function runCodeEditorTask(task, context) {
       `You are the EDIT step deferring a code-standard-only round on ${prCoordinates}, HEAD ${context.head} (${context.sourceLabel}). The round surfaced ONLY code-standard violations (CODE_RULES/style, no behavioral impact); the run treats it as passed and defers the fixes to follow-up work, which you now stage. A separate verify step then a separate commit step open the hardening PR after you. Do NOT commit or push to the PR's own branch.\n\n` +
         `Findings:\n${findingsBlock}\n\n` +
         `1. Follow-up fix issue: file a GitHub issue on ${input.owner}/${input.repo} (gh issue create --body-file with a temp file) titled "Deferred code-standard fixes from PR #${input.prNumber}". The body references the PR and lists each finding with its file:line, severity, and detail. The issue carries the fix work; do not open a fix PR. Capture the issue URL.\n` +
-        `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-dev-env for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do NOT commit and do NOT push — the commit step does that after the verify step binds a verdict to the working tree. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
+        `2. Stage the environment-hardening change: in the Claude environment config repo (the repo owning ~/.claude hooks and rules — JonEcho/llm-settings for hooks, jl-cmd/claude-dev-env for rules/skills; pick whichever owns the surface that would block these violation classes), find or clone a local checkout, fetch origin, and create a branch off origin/main. Edit the hooks/rules in that checkout's WORKING TREE so each violation class found here is blocked at Write/Edit time, before code is written. Do not commit or push; review and commit run after this step. Return the checkout's absolute path in hardeningRepoPath, the branch name in hardeningBranch, and set hardeningEdited=true. When no hardening is feasible for these classes, leave hardeningRepoPath and hardeningBranch empty and hardeningEdited=false; the follow-up issue still stands.\n` +
         `3. For each finding that carries a GitHub review comment id (${threadIds.length ? threadIds.join(', ') : 'none this batch'}): post an inline reply via python "${CONFIG.sharedScripts}/post_fix_reply.py" --owner ${input.owner} --repo ${input.repo} --pr-number ${input.prNumber} --in-reply-to <id> --body "Code-standard-only finding — deferred to follow-up issue <url>." Then resolve the thread by its PRRT_ node id (GraphQL lookup on comment databaseId, then resolveReviewThread or the github MCP pull_request_review_write method=resolve_thread — not the numeric comment id).\n\n` +
         `Return the issue URL in issueUrl (empty string when it could not be filed), the hardening checkout path and branch, hardeningEdited, and a one-line summary.` +
         PRE_COMMIT_GATE_STEP,
@@ -380,9 +386,9 @@ function runCodeEditorTask(task, context) {
   }
   if (task === 'hardening-commit') {
     return convergeAgent(
-      `You are the COMMIT step opening the environment-hardening PR (${context.sourceLabel}) for the change staged in ${context.hardeningRepoPath} on branch ${context.hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the verify step passed, so a verifier verdict already binds to this exact working tree. Do NOT touch the PR's own branch.\n\n` +
+       `You are the COMMIT step opening the environment-hardening PR (${context.sourceLabel}) for the change staged in ${context.hardeningRepoPath} on branch ${context.hardeningBranch}. The edit step left the hooks/rules edits in the working tree and the review step completed under ${REVIEW_GUIDE_REFERENCE}. Do not touch the PR's own branch.\n\n` +
         `Rules:\n` +
-        `- Make NO further file edits of any kind. Any edit changes the surface and invalidates the verdict that unlocks the commit gate, so the push would be blocked. Only commit and push what is already there.\n` +
+        `- Make no further file edits. Preserve the reviewed working tree; only commit and push what is already there.\n` +
         `- In ${context.hardeningRepoPath}: make ONE commit of the staged hooks/rules change on branch ${context.hardeningBranch}, push it, then open a DRAFT PR. The PR body references the follow-up issue ${context.issueUrl || '(none)'} and states the PR hardens the environment so the deferred violation classes are blocked at Write/Edit time. Honor the gh-cli-conventions rule: write a BOM-free temp file and pass --body-file.\n` +
         `- Title the PR as a Conventional Commit — a type prefix (feat, fix, chore, docs, refactor, perf, ci, style, test, build, revert), an optional scope in parentheses, then a colon and a short summary, e.g. "feat(hooks): block the deferred violation class". The target repo's CI validates the PR title as a semantic commit and rejects a non-conforming title.\n\n` +
         `Return the full https URL of the DRAFT hardening PR in hardeningPrUrl (empty string when no PR was opened) and a one-line summary.`,
@@ -420,25 +426,24 @@ function runCodeEditorTask(task, context) {
 }
 
 /**
- * Spawn a fresh verifier code-verifier agent for a specific verify task
- * (fix-verify, repair-verify, hardening-verify). The agent makes no edits —
- * verification only — and ends its message with a fenced verdict block.
+ * Spawn a fresh review agent for a specific verify task (fix-verify,
+ * repair-verify, hardening-verify). The agent makes no edits.
  * @param {string} task the short task name
  * @param {object} context task-specific context
- * @returns {Promise<string>} the verifier transcript carrying the verdict fence
+ * @returns {Promise<string>} the review transcript
  */
-function runVerifierTask(task, context) {
-  const label = `verifier:${task}`
+function runReviewTask(task, context) {
+  const label = `review:${task}`
   if (task === 'fix-verify') {
     const findingsBlock = renderFindingsBlock(context.findings)
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
+       `You are the VERIFY step for ${context.findings.length} finding(s) (${context.sourceLabel}) on ${prCoordinates}, HEAD ${context.head}. The edit step left fixes in the working tree, uncommitted. Make no edit to the tree under verification. Apply the review guide at ${REVIEW_GUIDE_REFERENCE}.\n\n` +
         `Findings the working-tree fixes must address:\n${findingsBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the uncommitted working-tree changes resolve every finding above: run the relevant tests and the named gates against the working tree. Read the diff (git diff) and confirm each finding is fixed test-first per CODE_RULES.\n` +
-        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
+         REVIEW_RESULT_INSTRUCTION,
+      { label, phase: 'Converge', agentType: 'code-quality-agent', ...TIERS.sonnetMedium },
     )
   }
   if (task === 'repair-verify') {
@@ -446,28 +451,34 @@ function runVerifierTask(task, context) {
       ? context.failures.map((each, position) => `${position + 1}. ${each}`).join('\n')
       : 'none reported'
     return convergeReadOnlyAgent(
-      `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
+       `You are the VERIFY step for the convergence repair on ${prCoordinates}, HEAD ${context.head}. The edit step left its repair in the working tree (a bot-thread fix uncommitted, and/or a rebase onto origin/main), unpushed. Make no edit to the tree under verification. Apply the review guide at ${REVIEW_GUIDE_REFERENCE}.\n\n` +
         `Concerns the working-tree repair must resolve (the gates the convergence check flagged):\n${failureBlock}\n\n` +
         `Steps:\n` +
         `1. Resolve the worktree repo root for running tests: REPO=$(git rev-parse --show-toplevel).\n` +
         `2. Verify the working tree against origin/main: any bot-thread code fix is correct test-first per CODE_RULES, and a rebase (if any) left a clean, conflict-free tree. Read the diff (git diff origin/main) and run the relevant tests and named gates.\n` +
-        `3. ${buildVerdictFenceSteps(input.owner, input.repo, input.prNumber)}`,
-      { label, phase: 'Finalize', agentType: 'code-verifier', ...TIERS.sonnetMedium },
+         REVIEW_RESULT_INSTRUCTION,
+      { label, phase: 'Finalize', agentType: 'code-quality-agent', ...TIERS.sonnetMedium },
     )
   }
   return convergeReadOnlyAgent(
-    `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Make NO edit to the tree under verification — verification only; any edit inside that tree invalidates the verdict you are about to emit.\n\n` +
+     `You are the VERIFY step for an environment-hardening change (${context.sourceLabel}) staged in the working tree of ${context.hardeningRepoPath}. The edit step left the hooks/rules edits uncommitted there. Make no edit to the tree under verification. Apply the review guide at ${REVIEW_GUIDE_REFERENCE}.\n\n` +
       `Concern the working-tree change must resolve: the edited hooks/rules block the code-standard violation classes from the deferred round at Write/Edit time, and a hook change carries a passing test per CODE_RULES.\n\n` +
       `Steps:\n` +
       `1. cd into ${context.hardeningRepoPath}, then resolve its repo root: REPO=$(git rev-parse --show-toplevel).\n` +
       `2. Verify the uncommitted working-tree change in REPO: read the diff (git diff) and run the hook/rule tests in that repo, confirming each violation class is now blocked.\n` +
-      `3. Compute the binding hash for the live surface:\n` +
-      `   The hardening branch is: ${context.hardeningBranch}\n` +
-      `   Run exactly:\n` +
-      `      "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "${context.hardeningBranch}"\n` +
-      `   (substitute the REPO path you resolved for the script path). That prints a single 64-char hex hash on stdout — capture it.\n` +
-      buildVerdictFenceTail('   '),
-    { label, phase: 'Converge', agentType: 'code-verifier', ...TIERS.sonnetMedium },
+       REVIEW_RESULT_INSTRUCTION,
+    { label, phase: 'Converge', agentType: 'code-quality-agent', ...TIERS.sonnetMedium },
+  )
+}
+
+function runWorkingTreeSurfaceTask(context) {
+  const repositoryInstruction = context.repositoryPath
+    ? `cd into ${context.repositoryPath}, then resolve its repo root with git rev-parse --show-toplevel.`
+    : 'Resolve the current worktree repo root with git rev-parse --show-toplevel.'
+  return convergeReadOnlyAgent(
+    `Capture the reviewed working-tree surface for ${context.sourceLabel}. Do not edit, stage, commit, push, rebase, or modify any file. ${repositoryInstruction}\n\n` +
+      `Use a temporary Python script outside the repository to print one lowercase SHA-256 hash. Hash this exact length-prefixed byte stream: first the literal bytes "tracked", then the exact stdout bytes from git diff --no-ext-diff --binary HEAD; then, for every path from git ls-files --others --exclude-standard -z sorted as raw bytes, the literal bytes "untracked", the raw path bytes, the lstat file-type bits as ASCII, and the payload bytes. The payload is file bytes for a regular file and the raw link target bytes for a symlink. Prefix every element with its eight-byte big-endian length. Return the hash in surfaceHash.`,
+    { label: `working-tree-surface:${context.sourceLabel}`, phase: context.phase, schema: WORKING_TREE_SURFACE_SCHEMA, agentType: 'general-purpose', ...TIERS.haikuLow },
   )
 }
 
@@ -607,7 +618,7 @@ function runConvergenceCheck(context) {
 const PRE_COMMIT_GATE_STEP =
   `\n\nFINAL STEP — pre-commit gate check (do NOT commit): before your turn ends, prove your working-tree changes CAN be committed by dry-running the CODE_RULES commit gate that gates git commit (precommit_code_rules_gate). From inside the checkout that holds your changes, resolve its root with git rev-parse --show-toplevel, stage your changes with git add -A, then run exactly:\n` +
   `   python "${CONFIG.prLoopScripts}/code_rules_gate.py" --repo-root "<that root>" --staged\n` +
-  `Exit 0 means the commit gate would accept the commit. On any non-zero exit, read every violation it prints, fix each one test-first per CODE_RULES, and re-run the gate until it exits 0. Then unstage with git restore --staged . so the verify step reads the working-tree diff. Make NO git commit and NO git push here — this is a dry committability check; the separate verify and commit steps run after you, and the verified-commit gate is their job, not yours. Your turn does not end while the commit gate would reject the commit.`
+  `Exit 0 means the commit gate would accept the commit. On any non-zero exit, read every violation it prints, fix each one test-first per CODE_RULES, and re-run the gate until it exits 0. Then unstage with git restore --staged . so the review step reads the working-tree diff. Make no git commit or git push here — this is a dry committability check; the separate review and commit steps run after you. Your turn does not end while the commit gate would reject the commit.`
 
 const LENS_SCHEMA = {
   type: 'object',
@@ -789,6 +800,15 @@ const FIX_SCHEMA = {
   required: ['newSha', 'pushed', 'resolvedWithoutCommit', 'summary', 'blockedNeedingEdit', 'blockerDetail'],
 }
 
+const WORKING_TREE_SURFACE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    surfaceHash: { type: 'string', description: 'the lowercase SHA-256 fingerprint of the complete tracked and untracked working-tree surface' },
+  },
+  required: ['surfaceHash'],
+}
+
 const EDIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -843,53 +863,6 @@ const HARDENING_COMMIT_SCHEMA = {
     summary: { type: 'string' },
   },
   required: ['hardeningPrUrl', 'summary'],
-}
-
-const VERDICT_FENCE_CONTRACT_SENTENCE =
-  'Set all_pass to false when verification fails, and list every code defect you found in findings. When the verdict is incomplete because a check it rests on never showed red, set all_pass to false and name that check in prose directly above the fence rather than in findings. Always include the manifest_sha256. The verdict fence must be the last thing in your message.'
-
-/**
- * Build the closing fence recipe every verify prompt ends with: the lead-in
- * sentence, the ```verdict block shape carrying the binding hash, and the
- * contract sentence. Each verify path resolves the binding hash its own way
- * and sits at its own nesting depth, so the caller passes the indent its
- * surrounding prose uses; the fence body itself sits one level deeper.
- * @param {string} indent leading whitespace the caller's prose sits at
- * @returns {string} the fence recipe tail for a verify prompt
- */
-function buildVerdictFenceTail(indent) {
-  const fenceIndent = `${indent}   `
-  return (
-    `${indent}Then END your message with a fenced verdict block exactly in this shape, on its own, carrying that hash:\n` +
-    `${fenceIndent}` + "```verdict\n" +
-    `${fenceIndent}{"all_pass": true, "findings": [], "manifest_sha256": "<that hash>"}\n` +
-    `${fenceIndent}` + "```\n" +
-    `${fenceIndent}${VERDICT_FENCE_CONTRACT_SENTENCE}`
-  )
-}
-
-/**
- * Build the verdict-fence step instructions for a verify agent, binding the
- * surface hash by branch name rather than by a self-resolved cwd. Resolving
- * the branch via `gh pr view` is cwd-immune: it does not matter which worktree
- * the verify agent runs in, so a launcher session whose cwd is a different
- * worktree cannot poison the binding hash.
- * @param {string} prOwner GitHub owner of the repo that holds the branch
- * @param {string} prRepo GitHub repo name
- * @param {number|string} prNumber PR number used to resolve the head branch
- * @returns {string} binding-hash and verdict-fence instructions for a verify prompt
- */
-function buildVerdictFenceSteps(prOwner, prRepo, prNumber) {
-  return (
-    `Compute the binding hash for the live surface:\n` +
-    `   a. Resolve the PR head branch (cwd-immune): run exactly\n` +
-    `         gh pr view ${prNumber} --repo ${prOwner}/${prRepo} --json headRefName -q .headRefName\n` +
-    `      Capture the branch name printed on stdout.\n` +
-    `   b. Run exactly:\n` +
-    `         "C:\\Python313\\python.exe" "<REPO>/packages/claude-dev-env/hooks/blocking/verification_verdict_store.py" --manifest-hash-for-branch "<that branch>"\n` +
-    `      (substitute the REPO path you resolved for the script path, and the branch name for <that branch>). That prints a single 64-char hex hash on stdout — capture it.\n` +
-    buildVerdictFenceTail('')
-  )
 }
 
 const FINALIZE_SCHEMA = {
@@ -1297,63 +1270,32 @@ function normalizeShaForComparison(sha) {
 }
 
 /**
- * Locate the LAST ```verdict ...``` fence in a transcript: the marker, optional
- * whitespace, a required newline, then a body closed by ```. This is the ONE
- * definition of "the verdict fence" — the verdict parser and the pre-fence prose
- * reader both anchor here, so they cannot land on different fences.
- *
- * ::
- *
- *   ok:   'note\n\n```verdict\n{}\n```'  -> body '{}\n' starting at index 6
- *   flag: 'note\n\n```verdict {}```'     -> null (no newline after the marker)
- *
- * A marker with no newline after it is not a fence, so a later one cannot pull
- * either reader off the fence the other reads.
- *
  * @param {string|null|undefined} transcript the agent transcript text
- * @returns {{bodyText: string, startIndex: number}|null} the last fence, or null when there is none
+ * @returns {'PASS'|'FINDINGS'|null} the final review result, or null when absent
  */
-function findLastVerdictFence(transcript) {
+function parseReviewResult(transcript) {
   if (typeof transcript !== 'string') return null
-  const fencePattern = /```verdict\s*\n([\s\S]*?)```/g
-  let lastFence = null
-  let eachMatch
-  while ((eachMatch = fencePattern.exec(transcript)) !== null) {
-    lastFence = { bodyText: eachMatch[1], startIndex: eachMatch.index }
-  }
-  return lastFence
+  const allTranscriptLines = transcript.trimEnd().split(/\r?\n/)
+  const allResultLikeLines = allTranscriptLines.filter((eachTranscriptLine) =>
+    eachTranscriptLine.includes('REVIEW_RESULT:'),
+  )
+  if (allResultLikeLines.length !== 1) return null
+  const terminalReviewLine = allTranscriptLines.at(-1)
+  if (terminalReviewLine === REVIEW_RESULT_PASS_MARKER) return 'PASS'
+  if (terminalReviewLine === REVIEW_RESULT_FINDINGS_MARKER) return 'FINDINGS'
+  return null
 }
 
 /**
- * Parse the LAST ```verdict ...``` fenced JSON block from a transcript.
- * Guards against non-string input, takes the fence findLastVerdictFence locates,
- * parses the JSON, and returns the object or null on any failure.
- * @param {string|null|undefined} transcript the agent transcript text
- * @returns {object|null} the parsed verdict object, or null when absent or malformed
+ * Decide whether a review transcript reports a passed review.
+ * @param {string|null|undefined} verifyTranscript the review transcript text
+ * @returns {boolean} true only when the final review result is PASS
  */
-function parseLastVerdictFence(transcript) {
-  const lastFence = findLastVerdictFence(transcript)
-  if (lastFence === null) return null
-  try {
-    return JSON.parse(lastFence.bodyText)
-  } catch {
-    return null
-  }
+function reviewPassed(verifyTranscript) {
+  return parseReviewResult(verifyTranscript) === 'PASS'
 }
 
-/**
- * Decide whether a workflow code-verifier transcript ended in a passing
- * verdict. Reads the LAST ```verdict ...``` fenced JSON block via the shared
- * parser and returns true only when it parses to an object with all_pass true.
- * @param {string|null|undefined} verifyTranscript the verifier's transcript text
- * @returns {boolean} true only when the last verdict fence reports all_pass true
- */
-function verdictPassed(verifyTranscript) {
-  const verdictRecord = parseLastVerdictFence(verifyTranscript)
-  return verdictRecord != null && verdictRecord.all_pass === true
-}
-
-const VERIFY_OBJECTION_FALLBACK = 'The verify step rejected the working-tree fixes without a parseable verdict; re-read the fix-verify transcript above and address every concern it raised.'
+const VERIFY_OBJECTION_FALLBACK = 'The review step rejected the working-tree fixes without an actionable result; re-read the fix-verify transcript and address every concern it raises.'
 
 /**
  * Render one verdict finding as a single objection line, tolerant of the shapes a
@@ -1383,68 +1325,16 @@ function renderVerifyObjectionLine(eachFinding) {
 }
 
 /**
- * Read the prose paragraph the verifier wrote directly above its last verdict
- * fence. A verdict that is incomplete — a check it rests on never showed red —
- * is not a code defect, so the fence contract puts that reason here rather than
- * in findings; this reader is how the reason survives into the re-fix step.
- *
- * Anchors through findLastVerdictFence, the single locator parseLastVerdictFence
- * reads its JSON from, so both readers see the same fence by construction rather
- * than by two searches that happen to agree: a stray marker after the real fence
- * — unterminated, or closed but carrying no newline after the marker — moves
- * neither reader. A candidate paragraph carrying only markdown scaffolding (a
- * heading, a fence delimiter) is skipped, since handing the fixer a heading is
- * worse than the generic fallback the caller keeps.
- *
- * ::
- *
- *   'ran the gates\n\ncheck X never showed red\n\n```verdict\n{}\n```'
- *     -> 'check X never showed red'
- *   '```verdict\n{}\n```'  -> null
- *
- * @param {string|null|undefined} verifyTranscript the verifier transcript text
- * @returns {string|null} the last prose paragraph above the final fence, or null when there is none
- */
-function extractPreFenceProse(verifyTranscript) {
-  const lastFence = findLastVerdictFence(verifyTranscript)
-  if (lastFence === null) return null
-  const proseParagraphs = verifyTranscript
-    .slice(0, lastFence.startIndex)
-    .split(/\n\s*\n/)
-    .map((eachParagraph) => eachParagraph.trim())
-    .filter((eachParagraph) =>
-      eachParagraph
-        .split('\n')
-        .some((eachLine) => {
-          const trimmedLine = eachLine.trim()
-          return trimmedLine.length > 0 && !trimmedLine.startsWith('#') && !trimmedLine.startsWith('```') && /[A-Za-z]/.test(trimmedLine)
-        }),
-    )
-  return proseParagraphs.length === 0 ? null : proseParagraphs[proseParagraphs.length - 1]
-}
-
-/**
- * Pull the verifier's stated objections out of a failed verify transcript so the
- * re-fix step knows what the verdict rejected. Reads the last fenced verdict JSON
- * (the same block verdictPassed reads) and renders each finding through
- * renderVerifyObjectionLine into a numbered list. When findings yields no usable
- * line the verdict is an incomplete one rather than a code-defect one, so the
- * prose paragraph above the fence — where the fence contract puts the unshown-red
- * check — carries the objection instead. A missing fence, a parse failure, or an
- * empty findings list with no prose above the fence falls back to a generic
- * re-read instruction, so the re-fix step always receives actionable text.
- * @param {string|null|undefined} verifyTranscript the failed verifier transcript text
- * @returns {string} a human-readable block of the verifier's objections
+ * Pull required findings from a failed review transcript so the repair step
+ * receives actionable text.
+ * @param {string|null|undefined} verifyTranscript the failed review transcript
+ * @returns {string} the review findings or a fallback instruction
  */
 function extractVerifyObjection(verifyTranscript) {
-  const verdictRecord = parseLastVerdictFence(verifyTranscript)
-  if (verdictRecord == null) return VERIFY_OBJECTION_FALLBACK
-  const allObjections = Array.isArray(verdictRecord?.findings) ? verdictRecord.findings : []
-  const renderedObjections = allObjections
-    .map((eachFinding) => renderVerifyObjectionLine(eachFinding))
-    .filter((eachLine) => eachLine !== null)
-  if (renderedObjections.length === 0) return extractPreFenceProse(verifyTranscript) || VERIFY_OBJECTION_FALLBACK
-  return renderedObjections.map((eachLine, position) => `${position + 1}. ${eachLine}`).join('\n')
+  if (parseReviewResult(verifyTranscript) !== 'FINDINGS') return VERIFY_OBJECTION_FALLBACK
+  const allTranscriptLines = verifyTranscript.trimEnd().split(/\r?\n/)
+  const findingText = allTranscriptLines.slice(0, -1).join('\n').trim()
+  return findingText.length > 0 ? findingText : VERIFY_OBJECTION_FALLBACK
 }
 
 /**
@@ -1974,6 +1864,45 @@ const FIX_RECOVERY_MAX_ATTEMPTS = 2
  */
 const COMMIT_RECOVERY_MAX_ATTEMPTS = 1
 
+function readReviewedSurfaceHash(reportedSurfaceHash) {
+  if (typeof reportedSurfaceHash !== 'string') return null
+  return /^[0-9a-f]{64}$/.test(reportedSurfaceHash) ? reportedSurfaceHash : null
+}
+
+async function captureReviewedSurfaceHash(context) {
+  const surfaceRecord = await runWorkingTreeSurfaceTask(context)
+  return readReviewedSurfaceHash(surfaceRecord?.surfaceHash)
+}
+
+function reviewedSurfaceUnavailableResult(head) {
+  return {
+    newSha: head,
+    pushed: false,
+    resolvedWithoutCommit: false,
+    summary: 'the reviewed working-tree surface changed or could not be fingerprinted before commit — not committing',
+    blockedNeedingEdit: false,
+    blockerDetail: '',
+  }
+}
+
+async function rebindReviewedSurface({ reviewedSurfaceHash, captureReviewedSurface, runVerify, runRecoverEdit }) {
+  let boundSurfaceHash = reviewedSurfaceHash
+  let driftAttempt = 0
+  while (driftAttempt <= COMMIT_RECOVERY_MAX_ATTEMPTS) {
+    const currentSurfaceHash = await captureReviewedSurface()
+    if (boundSurfaceHash !== null && currentSurfaceHash === boundSurfaceHash) return boundSurfaceHash
+    if (driftAttempt === COMMIT_RECOVERY_MAX_ATTEMPTS) return null
+    driftAttempt += 1
+    const verifyTranscript =
+      typeof runRecoverEdit === 'function'
+        ? await verifyWithRecovery({ runVerify, runRecoverEdit })
+        : await runVerify()
+    if (!reviewPassed(verifyTranscript)) return null
+    boundSurfaceHash = await captureReviewedSurface()
+  }
+  return null
+}
+
 /**
  * Run a commit step and, when it is blocked by a commit-time hook or gate that
  * requires a code change, route back to a fixer: fix the blocking violation,
@@ -1986,18 +1915,29 @@ const COMMIT_RECOVERY_MAX_ATTEMPTS = 1
  * @param {{runCommit: function, runVerify: function, runRecoverEdit: function}} steps the commit, re-verify, and recover-edit thunks
  * @returns {Promise<object>} the final FIX_SCHEMA result
  */
-async function commitWithRecovery({ runCommit, runVerify, runRecoverEdit }) {
-  let commitResult = await runCommit()
+async function commitWithRecovery({ head, reviewedSurfaceHash, captureReviewedSurface, runCommit, runVerify, runRecoverEdit }) {
+  let boundSurfaceHash = reviewedSurfaceHash
+  let commitResult = null
   let attempt = 0
-  while (commitNeedsCodeRecovery(commitResult) && attempt < COMMIT_RECOVERY_MAX_ATTEMPTS) {
+  while (attempt <= COMMIT_RECOVERY_MAX_ATTEMPTS) {
+    boundSurfaceHash = await rebindReviewedSurface({
+      reviewedSurfaceHash: boundSurfaceHash,
+      captureReviewedSurface,
+      runVerify,
+      runRecoverEdit,
+    })
+    if (boundSurfaceHash === null) return reviewedSurfaceUnavailableResult(head)
+    commitResult = await runCommit()
+    if (!commitNeedsCodeRecovery(commitResult) || attempt === COMMIT_RECOVERY_MAX_ATTEMPTS) return commitResult
     attempt += 1
     const recoverEdit = await runRecoverEdit(commitResult.blockerDetail, attempt)
-    if (recoverEdit?.edited !== true) break
+    if (recoverEdit?.edited !== true) return commitResult
     const verifyTranscript = await runVerify()
-    if (!verdictPassed(verifyTranscript)) break
-    commitResult = await runCommit()
+    if (!reviewPassed(verifyTranscript)) return commitResult
+    boundSurfaceHash = await captureReviewedSurface()
+    if (boundSurfaceHash === null) return reviewedSurfaceUnavailableResult(head)
   }
-  return commitResult
+  return reviewedSurfaceUnavailableResult(head)
 }
 
 /**
@@ -2013,7 +1953,7 @@ async function commitWithRecovery({ runCommit, runVerify, runRecoverEdit }) {
 async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
   let verifyTranscript = await runVerify()
   let attempt = 0
-  while (!verdictPassed(verifyTranscript) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
+  while (!reviewPassed(verifyTranscript) && attempt < FIX_RECOVERY_MAX_ATTEMPTS) {
     attempt += 1
     const objection = extractVerifyObjection(verifyTranscript)
     const recoverEdit = await runRecoverEdit(objection, attempt)
@@ -2024,14 +1964,9 @@ async function verifyWithRecovery({ runVerify, runRecoverEdit }) {
 }
 
 /**
- * Fix lens: edit (clean-coder, no commit) -> verify (a separate code-verifier
- * emits a verdict fence binding the working tree) -> commit (clean-coder, one
- * commit + push, no edits). The verifier is a distinct agent from the fixer, so
- * the verdict that gates the commit comes from a different agent than the one
- * that edits and pushes — the same editor/verifier separation the repair and
- * conflict paths use, and the separation a workflow code-verifier needs to
- * produce the verdict the verified-commit gate requires, which the SubagentStop
- * minter cannot mint for workflow-spawned agents. When verification fails (or the
+ * Fix lens: edit (clean-coder, no commit) -> review (code-quality-agent under
+ * the canonical review guide) -> commit (clean-coder, one commit + push, no
+ * edits). When review fails (or the
  * edit step stalled with no thread to resolve), the commit step is skipped and the
  * unchanged HEAD is returned so the round reads as not-progressed.
  * @param {string} head PR HEAD SHA the findings were raised against
@@ -2264,11 +2199,8 @@ function runRefutedThreadResolution(head, refutedFindings) {
 /**
  * Address the gates a convergence check reported as failing, then hand control
  * back to the converge phase: edit (clean-coder resolves bot threads, applies
- * any fix and rebase in the working tree, no push) -> verify (code-verifier
- * emits a verdict fence binding the working tree) -> commit (clean-coder, one
- * commit + push, no edits). Splitting the edit from the push lets a workflow
- * code-verifier produce the verdict the verified-commit gate requires for the
- * bot-thread fix commit and the post-rebase force-push. When the edit resolved
+ * any fix and rebase in the working tree, no push) -> review -> commit
+ * (clean-coder, one commit + push, no edits). When the edit resolved
  * the gates with neither a code change nor a rebase, or the verify step fails,
  * the commit step is skipped and the unchanged HEAD is returned.
  * @param {string} head current PR HEAD SHA
@@ -2289,10 +2221,10 @@ async function repairConvergence(head, failures) {
     }
   }
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runVerify: () => runReviewTask('repair-verify', { head, failures }),
     runRecoverEdit: (objection, attempt) => runCodeEditorTask('verify-recover', { head, sourceLabel: 'repair', objection, attempt }),
   })
-  if (!verdictPassed(verifyTranscript)) {
+  if (!reviewPassed(verifyTranscript)) {
     return {
       newSha: head,
       pushed: false,
@@ -2303,9 +2235,15 @@ async function repairConvergence(head, failures) {
     }
   }
   const wasRebased = editResult?.rebased === true
+  const captureReviewedSurface = () => captureReviewedSurfaceHash({ sourceLabel: 'repair', phase: 'Finalize' })
+  const reviewedSurfaceHash = await captureReviewedSurface()
+  if (reviewedSurfaceHash === null) return reviewedSurfaceUnavailableResult(head)
   return commitWithRecovery({
+    head,
+    reviewedSurfaceHash,
+    captureReviewedSurface,
     runCommit: () => runCodeEditorTask('repair-commit', { head, wasRebased }),
-    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runVerify: () => runReviewTask('repair-verify', { head, failures }),
     runRecoverEdit: (detail, attempt) => runCodeEditorTask('commit-recover', { head, sourceLabel: 'repair', blockerDetail: detail, attempt }),
   })
 }
@@ -2314,12 +2252,12 @@ async function repairConvergence(head, failures) {
 /**
  * Pre-flight conflict resolution: when the PR branch conflicts with its base,
  * rebase it clean before the bug checks run — edit (clean-coder rebases and
- * resolves, no push) -> verify (code-verifier binds a verdict to the rebased
- * tree) -> commit (clean-coder force-with-lease pushes). The conflict decision
+ * resolves, no push) -> review -> commit (clean-coder force-with-lease pushes).
+ * The conflict decision
  * comes from the merged 'preflight-git' probe the caller already ran, so this
  * function spawns no mergeability agent of its own. Returns the post-rebase
  * HEAD so the first converge round runs its lenses on the conflict-free diff.
- * A non-conflicting PR, a rebase the edit step declined, or a failed verdict
+ * A non-conflicting PR, a rebase the edit step declined, or a failed review
  * returns the unchanged HEAD so the run proceeds to the bug checks unchanged.
  * A mid-run conflict (origin/main advancing later) is still caught by the
  * FINALIZE convergence repair, which also rebases.
@@ -2334,13 +2272,19 @@ async function resolveMergeConflicts(head, isConflicting) {
   if (editResult?.rebased !== true) return head
   const failures = ['PR branch had merge conflicts with origin/main; the rebase must leave a clean, conflict-free tree']
   const verifyTranscript = await verifyWithRecovery({
-    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runVerify: () => runReviewTask('repair-verify', { head, failures }),
     runRecoverEdit: (objection, attempt) => runCodeEditorTask('verify-recover', { head, sourceLabel: 'conflict-rebase', objection, attempt }),
   })
-  if (!verdictPassed(verifyTranscript)) return head
+  if (!reviewPassed(verifyTranscript)) return head
+  const captureReviewedSurface = () => captureReviewedSurfaceHash({ sourceLabel: 'conflict-rebase', phase: 'Converge' })
+  const reviewedSurfaceHash = await captureReviewedSurface()
+  if (reviewedSurfaceHash === null) return head
   const commitResult = await commitWithRecovery({
+    head,
+    reviewedSurfaceHash,
+    captureReviewedSurface,
     runCommit: () => runCodeEditorTask('repair-commit', { head, wasRebased: true }),
-    runVerify: () => runVerifierTask('repair-verify', { head, failures }),
+    runVerify: () => runReviewTask('repair-verify', { head, failures }),
     runRecoverEdit: (detail, attempt) => runCodeEditorTask('commit-recover', { head, sourceLabel: 'conflict-rebase', blockerDetail: detail, attempt }),
   })
   return commitResult?.newSha || head
@@ -2426,9 +2370,9 @@ async function applyP2OnlyFix(head, findings, sourceLabel, stallSubject, noPushS
 }
 
 /**
- * Route after a successful P2-only fix. HEAD-bound CLEAN/review stamps are
- * SHA-specific: a push that moves HEAD must re-enter CONVERGE so those stamps
- * rebuild. A no-push progress (resolvedWithoutCommit) advances to the next
+ * Route after a successful P2-only fix. A push that moves HEAD re-enters
+ * CONVERGE so the current review state rebuilds. A no-push progress
+ * (resolvedWithoutCommit) advances to the next
  * phase on the same HEAD.
  *
  * ::
@@ -2604,10 +2548,8 @@ function parseDeferredPr(prUrl) {
  * Defer a standards-only round: edit (clean-coder files the follow-up fix issue,
  * stages an environment-hardening hooks/rules change in the config repo's
  * working tree without committing, and resolves the PR's code-standard threads)
- * -> verify (code-verifier binds a verdict to the hardening working tree) ->
- * commit (clean-coder makes one commit, pushes, and opens the DRAFT hardening
- * PR). Splitting the edit from the push lets a workflow code-verifier produce the
- * verdict the verified-commit gate requires for the cross-repo hardening commit.
+ * -> review -> commit (clean-coder makes one commit, pushes, and opens the DRAFT
+ * hardening PR).
  * This PR's own branch is never touched. When a hardening PR already opened for
  * this run, the edit staged no hardening, or the verify step fails, the follow-up
  * issue still stands and the commit step is skipped.
@@ -2628,10 +2570,31 @@ async function spawnStandardsFollowUp(head, findings, sourceLabel, hasHardeningP
   if (editResult?.hardeningEdited !== true || !editResult?.hardeningRepoPath) {
     return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
-  const verifyTranscript = await runVerifierTask('hardening-verify', {
+  const verifyTranscript = await runReviewTask('hardening-verify', {
     head, sourceLabel, hardeningRepoPath: editResult.hardeningRepoPath, hardeningBranch: editResult.hardeningBranch,
   })
-  if (!verdictPassed(verifyTranscript)) {
+  if (!reviewPassed(verifyTranscript)) {
+    return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
+  }
+  const hardeningReviewContext = {
+    head,
+    sourceLabel,
+    hardeningRepoPath: editResult.hardeningRepoPath,
+    hardeningBranch: editResult.hardeningBranch,
+  }
+  const captureReviewedSurface = () =>
+    captureReviewedSurfaceHash({
+      sourceLabel: `hardening:${sourceLabel}`,
+      phase: 'Converge',
+      repositoryPath: editResult.hardeningRepoPath,
+    })
+  const reviewedSurfaceHash = await captureReviewedSurface()
+  const stableReviewedSurfaceHash = await rebindReviewedSurface({
+    reviewedSurfaceHash,
+    captureReviewedSurface,
+    runVerify: () => runReviewTask('hardening-verify', hardeningReviewContext),
+  })
+  if (stableReviewedSurfaceHash === null) {
     return { followUpIssueFiled, issueUrl: followUpIssueUrl, hardeningPrOpened: false, deferredPr: null }
   }
   const commitResult = await runCodeEditorTask('hardening-commit', {

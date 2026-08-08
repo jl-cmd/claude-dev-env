@@ -1,10 +1,10 @@
 <!-- SYNC-HEADER-START -->
 <!--
-AUTO-GENERATED - DO NOT EDIT.
+AUTO-GENERATED — DO NOT EDIT.
 Source of truth: jl-cmd/claude-dev-env/AGENTS.md
 Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: 6c861b98f23572578d211356ce48e30907a7bd89
-Synced at: 2026-07-30T11:04:05.146356+00:00
+Source commit: e7868f98972c487db3a58b7ad06c7dde4c39eb5d
+Synced at: 2026-08-08T20:44:28.599572+00:00
 -->
 <!-- SYNC-HEADER-END -->
 
@@ -41,7 +41,7 @@ This file is **rules-only**. Repo layout, build commands, and workflow guidance 
 - [Scope of review](#scope-of-review)
 - [Hook enforcement](#hook-enforcement)
 
-Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` registers that script alongside `tdd_enforcer.py`, `windows_rmtree_blocker.py`, the `run_all_validators` entrypoint, and others; the `Bash` chain registers `destructive_command_blocker.py`, `gh_body_arg_blocker.py`, `block_main_commit.py`, and `pr_description_enforcer.py`. **Hook enforcement** below maps each rule to its **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
+Many bullets are implemented in `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` (`validate_content` for Python and a small JavaScript subset). The default `PreToolUse` `Write|Edit` chain in `packages/claude-dev-env/hooks/hooks.json` registers that script alongside `tdd_enforcer.py`, `windows_rmtree_blocker.py`, the `run_all_validators` entrypoint, and others; the `Bash` chain registers `destructive_command_blocker.py`, `gh_body_arg_blocker.py`, and `block_main_commit.py`. **Hook enforcement** below maps each rule to its **source script** and notes Python-only coverage where it applies. Flag violations from the diff in review even when no local hook runs the same check.
 
 ---
 

@@ -104,8 +104,10 @@ Repeat until an exit condition fires.
       action** below). Instructions: read the gate script’s stderr, edit the
       repo until a **re-run** of the **same** gate command exits **0**. On
       tiers 1 and 3 the headless worker edits and runs tests but never
-      commits or pushes — the lead stages with explicit `git add`, mints the
-      code-verifier verdict, then commits and pushes. Tier 2 keeps in-agent
+      commits or pushes — the lead stages with explicit `git add`, confirms the
+      gate output and changed behavior against the
+      [review guide](../../reviews/SKILL.md#review-workflow), then commits and
+      pushes. Tier 2 keeps in-agent
       commit and push with `mode="bypassPermissions"`. Repeat standards-fix
       spawns until the gate exits **0** or **5** failed gate rounds (each
       round = one worker session after a non-zero gate). If still non-zero
@@ -219,8 +221,9 @@ worker session after a non-zero gate).
      headless worker edits and runs tests but never commits or pushes. The
      lead session stages the worker's files itself with an explicit `git add`
      (the session edit tracker does not see files the lead did not edit),
-     mints the code-verifier verdict in its own context, then commits and
-     pushes — so the commit gate and the staged-commit scans fire on the real
+     confirms the gate output and changed behavior against the
+     [review guide](../../reviews/SKILL.md#review-workflow), then commits and
+     pushes — so the commit gate and the staged-commit scans run on the real
      diff. Re-run the gate command; if still non-zero, start the next round.
    - **`claude_agent_required`** (exit `2`, attempts include tier `2` with
      that reason): spawn the Agent-tool worker with in-agent commit and push:
@@ -283,8 +286,9 @@ Pass finding comment URL, comment id, and thread node id for each finding
      and 3 the headless worker edits and runs tests but never commits or
      pushes. The lead session stages the worker's files itself with an
      explicit `git add` (the session edit tracker does not see files the lead
-     did not edit), mints the code-verifier verdict in its own context, then
-     commits and pushes — so the commit gate and the staged-commit scans fire
+     did not edit), confirms the gate output and changed behavior against the
+     [review guide](../../reviews/SKILL.md#review-workflow), then commits and
+     pushes — so the commit gate and the staged-commit scans run
      on the real diff. Read the outcome XML at
      `<worktree_path>/.bugteam-pr<N>-loop<L>.fix-outcomes.xml`. The **lead**
      posts one reply per finding using the unified template at

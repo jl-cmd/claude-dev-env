@@ -11,16 +11,15 @@ into a retry prompt authorizes nothing.
     claude-sonnet-4 -> ['claude', 'sonnet', '4']  ok:   another tier
 
 Every literal the gate body reads lives here. ``AGENT_TOOL_NAME`` and
-``TASK_TOOL_NAME`` come from the sibling spawn-gate constants, so the spawn
-gates share one source for both tool names.
+``TASK_TOOL_NAME`` name the spawn tools the gate evaluates.
 """
 
 from __future__ import annotations
 
 import re
 
-from hooks_constants.code_verifier_spawn_preflight_gate_constants import TASK_TOOL_NAME
-from hooks_constants.pr_converge_bugteam_enforcer_constants import AGENT_TOOL_NAME
+AGENT_TOOL_NAME: str = "Agent"
+TASK_TOOL_NAME: str = "Task"
 
 ALL_SPAWN_TOOL_NAMES: frozenset[str] = frozenset({AGENT_TOOL_NAME, TASK_TOOL_NAME})
 

@@ -48,7 +48,7 @@ contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`. End-of-run gotchas
 - `reviews` — the reviewer guide: standard, what to look for, navigating a CL, speed, pushback; refs: CL descriptions, review comments, emergencies, style guides, the two guide indexes
 - `descriptions` — writing good CL descriptions
 - `emergencies` — what counts as an emergency change; refs: what to look for, speed
-- Shared ref in `_shared/references/`: `small-cls.md`, linked by `reviews` and `descriptions`
+- Focused pull request guidance: [`small-cl/SKILL.md`](small-cl/SKILL.md)
 
 **Research and discovery**
 - `recall` — retrieves facts from memory files

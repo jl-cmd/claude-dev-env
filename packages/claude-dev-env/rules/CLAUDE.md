@@ -45,13 +45,11 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
 | `plain-language.md` | Everyday words, short active sentences, lead with the answer |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
-| `proof-of-work-pr-comments.md` | Every PR carries one five-part proof-of-work comment before it leaves draft; the `pr_description_enforcer` hook audits proof-shaped comments and gates `gh pr ready` |
 | `re-stage-before-commit.md` | Stage the files edited this session before `git commit`; the session edit stage gate denies a commit that leaves a tracked session edit unstaged, with `-a`, a pathspec, a preceding `git add`, and `# partial-commit` as escapes |
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
 | `shell-invocation.md` | Windows shell commands run through `pwsh`; no `$(...)`, backtick, or process substitution in a Bash tool command |
 | `testing.md` | Test quality and infrastructure standards |
 | `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |
-| `verified-commit-gate-skip.md` | Code-verifier review is optional; commits and pushes use the checks selected for the task |
 | `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking; recalled facts expire until re-checked this session |
 | `verify-runtime-state.md` | A "component is fine / not at fault" verdict rests on a live probe this session, never code reading or prior-session memory |
 | `windows-filesystem-safe.md` | Use safe `rmtree` patterns on Windows; `mkdirSync` with `recursive: true` on possibly-existing paths |
