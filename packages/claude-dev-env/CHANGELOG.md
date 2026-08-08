@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.12.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.11.0...claude-dev-env-v2.12.0) (2026-08-07)
+
+
+### Features
+
+* **commands:** add /sr-loop converging cleanup command ([fd17003](https://github.com/jl-cmd/claude-dev-env/commit/fd17003535999600b8ec8e66310eec2e3dc0b91b))
+* **commands:** add /sr-loop converging cleanup command ([4b33d0c](https://github.com/jl-cmd/claude-dev-env/commit/4b33d0cf660556396ba2ba932f31381b775b589b))
+
+
+### Bug Fixes
+
+* **advisor:** distinguish declined from broken Sol fallbacks, add --enable-sol ([23c81cd](https://github.com/jl-cmd/claude-dev-env/commit/23c81cd5e4e37c5501b88f85c29a8e3f0bc98e58))
+* **advisor:** resolve Sol Codex executable on Windows, require signal-first charter ([4c61fb3](https://github.com/jl-cmd/claude-dev-env/commit/4c61fb374baaa24582ae5b9fe67e9dd4b757aaf7))
+* **advisor:** resolve Sol Codex executable on Windows, require signal-first charter replies ([08d2a70](https://github.com/jl-cmd/claude-dev-env/commit/08d2a70f4e1503d4dc4cf62d1f5d115498e558a3))
+* **usage-pause:** resolve the credential file from CLAUDE_CONFIG_DIR ([3479f7f](https://github.com/jl-cmd/claude-dev-env/commit/3479f7f197f3f08c0a460a4cd41f164f2ff07db5))
+* **usage-pause:** resolve the credential file from CLAUDE_CONFIG_DIR ([ebb04a5](https://github.com/jl-cmd/claude-dev-env/commit/ebb04a50f2d8ae8b06ba47563decc6e87054487a))
+
+
+### Refactoring
+
+* **advisor:** apply /simplify review fixes to the Sol executable PR ([a10d9e1](https://github.com/jl-cmd/claude-dev-env/commit/a10d9e1ae741b17f2ce34950d9826768ef0deab8))
+* **advisor:** fourth /simplify pass — test spells the flag via its constant ([8de3707](https://github.com/jl-cmd/claude-dev-env/commit/8de370758caeb309d92c9916d2f2fe238c6a76d7))
+* **advisor:** second /simplify pass on the fallback-kind commit ([2ce0c1a](https://github.com/jl-cmd/claude-dev-env/commit/2ce0c1a1e81831046d1dd9748a1f7e9594112c60))
+* **advisor:** third /simplify pass — drop derivable state, tighten test seam ([9cab51d](https://github.com/jl-cmd/claude-dev-env/commit/9cab51d544711997b21592818efcd78bb2c2a53b))
+* **commands:** /sr-loop delegates to the simplify and code-review skills ([ea3001c](https://github.com/jl-cmd/claude-dev-env/commit/ea3001ca2699da2d45afe501f52af9d9585b7721))
+
 ## [2.11.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.10.0...claude-dev-env-v2.11.0) (2026-08-04)
 
 
