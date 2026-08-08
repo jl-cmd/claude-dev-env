@@ -14,8 +14,8 @@ Hooks and scripts that collect, store, and query hook-firing records. The pipeli
 | File | What it does |
 |---|---|
 | `hook_log_init.py` | One-time setup: creates the Neon schema (runs `schema.sql`), then verifies read-write parity with a sentinel round-trip |
-| `hook_log_extractor.py` | Stop hook — reads per-session JSONL transcripts and ingests new `hook_*` attachment records into the `hook_events` table; idempotent via a UNIQUE constraint on `(source_jsonl_path, source_line_number)` |
-| `hook_log_stop_wrapper.py` | Thin wrapper that invokes `hook_log_extractor.py` from the Stop lifecycle event |
+| `hook_log_extractor.py` | Disabled CLI: exits 0 without reading transcripts or rewriting offset state; body remains for a re-enable path that ingests `hook_*` attachments into Neon |
+| `hook_log_stop_wrapper.py` | Disabled Stop wrapper: exits 0 without spawning the extractor; removed from the Stop dispatcher roster |
 | `schema.sql` | DDL for the `hook_events` table, `blocked_commands` view, and supporting indexes |
 | `requirements-hook-logs.txt` | Runtime dependencies (`psycopg`) for the extractor |
 | `requirements-hook-logs-dev.txt` | Dev/test dependencies |
@@ -38,6 +38,6 @@ The `blocked_commands` view filters to `outcome = 'blocked'`.
 
 ## Conventions
 
-- The extractor exits 0 even when Neon is unreachable (offline-graceful); it logs to `OFFLINE_WARNING_LOG` and does not block session end.
+- Extractor and Stop wrapper mains are disabled and exit 0 with no work.
 - Constants for the extractor (table name, offset state file, timeout) live in `hooks_constants/hook_log_extractor_constants.py`.
 - Tests run with `python -m pytest diagnostic/test_hook_log_*.py`.

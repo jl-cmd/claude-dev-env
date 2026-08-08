@@ -154,20 +154,12 @@ def _spawn_without_bws() -> None:
 
 
 def main() -> int:
-    """Debounce, then fire-and-forget the extractor; always exit 0."""
-    try:
-        if _is_within_debounce_window():
-            return EXIT_CODE_SUCCESS
-        _record_current_timestamp()
-        try:
-            if _can_use_bws():
-                _spawn_with_bws()
-            else:
-                _spawn_without_bws()
-        except Exception:
-            _clear_recorded_timestamp()
-    except Exception:
-        pass
+    """Stop-hook wrapper for the hook-log extractor.
+
+    Disabled: does not spawn the extractor. The extractor rewrote large
+    offset state under ``logs/hooks/.state`` on every Stop even when Neon
+    was offline. Re-enable by restoring the debounce-and-spawn body.
+    """
     return EXIT_CODE_SUCCESS
 
 

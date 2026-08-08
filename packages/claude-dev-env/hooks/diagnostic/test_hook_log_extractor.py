@@ -805,32 +805,22 @@ def test_offline_fallback_still_exits_zero_when_warning_log_write_raises(
     assert exit_code == 0
 
 
-def test_main_accepts_incremental_flag_as_noop(
-    tmp_path: Path,
+def test_main_is_disabled_and_skips_extraction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C8: ``--incremental`` must be recognized and route to default extraction."""
-    captured_arguments: dict[str, object] = {}
+    """Disabled main exits success without running extraction."""
 
-    def _fake_run_full_extraction(
-        transcripts_root: str,
-        state_file_path: str,
-        full_rebuild: bool,
-    ) -> int:
-        captured_arguments["transcripts_root"] = transcripts_root
-        captured_arguments["state_file_path"] = state_file_path
-        captured_arguments["full_rebuild"] = full_rebuild
-        return 0
+    def _fail_if_called(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("run_full_extraction must not run while disabled")
 
     monkeypatch.setattr(sys, "argv", ["hook_log_extractor.py", "--incremental"])
     monkeypatch.setattr(
-        hook_log_extractor, "run_full_extraction", _fake_run_full_extraction
+        hook_log_extractor, "run_full_extraction", _fail_if_called
     )
 
     exit_code = hook_log_extractor.main()
 
     assert exit_code == 0
-    assert captured_arguments["full_rebuild"] is False
 
 
 def test_run_query_returns_nonzero_for_unknown_query(
