@@ -123,6 +123,7 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
+            Pillow \
             mypy \
             ruff
 
@@ -168,6 +169,7 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
+            Pillow \
             mypy \
             ruff
 
