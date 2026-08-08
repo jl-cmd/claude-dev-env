@@ -141,12 +141,36 @@ def select_provider_size(final_size: ImageSize) -> ImageSize:
         final_size: Requested final artifact dimensions.
     Returns:
         A valid native provider size with the same aspect ratio.
-    Raises:
-        ImagegenError: If the aspect ratio cannot be represented by provider dimensions.
     """
     if is_native_openai_size(final_size):
         return final_size
     return ImageSize(DEFAULT_PROVIDER_EDGE, DEFAULT_PROVIDER_EDGE)
+
+
+def require_png_within_limits(image: Image.Image) -> None:
+    """Require a PNG whose pixel count stays within the safety limit.
+
+    Args:
+        image: Open Pillow image.
+    Raises:
+        ImagegenError: If the format is not PNG or the pixel count is too high.
+    """
+    if image.format != PNG_FORMAT:
+        raise ImagegenError("provider image must be PNG")
+    if image.width * image.height > MAXIMUM_PIXEL_COUNT:
+        raise ImagegenError("provider image exceeds the pixel limit")
+
+
+def require_provider_byte_limit(image_bytes: bytes) -> None:
+    """Require encoded image bytes stay within the provider byte limit.
+
+    Args:
+        image_bytes: Encoded image payload.
+    Raises:
+        ImagegenError: If the payload is larger than the allowed byte limit.
+    """
+    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
+        raise ImagegenError("provider image exceeds the byte limit")
 
 
 def decode_image(image_bytes: bytes) -> ImageSize:
@@ -159,18 +183,16 @@ def decode_image(image_bytes: bytes) -> ImageSize:
     Raises:
         ImagegenError: If bytes are oversized, malformed, or exceed pixel limits.
     """
-    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
-        raise ImagegenError("provider image exceeds the byte limit")
+    require_provider_byte_limit(image_bytes)
     try:
         with Image.open(BytesIO(image_bytes)) as image:
-            if image.format != PNG_FORMAT:
-                raise ImagegenError("provider image must be PNG")
-            if image.width * image.height > MAXIMUM_PIXEL_COUNT:
-                raise ImagegenError("provider image exceeds the pixel limit")
+            require_png_within_limits(image)
             image.verify()
         with Image.open(BytesIO(image_bytes)) as image:
             image.load()
             return ImageSize(*image.size)
+    except ImagegenError:
+        raise
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as error:
         raise ImagegenError("provider returned an invalid image") from error
 
@@ -237,6 +259,22 @@ def request_openai_image(prompt: str, requested_size: ImageSize, transport: Tran
     return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, OPENAI_MODEL, OPENAI_API_KEY_NAME)
 
 
+class _RejectRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse HTTP redirects so an HTTPS URL cannot land on a weaker scheme."""
+
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer: object,
+        status_code: int,
+        message: str,
+        all_headers: Mapping[str, str],
+        new_url: str,
+    ) -> None:
+        del request, file_pointer, status_code, message, all_headers, new_url
+        raise ImagegenError("OpenAI image URL redirects are not allowed")
+
+
 def download_https_image(image_url: str) -> bytes:
     """Download provider image bytes from an HTTPS URL only.
 
@@ -245,18 +283,22 @@ def download_https_image(image_url: str) -> bytes:
     Returns:
         Raw image bytes capped by the provider byte limit.
     Raises:
-        ImagegenError: If the URL is not HTTPS, download fails, or bytes exceed the limit.
+        ImagegenError: If the URL is not HTTPS, redirects, download fails, or bytes exceed the limit.
     """
     if not image_url.casefold().startswith("https://"):
         raise ImagegenError("OpenAI image URL must use HTTPS")
     request = urllib.request.Request(image_url, method="GET")
+    opener = urllib.request.build_opener(_RejectRedirectHandler)
     try:
-        with urllib.request.urlopen(request, timeout=OPENAI_TIMEOUT_SECONDS) as image_download:
+        with opener.open(request, timeout=OPENAI_TIMEOUT_SECONDS) as image_download:
+            if not image_download.geturl().casefold().startswith("https://"):
+                raise ImagegenError("OpenAI image URL must use HTTPS")
             image_bytes = image_download.read(MAXIMUM_PROVIDER_BYTES + 1)
+    except ImagegenError:
+        raise
     except (OSError, TimeoutError, urllib.error.URLError) as error:
         raise ImagegenError("OpenAI image download failed") from error
-    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
-        raise ImagegenError("provider image exceeds the byte limit")
+    require_provider_byte_limit(image_bytes)
     return image_bytes
 
 
@@ -321,14 +363,10 @@ def resize_image(image_bytes: bytes, target_size: ImageSize) -> bytes:
     Raises:
         ImagegenError: If the source is invalid or has a mismatched aspect ratio.
     """
-    if len(image_bytes) > MAXIMUM_PROVIDER_BYTES:
-        raise ImagegenError("provider image exceeds the byte limit")
+    require_provider_byte_limit(image_bytes)
     try:
         with Image.open(BytesIO(image_bytes)) as source_image:
-            if source_image.format != PNG_FORMAT:
-                raise ImagegenError("provider image must be PNG")
-            if source_image.width * source_image.height > MAXIMUM_PIXEL_COUNT:
-                raise ImagegenError("provider image exceeds the pixel limit")
+            require_png_within_limits(source_image)
             source_image.load()
             if source_image.width != source_image.height:
                 raise ImagegenError("provider image must be square")

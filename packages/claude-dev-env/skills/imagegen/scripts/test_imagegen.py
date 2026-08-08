@@ -126,6 +126,12 @@ def test_http_provider_image_url_is_rejected() -> None:
         download_https_image("http://example.invalid/image.png")
 
 
+def test_provider_image_url_redirects_are_rejected() -> None:
+    handler = imagegen_core._RejectRedirectHandler()
+    with pytest.raises(ImagegenError, match="redirects"):
+        handler.redirect_request(None, None, 302, "Found", {}, "https://example.invalid/other.png")
+
+
 def test_non_png_provider_bytes_are_rejected() -> None:
     destination = BytesIO()
     Image.new("RGB", (16, 16), "purple").save(destination, format="JPEG")
