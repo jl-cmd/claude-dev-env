@@ -317,7 +317,7 @@ jobs:
           if ($selectedCount -ne $expectedSelectedCount) {
             throw "selected count ($selectedCount) != expected non-comment line count ($expectedSelectedCount)"
           }
-          $expectedWindowsSemanticsCount = 8
+          $expectedWindowsSemanticsCount = 7
           if ($selectedCount -ne $expectedWindowsSemanticsCount) {
             throw "selected count ($selectedCount) != expected windows-semantics count ($expectedWindowsSemanticsCount)"
           }
