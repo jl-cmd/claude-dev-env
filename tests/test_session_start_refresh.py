@@ -1,12 +1,13 @@
 """Behavior checks for the cloud SessionStart refresh hook.
 
-Ten checks run `.claude/hooks/session_start_refresh.py` as a real subprocess
-against a sandbox home directory, with fake `npm` and `npx` executables on
-`PATH` that record their arguments to a log file. The assertions read that log:
-a refresh run shows an `npx -y claude-dev-env@<version>` line, a quiet run
-shows none. Two static checks bind the `.claude/settings.json` registration to
-the hook: the registered command names the script on disk, and the probe and
-install budgets stay inside the registered timeout.
+The behavior checks run `.claude/hooks/session_start_refresh.py` as a real
+subprocess against a sandbox home directory, with fake `npm` and `npx`
+executables on `PATH` that record their arguments to a log file. The
+assertions read that log: a refresh run shows an `npx -y
+claude-dev-env@<version>` line, a quiet run shows none. Two static checks
+bind the `.claude/settings.json` registration to the hook: the registered
+command names the script on disk, and the probe and install budgets stay
+inside the registered timeout.
 """
 
 import importlib.util
