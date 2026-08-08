@@ -19,6 +19,7 @@ import imagegen_core
 from imagegen_core import (
     ImagegenError,
     ImageSize,
+    build_codex_arguments,
     build_oauth_environment,
     decode_image,
     download_https_image,
@@ -26,6 +27,7 @@ from imagegen_core import (
     parse_size,
     publish_artifact,
     resize_image,
+    validate_reference_images,
 )
 
 
@@ -202,3 +204,147 @@ def test_resize_and_decode_have_expected_hashes() -> None:
     final_bytes = resize_image(source_bytes, ImageSize(2880, 2880))
     assert decode_image(final_bytes) == ImageSize(2880, 2880)
     assert hashlib.sha256(source_bytes).hexdigest() != hashlib.sha256(final_bytes).hexdigest()
+
+
+def test_missing_reference_image_fails(tmp_path: Path) -> None:
+    with pytest.raises(ImagegenError, match="reference_image_not_found"):
+        validate_reference_images([tmp_path / "missing.png"])
+
+
+def test_undecodable_reference_image_fails(tmp_path: Path) -> None:
+    reference_path = tmp_path / "not-an-image.png"
+    reference_path.write_bytes(b"not a real image")
+    with pytest.raises(ImagegenError, match="reference_image_undecodable"):
+        validate_reference_images([reference_path])
+
+
+def test_too_many_reference_images_fails(tmp_path: Path) -> None:
+    all_reference_paths = []
+    for each_index in range(3):
+        reference_path = tmp_path / f"reference-{each_index}.png"
+        reference_path.write_bytes(make_png((16, 16)))
+        all_reference_paths.append(reference_path)
+    with pytest.raises(ImagegenError, match="too_many_reference_images"):
+        validate_reference_images(all_reference_paths)
+
+
+def test_reference_images_pass_before_backend_spawn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with pytest.raises(ImagegenError, match="too_many_reference_images"):
+        generate_image(
+            "prompt",
+            "openai-api",
+            ImageSize(2880, 2880),
+            tmp_path / "artifact.png",
+            "forbid",
+            False,
+            all_reference_images=[tmp_path / "one.png", tmp_path / "two.png", tmp_path / "three.png"],
+        )
+
+
+def test_codex_argument_vector_carries_references_model_and_reasoning_effort(tmp_path: Path) -> None:
+    reference_path = tmp_path / "reference.png"
+    reference_path.write_bytes(make_png((16, 16)))
+    all_reference_images = validate_reference_images([reference_path])
+    work_directory = tmp_path / "work"
+
+    all_arguments = build_codex_arguments("codex", work_directory, "contract text", all_reference_images, "gpt-5-codex", "high")
+
+    assert all_arguments[-1] == "contract text"
+    assert ("-i", str(reference_path)) == tuple(all_arguments[all_arguments.index("-i") : all_arguments.index("-i") + 2])
+    assert ("-m", "gpt-5-codex") == tuple(all_arguments[all_arguments.index("-m") : all_arguments.index("-m") + 2])
+    assert ("-c", "model_reasoning_effort=high") == tuple(all_arguments[all_arguments.index("-c") : all_arguments.index("-c") + 2])
+
+
+def test_codex_argument_vector_omits_absent_options(tmp_path: Path) -> None:
+    all_arguments = build_codex_arguments("codex", tmp_path, "contract text", [], None, None)
+
+    assert "-i" not in all_arguments
+    assert "-m" not in all_arguments
+    assert "-c" not in all_arguments
+
+
+def test_oauth_backend_attaches_reference_images_via_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    reference_path = tmp_path / "reference.png"
+    reference_path.write_bytes(make_png((16, 16)))
+    captured_arguments: list[Sequence[str]] = []
+
+    def runner(all_arguments: Sequence[str], work_directory: Path, _environment: Mapping[str, str]) -> None:
+        captured_arguments.append(all_arguments)
+        (work_directory / "generated.png").write_bytes(make_png((2880, 2880)))
+
+    receipt = generate_image(
+        "prompt",
+        "codex-oauth",
+        ImageSize(2880, 2880),
+        tmp_path / "artifact.png",
+        "forbid",
+        False,
+        runner=runner,
+        all_reference_images=[reference_path],
+        model="gpt-5-codex",
+        reasoning_effort="high",
+    )
+
+    assert "-i" in captured_arguments[0]
+    assert str(reference_path) in captured_arguments[0]
+    assert receipt["reference_image_paths"] == [str(reference_path)]
+    assert receipt["reference_image_sha256"] == [hashlib.sha256(reference_path.read_bytes()).hexdigest()]
+    assert receipt["model"] == "gpt-5-codex"
+    assert receipt["reasoning_effort"] == "high"
+
+
+def test_openai_backend_uses_edit_endpoint_when_references_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "present")
+    reference_path = tmp_path / "reference.png"
+    reference_path.write_bytes(make_png((16, 16)))
+    source_bytes = make_png((2880, 2880))
+    provider_payload = b'{"data":[{"b64_json":"' + base64.b64encode(source_bytes) + b'"}]}'
+    requested_urls: list[str] = []
+
+    def transport(url: str, _body: bytes, _headers: Mapping[str, str]) -> bytes:
+        requested_urls.append(url)
+        return provider_payload
+
+    receipt = generate_image(
+        "prompt",
+        "openai-api",
+        ImageSize(2880, 2880),
+        tmp_path / "artifact.png",
+        "forbid",
+        False,
+        transport=transport,
+        all_reference_images=[reference_path],
+        model="gpt-image-2",
+    )
+
+    assert requested_urls == ["https://api.openai.com/v1/images/edits"]
+    assert receipt["reference_image_paths"] == [str(reference_path)]
+    assert receipt["model"] == "gpt-image-2"
+
+
+def test_openai_backend_reasoning_effort_fails_loudly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "present")
+    with pytest.raises(ImagegenError, match="reasoning_effort_unsupported_by_backend"):
+        generate_image("prompt", "openai-api", ImageSize(2880, 2880), tmp_path / "artifact.png", "forbid", False, reasoning_effort="high")
+
+
+def test_receipt_records_absent_reference_model_and_reasoning_effort(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "present")
+    source_bytes = make_png((2880, 2880))
+    provider_payload = b'{"data":[{"b64_json":"' + base64.b64encode(source_bytes) + b'"}]}'
+    receipt = generate_image(
+        "prompt",
+        "openai-api",
+        ImageSize(2880, 2880),
+        tmp_path / "artifact.png",
+        "forbid",
+        False,
+        transport=lambda _url, _body, _headers: provider_payload,
+    )
+    assert receipt["reference_image_paths"] == []
+    assert receipt["reference_image_sha256"] == []
+    assert receipt["model"] is None
+    assert receipt["reasoning_effort"] is None

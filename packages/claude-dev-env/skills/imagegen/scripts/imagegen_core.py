@@ -23,6 +23,7 @@ from PIL import Image
 from config.constants import (
     ALL_SUPPORTED_BACKENDS,
     ALL_SUPPORTED_RESIZE_POLICIES,
+    CODEX_REASONING_EFFORT_CONFIG_KEY,
     CODEX_TIMEOUT_SECONDS,
     CODEX_TOOL_NAME,
     DEFAULT_PROVIDER_EDGE,
@@ -32,10 +33,17 @@ from config.constants import (
     MAXIMUM_IMAGE_EDGE,
     MAXIMUM_PIXEL_COUNT,
     MAXIMUM_PROVIDER_BYTES,
+    MAXIMUM_REFERENCE_IMAGE_COUNT,
     MINIMUM_DIMENSION,
     MINIMUM_PIXEL_COUNT,
+    MULTIPART_BOUNDARY_TOKEN_BYTES,
+    MULTIPART_IMAGE_FIELD_NAME,
+    MULTIPART_MODEL_FIELD_NAME,
+    MULTIPART_PROMPT_FIELD_NAME,
+    MULTIPART_SIZE_FIELD_NAME,
     OPENAI_API_KEY_NAME,
     OPENAI_API_URL,
+    OPENAI_EDIT_API_URL,
     OPENAI_MODEL,
     OPENAI_OUTPUT_FORMAT,
     OPENAI_TIMEOUT_SECONDS,
@@ -63,6 +71,15 @@ class ImageSize:
 
     def as_text(self) -> str:
         return f"{self.width}{SIZE_SEPARATOR}{self.height}"
+
+
+@dataclass(frozen=True)
+class ReferenceImage:
+    """One entry from ``--reference-image``, validated and read into bytes."""
+
+    source_path: Path
+    image_bytes: bytes
+    image_format: str
 
 
 @dataclass(frozen=True)
@@ -197,6 +214,47 @@ def decode_image(image_bytes: bytes) -> ImageSize:
         raise ImagegenError("provider returned an invalid image") from error
 
 
+def require_readable_reference_image(source_path: Path) -> ReferenceImage:
+    """Require a reference image that exists and decodes with Pillow.
+
+    Args:
+        source_path: Candidate reference image path.
+    Returns:
+        The validated reference image.
+    Raises:
+        ImagegenError: If the path is missing or the bytes do not decode as an image.
+    """
+    if not source_path.is_file():
+        raise ImagegenError(f"reference_image_not_found: {source_path}")
+    image_bytes = source_path.read_bytes()
+    require_provider_byte_limit(image_bytes)
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            image.verify()
+        with Image.open(BytesIO(image_bytes)) as image:
+            image.load()
+            image_format = (image.format or PNG_FORMAT).lower()
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as error:
+        raise ImagegenError(f"reference_image_undecodable: {source_path}") from error
+    return ReferenceImage(source_path, image_bytes, image_format)
+
+
+def validate_reference_images(all_reference_image_paths: Sequence[Path]) -> list[ReferenceImage]:
+    """Validate every reference image before any backend is spawned.
+
+    Args:
+        all_reference_image_paths: Candidate reference image paths, in CLI order.
+    Returns:
+        The validated reference images, in the same order.
+    Raises:
+        ImagegenError: If the count exceeds the provider limit, or any path is
+            missing or undecodable.
+    """
+    if len(all_reference_image_paths) > MAXIMUM_REFERENCE_IMAGE_COUNT:
+        raise ImagegenError(f"too_many_reference_images: at most {MAXIMUM_REFERENCE_IMAGE_COUNT} are supported")
+    return [require_readable_reference_image(each_reference_image_path) for each_reference_image_path in all_reference_image_paths]
+
+
 def build_openai_transport() -> Transport:
     """Build the standard-library HTTPS transport.
 
@@ -225,12 +283,87 @@ def build_openai_transport() -> Transport:
     return send_request
 
 
-def request_openai_image(prompt: str, requested_size: ImageSize, transport: Transport) -> ProviderArtifact:
+def extract_openai_image_bytes(all_api_payload: Mapping[str, Sequence[Mapping[str, str]]]) -> bytes:
+    """Extract the first image artifact from an OpenAI images response.
+
+    Args:
+        all_api_payload: Decoded JSON response body.
+    Returns:
+        Raw image bytes, downloaded when the payload carries a URL.
+    Raises:
+        ImagegenError: If the payload carries no usable image artifact.
+    """
+    image_records = all_api_payload.get("data", [])
+    image_record = image_records[0] if image_records else {}
+    if image_record.get("b64_json"):
+        return base64.b64decode(image_record["b64_json"], validate=True)
+    if image_record.get("url"):
+        return download_https_image(image_record["url"])
+    raise ImagegenError("OpenAI returned no image artifact")
+
+
+def request_openai_image(prompt: str, requested_size: ImageSize, transport: Transport, model: str = OPENAI_MODEL) -> ProviderArtifact:
     """Request a GPT Image 2 artifact using the environment API key.
 
     Args:
         prompt: Image-generation prompt.
         requested_size: Native provider dimensions.
+        transport: Injected HTTPS transport.
+        model: Requested model name.
+    Returns:
+        Provider artifact with observed source dimensions.
+    Raises:
+        ImagegenError: If credentials, transport, or provider bytes are invalid.
+    """
+    api_key = os.environ.get(OPENAI_API_KEY_NAME)
+    if not api_key:
+        raise ImagegenError("OPENAI_API_KEY is required for openai-api")
+    request_body = json.dumps({"model": model, "prompt": prompt, "size": requested_size.as_text(), "output_format": OPENAI_OUTPUT_FORMAT}).encode()
+    all_headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        image_bytes = extract_openai_image_bytes(json.loads(transport(OPENAI_API_URL, request_body, all_headers)))
+    except ImagegenError:
+        raise
+    except (AttributeError, binascii.Error, IndexError, KeyError, OSError, TypeError, ValueError, urllib.error.URLError, json.JSONDecodeError) as error:
+        raise ImagegenError("OpenAI returned an invalid image response") from error
+    return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, model, OPENAI_API_KEY_NAME)
+
+
+def build_openai_edit_request_body(boundary: str, prompt: str, model: str, requested_size: ImageSize, all_reference_images: Sequence[ReferenceImage]) -> bytes:
+    """Build a multipart body for the OpenAI image-edit endpoint.
+
+    Args:
+        boundary: Multipart boundary token.
+        prompt: Image-generation prompt.
+        model: Requested model name.
+        requested_size: Native provider dimensions.
+        all_reference_images: Validated reference images to attach.
+    Returns:
+        The encoded multipart request body.
+    """
+    body_parts: list[bytes] = []
+    all_text_fields = ((MULTIPART_MODEL_FIELD_NAME, model), (MULTIPART_PROMPT_FIELD_NAME, prompt), (MULTIPART_SIZE_FIELD_NAME, requested_size.as_text()))
+    for each_field_name, each_field_content in all_text_fields:
+        body_parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{each_field_name}"\r\n\r\n{each_field_content}\r\n'.encode())
+    for each_reference_image in all_reference_images:
+        header = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{MULTIPART_IMAGE_FIELD_NAME}"; filename="{each_reference_image.source_path.name}"\r\n'
+            f"Content-Type: image/{each_reference_image.image_format}\r\n\r\n"
+        ).encode()
+        body_parts.append(header + each_reference_image.image_bytes + b"\r\n")
+    body_parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(body_parts)
+
+
+def request_openai_image_with_references(prompt: str, requested_size: ImageSize, model: str, all_reference_images: Sequence[ReferenceImage], transport: Transport) -> ProviderArtifact:
+    """Request an edited GPT Image 2 artifact grounded in reference images.
+
+    Args:
+        prompt: Image-generation prompt.
+        requested_size: Native provider dimensions.
+        model: Requested model name.
+        all_reference_images: Validated reference images to attach.
         transport: Injected HTTPS transport.
     Returns:
         Provider artifact with observed source dimensions.
@@ -240,23 +373,16 @@ def request_openai_image(prompt: str, requested_size: ImageSize, transport: Tran
     api_key = os.environ.get(OPENAI_API_KEY_NAME)
     if not api_key:
         raise ImagegenError("OPENAI_API_KEY is required for openai-api")
-    request_body = json.dumps({"model": OPENAI_MODEL, "prompt": prompt, "size": requested_size.as_text(), "output_format": OPENAI_OUTPUT_FORMAT}).encode()
-    all_headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    boundary = secrets.token_hex(MULTIPART_BOUNDARY_TOKEN_BYTES)
+    request_body = build_openai_edit_request_body(boundary, prompt, model, requested_size, all_reference_images)
+    all_headers = {"Authorization": f"Bearer {api_key}", "Content-Type": f"multipart/form-data; boundary={boundary}"}
     try:
-        api_payload = json.loads(transport(OPENAI_API_URL, request_body, all_headers))
-        image_records = api_payload.get("data", [])
-        image_record = image_records[0] if image_records else {}
-        if image_record.get("b64_json"):
-            image_bytes = base64.b64decode(image_record["b64_json"], validate=True)
-        elif image_record.get("url"):
-            image_bytes = download_https_image(image_record["url"])
-        else:
-            raise ImagegenError("OpenAI returned no image artifact")
+        image_bytes = extract_openai_image_bytes(json.loads(transport(OPENAI_EDIT_API_URL, request_body, all_headers)))
     except ImagegenError:
         raise
     except (AttributeError, binascii.Error, IndexError, KeyError, OSError, TypeError, ValueError, urllib.error.URLError, json.JSONDecodeError) as error:
         raise ImagegenError("OpenAI returned an invalid image response") from error
-    return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, OPENAI_MODEL, OPENAI_API_KEY_NAME)
+    return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, model, OPENAI_API_KEY_NAME)
 
 
 class _RejectRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -331,12 +457,40 @@ def discover_oauth_artifact(work_directory: Path, expected_path: Path) -> bytes:
         raise ImagegenError("Codex artifact could not be read") from error
 
 
-def request_oauth_image(prompt: str, runner: Runner) -> ProviderArtifact:
+def build_codex_arguments(codex_command: str, work_directory: Path, contract: str, all_reference_images: Sequence[ReferenceImage], model: str | None, reasoning_effort: str | None) -> tuple[str, ...]:
+    """Build the Codex CLI argument vector for one image-generation run.
+
+    Args:
+        codex_command: Resolved Codex executable path or name.
+        work_directory: Isolated Codex working directory.
+        contract: The generation instruction passed as the trailing prompt.
+        all_reference_images: Validated reference images to attach with ``-i``.
+        model: Requested Codex model name, or ``None`` to use the Codex default.
+        reasoning_effort: Requested Codex reasoning effort, or ``None`` to use the Codex default.
+    Returns:
+        The full argument vector, contract last.
+    """
+    all_arguments = [codex_command, "exec", "--skip-git-repo-check", "-s", "workspace-write", "-C", str(work_directory)]
+    if all_reference_images:
+        all_arguments.append("-i")
+        all_arguments.extend(str(each_reference_image.source_path) for each_reference_image in all_reference_images)
+    if model:
+        all_arguments.extend(("-m", model))
+    if reasoning_effort:
+        all_arguments.extend(("-c", f"{CODEX_REASONING_EFFORT_CONFIG_KEY}={reasoning_effort}"))
+    all_arguments.append(contract)
+    return tuple(all_arguments)
+
+
+def request_oauth_image(prompt: str, runner: Runner, all_reference_images: Sequence[ReferenceImage] = (), model: str | None = None, reasoning_effort: str | None = None) -> ProviderArtifact:
     """Run Codex in an isolated directory and measure its PNG artifact.
 
     Args:
         prompt: Image-generation prompt.
         runner: Injected Codex process runner.
+        all_reference_images: Validated reference images attached with ``-i``.
+        model: Requested Codex model name, passed through with ``-m``.
+        reasoning_effort: Requested Codex reasoning effort, passed through as a ``-c`` override.
     Returns:
         Provider artifact with runtime-observed dimensions.
     Raises:
@@ -345,9 +499,11 @@ def request_oauth_image(prompt: str, runner: Runner) -> ProviderArtifact:
     with tempfile.TemporaryDirectory(prefix=TEMPORARY_DIRECTORY_PREFIX) as temporary_directory:
         work_directory = Path(temporary_directory)
         artifact_path = work_directory / f"generated{PNG_SUFFIX}"
-        contract = f"Generate exactly one PNG image for this prompt: {prompt}. Save it at {artifact_path}."
+        reference_clause = " Use the attached reference image(s) as visual guidance." if all_reference_images else ""
+        contract = f"Generate exactly one PNG image for this prompt: {prompt}.{reference_clause} Save it at {artifact_path}."
         codex_command = shutil.which("codex") or "codex"
-        runner((codex_command, "exec", "--skip-git-repo-check", "-s", "workspace-write", "-C", str(work_directory), contract), work_directory, build_oauth_environment())
+        all_arguments = build_codex_arguments(codex_command, work_directory, contract, all_reference_images, model, reasoning_effort)
+        runner(all_arguments, work_directory, build_oauth_environment())
         image_bytes = discover_oauth_artifact(work_directory, artifact_path)
     return ProviderArtifact(image_bytes, decode_image(image_bytes), None, CODEX_TOOL_NAME, "codex OAuth")
 
@@ -380,7 +536,7 @@ def resize_image(image_bytes: bytes, target_size: ImageSize) -> bytes:
         raise ImagegenError("image resize failed") from error
 
 
-def build_receipt(prompt: str, backend: str, artifact: ProviderArtifact, requested_size: ImageSize, final_bytes: bytes) -> dict[str, object]:
+def build_receipt(prompt: str, backend: str, artifact: ProviderArtifact, requested_size: ImageSize, final_bytes: bytes, all_reference_images: Sequence[ReferenceImage], model: str | None, reasoning_effort: str | None) -> dict[str, object]:
     """Build receipt fields from observed provider and final bytes.
 
     Args:
@@ -389,6 +545,9 @@ def build_receipt(prompt: str, backend: str, artifact: ProviderArtifact, request
         artifact: Verified provider artifact.
         requested_size: Requested final dimensions.
         final_bytes: Verified final PNG bytes.
+        all_reference_images: Validated reference images attached to the request.
+        model: Requested model name, or ``None`` when not supplied.
+        reasoning_effort: Requested reasoning effort, or ``None`` when not supplied.
     Returns:
         JSON-compatible receipt fields.
     Raises:
@@ -402,7 +561,9 @@ def build_receipt(prompt: str, backend: str, artifact: ProviderArtifact, request
     provider_size = artifact.provider_requested_size.as_text() if artifact.provider_requested_size else None
     source_digest = hashlib.sha256(artifact.image_bytes).hexdigest()
     final_digest = source_digest if transformation == "native" else hashlib.sha256(final_bytes).hexdigest()
-    return {"prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "backend": backend, "model_or_tool": artifact.model_or_tool, "requested_size": requested_size.as_text(), "provider_size": provider_size, "source_size": artifact.source_size.as_text(), "final_size": final_size.as_text(), "transformation": transformation, "transformations": transformations, "source_sha256": source_digest, "final_sha256": final_digest, "credential_source": artifact.credential_source}
+    reference_image_paths = [str(each_reference_image.source_path) for each_reference_image in all_reference_images]
+    reference_image_sha256 = [hashlib.sha256(each_reference_image.image_bytes).hexdigest() for each_reference_image in all_reference_images]
+    return {"prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "backend": backend, "model_or_tool": artifact.model_or_tool, "requested_size": requested_size.as_text(), "provider_size": provider_size, "source_size": artifact.source_size.as_text(), "final_size": final_size.as_text(), "transformation": transformation, "transformations": transformations, "source_sha256": source_digest, "final_sha256": final_digest, "credential_source": artifact.credential_source, "reference_image_paths": reference_image_paths, "reference_image_sha256": reference_image_sha256, "model": model, "reasoning_effort": reasoning_effort}
 
 
 def require_png_destination(destination_path: Path) -> None:
@@ -474,7 +635,19 @@ def _restore_path(path: Path, previous_bytes: bytes | None) -> None:
         pass
 
 
-def generate_image(prompt: str, backend: str, requested_size: ImageSize, destination_path: Path, resize_policy: str, should_overwrite: bool, transport: Transport | None = None, runner: Runner | None = None) -> dict[str, object]:
+def generate_image(
+    prompt: str,
+    backend: str,
+    requested_size: ImageSize,
+    destination_path: Path,
+    resize_policy: str,
+    should_overwrite: bool,
+    transport: Transport | None = None,
+    runner: Runner | None = None,
+    all_reference_images: Sequence[Path] = (),
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+) -> dict[str, object]:
     """Generate, verify, optionally resize, and publish one image.
 
     Args:
@@ -486,6 +659,9 @@ def generate_image(prompt: str, backend: str, requested_size: ImageSize, destina
         should_overwrite: Whether existing destinations may be replaced.
         transport: Optional injected OpenAI transport.
         runner: Optional injected Codex runner.
+        all_reference_images: Reference image paths, validated before any backend spawn.
+        model: Requested model name, passed through to the selected backend.
+        reasoning_effort: Requested reasoning effort, passed through to ``codex-oauth`` only.
     Returns:
         Published receipt fields.
     Raises:
@@ -495,17 +671,25 @@ def generate_image(prompt: str, backend: str, requested_size: ImageSize, destina
     require_png_destination(destination_path)
     if backend not in ALL_SUPPORTED_BACKENDS or resize_policy not in ALL_SUPPORTED_RESIZE_POLICIES:
         raise ImagegenError("unsupported backend or resize policy")
+    all_verified_reference_images = validate_reference_images(all_reference_images)
     if backend == "openai-api":
+        if reasoning_effort:
+            raise ImagegenError("reasoning_effort_unsupported_by_backend: openai-api has no reasoning-effort control")
         provider_size = select_provider_size(requested_size)
         if provider_size != requested_size and resize_policy == "forbid":
             raise ImagegenError("requested size is not supported natively; use --resize-policy allow")
-        artifact = request_openai_image(prompt, provider_size, transport or build_openai_transport())
+        request_model = model or OPENAI_MODEL
+        active_transport = transport or build_openai_transport()
+        if all_verified_reference_images:
+            artifact = request_openai_image_with_references(prompt, provider_size, request_model, all_verified_reference_images, active_transport)
+        else:
+            artifact = request_openai_image(prompt, provider_size, active_transport, request_model)
     else:
-        artifact = request_oauth_image(prompt, runner or run_codex)
+        artifact = request_oauth_image(prompt, runner or run_codex, all_reference_images=all_verified_reference_images, model=model, reasoning_effort=reasoning_effort)
     if artifact.source_size != requested_size and resize_policy == "forbid":
         raise ImagegenError("provider dimensions differ from requested size")
     final_bytes = artifact.image_bytes if artifact.source_size == requested_size else resize_image(artifact.image_bytes, requested_size)
-    receipt = build_receipt(prompt, backend, artifact, requested_size, final_bytes)
+    receipt = build_receipt(prompt, backend, artifact, requested_size, final_bytes, all_verified_reference_images, model, reasoning_effort)
     publish_artifact(destination_path, final_bytes, receipt, should_overwrite)
     return receipt
 

@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from config.constants import ALL_SUPPORTED_BACKENDS, ALL_SUPPORTED_RESIZE_POLICIES
 from imagegen_core import ImagegenError, generate_image, parse_size
+
+from config.constants import ALL_SUPPORTED_BACKENDS, ALL_SUPPORTED_RESIZE_POLICIES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,6 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", dest="destination_path", type=Path, required=True)
     parser.add_argument("--resize-policy", choices=ALL_SUPPORTED_RESIZE_POLICIES, default=ALL_SUPPORTED_RESIZE_POLICIES[0])
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--reference-image", dest="reference_image_paths", type=Path, action="append", default=[])
+    parser.add_argument("--model")
+    parser.add_argument("--reasoning-effort")
     return parser
 
 
@@ -33,7 +37,17 @@ def main() -> int:
     """
     arguments = build_parser().parse_args()
     try:
-        all_receipt = generate_image(arguments.prompt, arguments.backend, parse_size(arguments.size), arguments.destination_path, arguments.resize_policy, arguments.overwrite)
+        all_receipt = generate_image(
+            arguments.prompt,
+            arguments.backend,
+            parse_size(arguments.size),
+            arguments.destination_path,
+            arguments.resize_policy,
+            arguments.overwrite,
+            all_reference_images=arguments.reference_image_paths,
+            model=arguments.model,
+            reasoning_effort=arguments.reasoning_effort,
+        )
     except ImagegenError as error:
         print(f"ERROR: {error}")
         return 1
