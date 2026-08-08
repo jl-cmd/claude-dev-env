@@ -22,6 +22,7 @@
 |---|---|
 | **`advisor/`** | Stubs → `@~/.claude/_shared/advisor/` |
 | **`pr-loop/`** | Local converge helpers + stubs → `@~/.claude/_shared/pr-loop/` |
+| **`references/`** | Google review-guide docs, adapted for an AI reviewer, that more than one skill links (`small-cls.md`) |
 
 ## Canonical-path stubs
 

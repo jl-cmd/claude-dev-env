@@ -1,0 +1,90 @@
+# How to handle reviewer comments
+
+
+
+When you've sent a CL out for review, it's likely that your reviewer will
+respond with several comments on your CL. Here are some useful things to know
+about handling reviewer comments.
+
+## Respond to the Substance {#personal}
+
+The goal of review is to maintain the quality of our codebase and our products.
+When a reviewer provides a critique of your code, treat it as information about
+the code, not as a judgment of the author. Respond to the substance of the
+critique, not its tone.
+
+Sometimes review comments come out blunt or read as frustration. This isn't
+good review output, but as a developer you should be prepared for this. Ask yourself, "What is the constructive thing that
+the reviewer is trying to communicate to me?" and then operate as though that's
+what they actually said.
+
+**Never respond with hostility to code review comments.** The reply lives
+forever in the code review tool. Before sending, strip anything that argues
+with the reviewer rather than about the code, and send only the substance,
+stated politely.
+
+In general, if a reviewer isn't providing feedback in a way that's constructive
+and polite, say so directly in the review thread. Explain in a kind way what you
+don't like and what you'd like the reviewer to do differently. If the follow-up
+responses are also non-constructive, or the feedback stays unusable, then
+escalate to a human maintainer or lead as
+appropriate.
+
+## Fix the Code {#code}
+
+If a reviewer says that they don't understand something in your code, your first
+response should be to clarify the code itself. If the code can't be clarified,
+add a code comment that explains why the code is there. If a comment seems
+pointless, only then should your response be an explanation in the code review
+tool.
+
+If a reviewer didn't understand some piece of your code, it's likely other
+future readers of the code won't understand either. Writing a response in the
+code review tool doesn't help future code readers, but clarifying your code or
+adding code comments does help them.
+
+## Think Collaboratively {#think}
+
+Writing a CL can take a lot of work, and by the time it goes out for review it
+can look finished. Comments asking for changes are still part of the work,
+especially the ones you don't agree with.
+
+At times like this, take a moment to step back and consider if the reviewer is
+providing valuable feedback that will help the codebase and Google. Your first
+question to yourself should always be, "Do I understand what the reviewer is
+asking for?"
+
+If you can't answer that question, ask the reviewer for clarification.
+
+And then, if you understand the comments but disagree with them, it's important
+to think collaboratively, not combatively or defensively:
+
+```txt {.bad}
+Bad: "No, I'm not going to do that."
+```
+
+```txt {.good}
+Good: "I went with X because of [these pros/cons] with [these tradeoffs]
+My understanding is that using Y would be worse because of [these reasons].
+Are you suggesting that Y better serves the original tradeoffs, that we should
+weigh the tradeoffs differently, or something else?"
+```
+
+Remember,
+**[courtesy and respect](https://chromium.googlesource.com/chromium/src/+/master/docs/cr_respect.md)
+should always be a first priority**. If you disagree with the reviewer, find
+ways to collaborate: ask for clarifications, discuss pros/cons, and provide
+explanations of why your method of doing things is better for the codebase,
+users, and/or Google.
+
+Sometimes, you might know something about the users, codebase, or CL that the
+reviewer doesn't know. [Fix the code](#code) where appropriate, and engage your
+reviewer in discussion, including giving them more context. Usually you can come
+to some consensus between yourself and the reviewer based on technical facts.
+
+## Resolving Conflicts {#conflicts}
+
+Your first step in resolving conflicts should always be to try to come to
+consensus with your reviewer. If you can't achieve consensus, see
+[The Standard of Code Review](../reviewer/standard.md), which gives principles
+to follow in such a situation.
