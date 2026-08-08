@@ -867,20 +867,7 @@ def run_query(named_query: str) -> int:
 
 
 def main() -> int:
-    """Entry point for the hook-log extractor CLI.
-
-    Disabled: exits without reading transcripts or rewriting
-    ``logs/hooks/.state/offsets.json``. Supported flags remain documented
-    for the re-enable path:
-
-    * ``--summary`` prints the top blockers of the last twenty-four hours.
-    * ``--query <name>`` runs a pre-baked SQL file under ``queries/``.
-    * ``--full-rebuild`` truncates ``hook_events`` and re-reads every
-      JSONL from byte zero.
-    * ``--incremental`` is a documented no-op; it selects the default
-      byte-offset resumption path that the Stop hook also uses when no
-      flags are passed.
-    """
+    """Disabled extractor entry point: exit success with no work."""
     return EXIT_CODE_SUCCESS
 
 

@@ -15,7 +15,7 @@ Hooks and scripts that collect, store, and query hook-firing records. The pipeli
 |---|---|
 | `hook_log_init.py` | One-time setup: creates the Neon schema (runs `schema.sql`), then verifies read-write parity with a sentinel round-trip |
 | `hook_log_extractor.py` | Disabled CLI: exits 0 without reading transcripts or rewriting offset state; body remains for a re-enable path that ingests `hook_*` attachments into Neon |
-| `hook_log_stop_wrapper.py` | Disabled Stop wrapper: exits 0 without spawning the extractor; removed from the Stop dispatcher roster |
+| `hook_log_stop_wrapper.py` | Disabled Stop wrapper stub: exits 0; not on the Stop dispatcher roster |
 | `schema.sql` | DDL for the `hook_events` table, `blocked_commands` view, and supporting indexes |
 | `requirements-hook-logs.txt` | Runtime dependencies (`psycopg`) for the extractor |
 | `requirements-hook-logs-dev.txt` | Dev/test dependencies |

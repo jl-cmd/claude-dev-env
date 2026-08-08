@@ -813,14 +813,11 @@ def test_main_is_disabled_and_skips_extraction(
     def _fail_if_called(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("run_full_extraction must not run while disabled")
 
-    monkeypatch.setattr(sys, "argv", ["hook_log_extractor.py", "--incremental"])
     monkeypatch.setattr(
         hook_log_extractor, "run_full_extraction", _fail_if_called
     )
 
-    exit_code = hook_log_extractor.main()
-
-    assert exit_code == 0
+    assert hook_log_extractor.main() == 0
 
 
 def test_run_query_returns_nonzero_for_unknown_query(
