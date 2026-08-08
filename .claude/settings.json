@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_refresh.py\"",
+            "command": "python3 .claude/hooks/session_start_refresh.py || python .claude/hooks/session_start_refresh.py",
             "timeout": 630
           }
         ]

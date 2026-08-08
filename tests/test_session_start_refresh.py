@@ -47,8 +47,16 @@ def _session_start_registration() -> dict[str, object]:
     settings = json.loads(
         (REPOSITORY_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
     )
-    [group] = settings["hooks"]["SessionStart"]
-    [entry] = group["hooks"]
+    all_entries = [
+        entry
+        for group in settings["hooks"]["SessionStart"]
+        for entry in group["hooks"]
+    ]
+    [entry] = [
+        entry
+        for entry in all_entries
+        if HOOK_SCRIPT.name in str(entry.get("command", ""))
+    ]
     return entry
 
 
@@ -80,7 +88,7 @@ printf '%s\\n' "$FAKE_NPM_VERSION"
 """
 
 POSIX_NPX_SHIM = """#!/bin/bash
-printf 'npx %s cwd=%s\\n' "$*" "$PWD" >> "$FAKE_TOOL_LOG"
+printf 'npx %s cfg=%s cwd=%s\\n' "$*" "$CLAUDE_CONFIG_DIR" "$PWD" >> "$FAKE_TOOL_LOG"
 """
 
 WINDOWS_NPM_SHIM = """@echo off
@@ -90,7 +98,7 @@ echo %FAKE_NPM_VERSION%
 """
 
 WINDOWS_NPX_SHIM = """@echo off
-echo npx %* cwd=%CD% >> "%FAKE_TOOL_LOG%"
+echo npx %* cfg=%CLAUDE_CONFIG_DIR% cwd=%CD% >> "%FAKE_TOOL_LOG%"
 """
 
 
@@ -227,6 +235,49 @@ def should_reinstall_when_no_manifest_is_present(tmp_path: Path) -> None:
         tmp_path, remote=True, installed_version=None, registry_version="2.12.0"
     )
     assert "npx -y claude-dev-env@2.12.0" in tool_log
+
+
+def should_exit_zero_and_reinstall_when_the_manifest_is_not_an_object(
+    tmp_path: Path,
+) -> None:
+    _seed_sandbox(tmp_path, None, None)
+    (tmp_path / "home" / ".claude" / MANIFEST_FILE_NAME).write_text(
+        "[1, 2]", encoding="utf-8"
+    )
+    environment = _hook_environment(
+        tmp_path,
+        remote=True,
+        registry_version="2.12.0",
+        registry_failure=False,
+        config_dir_version=None,
+    )
+    completed = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPT)],
+        env=environment, capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
+    assert "npx -y claude-dev-env@2.12.0" in tool_log
+
+
+def should_pass_the_resolved_config_dir_to_the_reinstall(tmp_path: Path) -> None:
+    _seed_sandbox(tmp_path, None, None)
+    environment = _hook_environment(
+        tmp_path,
+        remote=True,
+        registry_version="2.12.0",
+        registry_failure=False,
+        config_dir_version=None,
+    )
+    environment["CLAUDE_CONFIG_DIR"] = "~/profile"
+    completed = subprocess.run(
+        [sys.executable, str(HOOK_SCRIPT)],
+        env=environment, capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    tool_log = (tmp_path / "tool-log.txt").read_text(encoding="utf-8")
+    resolved_config_dir = tmp_path / "home" / "profile"
+    assert "cfg=" + str(resolved_config_dir) + " " in tool_log, tool_log
 
 
 def should_read_the_manifest_from_a_config_dir_override(tmp_path: Path) -> None:
