@@ -115,6 +115,7 @@ export const CORE_INCLUDE_DIRECTORIES = [
 ];
 
 export const CORE_SKILLS = [
+    'imagegen',
     'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
     'grok-spawn',
     'anthropic-plan', 'everything-search',
