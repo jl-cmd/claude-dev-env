@@ -1,4 +1,8 @@
-"""Attribute-chain and os.environ alias-resolution primitives for the test-isolation check."""
+"""Attribute-chain and os.environ alias-resolution primitives.
+
+Serves the test-isolation check, and lends ``_dotted_attribute_chain`` to the
+dead-module-constant check's widened attribute-read scan.
+"""
 
 import ast
 import sys

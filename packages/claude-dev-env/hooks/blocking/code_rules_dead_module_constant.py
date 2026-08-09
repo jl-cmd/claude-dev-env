@@ -357,38 +357,15 @@ def _collect_widened_scan_facts(
     return member_names, binding_names, all_attribute_nodes
 
 
-def _reads_module_binding(
-    value_expression: ast.expr, all_binding_names: set[str], has_dotted_binding: bool
-) -> bool:
-    """Return whether an attribute's value expression names a module binding.
-
-    A plain name (``sg`` in ``sg.NAME``) is matched directly. A dotted chain is
-    spelled back to source form only when some binding carries a dot, so a file
-    whose bindings are all single identifiers never pays for chain spelling.
-
-    Args:
-        value_expression: The expression an attribute is read on.
-        all_binding_names: The names bound to the constants module object.
-        has_dotted_binding: Whether any binding is a dotted module path.
-
-    Returns:
-        True when the expression spells a binding of the constants module.
-    """
-    if isinstance(value_expression, ast.Name):
-        return value_expression.id in all_binding_names
-    if not has_dotted_binding:
-        return False
-    return _dotted_attribute_chain(value_expression) in all_binding_names
-
-
 def _attribute_read_names(
     all_attribute_nodes: list[ast.Attribute], all_binding_names: set[str]
 ) -> set[str]:
     """Return the constant names read as attributes on a module-object binding.
 
-    An alias read (``sg.NAME``) and a full dotted path
-    (``pkg.config.constants.NAME``) both resolve, while a read on a binding of
-    some other module counts for nothing.
+    The expression an attribute is read on is spelled back to its dotted source
+    form and matched against the bindings, so an alias read (``sg.NAME``) and a
+    full dotted path (``pkg.config.constants.NAME``) both resolve, while a read
+    on a binding of some other module counts for nothing.
 
     Args:
         all_attribute_nodes: Every attribute node in the candidate module.
@@ -399,11 +376,10 @@ def _attribute_read_names(
     """
     if not all_binding_names:
         return set()
-    has_dotted_binding = any("." in each_name for each_name in all_binding_names)
     return {
         each_attribute.attr
         for each_attribute in all_attribute_nodes
-        if _reads_module_binding(each_attribute.value, all_binding_names, has_dotted_binding)
+        if _dotted_attribute_chain(each_attribute.value) in all_binding_names
     }
 
 
