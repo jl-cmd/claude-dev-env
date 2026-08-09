@@ -29,13 +29,20 @@ The scan is deliberately conservative to keep false positives near zero:
   exported constant live.
 - When the package-tree scan leaves a constant unreferenced, the scan widens to
   the repository root (the nearest ``.git`` ancestor). The widened pass counts a
-  sibling-tree reference only when a module imports the name through a
-  ``from <module> import`` whose final dotted segment equals the written
-  module's filename stem, so a genuine cross-tree consumer of this constants
-  module keeps the constant live while a same-named constant exported by an
-  unrelated module never masks a dead one. The widened pass reads a repository
-  file only to test whether its text names the written module's filename stem;
-  a file that never mentions the stem cannot carry such an import, so it is
+  sibling-tree reference in two shapes. The first is an import of the name
+  through a ``from <module> import`` whose final dotted segment equals the
+  written module's filename stem. The second is an attribute read on a binding
+  of the written module itself: a consumer that writes
+  ``import pkg.config.constants``, the same with an alias,
+  ``from pkg.config import constants``, or the same with an alias, and then
+  reads each constant as an attribute on that binding (``alias.NAME``,
+  ``pkg.config.constants.NAME``), keeps every name it reads that way live. Both
+  shapes are bound to the written module's stem, so a genuine cross-tree
+  consumer of this constants module keeps the constant live while a same-named
+  constant exported by an unrelated module never masks a dead one. The widened
+  pass reads a repository file only to test whether its text names the written
+  module's filename stem; neither shape can appear in a file that never spells
+  the stem, so such a file is
   skipped without spending scan-cap budget, keeping the widened pass bounded to
   the handful of candidate importer files even in a large repository. A module
   outside any repository is
@@ -268,7 +275,7 @@ def _module_final_segment(module_path: str | None) -> str:
     return module_path.rsplit(".", 1)[-1]
 
 
-def _qualified_import_member_names(source: str, module_stem: str) -> set[str]:
+def _qualified_import_member_names(tree: ast.Module, module_stem: str) -> set[str]:
     """Return names imported from a module whose filename stem is ``module_stem``.
 
     A cross-package consumer of an exported constant imports it through an
@@ -278,26 +285,161 @@ def _qualified_import_member_names(source: str, module_stem: str) -> set[str]:
     same-named constant exported by an unrelated module never masks a dead one.
 
     Args:
-        source: The full text of a ``.py`` module under the repository root.
+        tree: The parsed candidate module under the repository root.
         module_stem: The filename stem of the constants module being judged.
 
     Returns:
         The member names imported from a module whose final dotted segment equals
-        ``module_stem``. A module that fails to parse contributes no names.
+        ``module_stem``.
     """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set()
     member_names: set[str] = set()
     for each_node in ast.walk(tree):
         if not isinstance(each_node, ast.ImportFrom):
             continue
         if _module_final_segment(each_node.module) != module_stem:
             continue
-        for each_alias in each_node.names:
-            member_names.add(each_alias.name)
+        member_names |= {each_alias.name for each_alias in each_node.names}
     return member_names
+
+
+def _plain_import_module_bindings(import_node: ast.Import, module_stem: str) -> set[str]:
+    """Return the names an ``import`` statement binds to the constants module.
+
+    ::
+
+        import pkg.config.constants        ->  "pkg.config.constants"
+        import pkg.config.constants as sg  ->  "sg"
+        import pkg.config.other            ->  nothing (stem mismatch)
+
+    Args:
+        import_node: A plain ``import`` statement node.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The dotted path or alias through which the module object is reachable.
+    """
+    binding_names: set[str] = set()
+    for each_alias in import_node.names:
+        if _module_final_segment(each_alias.name) != module_stem:
+            continue
+        binding_names.add(each_alias.asname or each_alias.name)
+    return binding_names
+
+
+def _from_import_module_bindings(import_node: ast.ImportFrom, module_stem: str) -> set[str]:
+    """Return the names a ``from ... import`` binds to the constants module itself.
+
+    ::
+
+        from pkg.config import constants        ->  "constants"
+        from pkg.config import constants as sg  ->  "sg"
+        from . import constants as sg           ->  "sg"
+        from pkg.config import <a member>       ->  nothing (a member, not the module)
+
+    Args:
+        import_node: A ``from ... import`` statement node.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The alias through which the module object is reachable.
+    """
+    binding_names: set[str] = set()
+    for each_alias in import_node.names:
+        if each_alias.name != module_stem:
+            continue
+        binding_names.add(each_alias.asname or each_alias.name)
+    return binding_names
+
+
+def _node_module_object_bindings(node: ast.AST, module_stem: str) -> set[str]:
+    """Return the module-object bindings one AST node introduces.
+
+    Args:
+        node: A node from the candidate module's walk.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The bindings this node creates, empty for a node that is not an import
+        of the constants module.
+    """
+    if isinstance(node, ast.Import):
+        return _plain_import_module_bindings(node, module_stem)
+    if isinstance(node, ast.ImportFrom):
+        return _from_import_module_bindings(node, module_stem)
+    return set()
+
+
+def _module_object_binding_names(tree: ast.Module, module_stem: str) -> set[str]:
+    """Return every local name bound to the constants module object itself.
+
+    A consumer that imports the module rather than its members reads each
+    constant as an attribute, so the names it binds to the module object are
+    what an attribute read must be matched against.
+
+    Args:
+        tree: The parsed candidate module.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The dotted paths and aliases that name the constants module in this
+        module's source.
+    """
+    binding_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        binding_names |= _node_module_object_bindings(each_node, module_stem)
+    return binding_names
+
+
+def _module_attribute_reference_names(tree: ast.Module, module_stem: str) -> set[str]:
+    """Return the constant names a module reads as attributes on this module object.
+
+    The expression an attribute is taken on is unparsed back to its source
+    spelling and matched against the module-object bindings, so an alias and a
+    full dotted path both resolve::
+
+        from pkg.config import constants as sg
+        sg.<a constant>                     ->  that constant's name
+        pkg.config.constants.<a constant>   ->  that constant's name
+        unrelated_module.<a constant>       ->  nothing (not a binding)
+
+    Args:
+        tree: The parsed candidate module.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The attribute names read on a binding of the constants module.
+    """
+    binding_names = _module_object_binding_names(tree, module_stem)
+    if not binding_names:
+        return set()
+    attribute_names: set[str] = set()
+    for each_node in ast.walk(tree):
+        if not isinstance(each_node, ast.Attribute):
+            continue
+        if ast.unparse(each_node.value) not in binding_names:
+            continue
+        attribute_names.add(each_node.attr)
+    return attribute_names
+
+
+def _widened_scan_reference_names(source: str, module_stem: str) -> set[str]:
+    """Return the names a repository-wide candidate contributes, parsing it once.
+
+    Args:
+        source: The full text of a ``.py`` module under the repository root.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The members imported through a stem-matched ``from <module> import``,
+        plus the constant names read as attributes on an imported binding of the
+        constants module. A module that fails to parse contributes no names.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    qualified_member_names = _qualified_import_member_names(tree, module_stem)
+    return qualified_member_names | _module_attribute_reference_names(tree, module_stem)
 
 
 def _scan_root_for_constants_module(file_path: str) -> Path:
@@ -350,11 +492,13 @@ def _read_candidate_source(file_path: Path, required_substring: str | None) -> s
         required_substring = None                 -> read and keep every file
         required_substring = the module stem      -> keep only files naming it
             from pkg.foo_constants import BAR  ->  names the stem  ->  candidate
+            from pkg import foo_constants as c ->  names the stem  ->  candidate
             def unrelated() -> int: ...        ->  no stem mention ->  skipped
 
-    The widened repository pass looks only for a ``from <module> import`` whose
-    final dotted segment equals the constants module's filename stem, and such an
-    import always spells that stem in the file's text. A file whose text never
+    The widened repository pass looks only for an import bound to the constants
+    module's filename stem — a ``from <module> import`` whose final dotted segment
+    equals the stem, or an import of the module object itself — and every such
+    import spells that stem in the file's text. A file whose text never
     mentions the stem cannot carry the import, so returning None for it lets the
     caller skip the file without spending scan-cap budget, which keeps the widened
     pass bounded to the candidate importer files even under a large repository.
@@ -422,7 +566,9 @@ def _collect_names_under_root(
             in before the walk begins.
         extract_names: Maps one module's source text to the set of names it
             contributes — the generous reference collector for the package-tree
-            pass, the stem-bound import collector for the widened pass.
+            pass, and for the widened pass the stem-bound collector that counts
+            both a stem-matched from-import and an attribute read on a binding
+            of the written module.
         already_scanned_count: The parsed-file count accumulated by a prior
             pass, so the parse cap bounds the combined work of the
             package-tree and widened passes.
@@ -552,12 +698,13 @@ def check_dead_module_constants(
     are governed by the use-count rule instead. A constant is dead when its name
     appears in no ``.py`` module under the enclosing package tree — not imported,
     not read, not listed in another module's ``__all__`` literal, not named in a
-    string annotation — and, in the repository-wide scan the check widens to when
-    the package-tree scan leaves the constant unreferenced, no module imports the
-    name from a ``from <module> import`` whose final dotted segment equals this
-    module's filename stem. Binding the widened scan to the stem keeps a genuine
-    cross-tree consumer counting while a same-named constant exported by an
-    unrelated module never masks a dead one. A module declaring ``__all__``
+    string annotation. When that leaves a constant unreferenced, the scan widens
+    to the repository, where two shapes count: a ``from <module> import`` whose
+    final dotted segment equals this module's filename stem, and an attribute
+    read on a binding of this module (``import pkg.config.constants as alias``
+    then the alias followed by the constant name). Binding both to the stem
+    keeps a same-named constant in an unrelated module from masking a dead one.
+    A module declaring ``__all__``
     narrows the check to the constants its ``__all__`` list names: each must be
     imported or read by another module, and the module's own ``__all__`` entry
     never counts as that consumer, so an exported constant no module consumes is
@@ -616,14 +763,14 @@ def check_dead_module_constants(
     if has_unreferenced_constant:
         repository_root = _repository_root_for(written_path)
         if repository_root is not None and repository_root != scan_root:
-            collect_qualified_imports = partial(
-                _qualified_import_member_names, module_stem=written_path.stem
+            collect_widened_scan_names = partial(
+                _widened_scan_reference_names, module_stem=written_path.stem
             )
             widened_names, _widened_count, widened_cap_was_hit = _collect_names_under_root(
                 repository_root,
                 written_path,
                 set(),
-                collect_qualified_imports,
+                collect_widened_scan_names,
                 already_scanned_count=scanned_file_count,
                 excluded_subtree=scan_root,
                 required_substring=written_path.stem,
