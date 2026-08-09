@@ -509,11 +509,20 @@ def test_dead_constant_stays_denied_on_every_attempt(neutral_root: Path) -> None
 
 ALIAS_CONSTANTS_BODY = 'BASE_PROMPTS_DIRECTORY_NAME = "prompts"\nSTYLE_SHEET_FILENAME = "style.css"\n'
 
+ALIASED_IMPORT_CONSUMER_BODY = (
+    "from style_guide_gen_constants.config import constants as sg\n"
+    "\n"
+    "def prompts_directory() -> str:\n"
+    "    return sg.BASE_PROMPTS_DIRECTORY_NAME\n"
+    "\n"
+    "def style_sheet() -> str:\n"
+    "    return sg.STYLE_SHEET_FILENAME\n"
+)
+
 
 def _build_alias_repository(
     package_parent: Path,
     consumer_directory: Path,
-    constants_body: str,
     consumer_body: str,
 ) -> Path:
     package_directory = package_parent / "style_guide_gen_constants"
@@ -522,7 +531,7 @@ def _build_alias_repository(
     (package_directory / "__init__.py").write_text("", encoding="utf-8")
     (config_directory / "__init__.py").write_text("", encoding="utf-8")
     constants_path = config_directory / "constants.py"
-    constants_path.write_text(constants_body, encoding="utf-8")
+    constants_path.write_text(ALIAS_CONSTANTS_BODY, encoding="utf-8")
     consumer_directory.mkdir(parents=True, exist_ok=True)
     (consumer_directory / "style_guide_gen.py").write_text(consumer_body, encoding="utf-8")
     return constants_path
@@ -531,20 +540,10 @@ def _build_alias_repository(
 def test_does_not_flag_constant_read_through_an_aliased_module_import(
     neutral_root: Path,
 ) -> None:
-    consumer_body = (
-        "from style_guide_gen_constants.config import constants as sg\n"
-        "\n"
-        "def prompts_directory() -> str:\n"
-        "    return sg.BASE_PROMPTS_DIRECTORY_NAME\n"
-        "\n"
-        "def style_sheet() -> str:\n"
-        "    return sg.STYLE_SHEET_FILENAME\n"
-    )
     constants_path = _build_alias_repository(
         neutral_root,
         neutral_root / "style_guide_gen_constants",
-        ALIAS_CONSTANTS_BODY,
-        consumer_body,
+        ALIASED_IMPORT_CONSUMER_BODY,
     )
     issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
     assert issues == [], (
@@ -555,20 +554,10 @@ def test_does_not_flag_constant_read_through_an_aliased_module_import(
 def test_does_not_flag_constant_read_through_an_alias_outside_the_package_tree(
     neutral_root: Path,
 ) -> None:
-    consumer_body = (
-        "from style_guide_gen_constants.config import constants as sg\n"
-        "\n"
-        "def prompts_directory() -> str:\n"
-        "    return sg.BASE_PROMPTS_DIRECTORY_NAME\n"
-        "\n"
-        "def style_sheet() -> str:\n"
-        "    return sg.STYLE_SHEET_FILENAME\n"
-    )
     constants_path = _build_alias_repository(
         neutral_root / "scripts",
         neutral_root / "scripts",
-        ALIAS_CONSTANTS_BODY,
-        consumer_body,
+        ALIASED_IMPORT_CONSUMER_BODY,
     )
     issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
     assert issues == [], (
@@ -592,7 +581,6 @@ def test_does_not_flag_constant_read_through_an_unaliased_module_import_outside_
     constants_path = _build_alias_repository(
         neutral_root / "scripts",
         neutral_root / "scripts",
-        ALIAS_CONSTANTS_BODY,
         consumer_body,
     )
     issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
@@ -616,7 +604,6 @@ def test_does_not_flag_constant_read_through_a_dotted_module_path_outside_the_tr
     constants_path = _build_alias_repository(
         neutral_root / "scripts",
         neutral_root / "scripts",
-        ALIAS_CONSTANTS_BODY,
         consumer_body,
     )
     issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))

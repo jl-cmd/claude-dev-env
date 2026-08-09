@@ -143,7 +143,7 @@ def _attribute_chain_resolves_to_os_environ(
     return canonical_chain == OS_ENVIRON_DOTTED_NAME
 
 
-def _dotted_attribute_chain(attribute_node: ast.Attribute) -> str | None:
+def _dotted_attribute_chain(attribute_node: ast.expr) -> str | None:
     chain_parts: list[str] = []
     walker: ast.expr = attribute_node
     while isinstance(walker, ast.Attribute):
