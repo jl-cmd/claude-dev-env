@@ -65,8 +65,6 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
-from code_rules_probe_chains import _dotted_attribute_chain
-
 _blocking_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 if _blocking_directory not in sys.path:
@@ -74,6 +72,7 @@ if _blocking_directory not in sys.path:
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
+from code_rules_probe_chains import _dotted_attribute_chain  # noqa: E402
 from code_rules_shared import (  # noqa: E402
     is_migration_file,
     is_test_file,
