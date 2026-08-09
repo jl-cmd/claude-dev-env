@@ -275,155 +275,143 @@ def _module_final_segment(module_path: str | None) -> str:
     return module_path.rsplit(".", 1)[-1]
 
 
-def _qualified_import_member_names(tree: ast.Module, module_stem: str) -> set[str]:
-    """Return names imported from a module whose filename stem is ``module_stem``.
-
-    A cross-package consumer of an exported constant imports it through an
-    explicit ``from <module> import NAME`` whose module path ends in the defining
-    module's filename stem. Collecting only those member names binds a
-    widened-scan reference to the module that actually defines the constant, so a
-    same-named constant exported by an unrelated module never masks a dead one.
-
-    Args:
-        tree: The parsed candidate module under the repository root.
-        module_stem: The filename stem of the constants module being judged.
-
-    Returns:
-        The member names imported from a module whose final dotted segment equals
-        ``module_stem``.
-    """
-    member_names: set[str] = set()
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, ast.ImportFrom):
-            continue
-        if _module_final_segment(each_node.module) != module_stem:
-            continue
-        member_names |= {each_alias.name for each_alias in each_node.names}
-    return member_names
-
-
-def _plain_import_module_bindings(import_node: ast.Import, module_stem: str) -> set[str]:
-    """Return the names an ``import`` statement binds to the constants module.
+def _stem_import_member_names(import_node: ast.ImportFrom, module_stem: str) -> set[str]:
+    """Return the member names a stem-matched ``from ... import`` brings in.
 
     ::
 
-        import pkg.config.constants        ->  "pkg.config.constants"
-        import pkg.config.constants as sg  ->  "sg"
-        import pkg.config.other            ->  nothing (stem mismatch)
-
-    Args:
-        import_node: A plain ``import`` statement node.
-        module_stem: The filename stem of the constants module being judged.
-
-    Returns:
-        The dotted path or alias through which the module object is reachable.
-    """
-    binding_names: set[str] = set()
-    for each_alias in import_node.names:
-        if _module_final_segment(each_alias.name) != module_stem:
-            continue
-        binding_names.add(each_alias.asname or each_alias.name)
-    return binding_names
-
-
-def _from_import_module_bindings(import_node: ast.ImportFrom, module_stem: str) -> set[str]:
-    """Return the names a ``from ... import`` binds to the constants module itself.
-
-    ::
-
-        from pkg.config import constants        ->  "constants"
-        from pkg.config import constants as sg  ->  "sg"
-        from . import constants as sg           ->  "sg"
-        from pkg.config import <a member>       ->  nothing (a member, not the module)
+        from pkg.config.constants import NAME  ->  "NAME"
+        from pkg.config.other import NAME      ->  nothing (stem mismatch)
 
     Args:
         import_node: A ``from ... import`` statement node.
         module_stem: The filename stem of the constants module being judged.
 
     Returns:
-        The alias through which the module object is reachable.
+        The imported member names when the module path's final dotted segment
+        equals ``module_stem``, empty otherwise.
+    """
+    if _module_final_segment(import_node.module) != module_stem:
+        return set()
+    return {each_alias.name for each_alias in import_node.names}
+
+
+def _import_module_bindings(all_import_aliases: list[ast.alias], module_stem: str) -> set[str]:
+    """Return the names an import's aliases bind to the constants module object.
+
+    ::
+
+        import pkg.config.constants        ->  "pkg.config.constants"
+        import pkg.config.constants as sg  ->  "sg"
+        from pkg.config import constants   ->  "constants"
+        from . import constants as sg      ->  "sg"
+        import pkg.config.other            ->  nothing (stem mismatch)
+
+    A plain ``import`` names the module by its dotted path, so the final
+    segment is matched against the stem. A ``from ... import`` alias name is a
+    single identifier, which the same final-segment match covers unchanged.
+
+    Args:
+        all_import_aliases: The ``names`` list of an ``Import`` or
+            ``ImportFrom`` node.
+        module_stem: The filename stem of the constants module being judged.
+
+    Returns:
+        The dotted paths and aliases through which the module object is
+        reachable.
     """
     binding_names: set[str] = set()
-    for each_alias in import_node.names:
-        if each_alias.name != module_stem:
+    for each_alias in all_import_aliases:
+        if _module_final_segment(each_alias.name) != module_stem:
             continue
         binding_names.add(each_alias.asname or each_alias.name)
     return binding_names
 
 
-def _node_module_object_bindings(node: ast.AST, module_stem: str) -> set[str]:
-    """Return the module-object bindings one AST node introduces.
+def _attribute_value_spelling(value_expression: ast.expr) -> str | None:
+    """Return the dotted source spelling of a plain ``Name``/``Attribute`` chain.
+
+    ::
+
+        sg                      ->  "sg"
+        pkg.config.constants    ->  "pkg.config.constants"
+        get_config().constants  ->  None (not a plain dotted chain)
 
     Args:
-        node: A node from the candidate module's walk.
-        module_stem: The filename stem of the constants module being judged.
+        value_expression: The expression an attribute is read on.
 
     Returns:
-        The bindings this node creates, empty for a node that is not an import
-        of the constants module.
+        The dotted spelling, or None when the expression is not a plain
+        ``Name``/``Attribute`` chain and so can never match an import binding.
     """
-    if isinstance(node, ast.Import):
-        return _plain_import_module_bindings(node, module_stem)
-    if isinstance(node, ast.ImportFrom):
-        return _from_import_module_bindings(node, module_stem)
-    return set()
+    if isinstance(value_expression, ast.Name):
+        return value_expression.id
+    if isinstance(value_expression, ast.Attribute):
+        inner_spelling = _attribute_value_spelling(value_expression.value)
+        if inner_spelling is None:
+            return None
+        return f"{inner_spelling}.{value_expression.attr}"
+    return None
 
 
-def _module_object_binding_names(tree: ast.Module, module_stem: str) -> set[str]:
-    """Return every local name bound to the constants module object itself.
-
-    A consumer that imports the module rather than its members reads each
-    constant as an attribute, so the names it binds to the module object are
-    what an attribute read must be matched against.
+def _collect_widened_scan_facts(
+    tree: ast.Module, module_stem: str
+) -> tuple[set[str], set[str], list[ast.Attribute]]:
+    """Collect a candidate module's import and attribute facts in one walk.
 
     Args:
         tree: The parsed candidate module.
         module_stem: The filename stem of the constants module being judged.
 
     Returns:
-        The dotted paths and aliases that name the constants module in this
-        module's source.
+        The member names imported through a stem-matched ``from ... import``,
+        the names bound to the constants module object itself, and every
+        attribute node in the module.
     """
+    member_names: set[str] = set()
     binding_names: set[str] = set()
+    all_attribute_nodes: list[ast.Attribute] = []
     for each_node in ast.walk(tree):
-        binding_names |= _node_module_object_bindings(each_node, module_stem)
-    return binding_names
+        if isinstance(each_node, ast.ImportFrom):
+            member_names |= _stem_import_member_names(each_node, module_stem)
+        if isinstance(each_node, (ast.Import, ast.ImportFrom)):
+            binding_names |= _import_module_bindings(each_node.names, module_stem)
+        if isinstance(each_node, ast.Attribute):
+            all_attribute_nodes.append(each_node)
+    return member_names, binding_names, all_attribute_nodes
 
 
-def _module_attribute_reference_names(tree: ast.Module, module_stem: str) -> set[str]:
-    """Return the constant names a module reads as attributes on this module object.
+def _attribute_read_names(
+    all_attribute_nodes: list[ast.Attribute], all_binding_names: set[str]
+) -> set[str]:
+    """Return the constant names read as attributes on a module-object binding.
 
-    The expression an attribute is taken on is unparsed back to its source
-    spelling and matched against the module-object bindings, so an alias and a
-    full dotted path both resolve::
-
-        from pkg.config import constants as sg
-        sg.<a constant>                     ->  that constant's name
-        pkg.config.constants.<a constant>   ->  that constant's name
-        unrelated_module.<a constant>       ->  nothing (not a binding)
+    The expression an attribute is read on is spelled back to its dotted source
+    form and matched against the bindings, so an alias (``sg.NAME``) and a full
+    dotted path (``pkg.config.constants.NAME``) both resolve, while a read on a
+    binding of some other module counts for nothing.
 
     Args:
-        tree: The parsed candidate module.
-        module_stem: The filename stem of the constants module being judged.
+        all_attribute_nodes: Every attribute node in the candidate module.
+        all_binding_names: The names bound to the constants module object.
 
     Returns:
         The attribute names read on a binding of the constants module.
     """
-    binding_names = _module_object_binding_names(tree, module_stem)
-    if not binding_names:
+    if not all_binding_names:
         return set()
-    attribute_names: set[str] = set()
-    for each_node in ast.walk(tree):
-        if not isinstance(each_node, ast.Attribute):
-            continue
-        if ast.unparse(each_node.value) not in binding_names:
-            continue
-        attribute_names.add(each_node.attr)
-    return attribute_names
+    return {
+        each_attribute.attr
+        for each_attribute in all_attribute_nodes
+        if _attribute_value_spelling(each_attribute.value) in all_binding_names
+    }
 
 
 def _widened_scan_reference_names(source: str, module_stem: str) -> set[str]:
     """Return the names a repository-wide candidate contributes, parsing it once.
+
+    Both counted shapes are bound to the written module's filename stem, so a
+    same-named constant exported by an unrelated module never masks a dead one.
 
     Args:
         source: The full text of a ``.py`` module under the repository root.
@@ -438,8 +426,10 @@ def _widened_scan_reference_names(source: str, module_stem: str) -> set[str]:
         tree = ast.parse(source)
     except SyntaxError:
         return set()
-    qualified_member_names = _qualified_import_member_names(tree, module_stem)
-    return qualified_member_names | _module_attribute_reference_names(tree, module_stem)
+    member_names, binding_names, all_attribute_nodes = _collect_widened_scan_facts(
+        tree, module_stem
+    )
+    return member_names | _attribute_read_names(all_attribute_nodes, binding_names)
 
 
 def _scan_root_for_constants_module(file_path: str) -> Path:
