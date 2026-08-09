@@ -7,7 +7,12 @@ Resolve `python_automation_root` and `python_exe` from the repository's
 `run/tooling.json`, set `PYTHONPATH` to the resolved root, and run:
 
 ```powershell
-& $py -m shared_utils.imagegen `
+$tooling = Get-Content '<REPO>\\run\\tooling.json' | ConvertFrom-Json
+$python_automation_root = $tooling.python_automation_root
+$python_executable = $tooling.python_exe
+$env:PYTHONPATH = $python_automation_root
+
+& $python_executable -m shared_utils.imagegen `
   --prompt-file <PROMPT.txt> `
   --size 2880x2880 `
   --out <IMAGE.png>

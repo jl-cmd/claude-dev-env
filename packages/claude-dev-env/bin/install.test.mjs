@@ -42,6 +42,7 @@ import {
     pruneRetiredHookEntriesFromSettings,
     retainNewestRunBackupOnly,
 } from './install.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
     expandHomeDirectoryTokens,
     expandHomeDirectoryTokensInSettings,
@@ -200,6 +201,14 @@ test('CORE_SKILLS ships issue-tracker so the core group installs the skill the S
         INSTALL_GROUPS.core.skills,
         CORE_SKILLS,
         'the core group skills array must read CORE_SKILLS so the two never drift',
+    );
+});
+
+
+test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
+    assert.ok(
+        EVER_SHIPPED_SKILL_NAMES.has('imagegen'),
+        'imagegen must remain in the retirement registry after the package stops shipping it',
     );
 });
 
