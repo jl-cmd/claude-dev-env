@@ -1,7 +1,7 @@
 ---
 name: imagegen
 description: Generate prompt-driven images at exact requested resolutions through OpenAI API or Codex OAuth, with verified Pillow dimensions, truthful receipts, and safe atomic publication.
-argument-hint: --backend openai-api|codex-oauth --prompt "..." --size 2880x2880 --output path.png
+argument-hint: --backend openai-api|codex-oauth --prompt "..." --size 2880x2880 --output path.png [--reference-image path.png]... [--model name] [--reasoning-effort level] [--timeout seconds]
 ---
 
 # Exact-resolution image generation
@@ -18,4 +18,10 @@ python scripts/imagegen.py --backend openai-api --prompt "..." --size 2880x2880 
 
 Native provider dimensions publish unchanged source bytes. A mismatch fails with the default `--resize-policy forbid`; `--resize-policy allow` applies Pillow resizing and records `resized` in the JSON sidecar receipt.
 
-The receipt sits beside the PNG with a `.json` suffix. It contains hashes, observed dimensions, backend, model or tool, transformation classification, prompt hash, and credential source name. Existing output or receipt files require `--overwrite`.
+Up to two `--reference-image path.png` flags attach reference images. Each is validated (exists, decodes with Pillow) before any backend spawns; a third reference fails loudly before either backend runs. `codex-oauth` attaches references with the Codex CLI's own `-i`/`--image` flag. `openai-api` sends them through the OpenAI image-edit endpoint.
+
+`--model name` passes through to both backends. `--reasoning-effort level` passes through to `codex-oauth` only (as a `model_reasoning_effort` config override); `openai-api` has no reasoning-effort control and fails loudly if the flag is given. When `--reasoning-effort` is omitted, `codex-oauth` defaults to `max`; the receipt records the effective value. The Codex contract states the exact requested pixel dimensions.
+
+`--timeout seconds` bounds the `codex-oauth` subprocess only and defaults to 900 seconds; `openai-api` keeps its own separate, fixed timeout. A run that exceeds the bound fails loudly as `codex_timed_out` naming the cap, distinct from a `codex_exited_nonzero` failure.
+
+The receipt sits beside the PNG with a `.json` suffix. It contains hashes, observed dimensions, backend, model or tool, transformation classification, prompt hash, credential source name, the reference image paths and their sha256 hashes, and the requested model and reasoning effort (`null` when not given). Existing output or receipt files require `--overwrite`.
