@@ -25,8 +25,8 @@ from config.constants import (
     ALL_SUPPORTED_RESIZE_POLICIES,
     CODEX_DEFAULT_REASONING_EFFORT,
     CODEX_REASONING_EFFORT_CONFIG_KEY,
-    CODEX_TIMEOUT_SECONDS,
     CODEX_TOOL_NAME,
+    DEFAULT_CODEX_TIMEOUT_SECONDS,
     DEFAULT_PROVIDER_EDGE,
     JSON_INDENT_LEVEL,
     MAXIMUM_CODEX_ARTIFACT_COUNT,
@@ -95,7 +95,7 @@ class ProviderArtifact:
 
 
 Transport = Callable[[str, bytes, Mapping[str, str]], bytes]
-Runner = Callable[[Sequence[str], Path, Mapping[str, str]], None]
+Runner = Callable[[Sequence[str], Path, Mapping[str, str], int], None]
 
 
 def parse_size(size_text: str) -> ImageSize:
@@ -490,6 +490,7 @@ def request_oauth_image(
     all_reference_images: Sequence[ReferenceImage] = (),
     model: str | None = None,
     reasoning_effort: str | None = None,
+    timeout_seconds: int = DEFAULT_CODEX_TIMEOUT_SECONDS,
 ) -> ProviderArtifact:
     """Run Codex in an isolated directory and measure its PNG artifact.
 
@@ -502,6 +503,7 @@ def request_oauth_image(
         reasoning_effort: Requested Codex reasoning effort, or ``None`` to omit
             the override. ``generate_image`` resolves an absent value to
             ``CODEX_DEFAULT_REASONING_EFFORT`` before calling this function.
+        timeout_seconds: Bound passed through to the runner's process timeout.
     Returns:
         Provider artifact with runtime-observed dimensions.
     Raises:
@@ -515,7 +517,7 @@ def request_oauth_image(
         contract = f"Generate exactly one PNG image for this prompt: {prompt}.{size_clause}{reference_clause} Save it at {artifact_path}."
         codex_command = shutil.which("codex") or "codex"
         all_arguments = build_codex_arguments(codex_command, work_directory, contract, all_reference_images, model, reasoning_effort)
-        runner(all_arguments, work_directory, build_oauth_environment())
+        runner(all_arguments, work_directory, build_oauth_environment(), timeout_seconds)
         image_bytes = discover_oauth_artifact(work_directory, artifact_path)
     return ProviderArtifact(image_bytes, decode_image(image_bytes), requested_size, CODEX_TOOL_NAME, "codex OAuth")
 
@@ -659,6 +661,7 @@ def generate_image(
     all_reference_images: Sequence[Path] = (),
     model: str | None = None,
     reasoning_effort: str | None = None,
+    timeout_seconds: int = DEFAULT_CODEX_TIMEOUT_SECONDS,
 ) -> dict[str, object]:
     """Generate, verify, optionally resize, and publish one image.
 
@@ -675,6 +678,8 @@ def generate_image(
         model: Requested model name, passed through to the selected backend.
         reasoning_effort: Requested reasoning effort, passed through to ``codex-oauth``
             only. ``codex-oauth`` defaults an absent value to ``CODEX_DEFAULT_REASONING_EFFORT``.
+        timeout_seconds: Process timeout bound passed to ``codex-oauth`` only.
+            ``openai-api`` keeps its own separate ``OPENAI_TIMEOUT_SECONDS`` bound.
     Returns:
         Published receipt fields.
     Raises:
@@ -699,7 +704,15 @@ def generate_image(
             artifact = request_openai_image(prompt, provider_size, active_transport, request_model)
     else:
         reasoning_effort = reasoning_effort or CODEX_DEFAULT_REASONING_EFFORT
-        artifact = request_oauth_image(prompt, runner or run_codex, requested_size, all_reference_images=all_verified_reference_images, model=model, reasoning_effort=reasoning_effort)
+        artifact = request_oauth_image(
+            prompt,
+            runner or run_codex,
+            requested_size,
+            all_reference_images=all_verified_reference_images,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=timeout_seconds,
+        )
     if artifact.source_size != requested_size and resize_policy == "forbid":
         raise ImagegenError("provider dimensions differ from requested size")
     final_bytes = artifact.image_bytes if artifact.source_size == requested_size else resize_image(artifact.image_bytes, requested_size)
@@ -708,19 +721,24 @@ def generate_image(
     return receipt
 
 
-def run_codex(all_arguments: Sequence[str], work_directory: Path, all_environment: Mapping[str, str]) -> None:
+def run_codex(all_arguments: Sequence[str], work_directory: Path, all_environment: Mapping[str, str], timeout_seconds: int = DEFAULT_CODEX_TIMEOUT_SECONDS) -> None:
     """Invoke Codex without exposing credentials in arguments.
 
     Args:
         all_arguments: Executable and arguments for the Codex process.
         work_directory: Isolated temporary working directory.
         all_environment: Sanitized child environment.
+        timeout_seconds: Bound passed to the Codex subprocess timeout.
     Raises:
-        ImagegenError: If Codex cannot complete within the bounded process contract.
+        ImagegenError: If Codex times out, exits non-zero, or cannot run at all.
     """
     try:
-        completed_process = subprocess.run(all_arguments, cwd=work_directory, env=all_environment, shell=False, check=True, capture_output=True, text=False, timeout=CODEX_TIMEOUT_SECONDS)
+        completed_process = subprocess.run(all_arguments, cwd=work_directory, env=all_environment, shell=False, check=True, capture_output=True, text=False, timeout=timeout_seconds)
         if len(completed_process.stdout) > MAXIMUM_CODEX_OUTPUT_BYTES or len(completed_process.stderr) > MAXIMUM_CODEX_OUTPUT_BYTES:
             raise ImagegenError("Codex output exceeds the limit")
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        raise ImagegenError("Codex image generation failed") from error
+    except subprocess.TimeoutExpired as error:
+        raise ImagegenError(f"codex_timed_out: exceeded the {timeout_seconds}s cap") from error
+    except subprocess.CalledProcessError as error:
+        raise ImagegenError("codex_exited_nonzero: Codex image generation failed") from error
+    except OSError as error:
+        raise ImagegenError("codex_spawn_failed: Codex could not be run") from error

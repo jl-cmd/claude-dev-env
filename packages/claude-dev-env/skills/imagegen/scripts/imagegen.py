@@ -7,7 +7,7 @@ from pathlib import Path
 
 from imagegen_core import ImagegenError, generate_image, parse_size
 
-from config.constants import ALL_SUPPORTED_BACKENDS, ALL_SUPPORTED_RESIZE_POLICIES
+from config.constants import ALL_SUPPORTED_BACKENDS, ALL_SUPPORTED_RESIZE_POLICIES, DEFAULT_CODEX_TIMEOUT_SECONDS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference-image", dest="reference_image_paths", type=Path, action="append", default=[])
     parser.add_argument("--model")
     parser.add_argument("--reasoning-effort")
+    parser.add_argument("--timeout", dest="timeout_seconds", type=int, default=DEFAULT_CODEX_TIMEOUT_SECONDS)
     return parser
 
 
@@ -47,6 +48,7 @@ def main() -> int:
             all_reference_images=arguments.reference_image_paths,
             model=arguments.model,
             reasoning_effort=arguments.reasoning_effort,
+            timeout_seconds=arguments.timeout_seconds,
         )
     except ImagegenError as error:
         print(f"ERROR: {error}")
