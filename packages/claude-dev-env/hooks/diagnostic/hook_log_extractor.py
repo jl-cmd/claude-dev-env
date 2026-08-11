@@ -99,7 +99,7 @@ from hooks_constants.hook_log_extractor_constants import (
     STDERR_EXCERPT_MAX_CHARACTERS,
     STDOUT_EXCERPT_MAX_CHARACTERS,
     SUMMARY_COLUMN_HEADINGS,
-    SUMMARY_NO_NEW_BLOCKS_MESSAGE,
+    SUMMARY_ZERO_BLOCKED_EVENTS_MESSAGE,
     SUMMARY_TABLE_COLUMN_GAP,
     TOP_BLOCKED_COMMAND_PREVIEW_MAX_CHARACTERS,
     TOP_BLOCKERS_LAST_24_HOURS_SQL,
@@ -780,7 +780,7 @@ def run_summary() -> int:
         except Exception:
             pass
     if not all_result_rows:
-        print(SUMMARY_NO_NEW_BLOCKS_MESSAGE)
+        print(SUMMARY_ZERO_BLOCKED_EVENTS_MESSAGE)
         return EXIT_CODE_SUCCESS
     _print_summary_table(all_result_rows)
     return EXIT_CODE_SUCCESS

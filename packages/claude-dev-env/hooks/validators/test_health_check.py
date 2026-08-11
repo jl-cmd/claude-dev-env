@@ -1,6 +1,5 @@
 """Tests for validator health checks."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,20 +16,21 @@ from .health_check import (
 
 
 class TestValidatorExists:
-    def test_existing_validator_healthy(self, tmp_path: Path) -> None:
+    def test_existing_validator_is_ready(self, tmp_path: Path) -> None:
         validator_path = tmp_path / "validator.py"
         validator_path.write_text("print('hello')", encoding="utf-8")
 
         result = check_validator_exists(validator_path)
 
-        assert result.healthy is True
+        assert result.is_healthy is True
+        assert result.healthy is result.is_healthy
         assert result.status is ValidatorStatus.READY
         assert result.error is None
         assert result.is_present is True
 
-    def test_missing_validator_unhealthy(self) -> None:
+    def test_missing_validator_requires_a_file(self) -> None:
         result = check_validator_exists(Path("/nonexistent/validator.py"))
-        assert result.healthy is False
+        assert result.is_healthy is False
         assert result.status is ValidatorStatus.FILE_REQUIRED
         assert result.is_present is False
         assert "file required" in result.error.lower()
@@ -50,10 +50,43 @@ class TestValidatorExists:
 
         result = check_validator_exists(validator_path)
 
-        assert result.healthy is False
+        assert result.is_healthy is False
         assert result.status is ValidatorStatus.ACCESS_REQUIRED
         assert result.is_present is True
         assert "read access requires attention" in result.error.lower()
+
+    def test_directory_at_validator_path_requires_a_file(self, tmp_path: Path) -> None:
+        validator_path = tmp_path / "validator.py"
+        validator_path.mkdir()
+
+        result = check_validator_exists(validator_path)
+
+        assert result.is_healthy is False
+        assert result.status is ValidatorStatus.FILE_REQUIRED
+        assert result.is_present is False
+
+    def test_validator_disappearance_reports_file_required(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        validator_path = tmp_path / "validator.py"
+        validator_path.write_text("print('ready')", encoding="utf-8")
+
+        original_read_text = Path.read_text
+
+        def remove_before_read(
+            each_path: Path, **all_keyword_arguments: object
+        ) -> str:
+            each_path.unlink()
+            return original_read_text(each_path, **all_keyword_arguments)
+
+        monkeypatch.setattr(Path, "read_text", remove_before_read)
+
+        result = check_validator_exists(validator_path)
+
+        assert result.status is ValidatorStatus.FILE_REQUIRED
+        assert result.is_present is False
 
 
 class TestCheckAllValidators:
@@ -65,20 +98,18 @@ class TestCheckAllValidators:
 
 
 class TestGetValidatorVersion:
-    def test_version_changes_when_content_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            validator_file = temp_path / "python_style_checks.py"
+    def test_version_changes_when_content_changes(self, tmp_path: Path) -> None:
+        validator_file = tmp_path / "python_style_checks.py"
 
-            validator_file.write_text("# version 1")
-            version1 = get_validator_version(temp_path)
+        validator_file.write_text("# version 1")
+        version1 = get_validator_version(tmp_path)
 
-            validator_file.write_text("# version 2 - different content")
-            version2 = get_validator_version(temp_path)
+        validator_file.write_text("# version 2 - different content")
+        version2 = get_validator_version(tmp_path)
 
-            assert version1 != version2
-            assert isinstance(version1, str)
-            assert len(version1) > 0
+        assert version1 != version2
+        assert isinstance(version1, str)
+        assert len(version1) > 0
 
 
 def test_print_health_report_distinguishes_validator_states(

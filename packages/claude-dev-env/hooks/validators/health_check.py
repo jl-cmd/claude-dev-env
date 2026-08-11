@@ -7,14 +7,14 @@ Provides:
 """
 
 import hashlib
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
-
 
 VALIDATOR_FILES = [
     "python_style_checks.py",
@@ -44,9 +44,14 @@ class ValidatorHealth:
     last_modified: Optional[datetime] = None
 
     @property
-    def healthy(self) -> bool:
+    def is_healthy(self) -> bool:
         """Return whether the validator is ready for use."""
         return self.status is ValidatorStatus.READY
+
+    @property
+    def healthy(self) -> bool:
+        """Return the readiness state for compatibility readers."""
+        return self.is_healthy
 
     @property
     def is_present(self) -> bool:
@@ -75,20 +80,27 @@ def check_validator_exists(validator_path: Path) -> ValidatorHealth:
     """
     name = validator_path.stem
 
-    if not validator_path.exists():
+    try:
+        validator_stat = validator_path.stat()
+        if not stat.S_ISREG(validator_stat.st_mode):
+            return ValidatorHealth(
+                name=name,
+                status=ValidatorStatus.FILE_REQUIRED,
+                error=f"Validator file required: {validator_path}",
+            )
+        validator_path.read_text(encoding="utf-8")
+        return ValidatorHealth(
+            name=name,
+            status=ValidatorStatus.READY,
+            last_modified=datetime.fromtimestamp(
+                validator_stat.st_mtime, tz=timezone.utc
+            ),
+        )
+    except FileNotFoundError:
         return ValidatorHealth(
             name=name,
             status=ValidatorStatus.FILE_REQUIRED,
             error=f"Validator file required: {validator_path}",
-        )
-
-    try:
-        validator_path.read_text(encoding="utf-8")
-        mtime = datetime.fromtimestamp(validator_path.stat().st_mtime)
-        return ValidatorHealth(
-            name=name,
-            status=ValidatorStatus.READY,
-            last_modified=mtime,
         )
     except (IOError, OSError, PermissionError) as error:
         return ValidatorHealth(
@@ -154,7 +166,10 @@ def get_validator_version(validators_dir: Optional[Path] = None) -> str:
     for validator_file in sorted(VALIDATOR_FILES):
         validator_path = validators_dir / validator_file
         if validator_path.exists():
-            content = validator_path.read_bytes()
+            try:
+                content = validator_path.read_bytes()
+            except (FileNotFoundError, OSError):
+                continue
             hasher.update(content)
 
     return hasher.hexdigest()[:8]
@@ -173,7 +188,7 @@ def get_system_health(validators_dir: Optional[Path] = None) -> SystemHealth:
         validators_dir = Path(__file__).parent
 
     validators = check_all_validators(validators_dir)
-    all_healthy = all(v.healthy for v in validators.values())
+    all_healthy = all(v.is_healthy for v in validators.values())
 
     optional_tools = {
         "ruff": check_optional_tool("ruff"),
@@ -213,7 +228,7 @@ def print_health_report(health: SystemHealth) -> None:
 
     print("Optional Tools:")
     for tool, available in sorted(health.optional_tools.items()):
-        status = "[READY]" if available else "[OPTIONAL]"
+        status = ValidatorStatus.READY.value if available else "[OPTIONAL]"
         print(f"  {status} {tool}")
     print()
 

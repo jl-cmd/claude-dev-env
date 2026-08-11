@@ -60,6 +60,7 @@ ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES: tuple[str, ...] = (
     "refs/remotes/origin/main",
     "refs/remotes/origin/master",
 )
+REMOTE_BRANCH_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/{branch}"
 ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX: tuple[str, ...] = (
     "git",
     "symbolic-ref",

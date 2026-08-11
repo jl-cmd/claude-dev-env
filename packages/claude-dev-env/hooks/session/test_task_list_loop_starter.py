@@ -45,6 +45,12 @@ class TestSessionDirective:
         emitted = json.loads(_run_main())
         assert "/loop 10m" in emitted["additionalContext"]
 
+    def test_directive_runs_the_instruction_immediately(self) -> None:
+        emitted = json.loads(_run_main())
+        assert "Run that instruction once immediately when starting the loop, then" in emitted[
+            "additionalContext"
+        ]
+
     def test_directive_reuses_an_existing_loop(self) -> None:
         emitted = json.loads(_run_main())
         assert "Reuse the active task-list maintenance loop when available." in emitted[

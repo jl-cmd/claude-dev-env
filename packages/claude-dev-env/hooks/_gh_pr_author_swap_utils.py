@@ -164,7 +164,7 @@ def _build_restore_failure_message(
     """Build the shared diagnostic for a failed account restoration."""
     return (
         f"[{hook_label}] Restore the gh account to {original_account!r}; "
-        f"gh auth switch returned a failure for {state_file_context} {state_file}. "
+        f"gh account switch requires attention for {state_file_context} {state_file}. "
         "The file remains for the next session."
     )
 

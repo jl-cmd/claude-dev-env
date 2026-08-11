@@ -111,6 +111,10 @@ def test_intent_ending_message_emits_block_with_short_user_notice():
     assert parsed_response["systemMessage"] == USER_FACING_INTENT_ENDING_NOTICE
     assert parsed_response["suppressOutput"] is True
     assert "long-horizon-autonomy" in parsed_response["reason"]
+    assert "This turn ends with a promise of future work." in parsed_response["reason"]
+    assert "Complete that work with tool calls during this turn." in parsed_response[
+        "reason"
+    ]
 
 
 def test_next_steps_lead_in_emits_block():

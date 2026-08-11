@@ -38,9 +38,9 @@ suspected of drift.
 bws run -- python packages/claude-dev-env/hooks/diagnostic/hook_log_extractor.py --summary
 ```
 
-Skip extraction. Print the top-10 blockers of the last 24 hours with
-their block count and a single truncated command preview, or
-`No new blocks since last run.` when the window is empty.
+Run summary mode to print the top-10 blockers of the last 24 hours with
+their block count and a single truncated command preview. An empty window
+prints `Blocked events recorded in the last 24 hours: 0.`.
 
 ```
 bws run -- python packages/claude-dev-env/hooks/diagnostic/hook_log_extractor.py --query <name>

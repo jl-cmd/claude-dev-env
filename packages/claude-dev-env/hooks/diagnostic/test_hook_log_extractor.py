@@ -617,7 +617,7 @@ def test_tool_name_extracted_from_hook_name_prefix() -> None:
     assert hook_log_extractor.extract_tool_name("UserPromptSubmit") is None
 
 
-def test_run_summary_prints_no_new_blocks_when_cursor_empty(
+def test_run_summary_prints_zero_blocked_events_when_cursor_empty(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake_cursor = MagicMock()
