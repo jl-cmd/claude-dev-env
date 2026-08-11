@@ -9,7 +9,7 @@ from pathlib import Path
 
 SKILL_DIRECTORY = Path(__file__).resolve().parent
 SKILL_PATH = SKILL_DIRECTORY / "SKILL.md"
-PACKAGE_MAP_PATH = SKILL_DIRECTORY / "CLAUDE.md"
+PACKAGE_MAP_PATH = SKILL_DIRECTORY / "AGENTS.md"
 REFERENCE_DIRECTORY = SKILL_DIRECTORY / "reference"
 PACKAGE_ROOT = SKILL_DIRECTORY.parents[1]
 PYPROJECT_PATH = PACKAGE_ROOT / "pyproject.toml"
@@ -131,7 +131,7 @@ def test_scripts_surface_names_capture_wrapper_and_constants() -> None:
     skill_text = _read_skill_text()
     package_map_text = PACKAGE_MAP_PATH.read_text(encoding="utf-8")
     constants_map_text = (
-        SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants" / "CLAUDE.md"
+        SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants" / "AGENTS.md"
     ).read_text(encoding="utf-8")
     wrapper_path = SKILL_DIRECTORY / "scripts" / "run_codex_review.py"
 
@@ -168,7 +168,7 @@ def test_skill_body_stays_under_line_cap() -> None:
     assert skill_line_count < MAXIMUM_SKILL_BODY_LINE_COUNT
 
 
-def test_package_map_claude_md_exists() -> None:
+def test_package_map_agents_md_exists() -> None:
     package_map_text = PACKAGE_MAP_PATH.read_text(encoding="utf-8")
 
     assert "codex-review" in package_map_text

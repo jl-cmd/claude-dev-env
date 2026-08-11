@@ -1,0 +1,32 @@
+name: Validate instruction pairs
+
+on:
+  workflow_call:
+    inputs:
+      validator-ref:
+        description: Commit containing the shared instruction validator.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  instruction-pairs:
+    name: instruction-pairs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Load shared instruction validator
+        uses: actions/checkout@v5
+        with:
+          repository: jl-cmd/claude-dev-env
+          ref: ${{ inputs.validator-ref }}
+          path: .instruction-pair-validator
+          sparse-checkout: packages/claude-dev-env/scripts/validate_instruction_pairs.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Validate exact instruction imports
+        run: python .instruction-pair-validator/packages/claude-dev-env/scripts/validate_instruction_pairs.py --repository-root .

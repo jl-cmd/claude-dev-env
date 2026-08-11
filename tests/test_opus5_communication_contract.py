@@ -15,6 +15,7 @@ ELI11_PATH: Path = PACKAGE_ROOT / "rules" / "eli11-replies.md"
 PLAIN_LANGUAGE_PATH: Path = PACKAGE_ROOT / "rules" / "plain-language.md"
 LONG_HORIZON_PATH: Path = PACKAGE_ROOT / "rules" / "long-horizon-autonomy.md"
 CLAUDE_MD_PATH: Path = PACKAGE_ROOT / "CLAUDE.md"
+AGENTS_MD_PATH: Path = PACKAGE_ROOT / "AGENTS.md"
 SOFTWARE_ENGINEER_PATH: Path = (
     PACKAGE_ROOT / "system-prompts" / "software-engineer.xml"
 )
@@ -46,7 +47,8 @@ def test_short_answer_and_full_audit_examples_exist() -> None:
 def test_eli11_and_claude_md_point_at_contract() -> None:
     assert CONTRACT_MARKER in _read(ELI11_PATH)
     assert "opus5-communication-contract" in _read(ELI11_PATH)
-    assert CONTRACT_MARKER in _read(CLAUDE_MD_PATH)
+    assert CONTRACT_MARKER in _read(AGENTS_MD_PATH)
+    assert _read(CLAUDE_MD_PATH) == "@AGENTS.md\n"
 
 
 def test_plain_language_links_contract_without_restating() -> None:

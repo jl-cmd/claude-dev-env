@@ -6,14 +6,13 @@
  */
 
 /**
- * Entry names the source walk leaves behind, whatever directory they sit in.
+ * Entry names the source walk keeps out of installed trees.
  *
- * Each name belongs to a tool that writes beside the source it reads: Python
- * bytecode caches, the ruff, pytest, and mypy caches, an installed
- * `node_modules` tree, and the macOS Finder's `.DS_Store` marker. A contributor
- * who runs the test suites and then runs `node bin/install.mjs` copies from a
- * source tree carrying all of them, so skipping the names at the walk keeps them
- * out of `~/.claude` and out of the install manifest.
+ * Each name represents local metadata or build output.
+ * A contributor who runs the test suites and then runs `node bin/install.mjs`
+ * copies from a source tree carrying these entries, so skipping the names at
+ * the walk keeps installed trees and the install manifest focused on runtime
+ * files.
  */
 export const SKIPPED_SOURCE_ENTRY_NAMES = new Set([
     '__pycache__',
