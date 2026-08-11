@@ -1667,11 +1667,11 @@ test('collectFiles skips every named cache directory and loose bytecode file', (
 });
 
 
-test('copyTree skips the AGENTS.md instruction alias while copying agent definitions', () => {
+test('copyTree copies AGENTS.md with agent definitions', () => {
     const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-source-'));
     const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-destination-'));
     try {
-        writeFileSync(join(sourceRoot, 'AGENTS.md'), 'CLAUDE.md\n');
+        writeFileSync(join(sourceRoot, 'AGENTS.md'), '# Shared guidance\n');
         const agentDefinitionPath = join(sourceRoot, 'docs-agent.md');
         writeFileSync(
             agentDefinitionPath,
@@ -1679,12 +1679,12 @@ test('copyTree skips the AGENTS.md instruction alias while copying agent definit
         );
 
         const copyStats = copyTree(sourceRoot, destinationRoot);
-        const copiedAliasPath = join(destinationRoot, 'AGENTS.md');
+        const copiedAgentsPath = join(destinationRoot, 'AGENTS.md');
         const copiedAgentPath = join(destinationRoot, 'docs-agent.md');
 
-        assert.equal(existsSync(copiedAliasPath), false, 'the instruction alias stays in source');
+        assert.equal(existsSync(copiedAgentsPath), true, 'the canonical instructions install');
         assert.equal(existsSync(copiedAgentPath), true, 'the real agent definition installs');
-        assert.deepEqual(copyStats.paths, [copiedAgentPath]);
+        assert.deepEqual(copyStats.paths, [copiedAgentsPath, copiedAgentPath]);
     } finally {
         rmSync(sourceRoot, { recursive: true, force: true });
         rmSync(destinationRoot, { recursive: true, force: true });

@@ -26,6 +26,7 @@
         "installable-surfaces.manifest.json",
         "_shared/",
         "audit-rubrics/",
+        "AGENTS.md",
         "CLAUDE.md",
         "!**/__pycache__/**",
         "!**/*.py[cod]",

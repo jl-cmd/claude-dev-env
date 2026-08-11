@@ -8,7 +8,7 @@
 /**
  * Entry names the source walk keeps out of installed trees.
  *
- * Each name represents local metadata, build output, or an instruction alias.
+ * Each name represents local metadata or build output.
  * A contributor who runs the test suites and then runs `node bin/install.mjs`
  * copies from a source tree carrying these entries, so skipping the names at
  * the walk keeps installed trees and the install manifest focused on runtime
@@ -21,7 +21,6 @@ export const SKIPPED_SOURCE_ENTRY_NAMES = new Set([
     '.mypy_cache',
     'node_modules',
     '.DS_Store',
-    'AGENTS.md',
 ]);
 
 /**
