@@ -28,6 +28,12 @@
 # ephemeral production scripts.
 #
 # permissions: contents read + pull-requests read (dorny/paths-filter on PRs).
+#
+# Trigger scope: the pull_request trigger carries no branches filter, so a PR
+# whose base is a stacked parent branch runs the same jobs as a PR based on
+# main. dorny/paths-filter compares against the PR's own base ref, so each PR
+# in a stack filters on the files that PR alone changes. The push trigger stays
+# pinned to main and always runs the full suite.
 
 name: CI — Full test suites
 
@@ -35,7 +41,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -79,6 +84,7 @@ jobs:
               - '.github/ci/**'
               - 'docs/**'
               - '.github/workflows/**'
+              - '.github/labels.yml'
               - '.cursor/BUGBOT.md'
             javascript:
               - 'packages/claude-dev-env/**'
@@ -106,6 +112,7 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
+            Pillow \
             mypy \
             ruff
 
@@ -151,6 +158,7 @@ jobs:
             pytest-xdist \
             pyyaml \
             psycopg \
+            Pillow \
             mypy \
             ruff
 
@@ -163,13 +171,46 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
 
-      - name: Root suite (tests/)
+      # Collect-count floor (mirrors the pattern in
+      # .github/workflows/standalone-packages-tests.yml in python-automation):
+      # renaming or moving a root-suite test file outside python_files =
+      # test_*.py collects zero from that path while the rest of tests/ still
+      # passes, so the step would otherwise exit 0 looking identical to
+      # success. Raise ROOT_SUITE_COLLECT_FLOOR whenever new tests land.
+      - name: Enforce the root suite collect-count floor
+        env:
+          ROOT_SUITE_COLLECT_FLOOR: "258"
+        run: |
+          set -euo pipefail
+          source .github/ci/build-deselect-args.sh
+          python -m pytest tests/ .github/ci --collect-only -q "${deselect_args[@]}" | tee collect-only.txt
+          COLLECT_LINE=$(grep -E '[0-9]+ tests? collected' collect-only.txt | tail -1 || true)
+          COLLECTED_COUNT=$(echo "${COLLECT_LINE}" | grep -oE '^[0-9]+' || true)
+          case "${ROOT_SUITE_COLLECT_FLOOR}" in
+            ''|*[!0-9]*)
+              echo "Collect floor is unreadable ('${ROOT_SUITE_COLLECT_FLOOR}') — refusing to pass the floor check" >&2
+              exit 1
+              ;;
+          esac
+          case "${COLLECTED_COUNT}" in
+            ''|*[!0-9]*)
+              echo "Collected count is unreadable ('${COLLECTED_COUNT}') — refusing to pass the floor check" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${COLLECTED_COUNT}" -lt "${ROOT_SUITE_COLLECT_FLOOR}" ]; then
+            echo "Collected count ${COLLECTED_COUNT} is BELOW the floor ${ROOT_SUITE_COLLECT_FLOOR} — tests went missing" >&2
+            exit 1
+          fi
+          echo "Root suite collected ${COLLECTED_COUNT} tests, floor is ${ROOT_SUITE_COLLECT_FLOOR}"
+
+      - name: Root suite (tests/, .github/ci/)
         env:
           GITHUB_STEP_SUMMARY: ${{ runner.temp }}/pytest-step-summary-root.md
         run: |
           set -euo pipefail
           source .github/ci/build-deselect-args.sh
-          python -m pytest tests/ \
+          python -m pytest tests/ .github/ci \
             --basetemp="$RUNNER_TEMP/pytest-basetemp-root" \
             -q \
             -n auto \
@@ -267,7 +308,7 @@ jobs:
           if ($selectedCount -ne $expectedSelectedCount) {
             throw "selected count ($selectedCount) != expected non-comment line count ($expectedSelectedCount)"
           }
-          $expectedWindowsSemanticsCount = 8
+          $expectedWindowsSemanticsCount = 7
           if ($selectedCount -ne $expectedWindowsSemanticsCount) {
             throw "selected count ($selectedCount) != expected windows-semantics count ($expectedWindowsSemanticsCount)"
           }
@@ -276,3 +317,51 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "windows-semantics pytest exited $LASTEXITCODE"
           }
+
+  # P-21 / H: Node installer lifecycle on a clean Windows runner with isolated
+  # HOME, USERPROFILE, and GIT_CONFIG_GLOBAL (the driver sandbox owns those).
+  windows-installer-lifecycle:
+    name: Windows installer lifecycle
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.javascript == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python for installer hooks
+        run: pip install -e packages/claude-dev-env/
+
+      - name: Install package JS dependencies
+        working-directory: packages/claude-dev-env
+        run: npm install
+
+      - name: Run isolated Windows installer lifecycle
+        shell: pwsh
+        working-directory: packages/claude-dev-env
+        run: |
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-installer-lifecycle'
+          $adapter = Join-Path $PWD 'scripts/ci/windows-installer-lifecycle.ps1'
+          & $adapter -EvidenceRoot $evidenceRoot
+
+      - name: Run package npm test on Windows
+        working-directory: packages/claude-dev-env
+        run: npm test
+
+      - name: Upload Windows lifecycle failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-lifecycle-evidence
+          path: ${{ runner.temp }}/windows-installer-lifecycle/**
+          if-no-files-found: ignore
+          retention-days: 7

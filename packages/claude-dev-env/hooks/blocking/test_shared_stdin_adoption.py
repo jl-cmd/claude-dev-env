@@ -30,8 +30,6 @@ _BLOCKING_DIRECTORY = Path(__file__).resolve().parent
 ALL_CONVERTED_HOOK_FILENAMES = (
     "open_questions_in_plans_blocker.py",
     "claude_md_orphan_file_blocker.py",
-    "pr_converge_bugteam_enforcer.py",
-    "verdict_directory_write_blocker.py",
     "package_inventory_stale_blocker.py",
 )
 

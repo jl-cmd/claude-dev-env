@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "python3 -c \"import sys; sys.path.insert(0, r'${CLAUDE_PLUGIN_ROOT}/hooks'); from validators.run_all_validators import main; sys.exit(main())\" --pre-tool-use",
-            "timeout": 15
+            "timeout": 30
           }
         ]
       },
@@ -19,21 +19,6 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py",
             "timeout": 60
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/refactor_guard.py",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/advisory/migration_safety_advisor.py",
-            "timeout": 15
           }
         ]
       },
@@ -58,16 +43,6 @@
         ]
       },
       {
-        "matcher": "mcp__plugin_github_github__create_pull_request",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_review_pr_create_gate.py",
-            "timeout": 20
-          }
-        ]
-      },
-      {
         "matcher": "mcp__plugin_github_github__.*",
         "hooks": [
           {
@@ -83,32 +58,22 @@
         ]
       },
       {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pr_converge_bugteam_enforcer.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Agent|Task",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_verifier_spawn_preflight_gate.py",
-            "timeout": 30
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/fable_spawn_gate.py",
+            "timeout": 10
           }
         ]
       },
       {
-        "matcher": "Skill",
+        "matcher": "ScheduleWakeup|CronCreate",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/pr_converge_bugteam_skill_tracker.py",
-            "timeout": 10
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/orchestrator_refresh_reschedule_gate.py",
+            "timeout": 15
           }
         ]
       },
@@ -176,6 +141,21 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_list_loop_starter.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/working_style_prompt.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/orchestrator_auto_starter.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/issue_tracker_session_starter.py",
+            "timeout": 10
           }
         ]
       }
@@ -188,18 +168,6 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/stop_dispatcher.py",
             "timeout": 90
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/verifier_verdict_minter.py",
-            "timeout": 30
           }
         ]
       }
@@ -250,7 +218,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/session_file_edit_tracker.py",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       },
@@ -260,7 +228,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       },
@@ -270,7 +238,7 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_restore.py",
-            "timeout": 20
+            "timeout": 60
           }
         ]
       }

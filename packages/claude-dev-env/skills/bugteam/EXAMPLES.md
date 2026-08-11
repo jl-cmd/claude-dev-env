@@ -25,7 +25,7 @@ Claude: [runs 20 loops without convergence]
 
 `/bugteam exit: cap reached`
 `Loops: 20`
-`Remaining: 0P0 / 1P1 / 2P2 — run /findbugs for human triage`
+`Remaining: 0P0 / 1P1 / 2P2 — run /pr-converge for human triage`
 </example>
 
 <example>

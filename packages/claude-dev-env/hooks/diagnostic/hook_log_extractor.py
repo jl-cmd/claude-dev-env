@@ -67,15 +67,10 @@ from hooks_constants.hook_log_extractor_constants import (
     CATEGORY_PATH_MINIMUM_PARTS,
     COMMAND_EXCERPT_MAX_CHARACTERS,
     CONNECT_TIMEOUT_SECONDS,
-    DEFAULT_QUERY_FOR_SUMMARY,
     EMPTY_STRING,
     EXIT_CODE_EXTRACTOR_ENVIRONMENT_MISSING,
     EXIT_CODE_SUCCESS,
     EXIT_CODE_UNKNOWN_QUERY,
-    FLAG_FULL_REBUILD,
-    FLAG_INCREMENTAL,
-    FLAG_QUERY,
-    FLAG_SUMMARY,
     HOOK_CATEGORY_UNCATEGORIZED,
     HOOK_EVENTS_INSERT_SQL,
     HOOK_EVENTS_TRUNCATE_SQL,
@@ -94,10 +89,8 @@ from hooks_constants.hook_log_extractor_constants import (
     NEON_DATABASE_URL_ENVIRONMENT_VARIABLE,
     NEWLINE_JOINER,
     OFFLINE_WARNING_LOG,
-    OFFSET_STATE_FILE,
     OFFSETS_JSON_INDENT,
     OUTCOME_BY_ATTACHMENT_TYPE,
-    PROJECTS_TRANSCRIPT_ROOT,
     QUERIES_DIRECTORY_NAME,
     QUERY_NAME_PATTERN,
     QUERY_NO_ROWS_RETURNED_MESSAGE,
@@ -874,35 +867,8 @@ def run_query(named_query: str) -> int:
 
 
 def main() -> int:
-    """Entry point for the hook-log extractor CLI.
-
-    Supported flags:
-
-    * ``--summary`` prints the top blockers of the last twenty-four hours.
-    * ``--query <name>`` runs a pre-baked SQL file under ``queries/``.
-    * ``--full-rebuild`` truncates ``hook_events`` and re-reads every
-      JSONL from byte zero.
-    * ``--incremental`` is a documented no-op; it selects the default
-      byte-offset resumption path that the Stop hook also uses when no
-      flags are passed.
-    """
-    all_cli_arguments = list(sys.argv[1:])
-    if FLAG_SUMMARY in all_cli_arguments:
-        return run_summary()
-    if FLAG_QUERY in all_cli_arguments:
-        flag_index = all_cli_arguments.index(FLAG_QUERY)
-        if flag_index + 1 >= len(all_cli_arguments):
-            return run_query(DEFAULT_QUERY_FOR_SUMMARY)
-        return run_query(all_cli_arguments[flag_index + 1])
-    is_full_rebuild_requested = FLAG_FULL_REBUILD in all_cli_arguments
-    is_incremental_requested = FLAG_INCREMENTAL in all_cli_arguments
-    if is_incremental_requested and is_full_rebuild_requested:
-        is_full_rebuild_requested = False
-    return run_full_extraction(
-        transcripts_root=PROJECTS_TRANSCRIPT_ROOT,
-        state_file_path=OFFSET_STATE_FILE,
-        full_rebuild=is_full_rebuild_requested,
-    )
+    """Disabled extractor entry point: exit success with no work."""
+    return EXIT_CODE_SUCCESS
 
 
 if __name__ == "__main__":

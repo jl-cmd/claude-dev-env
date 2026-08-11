@@ -21,6 +21,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'auditing-claude-config',
     'autoconverge',
     'bdd-protocol',
+    'beat-sheet',
     'bg-agent',
     'bugteam',
     'caveman',
@@ -38,7 +39,9 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'gotcha',
     'grok-spawn',
     'grokify',
+    'imagegen',
     'implement',
+    'issue-tracker',
     'log-audit',
     'logifix',
     'monitor-open-prs',
@@ -70,4 +73,5 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'update',
     'usage-pause',
     'verified-build',
+    'split-pr',
 ]);

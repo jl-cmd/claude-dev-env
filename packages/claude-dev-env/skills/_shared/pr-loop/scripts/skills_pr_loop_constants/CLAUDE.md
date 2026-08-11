@@ -8,6 +8,7 @@ Python package of named constants for the `pr-loop` shared scripts. All constant
 |---|---|
 | `__init__.py` | Package marker. |
 | `path_resolver_constants.py` | Path template strings and format constants: workspace directory naming, worktree directory name, diff patch filename pattern, outcome XML filename patterns, fix status values, audit constraint texts, audit category entries, fix execution steps, and fix constraint texts. |
+| `audit_category_schema_constants.py` | Paths, regexes, and encoding constants for `audit_category_schema.py` (A-Q schema load and projection parity). |
 | `preflight_constants.py` | Constants used by `preflight_worktree.py` for exit codes and output marker strings. |
 | `handoff_constants.py` | Filename, path-segment, and template constants for the durable handoff writer. |
 | `pacer_constants.py` | Entry-skill names, pacer tokens, CLI flags, and result keys for `select_converge_pacer.py`. |

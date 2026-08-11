@@ -1,6 +1,8 @@
 # Code Rules Reference
 
-Compact reference for agents. ⚡ marks rules enforced by `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only.
+Compact **projection** of the checked-in review contract [`.cursor/BUGBOT.md`](../../../.cursor/BUGBOT.md). Update this reference alongside the full review contract when review rules change.
+
+⚡ marks rules enforced by hand-maintained `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only. Session policy (question routing, task tracking) lives in `rules/*.md`; see [`code-standards.md`](../rules/code-standards.md).
 
 ---
 
@@ -46,7 +48,7 @@ Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` fo
 
 ## 6. COMPLETE TYPE HINTS
 
-ALL parameters typed, ALL returns typed. No `Any`, no `# type: ignore` (also enforced by the mypy_validator.py hook).
+ALL parameters typed, ALL returns typed. No `Any`. A `# type: ignore` is allowed only with a second trailing `#` justification of at least five characters (e.g. `# type: ignore[misc]  # stubs missing in foo library`); bare ignores are blocked by `code_rules_enforcer.py`. Prefer fixing the type over an ignore when a real annotation is available.
 
 ## 6.5 FILE LENGTH GUIDANCE
 
@@ -59,6 +61,8 @@ Advisory only, never blocking: soft advisory at >= 400 lines, strong nudge at >=
 **Simple > Clever. Functions > Classes. Concrete > Abstract.**
 Never: ABC for single impl, DI frameworks, factory for single type. Always: functions when no state, concrete classes, simple imports.
 Parameters follow YAGNI: add an optional parameter when a caller varies the value; when every call site passes the same value, make it required or inline the constant. Remove parameters no caller passes and no body reads.
+
+**Complexity budget — state it BEFORE implementation:** files (target 1-2, max 3), lines (~50-300). Checkpoints: Is this the MINIMUM? Can it be fewer files? Functions instead of classes?
 
 ## 7.5 SOLID PRINCIPLES
 

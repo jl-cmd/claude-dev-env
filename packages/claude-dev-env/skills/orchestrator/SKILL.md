@@ -30,15 +30,97 @@ The moment it edits a file or runs a test itself, the pairing breaks —
 its own tool use stays orchestration, run-artifact writes, and light
 verification reads.
 
+## status_gate (deterministic — not optional)
+
+**Prose does not keep the loop alive.** Re-arm and terminate are gated by
+`scripts/status_gate.py` (and, on Claude, the PreToolUse hook
+`orchestrator_refresh_reschedule_gate`). The gate is host-agnostic: a
+single pending re-arm latch in the status file, not host product names.
+
+```
+python scripts/status_gate.py set --status active|done [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py begin-firing [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py should-reschedule [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py claim-rearm [--run-slug SLUG] [--status-file PATH]
+python scripts/status_gate.py release-rearm [--run-slug SLUG] [--status-file PATH]
+```
+
+| Exit / output | Meaning |
+|---|---|
+| `set` → 0 | Status written (`active`/`done`); `done` clears latch; re-asserting `active` preserves it |
+| `begin-firing` → 0 | Active; clears `rearm_pending` (start of a refresh firing) |
+| `begin-firing` → 1 | Stop — missing/invalid/done (fail closed) |
+| `should-reschedule` → 0 | Active and `rearm_pending` is false (read-only) |
+| `should-reschedule` → 1 | Stop — inactive, missing, invalid, or slot already pending |
+| `claim-rearm` → 0 | Slot latched (`rearm_pending` true) after a successful create |
+| `claim-rearm` → 1 | Slot already pending or inactive — cancel any just-created schedule |
+| `release-rearm` → 0 | Cleared pending (recovery if a latch stuck after create) |
+| `release-rearm` → 1 | Stop — missing/invalid/done; nothing to release |
+
+Default status path: `.orchestrator-run-status.json` under the repo plans
+directory, or `$ORCHESTRATOR_RUN_STATUS_FILE`. With `--run-slug SLUG`,
+under the slug plans subdirectory. When using a slug, every refresh
+schedule prompt must carry it: `/orchestrator-refresh --run-slug SLUG`.
+
+### Single-pending re-arm protocol (all hosts)
+
+**The re-arm never interrupts the run.** Every "stop" in the five steps
+below ends the *re-arm* and nothing else: the session returns to
+orchestrating in the same turn. Arming a delayed wake schedules a later
+reminder; it neither ends the turn nor pauses in-flight executors, and
+the session never waits for the refresh to fire before it carries on.
+When a create fails, keep orchestrating and re-arm at the next natural
+break. When the denial is `rearm_already_pending`, a refresh is already
+queued — keep orchestrating and arm nothing further this turn; the next
+refresh firing clears the latch and arms again.
+
+Exactly one delayed refresh may be outstanding. **Create then claim**
+(order matters on Claude: PreToolUse denies `ScheduleWakeup` when the
+slot is already pending).
+
+1. **Cancel matching schedules** only when the host can list and cancel
+   schedules by prompt. Drop every schedule whose prompt targets
+   `/orchestrator-refresh` (and the same `--run-slug` when used).
+   Replace, never stack. On Claude, there is no selective cancel for a
+   sibling `ScheduleWakeup` — the status-file latch
+   (`should-reschedule` / `claim-rearm`) is the sole stacking
+   enforcement there.
+2. **`should-reschedule`** (same path args as activate). Exit 1 → stop;
+   do not create. Exit 0 → continue.
+3. **Create exactly one non-recurring delayed wake** (~1200–2700s) with
+   prompt `/orchestrator-refresh` (plus `--run-slug` when used). Use the
+   host's one-shot delayed schedule tool (on Claude: `ScheduleWakeup`).
+   Never recurring, never cadence, never a second create in the same
+   firing.
+4. **`claim-rearm`** immediately after a successful create. Exit 0 →
+   done. Exit 1 → cancel the schedule just created and stop (race /
+   already latched).
+5. **On create failure:** do not claim; stop or retry once from step 1.
+
+On Claude, the PreToolUse hook also denies when inactive, already
+pending, or when the tool is `CronCreate`.
+
+**Rules:**
+
+- **Activate only with open work.** After the first ledger task exists,
+  `set --status active` (same `--run-slug` for the whole run if used).
+- **Done is a script.** When every ledger task is completed/cancelled and
+  no executor is running: `set --status done`, cancel matching host
+  schedules, stop. Do not re-arm.
+- **Invocation guard.** If `should-reschedule` is already exit 1 for
+  `rearm_already_pending`, a refresh is already queued — do not arm again.
+
 ## Process
 
-1. **Invocation guard.** One `/orchestrator` per session. When the
-   refresh loop is already running, do not schedule a second one; reuse
-   the live advisor bind and go to step 4.
-2. **Register the discipline reminder.** Schedule it with
-   `ScheduleWakeup` at `delaySeconds: 2700`, prompt
-   `/orchestrator-refresh`, where each refresh re-schedules the next one.
-3. **Bind the shared advisor before any executor.** Follow
+1. **Invocation guard.** One `/orchestrator` per session. When a refresh
+   one-shot is already queued (`should-reschedule` exits 1 with
+   `rearm_already_pending`), do not stack a second: reuse the live
+   advisor bind, skip step 4 and the re-arm half of step 5, and carry on
+   from step 5's dispatch — status is already active and a re-arm is
+   already latched, so a second registration would stack a duplicate
+   host schedule. (Re-asserting `set --status active` preserves
+   `rearm_pending` when already active, but still do not re-arm.)
+2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
    end to end: detect the host profile, compute the floor from the
    orchestrator consumer set — this session plus every tier in the
@@ -47,17 +129,33 @@ verification reads.
    whole lifecycle (its Lifecycle ownership section); executors only ever
    message the warm agent or report here, and an executor that finds the
    advisor unreachable reports that upward — it never spawns a
-   replacement itself.
-4. **Write the run artifacts** (next section) before the first spawn.
-5. **Orchestrate.** Hold the plan and the user conversation. Spawn each
-   task with a ticket (Spawn ticket section), keep driving while
+   replacement itself. A **Fable**-tier attempt carries the exact token
+   `FABLE-SPAWN-AUTHORIZED` in its spawn prompt, as the protocol's
+   warm-up rule states; `hooks/blocking/fable_spawn_gate.py` denies a
+   fable spawn whose prompt lacks it.
+3. **Write the run artifacts** (next section) before the first spawn.
+4. **Activate status_gate** when the first open ledger task exists:
+   `python scripts/status_gate.py set --status active`.
+5. **Dispatch the first task with its ticket** (Spawn ticket section),
+   **then register the discipline reminder** via the single-pending
+   re-arm protocol (cancel matching → `should-reschedule` → one
+   non-recurring delayed wake → `claim-rearm`; default delay about
+   2700s). Spawn before you arm, so the run is already moving, and go
+   straight on to step 6 in the same turn — the armed wake is a later
+   reminder, not the next thing to wait for.
+6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
+   remaining task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
    discipline).
-6. **Consult the advisor at hard decisions.** The trigger list, consult
+7. **Consult the advisor at hard decisions.** The trigger list, consult
    format, and reply handling live in the protocol's "Consulting the
    warm agent" section; both this session and every executor are
    consumers. Replies open with one of ENDORSE, CORRECTION, PLAN, or
    STOP — `agents/session-advisor.md` defines each signal.
+8. **Terminate when done.** When every ledger task is completed or
+   cancelled and no executor is running: run
+   `set --status done`, cancel matching host schedules, report
+   completion, and stop. Do not re-arm.
 
 ## Run state lives in artifacts
 
@@ -76,6 +174,9 @@ in the repo the run works on (working files, not committed):
   may write — and its reply is thin: status, artifact paths, blockers.
   The orchestrating session records each result into the run's result
   files as it reconciles the ledger.
+- **Run status file** — written only by `status_gate.py`
+  (`active` / `done`, plus `rearm_pending`). Source of truth for
+  reschedule and the single-pending latch.
 
 Correctness never rides on any agent's private context: when an executor
 dies or hangs, point a fresh spawn at the same assignment file plus its
@@ -92,7 +193,7 @@ Touch only: <files or globs>
 Done when: <one mechanical check — a command, a test, a diff scope>
 Return: status, artifact paths, blockers — nothing else.
 
-<host-matched Advisor block from advisor-protocol.md, advisor name filled in>
+<Advisor block assembled per _shared/advisor/reference/advisor-block.md — advisor name filled in>
 ```
 
 - **Size the task by its done-check.** The right task is the largest
@@ -101,13 +202,26 @@ Return: status, artifact paths, blockers — nothing else.
   fit gets split in the plan — never padded into a longer prompt.
   Explore fan-outs run tiny; a `clean-coder` assignment can carry a
   whole scoped feature.
+- **Focused tickets are the house convention.** One mechanical done-check
+  per ticket; thick context lives in the assignment file, not the ticket
+  prose. The orchestrator owns splitting a big task into tickets and
+  synthesizing the results — an executor never does either. Two
+  anti-patterns to avoid: an epic ticket that bundles several
+  deliverables behind one done-check, and micro-thrash — a run of tickets
+  so thin each spawn pays more in setup than the work itself takes. See
+  Anthropic's coordinator-pattern cookbook:
+  https://github.com/anthropics/claude-cookbooks/blob/main/managed_agents/CMA_plan_big_execute_small.ipynb.
+- **Resume with a thin next-slice ticket.** A warm agent already holds
+  the assignment's thick context, so its next ticket names only the next
+  slice of work and the done-check — it does not restate the assignment.
 - **Do not restate what the agent definition carries.** The routing
   table picks the definition, and `clean-coder` already holds the code
   discipline. The ticket adds the task, the pointers, and the Advisor
   block only.
-- **The Advisor block is the one pasted paragraph.** It is host-matched
-  at bind time and written to be self-contained (the protocol's Advisor
-  block section) — paste it; do not point at it.
+- **The Advisor block is pasted, assembled text.** Assemble it at bind
+  time from the parts in
+  [`_shared/advisor/reference/advisor-block.md`](../../_shared/advisor/reference/advisor-block.md)
+  and paste the assembled text itself into the ticket.
 
 ## Workflow Agent Routing
 
@@ -117,23 +231,41 @@ workflow resume is available.
 
 | Work | Agent type | Model |
 |---|---|---|
-| Feature, bug, and refactor coding | `clean-coder` | `opus` |
-| Verification passes | `code-verifier` | `sonnet` |
-| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` |
+| Feature, bug, and refactor coding | `clean-coder` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Review and verification | `code-quality-agent` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
 | PR descriptions | `pr-description-writer` | `haiku`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
+
+Every row that edits code, runs a build, or runs a test is a coding row.
+The per-spawn Agent call's `model:` field carries the routing.
+`CLAUDE_CODE_SUBAGENT_MODEL` and other environment variables do not set
+the worker model; the per-spawn `model:` field does.
 
 Routing rules:
 
 - Each row spawns workflow-backed with a ticket; the routing row and the
   ticket together carry the agent type, model, task, and return
-  contract. A task category that maps to `clean-coder` on `opus` is not
-  served by a `general-purpose` Sonnet spawn — the table is the
-  contract, not a cost suggestion.
+  contract. A coding task category is never served by a different tier
+  as a cost call — the table is the contract.
+- **Fail closed on a Claude host.** When `sonnet` cannot be spawned, use
+  the Claude chain failover for `sonnet` when the session has one
+  configured; otherwise stop the coding spawn and report the failure —
+  never fall back in silence to `opus` or the session's own model.
+- **Fail closed on a third-party host.** Before each coding spawn, the
+  orchestrator runs a deterministic worker-model resolver that prints
+  the sonnet-equivalent model id for that host. A non-zero exit stops
+  the coding spawn; the orchestrator reports the failure rather than
+  picking a model itself. This section states the resolver's contract
+  only; a host where no resolver is available fails closed the same
+  way — the coding spawn stops and the orchestrator reports it.
+- Host detection follows
+  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
+  (Host profiles section, `detect_host_profile`) — the sole detection
+  system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
-- `clean-coder` owns code edits. `code-verifier` owns verification. The
-  same workflow agent never grades work it wrote.
+- Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).
 - PR-description workflows include the actual changed-file list in the
   prompt and verify the final body against that file list before posting
   or returning it.
@@ -175,12 +307,16 @@ the live agents at any moment. Four invariants hold at all times:
    `blockedBy` links, updated the moment the plan changes.
 
 Reconcile on every state change (spawn, completion notification, plan
-change) and on every `/orchestrator-refresh` firing.
+change) and on every `/orchestrator-refresh` firing. After reconcile, if
+no open work remains, run `set --status done` before any re-arm attempt.
 
 ## Constraints
 
 - One `/orchestrator` per session; the invocation guard blocks a second
-  reminder loop.
+  stacked one-shot while one is already queued.
+- Reschedule is mechanical: status file + `claim-rearm` /
+  `should-reschedule` exit codes; never a recurring host schedule; at
+  most one pending re-arm latch.
 - The orchestrating session never edits code or runs a build or test
   itself — executors do that. Its own tool use stays orchestration,
   run-artifact writes, and light verification reads.
@@ -189,14 +325,40 @@ change) and on every `/orchestrator-refresh` firing.
 - One shared advisor per orchestrated session, owned by this session per
   the protocol; executors never spawn, respawn, or shut it down.
 
+## Gotchas
+
+- **Stacking re-arms.** Creating a second delayed wake while one is
+  already queued (or using a recurring host schedule) multiplies loops
+  on each refresh. Always cancel matching → `should-reschedule` → one
+  create → `claim-rearm`. A second create while pending is denied on
+  Claude by PreToolUse; elsewhere `should-reschedule` / `claim-rearm`
+  exit 1 is a hard stop.
+- **Claim before create on Claude.** If you `claim-rearm` first, the
+  PreToolUse hook sees `rearm_pending` and denies `ScheduleWakeup`.
+  Create first, then claim.
+- **Forgetting `begin-firing` on refresh.** The latch stays pending;
+  later re-arms are denied forever until a firing clears it. Refresh
+  must run `begin-firing` first.
+- **Create without claim.** If create succeeds and you skip
+  `claim-rearm`, a second create can stack. Always claim immediately
+  after a successful create.
+
 ## File Index
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Orchestrator strategy: design rule, process, run artifacts, spawn ticket, routing table, reuse rules, ledger invariants, constraints. |
+| `SKILL.md` | Orchestrator strategy; pointers to run-control scripts. |
+| `scripts/status_gate.py` | Status file, latch, and re-arm gate (exit codes). |
+| `scripts/status_gate_constants/config/constants.py` | Named constants for status_gate. |
+| `scripts/test_status_gate.py` | Gate tests. |
 
 ## Folder Map
 
-- `SKILL.md` — complete orchestrator workflow instructions. Advisor
-  policy lives in
+- `SKILL.md` — orchestration process and routing.
+- `scripts/` — deterministic status_gate.
+- Advisor policy:
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+
+## File-backed run ledger
+
+When host task tools are absent, reconcile delegated work through `scripts/grok_run_ledger.py` under the run-state directory (stable task ids, one live owner, unique advisor sessions, dependency blocking, snapshot-drift reopening).

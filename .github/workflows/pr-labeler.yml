@@ -1,0 +1,75 @@
+name: PR labeler
+
+# Applies the five label axes (type, size, status, area, stacked) to a pull
+# request on every event that can change what they should be: a title edit
+# changes type, a push changes size and area, and the draft/ready toggle is
+# the one event ci-tests.yml does not need but this workflow does — status:
+# is wrong the moment a draft is marked ready and nothing else re-runs. A
+# label edit re-runs the axes too, so a hand-applied axis label is
+# reconciled back to the derived value.
+#
+# Never removes a label outside those five axes: pr_labeler.py bounds every
+# removal to a known per-axis label set, so P0-P3, epic, tech-debt, and any
+# other flag a human or another workflow set stays untouched.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+      - labeled
+      - unlabeled
+
+concurrency:
+  group: pr-labeler-${{ github.ref }}
+  # false: the job-level `if:` below skips a redundant run only after
+  # GitHub evaluates concurrency, which cancels at the workflow-run level
+  # before any job `if:` runs. A true here can cancel a real labeling run
+  # (e.g. a synchronize) with a same-group run that then skips (e.g. a
+  # body-only edit), leaving stale labels with no further event to correct
+  # them. The job's 5-minute timeout and idempotent API calls make
+  # serialized runs converge on the same label set at low cost.
+  cancel-in-progress: false
+
+jobs:
+  label:
+    name: Apply label axes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Skip a fork PR: its GITHUB_TOKEN is read-only regardless of the
+    # permissions: block below, so the API call would 403 and the check
+    # would show a red X the contributor cannot fix.
+    # Skip a no-op body edit: only a title change and a base retarget feed an
+    # axis, and GitHub populates changes.title (title edits) or changes.base
+    # (base retargets) only when that respective change actually happened.
+    # A base retarget fires action: edited with no changes.title at all, and
+    # does not fire synchronize either, so this axis needs its own check —
+    # size, area, and stacked are all measured against the base.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.title != null || github.event.changes.base != null)
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install labeler dependencies
+        run: pip install PyYAML
+
+      - name: Apply the five label axes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/ci/pr_labeler.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --config .github/ci/pr_labeler_config.yml

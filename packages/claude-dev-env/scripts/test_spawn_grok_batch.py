@@ -22,15 +22,17 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     BUILD_PROFILE_PROMPT_HEADER,
     CLASSIFICATION_ERROR,
     CLASSIFICATION_OK,
+    CLASSIFICATION_TIMEOUT,
     CLASSIFICATION_USAGE_LIMIT,
     DEBUG_FILE_FLAG,
     DEFAULT_ROLE,
-    DEFAULT_WORKER_MAX_TURNS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
     DISABLE_WEB_SEARCH_FLAG,
     DISALLOWED_TOOLS_FLAG,
     LEADER_SOCKET_FILENAME_PREFIX,
     LEADER_SOCKET_FILENAME_SUFFIX,
+    MAX_TURNS_FLAG,
+    MAXIMUM_WORKER_TIMEOUT_SECONDS,
     OUTPUT_FILENAME_PREFIX,
     PROMPT_FILENAME_PREFIX,
     READONLY_DISALLOWED_TOOLS_VALUE,
@@ -53,7 +55,6 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     TOOL_PROFILE_READONLY,
     UTF8_ENCODING,
     WORKER_SPEC_AGENT_NAME_KEY,
-    WORKER_SPEC_MAX_TURNS_KEY,
     WORKER_SPEC_PROMPT_PARTS_KEY,
     WORKER_SPEC_TIMEOUT_KEY,
 )
@@ -61,8 +62,10 @@ from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS  # noqa: E40
 from grok_headless_runner import GrokRunnerOutcome  # noqa: E402
 from grok_worker_preflight import PreflightOutcome  # noqa: E402
 
+RETIRED_MAX_TURNS_KEYWORD = "max_turns"
 FIXTURE_REPORT_TEXT = '{"status":"done","role":"investigator"}'
 FIXTURE_USAGE_LIMIT_TEXT = "rate limit exceeded (HTTP 429): quota exceeded"
+FIXTURE_TIMEOUT_KILL_TEXT = "worker exceeded its timeout and was killed"
 
 
 def _write_prompt_parts(
@@ -871,7 +874,108 @@ def test_load_batch_spec_missing_worker_keys_raise_value_error(
     ).lower() or "must be" in str(raised_error.value).lower()
 
 
-def test_load_batch_spec_rejects_non_positive_timeout_and_max_turns(
+def test_load_batch_spec_rejects_an_unknown_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="stray-key-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload["timeout_second"] = 30
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert "timeout_second" in error_text
+    assert WORKER_SPEC_TIMEOUT_KEY in error_text
+
+
+def test_load_batch_spec_names_every_unknown_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="two-stray-keys",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload["stray_cap"] = 5
+    worker_payload["notes"] = "operator scratch"
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert "stray_cap" in error_text
+    assert "notes" in error_text
+
+
+def test_load_batch_spec_rejects_the_retired_turn_cap_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload = _worker_payload(
+        role_name="retired-cap-worker",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=working_directory,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    worker_payload[RETIRED_MAX_TURNS_KEYWORD] = 5
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    with pytest.raises(ValueError) as raised_error:
+        batch.load_batch_spec(specification_path)
+
+    error_text = str(raised_error.value)
+    assert RETIRED_MAX_TURNS_KEYWORD in error_text
+    assert WORKER_SPEC_TIMEOUT_KEY in error_text
+
+
+def test_load_batch_spec_accepts_every_documented_worker_key(
+    tmp_path: Path,
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    worker_payload: dict[str, object] = {
+        "role_name": "every-key-worker",
+        "prompt_parts": [str(header_part), str(body_part)],
+        "cwd": str(working_directory),
+        "tool_profile": TOOL_PROFILE_READONLY,
+        "timeout_seconds": 30,
+        "is_repo_only": True,
+        "agent_name": None,
+    }
+    specification_path = _write_batch_spec(
+        tmp_path, all_worker_payloads=[worker_payload]
+    )
+
+    batch_spec = batch.load_batch_spec(specification_path)
+
+    assert batch_spec.all_workers[0].role_name == "every-key-worker"
+    assert batch_spec.all_workers[0].is_repo_only is True
+
+
+def test_load_batch_spec_rejects_non_positive_timeout(
     tmp_path: Path,
 ) -> None:
     header_part, body_part = _write_prompt_parts(tmp_path)
@@ -891,27 +995,11 @@ def test_load_batch_spec_rejects_non_positive_timeout_and_max_turns(
         zero_timeout_dir,
         all_worker_payloads=[zero_timeout_payload],
     )
-    with pytest.raises(ValueError, match=WORKER_SPEC_TIMEOUT_KEY):
+    with pytest.raises(ValueError, match="MIN_WORKER_TIMEOUT_SECONDS"):
         batch.load_batch_spec(zero_timeout_path)
 
-    negative_turns_dir = tmp_path / "negative-turns"
-    negative_turns_dir.mkdir()
-    negative_turns_payload = _worker_payload(
-        role_name="negative-turns",
-        all_prompt_parts=[str(header_part), str(body_part)],
-        working_directory=working_directory,
-        tool_profile=TOOL_PROFILE_BUILD,
-    )
-    negative_turns_payload[WORKER_SPEC_MAX_TURNS_KEY] = -1
-    negative_turns_path = _write_batch_spec(
-        negative_turns_dir,
-        all_worker_payloads=[negative_turns_payload],
-    )
-    with pytest.raises(ValueError, match=WORKER_SPEC_MAX_TURNS_KEY):
-        batch.load_batch_spec(negative_turns_path)
 
-
-def test_load_batch_spec_accepts_default_timeout_and_max_turns(
+def test_load_batch_spec_accepts_the_default_timeout(
     tmp_path: Path,
 ) -> None:
     header_part, body_part = _write_prompt_parts(tmp_path)
@@ -931,7 +1019,223 @@ def test_load_batch_spec_accepts_default_timeout_and_max_turns(
 
     assert len(batch_spec.all_workers) == 1
     assert batch_spec.all_workers[0].timeout_seconds == DEFAULT_WORKER_TIMEOUT_SECONDS
-    assert batch_spec.all_workers[0].max_turns == DEFAULT_WORKER_MAX_TURNS
+
+
+def test_timeout_over_the_ceiling_is_refused_and_at_the_ceiling_passes(
+    tmp_path: Path,
+) -> None:
+    """The launcher refuses a spec past the 90-minute ceiling; it never clamps.
+
+    ::
+
+        timeout_seconds 5401  flag: ValueError naming MAXIMUM_WORKER_TIMEOUT_SECONDS
+        timeout_seconds 5400  ok:   loads, value untouched
+        timeout_seconds 30    ok:   loads, value untouched
+    """
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+
+    over_ceiling_directory = tmp_path / "over-ceiling"
+    over_ceiling_directory.mkdir()
+    over_ceiling_path = _write_batch_spec(
+        over_ceiling_directory,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="over-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS + 1,
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="MAXIMUM_WORKER_TIMEOUT_SECONDS"):
+        batch.load_batch_spec(over_ceiling_path)
+
+    at_ceiling_directory = tmp_path / "at-ceiling"
+    at_ceiling_directory.mkdir()
+    at_ceiling_path = _write_batch_spec(
+        at_ceiling_directory,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="at-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+            ),
+            _worker_payload(
+                role_name="well-under-ceiling",
+                all_prompt_parts=[str(header_part), str(body_part)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+                timeout_seconds=30,
+            ),
+        ],
+    )
+    at_ceiling_spec = batch.load_batch_spec(at_ceiling_path)
+
+    assert at_ceiling_spec.all_workers[0].timeout_seconds == (
+        MAXIMUM_WORKER_TIMEOUT_SECONDS
+    )
+    assert at_ceiling_spec.all_workers[1].timeout_seconds == 30
+
+
+def test_ceiling_timeout_reaches_the_runner_untouched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="long-worker")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="long-worker",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_READONLY,
+                    timeout_seconds=MAXIMUM_WORKER_TIMEOUT_SECONDS,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder({"long-worker": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    assert recorder.all_keyword_arguments[0]["timeout_seconds"] == (
+        MAXIMUM_WORKER_TIMEOUT_SECONDS
+    )
+
+
+def test_worker_invocations_carry_no_turn_cap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="uncapped")
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    batch_spec = batch.load_batch_spec(
+        _write_batch_spec(
+            tmp_path,
+            all_worker_payloads=[
+                _worker_payload(
+                    role_name="uncapped",
+                    all_prompt_parts=[str(header_part), str(body_part)],
+                    working_directory=working_directory,
+                    tool_profile=TOOL_PROFILE_READONLY,
+                )
+            ],
+        )
+    )
+    recorder = _RunnerRecorder({"uncapped": _ok_outcome()})
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    batch.run_grok_batch(
+        batch_spec=batch_spec,
+        run_state_directory=run_state_directory,
+    )
+
+    launched_keyword_arguments = recorder.all_keyword_arguments[0]
+    all_extra_arguments = launched_keyword_arguments["all_extra_arguments"]
+    assert RETIRED_MAX_TURNS_KEYWORD not in launched_keyword_arguments
+    assert isinstance(all_extra_arguments, tuple)
+    assert MAX_TURNS_FLAG not in all_extra_arguments
+
+
+def test_timed_out_worker_reads_as_timeout_beside_a_completed_worker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A killed worker stays distinguishable from a completed one in the summary.
+
+    ::
+
+        killed worker    ok: classification timeout, is_ok False, exit code 1
+        completed worker ok: classification ok, is_ok True
+    """
+    header_done, body_done = _write_prompt_parts(tmp_path, role_marker="done-worker")
+    header_killed, body_killed = _write_prompt_parts(
+        tmp_path, role_marker="killed-worker"
+    )
+    working_directory = tmp_path / "project"
+    working_directory.mkdir()
+    run_state_directory = tmp_path / "run-state"
+    specification_path = _write_batch_spec(
+        tmp_path,
+        all_worker_payloads=[
+            _worker_payload(
+                role_name="done-worker",
+                all_prompt_parts=[str(header_done), str(body_done)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+            _worker_payload(
+                role_name="killed-worker",
+                all_prompt_parts=[str(header_killed), str(body_killed)],
+                working_directory=working_directory,
+                tool_profile=TOOL_PROFILE_BUILD,
+            ),
+        ],
+    )
+    recorder = _RunnerRecorder(
+        {
+            "done-worker": _ok_outcome(),
+            "killed-worker": GrokRunnerOutcome(
+                is_ok=False,
+                returncode=-9,
+                classification=CLASSIFICATION_TIMEOUT,
+                stdout="",
+                stderr=FIXTURE_TIMEOUT_KILL_TEXT,
+            ),
+        }
+    )
+    monkeypatch.setattr(
+        batch, "batch_preflight", lambda **_kwargs: PreflightOutcome(True, None)
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    monkeypatch.setattr(batch, "batch_sleep", lambda _seconds: None)
+
+    exit_code = batch.main(
+        [
+            "--spec",
+            str(specification_path),
+            "--run-temp-dir",
+            str(run_state_directory),
+        ]
+    )
+
+    summary_payload = json.loads(capsys.readouterr().out)
+    payload_by_role_name = {
+        each_payload[SUMMARY_ROLE_NAME_KEY]: each_payload
+        for each_payload in summary_payload[SUMMARY_WORKERS_KEY]
+    }
+    killed_payload = payload_by_role_name["killed-worker"]
+    done_payload = payload_by_role_name["done-worker"]
+
+    assert exit_code == 1
+    assert killed_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_TIMEOUT
+    assert killed_payload[SUMMARY_IS_OK_KEY] is False
+    assert killed_payload[SUMMARY_CLASSIFICATION_KEY] != CLASSIFICATION_OK
+    assert done_payload[SUMMARY_CLASSIFICATION_KEY] == CLASSIFICATION_OK
+    assert done_payload[SUMMARY_IS_OK_KEY] is True
 
 
 def test_unwritable_report_file_keeps_the_worker_outcome(
@@ -1015,3 +1319,298 @@ def test_load_batch_spec_rejects_empty_agent_name(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=WORKER_SPEC_AGENT_NAME_KEY):
         batch.load_batch_spec(specification_path)
+
+# --- O-02 worker advisor contract ---
+
+
+def test_extract_advisor_signal_accepts_four_tokens_only() -> None:
+    assert batch.extract_advisor_signal("ENDORSE\nok") == "ENDORSE"
+    assert batch.extract_advisor_signal("CORRECTION fix path") == "CORRECTION"
+    assert batch.extract_advisor_signal("PLAN later") == "PLAN"
+    assert batch.extract_advisor_signal("STOP") == "STOP"
+    assert batch.extract_advisor_signal("hello ENDORSE") is None
+    assert batch.extract_advisor_signal("") is None
+
+
+def test_load_batch_spec_parses_advisor_block(tmp_path: Path) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path)
+    payload = _worker_payload(
+        role_name="lens",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=tmp_path,
+        tool_profile=TOOL_PROFILE_READONLY,
+    )
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": [payload],
+                "advisor": {
+                    "launcher": "fixture-advisor-launcher",
+                    "model": "opus",
+                    "effort": "high",
+                },
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    loaded = batch.load_batch_spec(specification_path)
+    assert loaded.advisor is not None
+    assert loaded.advisor.launcher == "fixture-advisor-launcher"
+    assert loaded.advisor.model == "opus"
+    assert loaded.advisor.effort == "high"
+
+
+def test_unique_advisor_sessions_and_completion_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    header_a, body_a = _write_prompt_parts(tmp_path, role_marker="alpha")
+    header_b, body_b = _write_prompt_parts(tmp_path, role_marker="beta")
+    workers = [
+        _worker_payload(
+            role_name="alpha",
+            all_prompt_parts=[str(header_a), str(body_a)],
+            working_directory=tmp_path,
+            tool_profile=TOOL_PROFILE_BUILD,
+        ),
+        _worker_payload(
+            role_name="beta",
+            all_prompt_parts=[str(header_b), str(body_b)],
+            working_directory=tmp_path,
+            tool_profile=TOOL_PROFILE_BUILD,
+        ),
+    ]
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": workers,
+                "advisor": {
+                    "launcher": "fixture-advisor-launcher",
+                    "model": "opus",
+                    "effort": "high",
+                },
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    bind_count = {"n": 0}
+    sessions_issued: list[str] = []
+
+    def fake_advisor(
+        *,
+        launcher: str,
+        model: str,
+        effort: str,
+        prompt_text: str,
+        session_id: str | None = None,
+    ) -> tuple[str | None, str, int]:
+        assert launcher == "fixture-advisor-launcher"
+        assert model == "opus"
+        assert effort == "high"
+        if session_id is None:
+            bind_count["n"] += 1
+            session = f"session-{bind_count['n']}"
+            sessions_issued.append(session)
+            return session, "ENDORSE\npre-dispatch ok", 0
+        return session_id, "ENDORSE\npost-report ok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake_advisor)
+    monkeypatch.setattr(
+        batch,
+        "batch_preflight",
+        lambda **kwargs: PreflightOutcome(is_usable=True, reason=None),
+    )
+    monkeypatch.setattr(batch, "batch_sleep", lambda seconds: None)
+    recorder = _RunnerRecorder(
+        {
+            "alpha": _ok_outcome(),
+            "beta": _ok_outcome(),
+        }
+    )
+    monkeypatch.setattr(batch, "batch_headless_runner", recorder)
+    loaded = batch.load_batch_spec(specification_path)
+    summary = batch.run_grok_batch(
+        batch_spec=loaded, run_state_directory=tmp_path / "run"
+    )
+    assert summary.is_preflight_usable
+    assert len(summary.all_worker_reports) == 2
+    all_session_ids = {
+        each.advisor_session_id for each in summary.all_worker_reports
+    }
+    assert all_session_ids == {"session-1", "session-2"}
+    assert all(
+        each.advisor_completion_signal == "ENDORSE"
+        for each in summary.all_worker_reports
+    )
+    assert all(
+        each.classification != "advisor_blocked"
+        for each in summary.all_worker_reports
+    )
+    for each_report in summary.all_worker_reports:
+        prompt_text = Path(each_report.prompt_path).read_text(encoding=UTF8_ENCODING)
+        assert each_report.advisor_session_id in prompt_text
+
+
+def test_advisor_failure_classifies_advisor_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    header_part, body_part = _write_prompt_parts(tmp_path, role_marker="solo")
+    payload = _worker_payload(
+        role_name="solo",
+        all_prompt_parts=[str(header_part), str(body_part)],
+        working_directory=tmp_path,
+        tool_profile=TOOL_PROFILE_BUILD,
+    )
+    specification_path = tmp_path / "batch-spec.json"
+    specification_path.write_text(
+        json.dumps(
+            {
+                "role": DEFAULT_ROLE,
+                "should_ping": False,
+                "workers": [payload],
+                "advisor": {"launcher": "fixture-advisor-launcher"},
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+
+    def failing_advisor(**kwargs: object) -> tuple[str | None, str, int]:
+        return None, "", 1
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", failing_advisor)
+    monkeypatch.setattr(
+        batch,
+        "batch_preflight",
+        lambda **kwargs: PreflightOutcome(is_usable=True, reason=None),
+    )
+    monkeypatch.setattr(batch, "batch_sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        batch,
+        "batch_headless_runner",
+        _RunnerRecorder({"solo": _ok_outcome()}),
+    )
+    loaded = batch.load_batch_spec(specification_path)
+    summary = batch.run_grok_batch(
+        batch_spec=loaded, run_state_directory=tmp_path / "run"
+    )
+    assert len(summary.all_worker_reports) == 1
+    report = summary.all_worker_reports[0]
+    assert report.classification == "advisor_blocked"
+    assert report.is_ok is False
+
+def test_bind_unique_worker_advisor_rejects_placeholder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(**kwargs: object) -> tuple[str | None, str, int]:
+        raise AssertionError("should not call launcher for placeholder")
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", boom)
+    with pytest.raises(ValueError, match="placeholder"):
+        batch.bind_unique_worker_advisor(
+            advisor_spec=batch.AdvisorSpec(launcher=batch.DEFAULT_ADVISOR_LAUNCHER_PLACEHOLDER),
+            role_name="lens",
+            all_used_session_ids=set(),
+        )
+
+
+def test_bind_unique_worker_advisor_returns_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(**kwargs: object) -> tuple[str | None, str, int]:
+        return "sess-unique-1", "ENDORSE\nok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake)
+    session_id, signal = batch.bind_unique_worker_advisor(
+        advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
+        role_name="lens",
+        all_used_session_ids=set(),
+    )
+    assert session_id == "sess-unique-1"
+    assert signal == "ENDORSE"
+
+
+def test_obtain_advisor_completion_verdict_endorses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake(**kwargs: object) -> tuple[str | None, str, int]:
+        return kwargs.get("session_id"), "ENDORSE\nok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake)
+    signal = batch.obtain_advisor_completion_verdict(
+        advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
+        role_name="lens",
+        session_id="sess-1",
+        report_text="done",
+    )
+    assert signal == "ENDORSE"
+
+
+def test_invoke_advisor_launcher_builds_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Completed:
+        returncode = 0
+        stdout = '{"session_id":"s1","result":"ENDORSE\\nok"}'
+        stderr = ""
+
+    def fake_run(args, **kwargs):  # type: ignore[no-untyped-def]  # subprocess.run stub for argv capture
+        captured["args"] = list(args)
+        captured["input"] = kwargs.get("input")
+        return _Completed()
+
+    monkeypatch.setattr(batch.subprocess, "run", fake_run)
+    session_id, body, code = batch.invoke_advisor_launcher(
+        launcher="fixture-advisor-launcher",
+        model="opus",
+        effort="high",
+        prompt_text="hello",
+    )
+    assert code == 0
+    assert session_id == "s1"
+    assert "ENDORSE" in body
+    assert captured["args"][0] == "fixture-advisor-launcher"
+    assert "--model" in captured["args"]
+
+
+def test_invoke_advisor_launcher_missing_binary_raises_advisor_failure() -> None:
+    try:
+        batch.invoke_advisor_launcher(
+            launcher="__no_such_advisor_launcher_xyz__",
+            model="opus",
+            effort="high",
+            prompt_text="ping",
+        )
+        raise AssertionError("expected AdvisorFailureError")
+    except batch.AdvisorFailureError as raised:
+        assert "not found" in str(raised).lower() or "launcher" in str(raised).lower()
+
+
+def test_invoke_advisor_launcher_passes_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Completed:
+        returncode = 0
+        stdout = '{"session_id":"s-timeout","result":"ENDORSE\\nok"}'
+        stderr = ""
+
+    def fake_run(args, **kwargs):  # type: ignore[no-untyped-def]  # subprocess.run stub
+        captured["timeout"] = kwargs.get("timeout")
+        return _Completed()
+
+    monkeypatch.setattr(batch.subprocess, "run", fake_run)
+    batch.invoke_advisor_launcher(
+        launcher="fixture-advisor-launcher",
+        model="opus",
+        effort="high",
+        prompt_text="hello",
+    )
+    assert captured["timeout"] == batch.MAXIMUM_ADVISOR_TIMEOUT_SECONDS

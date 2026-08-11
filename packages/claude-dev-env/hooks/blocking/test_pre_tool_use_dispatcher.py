@@ -14,6 +14,7 @@ fail-open malformed input.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -39,12 +40,26 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
     HostedHookEntry,
 )
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
+    DispatcherDecision,
     HostedHookResult,
+    _emit_deny_decision,
     aggregate_hosted_hook_results,
     run_hosted_hook,
+    unique_first_seen_strings,
 )
 
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
+
+_PROSE_STYLE_ENV_VAR = "CLAUDE_PROSE_STYLE_ENFORCEMENT"
+_PROSE_STYLE_ENV_VALUE = "1"
+
+
+def _subprocess_environment() -> dict[str, str]:
+    """Return process env with opinionated prose gates enabled for golden tests."""
+    environment_by_key = os.environ.copy()
+    environment_by_key[_PROSE_STYLE_ENV_VAR] = _PROSE_STYLE_ENV_VALUE
+    return environment_by_key
+
 
 _TEMP_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.txt")
 _MARKDOWN_FILE_PATH = str(_HOOKS_ROOT.parent.parent.parent / "tmp" / "dispatcher_test_dummy.md")
@@ -70,6 +85,7 @@ def _run_hook_subprocess(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_subprocess_environment(),
     )
 
 
@@ -89,6 +105,7 @@ def _run_dispatcher(payload_text: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=_subprocess_environment(),
     )
 
 
@@ -272,8 +289,8 @@ def test_clean_write_allows_on_multi_edit_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
-def test_plain_language_denial_on_write_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies a Write of heavy prose."""
+def test_plain_language_heavy_prose_allows_on_write_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose allows (OP-07D advisory)."""
     payload_text = _write_payload(
         _MARKDOWN_FILE_PATH,
         "# Guide\n\nPlease utilize this functionality to commence the process.\n",
@@ -281,8 +298,8 @@ def test_plain_language_denial_on_write_of_markdown_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
 
-def test_plain_language_denial_on_edit_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies an Edit with heavy prose."""
+def test_plain_language_heavy_prose_allows_on_edit_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose Edit allows (OP-07D)."""
     payload_text = _edit_payload(
         _MARKDOWN_FILE_PATH,
         "old line",
@@ -291,8 +308,8 @@ def test_plain_language_denial_on_edit_of_markdown_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
 
 
-def test_plain_language_denial_on_multi_edit_of_markdown_file() -> None:
-    """Dispatcher denies when plain_language_blocker denies a MultiEdit with heavy prose."""
+def test_plain_language_heavy_prose_allows_on_multi_edit_of_markdown_file() -> None:
+    """Dispatcher matches individual hooks: heavy prose MultiEdit allows (OP-07D)."""
     payload_text = _multi_edit_payload(
         _MARKDOWN_FILE_PATH,
         [{"old_string": "old", "new_string": "Please utilize this functionality to commence."}],
@@ -300,16 +317,23 @@ def test_plain_language_denial_on_multi_edit_of_markdown_file() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
+def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
+    """The dispatcher docstring names the roster, not per-tool counts that drift."""
+    dispatcher_source = Path(_DISPATCHER_SCRIPT).read_text(encoding="utf-8")
+    assert "ALL_HOSTED_HOOK_ENTRIES" in dispatcher_source
+    assert "-> 20 hooks" not in dispatcher_source
+    assert "-> 21 hooks" not in dispatcher_source
+    assert "-> 9 hooks" not in dispatcher_source
+
+
 def test_multi_edit_runs_only_group_b_hooks() -> None:
     """Dispatcher invokes only Group-B hooks on MultiEdit, not Group-A hooks.
 
-    A plain_language_blocker denial on a MultiEdit proves Group B runs.
     The write_existing_file_blocker (Group A only) must not run on MultiEdit,
     so a MultiEdit to any path that would trip a Group-A hook must still allow.
-    This test proves Group A does not run on MultiEdit by asserting:
-    1. Group-B (plain_language_blocker) fires on MultiEdit for a markdown file
-       with heavy prose.
-    2. The set of applicable entries for MultiEdit contains no Group-A entries.
+    Heavy prose no longer denies (OP-07D); this test proves Group A is absent
+    from MultiEdit and that plain_language_blocker stays in the MultiEdit set
+    and still runs (allow-with-advisory on heavy prose).
     """
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
     all_write_only_entries = [
@@ -325,15 +349,20 @@ def test_multi_edit_runs_only_group_b_hooks() -> None:
             f"Group-A hook {each_group_a_entry.script_relative_path!r} "
             "appears in the MultiEdit applicable set — it must not"
         )
+    assert "blocking/plain_language_blocker.py" in all_multi_edit_script_paths, (
+        "plain_language_blocker (Group B) must stay in the MultiEdit applicable set"
+    )
     heavy_prose_payload = _multi_edit_payload(
         _MARKDOWN_FILE_PATH,
         [{"old_string": "old line", "new_string": "Utilize this to commence the process."}],
     )
     dispatcher_result = _run_dispatcher(heavy_prose_payload)
     dispatcher_is_deny, _reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny, (
-        "Dispatcher should deny a MultiEdit with heavy prose (plain_language_blocker "
-        "is a Group-B hook and must run on MultiEdit)"
+    assert not dispatcher_is_deny, (
+        "Dispatcher should allow MultiEdit heavy prose (OP-07D advisory path)"
+    )
+    assert dispatcher_result.stdout.strip(), (
+        "plain_language_blocker should emit an allow advisory on MultiEdit heavy prose"
     )
 
 
@@ -422,16 +451,17 @@ def test_context_survives_alongside_deny_reason(
 def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
     """When two or more hooks deny, all their reasons appear in the dispatcher output.
 
-    Uses a Write to a .md file carrying both a historical phrase ("previously")
-    and a heavy word ("utilize") so state_description_blocker (Group A) and
-    plain_language_blocker (Group B) both deny deterministically with no
-    real-filesystem dependency.
+    Uses a Write to an existing markdown path with a historical phrase
+    ("previously") so write_existing_file_blocker and state_description_blocker
+    both deny. Heavy words no longer hard-deny (OP-07D), so plain_language is
+    not a denier.
     """
+    existing_markdown_path = str(Path(__file__).resolve().parent / "CLAUDE.md")
     multi_deny_content = (
         "# Guide\n\n"
-        "Previously the system utilized a different mechanism.\n"
+        "Previously the system used a different mechanism.\n"
     )
-    payload_text = _write_payload(_MARKDOWN_FILE_PATH, multi_deny_content)
+    payload_text = _write_payload(existing_markdown_path, multi_deny_content)
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
     dispatcher_result = _run_dispatcher(payload_text)
@@ -448,8 +478,8 @@ def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
 
     assert len(all_expected_deny_reasons) >= 2, (
         f"Test payload must trip at least two hooks — got {len(all_expected_deny_reasons)}. "
-        "Check that 'previously' triggers state_description_blocker and 'utilized' "
-        "triggers plain_language_blocker on a .md Write."
+        "Check that an existing path triggers write_existing_file_blocker and "
+        "'previously' triggers state_description_blocker on a Write."
     )
     for each_reason in all_expected_deny_reasons:
         assert each_reason in dispatcher_reason, (
@@ -604,16 +634,68 @@ def test_aggregate_explicit_allow_is_overridden_by_a_deny() -> None:
     )
 
 
+def test_unique_first_seen_strings_keeps_order_and_drops_exact_duplicates() -> None:
+    assert unique_first_seen_strings(["a", "b", "a", "c", "b"]) == ["a", "b", "c"]
+    assert unique_first_seen_strings(["Same", "same"]) == ["Same", "same"]
+
+
+def test_emit_deny_collapses_identical_reasons_and_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Final JSON keeps each exact string once; distinct reasons stay; suppress stays."""
+    shared_text = "BLOCKED: same corrective text"
+    decision = DispatcherDecision(
+        should_deny=True,
+        should_allow=False,
+        all_deny_reasons=[shared_text, "BLOCKED: other reason", shared_text],
+        all_system_messages=[shared_text, shared_text, "other notice"],
+        all_additional_context=["ctx-a", "ctx-a", "ctx-b"],
+        should_suppress_output=True,
+    )
+    _emit_deny_decision(decision)
+    captured = capsys.readouterr().out
+    parsed = json.loads(captured)
+    reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason == f"{shared_text} | BLOCKED: other reason"
+    assert reason.count(shared_text) == 1
+    system_message = parsed["systemMessage"]
+    assert system_message == f"{shared_text}\nother notice"
+    assert parsed["hookSpecificOutput"]["additionalContext"] == "ctx-a\nctx-b"
+    assert parsed["suppressOutput"] is True
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_emit_deny_does_not_cross_collapse_reason_and_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A deny reason equal to a systemMessage string stays in both fields."""
+    shared_text = "identical across fields"
+    decision = DispatcherDecision(
+        should_deny=True,
+        should_allow=False,
+        all_deny_reasons=[shared_text],
+        all_system_messages=[shared_text],
+        all_additional_context=[shared_text],
+        should_suppress_output=False,
+    )
+    _emit_deny_decision(decision)
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["hookSpecificOutput"]["permissionDecisionReason"] == shared_text
+    assert parsed["systemMessage"] == shared_text
+    assert parsed["hookSpecificOutput"]["additionalContext"] == shared_text
+
+
 def test_later_hook_deny_survives_early_hook_exit() -> None:
     """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
 
-    plain_language_blocker (Group B, last in order) denies a markdown write with heavy
-    prose. Earlier hooks exit 0 (allow). The dispatcher must catch each hook's
-    SystemExit and continue, so the later denial reaches the aggregator.
+    state_description_blocker denies a markdown write with a historical phrase.
+    Earlier hooks exit 0 (allow). Heavy words no longer hard-deny (OP-07D). The
+    dispatcher must catch each hook's SystemExit and continue, so the later
+    denial reaches the aggregator.
     """
     payload_text = _write_payload(
         _MARKDOWN_FILE_PATH,
-        "# Doc\n\nThis section attempts to facilitate the utilization of this functionality.\n",
+        "# Doc\n\nPreviously this section used a different mechanism.\n",
     )
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
@@ -633,8 +715,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
         "plain_language_blocker (Group B) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 21, (
-        f"Write tool must apply to all 21 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 19, (
+        f"Write tool must apply to all 19 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -647,6 +729,9 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
         "stale_comment_reference_blocker belongs in the Edit applicable set"
     )
+    assert "advisory/refactor_guard.py" in all_edit_script_paths, (
+        "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
+    )
     assert len(all_edit_entries) == 22, (
         f"expected 22 Edit entries, got {len(all_edit_entries)}"
     )
@@ -655,8 +740,8 @@ def test_dispatcher_edit_applies_both_groups() -> None:
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
     """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 10, (
-        f"MultiEdit tool must apply to exactly 10 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 9, (
+        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -667,7 +752,7 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
     A Python Write payload that run_all_validators would have flagged (mypy errors, for
     instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 22 hosted blocking hooks — none of which includes the
+    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
     validators runner.
     """
     python_content_with_type_error = (
@@ -835,6 +920,35 @@ def test_runpy_hosted_hook_sees_its_own_argv_not_the_dispatchers(tmp_path: Path)
     )
 
 
+def test_folded_write_edit_hooks_have_no_standalone_hooks_json_entry() -> None:
+    """A hook the dispatcher hosts must not also run as its own process.
+
+    Each folded hook spawns an interpreter of its own when hooks.json still
+    registers it, so the fold only pays off once the standalone entry is gone.
+    """
+    hooks_json_text = (_HOOKS_ROOT / "hooks.json").read_text(encoding="utf-8")
+    hooks_configuration = json.loads(hooks_json_text)
+    all_pre_tool_use_commands = [
+        each_hook["command"]
+        for each_group in hooks_configuration["hooks"]["PreToolUse"]
+        for each_hook in each_group["hooks"]
+    ]
+    folded_script_relative_paths = (
+        "advisory/refactor_guard.py",
+        "advisory/migration_safety_advisor.py",
+    )
+    for each_script_path in folded_script_relative_paths:
+        matching_commands = [
+            each_command
+            for each_command in all_pre_tool_use_commands
+            if each_script_path in each_command
+        ]
+        assert not matching_commands, (
+            f"{each_script_path} is hosted by the dispatcher, so its standalone "
+            f"hooks.json entry must be gone. Found: {matching_commands!r}"
+        )
+
+
 def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
     """The hosted hook set covers all previously-registered Write/Edit blocking hooks.
 
@@ -855,7 +969,6 @@ def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
         "blocking/state_description_blocker.py",
         "blocking/subprocess_budget_completeness.py",
         "blocking/hook_prose_detector_consistency.py",
-        "blocking/verified_commit_message_accuracy_blocker.py",
         "blocking/workflow_substitution_slot_blocker.py",
         "blocking/claude_md_orphan_file_blocker.py",
         "blocking/pytest_testpaths_orphan_blocker.py",

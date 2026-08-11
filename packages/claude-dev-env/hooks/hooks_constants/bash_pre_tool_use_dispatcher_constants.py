@@ -56,31 +56,21 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/es_exe_path_rewriter.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/destructive_command_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry("blocking/shell_substitution_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry("blocking/piped_pytest_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry(
+        "blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    ),
     BashHostedHookEntry("blocking/nas_ssh_binary_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/volatile_path_in_post_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry(
         "blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
     ),
     BashHostedHookEntry("blocking/conventional_pr_title_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/reviewer_spawn_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/block_main_commit.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/precommit_code_rules_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/session_edit_stage_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/pr_description_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/test_preflight_check.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/convergence_gate_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/windows_rmtree_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_pr_author_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/verified_commit_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/verdict_directory_write_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
-    BashHostedHookEntry("blocking/code_review_push_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/code_review_pr_create_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
-    BashHostedHookEntry(
-        "blocking/code_review_stamp_directory_write_blocker.py",
-        ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
-    ),
 )

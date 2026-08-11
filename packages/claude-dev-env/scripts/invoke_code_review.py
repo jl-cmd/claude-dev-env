@@ -8,26 +8,23 @@ Mode decision::
     host=ThirdParty, any model        -> mode chain
 
 Chain mode runs ``run_claude`` with argv from ``build_code_review_arguments``
-(single-turn prompt, model opus, json output, bypassPermissions).
+(single-turn prompt, model opus, json output, and the permission mode this
+caller is allowed to ask the review binary for).
 
 cwd is the PR working tree and stdin is redirected from the empty stream so
 the spawn does not wait for interactive input. Result JSON on stdout only::
 
     {"mode", "served_command", "returncode", "dirty_tree"}
 
-``--record-stamp`` forces chain mode, loops a capped number of review passes,
-and mints a clean stamp only when a pass exits 0 with a stable surface hash.
-
 Import ``invoke_code_review`` for the outcome object, or run as a CLI::
 
     python invoke_code_review.py --cwd <dir> --session-model <alias>
-        [--timeout-seconds N] [--record-stamp] [effort]
+        [--timeout-seconds N] [effort]
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import subprocess
 import sys
@@ -35,7 +32,6 @@ import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -63,7 +59,6 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     ALL_EFFORT_TOKENS_IN_ASCENDING_ORDER,
     CLI_EFFORT_HELP,
     CLI_EFFORT_METAVAR,
-    CLI_RECORD_STAMP_HELP,
     CLI_SESSION_MODEL_FLAG,
     CODE_REVIEW_FIX_FLAG,
     CODE_REVIEW_MODEL_ALIAS,
@@ -77,27 +72,14 @@ from dev_env_scripts_constants.code_review_constants import (  # noqa: E402
     IN_SESSION_RETURNCODE,
     INVALID_EFFORT_MESSAGE,
     INVALID_EFFORT_RETURNCODE,
-    MAXIMUM_STAMP_MINT_PASSES,
     MODE_CHAIN,
     MODE_IN_SESSION,
-    PERMISSION_MODE_BYPASS,
+    REVIEW_PERMISSION_MODE as PERMISSION_MODE_BYPASS,
     PERMISSION_MODE_FLAG,
-    RECORD_STAMP_FLAG,
-    RESULT_KEY_BOUND_HASH,
     RESULT_KEY_DIRTY_TREE,
     RESULT_KEY_MODE,
-    RESULT_KEY_PASS_COUNT,
     RESULT_KEY_RETURNCODE,
     RESULT_KEY_SERVED_COMMAND,
-    RESULT_KEY_STAMP_MINTED,
-    STAMP_DID_NOT_CONVERGE_MESSAGE,
-    STAMP_DID_NOT_CONVERGE_RETURNCODE,
-    STAMP_STORE_IMPORT_FAILURE_MESSAGE,
-    STAMP_STORE_LIVE_SURFACE_HASH_NAME,
-    STAMP_STORE_MODULE_FILE_NAME,
-    STAMP_STORE_MODULE_NAME,
-    STAMP_STORE_RECORD_CLEAN_STAMP_NAME,
-    STAMP_STORE_RESOLVE_REPO_ROOT_NAME,
     SUCCESSFUL_REVIEW_RETURNCODE,
 )
 from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
@@ -138,25 +120,6 @@ class CodeReviewOutcome:
     is_dirty_tree: bool
 
 
-@dataclass(frozen=True)
-class StampMintOutcome:
-    """Outcome of a ``--record-stamp`` minting run.
-
-    ::
-
-        stable rc 0 pass  -> is_stamp_minted True, bound_hash set
-        cap hit / unstable -> is_stamp_minted False, non-zero returncode
-
-    The attributes carry the last review, whether a stamp was minted, the pass
-    count, and the surface hash the stamp was bound to when minted.
-    """
-
-    review_outcome: CodeReviewOutcome
-    is_stamp_minted: bool
-    pass_count: int
-    bound_hash: str | None
-
-
 review_claude_runner = run_claude
 review_host_profile_detector = detect_host_profile
 review_git_status_runner = subprocess.run
@@ -165,65 +128,6 @@ TextCapturingSubprocessRunner = Callable[
     ...,
     subprocess.CompletedProcess[str],
 ]
-
-
-def _stamp_store_file_path() -> Path:
-    """Return the stamp store module path in the sibling hooks/blocking tree."""
-    blocking_directory = Path(__file__).resolve().parent.parent / "hooks" / "blocking"
-    return blocking_directory / STAMP_STORE_MODULE_FILE_NAME
-
-
-def _load_store_from_spec(store_file_path: Path) -> ModuleType:
-    """Import the stamp store from *store_file_path*, re-raising a missing dep."""
-    blocking_directory_string = str(store_file_path.parent)
-    if blocking_directory_string not in sys.path:
-        sys.path.insert(0, blocking_directory_string)
-    module_spec = importlib.util.spec_from_file_location(
-        STAMP_STORE_MODULE_NAME, store_file_path
-    )
-    if module_spec is None or module_spec.loader is None:
-        raise ModuleNotFoundError(
-            f"could not create import spec for {store_file_path}",
-            name=STAMP_STORE_MODULE_NAME,
-        )
-    store_module = importlib.util.module_from_spec(module_spec)
-    sys.modules[STAMP_STORE_MODULE_NAME] = store_module
-    try:
-        module_spec.loader.exec_module(store_module)
-    except ModuleNotFoundError:
-        del sys.modules[STAMP_STORE_MODULE_NAME]
-        raise
-    return store_module
-
-
-def load_code_review_stamp_store() -> ModuleType:
-    """Import the stamp store module from the installed or repo hooks tree.
-
-    ::
-
-        code_review_stamp_store.py present -> module with record_clean_stamp
-        module file missing                -> ModuleNotFoundError (loud)
-
-    A genuine missing dependency of the store still raises rather than being
-    swallowed, so ``--record-stamp`` fails loudly when it cannot mint.
-
-    Returns:
-        The loaded ``code_review_stamp_store`` module.
-
-    Raises:
-        ModuleNotFoundError: When the store file is absent or a real import
-            dependency of the store is missing.
-    """
-    store_file_path = _stamp_store_file_path()
-    if not store_file_path.is_file():
-        raise ModuleNotFoundError(
-            f"code review stamp store not found at {store_file_path}",
-            name=STAMP_STORE_MODULE_NAME,
-        )
-    cached_module = sys.modules.get(STAMP_STORE_MODULE_NAME)
-    if cached_module is not None:
-        return cached_module
-    return _load_store_from_spec(store_file_path)
 
 
 def is_opus_session_model(session_model: str) -> bool:
@@ -344,8 +248,7 @@ def is_working_tree_dirty(working_directory: Path) -> bool:
         is_working_tree_dirty(dirty_repo)  # ok: True
         is_working_tree_dirty(broken_git)  # ok: True (non-zero status)
 
-    A non-zero ``git status`` return code must not report clean: the caller
-    treats an unknown tree as dirty so a clean stamp cannot bypass the gate.
+    A non-zero ``git status`` return code reports a dirty tree.
 
     Args:
         working_directory: Git working tree to inspect.
@@ -383,8 +286,7 @@ def is_successful_code_review(review_outcome: CodeReviewOutcome) -> bool:
         review_outcome: Structured outcome from ``invoke_code_review``.
 
     Returns:
-        True when the outcome is a successful serve that may stamp clean if
-        the working tree is also clean.
+        True when the outcome is a successful review serve.
     """
     if review_outcome.returncode != SUCCESSFUL_REVIEW_RETURNCODE:
         return False
@@ -392,31 +294,6 @@ def is_successful_code_review(review_outcome: CodeReviewOutcome) -> bool:
         return False
     return True
 
-
-def is_code_review_clean_stamp_allowed(review_outcome: CodeReviewOutcome) -> bool:
-    """Return True when the outcome may set ``code_review_clean_at``.
-
-    ::
-
-        is_code_review_clean_stamp_allowed(chain_clean_ok)     # ok: True
-        is_code_review_clean_stamp_allowed(chain_failed)       # ok: False
-        is_code_review_clean_stamp_allowed(chain_dirty_ok)     # ok: False
-
-    Clean stamp requires a successful serve and a clean working tree.
-    ``dirty_tree`` alone is not enough: a failed chain leaves the tree clean
-    and must stay in CODE_REVIEW.
-
-    Args:
-        review_outcome: Structured outcome from ``invoke_code_review``.
-
-    Returns:
-        True only when the review succeeded and ``is_dirty_tree`` is False.
-    """
-    if not is_successful_code_review(review_outcome):
-        return False
-    if review_outcome.is_dirty_tree:
-        return False
-    return True
 
 def _run_claude_with_empty_stdin(
     all_claude_arguments: list[str],
@@ -495,6 +372,7 @@ def _failure_code_review_outcome(returncode: int) -> CodeReviewOutcome:
         is_dirty_tree=False,
     )
 
+
 def _run_chain_review(
     *,
     working_directory: Path,
@@ -507,6 +385,8 @@ def _run_chain_review(
         timeout_seconds=timeout_seconds,
         working_directory=working_directory,
     )
+    if chain_outcome.returncode != SUCCESSFUL_REVIEW_RETURNCODE and chain_outcome.stderr:
+        sys.stderr.write(chain_outcome.stderr.strip() + "\n")
     return _chain_outcome(chain_outcome, working_directory=working_directory)
 
 
@@ -516,34 +396,24 @@ def invoke_code_review(
     session_model: str,
     timeout_seconds: int,
     effort: str = DEFAULT_CODE_REVIEW_EFFORT,
-    is_force_chain: bool = False,
 ) -> CodeReviewOutcome:
     """Run or hand off ``/code-review`` based on host profile and session model.
 
     ::
 
-        Claude + opus, is_force_chain False -> in_session (no spawn)
-        Claude + opus, is_force_chain True  -> chain (headless spawn)
-        any host with sonnet                -> chain
+        Claude + opus  -> in_session (no spawn)
+        any host with sonnet -> chain (headless spawn)
 
     Args:
         working_directory: PR working tree used as cwd for the chain spawn.
         session_model: Caller-stated session model short alias.
         timeout_seconds: Timeout applied to each chain binary invocation.
         effort: Effort token embedded in the ``/code-review`` prompt.
-        is_force_chain: When True, always spawn chain mode (used by
-            ``--record-stamp`` so the invoker observes the review).
 
     Returns:
         Structured outcome including mode, served binary, return code, and
         whether the working tree is dirty after a chain run.
     """
-    if is_force_chain:
-        return _run_chain_review(
-            working_directory=working_directory,
-            timeout_seconds=timeout_seconds,
-            effort=effort,
-        )
     host_profile = review_host_profile_detector()
     review_mode = decide_review_mode(
         host_profile=host_profile,
@@ -555,188 +425,6 @@ def invoke_code_review(
         working_directory=working_directory,
         timeout_seconds=timeout_seconds,
         effort=effort,
-    )
-
-
-def _surface_hash_before_and_after_are_stable(
-    before_hash: str | None,
-    after_hash: str | None,
-) -> bool:
-    if before_hash is None:
-        return False
-    if after_hash is None:
-        return False
-    return before_hash == after_hash
-
-
-def _mint_stamp_for_stable_pass(
-    *,
-    store_module: ModuleType,
-    working_directory: Path,
-    surface_hash: str,
-    effort: str,
-) -> bool:
-    resolve_repo_root = getattr(store_module, STAMP_STORE_RESOLVE_REPO_ROOT_NAME)
-    record_clean_stamp = getattr(store_module, STAMP_STORE_RECORD_CLEAN_STAMP_NAME)
-    repo_root = resolve_repo_root(str(working_directory))
-    if repo_root is None:
-        return False
-    record_clean_stamp(repo_root, surface_hash, effort)
-    return True
-
-
-def _mint_outcome_when_stable_clean(
-    *,
-    store_module: ModuleType,
-    working_directory: Path,
-    effort: str,
-    pass_number: int,
-    before_hash: str,
-    review_outcome: CodeReviewOutcome,
-) -> StampMintOutcome | None:
-    is_minted = _mint_stamp_for_stable_pass(
-        store_module=store_module,
-        working_directory=working_directory,
-        surface_hash=before_hash,
-        effort=effort,
-    )
-    if not is_minted:
-        return None
-    return StampMintOutcome(
-        review_outcome=review_outcome,
-        is_stamp_minted=True,
-        pass_count=pass_number,
-        bound_hash=before_hash,
-    )
-
-
-def _unminted_pass_outcome(
-    review_outcome: CodeReviewOutcome, pass_number: int
-) -> StampMintOutcome:
-    return StampMintOutcome(
-        review_outcome=review_outcome,
-        is_stamp_minted=False,
-        pass_count=pass_number,
-        bound_hash=None,
-    )
-
-
-def _stamp_outcome_for_pass(
-    *,
-    store_module: ModuleType,
-    working_directory: Path,
-    effort: str,
-    pass_number: int,
-    before_hash: str | None,
-    after_hash: str | None,
-    review_outcome: CodeReviewOutcome,
-) -> StampMintOutcome | None:
-    is_stable = _surface_hash_before_and_after_are_stable(before_hash, after_hash)
-    is_successful = is_successful_code_review(review_outcome)
-    is_empty_surface = before_hash is None and after_hash is None
-    if is_successful and is_empty_surface:
-        return _unminted_pass_outcome(review_outcome, pass_number)
-    if is_successful and is_stable and before_hash is not None:
-        minted = _mint_outcome_when_stable_clean(
-            store_module=store_module,
-            working_directory=working_directory,
-            effort=effort,
-            pass_number=pass_number,
-            before_hash=before_hash,
-            review_outcome=review_outcome,
-        )
-        if minted is not None:
-            return minted
-    if is_stable:
-        return _unminted_pass_outcome(review_outcome, pass_number)
-    return None
-
-
-def _run_one_stamp_mint_pass(
-    *,
-    store_module: ModuleType,
-    live_surface_hash: Callable[..., str | None],
-    working_directory: Path,
-    timeout_seconds: int,
-    effort: str,
-    pass_number: int,
-) -> tuple[CodeReviewOutcome, StampMintOutcome | None]:
-    before_hash = live_surface_hash(str(working_directory))
-    review_outcome = invoke_code_review(
-        working_directory=working_directory,
-        session_model=CODE_REVIEW_MODEL_ALIAS,
-        timeout_seconds=timeout_seconds,
-        effort=effort,
-        is_force_chain=True,
-    )
-    after_hash = live_surface_hash(str(working_directory))
-    maybe_outcome = _stamp_outcome_for_pass(
-        store_module=store_module,
-        working_directory=working_directory,
-        effort=effort,
-        pass_number=pass_number,
-        before_hash=before_hash,
-        after_hash=after_hash,
-        review_outcome=review_outcome,
-    )
-    return review_outcome, maybe_outcome
-
-
-def _iterate_stamp_mint_passes(
-    *,
-    store_module: ModuleType,
-    live_surface_hash: Callable[..., str | None],
-    working_directory: Path,
-    timeout_seconds: int,
-    effort: str,
-    maximum_passes: int,
-) -> StampMintOutcome:
-    last_review_outcome = _failure_code_review_outcome(
-        STAMP_DID_NOT_CONVERGE_RETURNCODE
-    )
-    for each_pass_number in range(1, maximum_passes + 1):
-        last_review_outcome, maybe_mint_outcome = _run_one_stamp_mint_pass(
-            store_module=store_module,
-            live_surface_hash=live_surface_hash,
-            working_directory=working_directory,
-            timeout_seconds=timeout_seconds,
-            effort=effort,
-            pass_number=each_pass_number,
-        )
-        if maybe_mint_outcome is not None:
-            return maybe_mint_outcome
-    return _unminted_pass_outcome(last_review_outcome, maximum_passes)
-
-
-def invoke_code_review_and_record_stamp(
-    *,
-    working_directory: Path,
-    session_model: str,
-    timeout_seconds: int,
-    effort: str,
-    maximum_passes: int = MAXIMUM_STAMP_MINT_PASSES,
-) -> StampMintOutcome:
-    """Force chain review passes until the surface is stable, then mint a stamp.
-
-    Args:
-        working_directory: PR working tree used as cwd for each chain spawn.
-        session_model: Session model short alias (unused; chain mode forced).
-        timeout_seconds: Timeout applied to each chain binary invocation.
-        effort: Effort token the clean review records on the stamp.
-        maximum_passes: Hard cap on review passes before giving up.
-
-    Returns:
-        A StampMintOutcome for the last review and whether a stamp was minted.
-    """
-    del session_model
-    store_module = load_code_review_stamp_store()
-    return _iterate_stamp_mint_passes(
-        store_module=store_module,
-        live_surface_hash=getattr(store_module, STAMP_STORE_LIVE_SURFACE_HASH_NAME),
-        working_directory=working_directory,
-        timeout_seconds=timeout_seconds,
-        effort=effort,
-        maximum_passes=maximum_passes,
     )
 
 
@@ -757,27 +445,6 @@ def encode_code_review_outcome(
         RESULT_KEY_RETURNCODE: review_outcome.returncode,
         RESULT_KEY_DIRTY_TREE: review_outcome.is_dirty_tree,
     }
-
-
-def encode_stamp_mint_outcome(
-    mint_outcome: StampMintOutcome,
-) -> dict[str, object]:
-    """Encode a stamp-mint outcome as the JSON-serializable payload.
-
-    Args:
-        mint_outcome: The ``--record-stamp`` outcome to encode.
-
-    Returns:
-        A plain dict with the review fields plus mint metadata.
-    """
-    encoded_payload = encode_code_review_outcome(mint_outcome.review_outcome)
-    encoded_payload[RESULT_KEY_STAMP_MINTED] = mint_outcome.is_stamp_minted
-    encoded_payload[RESULT_KEY_PASS_COUNT] = mint_outcome.pass_count
-    encoded_payload[RESULT_KEY_BOUND_HASH] = mint_outcome.bound_hash
-    if not mint_outcome.is_stamp_minted:
-        if mint_outcome.pass_count >= MAXIMUM_STAMP_MINT_PASSES:
-            encoded_payload[RESULT_KEY_RETURNCODE] = STAMP_DID_NOT_CONVERGE_RETURNCODE
-    return encoded_payload
 
 
 def _add_review_arguments(parser: argparse.ArgumentParser) -> None:
@@ -803,13 +470,7 @@ def _add_review_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_stamp_and_effort_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        RECORD_STAMP_FLAG,
-        dest="is_record_stamp",
-        action="store_true",
-        help=CLI_RECORD_STAMP_HELP,
-    )
+def _add_effort_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         CLI_EFFORT_METAVAR,
         nargs="?",
@@ -825,7 +486,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         )
     )
     _add_review_arguments(parser)
-    _add_stamp_and_effort_arguments(parser)
+    _add_effort_argument(parser)
     return parser
 
 
@@ -835,94 +496,6 @@ def _emit_invalid_effort_and_exit_code(effort: str) -> int:
         return SUCCESSFUL_REVIEW_RETURNCODE
     sys.stderr.write(error_message + "\n")
     return INVALID_EFFORT_RETURNCODE
-
-
-def _import_failure_payload() -> dict[str, object]:
-    failure_outcome = _failure_code_review_outcome(INVALID_EFFORT_RETURNCODE)
-    encoded_payload = encode_code_review_outcome(failure_outcome)
-    encoded_payload[RESULT_KEY_STAMP_MINTED] = False
-    encoded_payload[RESULT_KEY_PASS_COUNT] = 0
-    encoded_payload[RESULT_KEY_BOUND_HASH] = None
-    return encoded_payload
-
-
-def _no_mint_outcome(returncode: int) -> StampMintOutcome:
-    return StampMintOutcome(
-        review_outcome=_failure_code_review_outcome(returncode),
-        is_stamp_minted=False,
-        pass_count=0,
-        bound_hash=None,
-    )
-
-
-def _mint_or_config_outcome(
-    *,
-    working_directory: Path,
-    session_model: str,
-    timeout_seconds: int,
-    effort: str,
-) -> StampMintOutcome:
-    try:
-        return invoke_code_review_and_record_stamp(
-            working_directory=working_directory,
-            session_model=session_model,
-            timeout_seconds=timeout_seconds,
-            effort=effort,
-        )
-    except ChainConfigurationError:
-        return _no_mint_outcome(CHAIN_CONFIG_ERROR_EXIT_CODE)
-    except ValueError:
-        return _no_mint_outcome(HOST_PROFILE_ERROR_RETURNCODE)
-
-
-def _emit_import_failure(import_error: ModuleNotFoundError) -> int:
-    sys.stderr.write(
-        STAMP_STORE_IMPORT_FAILURE_MESSAGE.format(error=import_error) + "\n"
-    )
-    sys.stdout.write(json.dumps(_import_failure_payload()) + "\n")
-    return INVALID_EFFORT_RETURNCODE
-
-
-def _record_stamp_exit_code(mint_outcome: StampMintOutcome) -> int:
-    if mint_outcome.is_stamp_minted:
-        return mint_outcome.review_outcome.returncode
-    if mint_outcome.pass_count >= MAXIMUM_STAMP_MINT_PASSES:
-        return STAMP_DID_NOT_CONVERGE_RETURNCODE
-    return mint_outcome.review_outcome.returncode
-
-
-def _emit_mint_outcome(mint_outcome: StampMintOutcome) -> int:
-    encoded_payload = encode_stamp_mint_outcome(mint_outcome)
-    did_not_converge = (
-        not mint_outcome.is_stamp_minted
-        and mint_outcome.pass_count >= MAXIMUM_STAMP_MINT_PASSES
-    )
-    if did_not_converge:
-        sys.stderr.write(
-            STAMP_DID_NOT_CONVERGE_MESSAGE.format(pass_count=mint_outcome.pass_count)
-            + "\n"
-        )
-    sys.stdout.write(json.dumps(encoded_payload) + "\n")
-    return _record_stamp_exit_code(mint_outcome)
-
-
-def _run_record_stamp_cli(
-    *,
-    working_directory: Path,
-    session_model: str,
-    timeout_seconds: int,
-    effort: str,
-) -> int:
-    try:
-        mint_outcome = _mint_or_config_outcome(
-            working_directory=working_directory,
-            session_model=session_model,
-            timeout_seconds=timeout_seconds,
-            effort=effort,
-        )
-    except ModuleNotFoundError as import_error:
-        return _emit_import_failure(import_error)
-    return _emit_mint_outcome(mint_outcome)
 
 
 def _run_plain_review_cli(*, parsed_arguments: argparse.Namespace, effort: str) -> int:
@@ -944,9 +517,7 @@ def _run_plain_review_cli(*, parsed_arguments: argparse.Namespace, effort: str) 
 def main(all_command_arguments: list[str]) -> int:
     """Run the invoker for CLI arguments and print the JSON outcome.
 
-    ``--record-stamp`` forces chain mode and mints only on a surface-stable
-    returncode-0 pass; an unknown or ``ultra`` effort exits non-zero before any
-    review runs.
+    An unknown or ``ultra`` effort exits non-zero before any review runs.
 
     Args:
         all_command_arguments: The argument vector after the program name.
@@ -961,13 +532,6 @@ def main(all_command_arguments: list[str]) -> int:
     invalid_effort_exit_code = _emit_invalid_effort_and_exit_code(effort_token)
     if invalid_effort_exit_code != SUCCESSFUL_REVIEW_RETURNCODE:
         return invalid_effort_exit_code
-    if parsed_arguments.is_record_stamp:
-        return _run_record_stamp_cli(
-            working_directory=parsed_arguments.working_directory,
-            session_model=parsed_arguments.session_model,
-            timeout_seconds=parsed_arguments.timeout_seconds,
-            effort=effort_token,
-        )
     return _run_plain_review_cli(parsed_arguments=parsed_arguments, effort=effort_token)
 
 

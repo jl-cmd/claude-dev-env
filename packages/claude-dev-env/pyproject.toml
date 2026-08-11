@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 [project.optional-dependencies]
 dev = [
     "pytest-xdist>=3.0",
+    "PyYAML>=6.0",
+    "Pillow>=10.0",
 ]
 
 [tool.setuptools]
@@ -25,9 +27,12 @@ packages = [
     "prototype_scripts_constants",
     "copilot_finding_triage_constants",
     "codex_review_scripts_constants",
+    "e_code_review_scripts_constants",
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
+    "process_tree_scripts_constants",
     "fresh_branch_scripts_constants",
+    "e_code_review_effort_constants",
 ]
 
 [tool.setuptools.package-dir]
@@ -42,6 +47,9 @@ usage_pause_constants = "skills/usage-pause/scripts/usage_pause_constants"
 prototype_scripts_constants = "skills/prototype/scripts/prototype_scripts_constants"
 copilot_finding_triage_constants = "skills/copilot-finding-triage/scripts/copilot_finding_triage_constants"
 codex_review_scripts_constants = "skills/codex-review/scripts/codex_review_scripts_constants"
+e_code_review_scripts_constants = "skills/e-code-review/scripts/e_code_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
+process_tree_scripts_constants = "_shared/process-tree/scripts/config/process_tree_scripts_constants"
 fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"
+e_code_review_effort_constants = "skills/e-code-review/scripts/config/e_code_review_effort_constants"

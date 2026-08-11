@@ -17,11 +17,11 @@ Note: This deliberately chooses exploration depth over the "commit and execute q
 - New feature or cross-cutting change: read broadly across the codebase to understand how similar things are done.
 - Architectural decision: explore the full landscape before recommending a direction.
 
+## Inside an autonomous run
+
+The depth budget shrinks once the evidence is in hand. When you can already name the files, the constraints, and what success looks like, further reading buys nothing — act. Re-reading a file to re-derive a fact the run already settled is the shape to cut. See [`long-horizon-autonomy.md`](long-horizon-autonomy.md).
+
 ## Relationship to other rules
 
 - **conservative-action.md** gates *whether* to act. This rule governs *how deeply* to investigate.
 - **research-mode.md** ensures factual claims are grounded. This rule ensures implementation plans are grounded in the actual codebase.
-
-## Why
-
-Premature commitment leads to wasted effort when the chosen approach conflicts with existing patterns or misses important context. Thorough exploration surfaces constraints early and produces better-informed solutions.

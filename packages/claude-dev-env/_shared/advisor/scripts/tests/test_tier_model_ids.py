@@ -10,6 +10,26 @@ from types import ModuleType
 import pytest
 
 
+constants_root = Path(__file__).parent.parent / "config"
+if str(constants_root) not in sys.path:
+    sys.path.insert(0, str(constants_root))
+
+from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
+    ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS,
+    ALL_CLI_MODEL_ID_BY_TIER,
+    ALL_KNOWN_TIER_NAMES,
+    ALL_MODEL_TIERS,
+    HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_THIRD_PARTY,
+    THIRD_PARTY_MODEL_TIER,
+)
+from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
+    ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_MODEL_TIER,
+    ALL_CODEX_MODEL_ID_BY_TIER,
+)
+
+
 def _load_tier_model_ids_module() -> ModuleType:
     scripts_root = Path(__file__).parent.parent
     module_path = scripts_root / "tier_model_ids.py"
@@ -26,21 +46,9 @@ def _load_tier_model_ids_module() -> ModuleType:
 
 tier_model_ids = _load_tier_model_ids_module()
 resolve_cli_model_id = tier_model_ids.resolve_cli_model_id
+resolve_codex_model_id = tier_model_ids.resolve_codex_model_id
 canonical_tier_name = tier_model_ids.canonical_tier_name
 detect_host_profile = tier_model_ids.detect_host_profile
-constants_root = Path(__file__).parent.parent / "config"
-if str(constants_root) not in sys.path:
-    sys.path.insert(0, str(constants_root))
-
-from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
-    ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS,
-    ALL_CLI_MODEL_ID_BY_TIER,
-    ALL_KNOWN_TIER_NAMES,
-    ALL_MODEL_TIERS,
-    HOST_PROFILE_CLAUDE,
-    HOST_PROFILE_THIRD_PARTY,
-    THIRD_PARTY_MODEL_TIER,
-)
 
 SCRIPTS_ROOT = Path(__file__).parent.parent
 DOCUMENTED_RESOLVE_ONE_LINER = (
@@ -94,14 +102,28 @@ def test_sendmessage_reply_wait_is_positive_bound() -> None:
     assert ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS == 120
 
 
+def test_resolve_codex_model_id_maps_sol() -> None:
+    assert resolve_codex_model_id(f" {ADVISOR_MODEL_TIER.lower()} ") == (
+        ADVISOR_CODEX_MODEL_ID
+    )
+
+
+def test_resolve_codex_model_id_rejects_claude_tier() -> None:
+    with pytest.raises(ValueError, match="not a known model tier"):
+        resolve_codex_model_id("Opus")
+
+
 def test_cli_model_alias_map_keys_match_known_tiers() -> None:
-    assert set(ALL_CLI_MODEL_ID_BY_TIER) == set(ALL_KNOWN_TIER_NAMES)
+    all_cli_tiers = (*ALL_MODEL_TIERS, THIRD_PARTY_MODEL_TIER)
+    assert set(ALL_CLI_MODEL_ID_BY_TIER) == set(all_cli_tiers)
     assert set(ALL_MODEL_TIERS).issubset(set(ALL_KNOWN_TIER_NAMES))
+    assert ADVISOR_MODEL_TIER in ALL_KNOWN_TIER_NAMES
     assert THIRD_PARTY_MODEL_TIER in ALL_KNOWN_TIER_NAMES
     assert THIRD_PARTY_MODEL_TIER not in ALL_MODEL_TIERS
-    assert all(
-        ALL_CLI_MODEL_ID_BY_TIER[each_tier] for each_tier in ALL_KNOWN_TIER_NAMES
-    )
+    assert all(ALL_CLI_MODEL_ID_BY_TIER[each_tier] for each_tier in all_cli_tiers)
+    assert ALL_CODEX_MODEL_ID_BY_TIER == {
+        ADVISOR_MODEL_TIER: ADVISOR_CODEX_MODEL_ID,
+    }
 
 
 def test_canonical_tier_name_strips_and_normalizes() -> None:

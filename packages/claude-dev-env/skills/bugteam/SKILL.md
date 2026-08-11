@@ -29,6 +29,15 @@ and take `true` as the pass. When any check fails, run the
 `pr-loop-cloud-transport` skill first and route every `gh` operation in this
 skill through its substitution matrix.
 
+## Judgment guides
+
+Use the [review guide](../reviews/SKILL.md#review-workflow) to decide whether a
+changed behavior is a finding. Use the [comment guide](../comments/SKILL.md#writing-useful-review-comments)
+for posted findings and replies, the [description guide](../descriptions/SKILL.md#reviewing-a-description)
+for final PR context, the [emergency guide](../emergencies/SKILL.md#while-the-incident-is-active)
+for active incidents, and the [small-change guide](../small-cl/SKILL.md#reviewable-scope)
+when the diff needs a narrower review boundary.
+
 ## Pre-flight
 
 ```bash

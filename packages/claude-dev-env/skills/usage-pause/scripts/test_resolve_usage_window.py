@@ -19,6 +19,7 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
 
 from usage_pause_constants.resolve_usage_window_constants import (  # noqa: E402
+    CONFIG_DIR_ENV_VAR,
     DESKTOP_ENTRYPOINT_VALUE,
     ENTRYPOINT_ENV_VAR,
     SESSION_INGRESS_TOKEN_FILE_ENV_VAR as INGRESS_TOKEN_FILE_ENV_VAR,
@@ -193,6 +194,31 @@ class TestReadOauthAccessToken:
                 resolver.read_oauth_access_token(credentials_path, local_now()) is None
             )
         assert any("unreadable" in each_message for each_message in caplog.messages)
+
+
+class TestDefaultCredentialsPath:
+    def should_use_the_config_dir_credential_file_when_the_variable_is_set(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv(CONFIG_DIR_ENV_VAR, str(tmp_path))
+        assert resolver.default_credentials_path() == tmp_path / ".credentials.json"
+
+    def should_fall_back_to_the_home_credential_file_when_the_variable_is_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.delenv(CONFIG_DIR_ENV_VAR, raising=False)
+        expected = Path.home() / ".claude" / ".credentials.json"
+        assert resolver.default_credentials_path() == expected
+
+    def should_fall_back_to_the_home_credential_file_when_the_variable_is_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resolver = load_resolver_module()
+        monkeypatch.setenv(CONFIG_DIR_ENV_VAR, "")
+        expected = Path.home() / ".claude" / ".credentials.json"
+        assert resolver.default_credentials_path() == expected
 
 
 class TestReadSessionIngressToken:

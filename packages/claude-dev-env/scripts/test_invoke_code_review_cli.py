@@ -1,4 +1,4 @@
-"""CLI JSON output for in-session, error, effort, and record-stamp paths."""
+"""CLI JSON output for in-session, error, and effort paths."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ import pytest
 
 import invoke_code_review as invoker
 from _code_review_test_support import (
-    DriftingReview,
-    EFFORT_LOW,
     FIXTURE_CHAIN_CONFIG_ERROR_MESSAGE,
     FIXTURE_HOST_PROFILE_ERROR_MESSAGE,
     FIXTURE_SESSION_OPUS,
@@ -19,8 +17,6 @@ from _code_review_test_support import (
     REJECTED_ULTRA_EFFORT,
     init_git_repository,
     install_seams,
-    prepared_surface_repo,
-    run_record_stamp_cli,
     run_review_cli,
 )
 from claude_chain_runner import ChainConfigurationError
@@ -32,17 +28,12 @@ from dev_env_scripts_constants.code_review_constants import (
     HOST_PROFILE_ERROR_RETURNCODE,
     IN_SESSION_RETURNCODE,
     INVALID_EFFORT_RETURNCODE,
-    MAXIMUM_STAMP_MINT_PASSES,
     MODE_CHAIN,
     MODE_IN_SESSION,
-    RESULT_KEY_BOUND_HASH,
     RESULT_KEY_DIRTY_TREE,
     RESULT_KEY_MODE,
-    RESULT_KEY_PASS_COUNT,
     RESULT_KEY_RETURNCODE,
     RESULT_KEY_SERVED_COMMAND,
-    RESULT_KEY_STAMP_MINTED,
-    STAMP_DID_NOT_CONVERGE_RETURNCODE,
 )
 from dev_env_scripts_constants.grok_worker_constants import CWD_FLAG
 
@@ -103,7 +94,6 @@ def test_cli_emits_json_on_chain_configuration_error(
         returncode=CHAIN_CONFIG_ERROR_EXIT_CODE,
         is_dirty_tree=False,
     )
-    assert invoker.is_code_review_clean_stamp_allowed(config_error_outcome) is False
 
 
 def test_cli_emits_json_on_host_profile_value_error(
@@ -156,37 +146,3 @@ def test_cli_rejects_ultra_effort_with_nonzero_exit(
     )
     assert exit_code == INVALID_EFFORT_RETURNCODE
     assert REJECTED_ULTRA_EFFORT in capsys.readouterr().err
-
-
-def test_cli_record_stamp_returns_non_convergence_code_on_cap(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    working_directory = prepared_surface_repo(monkeypatch, tmp_path)
-    monkeypatch.setattr(invoker, "invoke_code_review", DriftingReview())
-    exit_code = run_record_stamp_cli(working_directory, effort=EFFORT_LOW)
-    assert exit_code == STAMP_DID_NOT_CONVERGE_RETURNCODE
-    parsed_payload = json.loads(capsys.readouterr().out)
-    assert parsed_payload[RESULT_KEY_STAMP_MINTED] is False
-    assert parsed_payload[RESULT_KEY_PASS_COUNT] == MAXIMUM_STAMP_MINT_PASSES
-    assert parsed_payload[RESULT_KEY_BOUND_HASH] is None
-
-
-def test_cli_record_stamp_reports_missing_store_dependency(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def raise_missing_store(*all_args: object, **all_keywords: object) -> object:
-        del all_args, all_keywords
-        raise ModuleNotFoundError("store missing", name="code_review_stamp_store")
-
-    working_directory = prepared_surface_repo(monkeypatch, tmp_path)
-    monkeypatch.setattr(invoker, "load_code_review_stamp_store", raise_missing_store)
-    exit_code = run_record_stamp_cli(working_directory, effort=EFFORT_LOW)
-    assert exit_code == INVALID_EFFORT_RETURNCODE
-    captured = capsys.readouterr()
-    assert "stamp store" in captured.err
-    parsed_payload = json.loads(captured.out)
-    assert parsed_payload[RESULT_KEY_STAMP_MINTED] is False

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Stop-hook dispatcher that hosts the five Stop-chain hooks in one process.
+"""Stop-hook dispatcher that hosts the Stop-chain blockers in one process.
 
 Reads the Stop payload from stdin once, runs each hosted hook in registration
 order via the shared hosted-hook runner, and emits the first block decision the
-chain produced. Later hooks still run so side-effect hooks (the log extractor
-wrapper) fire even when an earlier hook blocked. A single hosted hook crash
-fails open and does not suppress the remaining hooks.
+chain produced. Later hooks still run after an earlier block so every hosted
+hook gets a chance to run. A single hosted hook crash fails open and does not
+suppress the remaining hooks.
 """
 
 from __future__ import annotations

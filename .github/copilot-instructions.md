@@ -1,6 +1,9 @@
 # Copilot instructions
 
-Hooks in this repo enforce the conventions below. Follow them so your suggestions match what the gates accept. The full reference is `packages/claude-dev-env/docs/CODE_RULES.md`.
+Hooks in this repo enforce the conventions below. Follow them so your suggestions match what the gates accept.
+
+**Checked-in review contract:** `.cursor/BUGBOT.md`.
+**Compact projection:** `packages/claude-dev-env/docs/CODE_RULES.md`.
 
 ## Naming
 

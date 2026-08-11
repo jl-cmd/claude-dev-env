@@ -378,3 +378,70 @@ def test_main_headless_flavor_emits_outcome_path_on_stdout(
     assert "post_audit_thread.py" in captured.out
     assert "Do not post reviews" in captured.out
     assert "add_comment_to_pending_review" not in captured.out
+
+
+_PACKAGE_ROOT = _SCRIPTS_DIR.parents[3]
+_CODE_QUALITY_AGENT_PATH = _PACKAGE_ROOT / "agents" / "code-quality-agent.md"
+_AUDIT_CONTRACT_PATH = _PACKAGE_ROOT / "_shared" / "pr-loop" / "audit-contract.md"
+_PRECATCH_RUBRIC_PATH = _PACKAGE_ROOT / "_shared" / "pr-loop" / "precatch-rubric.md"
+_CATEGORY_Q_LABEL = (
+    "Cross-surface claim consistency "
+    "(terminology, PR-description claims, message-vs-guard)"
+)
+_CATEGORY_Q_RUBRIC_REFERENCE = (
+    "../audit-rubrics/category_rubrics/category-q-cross-surface-claims.md"
+)
+_A_THROUGH_Q_PATTERN = re.compile(r"A[\u2013-]Q")
+_SEVENTEEN_CATEGORIES_PATTERN = re.compile(r"seventeen categor", re.IGNORECASE)
+_STALE_SIXTEEN_PATTERN = re.compile(r"sixteen categor", re.IGNORECASE)
+_STALE_A_THROUGH_P_PATTERN = re.compile(r"A[\u2013-]P")
+
+
+def test_code_quality_agent_default_scope_is_a_through_q() -> None:
+    agent_text = _CODE_QUALITY_AGENT_PATH.read_text(encoding="utf-8")
+    assert _A_THROUGH_Q_PATTERN.search(agent_text) is not None
+    assert _SEVENTEEN_CATEGORIES_PATTERN.search(agent_text) is not None
+    assert _STALE_SIXTEEN_PATTERN.search(agent_text) is None
+    assert "A through Q" in agent_text
+    assert "A through P" not in agent_text
+    assert _STALE_A_THROUGH_P_PATTERN.search(agent_text) is None
+    assert "## Bug Categories A–Q" in agent_text
+    assert _CATEGORY_Q_LABEL in agent_text
+    assert _CATEGORY_Q_RUBRIC_REFERENCE in agent_text
+    assert "| Q |" in agent_text
+
+
+def test_audit_contract_category_schema_includes_q() -> None:
+    contract_text = _AUDIT_CONTRACT_PATH.read_text(encoding="utf-8")
+    assert '"category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q"' in (
+        contract_text
+    )
+    assert _A_THROUGH_Q_PATTERN.search(contract_text) is not None
+    assert _STALE_A_THROUGH_P_PATTERN.search(contract_text) is None
+
+
+def test_precatch_rubric_adversarial_lane_uses_a_through_q() -> None:
+    rubric_text = _PRECATCH_RUBRIC_PATH.read_text(encoding="utf-8")
+    assert _A_THROUGH_Q_PATTERN.search(rubric_text) is not None
+    assert _STALE_A_THROUGH_P_PATTERN.search(rubric_text) is None
+
+
+def test_audit_prompt_constraints_require_collection_before_severity_filter() -> None:
+    root = _build_audit_root()
+    constraints = root.find("constraints")
+    assert constraints is not None
+    all_constraint_texts = [
+        each_constraint.text or "" for each_constraint in constraints
+    ]
+    joined = "\n".join(all_constraint_texts)
+    assert "Report every real finding" in joined
+    assert "Do not drop findings by severity during collection" in joined
+    assert "separate consumer stage" in joined
+    assert "P0" in joined and "P1" in joined and "P2" in joined
+
+
+def test_audit_contract_documents_collection_before_severity_filtering() -> None:
+    contract_text = _AUDIT_CONTRACT_PATH.read_text(encoding="utf-8")
+    assert "## Collection before severity filtering" in contract_text
+    assert "separate consumer stage" in contract_text
+    assert "Do not drop a real finding because its severity is low" in contract_text

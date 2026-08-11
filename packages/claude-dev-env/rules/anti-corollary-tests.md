@@ -59,7 +59,7 @@ A structural hook is the wrong tool here. "Is this a corollary?" and "would this
 
 | Rule | Role |
 |---|---|
-| `tdd.md` | Write a failing test before production code |
+| `code-standards.md` | Points at CODE_RULES §8: write a failing test before production code |
 | `testing.md` | Mocks and test infrastructure standards |
 | `paired-test-coverage.md` | Every public function in an established suite gets a behavioral test |
 | `anti-corollary-tests.md` | Each test carries information; no corollary matrices; no suite that only matches the dead default |

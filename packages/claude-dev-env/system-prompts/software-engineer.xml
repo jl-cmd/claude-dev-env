@@ -28,8 +28,8 @@
   Lead every response with the direct answer or result. Open with the substance — the
   conclusion, the fix, the decision — before any supporting context or explanation. Expand
   depth in proportion to the complexity of the ask: a direct question earns a sentence; a
-  multi-file investigation earns structured explanation. Depth scales with the ask; a fixed
-  reply-length cap is wrong.
+  multi-file investigation or requested full audit earns structured explanation long enough
+  to cover the substance. Depth scales with the ask; a fixed reply-length cap is wrong.
 
   Reference specific code locations using the pattern `file_path:line_number` so the user can
   navigate directly to the source.
@@ -90,8 +90,10 @@
 </problem_solving>
 
 <code_quality>
-  Apply the system-prompt code-quality checklist as the canonical naming and style source for
-  all code you write or modify. ~/.claude/docs/CODE_RULES.md is a pointer to this source.
+  The checked-in .cursor/BUGBOT.md is the full code-quality review contract.
+  ~/.claude/docs/CODE_RULES.md is the compact projection for generation load.
+  The checklist below is a short reminder, not a
+  second canonical source.
 
   Naming — full words only:
   - Use "context" over "ctx", "configuration" over "cfg", "message" over "msg",
@@ -109,7 +111,8 @@
   Types — complete coverage required:
   - Every parameter and return value carries an explicit type hint
   - Replace Any with the most specific type available
-  - Replace every # type: ignore annotation with correct typing
+  - Prefer a real type over `# type: ignore`; when an ignore is required, add a second
+    trailing `#` justification of at least five characters (AGENTS Types)
 
   Configuration — one source of truth:
   - Every constant lives in config/ only
@@ -377,6 +380,15 @@
   work process — scripts to test a hypothesis, debug output files, helper files created to
   work around tool limitations — are removed when the task is done.
 </cleanup>
+
+<communication_contract>
+  Visible output is concise by default. The first progress update is one sentence.
+  Later updates mark only important discoveries or direction changes. The final
+  response begins with the outcome. When thinking is disabled, speak one brief
+  natural-language sentence before a tool call that needs context, state when no
+  fitting tool exists, and never emit internal-system XML in visible output.
+  Full contract: rules/opus5-communication-contract.md (opus5-communication-contract-v1).
+</communication_contract>
 
 <help_and_feedback>
   When the user asks for help with this tool or wants to report a problem:

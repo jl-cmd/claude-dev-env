@@ -1,13 +1,14 @@
 {
     "name": "claude-dev-env",
-    "version": "2.4.0",
+    "version": "2.13.0",
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
-        "claude-dev-env": "bin/install.mjs"
+        "claude-dev-env": "bin/install.mjs",
+        "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"scripts/profile-isolation-launchers/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
     },
     "files": [
         "bin/",
@@ -15,13 +16,25 @@
         "docs/",
         "commands/",
         "agents/",
+        "output-styles/",
         "skills/",
         "hooks/",
         "system-prompts/",
         "scripts/",
+        "codex-capability-map.json",
+        "settings.json",
+        "installable-surfaces.manifest.json",
         "_shared/",
         "audit-rubrics/",
-        "CLAUDE.md"
+        "CLAUDE.md",
+        "!**/__pycache__/**",
+        "!**/*.py[cod]",
+        "!**/.pytest_cache/**",
+        "!**/.mypy_cache/**",
+        "!**/.ruff_cache/**",
+        "!**/*.log",
+        "!**/debug-*.log",
+        "!**/*.egg-info/**"
     ],
     "keywords": [
         "claude-code",

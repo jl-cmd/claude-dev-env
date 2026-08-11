@@ -32,6 +32,7 @@ try:
         gate_running,
         git_blob_readers,
         git_file_sets,
+        staged_test_regression,
         staged_test_running,
         violation_scoping,
         wrapper_plumb_check,
@@ -115,9 +116,8 @@ def _report_partitioned_violations(
 ) -> int:
     """Print the violation sections and return the gate exit code.
 
-    Importers outside this directory (the code-verifier spawn-preflight hook)
-    call this surface with the partition spread across positional arguments,
-    so this wrapper keeps that calling shape and folds the pieces into the
+    External callers pass the partition across positional arguments, so this
+    wrapper keeps that calling shape and folds the pieces into the
     ``PartitionedViolations`` tuple the gate-running module consumes.
 
     Args:
@@ -136,7 +136,7 @@ def _report_partitioned_violations(
         is_whole_file_scope,
     )
 
-run_staged_test_files = staged_test_running.run_staged_test_files
+run_staged_test_files = staged_test_regression.run_staged_test_files
 _staged_test_file_paths = staged_test_running._staged_test_file_paths
 _resolve_owning_test_root = staged_test_running._resolve_owning_test_root
 _group_staged_tests_by_root = staged_test_running._group_staged_tests_by_root
@@ -296,8 +296,9 @@ def _run_diff_mode(
     """Validate the merge-base diff joined with the untracked files.
 
     Zero candidates means nothing was inspected (bad wiring looks the same),
-    so that run refuses loudly. A set emptied only by the ``--only-under``
-    scope flows through ``run_gate`` over zero files and exits clean.
+    so that run refuses loudly. A set emptied by the ``--only-under`` scope or
+    left with no code files after the code-path filter flows through
+    ``run_gate`` over zero files and exits clean.
     """
     all_candidate_paths = _deduplicate_paths(
         paths_from_git_diff(repository_root, arguments.base)
@@ -308,14 +309,17 @@ def _run_diff_mode(
     file_paths = filter_paths_under_prefixes(
         all_candidate_paths, repository_root, arguments.only_under
     )
+    file_paths = [each_path for each_path in file_paths if is_code_path(each_path)]
     scoped_added_lines = (
         added_lines_by_file(repository_root, arguments.base, file_paths) if file_paths else {}
     )
+    merge_base_ref = resolve_merge_base(repository_root, arguments.base)
     return run_gate(
         validate_content,
         file_paths,
         repository_root,
         all_added_lines_by_path=scoped_added_lines,
+        prior_ref=merge_base_ref,
     )
 
 

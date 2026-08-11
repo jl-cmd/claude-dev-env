@@ -203,9 +203,6 @@ CLASSIFICATION_STREAM_JOIN_SEPARATOR: str = "\n"
 DEFAULT_WORKER_TIMEOUT_SECONDS: int = 600
 """Default timeout applied to one headless worker invocation, in seconds."""
 
-DEFAULT_WORKER_MAX_TURNS: int = 8
-"""Default max-turns value applied to one headless worker invocation."""
-
 TIMEOUT_RETURN_CODE: int = -1
 """Return code recorded on the outcome when a timed-out process leaves no return code."""
 
@@ -216,13 +213,66 @@ LAUNCH_FAILURE_STDERR_PREFIX: str = "failed to launch: "
 """Prefix for the non-empty stderr diagnostic returned on a launch OSError."""
 
 KILL_GRACE_TIMEOUT_SECONDS: int = 10
-"""Seconds to wait for a killed process to reap its pipes before giving up on its streams."""
+"""Seconds to wait for a killed process to reap its pipes before giving up on its streams.
+
+Gates the drain that follows a kill. The shared process-tree helper carries its
+own bound on the kill command, so the two bound different operations.
+"""
+
+MAXIMUM_WORKER_TIMEOUT_SECONDS: int = 5400
+"""Ceiling the batch launcher puts on a worker's ``timeout_seconds`` (90 minutes).
+
+Enforced at three sites: the batch launcher refuses an over-ceiling
+specification while parsing it, ``run_headless_worker`` refuses one from any
+caller, and ``resolve_worker_spawn`` refuses one before its preflight so the
+bound holds on every tier. A worker that reaches this ceiling is killed and
+classified ``CLASSIFICATION_TIMEOUT``.
+"""
+
+MAXIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (
+    "worker {field_name} {requested_seconds} exceeds "
+    "MAXIMUM_WORKER_TIMEOUT_SECONDS ({maximum_seconds})"
+)
+"""Rejection message for an over-ceiling timeout, shared by the batch parse and the runner."""
 
 MIN_WORKER_TIMEOUT_SECONDS: int = 1
-"""Minimum accepted worker timeout_seconds in a batch specification."""
+"""Minimum accepted worker timeout_seconds, in seconds.
 
-MIN_WORKER_MAX_TURNS: int = 1
-"""Minimum accepted worker max_turns in a batch specification."""
+Enforced at the same three sites as ``MAXIMUM_WORKER_TIMEOUT_SECONDS``.
+"""
+
+MINIMUM_WORKER_TIMEOUT_ERROR_TEMPLATE: str = (
+    "worker {field_name} {requested_seconds} is below "
+    "MIN_WORKER_TIMEOUT_SECONDS ({minimum_seconds})"
+)
+"""Rejection message for a below-floor timeout, shared by the batch parse and the runner."""
+
+CLASSIFICATION_KILL_FAILED: str = "kill_failed"
+"""Outcome classification when a timed-out worker's streams never drain.
+
+Distinct from ``CLASSIFICATION_TIMEOUT``: that worker's tree was cleared, this
+one's was not, so a caller can tell an abandoned process tree from a stopped
+one.
+"""
+
+KILL_FAILED_RETURN_CODE: int = -4
+"""Return code recorded when a timed-out worker's streams never drain."""
+
+KILL_FAILED_STDERR_TEMPLATE: str = (
+    "worker timed out and its streams never drained across {attempt_count} "
+    "kill-and-drain attempts; process {process_identifier} may still be running"
+)
+"""Stderr diagnostic naming the surviving process id after every attempt fails."""
+
+PROCESS_TREE_KILL_ATTEMPT_LIMIT: int = 2
+"""Kill-and-drain rounds run on a timed-out worker before the kill is reported failed.
+
+Each round issues the tree kill while the worker process is still alive, then
+waits ``KILL_GRACE_TIMEOUT_SECONDS`` for the streams to drain.
+"""
+
+REASON_TIMEOUT_OUT_OF_BOUNDS: str = "timeout_out_of_bounds"
+"""Dispatcher attempt reason when the requested timeout is below the floor or above the ceiling."""
 
 WORKER_EXCEPTION_RETURN_CODE: int = -3
 """Return code recorded on a WorkerReport when the worker body raises before a process runs.
@@ -321,11 +371,34 @@ WORKER_SPEC_TIMEOUT_KEY: str = "timeout_seconds"
 WORKER_SPEC_IS_REPO_ONLY_KEY: str = "is_repo_only"
 """JSON key for whether a readonly worker also disables web search."""
 
-WORKER_SPEC_MAX_TURNS_KEY: str = "max_turns"
-"""JSON key for one worker's max-turns cap."""
-
 WORKER_SPEC_AGENT_NAME_KEY: str = "agent_name"
 """JSON key for one worker's optional agent definition name."""
+
+ALL_KNOWN_WORKER_SPEC_KEYS: frozenset[str] = frozenset(
+    {
+        WORKER_SPEC_ROLE_NAME_KEY,
+        WORKER_SPEC_PROMPT_PARTS_KEY,
+        WORKER_SPEC_CWD_KEY,
+        WORKER_SPEC_TOOL_PROFILE_KEY,
+        WORKER_SPEC_TIMEOUT_KEY,
+        WORKER_SPEC_IS_REPO_ONLY_KEY,
+        WORKER_SPEC_AGENT_NAME_KEY,
+    }
+)
+"""Every JSON key a batch worker entry accepts.
+
+A worker entry carrying any other key fails to load, so a key the launcher
+would drop is named to the operator rather than passing for a setting that
+took effect.
+"""
+
+WORKER_SPEC_KEY_JOIN_SEPARATOR: str = ", "
+"""Separator between key names listed in an unknown-worker-key error message."""
+
+UNKNOWN_WORKER_KEY_ERROR_TEMPLATE: str = (
+    "unknown worker key(s): {unknown_keys}; accepted keys: {accepted_keys}"
+)
+"""Message raised when a worker entry carries a key outside the accepted set."""
 
 CLI_BATCH_SPEC_FLAG: str = "--spec"
 """CLI flag that points the batch launcher at a JSON batch specification file."""
@@ -389,9 +462,6 @@ REASON_CLAUDE_AGENT_REQUIRED: str = "claude_agent_required"
 REASON_PROMPT_FILE_MISSING: str = "prompt_file_missing"
 """Config reason when the dispatcher CLI prompt file path is absent or unreadable."""
 
-DEFAULT_SPAWN_MAX_TURNS: int = 8
-"""Default max-turns applied to the headless grok worker when the caller names none."""
-
 SPAWN_SERVED_EXIT_CODE: int = 0
 """CLI exit code when a dispatcher tier served the call."""
 
@@ -433,3 +503,107 @@ CLI_ENABLE_CLAUDE_TIER_FLAG: str = "--enable-claude-tier"
 
 EMPTY_OUTPUT: str = ""
 """Empty captured output when no tier produced stdout."""
+
+BATCH_SPEC_ADVISOR_KEY: str = "advisor"
+"""JSON key for the optional batch-level worker-advisor block."""
+
+ADVISOR_SPEC_LAUNCHER_KEY: str = "launcher"
+"""JSON key for the lead-supplied advisor launcher executable name."""
+
+ADVISOR_SPEC_MODEL_KEY: str = "model"
+"""JSON key for the advisor model name."""
+
+ADVISOR_SPEC_EFFORT_KEY: str = "effort"
+"""JSON key for the advisor effort level."""
+
+DEFAULT_ADVISOR_LAUNCHER_PLACEHOLDER: str = "ADVISOR_LAUNCHER_PLACEHOLDER"
+"""Committed placeholder; real launcher arrives only from the lead's batch spec."""
+
+DEFAULT_ADVISOR_MODEL: str = "opus"
+"""Default advisor model when the batch advisor block omits model."""
+
+DEFAULT_ADVISOR_EFFORT: str = "high"
+"""Default advisor effort when the batch advisor block omits effort."""
+
+MAXIMUM_WORKER_ADVISOR_CORRECTIONS: int = 3
+"""Maximum CORRECTION/PLAN re-consults per worker before advisor_blocked."""
+
+MAXIMUM_ADVISOR_TIMEOUT_SECONDS: int = 600
+"""Timeout for one advisor launcher subprocess call, in seconds."""
+
+ADVISOR_SIGNAL_ENDORSE: str = "ENDORSE"
+"""Opening signal that accepts a worker report."""
+
+ADVISOR_SIGNAL_CORRECTION: str = "CORRECTION"
+"""Opening signal that requires a re-consult up to the correction cap."""
+
+ADVISOR_SIGNAL_PLAN: str = "PLAN"
+"""Opening signal treated like CORRECTION for re-consult counting."""
+
+ADVISOR_SIGNAL_STOP: str = "STOP"
+"""Opening signal that ends the worker as advisor_blocked immediately."""
+
+ALL_KNOWN_ADVISOR_SIGNALS: frozenset[str] = frozenset(
+    {
+        ADVISOR_SIGNAL_ENDORSE,
+        ADVISOR_SIGNAL_CORRECTION,
+        ADVISOR_SIGNAL_PLAN,
+        ADVISOR_SIGNAL_STOP,
+    }
+)
+"""The four allowed first tokens of an advisor reply."""
+
+CLASSIFICATION_ADVISOR_BLOCKED: str = "advisor_blocked"
+"""Worker classification when advisor bind, resume, or verdict fails closed."""
+
+PENDING_BIND_SENTINEL: str = "PENDING_BIND"
+"""Unbound advisor session or signal sentinel; must fail closed before launch."""
+
+ADVISOR_PROMPT_HEADER_TEMPLATE: str = (
+    "Worker advisor session: {session_id}\n"
+    "Advisor model: {model}\n"
+    "Advisor effort: {effort}\n"
+    "Report only after the same session endorses or corrections are applied.\n\n"
+)
+"""Prefix injected into each worker prompt after a successful pre-dispatch bind."""
+
+SUMMARY_ADVISOR_SESSION_ID_KEY: str = "advisor_session_id"
+"""Per-worker report JSON key for the unique advisor session id."""
+
+SUMMARY_ADVISOR_SIGNAL_KEY: str = "advisor_completion_signal"
+"""Per-worker report JSON key for the final advisor opening signal."""
+
+SUMMARY_ADVISOR_LAUNCHER_KEY: str = "advisor_launcher"
+"""Per-worker report JSON key for the spec-supplied launcher (runtime only)."""
+
+ADVISOR_CLI_PRINT_FLAG: str = "-p"
+"""Print/non-interactive flag passed to the advisor launcher."""
+
+ADVISOR_CLI_MODEL_FLAG: str = "--model"
+"""Model flag passed to the advisor launcher."""
+
+ADVISOR_CLI_EFFORT_FLAG: str = "--effort"
+"""Effort flag passed to the advisor launcher."""
+
+ADVISOR_CLI_OUTPUT_FORMAT_FLAG: str = "--output-format"
+"""Output-format flag passed to the advisor launcher."""
+
+ADVISOR_CLI_OUTPUT_FORMAT_JSON: str = "json"
+"""JSON output format value for advisor launcher calls."""
+
+ADVISOR_CLI_RESUME_FLAG: str = "--resume"
+"""Resume flag for post-report advisor consults."""
+
+ADVISOR_BIND_PROMPT_TEMPLATE: str = (
+    "You are the unique worker advisor for role {role_name}. "
+    "Answer only. Open with exactly one of: ENDORSE | CORRECTION | PLAN | STOP. "
+    "Pre-dispatch: ENDORSE this worker assignment if safe, else CORRECTION."
+)
+"""Prompt body used for the pre-dispatch advisor bind."""
+
+ADVISOR_VERDICT_PROMPT_TEMPLATE: str = (
+    "You are the unique worker advisor for role {role_name}, session {session_id}. "
+    "Answer only. Open with exactly one of: ENDORSE | CORRECTION | PLAN | STOP. "
+    "Post-report review of the worker report follows.\n\n{report_text}"
+)
+"""Prompt body used for the post-report advisor verdict."""

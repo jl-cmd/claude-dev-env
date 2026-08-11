@@ -13,16 +13,16 @@
 - **Clean-room audits, every loop.** Each bugfind subagent's spawn prompt contains only the PR scope, audit rubric, and the current loop number. Prior loop history stays in the lead.
 - **Targeted fixes.** Each fix subagent sees ONLY the most recent audit's findings. Prior loops are invisible to the fix subagent.
 - **Fix subagent receives the latest audit as its input contract.** Each loop's fix run operates on the current audit's output and only that.
-- **Lead owns the final PR description rewrite only** (Step 4 Close substep via `pr-loop-lifecycle`), composed directly against `docs/PR_DESCRIPTION_GUIDE.md`.
+- **Lead owns the final PR description.** The lead applies the [description guide](../descriptions/SKILL.md#required-content) through `pr-loop-lifecycle`.
 
 ## Why this design
 
 The three sibling skills compose, but `/bugteam` solves a problem they cannot solve in sequence:
 
-- `/findbugs` audits once and stops.
-- `/fixbugs` fixes the findings of one audit and stops.
-- A human-driven `/findbugs` → `/fixbugs` → `/findbugs` → `/fixbugs` cycle works but requires the user to drive it.
+- `clean-room audit (code-quality-agent)` audits once and stops.
+- `/pr-fix-protocol` fixes the findings of one audit and stops.
+- A human-driven `clean-room audit (code-quality-agent)` → `/pr-fix-protocol` → `clean-room audit (code-quality-agent)` → `/pr-fix-protocol` cycle works but requires the user to drive it.
 
 `/bugteam` automates that cycle. The clean-room property is preserved by spawning a fresh audit agent each loop with no inherited context — every audit is independent of the prior loop's verdict. The 20-loop cap is the safety: pathological cases (audit agent oscillating, fix agent regressing) cannot run away.
 
-The single up-front confirmation is the explicit trade — `/bugteam` is more autonomous than `/findbugs`+`/fixbugs` chained manually. The user accepts that autonomy by typing the command. Stop conditions and the loop log give the user full visibility on exit.
+The single up-front confirmation is the explicit trade — `/bugteam` is more autonomous than `clean-room audit (code-quality-agent)`+`/pr-fix-protocol` chained manually. The user accepts that autonomy by typing the command. Stop conditions and the loop log give the user full visibility on exit.

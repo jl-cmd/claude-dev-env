@@ -1,0 +1,16 @@
+# mypy configuration for the shared process-tree scripts.
+#
+# Scoped separately from hooks/pyproject.toml so this shared home and the hooks
+# stay independent. check.ps1 invokes this via the mypy-process-tree tool label.
+
+[tool.mypy]
+mypy_path = ".:config"
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true
+exclude = [
+    "test_",
+]

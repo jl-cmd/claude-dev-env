@@ -96,22 +96,19 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ## What's Included
 
-### Rules (13)
+### Rules (10)
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
 | Rule | What it does |
 |------|-------------|
-| `tdd` | Red-green-refactor is non-negotiable |
 | `code-standards` | References CODE_RULES.md for all code generation |
 | `conservative-action` | Research first, act only when explicitly asked |
-| `right-sized-engineering` | Simple > clever, functions > classes, concrete > abstract |
 | `explore-thoroughly` | Read before proposing, map patterns before committing |
 | `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
 | `parallel-tools` | Independent tool calls run simultaneously |
 | `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
-| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns |
-| `code-reviews` | Systematic PR review response protocol |
+| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns, review-response protocol |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
@@ -126,7 +123,6 @@ Reference documents that rules and agents point to for detailed standards.
 | `TEST_QUALITY.md` | Test writing standards, mock completeness, assertion patterns |
 | `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
-| `PR_DESCRIPTION_GUIDE.md` | PR description structure and file-grouped format |
 
 ### Agents (28)
 
@@ -152,7 +148,7 @@ Specialized agent prompts for common development tasks. Claude Code automaticall
 
 **Other:** clasp-deployment-orchestrator, project-context-loader
 
-### Commands (10)
+### Commands (9)
 
 Slash commands for common workflows.
 
@@ -163,11 +159,10 @@ Slash commands for common workflows.
 | `/implement` | Execute plans with TDD workflow |
 | `/review-plan` | Review and critique implementation plans |
 | `/right-size` | Check for over/under-engineering |
-| `/stubcheck` | Find stubs, TODOs, and NotImplementedError |
 | `/pr-comments` | Process PR review comments systematically |
 | `/docupdate` | Update documentation after changes |
-| `/initialize` | Session initialization with protocol review |
 | `/sum` | Summarize current work context |
+| `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
 ### Skills (12)
 
@@ -204,7 +199,8 @@ Slash commands for common workflows.
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
-| `closeout` | Harvest session obstacles into quoted, user-approved GitHub issues at session end, dedupe against open and closed issues, route each to its repo, file children then a parent checklist, and print a computed cloud handoff prompt |
+| `issue-tracker` | One consistent way to create, update in place, and close GitHub issues for a work-stream: one epic parent with native sub-issues, dedup-first against open and closed issues, marker-delimited body sections edited in place, and an epic checklist mirroring the children; the `issue-tracker` agent runs one op per call, this skill is the fallback |
+| `closeout` | Harvest session obstacles into quoted, user-approved GitHub issues at session end, then delegate filing to the `issue-tracker` agent (skill fallback) so each runs the full tracker path; print a computed cloud handoff prompt |
 | `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
 | `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
 | `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
@@ -215,6 +211,7 @@ Slash commands for common workflows.
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 | `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
 | `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
+| `show` | Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations: routed by `routing.yaml`, held to a two-tier SVG canvas contract, and checked by `validate-artifact.py` for accessibility, dead references, undefined CSS variables, and text size |
 
 ### Hooks
 
@@ -235,7 +232,6 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Edit | `migration-safety-advisor` | Warns about risky database migration patterns |
 | Bash | `destructive-command-blocker` | Blocks rm -rf, git reset --hard, and other destructive commands |
 | Bash | `block-main-commit` | Blocks direct commits to main/master branch |
-| Bash | `pr-description-enforcer` | Enforces PR description structure and style |
 | Bash | `test-preflight-check` | Validates server health and database before test runs |
 | Task\|Agent | `parallel-task-blocker` | Limits concurrent Task/Agent delegations |
 | AskUserQuestion | `attention-needed-notify` | Desktop notification when Claude needs your input |

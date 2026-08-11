@@ -16,6 +16,8 @@ __all__ = [
     "BLOCKING_CRASH_EXIT_CODE",
     "EXIT_CODE_TWO_DENY_REASON",
     "BLOCKING_CRASH_DENY_REASON",
+    "REASON_JOIN_SEPARATOR",
+    "CONTEXT_JOIN_SEPARATOR",
     "WRITE_TOOL_NAME",
     "EDIT_TOOL_NAME",
     "MULTI_EDIT_TOOL_NAME",
@@ -23,6 +25,7 @@ __all__ = [
     "ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES",
     "STATE_DESCRIPTION_BLOCKER_MODULE_NAME",
     "PLAIN_LANGUAGE_BLOCKER_MODULE_NAME",
+    "SYSTEM_MESSAGE_JOIN_SEPARATOR",
     "HostedHookEntry",
     "ALL_HOSTED_HOOK_ENTRIES",
 ]
@@ -30,9 +33,12 @@ __all__ = [
 DENY_DECISION = "deny"
 ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
+SYSTEM_MESSAGE_JOIN_SEPARATOR = "\n"
 BLOCKING_CRASH_EXIT_CODE = 2
 EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"
 BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"
+REASON_JOIN_SEPARATOR = " | "
+CONTEXT_JOIN_SEPARATOR = "\n"
 
 WRITE_TOOL_NAME = "Write"
 EDIT_TOOL_NAME = "Edit"
@@ -81,10 +87,6 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
-        script_relative_path="blocking/code_review_stamp_directory_write_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
         script_relative_path="blocking/pii_prevention_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
@@ -126,10 +128,6 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
-        script_relative_path="blocking/verified_commit_message_accuracy_blocker.py",
-        applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
         script_relative_path="blocking/workflow_substitution_slot_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
@@ -161,5 +159,15 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         script_relative_path="blocking/plain_language_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
         native_module_name=PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
+    ),
+    HostedHookEntry(
+        script_relative_path="advisory/refactor_guard.py",
+        applicable_tool_names=frozenset({EDIT_TOOL_NAME}),
+        is_blocking=False,
+    ),
+    HostedHookEntry(
+        script_relative_path="advisory/migration_safety_advisor.py",
+        applicable_tool_names=frozenset({EDIT_TOOL_NAME}),
+        is_blocking=False,
     ),
 )

@@ -43,6 +43,7 @@ from preflight_self_heal import silently_clear_stale_local_hooks_path_override  
 from reviews_disabled import (
     CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN,
     CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME,
+    CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME,
     EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV,
     is_bugteam_disabled_via_env,
 )
@@ -467,8 +468,10 @@ def main(all_arguments: list[str]) -> int:
 
     Returns:
         Zero on success. Non-zero exit code on the first failing check.
-        Returns :data:`EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV` when
-        ``CLAUDE_REVIEWS_DISABLED`` lists the ``bugteam`` token.
+        Returns :data:`EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV` when bugteam is off
+        for this run. Bugteam is off by default, so that happens when
+        ``CLAUDE_REVIEWS_ENABLED`` omits the ``bugteam`` token, and also when
+        ``CLAUDE_REVIEWS_DISABLED`` lists it.
     """
     arguments = parse_arguments(all_arguments)
     skip_env_var_name = BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME
@@ -480,13 +483,15 @@ def main(all_arguments: list[str]) -> int:
         )
         return 0
     reviews_disabled_env_var_name = CLAUDE_REVIEWS_DISABLED_ENV_VAR_NAME
+    reviews_enabled_env_var_name = CLAUDE_REVIEWS_ENABLED_ENV_VAR_NAME
     reviews_disabled_bugteam_token = CLAUDE_REVIEWS_DISABLED_BUGTEAM_TOKEN
     disabled_via_env_exit_code = EXIT_CODE_BUGTEAM_DISABLED_VIA_ENV
     if is_bugteam_disabled_via_env():
         print(
             f"bugteam_preflight: halted "
-            f"({reviews_disabled_env_var_name} contains "
-            f"'{reviews_disabled_bugteam_token}').",
+            f"({reviews_enabled_env_var_name} omits "
+            f"'{reviews_disabled_bugteam_token}', or "
+            f"{reviews_disabled_env_var_name} lists it).",
             file=sys.stderr,
         )
         return disabled_via_env_exit_code

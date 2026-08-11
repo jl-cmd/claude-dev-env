@@ -2,60 +2,45 @@
 name: team-advisor
 description: >-
   Spawn one warm session-advisor at the strongest reachable tier and consult
-  it before big decisions, completion, commits, or when stuck. Triggers:
+  it before substantive work, completion, commits, or when stuck. Triggers:
   'team-advisor', 'team advisor', 'second opinion', 'advisor', 'consult',
   'verify', 'validate', 'commit', 'push'.
 ---
 
 # Team Advisor
 
-## Principle
+One warm advisor at the strongest tier this session can reach. This session is the sole consumer.
 
-One warm, addressable advisor available at the strongest model tier the session can reach. The session sends concise briefs when a decision benefits from a second opinion: before acting on a plan, at completion, before commits, when stuck, when reconsidering the approach, or when an agent deems it necessary and beneficial to the user's goals.
+## Refs
 
-## Follow the shared protocol
+| Doc | Holds |
+|---|---|
+| [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up, CLI fallback; its read map routes each moment to a `reference/` detail file. |
+| [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
+| [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background — read it when tuning the bind, not on every consult. |
 
-**Detect the host profile first** (Host profiles in
-[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-— e.g. %USERPROFILE%\.claude\_shared\advisor\advisor-protocol.md). Do not start a model-floor
-walk until the host is known. 
+## Bind
 
-This session is the shared advisor's sole consumer, so its model floor is
-simply this session's own tier — no routing table to take a max against.
+1. Detect the host profile first (protocol **Host profiles**), then walk the model floor.
+2. Floor: the stronger of Opus and this session's own tier on Claude; Opus floor with Fable first on a third-party host.
+3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); one CLI `session_id` on a third-party host via the protocol Claude-chain.
+4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
+5. Skip the multi-consumer "who you are" opener — sole consumer.
+6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
-**Claude host:** follow the shared protocol for the model-floor walk, the
-warm-up spawn and charter, the consult format and cadence, drift-respawn, and
-the CLI fallback — using `team-advisor-agent` as the name and this session as
-the only consumer (skip the "who you are and your assignment" opener in each
-consult; a single-consumer session doesn't need it).
+Full walk, charter, consult packet, Sol routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
 
-**Third-party host:** bind a max-tier Claude advisor through the shared CLI Claude-chain
-in the protocol (Fable max, then Opus max; `claude_chain_runner.py` ranks
-`~/.claude/claude-chain.json` accounts by weekly remaining via `claude_chain_usage`
-and fails over on usage limits). Consult via
-`--resume <session_id>` on that bind. This session is the sole consumer of that
-CLI advisor; skip the multi-consumer opener. When the chain cannot bind or
-reply, fail closed and report to the user — do **not** answer ENDORSE /
-CORRECTION / PLAN / STOP as this third-party session.
+## Consult
+
+Follow **When to call**, **Hard rule**, and **How to treat advice** in `advisor-tool.md`.
+
+Build every first brief with [`_shared/advisor/reference/consult-format.md`](../../_shared/advisor/reference/consult-format.md). Later briefs carry only the delta and changed evidence.
+
+Aim for two consults on a normal task: one after orientation and one after writes and validation. Reserve a third for advisory recovery or reconciliation guidance, and add a consult when a material fork produces new evidence. This is an advisory target owned by the task, not a cap or gate.
 
 ## Constraints
 
-- One advisor bind per session (`team-advisor-agent` on Claude; one CLI
-  `session_id` on a third-party host), owned by this session for its whole lifecycle
-  (spawn or CLI bind, drift re-bind, shutdown) — see
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
-- Never bind the advisor, or its CLI path, at a tier below the protocol floor
-  for this host (Claude: this session's own tier; a third-party host: Opus floor
-  with Fable first).
-- The advisor only answers. It never edits a file, never runs a build or
-  test, and never posts anything on the session's behalf.
-
-## File Index
-
-| File | Purpose |
-|---|---|
-| `SKILL.md` | Pointer to the shared advisor protocol; this session's consumer-specific wiring and constraints. |
-
-## Folder Map
-
-- `SKILL.md` — complete team-advisor workflow instructions.
+- One bind per session; this session owns spawn or CLI bind, drift re-bind, and shutdown.
+- Bind at or above the protocol floor for this host.
+- The advisor only answers (messaging); the session runs tools and posts.

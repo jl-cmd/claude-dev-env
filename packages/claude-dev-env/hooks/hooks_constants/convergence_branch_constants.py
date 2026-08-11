@@ -1,7 +1,6 @@
 """Convergence branch naming policy constants.
 
 Shared by destructive_command_blocker convergence-branch exemptions
-and convergence_gate_blocker pre-flight checks.
 """
 
 ALL_CONVERGENCE_BRANCH_PREFIXES: tuple[str, ...] = ("claude/", "worktree-")

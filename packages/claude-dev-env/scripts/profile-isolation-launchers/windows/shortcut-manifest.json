@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "unsuffixedNames": "Native Desktop wins: Claude Profile A and Claude Profile B",
+    "browserNames": "Chrome variants use explicit Web or Chrome source labels",
+    "authority": "The owner confirms or revises this policy before live mutation.",
+    "liveMutationAuthorized": false
+  },
+  "allManagedShortcuts": [
+    {
+      "id": "desktop-profile-a-native",
+      "visibleName": "Claude Profile A",
+      "source": "native-desktop",
+      "profileId": "profile-a",
+      "locationKind": "desktop",
+      "targetKind": "native-launcher",
+      "launcherName": "claude-profile-a",
+      "groupingIdentity": "native-profile-a"
+    },
+    {
+      "id": "desktop-profile-b-native",
+      "visibleName": "Claude Profile B",
+      "source": "native-desktop",
+      "profileId": "profile-b",
+      "locationKind": "desktop",
+      "targetKind": "native-launcher",
+      "launcherName": "claude-profile-b",
+      "groupingIdentity": "native-profile-b"
+    },
+    {
+      "id": "start-profile-a-chrome",
+      "visibleName": "Claude Profile A (Chrome)",
+      "source": "chrome-start-menu",
+      "profileId": "profile-a",
+      "locationKind": "start-menu",
+      "targetKind": "chrome-profile",
+      "launcherName": "claude-profile-a",
+      "groupingIdentity": "chrome-profile-a"
+    },
+    {
+      "id": "start-profile-b-chrome",
+      "visibleName": "Claude Profile B (Chrome)",
+      "source": "chrome-start-menu",
+      "profileId": "profile-b",
+      "locationKind": "start-menu",
+      "targetKind": "chrome-profile",
+      "launcherName": "claude-profile-b",
+      "groupingIdentity": "chrome-profile-b"
+    }
+  ]
+}

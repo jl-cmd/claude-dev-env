@@ -36,8 +36,6 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from verification_verdict_store import resolve_repo_root  # noqa: E402
-
 from blocking._gh_body_arg_utils import (  # noqa: E402
     all_value_flags,
     count_extra_tokens_to_skip_for_split_quoted_value,
@@ -68,6 +66,7 @@ from hooks_constants.conventional_pr_title_gate_constants import (  # noqa: E402
     YAML_LIST_ITEM_PREFIX,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.project_paths_reader import find_git_root as resolve_repo_root  # noqa: E402
 
 
 def _matches_gh_pr_title_subcommand(command: str) -> bool:

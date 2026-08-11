@@ -12,7 +12,7 @@ what the system **is**, not how it got there.
 
 | File | Role |
 |------|------|
-| `claude-code-on-the-web.md` | How to mirror this config into Claude Code on the web: the environment setup script that installs `claude-dev-env`, the personal umbrella-package pattern, and the hooks verification check. |
+| `claude-code-on-the-web.md` | How to mirror this config into Claude Code on the web: the environment setup script that installs `claude-dev-env`, the SessionStart refresh hook that keeps the cached install fresh, the personal umbrella-package pattern, and the hooks verification check. |
 
 ## Subdirectories
 

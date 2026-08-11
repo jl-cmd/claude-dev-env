@@ -5,9 +5,9 @@
 Before the first round, the workflow checks once whether the PR branch conflicts
 with `origin/main`. When GitHub reports a conflict (`mergeable` false or
 `mergeable_state` dirty), one `clean-coder` rebases the branch onto `origin/main`
-and resolves every conflict — gated the same way as every other code change: the
-edit leaves the rebase in the working tree, a `code-verifier` binds a verdict to
-it, and the commit step force-pushes with lease. The bug checks then run on a
+and resolves every conflict — the edit remains in the working tree, review and
+verification follow the [review guide](../../reviews/SKILL.md#review-workflow),
+and the commit step force-pushes with lease. The bug checks then run on a
 conflict-free diff.
 
 A PR that merges cleanly skips the rebase. A conflict that surfaces mid-run, when
@@ -61,8 +61,8 @@ confirmation gates that are expected to return zero.
    the round re-runs, so the reading lenses only ever review sweep-clean code.
 3. Run three reading lenses in parallel on that HEAD, each over the full
    `origin/main...HEAD` diff. Each lens receives the preflight's changed-file
-   list and diffstat and reads only the files it needs from that list rather than
-   re-deriving the diff; each lens forms its own review judgment.
+list and diffstat and reads only the files it needs from that list rather than
+re-deriving the diff; each lens applies the [review guide](../../reviews/SKILL.md#review-judgment).
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`),
      report-only workflow agent — see runCodeReviewLens in workflow/converge.mjs for its configuration.
      The built-in `/code-review` command is a separate surface outside this
@@ -113,8 +113,8 @@ When the already-deduped findings for a phase are all severity P2 (and not
 standards-only), the phase still applies the fixes once. If the fix does **not**
 move HEAD (for example `resolvedWithoutCommit`), the phase treats that HEAD as
 clean and advances forward. If the fix **does** move HEAD, the run re-enters
-CONVERGE on the fixed SHA so HEAD-bound CLEAN/review stamps rebuild before
-FINALIZE — those stamps are SHA-specific. The three CONVERGE reading lenses stay
+CONVERGE on the fixed SHA so the current review state rebuilds before
+FINALIZE. The three CONVERGE reading lenses stay
 parallel; the P2-only decision is a routing branch on the deduped set after
 `resolveRoundOutcome` / gate classification. Mixed P0/P1 findings keep the
 existing fix + re-converge path.
@@ -152,7 +152,8 @@ existing fix + re-converge path.
 - Runs after Bugbot and Copilot. Honors `reviews_disabled.py --reviewer codex`,
   the weekly usage probe via `is_codex_review_required` (shared threshold
   constant — no inline percent), and the wrapper's `codex_down` class.
-- Opt-out token or `codex_down` → set `codexDown`, no stamp, move to the
+- Missing opt-in (the default), opt-out token, or `codex_down` → set
+  `codexDown`, no stamp, move to the
   convergence check with `--codex-down`. A `codex_down` classification also
   records a `codexNote` so the skip stays visible in the final report.
 - Usage at/below threshold or null → skip with no stamp; the machine checklist

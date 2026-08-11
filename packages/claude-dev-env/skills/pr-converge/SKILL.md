@@ -168,9 +168,8 @@ when `$CLAUDE_JOB_DIR` is gone.
 
 Fields: `phase`, `tick_count`, `bugbot_clean_at`, `code_review_clean_at`,
 `bugteam_clean_at`, `copilot_clean_at`, `merge_state_status`, `current_head`,
-`bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`,
-`bugteam_skill_invoked_at_head`, `bugteam_skill_invoked_at_tick`,
-`agents_session_id`, `persistent_agents`.
+`bugbot_acknowledged_at`, `bugbot_down`, `copilot_down`, `agents_session_id`,
+`persistent_agents`.
 
 ## Persistent per-step agents
 
@@ -185,21 +184,22 @@ the `persistent_agents` map
   or threads, and the report-back contract. Bump `last_used_tick`, then
   await completion.
 - **First spawn:** `Agent(subagent_type: "clean-coder", name:
-  "prc-fix-<PR#>")` — the `name` makes the agent a persistent teammate
+  "prc-fix-<PR#>", model: "sonnet")` — worker-model routing per
+  [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing);
+  resolver-supplied sonnet-equivalent on third-party hosts. The `name`
+  makes the agent a persistent teammate
   that idles awaiting messages. Record `{agent_id, created_tick,
-  last_used_tick}` under the step key. Keep the spawn prompt fix-shaped,
-  never audit-shaped: the `pr_converge_bugteam_enforcer` hook blocks
-  audit-shaped clean-coder spawns during the BUGTEAM phase.
+  last_used_tick}` under the step key. Keep the spawn prompt focused on the
+  current fix. Step 6 sends audit judgment through the
+  [review guide](../reviews/SKILL.md#review-workflow).
 - **Stale or dead id:** on a `SendMessage` failure, or no acknowledgment
   within one bounded wait, drop the map entry, spawn a fresh named agent,
   record it, and continue the tick. Never abort a tick on a stale id;
   never retry the same dead id.
 - **Fresh every round (never persisted):** the Step 5 host-aware
   `invoke_code_review.py` / `/code-review ultra --fix` pass and the Step 6
-  bugteam audit (unbiased eyes each round; the enforcer needs the formal
-  Skill call), and every `code-verifier` — a named code-verifier never fires
-  `SubagentStop`, so no verdict mints (see the named-`code-verifier` entry
-  in the Gotchas list below).
+  bugteam audit. Apply the [review guide](../reviews/SKILL.md#review-workflow)
+  to each review pass.
 - **Shutdown:** at loop end (convergence or a stop condition), send each
   persistent agent a shutdown request and clear `persistent_agents` before
   the `pr-loop-lifecycle` Close.
@@ -260,7 +260,6 @@ post a fresh PR in a fresh branch based on origin main to the user.
   [Step 1.5](reference/per-tick.md). Skipping this reviews and edits the
   wrong repo. The route is routine and automatic — never a material fork
   to pause on.
-- **A named/teammate `code-verifier` never mints a verdict** — In a background-job session, an `Agent`-tool `code-verifier` spawned with a `name` (or otherwise as a persistent teammate) goes idle/"available" awaiting messages rather than terminating, so its `SubagentStop` never fires. `verifier_verdict_minter.py` mints the verdict only on `SubagentStop`, so no verdict file is written and `verified_commit_gate` blocks the `git commit`/`git push` with "no passing verification verdict" even though the verifier emitted `all_pass`. A `shutdown_request` is ignored and `TaskStop` cannot resolve the teammate's id. Spawn the code-verifier as a one-shot agent with NO `name` (a plain async `Agent` call) so it runs to completion and fires `SubagentStop`, minting the verdict bound to the live surface. Keep the work tree frozen between verification and the commit so the minted surface hash still matches.
 
 ## Progress checklist
 
@@ -330,7 +329,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
             → `bugbot_clean_at = current_head` → Step 7
       - [ ] **no review / commit_id mismatch** → `reviewer-gates` Bugbot flow (Gate 3):
-            silent pass → stamp + Step 7; queued/triggered → ScheduleWakeup 360s or portable in-session poll → Step 4;
+            silent pass → Step 7; queued/triggered → ScheduleWakeup 360s or portable in-session poll → Step 4;
             down → `bugbot_down = true` → Step 7
 
 - [ ] **Step 5: CODE-REVIEW — static sweep, review, fix, advance**
@@ -370,9 +369,10 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`reference/per-tick.md` § Step 2 BUGTEAM](reference/per-tick.md);
       [`../bugteam/SKILL.md`](../bugteam/SKILL.md).
       Pre-condition: `code_review_clean_at == current_head`.
-      Mandatory: `Skill({skill: "bugteam", args: "<PR URL>"})` this tick
-      (enforcer-blocked otherwise; `qbug` is not a substitute). Scope: FULL
-      `origin/main...HEAD` diff. Re-resolve HEAD after bugteam.
+      Mandatory: `Skill({skill: "bugteam", args: "<PR URL>"})` this tick.
+      Use the [review guide](../reviews/SKILL.md#review-workflow) for its
+      judgment. `qbug` is not a substitute. Scope: FULL `origin/main...HEAD`
+      diff. Re-resolve HEAD after bugteam.
 
       - [ ] **bugteam pushed** → verify threads replied + resolved → reset markers
             → `phase = CODE_REVIEW` → ScheduleWakeup 360s or portable in-session poll → Step 5
@@ -389,7 +389,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       before these gates run. Count unresolved threads before each gate.
       Every gate records evidence; gate (f) cites evidence from (a)–(e).
 
-      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → stamp `copilot_clean_at`; absent → continue; when `copilot_down`, skip
+      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → record `copilot_clean_at`; absent → continue; when `copilot_down`, skip
       - [ ] **(b) Claude reviewer** — fetch Claude on `current_head`; dirty → fix + return to Step 5; clean or absent → continue
       - [ ] **(c) Mergeability** — `mergeable_state == "clean"` and `mergeable == true`; dirty → rebase + return to Step 1; blocked/behind/unknown/unstable → hard blocker
       - [ ] **(d) Post-convergence Copilot request** — request Copilot when not pending and not `copilot_down`; enter `COPILOT_WAIT` (Step 7a); when `copilot_down`, skip to (e)

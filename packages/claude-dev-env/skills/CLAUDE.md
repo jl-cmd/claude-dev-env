@@ -17,7 +17,9 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 
 ## Shared support code
 
-`_shared/` — support code used by more than one skill. It holds `pr-loop/`, which provides prompt templates and Python helper scripts shared across the PR-loop skills, and `advisor/`, which provides the shared warm-advisor protocol used by `team-advisor`, `orchestrator`, and `orchestrator-refresh`.
+**`skills/_shared/`** — skill-local PR-loop helpers plus `@` stubs that name
+canonical homes under **`@~/.claude/_shared/`** (advisor protocol, PR-loop
+contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`. End-of-run gotchas: `skills/_shared/end-of-run-gotcha-recommendations.md`.
 
 ## Skill groups
 
@@ -25,7 +27,7 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `anthropic-plan` — creates a source-grounded plan packet before any code changes
 - `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor (Claude warm `session-advisor` via SendMessage; a third-party host: max-tier Claude via CLI Claude-chain)
 - `orchestrator-refresh` — sub-skill fired by the `/orchestrator` loop to re-assert the host-matched shared-advisor discipline mid-run (Claude SendMessage; a third-party host's Claude CLI chain, no Agent-tool advisor spawn)
-- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; a third-party host: max-tier Claude via CLI Claude-chain, fail closed when unreachable) and consults it for a second opinion before a big decision, at completion, when stuck, or when reconsidering the approach
+- `team-advisor` — binds one advisor at the strongest reachable tier (Claude warm agent; a third-party host: max-tier Claude via CLI Claude-chain, fail closed when unreachable); consult cadence and weight live in `docs/references/advisor-tool.md`
 - `grokify` — builds a paste-ready Grok Build handoff with a Claude advisor charter
 - `grok-spawn` — orchestrator playbook for fleets of headless grok CLI workers (preflight, batch spec, `spawn_grok_batch.py`)
 
@@ -40,15 +42,27 @@ Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/
 - `pr-loop-lifecycle` — opens and closes a PR-loop run (grant, teardown, PR description, revoke, report)
 - `pr-loop-cloud-transport` — six-step transport workflow that lets any PR-loop skill run in a session whose `gh` CLI is absent or cannot act on the PR (MCP schema load, origin/HEAD fix, identity rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check)
 
+**Code review guides (Google eng-practices, adapted for an AI reviewer)**
+- `small-cl` — the Small CLs guide; refs: handling reviewer comments
+- `comments` — writing review comments and handling reviewer comments; refs: the review standard, pushback, respectful code reviews
+- `reviews` — the reviewer guide: standard, what to look for, navigating a CL, speed, pushback; refs: CL descriptions, review comments, emergencies, style guides, the two guide indexes
+- `descriptions` — writing good CL descriptions
+- `emergencies` — what counts as an emergency change; refs: what to look for, speed
+- Focused pull request guidance: [`small-cl/SKILL.md`](small-cl/SKILL.md)
+
 **Research and discovery**
 - `recall` — retrieves facts from memory files
 - `remember` — saves a decision, gotcha, or architectural choice to the Obsidian vault
 - `everything-search` — file-system search via the Everything `es.exe` CLI
+- `beat-sheet` — reformats a reply as short single-line beats
+- `show` — creates and reviews inline visual explanations: diagrams, interactive widgets, mockups, charts, and illustrations
 
 **Session and workflow management**
 - `session-log` — logs a session report to the Obsidian vault
 - `session-tidy` — tidies the session folder
 - `task-build` — gathers open tasks
+- `issue-tracker` — one consistent way to create, update in place, and close GitHub issues for a work-stream: one epic parent with native sub-issues, dedup-first, marker-delimited body sections edited in place, and an epic checklist mirroring the children
+- `closeout` — session-end entry that harvests obstacles into issue-candidate records and delegates filing to the `issue-tracker` agent (skill fallback), keeping the user-validation gate on each draft
 - `privacy-hygiene` — full-repo personal-data and secret sweep plus remediation guide
 - `update` — updates the dev-env package
 - `fresh-branch` — creates a clean branch off main

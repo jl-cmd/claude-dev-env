@@ -9,5 +9,19 @@
   },
   "worktree": {
     "bgIsolation": "none"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/session_start_refresh.py\" || python .claude/hooks/session_start_refresh.py",
+            "timeout": 630
+          }
+        ]
+      }
+    ]
   }
 }

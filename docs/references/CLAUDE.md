@@ -13,8 +13,11 @@ edit third-party content.
 | File | Role |
 |------|------|
 | `skill-install-system.md` | Internal design doc: how skills, rules, hooks, and config travel from `packages/claude-dev-env/` to `~/.claude/` via the install pipeline. **Read this before adding a skill or changing install behavior.** |
+| `plugin-channel-inventory.json` | R2A measured inventory of plugin-channel consumers: classifications, selected-profile collision boolean with readback evidence, and version drift between package 2.8.0 and plugin metadata 1.0.0. |
 | `cloud-pr-loop-compatibility.md` | Zero-context runbook for running the PR-loop skill family in Claude Code cloud sessions: verified environment facts, root causes, the gh-to-MCP substitution matrix, a session preamble, a phased per-file remediation plan, a probe appendix, and account-owner actions. |
 | `anthropic-harnessing-claudes-intelligence-technique-inventory.md` | Inventory of prompting and agentic techniques from Anthropic research. |
+| `tabbed-decision-artifact-template.md` | Guide to the tabbed decision artifact: when the format fits, every field, and how to reskin it. |
+| `tabbed-decision-artifact-template.html` | The template itself: a one-page artifact with one tab per open decision, a choice card and note box per tab, and a button that copies every answer as one block of text. |
 | `bdd in action.pdf` | BDD reference material. |
 | `Thariq on X_ _Lessons from Building Claude Code_...html` | Archived X post: lessons from building Claude Code, covering skill design. |
 | `Thariq on X_ _Using Claude Code_ The Unreasonable Effectiveness of HTML_...html` | Archived X post: using Claude Code with HTML-centric workflows. |

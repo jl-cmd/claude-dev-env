@@ -47,3 +47,8 @@ Reserve user questions for:
 
 **Wrong:** "Is there a Prisma schema in this project?"
 **Right:** Glob for `schema.prisma` and check.
+
+## Parent rules
+
+- [`ask-user-question-required.md`](ask-user-question-required.md) — once a question genuinely belongs to the user, this rule routes it through `AskUserQuestion`.
+- [`verify-runtime-state.md`](verify-runtime-state.md) — the same duty applied to a verdict: gather the live probe before you conclude, not just before you ask.

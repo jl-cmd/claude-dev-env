@@ -18,6 +18,7 @@ concern focused. The separate ``tdd_enforcer.py`` hook accepts any
 import json
 import sys
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
 
@@ -285,7 +286,15 @@ def validate_content(
         all_issues.extend(check_logging_adjacent_string_literals(content, file_path))
         all_issues.extend(check_windows_api_none(content))
         all_issues.extend(check_naive_datetime_construction(content, file_path))
-        all_issues.extend(check_magic_values(content, file_path))
+        all_issues.extend(
+            _fragment_or_deferred_check(
+                check_magic_values,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_fstring_structural_literals(content, file_path))
         all_issues.extend(check_constants_outside_config(content, file_path))
         all_issues.extend(check_config_duplicate_path_anchor(content, file_path))
@@ -358,9 +367,21 @@ def validate_content(
         all_issues.extend(
             check_class_docstring_names_public_methods(effective_content, file_path)
         )
-        all_issues.extend(check_docstring_runon_sentence(effective_content, file_path))
         all_issues.extend(
-            check_docstring_prose_wall_without_illustration(effective_content, file_path)
+            check_docstring_runon_sentence(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            check_docstring_prose_wall_without_illustration(
+                effective_content,
+                file_path,
+                all_changed_lines,
+                defer_scope_to_caller,
+            )
         )
         all_issues.extend(
             check_module_docstring_names_public_checks(effective_content, file_path)
@@ -508,8 +529,24 @@ def validate_content(
         all_issues.extend(check_polarity_name_contradiction(content, file_path))
         all_issues.extend(check_inline_literal_collections(content, file_path))
         all_issues.extend(check_inline_tuple_string_magic(content, file_path))
-        all_issues.extend(check_join_separator_string_magic(content, file_path))
-        all_issues.extend(check_string_literal_magic(content, file_path))
+        all_issues.extend(
+            _fragment_or_deferred_check(
+                check_join_separator_string_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            _fragment_or_deferred_check(
+                check_string_literal_magic,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
+            )
+        )
         all_issues.extend(check_whitespace_indentation_magic(content, file_path))
         all_issues.extend(check_orphan_css_classes(effective_content, file_path))
         check_incomplete_mocks(content, file_path)
@@ -723,6 +760,124 @@ def _without_line_prefix(violation_text: str) -> str:
     return violation_text
 
 
+def _issues_absent_from_prior_bodies(
+    all_candidate_issues: list[str],
+    all_prior_issues: list[str],
+) -> list[str]:
+    """Return candidates whose message bodies are not covered by prior issues.
+
+    Matching is line-number-agnostic with per-occurrence accounting: each prior
+    entry consumes exactly one candidate carrying the same body.
+
+    ::
+
+        prior:    ["Line 1: magic 'X'"]
+        candidates: ["Line 4: magic 'X'", "Line 9: magic 'Y'"]
+        -> ["Line 9: magic 'Y'"]
+
+    Args:
+        all_candidate_issues: Findings from the scan under review.
+        all_prior_issues: Findings that already account for a body.
+
+    Returns:
+        Candidates not consumed by a matching prior body.
+    """
+    remaining_prior_counts = Counter(
+        _without_line_prefix(each_issue) for each_issue in all_prior_issues
+    )
+    all_uncovered_issues: list[str] = []
+    for each_issue in all_candidate_issues:
+        message_body = _without_line_prefix(each_issue)
+        if remaining_prior_counts[message_body] > 0:
+            remaining_prior_counts[message_body] -= 1
+            continue
+        all_uncovered_issues.append(each_issue)
+    return all_uncovered_issues
+
+
+def _fragment_or_deferred_check(
+    check_function: Callable[[str, str], list[str]],
+    old_content: str,
+    new_content: str,
+    file_path: str,
+    defer_scope_to_caller: bool,
+) -> list[str]:
+    """Run a check with fragment baselining, or full-file when the gate owns scope.
+
+    The commit/push gate sets ``defer_scope_to_caller`` and passes HEAD as
+    ``old_content`` while scanning the current file (often the same blob on a
+    clean worktree). Fragment baselining would grandfather every finding there,
+    so the gate path runs the check on ``new_content`` alone and classifies by
+    added line afterward. PreToolUse Edit keeps baselining against the prior
+    fragment.
+
+    ::
+
+        defer=True, old==new with magic 9999
+            -> [Line 2: Magic value 9999 ...]  gate still sees it
+        defer=False, old and new both carry the same magic
+            -> []  grandfathered for wide Edit
+
+    Args:
+        check_function: A ``(content, file_path) -> list[str]`` check.
+        old_content: Prior fragment or gate HEAD blob.
+        new_content: Proposed fragment or current full file.
+        file_path: Destination path used for path-based exemptions.
+        defer_scope_to_caller: True when the gate will scope by added line.
+
+    Returns:
+        Findings from the check, baselined against ``old_content`` only when
+        ``defer_scope_to_caller`` is False.
+    """
+    if defer_scope_to_caller:
+        return check_function(new_content, file_path)
+    return _issues_introduced_in_fragment(
+        check_function, old_content, new_content, file_path
+    )
+
+
+def _issues_introduced_in_fragment(
+    check_function: Callable[[str, str], list[str]],
+    old_content: str,
+    new_content: str,
+    file_path: str,
+) -> list[str]:
+    """Return fragment findings that are new relative to the pre-edit fragment.
+
+    Grades both the prior and proposed Edit fragments with the same check, then
+    subtracts findings whose message body already appears in the prior scan.
+    Per-occurrence accounting keeps a second identical new finding when only
+    one matching body existed before. Line numbers on kept findings come from
+    the proposed fragment so diagnostics point at the introduced location.
+
+    ::
+
+        old:  def f(): return os.environ['STRIPE_SECRET']
+        new:  def f(): return os.environ['STRIPE_SECRET']  # same body
+              -> []  grandfathered
+        old:  def f(): return 0
+        new:  def f(): return os.environ['STRIPE_SECRET']
+              -> [Line ...: string magic value 'STRIPE_SECRET' ...]
+
+    Args:
+        check_function: A ``(content, file_path) -> list[str]`` check.
+        old_content: The Edit's prior ``old_string`` fragment, or empty when
+            there is no prior region to baseline against.
+        new_content: The Edit's ``new_string`` fragment (or Write body).
+        file_path: Destination path used for path-based exemptions.
+
+    Returns:
+        Findings present in ``new_content`` that are absent from ``old_content``
+        under line-number-agnostic body matching. When ``old_content`` is empty,
+        every finding from ``new_content`` is returned.
+    """
+    all_new_issues = check_function(new_content, file_path)
+    if not old_content:
+        return all_new_issues
+    all_old_issues = check_function(old_content, file_path)
+    return _issues_absent_from_prior_bodies(all_new_issues, all_old_issues)
+
+
 def _forecast_full_file_violations(
     full_file_content_after_edit: str,
     file_path: str,
@@ -763,17 +918,7 @@ def _forecast_full_file_violations(
     all_full_file_issues = validate_content(
         full_file_content_after_edit, file_path, prior_full_file_content
     )
-    remaining_blocking_counts = Counter(
-        _without_line_prefix(each_issue) for each_issue in all_blocking_issues
-    )
-    forecast_issues: list[str] = []
-    for each_issue in all_full_file_issues:
-        message_body = _without_line_prefix(each_issue)
-        if remaining_blocking_counts[message_body] > 0:
-            remaining_blocking_counts[message_body] -= 1
-            continue
-        forecast_issues.append(each_issue)
-    return forecast_issues
+    return _issues_absent_from_prior_bodies(all_full_file_issues, all_blocking_issues)
 
 
 def _precheck_hint() -> str:

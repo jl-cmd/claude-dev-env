@@ -125,7 +125,6 @@ Shape:
       "tool_profile": "readonly",
       "timeout_seconds": 600,
       "is_repo_only": true,
-      "max_turns": 8,
       "agent_name": null
     }
   ]
@@ -141,10 +140,18 @@ Shape:
 | `prompt_parts` | Ordered absolute paths to part files |
 | `cwd` | Working directory for that worker |
 | `tool_profile` | `readonly` or `build` |
-| `timeout_seconds` | Per-worker timeout (default 600) |
+| `timeout_seconds` | Per-worker timeout (default 600, ceiling 5400). A spec asking for more is refused |
 | `is_repo_only` | Readonly only: when true, also pass `--disable-web-search` |
-| `max_turns` | Turn cap (default 8) |
 | `agent_name` | Optional `--agent` name, or `null` |
+
+Workers run with no turn cap. The timeout is the only bound on a worker's
+length, and a worker that hits it is killed with its whole process tree and
+reported as `timeout`.
+
+A worker entry accepts these fields and no others. Any other key fails the
+load with an error naming the stray key and listing the accepted set, so a
+misspelled field shows up at startup rather than passing for a setting that
+took effect.
 
 Put the spec file under the run state directory (or any path you pass to
 `--spec`).
@@ -224,3 +231,8 @@ Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handof
 
 - `SKILL.md` — hub and process.
 - `reference/` — brief templates and flag profiles.
+
+## Worker advisors
+
+Each grok worker binds a unique Opus-high dvisor_session_id through the lead-supplied dvisor.launcher in the batch spec (committed default is a placeholder). Reports require the same handle\'s ENDORSE (or bounded CORRECTION/PLAN then ENDORSE); STOP or malformed signals end as advisor_blocked.
+

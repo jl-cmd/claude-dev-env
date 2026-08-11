@@ -22,5 +22,5 @@ ALL_STOP_HOSTED_HOOK_PATHS: tuple[str, ...] = (
     "blocking/question_to_user_enforcer.py",
     "blocking/intent_only_ending_blocker.py",
     "blocking/session_handoff_blocker.py",
-    "diagnostic/hook_log_stop_wrapper.py",
+    "blocking/eli11_reply_enforcer.py",
 )

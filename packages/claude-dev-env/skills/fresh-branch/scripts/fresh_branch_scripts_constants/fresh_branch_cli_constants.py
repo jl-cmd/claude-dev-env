@@ -1,7 +1,7 @@
 """Constants for the fresh-branch worktree creator.
 
-Groups: default refs, agent detection, path layout, JSON payload keys,
-exit codes, and unique-path suffix limits.
+Groups: default refs, agent detection, path layout, CLI flags, JSON payload
+keys, exit codes, and unique-path suffix limits.
 """
 
 from __future__ import annotations
@@ -23,9 +23,13 @@ ALL_AGENT_DETECTION_MARKERS: tuple[tuple[str, str], ...] = (
 PATH_SEGMENT_CURRENT = "."
 PATH_SEGMENT_PARENT = ".."
 
-WINDOWS_PLATFORM_PREFIX = "win"
-ALL_WINDOWS_USER_SCRATCH_PARTS = ("AppData", "Local", "Temp")
-USERPROFILE_ENV_VAR = "USERPROFILE"
+ALL_REPOSITORY_WORKTREE_ROOT_PARTS = (".claude", "worktrees")
+
+CLI_FLAG_WORKTREE_ROOT = "--worktree-root"
+CLI_HELP_WORKTREE_ROOT = (
+    "Absolute isolated root for worktrees "
+    "(default: <repo>/.claude/worktrees). Agent and branch nest under it."
+)
 
 MAXIMUM_UNIQUE_PATH_ATTEMPTS = 100
 UNIQUE_PATH_SUFFIX_START = 2
@@ -62,7 +66,8 @@ ERROR_BRANCH_NAME_REQUIRED = "branch name is required"
 ERROR_BRANCH_NAME_UNSAFE = (
     "branch name must be a relative path without '.' or '..' segments"
 )
-ERROR_WORKTREE_PATH_OUTSIDE_ROOT = "worktree path escapes agent root: %s"
+ERROR_WORKTREE_PATH_OUTSIDE_ROOT = "worktree path escapes configured root: %s"
+ERROR_WORKTREE_ROOT_NOT_ABSOLUTE = "--worktree-root must be an absolute path"
 ERROR_CLI_ARGUMENTS = "invalid or missing command-line arguments"
 ERROR_AGENT_SLUG_INVALID = "agent slug must be lowercase letters, digits, or hyphens"
 ERROR_REPO_NOT_GIT = "path is not inside a git repository: %s"

@@ -8,7 +8,7 @@ Python hook scripts wired into Claude Code's lifecycle via `settings.json`. Each
 |---|---|
 | `advisory/` | Hooks that warn but do not block (`permissionDecision: "ask"`) |
 | `blocking/` | Hooks that deny tool calls when a rule is violated |
-| `blocking/config/` | Shared constants for the verified-commit gate family |
+| `blocking/config/` | Shared constants for blocking hooks |
 | `diagnostic/` | Hooks that record and extract hook-firing records into Neon |
 | `diagnostic/migrations/` | SQL migrations for the `hook_events` Neon schema |
 | `diagnostic/queries/` | Parameterized SQL queries for inspecting blocked commands |

@@ -45,8 +45,9 @@ def test_allows_proactive_status() -> None:
     assert _should_block(PROACTIVE_STATUS) is False
 
 
-def test_corrective_message_points_to_show_asset() -> None:
-    assert "Show-Asset.ps1" in CORRECTIVE_MESSAGE
+def test_corrective_message_points_to_native_windows_app() -> None:
+    assert "native Windows app" in CORRECTIVE_MESSAGE
+    assert "Show-Asset.ps1" not in CORRECTIVE_MESSAGE
 
 
 def test_corrective_message_names_proactive_escape_hatch() -> None:
@@ -71,7 +72,7 @@ def test_main_blocks_normal_attach() -> None:
     output_text = _run_main_with_io(json.dumps(hook_input))
     output = json.loads(output_text)
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "Show-Asset.ps1" in output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "native Windows app" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 def test_main_allows_proactive_attach() -> None:

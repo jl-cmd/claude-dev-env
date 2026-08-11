@@ -15,7 +15,25 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
+from claude_chain_runner import (  # noqa: E402
+    ChainEntry,
+    default_affinity_state_path,
+    extract_resume_session_id,
+    load_affinity_store,
+    lookup_affinity_command,
+    order_entries_for_resume,
+    record_affinity_binding,
+    save_affinity_store_atomic,
+)
 from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
+    AFFINITY_KEY_ALL_BINDINGS,
+    AFFINITY_KEY_COMMAND,
+    AFFINITY_KEY_SCHEMA_VERSION,
+    AFFINITY_KEY_SESSION_ID,
+    AFFINITY_MAXIMUM_ENTRIES,
+    AFFINITY_STATE_FILENAME,
+    AFFINITY_STATE_SCHEMA_VERSION,
+    RESUME_SESSION_FLAG,
     ALL_USAGE_LIMIT_SIGNATURES,
     ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
     ATTEMPT_STATUS_NONZERO_EXIT,
@@ -24,11 +42,13 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     ATTEMPT_STATUS_USAGE_LIMITED,
     ATTEMPT_SUMMARY_ENTRY_TEMPLATE,
     ATTEMPT_SUMMARY_JOIN_SEPARATOR,
+    CHAIN_ADVISOR_BLOCKED_EXIT_CODE,
     CHAIN_CONFIG_ERROR_EXIT_CODE,
     CHAIN_EXHAUSTED_EXIT_CODE,
     CHAIN_EXHAUSTED_MESSAGE_TEMPLATE,
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_ARGUMENTS_SEPARATOR,
+    CLI_ROUTING_MODE_FLAG,
     CLI_TIMEOUT_FLAG,
     CODEC_ERROR_STRATEGY,
     CONFIG_CHAIN_EMPTY_REASON,
@@ -48,6 +68,11 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
     DEFAULT_TIMEOUT_SECONDS,
     EXAMPLE_CONFIG_FILENAME,
     NO_COMPLETED_PROCESS_RETURN_CODE,
+    ROUTING_MODE_ORDERED_ACCOUNT,
+    SESSION_ID_JSON_KEY,
+    TERMINAL_STATUS_ADVISOR_BLOCKED,
+    TERMINAL_STATUS_SERVED,
+    TERMINAL_STATUS_TIMEOUT,
     UTF8_ENCODING,
 )
 
@@ -65,6 +90,15 @@ _EQUAL_WEEKLY_REMAINING_PERCENT = 50.0
 _HIGH_WEEKLY_REMAINING_PERCENT = 90.0
 _MID_WEEKLY_REMAINING_PERCENT = 50.0
 _LOW_WEEKLY_REMAINING_PERCENT = 10.0
+_PRIMARY_LAUNCHER = "primary-launcher"
+_SECONDARY_LAUNCHER = "secondary-launcher"
+_BOUND_SESSION_ID = "session-bound-abc-123"
+_AUTHENTICATION_ERROR_STDERR = "authentication_error: invalid API key"
+_GENERIC_PROCESS_ERROR_STDERR = "unknown flag: --not-a-real-flag"
+_JSON_BIND_STDOUT_WITH_SESSION = (
+    f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+    f'"result":"ENDORSE"}}\n'
+)
 
 
 def _completed(command, returncode, stdout="", stderr=""):
@@ -167,6 +201,12 @@ def _install(
         else _config_order_usage_reporter
     )
     monkeypatch.setattr(runner, "chain_weekly_usage_reporter", active_reporter)
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
     _install_tty_stdin(monkeypatch)
     return recorder
 
@@ -174,11 +214,11 @@ def _install(
 def test_highest_weekly_remaining_is_tried_first(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _LOW_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
         }
     )
     recorder = _install(
@@ -186,17 +226,17 @@ def test_highest_weekly_remaining_is_tried_first(
         config_file,
         {
             "claude": _completed("claude", 0, stdout="from-claude"),
-            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="from-profile-c"),
         },
         weekly_usage_reporter=usage_reporter,
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-ev"
+    assert chain_result.served_command == "claude-profile-c"
     assert chain_result.returncode == 0
-    assert chain_result.stdout == "from-ev"
-    assert recorder.invocations[0][0] == "claude-ev"
+    assert chain_result.stdout == "from-profile-c"
+    assert recorder.invocations[0][0] == "claude-profile-c"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev"
+        "claude-profile-c"
     ]
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_SERVED
 
@@ -205,22 +245,22 @@ def test_usage_limit_failsover_remaining_ranked_accounts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(
-        tmp_path, [_entry("claude"), _entry("claude-ev"), _entry("claude-editor")]
+        tmp_path, [_entry("claude"), _entry("claude-profile-c"), _entry("claude-profile-a")]
     )
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _MID_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
-            "claude-editor": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-a": _LOW_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
         monkeypatch,
         config_file,
         {
-            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude-profile-c": _completed("claude-profile-c", 1, stderr=_A_SIGNATURE),
             "claude": _completed("claude", 0, stdout="ok"),
-            "claude-editor": _completed("claude-editor", 0, stdout="should not run"),
+            "claude-profile-a": _completed("claude-profile-a", 0, stdout="should not run"),
         },
         weekly_usage_reporter=usage_reporter,
     )
@@ -228,7 +268,7 @@ def test_usage_limit_failsover_remaining_ranked_accounts(
     assert chain_result.served_command == "claude"
     assert chain_result.returncode == 0
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev",
+        "claude-profile-c",
         "claude",
     ]
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_USAGE_LIMITED
@@ -238,24 +278,24 @@ def test_usage_limit_failsover_remaining_ranked_accounts(
 def test_non_usage_error_on_highest_ranked_stops_without_rest(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _LOW_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
         monkeypatch,
         config_file,
         {
-            "claude-ev": _completed("claude-ev", 2, stderr="unknown flag"),
+            "claude-profile-c": _completed("claude-profile-c", 2, stderr="unknown flag"),
             "claude": _completed("claude", 0, stdout="should not run"),
         },
         weekly_usage_reporter=usage_reporter,
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-ev"
+    assert chain_result.served_command == "claude-profile-c"
     assert chain_result.returncode == 2
     assert len(chain_result.attempts) == 1
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
@@ -264,11 +304,11 @@ def test_non_usage_error_on_highest_ranked_stops_without_rest(
 def test_weekly_usage_probe_runs_once_per_run_claude(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _HIGH_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _LOW_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
@@ -276,7 +316,7 @@ def test_weekly_usage_probe_runs_once_per_run_claude(
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
-            "claude-ev": _completed("claude-ev", 0, stdout="ok"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="ok"),
         },
         weekly_usage_reporter=usage_reporter,
     )
@@ -287,7 +327,7 @@ def test_weekly_usage_probe_runs_once_per_run_claude(
 def test_usage_reporter_import_failure_falls_back_to_config_order(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
 
     def broken_usage_reporter(
         *, config_path: Path
@@ -299,7 +339,7 @@ def test_usage_reporter_import_failure_falls_back_to_config_order(
         config_file,
         {
             "claude": _completed("claude", 0, stdout="from-claude"),
-            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="from-profile-c"),
         },
         weekly_usage_reporter=broken_usage_reporter,
     )
@@ -316,18 +356,18 @@ def test_usage_reporter_import_failure_falls_back_to_config_order(
 def test_missing_high_remaining_binary_falls_through_to_lower_remaining(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _LOW_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
         monkeypatch,
         config_file,
         {
-            "claude-ev": FileNotFoundError(),
+            "claude-profile-c": FileNotFoundError(),
             "claude": _completed("claude", 0, stdout="from-claude"),
         },
         weekly_usage_reporter=usage_reporter,
@@ -337,7 +377,7 @@ def test_missing_high_remaining_binary_falls_through_to_lower_remaining(
     assert chain_result.returncode == 0
     assert chain_result.stdout == "from-claude"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev",
+        "claude-profile-c",
         "claude",
     ]
     assert [each_attempt.status for each_attempt in chain_result.attempts] == [
@@ -349,18 +389,18 @@ def test_missing_high_remaining_binary_falls_through_to_lower_remaining(
 def test_all_missing_binaries_exhausts_chain(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _LOW_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
         monkeypatch,
         config_file,
         {
-            "claude-ev": FileNotFoundError(),
+            "claude-profile-c": FileNotFoundError(),
             "claude": FileNotFoundError(),
         },
         weekly_usage_reporter=usage_reporter,
@@ -369,7 +409,7 @@ def test_all_missing_binaries_exhausts_chain(
     assert chain_result.served_command is None
     assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev",
+        "claude-profile-c",
         "claude",
     ]
     assert [each_attempt.status for each_attempt in chain_result.attempts] == [
@@ -382,31 +422,31 @@ def test_missing_later_ranked_binary_is_skipped(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(
-        tmp_path, [_entry("claude"), _entry("claude-ev"), _entry("claude-editor")]
+        tmp_path, [_entry("claude"), _entry("claude-profile-c"), _entry("claude-profile-a")]
     )
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _MID_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
-            "claude-editor": _LOW_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-a": _LOW_WEEKLY_REMAINING_PERCENT,
         }
     )
     _install(
         monkeypatch,
         config_file,
         {
-            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude-profile-c": _completed("claude-profile-c", 1, stderr=_A_SIGNATURE),
             "claude": FileNotFoundError(),
-            "claude-editor": _completed("claude-editor", 0, stdout="done"),
+            "claude-profile-a": _completed("claude-profile-a", 0, stdout="done"),
         },
         weekly_usage_reporter=usage_reporter,
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-editor"
+    assert chain_result.served_command == "claude-profile-a"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev",
+        "claude-profile-c",
         "claude",
-        "claude-editor",
+        "claude-profile-a",
     ]
     assert [each_attempt.status for each_attempt in chain_result.attempts] == [
         ATTEMPT_STATUS_USAGE_LIMITED,
@@ -422,28 +462,28 @@ def test_ranked_walk_preserves_extra_args_for_mapped_entry(
         tmp_path,
         [
             _entry("claude", extra_args=["--account", "primary"]),
-            _entry("claude-ev", extra_args=["--account", "ev"]),
+            _entry("claude-profile-c", extra_args=["--account", "profile-c"]),
         ],
     )
     usage_reporter = _usage_reporter_from_remaining(
         {
             "claude": _LOW_WEEKLY_REMAINING_PERCENT,
-            "claude-ev": _HIGH_WEEKLY_REMAINING_PERCENT,
+            "claude-profile-c": _HIGH_WEEKLY_REMAINING_PERCENT,
         }
     )
     recorder = _install(
         monkeypatch,
         config_file,
-        {"claude-ev": _completed("claude-ev", 0)},
+        {"claude-profile-c": _completed("claude-profile-c", 0)},
         weekly_usage_reporter=usage_reporter,
     )
     runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert recorder.invocations[0] == [
-        "claude-ev",
+        "claude-profile-c",
         "-p",
         "hello",
         "--account",
-        "ev",
+        "profile-c",
     ]
 
 
@@ -480,14 +520,14 @@ def test_duplicate_command_entries_are_both_walked(
 def test_entry_absent_from_usage_report_is_still_walked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
 
     def partial_usage_reporter(
         *, config_path: Path
     ) -> list[chain_usage.AccountUsageReport]:
         return [
             chain_usage.AccountUsageReport(
-                command="claude-ev",
+                command="claude-profile-c",
                 weekly_remaining_percent=_HIGH_WEEKLY_REMAINING_PERCENT,
             )
         ]
@@ -496,7 +536,7 @@ def test_entry_absent_from_usage_report_is_still_walked(
         monkeypatch,
         config_file,
         {
-            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude-profile-c": _completed("claude-profile-c", 1, stderr=_A_SIGNATURE),
             "claude": _completed("claude", 0, stdout="ok"),
         },
         weekly_usage_reporter=partial_usage_reporter,
@@ -504,7 +544,7 @@ def test_entry_absent_from_usage_report_is_still_walked(
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert chain_result.served_command == "claude"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
-        "claude-ev",
+        "claude-profile-c",
         "claude",
     ]
 
@@ -512,22 +552,22 @@ def test_entry_absent_from_usage_report_is_still_walked(
 def test_usage_limited_primary_falls_over_to_second(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
-            "claude-ev": _completed("claude-ev", 0, stdout="ok"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="ok"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-ev"
+    assert chain_result.served_command == "claude-profile-c"
     assert chain_result.returncode == 0
     assert chain_result.stdout == "ok"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
         "claude",
-        "claude-ev",
+        "claude-profile-c",
     ]
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_USAGE_LIMITED
     assert chain_result.attempts[1].status == ATTEMPT_STATUS_SERVED
@@ -536,13 +576,13 @@ def test_usage_limited_primary_falls_over_to_second(
 def test_nonzero_exit_without_signature_does_not_fall_over(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 2, stderr="unknown flag"),
-            "claude-ev": _completed("claude-ev", 0, stdout="should not run"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="should not run"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
@@ -555,18 +595,19 @@ def test_nonzero_exit_without_signature_does_not_fall_over(
 def test_timeout_on_primary_does_not_fall_over(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": subprocess.TimeoutExpired(cmd=["claude"], timeout=5),
-            "claude-ev": _completed("claude-ev", 0),
+            "claude-profile-c": _completed("claude-profile-c", 0),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
     assert chain_result.served_command is None
     assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert chain_result.terminal_status == TERMINAL_STATUS_TIMEOUT
     assert len(chain_result.attempts) == 1
     assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
 
@@ -574,22 +615,22 @@ def test_timeout_on_primary_does_not_fall_over(
 def test_missing_primary_binary_falls_through_to_next(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": FileNotFoundError(),
-            "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+            "claude-profile-c": _completed("claude-profile-c", 0, stdout="from-profile-c"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-ev"
+    assert chain_result.served_command == "claude-profile-c"
     assert chain_result.returncode == 0
-    assert chain_result.stdout == "from-ev"
+    assert chain_result.stdout == "from-profile-c"
     assert [each_attempt.command for each_attempt in chain_result.attempts] == [
         "claude",
-        "claude-ev",
+        "claude-profile-c",
     ]
     assert [each_attempt.status for each_attempt in chain_result.attempts] == [
         ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -601,19 +642,19 @@ def test_missing_fallback_binary_is_skipped_and_walk_continues(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(
-        tmp_path, [_entry("claude"), _entry("claude-ev"), _entry("claude-editor")]
+        tmp_path, [_entry("claude"), _entry("claude-profile-c"), _entry("claude-profile-a")]
     )
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
-            "claude-ev": FileNotFoundError(),
-            "claude-editor": _completed("claude-editor", 0, stdout="done"),
+            "claude-profile-c": FileNotFoundError(),
+            "claude-profile-a": _completed("claude-profile-a", 0, stdout="done"),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-editor"
+    assert chain_result.served_command == "claude-profile-a"
     assert [each_attempt.status for each_attempt in chain_result.attempts] == [
         ATTEMPT_STATUS_USAGE_LIMITED,
         ATTEMPT_STATUS_EXECUTABLE_NOT_FOUND,
@@ -624,13 +665,13 @@ def test_missing_fallback_binary_is_skipped_and_walk_continues(
 def test_zero_exit_mentioning_usage_limit_is_success(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 0, stdout=f"note: {_A_SIGNATURE} earlier"),
-            "claude-ev": _completed("claude-ev", 0),
+            "claude-profile-c": _completed("claude-profile-c", 0),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
@@ -643,13 +684,13 @@ def test_zero_exit_mentioning_usage_limit_is_success(
 def test_exhausted_chain_records_every_attempt(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
-            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude-profile-c": _completed("claude-profile-c", 1, stderr=_A_SIGNATURE),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
@@ -666,12 +707,12 @@ def test_reordering_config_changes_walk_order(
 ) -> None:
     behavior_by_command = {
         "claude": _completed("claude", 0, stdout="from-claude"),
-        "claude-ev": _completed("claude-ev", 0, stdout="from-ev"),
+        "claude-profile-c": _completed("claude-profile-c", 0, stdout="from-profile-c"),
     }
     first_config = tmp_path / "first"
     first_config.mkdir()
     config_a = _write_chain_config(
-        first_config, [_entry("claude"), _entry("claude-ev")]
+        first_config, [_entry("claude"), _entry("claude-profile-c")]
     )
     _install(monkeypatch, config_a, behavior_by_command)
     result_a = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
@@ -680,22 +721,22 @@ def test_reordering_config_changes_walk_order(
     second_config = tmp_path / "second"
     second_config.mkdir()
     config_b = _write_chain_config(
-        second_config, [_entry("claude-ev"), _entry("claude")]
+        second_config, [_entry("claude-profile-c"), _entry("claude")]
     )
     _install(monkeypatch, config_b, behavior_by_command)
     result_b = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert result_b.served_command == "claude-ev"
+    assert result_b.served_command == "claude-profile-c"
 
 
 def test_extra_args_are_appended_to_invocation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = _write_chain_config(
-        tmp_path, [_entry("claude", extra_args=["--account", "ev"])]
+        tmp_path, [_entry("claude", extra_args=["--account", "profile-c"])]
     )
     recorder = _install(monkeypatch, config_file, {"claude": _completed("claude", 0)})
     runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert recorder.invocations[0] == ["claude", "-p", "hello", "--account", "ev"]
+    assert recorder.invocations[0] == ["claude", "-p", "hello", "--account", "profile-c"]
 
 
 def test_run_claude_forwards_stdin_text_to_subprocess(
@@ -740,17 +781,17 @@ def test_cli_forwards_piped_stdin_to_invocation(
 def test_signature_matching_is_case_insensitive(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE.upper()),
-            "claude-ev": _completed("claude-ev", 0),
+            "claude-profile-c": _completed("claude-profile-c", 0),
         },
     )
     chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
-    assert chain_result.served_command == "claude-ev"
+    assert chain_result.served_command == "claude-profile-c"
 
 
 def test_cli_passthrough_builds_argument_list_and_timeout(
@@ -794,13 +835,13 @@ def test_cli_served_nonzero_exit_is_passed_through(
 def test_cli_exhausted_chain_exits_nonzero_with_attempt_summary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-ev")])
+    config_file = _write_chain_config(tmp_path, [_entry("claude"), _entry("claude-profile-c")])
     _install(
         monkeypatch,
         config_file,
         {
             "claude": _completed("claude", 1, stderr=_A_SIGNATURE),
-            "claude-ev": _completed("claude-ev", 1, stderr=_A_SIGNATURE),
+            "claude-profile-c": _completed("claude-profile-c", 1, stderr=_A_SIGNATURE),
         },
     )
     exit_code = runner.main([CLI_ARGUMENTS_SEPARATOR, "-p", "hi"])
@@ -810,7 +851,7 @@ def test_cli_exhausted_chain_exits_nonzero_with_attempt_summary(
         ATTEMPT_SUMMARY_ENTRY_TEMPLATE.format(
             command=each_command, status=ATTEMPT_STATUS_USAGE_LIMITED
         )
-        for each_command in ("claude", "claude-ev")
+        for each_command in ("claude", "claude-profile-c")
     )
     assert (
         CHAIN_EXHAUSTED_MESSAGE_TEMPLATE.format(attempt_summary=expected_summary)
@@ -920,11 +961,11 @@ def test_extra_args_default_to_empty_when_omitted(tmp_path: Path) -> None:
 
 def test_load_chain_parses_command_and_extra_args(tmp_path: Path) -> None:
     config_file = _write_chain_config(
-        tmp_path, [_entry("claude", extra_args=["--account", "ev"])]
+        tmp_path, [_entry("claude", extra_args=["--account", "profile-c"])]
     )
     all_entries = runner.load_chain(config_file)
     assert all_entries == [
-        runner.ChainEntry(command="claude", extra_args=("--account", "ev"))
+        runner.ChainEntry(command="claude", extra_args=("--account", "profile-c"))
     ]
 
 
@@ -1119,3 +1160,652 @@ def test_cli_emits_utf8_when_console_encoding_is_legacy(tmp_path: Path) -> None:
     assert completed.returncode == 0
     assert b"Traceback" not in completed.stderr
     assert "report ✅" in completed.stdout.decode(UTF8_ENCODING)
+
+
+def test_usage_limit_classifier_keys_on_exact_signature_constants() -> None:
+    assert ALL_USAGE_LIMIT_SIGNATURES == (
+        "hit your session limit",
+        "usage limit reached",
+        "out of usage",
+        "usage quota exceeded",
+    )
+    assert _A_SIGNATURE in ALL_USAGE_LIMIT_SIGNATURES
+    assert runner._is_usage_limit_failure(
+        _completed("primary-launcher", 1, stderr=_A_SIGNATURE)
+    )
+    assert not runner._is_usage_limit_failure(
+        _completed("primary-launcher", 1, stderr=_GENERIC_PROCESS_ERROR_STDERR)
+    )
+
+
+def test_extract_session_id_from_stdout_reads_json_object_and_ndjson() -> None:
+    single_object = (
+        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+        f'"result":"ENDORSE"}}'
+    )
+    assert runner.extract_session_id_from_stdout(single_object) == _BOUND_SESSION_ID
+    ndjson_stream = (
+        f'{{"type":"system","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}"}}\n'
+        f'{{"type":"result","{SESSION_ID_JSON_KEY}":"{_BOUND_SESSION_ID}",'
+        f'"result":"ok"}}\n'
+    )
+    assert runner.extract_session_id_from_stdout(ndjson_stream) == _BOUND_SESSION_ID
+    assert runner.extract_session_id_from_stdout("not json at all") is None
+    assert runner.extract_session_id_from_stdout("") is None
+
+
+def test_ordered_account_mode_tries_primary_launcher_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert recorder.invocations[0][0] == _PRIMARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 0
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        _PRIMARY_LAUNCHER
+    ]
+
+
+def test_ordered_account_mode_usage_limit_falls_over_to_secondary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 1, stderr=_A_SIGNATURE
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _SECONDARY_LAUNCHER
+    assert chain_result.returncode == 0
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert [each_attempt.command for each_attempt in chain_result.attempts] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_USAGE_LIMITED
+    assert chain_result.attempts[1].status == ATTEMPT_STATUS_SERVED
+
+
+def test_ordered_account_mode_authentication_error_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 1, stderr=_AUTHENTICATION_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == 1
+    assert _AUTHENTICATION_ERROR_STDERR in chain_result.stderr
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
+
+
+def test_ordered_account_mode_timeout_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: subprocess.TimeoutExpired(
+                cmd=[_PRIMARY_LAUNCHER], timeout=5
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == NO_COMPLETED_PROCESS_RETURN_CODE
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_TIMEOUT
+
+
+def test_ordered_account_mode_generic_process_error_is_advisor_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 2, stderr=_GENERIC_PROCESS_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_ADVISOR_BLOCKED
+    assert chain_result.served_command is None
+    assert chain_result.returncode == 2
+    assert len(recorder.invocations) == 1
+    assert chain_result.attempts[0].status == ATTEMPT_STATUS_NONZERO_EXIT
+
+
+def test_ordered_account_mode_configuration_error_does_not_fall_over(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing_config = tmp_path / CONFIG_FILENAME
+    monkeypatch.setattr(runner, "chain_config_path", lambda: missing_config)
+    _install_tty_stdin(monkeypatch)
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == CHAIN_CONFIG_ERROR_EXIT_CODE
+    assert EXAMPLE_CONFIG_FILENAME in captured.err
+
+
+def test_ordered_account_mode_preserves_session_id_on_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=5,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert chain_result.session_id == _BOUND_SESSION_ID
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+
+
+def test_default_routing_mode_remains_usage_ranked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout="from-primary"
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="from-secondary"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    chain_result = runner.run_claude(_PROMPT_ARGUMENTS, timeout_seconds=5)
+    assert chain_result.served_command == _SECONDARY_LAUNCHER
+    assert chain_result.terminal_status == TERMINAL_STATUS_SERVED
+    assert recorder.invocations[0][0] == _SECONDARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 1
+
+
+def test_cli_ordered_account_routing_mode_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    recorder = _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(
+                _SECONDARY_LAUNCHER, 0, stdout="should-not-run"
+            ),
+        },
+        weekly_usage_reporter=usage_reporter,
+    )
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    assert exit_code == 0
+    assert recorder.invocations[0][0] == _PRIMARY_LAUNCHER
+    assert usage_reporter.call_count["count"] == 0
+
+
+def test_cli_ordered_account_advisor_blocked_exit_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 2, stderr=_GENERIC_PROCESS_ERROR_STDERR
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    exit_code = runner.main(
+        [
+            CLI_ROUTING_MODE_FLAG,
+            ROUTING_MODE_ORDERED_ACCOUNT,
+            CLI_ARGUMENTS_SEPARATOR,
+            "-p",
+            "hi",
+        ]
+    )
+    assert exit_code == CHAIN_ADVISOR_BLOCKED_EXIT_CODE
+
+
+def test_default_affinity_state_path_joins_filename() -> None:
+    claude_home = Path("/tmp/claude-home")
+    resolved = default_affinity_state_path(claude_home)
+    assert resolved == claude_home / AFFINITY_STATE_FILENAME
+
+
+def test_affinity_store_round_trip_is_versioned_and_atomic(tmp_path: Path) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    empty_store = load_affinity_store(state_path)
+    assert empty_store.schema_version == AFFINITY_STATE_SCHEMA_VERSION
+    assert empty_store.all_bindings == []
+
+    updated = record_affinity_binding(
+        empty_store,
+        session_id=_BOUND_SESSION_ID,
+        command=_PRIMARY_LAUNCHER,
+    )
+    save_affinity_store_atomic(state_path, updated)
+
+    reloaded = load_affinity_store(state_path)
+    assert reloaded.schema_version == AFFINITY_STATE_SCHEMA_VERSION
+    assert len(reloaded.all_bindings) == 1
+    assert reloaded.all_bindings[0].session_id == _BOUND_SESSION_ID
+    assert reloaded.all_bindings[0].command == _PRIMARY_LAUNCHER
+    on_disk = json.loads(state_path.read_text(encoding=UTF8_ENCODING))
+    assert on_disk[AFFINITY_KEY_SCHEMA_VERSION] == AFFINITY_STATE_SCHEMA_VERSION
+    assert on_disk[AFFINITY_KEY_ALL_BINDINGS][0][AFFINITY_KEY_SESSION_ID] == (
+        _BOUND_SESSION_ID
+    )
+    assert on_disk[AFFINITY_KEY_ALL_BINDINGS][0][AFFINITY_KEY_COMMAND] == (
+        _PRIMARY_LAUNCHER
+    )
+
+
+def test_affinity_store_is_bounded_and_drops_oldest() -> None:
+    store = runner.AffinityStore()
+    for each_index in range(AFFINITY_MAXIMUM_ENTRIES + 3):
+        store = record_affinity_binding(
+            store,
+            session_id=f"session-{each_index}",
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=AFFINITY_MAXIMUM_ENTRIES,
+        )
+    assert len(store.all_bindings) == AFFINITY_MAXIMUM_ENTRIES
+    all_session_ids = [each.session_id for each in store.all_bindings]
+    assert "session-0" not in all_session_ids
+    assert "session-1" not in all_session_ids
+    assert "session-2" not in all_session_ids
+    assert f"session-{AFFINITY_MAXIMUM_ENTRIES + 2}" in all_session_ids
+
+
+def test_affinity_rebind_moves_session_to_newest_end() -> None:
+    store = runner.AffinityStore()
+    store = record_affinity_binding(
+        store, session_id="a", command=_PRIMARY_LAUNCHER
+    )
+    store = record_affinity_binding(
+        store, session_id="b", command=_SECONDARY_LAUNCHER
+    )
+    store = record_affinity_binding(
+        store, session_id="a", command=_SECONDARY_LAUNCHER
+    )
+    assert [each.session_id for each in store.all_bindings] == ["b", "a"]
+    assert store.all_bindings[-1].command == _SECONDARY_LAUNCHER
+
+
+def test_affinity_corrupt_state_raises_actionable_diagnostic(tmp_path: Path) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text("{not-json", encoding=UTF8_ENCODING)
+    with pytest.raises(ValueError, match="corrupt or unreadable") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_unsupported_schema_version_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION + 1,
+                AFFINITY_KEY_ALL_BINDINGS: [],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="unsupported schema_version") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_affinity_binding_not_object_raises_actionable_diagnostic(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    state_path.write_text(
+        json.dumps(
+            {
+                AFFINITY_KEY_SCHEMA_VERSION: AFFINITY_STATE_SCHEMA_VERSION,
+                AFFINITY_KEY_ALL_BINDINGS: ["not-an-object"],
+            }
+        ),
+        encoding=UTF8_ENCODING,
+    )
+    with pytest.raises(ValueError, match="not an object") as raised:
+        load_affinity_store(state_path)
+    assert str(state_path) in str(raised.value)
+
+
+def test_record_affinity_binding_rejects_empty_session_or_command() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id="", command=_PRIMARY_LAUNCHER)
+    with pytest.raises(ValueError, match="session_id and command"):
+        record_affinity_binding(store, session_id=_BOUND_SESSION_ID, command="")
+
+
+def test_record_affinity_binding_rejects_non_positive_maximum_entries() -> None:
+    store = runner.AffinityStore()
+    with pytest.raises(ValueError, match="maximum_entries must be at least 1"):
+        record_affinity_binding(
+            store,
+            session_id=_BOUND_SESSION_ID,
+            command=_PRIMARY_LAUNCHER,
+            maximum_entries=0,
+        )
+
+
+def test_affinity_write_failure_raises_actionable_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = tmp_path / AFFINITY_STATE_FILENAME
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_PRIMARY_LAUNCHER,
+    )
+
+    def _raise_replace(_source: object, _destination: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(runner.os, "replace", _raise_replace)
+    with pytest.raises(OSError, match="Failed to write affinity state") as raised:
+        save_affinity_store_atomic(state_path, store)
+    assert str(state_path) in str(raised.value)
+
+
+def test_extract_resume_session_id_reads_flag() -> None:
+    assert extract_resume_session_id(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"]
+    ) == _BOUND_SESSION_ID
+    assert extract_resume_session_id(["-p", "hi"]) is None
+    assert extract_resume_session_id([RESUME_SESSION_FLAG]) is None
+
+
+def test_order_entries_for_resume_puts_originating_binary_first() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command=_SECONDARY_LAUNCHER
+    )
+    assert [each.command for each in ordered] == [
+        _SECONDARY_LAUNCHER,
+        _PRIMARY_LAUNCHER,
+    ]
+
+
+def test_order_entries_for_resume_falls_back_when_command_missing() -> None:
+    all_entries = [
+        ChainEntry(command=_PRIMARY_LAUNCHER, extra_args=()),
+        ChainEntry(command=_SECONDARY_LAUNCHER, extra_args=()),
+    ]
+    ordered = order_entries_for_resume(
+        all_entries, preferred_command="missing-binary"
+    )
+    assert [each.command for each in ordered] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+    ordered_none = order_entries_for_resume(all_entries, preferred_command=None)
+    assert [each.command for each in ordered_none] == [
+        _PRIMARY_LAUNCHER,
+        _SECONDARY_LAUNCHER,
+    ]
+
+
+def test_lookup_affinity_command_returns_bound_binary() -> None:
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    assert lookup_affinity_command(store, _BOUND_SESSION_ID) == _SECONDARY_LAUNCHER
+    assert lookup_affinity_command(store, "unknown") is None
+
+
+def test_run_claude_resume_routes_through_originating_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = tmp_path / "claude-chain-affinity.json"
+    store = record_affinity_binding(
+        runner.AffinityStore(),
+        session_id=_BOUND_SESSION_ID,
+        command=_SECONDARY_LAUNCHER,
+    )
+    save_affinity_store_atomic(affinity_path, store)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home: affinity_path,
+    )
+    monkeypatch.setattr(
+        runner,
+        "chain_weekly_usage_reporter",
+        _usage_reporter_from_remaining(
+            {
+                _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+                _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+            }
+        ),
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _SECONDARY_LAUNCHER
+    assert all_called[0] == _SECONDARY_LAUNCHER
+
+
+def test_run_claude_success_persists_session_affinity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    _install(
+        monkeypatch,
+        config_file,
+        {
+            _PRIMARY_LAUNCHER: _completed(
+                _PRIMARY_LAUNCHER, 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION
+            ),
+            _SECONDARY_LAUNCHER: _completed(_SECONDARY_LAUNCHER, 0),
+        },
+    )
+    chain_result = runner.run_claude(
+        _PROMPT_ARGUMENTS,
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+        routing_mode=ROUTING_MODE_ORDERED_ACCOUNT,
+    )
+    assert chain_result.served_command == _PRIMARY_LAUNCHER
+    assert chain_result.session_id == _BOUND_SESSION_ID
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    reloaded = load_affinity_store(affinity_path)
+    assert len(reloaded.all_bindings) == 1
+    assert reloaded.all_bindings[0].session_id == _BOUND_SESSION_ID
+    assert reloaded.all_bindings[0].command == _PRIMARY_LAUNCHER
+
+
+def test_run_claude_resume_falls_back_when_affinity_corrupt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = _write_chain_config(
+        tmp_path, [_entry(_PRIMARY_LAUNCHER), _entry(_SECONDARY_LAUNCHER)]
+    )
+    affinity_path = Path(config_file).parent / AFFINITY_STATE_FILENAME
+    affinity_path.write_text("{not-json", encoding=UTF8_ENCODING)
+    usage_reporter = _usage_reporter_from_remaining(
+        {
+            _PRIMARY_LAUNCHER: _HIGH_WEEKLY_REMAINING_PERCENT,
+            _SECONDARY_LAUNCHER: _LOW_WEEKLY_REMAINING_PERCENT,
+        }
+    )
+    all_called: list[str] = []
+
+    def _runner(command, **_kwargs):
+        all_called.append(command[0])
+        return _completed(command[0], 0, stdout=_JSON_BIND_STDOUT_WITH_SESSION)
+
+    monkeypatch.setattr(runner, "chain_config_path", lambda: config_file)
+    monkeypatch.setattr(
+        runner,
+        "default_affinity_state_path",
+        lambda _home, _affinity_path=affinity_path: _affinity_path,
+    )
+    monkeypatch.setattr(runner, "chain_weekly_usage_reporter", usage_reporter)
+    monkeypatch.setattr(runner, "chain_subprocess_runner", _runner)
+    outcome = runner.run_claude(
+        [RESUME_SESSION_FLAG, _BOUND_SESSION_ID, "-p", "hi"],
+        timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
+    )
+    assert outcome.served_command == _PRIMARY_LAUNCHER
+    assert all_called[0] == _PRIMARY_LAUNCHER

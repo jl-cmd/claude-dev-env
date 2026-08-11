@@ -33,6 +33,8 @@ main = model_tier_run_validator.main
 load_model_tier_run_from_json_path = (
     model_tier_run_validator.load_model_tier_run_from_json_path
 )
+ADVISOR_MODEL_TIER = model_tier_run_validator.ADVISOR_MODEL_TIER
+CODEX_BIND_SUCCESS_TOKEN = model_tier_run_validator.CODEX_BIND_SUCCESS_TOKEN
 
 
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
@@ -43,6 +45,66 @@ def test_clean_single_spawn_at_top_of_slice_passes() -> None:
         selected_tier="Fable",
     )
     assert validate_model_tier_run(run) is None
+
+
+def test_sol_codex_bind_is_first_success_when_enabled() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_sol_failure_falls_through_to_fable_when_enabled() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
+        attempts=[
+            {"tier": ADVISOR_MODEL_TIER, "result": "unavailable"},
+            {"tier": "Fable", "result": "spawned"},
+        ],
+        selected_tier="Fable",
+        is_sol_enabled=True,
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_sol_rung_precedes_third_party_cli_floor_when_enabled() -> None:
+    run = ModelTierRun(
+        own_tier="ThirdParty",
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
+    )
+
+    assert validate_model_tier_run(run) is None
+
+
+def test_sol_codex_result_requires_sol_candidate() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", "Opus"],
+        attempts=[{"tier": "Fable", "result": CODEX_BIND_SUCCESS_TOKEN}],
+        selected_tier="Fable",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
 
 
 def test_fallthrough_to_floor_tier_passes() -> None:
@@ -221,6 +283,23 @@ def test_cli_validates_json_log_file(tmp_path: Path) -> None:
     assert main([str(log_path)]) == 0
     loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
     assert loaded_run.selected_tier == "Fable"
+
+
+def test_cli_rejects_non_boolean_sol_enabled(tmp_path: Path) -> None:
+    log_path = tmp_path / "invalid-sol-enabled.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": ["Fable", "Opus"],
+                "attempts": [{"tier": "Fable", "result": "spawned"}],
+                "selected_tier": "Fable",
+                "sol_enabled": "false",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 2
 
 
 def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:

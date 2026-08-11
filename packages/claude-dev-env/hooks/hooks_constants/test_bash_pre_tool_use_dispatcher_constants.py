@@ -25,33 +25,24 @@ _EXPECTED_BASH_ORDER = (
     "blocking/es_exe_path_rewriter.py",
     "blocking/destructive_command_blocker.py",
     "blocking/gh_body_arg_blocker.py",
+    "blocking/shell_substitution_blocker.py",
+    "blocking/piped_pytest_blocker.py",
+    "blocking/unscoped_search_blocker.py",
     "blocking/nas_ssh_binary_enforcer.py",
     "blocking/volatile_path_in_post_blocker.py",
     "blocking/pii_prevention_blocker.py",
     "blocking/conventional_pr_title_gate.py",
-    "blocking/reviewer_spawn_gate.py",
     "blocking/block_main_commit.py",
     "blocking/precommit_code_rules_gate.py",
     "blocking/session_edit_stage_gate.py",
-    "blocking/pr_description_enforcer.py",
     "blocking/test_preflight_check.py",
-    "blocking/convergence_gate_blocker.py",
     "blocking/windows_rmtree_blocker.py",
     "blocking/gh_pr_author_enforcer.py",
-    "blocking/verified_commit_gate.py",
-    "blocking/verdict_directory_write_blocker.py",
-    "blocking/code_review_push_gate.py",
-    "blocking/code_review_pr_create_gate.py",
-    "blocking/code_review_stamp_directory_write_blocker.py",
 )
 
 _POWERSHELL_APPLICABLE = (
+    "blocking/unscoped_search_blocker.py",
     "blocking/pii_prevention_blocker.py",
-    "blocking/verified_commit_gate.py",
-    "blocking/verdict_directory_write_blocker.py",
-    "blocking/code_review_push_gate.py",
-    "blocking/code_review_pr_create_gate.py",
-    "blocking/code_review_stamp_directory_write_blocker.py",
 )
 
 
@@ -69,8 +60,8 @@ def test_every_hook_applies_to_the_bash_tool() -> None:
         assert BASH_TOOL_NAME in each_entry.applicable_tool_names
 
 
-def test_powershell_applicable_hooks_include_pii_and_verified_commit_pair() -> None:
-    """PowerShell runs the PII gate plus the verified-commit pair."""
+def test_powershell_applicable_hooks_include_the_shared_gates() -> None:
+    """PowerShell runs the shared unscoped-search and PII gates."""
     powershell_hooks = tuple(
         each_entry.script_relative_path
         for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
@@ -86,22 +77,6 @@ def test_powershell_hooks_carry_the_shared_tool_set() -> None:
             assert each_entry.applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
 
 
-def test_code_review_gate_family_registered_for_bash_and_powershell() -> None:
-    """The three code-review shell gates run on both Bash and PowerShell."""
-    code_review_gate_paths = (
-        "blocking/code_review_push_gate.py",
-        "blocking/code_review_pr_create_gate.py",
-        "blocking/code_review_stamp_directory_write_blocker.py",
-    )
-    entry_by_path = {
-        each_entry.script_relative_path: each_entry
-        for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
-    }
-    for each_gate_path in code_review_gate_paths:
-        assert each_gate_path in entry_by_path
-        assert entry_by_path[each_gate_path].applicable_tool_names == (
-            ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-        )
 
 
 def test_every_roster_path_points_at_an_existing_hook() -> None:

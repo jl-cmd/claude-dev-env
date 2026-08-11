@@ -45,8 +45,8 @@ so a running cloud session sees the same files under `/root/.claude/`.
 | Raw REST through the proxy | `GET https://api.github.com/user` returns 200 as `example-org-2`. `GET /repos/example-org/example-repo` returns 200. `GET /repos/example-org-2/claude-dev-env` returns 403 with body `{"message":"GitHub access is not enabled for this session. An org admin must connect the Claude GitHub App for this organization."}`. So REST works for owners the Claude GitHub App connection covers (`example-org` today, not `example-org-2`). |
 | Raw GraphQL through the proxy | Pinned. Any query outside the pinned PR-review set returns `{"message":"This GraphQL query is not enabled for this session — only the pinned set of PR-review operations is served. Use REST via 'gh api repos/{owner}/{repo}/...' instead."}`. Custom `gh api graphql` queries fail even with transport fixed. |
 | Installing the `gh` binary | Blocked. `GET /repos/cli/cli/releases/latest` returns 403 (out-of-scope repo); `https://github.com/...` release downloads return 403. |
-| Git push identity | `user.name=Claude`, `user.email=noreply@anthropic.com`. Remotes are plain https; the proxy injects credentials. Push dry-runs succeed for both in-scope repos after the origin/HEAD fix below. |
-| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook resolves `git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE = "origin/HEAD"`. Cloud clones do not set `origin/HEAD`, so every `git push` fails with `fatal: Not a valid object name origin/HEAD` until `git remote set-head origin -a` runs in that repo. |
+| Git push identity | `user.name=Claude`, `user.email=noreply@anthropic.com`. Remotes are plain https; the proxy injects credentials. Push dry-runs succeed for both in-scope repos. |
+| `core.hooksPath` | Set globally to `/root/.claude/hooks/git-hooks`. The pre-push hook starts from `git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE = "origin/HEAD"`. Cloud clones leave `origin/HEAD` unset, so the hook resolves the gate base itself: it reads the pushed remote name from git's arguments, then names that remote's default branch from its symbolic ref or from the first candidate branch (`main`, `master`, `trunk`, `develop`) that exists under it. A push proceeds on that resolved base. |
 | `BUGTEAM_REVIEWER_ACCOUNT`, `CLAUDE_REVIEWS_DISABLED` | Both unset. |
 | `ScheduleWakeup` | Available to the main session (verified by use). Subagents do not see it. |
 | `EnterWorktree`, `Monitor` | Available. `Monitor` is deferred (load its schema with ToolSearch first). |
@@ -75,12 +75,13 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Evidence:** Verified against `mcp__github__get_me` and `mcp__github__pull_request_read` before a `ToolSearch` load.
 - **Fix summary:** Phase B adds a `ToolSearch` load line to the shared cloud-transport doc and to every SKILL.md that names an MCP tool.
 
-### RC3 — `origin/HEAD` missing in cloud clones
+### RC3 — `origin/HEAD` unset in cloud clones
 
-- **Symptom:** Every `git push` fails with `fatal: Not a valid object name origin/HEAD`.
-- **Cause:** The global `core.hooksPath` pre-push hook resolves the base ref as `origin/HEAD`, which a cloud clone does not set.
-- **Evidence:** A push dry-run fails before `git remote set-head origin -a` and succeeds after it. `--no-verify` also gets past the hook (avoid this routine bypass).
-- **Fix summary:** Phase D ships a session-start step that runs `git remote set-head origin -a` in each repo root.
+- **Symptom:** A cloud clone carries no `origin/HEAD`, so the gate base the pre-push hook starts from names no object.
+- **Cause:** A cloud clone sets no symbolic head for its remote.
+- **Handling:** The global `core.hooksPath` pre-push hook resolves the base on its own. It reads the pushed remote name from git's arguments (falling back to `origin` when git passes a URL), asks that remote for its symbolic head, then lists the candidate default branches `main`, `master`, `trunk`, and `develop` under the same remote and takes the first that exists. A push proceeds on the resolved base.
+- **When nothing resolves:** The hook blocks the push with exit code 2 and prints the one-command fix, naming the remote it tried: `git remote set-head <remote> --auto`.
+- **Evidence:** `packages/claude-dev-env/hooks/git-hooks/pre_push_base_reference.py` holds the resolution; `test_pre_push_base_reference.py` pins each path, including a non-`origin` remote name and a `trunk` default branch.
 
 ### RC4 — Single reviewer identity
 
@@ -103,12 +104,12 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Evidence:** The settings.json matcher for `bot_mention_comment_blocker` names the tool-specific `mcp__plugin_github_github__add_issue_comment`, and the MCP branch of `volatile_path_in_post_blocker` names the wildcard `mcp__plugin_github_github__.*`. Cloud tool calls carry the `mcp__github__*` prefix, which neither matcher names.
 - **Fix summary:** Phase C adds `mcp__github__.*` matchers beside the plugin-prefix ones. Phase B tells skills to name the operation and resolve the tool by `ToolSearch`, or to name both prefixes.
 
-### RC7 — Hardcoded Windows interpreter path
+### RC7 — Portable review tooling
 
-- **Symptom:** In cloud, the verifier can never compute `manifest_sha256`, so the verification verdict is never minted, and `verified_commit_gate` blocks every code commit.
-- **Cause:** `autoconverge/workflow/converge.mjs` hardcodes `"C:\\Python313\\python.exe"` for `verification_verdict_store.py` in two verify prompts: the `buildVerdictFenceSteps` helper and a separate inline hardening-verify prompt that repeats the verdict-fence text.
-- **Evidence:** `converge.mjs` carries the literal `"C:\\Python313\\python.exe"` at line 712 (inside `buildVerdictFenceSteps`) and at line 418 (inside the separate hardening-verify prompt). The cloud image has no such path. `Start-Process chrome` in the autoconverge SKILL.md teardown and the `.ahk`, `.ps1`, and `.cmd` operator tooling under `skills/pr-converge/scripts/` are Windows-only and stay unused in cloud.
-- **Fix summary:** Phase A changes the fence step to a resolved interpreter (`python3` on PATH / a `sys.executable` pattern).
+- **Symptom:** A cloud review step fails when it assumes a Windows-only executable path.
+- **Cause:** Cloud sessions provide their own runtime paths and do not expose local Windows tool locations.
+- **Evidence:** Cloud compatibility work runs through MCP and the available shell runtime; local desktop tooling remains unavailable to that session.
+- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow) format.
 
 ### RC8 — Copilot quota gap
 
@@ -188,16 +189,15 @@ loads returns `InputValidationError` (RC2). The select list mixes servers:
 the `mcp__github__*` tools plus `mcp__Claude_Code_Remote__add_repo` for
 cross-repo checkout (5.3).
 
-### 5.2 Fix `origin/HEAD` before any push
+### 5.2 Set `origin/HEAD` when the pre-push hook asks for it
 
-For each repo root the run touches:
+The pre-push hook resolves the gate base on its own (RC3), so a push works in
+a clone that carries no `origin/HEAD`. When the hook blocks a push and asks
+for a remote head, run its one-command fix in that repo root:
 
 ```
 git -C <repo-root> remote set-head origin -a
 ```
-
-Without this, `git push` fails with `fatal: Not a valid object name
-origin/HEAD` (RC3). Run it once per repo per session.
 
 ### 5.3 Transport rules
 
@@ -249,19 +249,18 @@ origin/HEAD` (RC3). Run it once per repo per session.
 ### 5.6 Hook-denial notes
 
 The commit and push gates still fire on cloud Bash git commands and gate the
-run: `verified_commit_gate`, `session_edit_stage_gate`, `block_main_commit`,
+run: `session_edit_stage_gate`, `block_main_commit`,
 `precommit_code_rules_gate`, `test_preflight_check`. Follow them normally.
 
 The `gh`-text hooks read risk from literal `gh ...` command text
-(`pr_description_enforcer`, `gh_body_arg_blocker`, `conventional_pr_title_gate`,
-`gh_pr_author_enforcer`, the `gh` branch of `volatile_path_in_post_blocker`,
-and the `gh pr ready` branch of `convergence_gate_blocker`). An MCP-path post
+(`gh_body_arg_blocker`, `conventional_pr_title_gate`, `gh_pr_author_enforcer`,
+and the `gh` branch of `volatile_path_in_post_blocker`). An MCP-path post
 carries no `gh` text, so these hooks stay quiet. Cloud loses those checks
 until Phase C lands the MCP matchers. Meanwhile, self-check by hand before an
 MCP post:
 
 - No volatile scratch path in a post body (job dirs, `/tmp`, worktrees).
-- A proof-of-work comment carries the five parts the proof standard names.
+- Review comments follow the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow).
 - A PR title follows Conventional Commits.
 - A body with markdown goes through the structured `body` parameter, so
   backticks show as formatting.
@@ -352,15 +351,12 @@ search, or have the SKILL.md call `mcp__github__search_pull_requests` with
 *Acceptance:* discovery lists open PRs for an owner in cloud; the test file
 is green.
 
-**A10. `skills/autoconverge/workflow/converge.mjs` — resolved interpreter.**
-Change both hardcoded `"C:\\Python313\\python.exe"` tokens to a resolved
-interpreter (`python3` on PATH, or a value the workflow reads at runtime):
-line 712 inside `buildVerdictFenceSteps`, and line 418 inside the separate
-hardening-verify prompt that repeats the verdict-fence text. Both verdict
-fence steps then run in cloud, so the verifier computes `manifest_sha256` and
-`verified_commit_gate` can mint a verdict.
+**A10. `skills/autoconverge/workflow/converge.mjs` — portable review runtime.**
+Resolve the review runtime at execution time instead of requiring a local
+desktop path.
 *Acceptance:* `cd packages/claude-dev-env && npm test` passes the converge
-workflow tests, and the emitted fence names a portable interpreter.
+workflow tests. The cloud `review_task_source` resolves to an available runtime
+that reports `REVIEW_RESULT: PASS` or `REVIEW_RESULT: FINDINGS`.
 
 ### Phase B — Make SKILL.md prose cloud-aware
 
@@ -436,23 +432,22 @@ hook-merge step, so a cloud MCP post routes through the guard.
 *Acceptance:* a hook unit test drives the guard with a `mcp__github__*` tool
 name and sees it fire; `python3 -m pytest` covers the new matcher.
 
-**C2. Decide MCP-side gates for PR create and edit (decision item).**
-Decide whether `conventional_pr_title_gate` and `pr_description_enforcer`
-need MCP-side equivalents that match `mcp__github__create_pull_request` and
-`mcp__github__update_pull_request`, so a cloud PR create or edit gets the same title and
-body checks the `gh` path gets. Record the decision and, if yes, add the
-matchers and checks.
-*Acceptance:* a written decision; if the decision is yes, the matchers exist
+**C2. Decide MCP-side title validation for PR create and edit (decision item).**
+Decide whether `conventional_pr_title_gate` needs an MCP-side equivalent that
+matches `mcp__github__create_pull_request` and
+`mcp__github__update_pull_request`, so cloud PR create or edit gets the same
+title check as the `gh` path. Record the decision and, if yes, add the matcher
+and check.
 and a hook test covers them.
 
 ### Phase D — Session bootstrap
 
-**D1. SessionStart hook or environment setup step — origin/HEAD and cloud marker.**
-Ship a step that runs `git remote set-head origin -a` in each repo root and
-exports a cloud marker env var (for example `CLAUDE_CLOUD_SESSION=1`) that
-skills read for cloud detection. The installer ships it.
-*Acceptance:* a fresh cloud session can push without the manual origin/HEAD
-fix, and the marker env var is set; a test drives the hook and checks both.
+**D1. SessionStart hook or environment setup step — cloud marker.**
+Ship a step that exports a cloud marker env var (for example
+`CLAUDE_CLOUD_SESSION=1`) that skills read for cloud detection. The installer
+ships it.
+*Acceptance:* a fresh cloud session carries the marker env var; a test drives
+the hook and checks it.
 
 ### Phase E — Verification
 

@@ -42,24 +42,40 @@ USER_DIRECTED_NEXT_STEPS_MESSAGE = (
 EMPTY_MESSAGE = ""
 
 
-def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
+def run_hook_with_message(
+    assistant_message: str, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess:
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
         input=hook_input_payload,
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
-def run_hook_with_payload(hook_input_payload: dict) -> subprocess.CompletedProcess:
+def run_hook_with_payload(
+    hook_input_payload: dict, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess:
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
         input=json.dumps(hook_input_payload),
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
@@ -74,6 +90,15 @@ def test_user_facing_notice_matches_config_messages_module():
         intent_only_ending_blocker.USER_FACING_INTENT_ENDING_NOTICE
         == module.USER_FACING_INTENT_ENDING_NOTICE
     )
+
+
+def test_intent_scan_is_default_off() -> None:
+    completed_process = run_hook_with_message(
+        INTENT_ENDING_MESSAGE, is_prose_style_enabled=False
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
 
 
 def test_intent_ending_message_emits_block_with_short_user_notice():

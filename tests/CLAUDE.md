@@ -70,7 +70,7 @@ this register is the why.
 | Known-pending deselects | Deselected on CI | Pending #20 disposition or venue-dependent failures. List: `.github/ci/known-pending-deselects.txt`. |
 | Linux `is_ephemeral` OS-temp assertion | Deselected on CI | Out-of-scope production gap (#18). Listed in `.github/ci/known-pending-deselects.txt`. |
 | Full `check.ps1` ruff + mypy green | CI quality gate | The quality-gate job runs `check.ps1 -SkipTests` (ruff + mypy); the enforcer pytest suite runs in the package-suite job. For a pytest-only `check.ps1` pass locally, use `-SkipRuff -SkipMypy`. |
-| Native git hooks / `verified_commit_gate` | Tests run in CI | Production hook surface is local (installed under the user Claude config). The unit tests run in the package suite. |
+| Native git hooks / commit controls | Tests run in CI | Production hook surface is local (installed under the user Claude config). The unit tests run in the package suite. |
 | Live Neon logging | Tests run in CI | Production logging needs Neon credentials. Tests mock the boundary and run in CI. |
 
 ### Deselection provenance
@@ -90,6 +90,7 @@ matching list under `.github/ci/` with an owner disposition for that node ID.
 | `test_bugteam_permission_scripts.py` | Verifies the bugteam grant/revoke permission scripts exist, are runnable, and produce expected exit codes. |
 | `test_bugteam_preflight.py` | Checks the bugteam preflight script logic. |
 | `test_doc_cross_references.py` | Walks Python docstrings and Markdown files for repo-relative path references and confirms each path exists on disk. |
+| `test_session_start_refresh.py` | Runs the `.claude/hooks/session_start_refresh.py` SessionStart hook as a subprocess against a sandbox home with fake `npm`/`npx` shims, plus static checks binding the `.claude/settings.json` registration and timeout budget to the hook's constants. |
 
 ## Conventions
 

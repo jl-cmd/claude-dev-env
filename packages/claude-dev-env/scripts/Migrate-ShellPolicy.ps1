@@ -9,7 +9,7 @@
     settings.local.json, and settings.local.json.template, and rewrites permission
     rule strings that invoke powershell / powershell.exe / bash -c / cmd /c
     into their pwsh equivalents per the migration mapping in
-    rules/shell-invocation-policy.md. Defaults to dry-run; pass -Apply to write
+    rules/shell-invocation.md. Defaults to dry-run; pass -Apply to write
     changes. Prints exactly one summary line.
 
 .PARAMETER Roots

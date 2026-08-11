@@ -1,11 +1,14 @@
 """Tests for hedging_language_blocker hook response shape."""
 
 import importlib.util
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
+
+import pytest
 
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "hedging_language_blocker.py")
 _HOOKS_DIR = os.path.dirname(HOOK_SCRIPT_PATH)
@@ -30,14 +33,22 @@ CLEAN_MESSAGE = "This is verified by the source document."
 EMPTY_MESSAGE = ""
 
 
-def run_hook_with_message(assistant_message: str) -> subprocess.CompletedProcess:
+def run_hook_with_message(
+    assistant_message: str, *, is_prose_style_enabled: bool = True
+) -> subprocess.CompletedProcess:
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    environment_by_key = os.environ.copy()
+    if is_prose_style_enabled:
+        environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
+    else:
+        environment_by_key.pop("CLAUDE_PROSE_STYLE_ENFORCEMENT", None)
     return subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
         input=hook_input_payload,
         capture_output=True,
         text=True,
         check=False,
+        env=environment_by_key,
     )
 
 
@@ -58,6 +69,8 @@ def run_hook_with_patched_search_paths(
         wrapper_file_path = wrapper_file.name
 
     hook_input_payload = json.dumps({"last_assistant_message": assistant_message})
+    environment_by_key = os.environ.copy()
+    environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
     try:
         completed_process = subprocess.run(
             [sys.executable, wrapper_file_path],
@@ -65,6 +78,7 @@ def run_hook_with_patched_search_paths(
             capture_output=True,
             text=True,
             check=False,
+            env=environment_by_key,
         )
     finally:
         os.unlink(wrapper_file_path)
@@ -78,6 +92,49 @@ def test_user_facing_notice_matches_config_messages_module():
     specification.loader.exec_module(module)
 
     assert module.USER_FACING_NOTICE == USER_FACING_NOTICE
+
+
+def test_hedging_scan_is_default_off() -> None:
+    completed_process = run_hook_with_message(
+        HEDGING_MESSAGE, is_prose_style_enabled=False
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_default_off_emits_privacy_safe_advisory_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_emitted: list[tuple[str, str, str]] = []
+
+    def _record_advisory(
+        matcher_id: str, surface: str, context_text: str, **_kwargs: object
+    ) -> dict[str, object]:
+        all_emitted.append((matcher_id, surface, context_text))
+        return {}
+
+    monkeypatch.setattr(
+        hedging_language_blocker, "emit_advisory_candidate", _record_advisory
+    )
+    monkeypatch.setattr(
+        hedging_language_blocker,
+        "prose_style_enforcement_enabled_in_environment",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        hedging_language_blocker.sys,
+        "stdin",
+        io.StringIO(json.dumps({"last_assistant_message": HEDGING_MESSAGE})),
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        hedging_language_blocker.main()
+    assert exit_info.value.code == 0
+    assert all_emitted
+    matcher_id, surface, context_text = all_emitted[0]
+    assert matcher_id == "hedging_word"
+    assert surface == "Stop"
+    assert "likely" in context_text
 
 
 def test_hedging_message_emits_block_with_short_user_notice():
@@ -140,3 +197,65 @@ def test_empty_message_passes_through_with_no_output():
 
     assert completed_process.returncode == 0
     assert completed_process.stdout == ""
+
+
+def test_explicit_unverified_label_in_same_sentence_passes() -> None:
+    completed_process = run_hook_with_message(
+        "This claim is unverified; the deploy is probably blocked."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_i_dont_know_label_in_same_sentence_passes() -> None:
+    completed_process = run_hook_with_message(
+        "I don't know whether the port is probably open."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_supported_probability_without_hedge_word_passes() -> None:
+    completed_process = run_hook_with_message(
+        "The suite reports 0.92 precision on the labeled fixture set in "
+        "test_prose_matcher_advisory.py."
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
+
+
+def test_label_in_one_sentence_does_not_exempt_bare_hedge_in_another() -> None:
+    completed_process = run_hook_with_message(
+        "This claim is unverified. The deploy is probably blocked."
+    )
+
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "probably" in parsed_response["reason"]
+    assert "explicit uncertainty label" in parsed_response["reason"]
+
+
+def test_bare_probably_still_blocks_with_positive_corrective() -> None:
+    completed_process = run_hook_with_message("The deploy is probably blocked.")
+
+    assert completed_process.returncode == 0
+    parsed_response = json.loads(completed_process.stdout)
+    assert parsed_response["decision"] == "block"
+    assert "probably" in parsed_response["reason"]
+    assert "label that claim unverified" in parsed_response["reason"]
+    assert "AskUserQuestion" in parsed_response["reason"]
+
+
+def test_find_blocking_hedging_terms_is_sentence_scoped() -> None:
+    bare = hedging_language_blocker.find_blocking_hedging_terms(
+        "This claim is unverified. The deploy is probably blocked."
+    )
+    labeled = hedging_language_blocker.find_blocking_hedging_terms(
+        "This claim is unverified; the deploy is probably blocked."
+    )
+    assert bare == ["probably"]
+    assert labeled == []

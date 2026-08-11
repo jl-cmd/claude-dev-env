@@ -52,7 +52,7 @@ node bin/install.mjs --update       # remove manifest-tracked files, then reinst
 node bin/install.mjs --uninstall    # remove every installed file
 ```
 
-Groups: `core`, `prompt-generator`, `journal`, `research`. The published package runs the same entry point as `npx claude-dev-env`.
+Groups: `core`, `journal`, and the discovered `prompt-generator` dependency group. Run `node bin/install.mjs --help` for the live list. The published package runs the same entry point as `npx claude-dev-env`.
 
 ## Test
 
@@ -60,15 +60,15 @@ Groups: `core`, `prompt-generator`, `journal`, `research`. The published package
 npm test
 ```
 
-Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's built-in test runner — no extra dependency, no network. Expected: `# pass 185  # fail 0` (count grows as tests are added).
+Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's built-in test runner — no extra dependency, no network. Expected: `# fail 0`, with the pass count growing as tests are added.
 
 ## Gotchas
 
-- **The install target is `os.homedir()/.claude` with no override flag** (`bin/install.mjs:12`). To drive the installer without overwriting your real config, redirect the home directory: set `USERPROFILE` (Windows) and `HOME` (POSIX) to a temp dir. The driver does this for you.
+- **The install target is `os.homedir()/.claude` with no override flag** (the `CLAUDE_HOME` constant in `bin/install.mjs`). To drive the installer without overwriting your real config, redirect the home directory: set `USERPROFILE` (Windows) and `HOME` (POSIX) to a temp dir. The driver does this for you.
 - **The installer reaches outside `~/.claude/`.** It runs `git config --global core.hooksPath ...`, which applies to every git repo on the machine, and it writes `~/.mypy.ini`. The driver isolates both by pointing `GIT_CONFIG_GLOBAL` at a sandbox file and redirecting the home directory.
 - **git "dubious ownership" aborts the install.** The source-conflict guard runs `git status`; when the checkout sits on a path git distrusts (a UNC network share owned by another account), git exits 128 with a dubious-ownership message that the installer rethrows. The driver seeds its sandbox git config with `safe.directory = *` so the guard runs. For a real install on such a checkout, add the exception: `git config --global --add safe.directory '<repo-path>'`.
-- **`npm install` at the repo root fails on a Windows network-share checkout.** npm symlinks the workspace package into root `node_modules` and the share rejects the symlink (`UNKNOWN ... symlink`, errno -4094). The package's own `node_modules` already carries its single dependency, so the driver and tests run without it. The installer also keeps working when `@jl-cmd/prompt-generator` cannot resolve — it skips that group with a warning (`bin/install.mjs:99-104`).
-- **Microsoft Store Python is rejected on Windows.** The installer skips any interpreter under a `WindowsApps` directory because that stub cannot run as a hook subprocess (`bin/install.mjs:201-203`). Install Python from python.org if detection fails.
+- **`npm install` at the repo root fails on a Windows network-share checkout.** npm symlinks the workspace package into root `node_modules` and the share rejects the symlink (`UNKNOWN ... symlink`, errno -4094). The package's own `node_modules` already carries its single dependency, so the driver and tests run without it. The installer also keeps working when `@jl-cmd/prompt-generator` cannot resolve — it skips that group with a warning (`discoverDependencyGroups` in `bin/install.mjs`).
+- **Microsoft Store Python is rejected on Windows.** The installer skips any interpreter under a `WindowsApps` directory because that stub cannot run as a hook subprocess (`isWindowsStorePythonStub` in `bin/install.mjs`). Install Python from python.org if detection fails.
 
 ## Troubleshooting
 

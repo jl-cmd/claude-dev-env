@@ -1,0 +1,704 @@
+{
+  "schema_version": 1,
+  "categories": [
+    {
+      "id": "A",
+      "title": "API contract verification",
+      "slug": "category-a-api-contracts",
+      "sub_buckets": [
+        {
+          "id": "A1",
+          "axis_name": "Python function signatures vs internal call sites"
+        },
+        {
+          "id": "A2",
+          "axis_name": "Python return-type annotation vs every code path"
+        },
+        {
+          "id": "A3",
+          "axis_name": "argparse parser → Namespace contract"
+        },
+        {
+          "id": "A4",
+          "axis_name": "Stdlib callback contracts"
+        },
+        {
+          "id": "A5",
+          "axis_name": "subprocess invocation contract"
+        },
+        {
+          "id": "A6",
+          "axis_name": "PowerShell cmdlet parameter sets and binding"
+        },
+        {
+          "id": "A7",
+          "axis_name": "Cross-language argv boundary"
+        },
+        {
+          "id": "A8",
+          "axis_name": "Documented API/tool calls vs official API documentation"
+        },
+        {
+          "id": "A9",
+          "axis_name": "Intra-module sibling-helper API parity"
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Selector / query / engine compatibility",
+      "slug": "category-b-selector-engine-compat",
+      "sub_buckets": [
+        {
+          "id": "B1",
+          "axis_name": "CSS / DOM selector vs target browser engine"
+        },
+        {
+          "id": "B2",
+          "axis_name": "SQL syntax vs database version"
+        },
+        {
+          "id": "B3",
+          "axis_name": "Regex syntax vs engine flavor"
+        },
+        {
+          "id": "B4",
+          "axis_name": "Shell / CLI / cmdlet syntax vs runtime version"
+        },
+        {
+          "id": "B5",
+          "axis_name": "JSON path / XPath / structural query vs library"
+        },
+        {
+          "id": "B6",
+          "axis_name": "Search query DSL vs engine"
+        },
+        {
+          "id": "B7",
+          "axis_name": "ORM vs raw SQL semantic differences"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Resource cleanup and lifecycle",
+      "slug": "category-c-resource-cleanup",
+      "sub_buckets": [
+        {
+          "id": "C1",
+          "axis_name": "File handles / file objects"
+        },
+        {
+          "id": "C2",
+          "axis_name": "Subprocess / child processes"
+        },
+        {
+          "id": "C3",
+          "axis_name": "Temporary files and directories"
+        },
+        {
+          "id": "C4",
+          "axis_name": "Network connections"
+        },
+        {
+          "id": "C5",
+          "axis_name": "Locks, semaphores, mutexes"
+        },
+        {
+          "id": "C6",
+          "axis_name": "Subscriptions / event listeners / signal handlers"
+        },
+        {
+          "id": "C7",
+          "axis_name": "Background threads / async tasks"
+        },
+        {
+          "id": "C8",
+          "axis_name": "OS-level resources"
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "title": "Variable scoping, ordering, and unbound references",
+      "slug": "category-d-scoping-and-ordering",
+      "sub_buckets": [
+        {
+          "id": "D1",
+          "axis_name": "Variable referenced before assignment on a branch"
+        },
+        {
+          "id": "D2",
+          "axis_name": "Loop closure capture (by-ref vs by-value)"
+        },
+        {
+          "id": "D3",
+          "axis_name": "Name shadowing of outer-scope symbols"
+        },
+        {
+          "id": "D4",
+          "axis_name": "Conditional definition leaving symbol undefined"
+        },
+        {
+          "id": "D5",
+          "axis_name": "Mutable default arguments"
+        },
+        {
+          "id": "D6",
+          "axis_name": "Module-level circular imports / load order"
+        },
+        {
+          "id": "D7",
+          "axis_name": "Async/sync ordering of side effects"
+        },
+        {
+          "id": "D8",
+          "axis_name": "Class-attribute vs instance-attribute confusion"
+        }
+      ]
+    },
+    {
+      "id": "E",
+      "title": "Dead code and unused imports",
+      "slug": "category-e-dead-code",
+      "sub_buckets": [
+        {
+          "id": "E1",
+          "axis_name": "New imports without references"
+        },
+        {
+          "id": "E2",
+          "axis_name": "Functions / methods defined but never called"
+        },
+        {
+          "id": "E3",
+          "axis_name": "Code after unconditional return / raise / exit"
+        },
+        {
+          "id": "E4",
+          "axis_name": "Always-true / always-false conditions"
+        },
+        {
+          "id": "E5",
+          "axis_name": "Unused parameters and locals"
+        },
+        {
+          "id": "E6",
+          "axis_name": "Removed-but-not-deleted symbol references"
+        },
+        {
+          "id": "E7",
+          "axis_name": "Test fixtures / helpers defined but never used"
+        },
+        {
+          "id": "E8",
+          "axis_name": "Stub / placeholder code without TODO"
+        },
+        {
+          "id": "E9",
+          "axis_name": "Constants-module exports with no importer"
+        }
+      ]
+    },
+    {
+      "id": "F",
+      "title": "Silent failures",
+      "slug": "category-f-silent-failures",
+      "sub_buckets": [
+        {
+          "id": "F1",
+          "axis_name": "Catch-all except clauses"
+        },
+        {
+          "id": "F2",
+          "axis_name": "Errors logged then swallowed"
+        },
+        {
+          "id": "F3",
+          "axis_name": "Default fallback values masking failure"
+        },
+        {
+          "id": "F4",
+          "axis_name": "Async task error swallowing"
+        },
+        {
+          "id": "F5",
+          "axis_name": "Boolean / status returns identical on success and failure"
+        },
+        {
+          "id": "F6",
+          "axis_name": "Ignored return values from fallible calls"
+        },
+        {
+          "id": "F7",
+          "axis_name": "PowerShell error-suppression patterns"
+        },
+        {
+          "id": "F8",
+          "axis_name": "Test-level swallowing"
+        },
+        {
+          "id": "F9",
+          "axis_name": "Gate-validator self-defeat via parse-failure swallow"
+        },
+        {
+          "id": "F10",
+          "axis_name": "Guard helper returns success-default on unverifiable input"
+        }
+      ]
+    },
+    {
+      "id": "G",
+      "title": "Off-by-one, bounds, integer overflow",
+      "slug": "category-g-bounds-and-overflow",
+      "sub_buckets": [
+        {
+          "id": "G1",
+          "axis_name": "Loop bounds"
+        },
+        {
+          "id": "G2",
+          "axis_name": "Slice / substring indices"
+        },
+        {
+          "id": "G3",
+          "axis_name": "Array / list indexing with computed offsets"
+        },
+        {
+          "id": "G4",
+          "axis_name": "Integer arithmetic overflow"
+        },
+        {
+          "id": "G5",
+          "axis_name": "Floating-point comparison"
+        },
+        {
+          "id": "G6",
+          "axis_name": "Date / time arithmetic"
+        },
+        {
+          "id": "G7",
+          "axis_name": "Unicode codepoint vs byte length"
+        },
+        {
+          "id": "G8",
+          "axis_name": "Threshold and age comparisons"
+        }
+      ]
+    },
+    {
+      "id": "H",
+      "title": "Security boundaries",
+      "slug": "category-h-security-boundaries",
+      "sub_buckets": [
+        {
+          "id": "H1",
+          "axis_name": "SQL injection"
+        },
+        {
+          "id": "H2",
+          "axis_name": "Command injection"
+        },
+        {
+          "id": "H3",
+          "axis_name": "Path traversal"
+        },
+        {
+          "id": "H4",
+          "axis_name": "Authentication bypass"
+        },
+        {
+          "id": "H5",
+          "axis_name": "Authorization checks"
+        },
+        {
+          "id": "H6",
+          "axis_name": "Secret / credential leakage"
+        },
+        {
+          "id": "H7",
+          "axis_name": "SSRF / external request validation"
+        },
+        {
+          "id": "H8",
+          "axis_name": "CSRF / state-changing without token"
+        },
+        {
+          "id": "H9",
+          "axis_name": "Deserialization"
+        },
+        {
+          "id": "H10",
+          "axis_name": "File upload / MIME validation"
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "title": "Concurrency hazards",
+      "slug": "category-i-concurrency",
+      "sub_buckets": [
+        {
+          "id": "I1",
+          "axis_name": "Shared mutable state without synchronization"
+        },
+        {
+          "id": "I2",
+          "axis_name": "Missing await on async operations"
+        },
+        {
+          "id": "I3",
+          "axis_name": "Lock ordering / deadlock potential"
+        },
+        {
+          "id": "I4",
+          "axis_name": "Race conditions / TOCTOU"
+        },
+        {
+          "id": "I5",
+          "axis_name": "Atomicity of compound operations"
+        },
+        {
+          "id": "I6",
+          "axis_name": "Thread-local / async-local context bleed"
+        },
+        {
+          "id": "I7",
+          "axis_name": "Cancellation handling"
+        },
+        {
+          "id": "I8",
+          "axis_name": "Signal handling in multi-threaded code"
+        }
+      ]
+    },
+    {
+      "id": "J",
+      "title": "CODE_RULES.md compliance",
+      "slug": "category-j-code-rules-compliance",
+      "sub_buckets": [
+        {
+          "id": "J1",
+          "axis_name": "Magic values in production function bodies"
+        },
+        {
+          "id": "J2",
+          "axis_name": "String-template magic"
+        },
+        {
+          "id": "J3",
+          "axis_name": "Constants location"
+        },
+        {
+          "id": "J4",
+          "axis_name": "File-global use-count"
+        },
+        {
+          "id": "J5",
+          "axis_name": "Abbreviations"
+        },
+        {
+          "id": "J6",
+          "axis_name": "Vague names"
+        },
+        {
+          "id": "J7",
+          "axis_name": "Type hints"
+        },
+        {
+          "id": "J8",
+          "axis_name": "New inline comments"
+        },
+        {
+          "id": "J9",
+          "axis_name": "Logging format"
+        },
+        {
+          "id": "J10",
+          "axis_name": "Imports inside functions"
+        },
+        {
+          "id": "J11",
+          "axis_name": "sys.path.insert dedup"
+        },
+        {
+          "id": "J12",
+          "axis_name": "Hardcoded user paths"
+        }
+      ]
+    },
+    {
+      "id": "K",
+      "title": "Codebase conflicts (incomplete propagation)",
+      "slug": "category-k-codebase-conflicts",
+      "sub_buckets": [
+        {
+          "id": "K1",
+          "axis_name": "Multi-site name renames"
+        },
+        {
+          "id": "K2",
+          "axis_name": "Duplicated constants / defaults"
+        },
+        {
+          "id": "K3",
+          "axis_name": "Primary path vs fallback path"
+        },
+        {
+          "id": "K4",
+          "axis_name": "Feature flag / version gate consistency"
+        },
+        {
+          "id": "K5",
+          "axis_name": "Producer-vs-consumer type contracts"
+        },
+        {
+          "id": "K6",
+          "axis_name": "Code vs documentation sync (cross-surface)"
+        },
+        {
+          "id": "K7",
+          "axis_name": "Code vs test sync"
+        },
+        {
+          "id": "K8",
+          "axis_name": "Cross-file / cross-language contract sync"
+        },
+        {
+          "id": "K9",
+          "axis_name": "Schema / data-shape propagation"
+        },
+        {
+          "id": "K10",
+          "axis_name": "Intra-file sibling-helper pattern propagation"
+        },
+        {
+          "id": "K11",
+          "axis_name": "Intra-document internal contradiction"
+        }
+      ]
+    },
+    {
+      "id": "L",
+      "title": "Behavior-equivalence for refactors",
+      "slug": "category-l-behavior-equivalence",
+      "sub_buckets": [
+        {
+          "id": "L1",
+          "axis_name": "KNOWN_GOOD_INPUTS table presence"
+        },
+        {
+          "id": "L2",
+          "axis_name": "Whitespace / separator variants"
+        },
+        {
+          "id": "L3",
+          "axis_name": "Adjacent-form regressions"
+        },
+        {
+          "id": "L4",
+          "axis_name": "Empty / boundary inputs"
+        },
+        {
+          "id": "L5",
+          "axis_name": "Invariant preservation"
+        },
+        {
+          "id": "L6",
+          "axis_name": "Implementation-tag parity"
+        },
+        {
+          "id": "L7",
+          "axis_name": "Skipped-category exhaustion"
+        },
+        {
+          "id": "L8",
+          "axis_name": "Sibling-implementation comparison"
+        }
+      ]
+    },
+    {
+      "id": "M",
+      "title": "Producer/consumer cardinality vs collection-type contract",
+      "slug": "category-m-producer-consumer-cardinality",
+      "sub_buckets": [
+        {
+          "id": "M1",
+          "axis_name": "Subprocess-stdout parsers"
+        },
+        {
+          "id": "M2",
+          "axis_name": "Database / registry queries"
+        },
+        {
+          "id": "M3",
+          "axis_name": "Consumer-expects-set anti-pattern"
+        },
+        {
+          "id": "M4",
+          "axis_name": "`extend(...)` into list consumers (acceptable)"
+        },
+        {
+          "id": "M5",
+          "axis_name": "\"Duplicates preserved\" docstring (acceptable)"
+        },
+        {
+          "id": "M6",
+          "axis_name": "Producer signature widening"
+        },
+        {
+          "id": "M7",
+          "axis_name": "Recursive / cycle-prone walkers"
+        },
+        {
+          "id": "M8",
+          "axis_name": "Stream-fold accumulators"
+        }
+      ]
+    },
+    {
+      "id": "N",
+      "title": "Test-name scenario verifier",
+      "slug": "category-n-test-name-scenario-verifier",
+      "sub_buckets": [
+        {
+          "id": "N1",
+          "axis_name": "Scenario-named tests demonstrate the scenario"
+        },
+        {
+          "id": "N2",
+          "axis_name": "Path-decision parametric matrices"
+        },
+        {
+          "id": "N3",
+          "axis_name": "Tests that pass \"for the wrong reason\""
+        },
+        {
+          "id": "N4",
+          "axis_name": "No-op branch exercised by scenario name"
+        },
+        {
+          "id": "N5",
+          "axis_name": "Assertion shape mismatch"
+        },
+        {
+          "id": "N6",
+          "axis_name": "Cross-platform scenario gating"
+        },
+        {
+          "id": "N7",
+          "axis_name": "Time / clock scenario gating"
+        },
+        {
+          "id": "N8",
+          "axis_name": "Concurrent / load scenario gating"
+        },
+        {
+          "id": "N9",
+          "axis_name": "Neutral-named tests (out of scope)"
+        },
+        {
+          "id": "N10",
+          "axis_name": "Test fixture wiring correctness"
+        }
+      ]
+    },
+    {
+      "id": "O",
+      "title": "Docstring / fixture-prose vs implementation drift",
+      "slug": "category-o-docstring-vs-impl-drift",
+      "sub_buckets": [
+        {
+          "id": "O1",
+          "axis_name": "Module-level responsibility verbs"
+        },
+        {
+          "id": "O2",
+          "axis_name": "Fixture docstring vs sibling-test behavior"
+        },
+        {
+          "id": "O3",
+          "axis_name": "Predicate-name and -docstring vs body breadth"
+        },
+        {
+          "id": "O4",
+          "axis_name": "Step-ordering narrative"
+        },
+        {
+          "id": "O5",
+          "axis_name": "Named-sentinel / filename references"
+        },
+        {
+          "id": "O6",
+          "axis_name": "Free-form `Args:`-adjacent claims"
+        },
+        {
+          "id": "O7",
+          "axis_name": "Module-doc-vs-split-module after refactor"
+        },
+        {
+          "id": "O8",
+          "axis_name": "Companion-doc ordering/content vs producer"
+        },
+        {
+          "id": "O9",
+          "axis_name": "Python docstring plainness for a general developer"
+        }
+      ]
+    },
+    {
+      "id": "P",
+      "title": "Name / regex / word-list vs behavior-contract precision",
+      "slug": "category-p-name-vs-behavior-contract",
+      "sub_buckets": [
+        {
+          "id": "P1",
+          "axis_name": "Boolean / flag names assert state the body keeps"
+        },
+        {
+          "id": "P2",
+          "axis_name": "Predicate-name breadth matches body coverage"
+        },
+        {
+          "id": "P3",
+          "axis_name": "Regex name vs regex shape"
+        },
+        {
+          "id": "P4",
+          "axis_name": "Helper-function name vs return contract"
+        },
+        {
+          "id": "P5",
+          "axis_name": "Word-list / replacement-table precision"
+        },
+        {
+          "id": "P6",
+          "axis_name": "Class / module name vs scope"
+        },
+        {
+          "id": "P7",
+          "axis_name": "Reverse: name understates what the body does"
+        }
+      ]
+    },
+    {
+      "id": "Q",
+      "title": "Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard)",
+      "slug": "category-q-cross-surface-claims",
+      "sub_buckets": [
+        {
+          "id": "Q1",
+          "axis_name": "Term sweep"
+        },
+        {
+          "id": "Q2",
+          "axis_name": "PR-description claim verification"
+        },
+        {
+          "id": "Q3",
+          "axis_name": "Message-vs-guard consistency"
+        }
+      ]
+    }
+  ]
+}

@@ -1,84 +1,57 @@
-# Claude Development Assistant
+# Development Assistant
 
-The user is short on time and appreciates brevity in replies. When you reply, always assume they'll only read your first few sentences and final sentences. Anything else is skimmed at best. Frame your replies accordingly.
+## Communication
 
-The user delegates execution to you and expects zero manual steps unless strictly necessary. Execute every command you can directly. Only instruct the user to do something manually when you are technically unable to do it yourself. When a task involves credentials or other sensitive input, display a minimal secure UI (e.g., a password dialog) to collect it rather than asking the user to paste it into chat or run the command themselves. When direction is ambiguous, use AskUserQuestion to clarify before acting.
+Reply shape and length: follow `~/.claude/rules/eli11-replies.md`. Word choice: follow `~/.claude/rules/plain-language.md`. Progress and finals: follow `~/.claude/rules/opus5-communication-contract.md` (`opus5-communication-contract-v1`). State claims affirmatively.
 
-## Timeless Documentation (all `.md` files)
+## Security
 
-Docs describe the current state only. Full rule set and enforcement: `~/.claude/rules/no-historical-clutter.md` (hook `state-description-blocker`) and `~/.claude/rules/self-contained-docs.md`.
+Collect credentials through secure UI only; never request secrets in chat.
 
-## Private values stay out of the committed tree
+A runtime value that is itself private — a host, an SSH user or port, an owner scope, an account ID — lives in git-ignored local configuration with a committed placeholder in its place. Source files never carry the real value.
 
-A value the code needs at run time that is itself private — a host, ssh user or port, owner scope, or id — lives in git-ignored local config with a committed placeholder, not in the source.
+## Advisors
 
-## Choosing Edit vs Write
+| Path | Holds |
+|---|---|
+| `~/.claude/docs/references/advisor-tool.md` | When to call a stronger reviewer, hard rule before first write, how to treat advice |
+| `/team-advisor` skill | Standing warm advisor bind (map: `docs/references/team-advisor-skill.md`) |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, model floor, lifecycle |
 
-`Edit` changes existing files; `Write` creates new ones. Default to `Edit` — reach for `Write` only for a genuinely new path. For a true full rewrite, delete the file first, then `Write`.
+Use `/team-advisor` under the rules in `advisor-tool.md` for every advisor consultation.
 
-## Showing Files: Open Them, Don't Print the Path
+## Files and workspaces
 
-When I ask you to "show me", "open", "display", "let me see", or "pull up" a file — an image, PDF, HTML page, document, anything — open it on my screen. Launch the viewer so each image window matches the asset's size:
+Put all work in an isolated worktree under the repo's `.claude/worktrees/`.
 
-`Start-Process pwsh -WindowStyle Hidden -ArgumentList '-NoProfile','-File',"$HOME\.claude\scripts\Show-Asset.ps1",'<path 1>','<path 2>'`
+Default to Edit for existing files; reach for Write only when the path is genuinely new.
 
-## Test Philosophy
+## Code and tests
 
-When writing tests, always write tests that actually test the behavior of the function against actual, real data and environments.
+Tests must exercise real behavior, real data, and production paths.
 
-When writing tests, always ensure you utilize the production code paths instead of duplicating explicitly for the test.
+Keep changes within scope. Prefer durable systemic fixes for reusable behavior.
 
-## Research via Subagents
+Do not rewrite entire files or rename public parameters without need.
 
-Delegate exploration whose raw content you won't directly edit or reuse. If you'd `Read` more than one file or `Grep` more than one pattern just to extract a fact, dispatch an `Explore` subagent.
+## Reviews
 
-Ask the subagent for a specific answer: "return the file:line where X is defined." For multiple unrelated questions, fan out parallel subagents — issue several `Agent` calls in a single response.
+Verify every sub-agent file list, count, description, and finding against the repository and diff.
 
-Reserve `Read`/`Grep`/`Glob` for files you will actually touch this turn. Compose subagent prompts via the protocol in `agent-spawn-protocol`.
+Do not commit untracked files unless explicitly instructed.
 
-## Target Execution Workflow for Code Tasks
+## Delegation
 
-Run every multi-step code task in three ordered phases:
+Request precise file-and-line answers from research subagents.
 
-1. **Coders** — one coder agent per scoped assignment writes the code. A coder that hits a decision it can't reasonably solve consults the advisor (see beginning of this file).
-2. **Commit-gate preflight** — before spawning `code-verifier`, the branch must be merge-clean vs base and CODE_RULES-clean on added working-tree lines (committed on the branch or uncommitted). The `code_verifier_spawn_preflight_gate` enforces this on Agent/Task spawns with `subagent_type` `code-verifier`; do not spawn the verifier until those gates are green.
-3. **Verification** — the main session spawns the `code-verifier` agent in a fresh context, but you must first verify that their work is based on upstream's origin main (aka: the commit live on github). It derives and runs the checks itself rather than trusting coder reports: the task's named gates, tests against baselines recorded before the coders ran, and a two-way diff-vs-assignment reading (every task item maps to a hunk, every hunk maps to a task item, nothing missing). A finding must cite a failing command or a named task item. Before it emits the verdict, it puts the draft through one strongest-tier validation subagent — selected per the advisor protocol's host detection and tier ladder — that tries to refute it, and it re-checks and corrects any part the validator overturns. Source: the fresh-context review step in Claude Code best practices (https://code.claude.com/docs/en/best-practices) — the agent doing the work isn't the one grading it.
+## Task tracking
 
-Repair agents run only on reported findings; the verifier re-checks after each repair. Work lands (commit, push, draft PR) only on a clean verdict — enforced by the `verified_commit_gate` hook, which blocks `git commit`/`git push` unless a hook-minted verdict covers the current branch diff. One exemption is mechanical, not discretionary: a diff whose every changed file is non-code (docs, images), a pytest test file by name (`test_*.py`, `*_test.py`, or `conftest.py`), or a Python file whose docstring-stripped AST is unchanged (docstring, comment, or formatting-only edits). One escape hatch is manual and narrow: appending `# verify-skip` as a trailing shell comment (outside every quoted region) to the blocked commit or push command bypasses the gate for that one command — allowed only when the branch surface is the same code a code-verifier already passed clean and the gate is blocking on a verdict that doesn't cover it (an unminted verdict, staging churn, a reverted concurrent write); any real code change since the clean verdict runs a fresh verification instead. Full rule: `~/.claude/rules/verified-commit-gate-skip.md`.
+Track multi-step work with the `task-build` skill.
 
-## Sub-agent Output Validation
+## Repository rule
 
-After any sub-agent returns a PR description, file list, or counts, verify each claim against the actual diff and repo state before using it. Flag and correct any invented paths, fabricated counts, or out-of-scope changes before they land in commits or PR bodies.
+Before changing skill, rule, or hook installation in the claude-dev-env repo, read `docs/references/skill-install-system.md`.
 
-## Task Tracking
+## Definitions
 
-Track every task with the task tool, always — for all sessions and all tasks. Capture each task with `TaskCreate` as it arrives, mark it `in_progress` with `TaskUpdate` when you start, and `completed` when it is done. Run `/task-build` to gather any open tasks and add them to the list in one pass.
-
-## Working in the claude-dev-env Repo
-
-When changing how skills, rules, or hooks install or sync in this repo (for example adding a skill), read `docs/references/skill-install-system.md` — it maps the install pipeline in `packages/claude-dev-env/bin/install.mjs`.
-
-## Additional Non-overlapping Rules
-
-- **disambiguate_overloaded_terms:** When a word in the request has two different technical meanings — "conflict" (git-merge versus functional/behavioral), "sync" (fast-forward versus commit), and the like — confirm which one is meant via AskUserQuestion before analyzing or acting.
-
-## Serena (Code Intelligence MCP)
-
-The `mcp__serena__*` tools expose LSP-level code intelligence for any activated project.
-
-### CRITICAL: Call `initial_instructions` first
-Before any coding task, call the `initial_instructions` tool to load the Serena Instructions Manual.
-
-### When to use Serena
-- **Symbol declaration** → `mcp__serena__find_declaration`
-- **All references to a symbol** → `mcp__serena__find_referencing_symbols`
-- **Implementations of an interface/class** → `mcp__serena__find_implementations`
-- **Rename across codebase** → `mcp__serena__rename_symbol`
-- **Targeted body replacement / insertion** → `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`
-- **Safe symbol removal (no references)** → `mcp__serena__safe_delete_symbol`
-- **File diagnostics** → `mcp__serena__get_diagnostics_for_file`
-
-### Tool hierarchy for code navigation
-1. **Serena** — symbol-level navigation (declarations, references, implementations, rename)
-2. **es.exe** — file-system search by name/path/extension/size/date (Everything CLI)
-3. **Grep/Glob** — content and pattern matching
+Warm agent: active within the past 59 minutes.

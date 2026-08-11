@@ -70,7 +70,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       - [ ] **clean on `current_head`** → zero unresolved threads (else fix + resolve first)
             → `bugbot_clean_at = current_head` → Step 7
       - [ ] **no review / commit_id mismatch** → `reviewer-gates` Bugbot flow (Gate 3):
-            silent pass → stamp + Step 7; queued/triggered → 360s wakeup → Step 4;
+            silent pass → Step 7; queued/triggered → 360s wakeup → Step 4;
             down → `bugbot_down = true` → Step 7
 
 - [ ] **Step 5: CODE-REVIEW — static sweep, review, fix, advance**
@@ -110,9 +110,10 @@ round as converged. This rule holds every tick, every loop, every PR.
       See: [`per-tick.md` § Step 2 BUGTEAM](per-tick.md);
       [`../../bugteam/SKILL.md`](../../bugteam/SKILL.md).
       Pre-condition: `code_review_clean_at == current_head`.
-      Mandatory: `Skill({skill: "bugteam", args: "<PR URL>"})` this tick
-      (enforcer-blocked otherwise; `qbug` is not a substitute). Scope: FULL
-      `origin/main...HEAD` diff. Re-resolve HEAD after bugteam.
+      Mandatory: `Skill({skill: "bugteam", args: "<PR URL>"})` this tick.
+      Use the [review guide](../../reviews/SKILL.md#review-workflow) for its
+      judgment. `qbug` is not a substitute. Scope: FULL `origin/main...HEAD`
+      diff. Re-resolve HEAD after bugteam.
 
       - [ ] **bugteam pushed** → verify threads replied + resolved → reset markers
             → `phase = CODE_REVIEW` → 360s wakeup → Step 5
@@ -129,7 +130,7 @@ round as converged. This rule holds every tick, every loop, every PR.
       before these gates run. Count unresolved threads before each gate.
       Every gate records evidence; gate (f) cites evidence from (a)–(e).
 
-      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → stamp `copilot_clean_at`; absent → continue; when `copilot_down`, skip
+      - [ ] **(a) Copilot findings** — fetch Copilot on `current_head`; dirty → fix + return to Step 5; clean → record `copilot_clean_at`; absent → continue; when `copilot_down`, skip
       - [ ] **(b) Claude reviewer** — fetch Claude on `current_head`; dirty → fix + return to Step 5; clean or absent → continue
       - [ ] **(c) Mergeability** — `mergeable_state == "clean"` and `mergeable == true`; dirty → rebase + return to Step 1; blocked/behind/unknown/unstable → hard blocker
       - [ ] **(d) Post-convergence Copilot request** — request Copilot when not pending and not `copilot_down`; enter `COPILOT_WAIT` (Step 7a); when `copilot_down`, skip to (e)

@@ -7,15 +7,22 @@ from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME
 __all__ = (
     "ALL_AGENT_CONFIG_DENY_TOOLS",
     "ALL_AGENT_CONFIG_PATH_PATTERNS",
+    "ALL_INERT_FILE_PERMISSION_TOOLS",
+    "ALL_LEGACY_PERMISSION_REAP_TOOLS",
     "ALL_PERMISSION_ALLOW_TOOLS",
     "ALL_TRUST_ENTRY_PROJECT_PATH_BOUNDARY_QUOTE_CHARACTERS",
     "AUTO_MODE_ENVIRONMENT_ENTRY_PREFIX",
     "AUTO_MODE_ENVIRONMENT_ENTRY_TEMPLATE",
     "CLAUDE_SETTINGS_DIRECTORY_NAME",
     "CLAUDE_SETTINGS_FILENAME",
+    "CLAUDE_SETTINGS_LOCAL_FILENAME",
     "GIT_DIRECTORY_NAME",
+    "HOME_PROJECT_PATH_ALIAS",
+    "INERT_RULES_REMOVED_LOG_PREFIX",
+    "PROJECT_LOCAL_INERT_RULES_REMOVED_LOG_PREFIX",
     "TEXT_FILE_ENCODING",
     "UNIQUE_TEMPORARY_SUFFIX_BYTE_LENGTH",
+    "get_claude_project_local_settings_path",
     "get_claude_user_settings_path",
 )
 
@@ -23,6 +30,20 @@ __all__ = (
 ALL_PERMISSION_ALLOW_TOOLS: tuple[str, ...] = ("Edit", "Read")
 
 ALL_AGENT_CONFIG_DENY_TOOLS: tuple[str, ...] = ("Edit", "Read")
+
+ALL_LEGACY_PERMISSION_REAP_TOOLS: tuple[str, ...] = ("Write", "Glob")
+
+ALL_INERT_FILE_PERMISSION_TOOLS: tuple[str, ...] = ("Write", "Glob", "NotebookEdit")
+
+HOME_PROJECT_PATH_ALIAS: str = "$HOME"
+
+INERT_RULES_REMOVED_LOG_PREFIX: str = (
+    "Inert Write/Glob/NotebookEdit rules removed: "
+)
+
+PROJECT_LOCAL_INERT_RULES_REMOVED_LOG_PREFIX: str = (
+    "Project-local inert Write/Glob/NotebookEdit rules removed: "
+)
 
 ALL_AGENT_CONFIG_PATH_PATTERNS: tuple[str, ...] = (
     "settings*.json",
@@ -81,6 +102,8 @@ CLAUDE_SETTINGS_DIRECTORY_NAME: str = ".claude"
 
 CLAUDE_SETTINGS_FILENAME: str = "settings.json"
 
+CLAUDE_SETTINGS_LOCAL_FILENAME: str = "settings.local.json"
+
 TEXT_FILE_ENCODING: str = "utf-8"
 
 UNIQUE_TEMPORARY_SUFFIX_BYTE_LENGTH: int = 8
@@ -88,3 +111,24 @@ UNIQUE_TEMPORARY_SUFFIX_BYTE_LENGTH: int = 8
 
 def get_claude_user_settings_path() -> Path:
     return Path.home() / CLAUDE_SETTINGS_DIRECTORY_NAME / CLAUDE_SETTINGS_FILENAME
+
+
+def get_claude_project_local_settings_path(
+    project_root_path: Path | None = None,
+) -> Path:
+    """Return ``<project>/.claude/settings.local.json`` for the project root.
+
+    Args:
+        project_root_path: Project root; defaults to the process cwd.
+
+    Returns:
+        Path to the project-local Claude settings file (may not exist yet).
+    """
+    resolved_project_root_path = (
+        project_root_path if project_root_path is not None else Path.cwd()
+    )
+    return (
+        resolved_project_root_path
+        / CLAUDE_SETTINGS_DIRECTORY_NAME
+        / CLAUDE_SETTINGS_LOCAL_FILENAME
+    )

@@ -20,7 +20,7 @@ The `pre-push-review` skill was retired. Its mechanical checks are now covered a
 
 - **Mechanical pre-push checks** (magic values, boolean naming, imports, constants location, and other CODE_RULES checks) — handled by the `code_rules_enforcer.py` PreToolUse hook (blocks at write time) and by the git pre-push hook installed via `npx claude-dev-env`. The git pre-push hook is the gate that runs at `git push` time; no manual invocation is needed.
 
-- **`/qbug`** — a full PR audit-fix cycle that spawns subagents, runs multiple audit loops, and produces a structured report. It is NOT a lightweight pre-push gate. Do not use `/qbug` as a substitute for `git push` (the hook fires automatically). Use `/qbug` when you want a thorough multi-loop review of a PR before requesting human review.
+- **`/bugteam`** — a full PR audit-fix cycle that spawns subagents, runs multiple audit loops, and produces a structured report. It is NOT a lightweight pre-push gate. Do not use `/bugteam` as a substitute for `git push` (the hook fires automatically). Use `/bugteam` when you want a thorough multi-loop review of a PR before requesting human review.
 
 References:
 - `hooks/git-hooks/pre_push.py` — the git pre-push hook that runs the CODE_RULES gate over the commits about to be pushed

@@ -20,7 +20,7 @@ The caller passes: its identity, the PR scope, the PR worktree path, this round'
 
 ## Executor choice
 
-- **Single-PR loops** (no shared `state.json`): the lead spawns `Agent(subagent_type: "clean-coder")` to write the fix. Stop when `Agent` is unavailable. A spawned clean-coder starts in its own working directory, so its prompt names the PR worktree path and directs it to edit, stage, and commit there.
+- **Single-PR loops** (no shared `state.json`): the lead spawns `Agent(subagent_type: "clean-coder", model: "sonnet")` — worker-model routing per [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing); resolver-supplied sonnet-equivalent on third-party hosts — to write the fix. Stop when `Agent` is unavailable. A spawned clean-coder starts in its own working directory, so its prompt names the PR worktree path and directs it to edit, stage, and commit there.
 - **Multi-PR orchestration** (shared `state.json`): a per-PR clean-coder teammate owns edits, replies, and state writes; the orchestrator holds back from inline edits. The teammate obligations — reply before writing state, which state fields to set, idle handoff — live in the calling skill's multi-PR reference.
 
 Run every git command in the PR worktree. `git add`, `git commit`, and `git push` act on the repo of the current working directory, so a cross-repo PR's fix lands in the PR's repo only when the working directory is its worktree.
