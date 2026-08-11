@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Stop hook that blocks Claude responses ending on a promise about undone work.
+Stop hook that routes Claude responses ending on a promise about future work.
 
 When a turn ends on a forward-looking statement of intent ("I'll now run the
-tests", "Let me implement the fix") instead of actually doing the work, the
-agent is forced to do the work now with tool calls, or - when genuinely blocked
-on input only the user can supply - route through AskUserQuestion and end
-cleanly. The rule name is long-horizon-autonomy.
+tests", "Let me implement the fix"), the agent completes the work with tool
+calls during the turn. AskUserQuestion routes work that requires input only the
+user can provide. The rule name is long-horizon-autonomy.
 """
 
 import json
@@ -125,14 +124,12 @@ def main() -> None:
         sys.exit(0)
 
     block_reason = (
-        "LONG-HORIZON-AUTONOMY GUARDRAIL: Your turn ends on a promise about work "
-        "that is not yet done, rather than doing it. Do the work NOW with tool calls "
-        "instead of describing what you are about to do.\n\n"
-        "If the work is genuinely blocked on input only the user can give, route the "
-        "ask through an AskUserQuestion tool call and end the turn cleanly. Otherwise, "
-        "carry out the stated action this turn.\n\n"
-        "You MUST re-output the complete response with the work actually performed, "
-        "per the long-horizon-autonomy rule."
+        "LONG-HORIZON-AUTONOMY GUARDRAIL: Complete the promised work with tool calls "
+        "during this turn. Route the question through an AskUserQuestion tool call "
+        "when the work requires input only the user can provide, then end the turn "
+        "cleanly.\n\n"
+        "Re-output the complete response with the work performed, per the "
+        "long-horizon-autonomy rule."
     )
     block_response = {
         "decision": "block",

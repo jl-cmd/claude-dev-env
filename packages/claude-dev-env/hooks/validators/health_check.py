@@ -11,6 +11,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -25,14 +26,32 @@ VALIDATOR_FILES = [
 ]
 
 
+class ValidatorStatus(str, Enum):
+    """Displayed state for one required validator."""
+
+    READY = "[READY]"
+    FILE_REQUIRED = "[FILE REQUIRED]"
+    ACCESS_REQUIRED = "[ACCESS REQUIRED]"
+
+
 @dataclass(frozen=True)
 class ValidatorHealth:
     """Health status of a single validator."""
 
     name: str
-    healthy: bool
+    status: ValidatorStatus
     error: Optional[str] = None
     last_modified: Optional[datetime] = None
+
+    @property
+    def healthy(self) -> bool:
+        """Return whether the validator is ready for use."""
+        return self.status is ValidatorStatus.READY
+
+    @property
+    def is_present(self) -> bool:
+        """Return whether the validator file is present on disk."""
+        return self.status is not ValidatorStatus.FILE_REQUIRED
 
 
 @dataclass(frozen=True)
@@ -59,8 +78,8 @@ def check_validator_exists(validator_path: Path) -> ValidatorHealth:
     if not validator_path.exists():
         return ValidatorHealth(
             name=name,
-            healthy=False,
-            error=f"Validator not found: {validator_path}",
+            status=ValidatorStatus.FILE_REQUIRED,
+            error=f"Validator file required: {validator_path}",
         )
 
     try:
@@ -68,14 +87,14 @@ def check_validator_exists(validator_path: Path) -> ValidatorHealth:
         mtime = datetime.fromtimestamp(validator_path.stat().st_mtime)
         return ValidatorHealth(
             name=name,
-            healthy=True,
+            status=ValidatorStatus.READY,
             last_modified=mtime,
         )
     except (IOError, OSError, PermissionError) as error:
         return ValidatorHealth(
             name=name,
-            healthy=False,
-            error=f"Cannot read validator: {error}",
+            status=ValidatorStatus.ACCESS_REQUIRED,
+            error=f"Validator read access requires attention: {error}",
         )
 
 
@@ -187,15 +206,14 @@ def print_health_report(health: SystemHealth) -> None:
 
     print("Required Validators:")
     for name, validator in sorted(health.validators.items()):
-        status = "[OK]" if validator.healthy else "[MISSING]"
-        print(f"  {status} {name}")
+        print(f"  {validator.status.value} {name}")
         if validator.error:
             print(f"         Error: {validator.error}")
     print()
 
     print("Optional Tools:")
     for tool, available in sorted(health.optional_tools.items()):
-        status = "[OK]" if available else "[NOT INSTALLED]"
+        status = "[READY]" if available else "[OPTIONAL]"
         print(f"  {status} {tool}")
     print()
 

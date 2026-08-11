@@ -632,7 +632,7 @@ def test_run_summary_prints_no_new_blocks_when_cursor_empty(
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "No new blocks since last run." in captured.out
+    assert "Blocked events recorded in the last 24 hours: 0." in captured.out
 
 
 def test_run_summary_prints_table_when_rows_returned(

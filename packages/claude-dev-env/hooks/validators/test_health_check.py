@@ -6,30 +6,54 @@ from pathlib import Path
 import pytest
 
 from .health_check import (
+    SystemHealth,
     ValidatorHealth,
+    ValidatorStatus,
     check_validator_exists,
     check_all_validators,
     get_validator_version,
+    print_health_report,
 )
 
 
 class TestValidatorExists:
-    def test_existing_validator_healthy(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as temp_file:
-            temp_file.write(b"print('hello')")
-            temp_path = Path(temp_file.name)
+    def test_existing_validator_healthy(self, tmp_path: Path) -> None:
+        validator_path = tmp_path / "validator.py"
+        validator_path.write_text("print('hello')", encoding="utf-8")
 
-        try:
-            result = check_validator_exists(temp_path)
-            assert result.healthy is True
-            assert result.error is None
-        finally:
-            temp_path.unlink()
+        result = check_validator_exists(validator_path)
+
+        assert result.healthy is True
+        assert result.status is ValidatorStatus.READY
+        assert result.error is None
+        assert result.is_present is True
 
     def test_missing_validator_unhealthy(self) -> None:
         result = check_validator_exists(Path("/nonexistent/validator.py"))
         assert result.healthy is False
-        assert "not found" in result.error.lower()
+        assert result.status is ValidatorStatus.FILE_REQUIRED
+        assert result.is_present is False
+        assert "file required" in result.error.lower()
+
+    def test_unreadable_validator_reports_read_access_state(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        validator_path = tmp_path / "validator.py"
+        validator_path.write_text("print('ready')", encoding="utf-8")
+
+        def raise_read_error(*_args: object, **_kwargs: object) -> str:
+            raise OSError("permission detail")
+
+        monkeypatch.setattr(Path, "read_text", raise_read_error)
+
+        result = check_validator_exists(validator_path)
+
+        assert result.healthy is False
+        assert result.status is ValidatorStatus.ACCESS_REQUIRED
+        assert result.is_present is True
+        assert "read access requires attention" in result.error.lower()
 
 
 class TestCheckAllValidators:
@@ -55,3 +79,33 @@ class TestGetValidatorVersion:
             assert version1 != version2
             assert isinstance(version1, str)
             assert len(version1) > 0
+
+
+def test_print_health_report_distinguishes_validator_states(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    health = SystemHealth(
+        all_healthy=False,
+        validators={
+            "missing_validator": ValidatorHealth(
+                name="missing_validator",
+                status=ValidatorStatus.FILE_REQUIRED,
+                error="Validator file required: missing_validator.py",
+            ),
+            "unreadable_validator": ValidatorHealth(
+                name="unreadable_validator",
+                status=ValidatorStatus.ACCESS_REQUIRED,
+                error="Validator read access requires attention: permission detail",
+            ),
+        },
+        python_version="3.12.0",
+        optional_tools={"mypy": True, "ruff": False},
+    )
+
+    print_health_report(health)
+
+    report = capsys.readouterr().out
+    assert "[FILE REQUIRED] missing_validator" in report
+    assert "[ACCESS REQUIRED] unreadable_validator" in report
+    assert "[READY] mypy" in report
+    assert "[OPTIONAL] ruff" in report

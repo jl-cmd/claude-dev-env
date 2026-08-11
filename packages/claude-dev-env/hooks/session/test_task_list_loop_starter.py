@@ -45,9 +45,11 @@ class TestSessionDirective:
         emitted = json.loads(_run_main())
         assert "/loop 10m" in emitted["additionalContext"]
 
-    def test_directive_is_idempotent_about_an_existing_loop(self) -> None:
+    def test_directive_reuses_an_existing_loop(self) -> None:
         emitted = json.loads(_run_main())
-        assert "not already running" in emitted["additionalContext"]
+        assert "Reuse the active task-list maintenance loop when available." in emitted[
+            "additionalContext"
+        ]
 
     def test_build_session_directive_returns_the_shared_constant(self) -> None:
         assert starter.build_session_directive() == TASK_LIST_LOOP_DIRECTIVE

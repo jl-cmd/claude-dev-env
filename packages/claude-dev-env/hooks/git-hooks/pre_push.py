@@ -550,7 +550,7 @@ def main() -> int:
         return gate_infrastructure_failure_exit_code
     if base_reference == unresolvable_merge_base_sentinel:
         print(unresolvable_merge_base_message, file=sys.stderr)
-        return 0
+        return gate_infrastructure_failure_exit_code
     remote_name = resolve_remote_name_from_arguments(sys.argv)
     try:
         usable_base_reference = resolve_usable_base_reference(

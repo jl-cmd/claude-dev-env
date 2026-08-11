@@ -169,7 +169,7 @@ def _decorator_gap_violation(
     return Violation(
         filename,
         last_decorator_line,
-        "No empty line allowed between decorator and function",
+        "Place the decorator directly above the function",
     )
 
 

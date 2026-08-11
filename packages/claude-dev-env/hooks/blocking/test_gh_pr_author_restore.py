@@ -422,7 +422,8 @@ def test_main_logs_high_level_failure_when_restore_switch_fails(
 
     assert exit_code == 0
     assert state_file.exists()
-    assert "[gh-pr-author-restore] failed to restore" in captured_streams.err
+    assert "[gh-pr-author-restore] Restore the gh account" in captured_streams.err
+    assert "gh auth switch returned a failure" in captured_streams.err
     assert "'jl-cmd'" in captured_streams.err
     assert str(state_file) in captured_streams.err
 

@@ -156,11 +156,10 @@ def test_run_git_reference_query_returns_replaced_text_on_locale_invalid_bytes(
     assert resolved_output == expected_replaced_reference
 
 
-def test_unresolvable_merge_base_message_does_not_claim_dangling_origin_head() -> None:
+def test_unresolvable_merge_base_message_describes_pending_validation() -> None:
     skip_message = git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE
-    assert "origin/HEAD names a ref" not in skip_message
-    assert "unrelated histories" in skip_message
-    assert "merge-base still could not name a shared commit" in skip_message
+    assert "CODE_RULES validation is pending" in skip_message
+    assert "Restore shared history" in skip_message
 
 
 def test_run_git_text_command_raises_when_git_cannot_launch(
@@ -1198,7 +1197,7 @@ def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
     assert recorded_arguments == ["--base", remote_object_name]
 
 
-def test_main_skips_the_gate_when_no_merge_base_resolves(
+def test_main_keeps_the_gate_pending_when_no_merge_base_resolves(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1230,9 +1229,9 @@ def test_main_skips_the_gate_when_no_merge_base_resolves(
 
     exit_code = pre_push.main()
 
-    assert exit_code == 0
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     assert not recorded_arguments_path.exists(), (
-        "the gate ran on a base the hook could not verify"
+        "the gate remains pending until the hook verifies a usable base"
     )
     assert git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE in capsys.readouterr().err
 

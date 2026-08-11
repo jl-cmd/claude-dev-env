@@ -11,8 +11,9 @@ TASK_LIST_MAINTENANCE_INSTRUCTION = "build or update the task list using the tas
 
 TASK_LIST_LOOP_DIRECTIVE = (
     "TASK LIST MAINTENANCE: Keep this session's task list current on a 10-minute "
-    "cadence. If a task-list maintenance loop is not already running this session, "
-    "start one now with Claude Code's built-in /loop skill on a 10-minute interval: "
+    "cadence. Reuse the active task-list maintenance loop when available. Start "
+    "Claude Code's built-in /loop skill with a 10-minute interval when this session "
+    "needs its first loop: "
     f'/loop 10m "{TASK_LIST_MAINTENANCE_INSTRUCTION}". Run that instruction once '
-    "immediately, then let the loop refresh the list every 10 minutes."
+    "when starting the loop, then let the loop refresh the list every 10 minutes."
 )
