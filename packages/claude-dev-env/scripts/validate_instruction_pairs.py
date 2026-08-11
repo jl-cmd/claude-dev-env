@@ -9,60 +9,88 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 git_directory_name = ".git"
-git_list_files_command = ("git", "ls-files", "--stage", "-z")
-utf8_encoding_name = "utf-8"
+git_listing_commands = (
+    (("git", "ls-files", "--stage", "-z"), True),
+    (("git", "ls-files", "--others", "--exclude-standard", "-z"), False),
+)
 ascii_encoding_name = "ascii"
+utf8_encoding_name = "utf-8"
 regular_git_file_mode = "100644"
 canonical_instruction_names = frozenset(("AGENTS.md", "CLAUDE.md"))
 
 
-def _discover_named_files(repository_root: Path, expected_name: str) -> list[Path]:
+def _read_git_paths_and_modes(
+    repository_root: Path,
+) -> tuple[set[Path], dict[Path, set[str]]]:
+    all_git_paths: set[Path] = set()
+    modes_by_path: dict[Path, set[str]] = {}
+    for each_command, each_has_git_mode in git_listing_commands:
+        completed_process = subprocess.run(
+            each_command,
+            cwd=repository_root,
+            capture_output=True,
+            check=True,
+        )
+        for each_record in completed_process.stdout.split(b"\0"):
+            if not each_record:
+                continue
+            if each_has_git_mode:
+                each_header, each_path_bytes = each_record.split(b"\t", 1)
+                each_mode = each_header.split(b" ", 1)[0].decode(ascii_encoding_name)
+                each_path = repository_root / Path(os.fsdecode(each_path_bytes))
+                modes_by_path.setdefault(each_path, set()).add(each_mode)
+            else:
+                each_path = repository_root / Path(os.fsdecode(each_record))
+            all_git_paths.add(each_path)
+    return all_git_paths, modes_by_path
+
+
+def _discover_named_files(
+    repository_root: Path,
+    all_git_paths: set[Path],
+    expected_name: str,
+) -> list[Path]:
+    all_candidate_paths = set(all_git_paths)
+    all_candidate_paths.update(repository_root.rglob("*"))
     return sorted(
         each_path
-        for each_path in repository_root.rglob("*")
+        for each_path in all_candidate_paths
         if git_directory_name not in each_path.parts
-        and each_path.is_file()
         and each_path.name.casefold() == expected_name.casefold()
     )
 
 
-def _read_git_modes(repository_root: Path) -> dict[Path, str]:
-    completed_process = subprocess.run(
-        git_list_files_command,
-        cwd=repository_root,
-        capture_output=True,
-        check=True,
-    )
-    modes_by_path: dict[Path, str] = {}
-    for each_record in completed_process.stdout.split(b"\0"):
-        if not each_record:
-            continue
-        each_header, each_path_bytes = each_record.split(b"\t", 1)
-        each_mode = each_header.split(b" ", 1)[0].decode(ascii_encoding_name)
-        modes_by_path[Path(each_path_bytes.decode(utf8_encoding_name))] = each_mode
-    return modes_by_path
-
-
 def _find_nearest_agents_path(
-    claude_path: Path, repository_root: Path
+    claude_path: Path,
+    repository_root: Path,
+    agents_by_directory: dict[Path, Path],
 ) -> Path | None:
     each_directory = claude_path.parent
     while True:
-        each_agents_path = each_directory / "AGENTS.md"
-        if each_agents_path.exists():
+        each_agents_path = agents_by_directory.get(each_directory)
+        if each_agents_path is not None:
             return each_agents_path
         if each_directory == repository_root:
             return None
         each_directory = each_directory.parent
 
 
+def _relative_import_path(claude_path: Path, agents_path: Path) -> str:
+    return Path(os.path.relpath(agents_path, claude_path.parent)).as_posix()
+
+
 def _expected_import_text(claude_path: Path, agents_path: Path) -> bytes:
-    relative_import_path = Path(
-        os.path.relpath(agents_path, claude_path.parent)
-    ).as_posix()
-    return f"@{relative_import_path}\n".encode(utf8_encoding_name)
+    return f"@{_relative_import_path(claude_path, agents_path)}\n".encode(
+        utf8_encoding_name
+    )
+
+
+def _is_regular_file(each_path: Path) -> bool:
+    try:
+        return stat.S_ISREG(each_path.lstat().st_mode)
+    except FileNotFoundError:
+        return False
 
 
 def validate_repository(repository_root: Path) -> list[str]:
@@ -74,39 +102,53 @@ def validate_repository(repository_root: Path) -> list[str]:
     Returns:
         Human-readable validation errors, with an empty list for a valid tree.
     """
+    repository_root = repository_root.resolve()
     all_errors: list[str] = []
-    modes_by_path = _read_git_modes(repository_root)
-    all_agents_paths = _discover_named_files(repository_root, "AGENTS.md")
-    all_claude_paths = _discover_named_files(repository_root, "CLAUDE.md")
+    all_git_paths, modes_by_path = _read_git_paths_and_modes(repository_root)
+    all_agents_paths = _discover_named_files(
+        repository_root, all_git_paths, "AGENTS.md"
+    )
+    all_claude_paths = _discover_named_files(
+        repository_root, all_git_paths, "CLAUDE.md"
+    )
+    agents_by_directory = {
+        each_path.parent: each_path
+        for each_path in all_agents_paths
+        if each_path.name == "AGENTS.md"
+    }
 
     for each_instruction_path in (*all_agents_paths, *all_claude_paths):
         relative_path = each_instruction_path.relative_to(repository_root)
-        tracked_mode = modes_by_path.get(relative_path)
+        tracked_modes = modes_by_path.get(each_instruction_path, set())
         if each_instruction_path.name not in canonical_instruction_names:
             all_errors.append(f"Use the canonical filename: {relative_path}")
-        if each_instruction_path.is_symlink() or not stat.S_ISREG(
-            each_instruction_path.stat(follow_symlinks=False).st_mode
-        ):
+        if not _is_regular_file(each_instruction_path):
             all_errors.append(f"Use a regular file: {relative_path}")
-        if tracked_mode != regular_git_file_mode:
+        if tracked_modes != {regular_git_file_mode}:
             all_errors.append(
                 f"Commit the instruction file with Git mode 100644: {relative_path}"
             )
 
     for each_claude_path in all_claude_paths:
         relative_claude_path = each_claude_path.relative_to(repository_root)
-        each_agents_path = _find_nearest_agents_path(each_claude_path, repository_root)
+        each_agents_path = _find_nearest_agents_path(
+            each_claude_path, repository_root, agents_by_directory
+        )
         if each_agents_path is None:
             all_errors.append(f"Add the nearest governing AGENTS.md: {relative_claude_path}")
+            continue
+        if not _is_regular_file(each_claude_path):
             continue
         expected_bytes = _expected_import_text(each_claude_path, each_agents_path)
         actual_bytes = each_claude_path.read_bytes()
         if actual_bytes != expected_bytes:
+            relative_import_path = _relative_import_path(
+                each_claude_path, each_agents_path
+            )
             relative_agents_path = each_agents_path.relative_to(repository_root)
             all_errors.append(
                 f"Make {relative_claude_path} exactly import "
-                f"@{each_agents_path.relative_to(each_claude_path.parent).as_posix()} "
-                f"for {relative_agents_path}"
+                f"@{relative_import_path} for {relative_agents_path}"
             )
 
     return all_errors
@@ -133,10 +175,7 @@ def _main() -> int:
         for each_error in all_errors:
             sys.stderr.write(f"{each_error}\n")
         return 1
-    sys.stdout.write(
-        f"Validated {len(_discover_named_files(repository_root, 'CLAUDE.md'))} "
-        "exact instruction imports.\n"
-    )
+    sys.stdout.write("Validated exact instruction imports.\n")
     return 0
 
 

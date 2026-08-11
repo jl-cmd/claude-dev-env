@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from validate_instruction_pairs import validate_repository
 
@@ -62,3 +62,29 @@ def test_crlf_import_fails_line_ending_check(tmp_path: Path) -> None:
     all_errors = validate_repository(tmp_path)
 
     assert any("exactly import" in each_error for each_error in all_errors)
+
+
+def test_executable_import_fails_git_mode_check(tmp_path: Path) -> None:
+    initialize_repository(tmp_path)
+    (tmp_path / "AGENTS.md").write_bytes(b"# Canonical guidance\n")
+    (tmp_path / "CLAUDE.md").write_bytes(b"@AGENTS.md\n")
+    stage_instruction_files(tmp_path)
+    subprocess.run(
+        ["git", "update-index", "--chmod=+x", "CLAUDE.md"],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    all_errors = validate_repository(tmp_path)
+
+    assert any("Git mode 100644" in each_error for each_error in all_errors)
+
+
+def test_untracked_import_fails_tracking_check(tmp_path: Path) -> None:
+    initialize_repository(tmp_path)
+    (tmp_path / "AGENTS.md").write_bytes(b"# Canonical guidance\n")
+    (tmp_path / "CLAUDE.md").write_bytes(b"@AGENTS.md\n")
+
+    all_errors = validate_repository(tmp_path)
+
+    assert any("Git mode 100644" in each_error for each_error in all_errors)
