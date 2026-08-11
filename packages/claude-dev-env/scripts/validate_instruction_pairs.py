@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import stat
 import subprocess
-import sys
 from pathlib import Path
 
 git_directory_name = ".git"
@@ -18,6 +18,7 @@ ascii_encoding_name = "ascii"
 utf8_encoding_name = "utf-8"
 regular_git_file_mode = "100644"
 canonical_instruction_names = frozenset(("AGENTS.md", "CLAUDE.md"))
+logger = logging.getLogger(__name__)
 
 
 def _read_git_paths_and_modes(
@@ -173,9 +174,8 @@ def _main() -> int:
     all_errors = validate_repository(repository_root)
     if all_errors:
         for each_error in all_errors:
-            sys.stderr.write(f"{each_error}\n")
+            logger.error("%s", each_error)
         return 1
-    sys.stdout.write("Validated exact instruction imports.\n")
     return 0
 
 
