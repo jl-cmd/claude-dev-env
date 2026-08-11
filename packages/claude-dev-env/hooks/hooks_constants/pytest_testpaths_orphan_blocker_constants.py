@@ -53,27 +53,19 @@ ALL_PRUNED_PARENT_DIRECTORY_NAMES: frozenset[str] = frozenset(
 MAX_PARENT_DIRECTORIES_SEARCHED: int = 40
 
 UNREGISTERED_TEST_DIRECTORY_MESSAGE_TEMPLATE: str = (
-    "Test file {test_file} lands in a directory that the pytest config at "
-    "{pyproject} does not collect. That pyproject declares an explicit testpaths "
-    "allowlist, and no entry covers {test_directory} (relative to the package "
-    "root). A default `pytest` run from the package root never collects this file, "
-    "so the test silently never runs and a regression it would catch passes the "
-    "suite undetected. Add the directory to the testpaths list in {pyproject} "
-    "(for example `{suggested_entry}`) in the same change that adds the test."
+    "Place test file {test_file} in a directory listed by the pytest config at "
+    "{pyproject}. The explicit testpaths list defines the directories collected "
+    "by a default pytest run. Add {test_directory} with an entry such as "
+    "`{suggested_entry}` in the same change that adds the test."
 )
 
 UNREGISTERED_TEST_DIRECTORY_SYSTEM_MESSAGE: str = (
-    "test file lands outside the pytest testpaths allowlist - add its directory to "
-    "testpaths so the default suite collects it"
+    "Add the test file's directory to pytest testpaths so the default suite "
+    "collects it"
 )
 
 UNREGISTERED_TEST_DIRECTORY_ADDITIONAL_CONTEXT: str = (
-    "When a package's pyproject.toml declares [tool.pytest.ini_options] with an "
-    "explicit testpaths list, that list is the complete set of directories a "
-    "default pytest run collects. A test_*.py file written into a directory no "
-    "testpaths entry covers is collected by nobody: the default run skips it and "
-    "the regression it guards goes unnoticed. To resolve:\n"
-    "  - add the test file's directory (relative to the package root) to the "
-    "testpaths list in pyproject.toml, or\n"
-    "  - move the test under a directory the testpaths list already covers."
+    "The explicit `testpaths` list defines the directories collected by a default "
+    "pytest run. Place each `test_*.py` file in a listed directory. Add its "
+    "directory to `testpaths`, or move the file under a listed directory."
 )

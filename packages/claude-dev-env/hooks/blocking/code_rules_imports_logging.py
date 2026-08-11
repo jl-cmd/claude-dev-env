@@ -507,7 +507,9 @@ def check_logging_fstrings(content: str) -> list[str]:
     maximum_issues = MAX_LOGGING_FSTRING_ISSUES
     for each_line_number, each_line in enumerate(content.split("\n"), 1):
         if pattern.search(each_line):
-            issues.append(f"Line {each_line_number}: f-string in log call - use format args instead")
+            issues.append(
+                f"Line {each_line_number}: f-string in log call needs format arguments"
+            )
 
         if len(issues) >= maximum_issues:
             break
@@ -739,7 +741,10 @@ def check_windows_api_none(content: str) -> list[str]:
     maximum_issues = MAX_WINDOWS_API_NONE_ISSUES
     for each_line_number, each_line in enumerate(content.split("\n"), 1):
         if pattern.search(each_line):
-            issues.append(f"Line {each_line_number}: win32gui call with None - use 0 for unused int params")
+            issues.append(
+                f"Line {each_line_number}: win32gui receives None for an integer "
+                "parameter; pass 0"
+            )
 
         if len(issues) >= maximum_issues:
             break
@@ -905,9 +910,9 @@ def check_naive_datetime_construction(content: str, file_path: str) -> list[str]
             continue
         remediation = _naive_datetime_remediation(naive_constructor_name)
         issues.append(
-            f"Line {each_node.lineno}: naive datetime.{naive_constructor_name}() - "
-            f"{remediation} so the instant is unambiguous; call .astimezone() only "
-            "when local display is needed (avoids DST-fold ambiguity)"
+            f"Line {each_node.lineno}: naive datetime.{naive_constructor_name}(). "
+            f"{remediation} to keep the instant unambiguous. Use timezone conversion "
+            "for local display (avoids DST-fold ambiguity)"
         )
         if len(issues) >= MAX_NAIVE_DATETIME_ISSUES:
             break
@@ -1229,8 +1234,8 @@ def check_js_resume_task_enumeration_coverage(
             continue
         for each_task in sorted(dispatched_tasks - enumerated_tasks):
             issues.append(
-                f"spawn{role}Agent() JSDoc resume enumeration omits the "
-                f"'{each_task}' task that resume{role}Agent dispatches on — add it "
+                f"spawn{role}Agent() JSDoc resume enumeration needs the "
+                f"'{each_task}' task that resume{role}Agent dispatches on. Add it "
                 "to the parenthetical (Category O6 docstring-vs-implementation drift)"
             )
             if len(issues) >= MAX_JS_RESUME_TASK_ENUMERATION_ISSUES:
@@ -1357,11 +1362,11 @@ def check_js_returns_object_schemaless_branch(content: str, file_path: str) -> l
         line_number = content.count("\n", 0, each_match.start("name")) + 1
         joined_callees = ", ".join(sorted(mixed_callees))
         issues.append(
-            f"Line {line_number}: {function_name}() JSDoc @returns a Promise<object> but a "
-            f"branch returns {joined_callees}(...) with a schema-less options object — that "
-            "branch resolves to a transcript string, not the structured object the @returns "
-            "claims; widen the @returns type to admit the string transcript, or pass a schema "
-            "(Category O6 docstring-vs-implementation drift)"
+            f"Line {line_number}: {function_name}() JSDoc @returns a Promise<object> while "
+            f"a branch returns {joined_callees}(...) with a schema-less options object. "
+            "That branch resolves to a transcript string. Widen the @returns type or pass "
+            "a schema so every branch returns the documented shape (Category O6 "
+            "docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_JS_RETURNS_OBJECT_SCHEMALESS_ISSUES:
             break
@@ -1855,11 +1860,10 @@ def check_js_sibling_return_object_key_drift(content: str, file_path: str) -> li
             if missing_key is None:
                 continue
             issues.append(
-                f"Line {each_line_number}: this return object literal omits '{missing_key}' "
-                "that a sibling return in the same scope carries — every return path that "
-                f"yields this record carries the same keys, so a caller reading '{missing_key}' "
-                f"gets undefined on this path; add '{missing_key}' "
-                "(Category O doc-vs-implementation return-shape drift)"
+                f"Line {each_line_number}: this return object literal needs '{missing_key}', "
+                "which a sibling return in the same scope carries. Add the key so every "
+                "return path yields the same record shape (Category O doc-vs-implementation "
+                "return-shape drift)"
             )
             if len(issues) >= MAX_JS_SIBLING_RETURN_OBJECT_KEY_DRIFT_ISSUES:
                 return issues
@@ -1940,10 +1944,10 @@ def check_js_bare_flag_return_directive(
         offending_line = content.count("\n", 0, each_directive.start()) + 1
         contract_matched_phrase = contract_matched_phrase_by_flag[folded_flag]
         message = (
-            f"Line {offending_line}: 'return {forbidden_flag}: ...' repeats a bare "
-            f"{forbidden_flag} status the same converge workflow forbids "
-            f"('{contract_matched_phrase}'); return the whole result object "
-            "with every StructuredOutput field set (Category O6 docstring drift)"
+            f"Line {offending_line}: 'return {forbidden_flag}: ...' uses a bare "
+            f"{forbidden_flag} status. Return the whole result object with every "
+            f"StructuredOutput field set ('{contract_matched_phrase}') (Category O "
+            "docstring drift)"
         )
         violation_lines = {offending_line} | contract_line_numbers_by_flag[folded_flag]
         all_violations_in_source_order.append((violation_lines, message))

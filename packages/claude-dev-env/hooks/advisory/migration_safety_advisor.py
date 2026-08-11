@@ -34,8 +34,9 @@ def main() -> None:
                         "permissionDecision": "ask",
                         "permissionDecisionReason": (
                             f"MIGRATION SAFETY: Contains {operations}. "
-                            "Post-launch, model changes MUST be backwards-compatible. "
-                            "Verify this won't break running instances during deployment."
+                            "Post-launch model changes must preserve compatibility "
+                            "with running instances. Verify compatibility before "
+                            "proceeding."
                         ),
                     }
                 }

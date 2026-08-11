@@ -139,10 +139,7 @@ class TestUntrackedRepoDetection:
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         emitted = json.loads(stdout)
         context_text = emitted["additionalContext"]
-        assert (
-            "written nothing" in context_text.lower()
-            or "has not written" in context_text.lower()
-        )
+        assert "config file reflects the mapping" in context_text.lower()
 
 
 class TestSharedRegistryPath:

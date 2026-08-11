@@ -223,7 +223,7 @@ def check_boolean_naming(
         tree = ast.parse(content)
     except SyntaxError as parse_error:
         print(
-            f"[CODE_RULES advisory] {file_path}: boolean-naming check skipped - "
+            f"[CODE_RULES advisory] {file_path}: boolean-naming check paused after "
             f"SyntaxError at line {parse_error.lineno}: {parse_error.msg}",
             file=sys.stderr,
         )
@@ -336,8 +336,8 @@ def check_ignored_must_check_return(
         end_line_number = each_node.end_lineno or each_node.lineno
         line_span = range(each_node.lineno, end_line_number + 1)
         message = (
-            f"Line {each_node.lineno}: return value of {called_name}() is discarded - "
-            "assign and check it (the boolean/outcome is the only failure signal)"
+            f"Line {each_node.lineno}: return value of {called_name}() carries the "
+            "failure signal; assign and check it"
         )
         all_violations_in_walk_order.append((line_span, message))
     scoped_issues = _scope_violations_to_changed_lines(

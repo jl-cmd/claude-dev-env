@@ -9,4 +9,4 @@ HARDCODED_USER_PATH_PATTERN: re.Pattern[str] = re.compile(
     r"|/home/[^/]+(?=/|$))"
 )
 MAX_HARDCODED_USER_PATH_ISSUES: int = 25
-HARDCODED_USER_PATH_GUIDANCE: str = "use pathlib.Path.home() or os.path.expanduser('~') instead of a hardcoded user directory"
+HARDCODED_USER_PATH_GUIDANCE: str = "use pathlib.Path.home() or os.path.expanduser('~') to resolve the user directory"

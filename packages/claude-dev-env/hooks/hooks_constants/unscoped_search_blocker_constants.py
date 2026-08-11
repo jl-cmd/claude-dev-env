@@ -143,11 +143,7 @@ DENY_DECISION = "deny"
 CALLING_HOOK_NAME = "unscoped_search_blocker.py"
 
 CORRECTIVE_MESSAGE = (
-    "Unscoped filesystem search blocked. Never start find/Get-ChildItem at `/`, "
-    "a drive root (`/c`, `C:\\`), bare home (`~`, `$HOME`), or a network share "
-    "root (`\\\\server\\share`). Scope the walk to a project or worktree path "
-    "(for example `find . -name '*.py'` or "
-    "`find packages/claude-dev-env -iname code_rules_gate.py`). On Windows prefer "
-    "es.exe with a path scope, or the Grep/Glob tools. Batch shell work; avoid "
-    "parallel full-tree searches that contend for the shell and lock the host."
+    "Unscoped filesystem search blocked. Scope every filesystem walk to a project "
+    "or worktree path. On Windows use es.exe with a path scope. Run shell work in "
+    "batches. Use Grep or Glob for scoped searches."
 )

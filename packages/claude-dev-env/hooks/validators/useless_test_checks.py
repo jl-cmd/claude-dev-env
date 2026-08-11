@@ -21,15 +21,15 @@ def check_useless_tests(tree: ast.AST, filename: str) -> List[Violation]:
                 if isinstance(child, ast.Assert):
                     if _is_callable_check(child):
                         violations.append(
-                            Violation(filename, child.lineno, "Useless test: callable() check doesn't verify behavior")
+                            Violation(filename, child.lineno, "Behavior test requires an assertion beyond callable()")
                         )
                     elif _is_hasattr_check(child):
                         violations.append(
-                            Violation(filename, child.lineno, "Useless test: hasattr() check doesn't verify behavior")
+                            Violation(filename, child.lineno, "Behavior test requires an assertion beyond hasattr()")
                         )
                     elif _is_constant_value_check(child):
                         violations.append(
-                            Violation(filename, child.lineno, "Useless test: testing constant value doesn't verify behavior")
+                            Violation(filename, child.lineno, "Behavior test requires an assertion beyond a constant value")
                         )
 
     return violations
@@ -69,7 +69,7 @@ def validate_file(file_path: Path) -> List[Violation]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
     except Exception as error:
-        return [Violation(filename, 0, f"Error: {error}")]
+        return [Violation(filename, 0, f"Validation reported an error: {error}")]
 
     return check_useless_tests(tree, filename)
 

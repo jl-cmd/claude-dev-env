@@ -41,15 +41,9 @@ GH_ARTIFACT_UPLOAD_INVOCATION: str = (
 )
 
 CORRECTIVE_MESSAGE: str = (
-    "BLOCKED [durable-post-artifacts]: this post body references a volatile path "
-    "(a job scratch dir, worktree, or system temp location). The post is durable "
-    "and outlives that scratch, so the reference breaks the moment the directory "
-    "is cleaned.\n\n"
-    "Fix it before posting:\n"
-    "  1. Text data (logs, tables, diffs): paste the actual content inline in the "
-    "post instead of linking a scratch file path.\n"
-    "  2. Binary artifacts (images, archives): upload the file to the repo's "
-    "durable 'artifacts' release and link the permanent asset URL it prints:\n"
-    f"       {GH_ARTIFACT_UPLOAD_INVOCATION}\n\n"
-    "See ~/.claude/rules/durable-post-artifacts.md for the full contract."
+    "BLOCKED [durable-post-artifacts]: Durable posts use durable references. "
+    "Paste text data inline. Upload binary artifacts to the durable artifacts "
+    "release with "
+    f"{GH_ARTIFACT_UPLOAD_INVOCATION}. Link the permanent asset URL. See "
+    "~/.claude/rules/durable-post-artifacts.md for the full contract."
 )

@@ -49,16 +49,13 @@ MAX_SUBTREE_FILES_SCANNED = 20000
 MAX_DRIFT_ISSUES = 20
 
 DRIFT_MESSAGE_TEMPLATE = (
-    "Env-var summary table in {file} attributes an environment variable to a "
-    "code file that does not read it: {drift}. The code file no longer "
-    "references the variable, so the table points a reader at a consumer "
-    "relationship the code does not have. Remove or correct the row so the "
-    "summary matches the code."
+    "Update the env-var summary table in {file} for this variable and code-file "
+    "pair: {drift}. Point the row to the variable the code reads."
 )
 DRIFT_ADDITIONAL_CONTEXT = (
     "Each `VARIABLE` | `code/file.py` row in a markdown env-var summary table "
-    "names a code file that reads that variable. When the code file exists but "
-    "its source never references the variable name, the row is stale. Drop the "
-    "row, or point it at the variable the file actually reads."
+    "names a code file that reads that variable. Update every row to match the "
+    "variable/file pair the code reads. Point each row to the variable and file "
+    "pair the code reads."
 )
-DRIFT_SYSTEM_MESSAGE = "Blocked: env-var summary table attributes a variable to a code file that does not read it."
+DRIFT_SYSTEM_MESSAGE = "Update the env-var summary table to match the variable each code file reads."

@@ -125,14 +125,10 @@ def main() -> None:
         sys.exit(0)
 
     block_reason = (
-        "LONG-HORIZON-AUTONOMY GUARDRAIL: Your turn ends on a promise about work "
-        "that is not yet done, rather than doing it. Do the work NOW with tool calls "
-        "instead of describing what you are about to do.\n\n"
-        "If the work is genuinely blocked on input only the user can give, route the "
-        "ask through an AskUserQuestion tool call and end the turn cleanly. Otherwise, "
-        "carry out the stated action this turn.\n\n"
-        "You MUST re-output the complete response with the work actually performed, "
-        "per the long-horizon-autonomy rule."
+        "long-horizon-autonomy guardrail: Complete the promised work with tool "
+        "calls before ending this turn. When user input provides the required "
+        "decision, ask through AskUserQuestion. Perform the stated action during "
+        "this turn. Re-output the complete response with the work performed."
     )
     block_response = {
         "decision": "block",

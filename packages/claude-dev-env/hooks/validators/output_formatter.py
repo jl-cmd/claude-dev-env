@@ -197,7 +197,7 @@ class OutputFormatter:
             detail = "All automated checks passed"
         else:
             verdict = colorize("VIOLATIONS FOUND", "red", use_colors)
-            detail = f"{failed} check(s) failed"
+            detail = f"{failed} check(s) report violations"
 
         return f"\n{separator}\nVERDICT: {verdict} - {detail}\n{separator}\n"
 
@@ -230,7 +230,7 @@ def group_violations_by_file(violations: List[ViolationDict]) -> Dict[str, List[
     grouped: Dict[str, List[ViolationDict]] = {}
 
     for violation in violations:
-        file_path = violation.get("file", "unknown")
+        file_path = violation.get("file", "Violation file requires inspection")
         if file_path not in grouped:
             grouped[file_path] = []
         grouped[file_path].append(violation)
@@ -260,7 +260,7 @@ def format_grouped_violations(
 
         for violation in sorted(violations, key=lambda v: v.get("line", 0)):
             line = violation.get("line", "?")
-            message = violation.get("message", "Unknown violation")
+            message = violation.get("message", "Violation details require inspection")
             output_lines.append(f"    Line {line}: {message}")
 
     return "\n".join(output_lines)

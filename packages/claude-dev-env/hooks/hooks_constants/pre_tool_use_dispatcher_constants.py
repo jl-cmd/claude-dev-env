@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from hooks_constants.messages import HOSTED_HOOK_CRASH_DENY_REASON
+
 __all__ = [
     "DENY_DECISION",
     "ALLOW_DECISION",
@@ -35,8 +37,8 @@ ALLOW_DECISION = "allow"
 HOOK_EVENT_NAME = "PreToolUse"
 SYSTEM_MESSAGE_JOIN_SEPARATOR = "\n"
 BLOCKING_CRASH_EXIT_CODE = 2
-EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook denied via exit code 2 — write blocked"
-BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"
+EXIT_CODE_TWO_DENY_REASON = "[dispatcher] hook returned exit code 2; keep the write protected"
+BLOCKING_CRASH_DENY_REASON = HOSTED_HOOK_CRASH_DENY_REASON
 REASON_JOIN_SEPARATOR = " | "
 CONTEXT_JOIN_SEPARATOR = "\n"
 

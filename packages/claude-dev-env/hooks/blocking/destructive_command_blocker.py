@@ -201,8 +201,8 @@ def _build_silent_gh_deny_response(matched_description: str) -> dict:
     brief_label = f"blocked redirected {matched_description}"
     full_reason = (
         f"GH-REDIRECT GATE: {matched_description} already executed by "
-        "gh-wsl-to-windows-redirect.py via PowerShell. Denying the original "
-        "Bash call prevents duplicate execution."
+        "gh-wsl-to-windows-redirect.py via PowerShell. Keep the original Bash call "
+        "protected from duplicate execution."
     )
     _append_destructive_gate_log_entry(brief_label, full_reason)
     log_hook_block(

@@ -29,7 +29,7 @@ class TestValidatorExists:
     def test_missing_validator_unhealthy(self) -> None:
         result = check_validator_exists(Path("/nonexistent/validator.py"))
         assert result.healthy is False
-        assert "not found" in result.error.lower()
+        assert "requires an existing file" in result.error.lower()
 
 
 class TestCheckAllValidators:

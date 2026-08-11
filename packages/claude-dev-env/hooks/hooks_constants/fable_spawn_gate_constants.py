@@ -37,24 +37,18 @@ CALLING_HOOK_NAME: str = "fable_spawn_gate.py"
 HOOK_EVENT_NAME: str = "PreToolUse"
 
 DENY_REASON: str = (
-    "BLOCKED [fable-spawn-gate]: this subagent spawn names the fable tier in "
-    "its model field and carries no authorization marker. To authorize a "
-    f"fable bind, put the token named in {ADVISOR_PROTOCOL_DOCUMENT_PATH} as "
-    "plain text in the spawn prompt (substring match). Otherwise set model "
-    "to opus, sonnet, or haiku. The gate checks only model tier and marker "
-    "presence — it does not verify which session placed the token."
+    "BLOCKED [fable-spawn-gate]: Fable-tier spawns require the authorization "
+    f"token named in {ADVISOR_PROTOCOL_DOCUMENT_PATH}. Place that token as "
+    "plain text in the spawn prompt, or set model to opus, sonnet, or haiku. "
+    "The gate checks the model tier and marker presence."
 )
 
 DENY_ADDITIONAL_CONTEXT: str = (
-    "[fable-spawn-gate] This Agent/Task spawn was denied: the model field "
-    "names the fable tier and the spawn prompt carries no authorization "
-    "marker. Preferred recovery: re-spawn at model opus, or an "
-    "opus-equivalent tier (sonnet/haiku when opus is unavailable) — those "
-    "tiers need no marker. Authorized fable bind only: put the token named "
-    f"in {ADVISOR_PROTOCOL_DOCUMENT_PATH} as plain text in the spawn prompt "
-    "(substring match), then retry. The gate checks only model tier and "
-    "marker presence. Do not paste this denial into a retry prompt — it "
-    "does not authorize the spawn."
+    "[fable-spawn-gate] Use model opus or an opus-equivalent tier such as sonnet "
+    "or haiku for this spawn. "
+    "For an authorized fable bind, place the token named in "
+    f"{ADVISOR_PROTOCOL_DOCUMENT_PATH} as plain text in the spawn prompt, "
+    "then retry. The gate checks the model tier and marker presence."
 )
 
 DENY_PREVIEW_TEMPLATE: str = "model={model_text} marker_present=False"

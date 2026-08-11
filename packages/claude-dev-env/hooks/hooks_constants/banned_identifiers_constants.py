@@ -46,8 +46,8 @@ BANNED_IDENTIFIER_MESSAGE_SUFFIX: str = (
     "use descriptive name (see CODE_RULES Naming section)"
 )
 BANNED_NOUN_WORD_MESSAGE_SUFFIX: str = (
-    "contains banned noun word - rename to a domain-specific term (see CODE_RULES §5)"
+    "uses a generic noun; rename it to a domain-specific term (see CODE_RULES §5)"
 )
 BANNED_IDENTIFIER_SKIP_ADVISORY: str = (
-    "banned-identifier check skipped: file did not parse as Python"
+    "banned-identifier check paused after a Python parse error"
 )

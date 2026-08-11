@@ -22,13 +22,12 @@ CWD_FIELD_NAME = "cwd"
 REASON_CRON_CREATE_FORBIDDEN = "cron_create_forbidden"
 
 DENY_REASON_TEMPLATE = (
-    "BLOCKED: orchestrator-refresh re-arm denied ({reason}). "
-    "Use one-shot delayed wake only (never CronCreate / never recurring). "
-    "At most one re-arm slot: begin-firing at refresh start; "
-    "should-reschedule then create then claim-rearm (never claim before "
-    "ScheduleWakeup). Status must be active: "
+    "BLOCKED: orchestrator-refresh requires a one-shot delayed wake ({reason}). "
+    "Use ScheduleWakeup for one re-arm slot. Begin firing at refresh start, "
+    "then evaluate, create, and claim the re-arm. Claim after ScheduleWakeup. "
+    "Set status to active with "
     "python skills/orchestrator/scripts/status_gate.py set "
-    "--status active. When finished: --status done. Never re-arm an idle loop."
+    "--status active. Set --status done when the work finishes."
 )
 
 CALLING_HOOK_NAME = "orchestrator_refresh_reschedule_gate.py"

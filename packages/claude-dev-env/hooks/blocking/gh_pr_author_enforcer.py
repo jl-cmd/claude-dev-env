@@ -270,18 +270,15 @@ def _build_switch_failure_message(required_account: str, current_account: str) -
         the exact ``gh auth switch`` command the user should run.
     """
     return (
-        f"BLOCKED [gh-pr-author]: tried to auto-switch the active gh CLI "
-        f"account from `{current_account}` to `{required_account}` so "
-        f"`gh pr create` would author from the canonical account, but "
-        f"`gh auth switch` failed.\n\n"
+        f"BLOCKED [gh-pr-author]: Set the active gh CLI account to "
+        f"`{required_account}` before running `gh pr create`. The automatic "
+        f"switch from `{current_account}` returned an error.\n\n"
         f"  Current:  {current_account}\n"
         f"  Required: {required_account}  (from ${REQUIRED_ACCOUNT_ENV_VAR})\n\n"
         f"Run first:\n"
         f"  gh auth switch --user {required_account}\n\n"
-        f"If you genuinely want to author this PR from a different account "
-        f"in this one case, switch to that account and retry. To create the "
-        f"PR through the browser instead (uses your browser's GitHub session, "
-        f"not the gh CLI token), add `--web`."
+        f"Use `gh auth switch --user <account>` for a deliberate alternate author. "
+        f"Use `--web` to create the PR through the browser's GitHub session."
     )
 
 
@@ -315,26 +312,22 @@ def _build_state_write_failure_message(
     """
     if has_rollback_succeeded:
         rollback_outcome_sentence = (
-            f"The swap was reversed to put `{current_account}` back in place, "
-            f"and `gh pr create` is being denied to prevent leaving the "
-            f"workflow in an inconsistent state."
+            f"The swap returned the active account to `{current_account}`. "
+            f"Keep `gh pr create` paused while the state file receives attention."
         )
     else:
         rollback_outcome_sentence = (
-            f"The reverse `gh auth switch` to put `{current_account}` back "
-            f"in place ALSO failed, so the active gh CLI account is still "
-            f"`{required_account}`. `gh pr create` is being denied so the "
-            f"user can recover the original account before re-running."
+            f"The reverse `gh auth switch` returned an error, so the active gh "
+            f"CLI account remains `{required_account}`. Restore `{current_account}` "
+            f"before running `gh pr create` again."
         )
     return (
-        f"BLOCKED [gh-pr-author]: swapped the active gh CLI account "
-        f"from `{current_account}` to `{required_account}` so "
-        f"`gh pr create` would author from the canonical account, but "
-        f"writing the per-session state file used to restore the prior "
-        f"account afterward failed. {rollback_outcome_sentence}\n\n"
+        f"BLOCKED [gh-pr-author]: The active gh CLI account changed from "
+        f"`{current_account}` to `{required_account}` for `gh pr create`. "
+        f"The per-session state file needs attention. {rollback_outcome_sentence}\n\n"
         f"  Original:             {current_account}\n"
         f"  Required:             {required_account}  (from ${REQUIRED_ACCOUNT_ENV_VAR})\n"
-        f"  State file (failed):  {state_file}\n\n"
+        f"  State file (pending): {state_file}\n\n"
         f"Verify the active account and recover manually:\n"
         f"  gh auth status\n"
         f"  gh auth switch --user {current_account}\n\n"

@@ -30,13 +30,12 @@ ALL_EXPLICIT_UNCERTAINTY_LABEL_PATTERNS = (
 HEDGING_TERM_LIST_SEPARATOR = ", "
 
 POSITIVE_CORRECTIVE_GUIDANCE = (
-    "State the claim with evidence that backs it, or label that claim unverified "
-    "in the same sentence as the uncertainty word. "
-    "Gather a source, run a live probe, or ask the user through AskUserQuestion — "
-    "then re-output the complete revised response."
+    "Support the claim with evidence. Label the claim unverified until a source or "
+    "live probe supports it. Gather a source, run a live probe, or ask through "
+    "AskUserQuestion. Re-output the complete revised response."
 )
 
 BLOCK_REASON_PREFIX = (
-    "ANTI-HALLUCINATION GUARDRAIL: Your response contains hedging language without "
-    "an explicit uncertainty label in the same sentence: "
+    "ANTI-HALLUCINATION GUARDRAIL: Add an explicit uncertainty label in the same "
+    "sentence as the hedging language: "
 )

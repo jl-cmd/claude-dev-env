@@ -101,15 +101,12 @@ def main() -> None:
     )
 
     block_reason = (
-        f"ASKUSERQUESTION GUARDRAIL: Your response asks the user a question in prose "
-        f"(indicators: {formatted_indicator_list}). "
-        f"User-directed questions must route through the AskUserQuestion tool so the user "
-        f"sees structured options with labels.\n\n"
-        f"Re-output your response with the trailing question removed from prose and moved "
-        f"into an AskUserQuestion tool call. Rhetorical questions answered in the same "
-        f"paragraph are allowed; questions inside code fences, inline code, and blockquotes "
-        f"are ignored.\n\n"
-        f"You MUST re-output the complete, revised response with the correction applied."
+        f"ASKUSERQUESTION GUARDRAIL: Route the user-directed question through the "
+        f"AskUserQuestion tool (indicators: {formatted_indicator_list}). Give the user "
+        f"structured options with labels. Move the trailing question into the tool call, "
+        f"then re-output the complete revised response. Rhetorical questions answered "
+        f"in the same paragraph, code fences, inline code, and blockquotes remain in "
+        f"the response."
     )
     block_response = {
         "decision": "block",

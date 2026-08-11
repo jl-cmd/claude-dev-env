@@ -275,32 +275,32 @@ ALL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
 ANGLE_BRACKET_PLACEHOLDER_PATTERN: re.Pattern[str] = re.compile(r"^<[^>]+>$")
 
 CORRECTIVE_MESSAGE_HEADER: str = (
-    "BLOCKED [pii_prevention_blocker]: high-confidence personal data or secret "
-    "material must not land in the repository or on a durable GitHub post."
+    "BLOCKED [pii_prevention_blocker]: Keep high-confidence personal data and "
+    "secret material out of the repository and durable GitHub posts."
 )
 
 CORRECTIVE_MESSAGE_FOOTER: str = (
-    "Remediate: replace with placeholders (user@example.com, C:/Users/example/), "
-    "move secrets to an env or secret store, and run the privacy-hygiene skill "
-    "for a full sweep. Your own NAS host is allowlisted at scan time from "
-    "CLAUDE_NAS_HOST or ~/.claude/local-identity.json, so set it there rather "
-    "than committing the address."
+    "Replace findings with placeholders (user@example.com, C:/Users/example/). "
+    "Move secrets to an environment variable or secret store. Run the "
+    "privacy-hygiene skill. Configure the NAS host through CLAUDE_NAS_HOST or "
+    "~/.claude/local-identity.json. Keep the address out of commits."
 )
 
 FINDING_LINE_TEMPLATE: str = "  [{category}] {preview}"
 
 STAGED_LIST_FAILURE_REASON: str = (
-    "BLOCKED [pii_prevention_blocker]: could not list staged files for PII scan "
-    "(git diff --cached failed). Refuse commit until the index is readable."
+    "BLOCKED [pii_prevention_blocker]: Git staging-list access needs repair for "
+    "the PII scan (git diff --cached returned an error). Restore index access, "
+    "then retry the commit."
 )
 
 STAGED_BLOB_UNSCANNABLE_REASON_TEMPLATE: str = (
-    "BLOCKED [pii_prevention_blocker]: staged file '{relative_path}' could not be "
-    "scanned for PII ({reason}). Refuse commit, shrink the blob, or keep binary "
-    "assets free of embedded secrets."
+    "BLOCKED [pii_prevention_blocker]: PII scanning for staged file "
+    "'{relative_path}' needs a readable text blob ({reason}). Restore readable "
+    "content, shrink the blob, or keep binary assets free of embedded secrets."
 )
 
-STAGED_BLOB_REASON_GIT_SHOW_FAILED: str = "git show of staged blob failed"
+STAGED_BLOB_REASON_GIT_SHOW_FAILED: str = "git show returned an error while reading the staged blob"
 STAGED_BLOB_REASON_OVERSIZED: str = "blob exceeds MAXIMUM_STAGED_FILE_BYTES"
-STAGED_BLOB_REASON_NULL_BYTES: str = "blob contains null bytes (binary/unscannable)"
-STAGED_BLOB_REASON_DECODE_FAILED: str = "blob is not valid UTF-8 text"
+STAGED_BLOB_REASON_NULL_BYTES: str = "blob contains null bytes and requires binary-safe handling"
+STAGED_BLOB_REASON_DECODE_FAILED: str = "blob requires UTF-8 text encoding"

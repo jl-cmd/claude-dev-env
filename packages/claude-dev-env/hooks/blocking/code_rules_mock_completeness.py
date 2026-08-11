@@ -290,6 +290,6 @@ def check_incomplete_mocks(content: str, file_path: str) -> None:
             already_advised.add(advisory_key)
             print(
                 f"[CODE_RULES advisory] Line {each_definition_line}: mock {each_mock_name}"
-                f" missing field {each_accessed_field} accessed at line {each_access_line}",
+                f" requires field {each_accessed_field} accessed at line {each_access_line}",
                 file=sys.stderr,
             )

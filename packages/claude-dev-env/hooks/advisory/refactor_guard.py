@@ -192,7 +192,7 @@ def main() -> None:
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
-            "additionalContext": f"[HOOK ADVISORY] Refactor guard — {refactor_description} in {file_path}. Only modify lines already changed in the current git diff. Ask the user for explicit approval first. If the user approves, create the bypass token then retry.",
+            "additionalContext": f"[HOOK ADVISORY] Refactor guard — {refactor_description} in {file_path}. Keep edits within changed diff lines. Get explicit user approval before proceeding; after approval, create the bypass token and retry.",
         }
     }
     print(json.dumps(result))

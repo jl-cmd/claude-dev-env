@@ -373,9 +373,9 @@ def extract_gh_post_body_texts_for_privacy_gate(
         file_text = _read_body_file(each_path, working_directory=working_directory)
         if file_text is None:
             return [], (
-                "BLOCKED [pii_prevention_blocker]: durable post uses --body-file "
-                f"but '{each_path}' could not be read for PII scanning. Use an "
-                "absolute path, ensure the file exists, or pass --body text."
+                "BLOCKED [pii_prevention_blocker]: durable post body-file "
+                f"'{each_path}' needs readable text for PII scanning. Use an "
+                "absolute path with readable content or pass --body text."
             )
         all_body_texts.append(file_text)
     return all_body_texts, None

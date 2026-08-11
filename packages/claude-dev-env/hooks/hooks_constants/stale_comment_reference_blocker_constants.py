@@ -58,19 +58,17 @@ COMMENT_LINE_PREFIX: str = "#"
 
 STALE_COMMENT_DENY_TEMPLATE: str = (
     "The comment above the changed line in {file_path} names "
-    "'{orphaned_name}', which this edit removes from the line below. "
-    "The comment left in place reads: {contradicted_comment}. "
-    "Update or remove the comment in the same edit."
+    "'{orphaned_name}'. Align it with the edited line's current name. The comment "
+    "reads: {contradicted_comment}. Update the comment in the same edit to describe "
+    "the edited line."
 )
 
 STALE_COMMENT_ADDITIONAL_CONTEXT: str = (
-    "A standalone comment directly above an edited line describes that "
-    "line. When the edit drops a name the comment carries, rewrite the "
-    "comment to describe the rewritten line, or delete the comment, inside "
-    "the same Edit call."
+    "The comment directly above an edited line describes that line. Update it to "
+    "describe the rewritten line. Keep the comment aligned with the line and make "
+    "the change in the same Edit call."
 )
 
 STALE_COMMENT_SYSTEM_MESSAGE: str = (
-    "Agent edited a code line without updating the comment above it that "
-    "names what the edit removed"
+    "Update the comment above the edited code line to describe the current line."
 )

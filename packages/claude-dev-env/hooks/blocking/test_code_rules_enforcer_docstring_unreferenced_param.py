@@ -153,7 +153,7 @@ def test_validate_content_surfaces_unreferenced_parameter() -> None:
         _function_with_dead_documented_flag(), PRODUCTION_FILE_PATH, old_content=""
     )
     matching_issues = [
-        each for each in issues if "is_no_notify" in each and "never references" in each
+        each for each in issues if "is_no_notify" in each and "body needs a reference" in each
     ]
     assert matching_issues, (
         f"Expected validate_content to surface the dead-parameter issue, got: {issues!r}"

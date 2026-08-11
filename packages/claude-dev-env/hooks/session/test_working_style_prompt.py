@@ -44,7 +44,7 @@ class TestWorkingStylePrompt:
         assert "Use positive prose throughout every generated text surface" in prompt_text
         assert "Write each point as one direct affirmative statement" in prompt_text
         assert "Use plain language, full terms, and simple descriptive names" in prompt_text
-        assert "When a request has multiple reasonable interpretations" in prompt_text
+        assert "State your understanding and assumptions when interpretations vary." in prompt_text
         assert "Ask one focused clarification question" in prompt_text
         assert "Pause for the user's choice before making a high-impact decision." in prompt_text
 

@@ -38,7 +38,7 @@ UTF8_BYTE_ORDER_MARK = "\ufeff"
 
 CONFIRMATION_PROMPT_TEXT = "Write this mapping to the config file? (yes/no): "
 
-ABORTED_NOTHING_WRITTEN_MESSAGE = "Aborted. Nothing written."
+ABORTED_NOTHING_WRITTEN_MESSAGE = "The config file retains its current mappings."
 
 WROTE_ENTRIES_STATUS_TEMPLATE = "Wrote {entry_count} entries to {save_path}."
 

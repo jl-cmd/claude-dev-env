@@ -123,9 +123,9 @@ SUMMARY_COLUMN_HEADINGS: tuple[str, str, str, str] = (
     "top_blocked_command_preview",
 )
 
-SUMMARY_NO_NEW_BLOCKS_MESSAGE: str = "No new blocks since last run."
+SUMMARY_NO_NEW_BLOCKS_MESSAGE: str = "Block count matches the previous run."
 
-QUERY_NO_ROWS_RETURNED_MESSAGE: str = "No rows returned."
+QUERY_NO_ROWS_RETURNED_MESSAGE: str = "Rows returned: 0."
 
 TOP_BLOCKED_COMMAND_PREVIEW_MAX_CHARACTERS: int = 80
 
@@ -184,7 +184,7 @@ SUMMARY_TABLE_COLUMN_GAP: str = "  "
 CATEGORY_PATH_MINIMUM_PARTS: int = 2
 OFFSETS_JSON_INDENT: int = 2
 
-MISSING_ENVIRONMENT_VARIABLE_PREFIX: str = "Missing required environment variable: "
+MISSING_ENVIRONMENT_VARIABLE_PREFIX: str = "Set the required environment variable: "
 SUCCESS_REPORT_HEADER: str = "Hook-log init succeeded."
 NEON_HOST_REPORT_LABEL: str = "Neon host:"
 TABLE_REPORT_LABEL: str = "Table:"
@@ -197,18 +197,18 @@ MISSING_NEON_DATABASE_URL_WARNING_LABEL: str = "missing_neon_database_url"
 LEGACY_OFFSETS_FORMAT_WARNING_LABEL: str = "legacy_offsets_format"
 
 SENTINEL_SELECT_FAILURE_MESSAGE: str = (
-    "Sentinel SELECT did not return the inserted id; round-trip failed."
+    "Sentinel SELECT returned zero inserted-id rows; verify the database round trip."
 )
 
 SENTINEL_INSERT_FAILURE_MESSAGE: str = (
-    "Sentinel INSERT did not return a row; round-trip failed."
+    "Sentinel INSERT returned zero rows; verify the database round trip."
 )
 
 BYTE_OFFSET_KEY: str = "byte_offset"
 LINE_NUMBER_KEY: str = "line_number"
 
-UNKNOWN_QUERY_MESSAGE_PREFIX: str = "Unknown query: "
-INVALID_QUERY_NAME_MESSAGE_PREFIX: str = "Invalid query name: "
+UNKNOWN_QUERY_MESSAGE_PREFIX: str = "Choose a supported query: "
+INVALID_QUERY_NAME_MESSAGE_PREFIX: str = "Choose a supported query name: "
 
 BWS_EXECUTABLE_NAME: str = "bws"
 BWS_ACCESS_TOKEN_ENV_VAR: str = "BWS_ACCESS_TOKEN"
@@ -231,4 +231,3 @@ WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG: int = 0x00000200
 
 LOCK_MAXIMUM_RETRY_COUNT: int = 30
 LOCK_RETRY_SLEEP_SECONDS: float = 0.1
-

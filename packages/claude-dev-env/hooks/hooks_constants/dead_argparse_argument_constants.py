@@ -22,7 +22,6 @@ DEST_WORD_JOINER: str = "_"
 EXPORTED_NAMES_ATTRIBUTE: str = "__all__"
 MAX_DEAD_ARGPARSE_ARGUMENT_ISSUES: int = 25
 DEAD_ARGPARSE_ARGUMENT_GUIDANCE: str = (
-    "optional CLI flag whose parsed value is never read in this file - remove the"
-    " add_argument call (argparse silently accepts an unused flag), or read the"
-    " parsed value where it is needed (CODE_RULES §9.8)"
+    "CLI flag value needs a consumer in this file. Read the parsed value where it "
+    "is needed or remove the add_argument call (CODE_RULES §9.8)."
 )

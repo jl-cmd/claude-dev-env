@@ -20,9 +20,9 @@ FIRST_TOKEN_TOKENIZATION_PATTERN: re.Pattern[str] = re.compile(
 ALL_REGEX_START_ANCHOR_TOKENS: tuple[str, ...] = ("^", "\\A")
 
 COMMAND_DISPATCH_MESSAGE_SUFFIX: str = (
-    "matches a multi-word command as a substring - anchor the pattern to the "
-    "start of the command (^) or tokenize the first word (shlex.split) so a "
-    "command like 'echo gh pr create' is not matched"
+    "Use an anchored pattern or tokenize the first command word with shlex.split. "
+    "The current pattern matches a multi-word command as a substring; anchor it "
+    "to ^ or tokenize so a command like 'echo gh pr create' stays data"
 )
 
 MAX_COMMAND_DISPATCH_ISSUES: int = 20

@@ -176,7 +176,8 @@ def _read_original_account(state_file: Path) -> str | None:
         return None
     except OSError as os_error:
         _write_line(
-            f"[gh-pr-author-utils] failed to read state file {state_file}: {os_error}",
+            f"[gh-pr-author-utils] State-file read raised {type(os_error).__name__} "
+            f"for {state_file}: {os_error}",
             sys.stderr,
         )
         return None
@@ -184,7 +185,8 @@ def _read_original_account(state_file: Path) -> str | None:
         parsed_state = json.loads(raw_contents)
     except json.JSONDecodeError as decode_error:
         _write_line(
-            f"[gh-pr-author-utils] malformed state file {state_file}: {decode_error}",
+            f"[gh-pr-author-utils] State file {state_file} returned a JSON parse error: "
+            f"{decode_error}",
             sys.stderr,
         )
         return None
@@ -209,7 +211,8 @@ def _delete_state_file(state_file: Path) -> None:
         return
     except OSError as os_error:
         _write_line(
-            f"[gh-pr-author-utils] failed to delete state file {state_file}: {os_error}",
+            f"[gh-pr-author-utils] State-file deletion raised {type(os_error).__name__} "
+            f"for {state_file}: {os_error}",
             sys.stderr,
         )
 

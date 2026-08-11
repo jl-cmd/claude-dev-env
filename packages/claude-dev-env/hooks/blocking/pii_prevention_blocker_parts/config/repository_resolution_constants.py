@@ -9,10 +9,9 @@ working directory.
 from __future__ import annotations
 
 REPOSITORY_ROOT_UNRESOLVED_REASON_TEMPLATE: str = (
-    "BLOCKED [pii_prevention_blocker]: could not resolve the git repository root "
-    "for a commit command targeting {attempted_path} (not a git work tree, git "
-    "missing, or bad -C or cd path). Refuse commit until the repository root is "
-    "resolvable."
+    "BLOCKED [pii_prevention_blocker]: Set a git repository root for the commit "
+    "command targeting {attempted_path}. Confirm the path names a git work tree "
+    "and use a valid -C or cd path, then retry the commit."
 )
 
 REPOSITORY_ROOT_UNRESOLVED_CWD_LABEL: str = "the session working directory"

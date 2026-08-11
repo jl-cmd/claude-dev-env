@@ -110,7 +110,7 @@ def check_single_commit_when_pr_exists() -> List[Violation]:
         Violation(
             file="",
             line=0,
-            message=f"Branch must have exactly 1 commit ahead of {base_branch}, found {commit_count} commits",
+            message=f"Branch requires exactly 1 commit ahead of {base_branch}; current count: {commit_count}",
         )
     ]
 
@@ -166,7 +166,7 @@ def check_draft_pr_state() -> List[Violation]:
         Violation(
             file="",
             line=0,
-            message="PR must be in draft state before pushing. Run: gh pr ready --undo",
+            message="Set the PR to draft before pushing. Run: gh pr ready --undo",
         )
     ]
 

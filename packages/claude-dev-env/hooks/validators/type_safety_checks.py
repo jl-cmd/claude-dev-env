@@ -26,7 +26,7 @@ def check_missing_type_hints(tree: ast.AST, filename: str) -> List[Violation]:
                     Violation(
                         filename,
                         node.lineno,
-                        f"Function '{node.name}' missing return type annotation",
+                        f"Function '{node.name}' requires a return type annotation",
                     )
                 )
 
@@ -38,7 +38,7 @@ def check_missing_type_hints(tree: ast.AST, filename: str) -> List[Violation]:
                         Violation(
                             filename,
                             node.lineno,
-                            f"Parameter '{arg.arg}' in '{node.name}' missing type annotation",
+                            f"Parameter '{arg.arg}' in '{node.name}' requires a type annotation",
                         )
                     )
 
@@ -69,7 +69,7 @@ def validate_file(file_path: Path) -> List[Violation]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
     except Exception as error:
-        return [Violation(filename, 0, f"Error: {error}")]
+        return [Violation(filename, 0, f"Validation reported an error: {error}")]
 
     violations.extend(check_missing_type_hints(tree, filename))
     violations.extend(check_any_type(tree, filename))
@@ -87,7 +87,7 @@ def main() -> int:
     for file_arg in sys.argv[1:]:
         file_path = Path(file_arg)
         if not file_path.exists():
-            print(f"Error: File not found: {file_path}", file=sys.stderr)
+            print(f"File access requires an existing path: {file_path}", file=sys.stderr)
             return 1
         all_violations.extend(validate_file(file_path))
 

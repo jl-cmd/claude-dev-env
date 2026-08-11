@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from hooks_constants.messages import HOSTED_HOOK_CRASH_DENY_REASON
+
 __all__ = [
     "BLOCK_DECISION",
     "DECISION_KEY",
@@ -25,8 +27,8 @@ BLOCK_DECISION = "block"
 DECISION_KEY = "decision"
 REASON_KEY = "reason"
 HOOK_EVENT_NAME = "PostToolUse"
-EMPTY_REASON_BLOCK_FALLBACK = "[dispatcher] hook blocked with no reason — write blocked"
-BLOCKING_CRASH_DENY_REASON = "[dispatcher] hook crash in blocking hook — write blocked for safety"
+EMPTY_REASON_BLOCK_FALLBACK = "[dispatcher] hook supplied zero reason text; keep the write protected for safety"
+BLOCKING_CRASH_DENY_REASON = HOSTED_HOOK_CRASH_DENY_REASON
 
 PLUGIN_ROOT_PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}"
 

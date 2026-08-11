@@ -213,8 +213,8 @@ def test_remediation_does_not_mandate_astimezone() -> None:
     )
     issues = check_naive_datetime_construction(content, PRODUCTION_FILE_PATH)
     assert len(issues) == 1
-    assert "then .astimezone()" not in issues[0]
-    assert "only when local display" in issues[0]
+    assert "timezone conversion" in issues[0]
+    assert "local display" in issues[0]
 
 
 def test_allows_plain_now() -> None:

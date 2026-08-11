@@ -74,12 +74,12 @@ def load_registry(config_path: Path | None = None) -> dict[str, str]:
     try:
         raw_text = resolved_path.read_text(encoding=UTF8_ENCODING)
     except OSError as e:
-        _logger.error("cannot read %s: %s", resolved_path, e)
+        _logger.error("read error for %s: %s", resolved_path, e)
         return {}
     try:
         parsed = json.loads(raw_text)
     except json.JSONDecodeError as e:
-        _logger.error("malformed JSON in %s: %s", resolved_path, e)
+        _logger.error("JSON parse error in %s: %s", resolved_path, e)
         return {}
     if not isinstance(parsed, dict):
         return {}

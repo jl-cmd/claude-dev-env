@@ -41,7 +41,7 @@ def test_should_flag_constant_used_by_only_one_function() -> None:
         source, PRODUCTION_FILE_PATH
     )
     assert any(
-        "UPPER" in issue and "only 1 function/method" in issue for issue in issues
+        "UPPER" in issue and "has one consumer" in issue for issue in issues
     ), f"Expected single-caller violation for UPPER, got: {issues}"
 
 
@@ -140,7 +140,7 @@ def test_should_flag_constant_used_only_in_decorator_of_one_function() -> None:
         source, PRODUCTION_FILE_PATH
     )
     assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
+        "TIMEOUT" in issue and "has one consumer" in issue for issue in issues
     ), f"Expected decorator usage to count as single caller, got: {issues}"
 
 
@@ -157,7 +157,7 @@ def test_should_flag_ann_assign_constant_used_by_only_one_function() -> None:
         source, PRODUCTION_FILE_PATH
     )
     assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
+        "TIMEOUT" in issue and "has one consumer" in issue for issue in issues
     ), f"Expected AnnAssign constant to be flagged, got: {issues}"
 
 
@@ -172,7 +172,7 @@ def test_should_flag_private_upper_snake_constant_used_by_only_one_function() ->
         source, PRODUCTION_FILE_PATH
     )
     assert any(
-        "_PRIVATE_CONSTANT" in issue and "only 1 function/method" in issue
+        "_PRIVATE_CONSTANT" in issue and "has one consumer" in issue
         for issue in issues
     ), f"Expected private UPPER_SNAKE to be flagged, got: {issues}"
 
@@ -182,7 +182,7 @@ def test_should_flag_constant_referenced_only_at_module_scope() -> None:
     issues = code_rules_enforcer.check_file_global_constants_use_count(
         source, PRODUCTION_FILE_PATH
     )
-    assert any("A" in issue and "only 1 function/method" in issue for issue in issues), (
+    assert any("A" in issue and "has one consumer" in issue for issue in issues), (
         f"Expected single module-scope reference to be flagged, got: {issues}"
     )
 

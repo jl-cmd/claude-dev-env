@@ -262,7 +262,8 @@ def check_file_global_constants_use_count(content: str, file_path: str) -> list[
         caller_count = len(callers_by_constant[each_constant_name])
         if caller_count == 1:
             issues.append(
-                f"Line {each_line_number}: File-global constant {each_constant_name} used by only 1 function/method - move to method scope or add a second caller"
+                f"Line {each_line_number}: File-global constant {each_constant_name} has one consumer. "
+                "Move it to method scope or add a second caller"
             )
 
     return issues

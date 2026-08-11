@@ -19,7 +19,6 @@ ALL_WHOLE_INSTANCE_STRINGIFY_NAMES: frozenset[str] = frozenset(
 )
 MAX_DEAD_DATACLASS_FIELD_ISSUES: int = 25
 DEAD_DATACLASS_FIELD_GUIDANCE: str = (
-    "field is assigned but never read in this file - remove the field and the code"
-    " that only exists to populate it, or read it where the value is needed"
-    " (CODE_RULES §9.8)"
+    "Field is assigned in this file and needs a read. Read it where the value is"
+    " needed or remove the field and its population code (CODE_RULES §9.8)."
 )

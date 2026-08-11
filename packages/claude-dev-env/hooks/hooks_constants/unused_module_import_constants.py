@@ -11,7 +11,7 @@ NOQA_DIRECTIVE_PATTERN: re.Pattern[str] = re.compile(
 )
 MAX_UNUSED_IMPORT_ISSUES: int = 25
 UNUSED_IMPORT_GUIDANCE: str = (
-    "remove unused import; if kept for side effects, mark with `# noqa: F401`"
+    "Use the import in runtime code or mark it for side effects with `# noqa: F401`."
 )
 TYPE_CHECKING_IDENTIFIER: str = "TYPE_CHECKING"
 

@@ -188,7 +188,7 @@ class TestCrossSurfaceConsistency:
 
 CLI_BASENAME = "cli.py"
 ANTIPATTERN_VALIDATOR_NAME = "Python Anti-patterns"
-PRINT_FINDING_FRAGMENT = "print() in production"
+PRINT_FINDING_FRAGMENT = "uses print()"
 
 PIPELINE_PRINT_SOURCE = '''
 def emit_status(message):

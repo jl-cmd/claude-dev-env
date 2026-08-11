@@ -95,7 +95,7 @@ def check_skip_decorators_in_tests(content: str, file_path: str) -> list[str]:
             if _decorator_name_contains_skip(each_decorator):
                 issues.append(
                     f"Line {each_decorator.lineno}: @skip decorator on test"
-                    f" — tests must fail on missing deps"
+                    f" — tests require installed dependencies"
                 )
 
     return issues
@@ -382,11 +382,8 @@ def check_vacuous_cleanup_assertion_tests(content: str, file_path: str) -> list[
         if not all(_is_absence_assertion(each_assert) for each_assert in body_assertions):
             continue
         issues.append(
-            f"Line {each_node.lineno}: vacuous cleanup-on-failure test"
-            f" — asserts no leftover temp file but never proves the temp was created,"
-            f" so it passes even when cleanup is broken; arrange a post-creation"
-            f" failure (e.g. monkeypatch os.replace to raise after the temp exists)"
-            f" then assert the temp was removed"
+            f"Line {each_node.lineno}: vacuous cleanup-on-failure test needs a post-creation "
+            "failure. Create the temp file, raise after creation, then assert its removal"
         )
         if len(issues) >= MAX_VACUOUS_CLEANUP_ASSERTION_ISSUES:
             break
@@ -505,9 +502,8 @@ def check_flag_gated_scenario_test_naming(content: str, file_path: str) -> None:
             flag_list = ", ".join(sorted(unpatched_flags))
             print(
                 f"ADVISORY [CODE_RULES] Line {each_test.lineno}: scenario test"
-                f" {each_test.name!r} never patches {flag_list}, which sibling tests"
-                f" establish — the named scenario may run under the flag default."
-                f" Patch the flag (and assert the gated path runs) or rename the test.",
+                f" {each_test.name!r} needs a patch for {flag_list}. Patch the flag and"
+                " assert the gated path.",
                 file=sys.stderr,
             )
 
@@ -648,9 +644,9 @@ def check_stale_test_name_target(content: str, file_path: str) -> list[str]:
                 continue
             issues.append(
                 f"Line {each_node.lineno}: test {each_node.name!r} names "
-                f"{each_candidate!r}, which the file never imports, defines, or calls; "
-                f"the body calls {renamed_sibling!r} instead — rename the test to match "
-                "the function it exercises (Category N test-name-vs-scenario drift)"
+                f"{each_candidate!r}; the body calls {renamed_sibling!r}. Rename the "
+                "test to match the exercised function (Category N test-name-vs-scenario "
+                "drift)"
             )
             if len(issues) >= MAX_STALE_TEST_NAME_TARGET_ISSUES:
                 return issues[:MAX_STALE_TEST_NAME_TARGET_ISSUES]

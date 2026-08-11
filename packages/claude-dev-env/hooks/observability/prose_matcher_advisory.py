@@ -176,7 +176,7 @@ def classify_matcher(
             "labeled_count": labeled_count,
             "precision": precision,
             "restart_observation_window": False,
-            "reason": "below sample floor",
+            "reason": "Collect labeled samples to complete the observation floor.",
         }
     assert precision is not None
     if precision >= keep_precision_floor:
@@ -200,7 +200,7 @@ def classify_matcher(
         "labeled_count": labeled_count,
         "precision": precision,
         "restart_observation_window": False,
-        "reason": "below narrow precision floor",
+        "reason": "Collect precision evidence to support narrow classification.",
     }
 
 

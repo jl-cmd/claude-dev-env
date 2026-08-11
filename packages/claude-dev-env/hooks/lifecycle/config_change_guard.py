@@ -68,8 +68,8 @@ def guard_hook_injection(file_path: str) -> None:
     if current_count > stored_count:
         block_reason = (
             f"Hook count increased from {stored_count} to {current_count}. "
-            f"Review the added hook entries before proceeding. "
-            f"Delete known-hook-count.txt to reset."
+            f"Review the added hook entries, then remove {known_hook_count_file} "
+            f"to reset the baseline."
         )
         block_payload = {
             "decision": "block",

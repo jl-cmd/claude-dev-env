@@ -282,7 +282,7 @@ def build_advisory_system_message(all_matches: list[tuple[str, str]]) -> str:
     return (
         f"[PLAIN_LANGUAGE advisory] {swap_phrases}. "
         "Reach for the everyday word the reader understands on the first pass. "
-        "This notice does not deny the write; lean-block structure denials still apply."
+        "This notice accompanies an allowed write. Lean-block structure denials remain active."
     )
 
 

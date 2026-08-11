@@ -55,7 +55,9 @@ def main() -> None:
     if not os.path.exists(target_file_path):
         sys.exit(0)
 
-    deny_reason = f"BLOCKED: Write on existing file {target_file_path}. Use Edit tool instead."
+    deny_reason = (
+        f"BLOCKED: Route changes to existing file {target_file_path} through the Edit tool."
+    )
     denial = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

@@ -137,10 +137,7 @@ def check_empty_init_files(project_root: Path) -> List[Violation]:
         content = init_file.read_text(encoding="utf-8")
         if not content.strip():
             relative_path = _normalize_path(init_file, project_root)
-            message = (
-                "Empty __init__.py file serves no purpose. "
-                "Either add exports/initialization or delete the file."
-            )
+            message = "Empty __init__.py file needs exports or initialization."
             violations.append(Violation(file=relative_path, line=1, message=message))
 
     return violations
@@ -162,7 +159,7 @@ def main(args: List[str]) -> None:
 
     project_root = Path(args[0])
     if not project_root.exists():
-        print(f"Error: Project root does not exist: {project_root}")
+        print(f"Project root requires an existing path: {project_root}")
         sys.exit(1)
 
     all_violations: List[Violation] = []

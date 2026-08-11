@@ -235,7 +235,7 @@ def test_should_emit_stderr_advisory_on_syntax_error(
     content = "def broken(\n    this is not python\n"
     check_banned_identifiers(content, PRODUCTION_FILE_PATH)
     captured = capsys.readouterr()  # type: ignore[attr-defined]
-    assert "banned-identifier check skipped" in captured.err
+    assert "banned-identifier check paused" in captured.err
     assert PRODUCTION_FILE_PATH in captured.err
 
 

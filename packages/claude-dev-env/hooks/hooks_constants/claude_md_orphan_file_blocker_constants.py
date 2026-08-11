@@ -106,30 +106,20 @@ MAX_SUBTREE_FILES_SCANNED: int = 5000
 MAX_ORPHAN_FILE_ISSUES: int = 20
 
 ORPHAN_FILE_MESSAGE_TEMPLATE: str = (
-    "CLAUDE.md references files that exist nowhere under {directory}: "
-    "{missing}. A per-directory CLAUDE.md names files in its own directory "
-    "subtree, both in its table cells and in the run commands its fenced code "
-    "blocks show; a cell or a run command naming a file absent from that subtree "
-    "points a reader at something that is not there. Drop the row or run command, "
-    "or correct it to name a file that exists in this directory, a subdirectory of "
-    "it, or a sibling directory under its parent."
+    "CLAUDE.md file references require these scan-root paths in {directory}: {missing}. "
+    "Name each backticked table file and interpreter-invoked script with its current "
+    "path under the scan root, including a sibling directory under the parent. "
+    "Use an existing scan-root file when it is the intended target."
 )
 
 ORPHAN_FILE_SYSTEM_MESSAGE: str = (
-    "CLAUDE.md names a file that does not exist in its directory subtree - "
-    "drop the row or run command, or name an existing file"
+    "CLAUDE.md requires each named file to use its current path in the directory "
+    "subtree. Name an existing file in the row or command."
 )
 
 ORPHAN_FILE_ADDITIONAL_CONTEXT: str = (
-    "Each first-column table cell wrapped in backticks that ends in a known file "
-    "extension, and each script an interpreter invocation inside a fenced run "
-    "command names (such as 'python script.py'), must name a file present under "
-    "the scan root: this CLAUDE.md's own directory, a subdirectory of it, or a "
-    "sibling directory under its parent. Cells holding a path with a slash, a "
-    "subdirectory ending in '/', or a slash-command are out of scope. A table "
-    "whose own block names an explicit relative-path source (a '../' token) "
-    "documents files outside the subtree and is out of scope. For each missing "
-    "file:\n"
-    "  - delete the table row or the run command, or\n"
-    "  - rename it to an existing file under the scan root."
+    "Inspect backticked table filenames and interpreter-invoked scripts under the "
+    "scan root and its sibling directory under the parent. Treat slash paths, "
+    "subdirectory paths, slash commands, and `../` sources as external references. "
+    "Name each row or command with an existing scan-root file."
 )

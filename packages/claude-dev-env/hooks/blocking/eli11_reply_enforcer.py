@@ -386,7 +386,7 @@ def build_block_reason(all_violations: list[str]) -> str:
         f"ELI11 REPLY SHAPE: Rewrite the reply into a short action-first shape "
         f"({formatted_violation_list}).\n\n"
         f"When the user must act, open with numbered click-by-click steps, one "
-        f"short line each. When nothing is needed, open with the outcome in one "
+        f"short line each. For informational replies, open with the outcome in one "
         f"sentence. Keep findings to at most {TARGET_BULLET_LINE_COUNT} short "
         f"bullets. A requested full report may run long; keep list lines short "
         f"and lead with the outcome. Code fences, blockquotes, tables, and "

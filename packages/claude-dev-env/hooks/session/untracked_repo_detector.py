@@ -45,12 +45,13 @@ def current_working_directory() -> str:
 def _build_confirm_instruction(repo_root: str) -> str:
     config_file_path = str(registry_file_path())
     return (
-        f"UNTRACKED REPO DETECTED: The current session is running inside a git "
-        f"repository at '{repo_root}' that is not present in {config_file_path}. "
+        f"UNTRACKED REPO DETECTED: The repository path '{repo_root}' is pending "
+        f"registration in {config_file_path}. "
         f"Use AskUserQuestion with two options — 'Save mapping' (recommended) and "
-        f"'Skip for this session' — to confirm whether to persist this repo path. "
+        f"'Use this path for this session' — to choose the mapping scope. "
         f"On approval, append a new entry to {config_file_path} mapping the "
-        f"repository leaf name to '{repo_root}'. This hook has written nothing."
+        f"repository leaf name to '{repo_root}'. The config file reflects the "
+        f"mapping after you choose Save mapping."
     )
 
 

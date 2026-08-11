@@ -52,9 +52,8 @@ _BARE_BODY_TOKEN_PATTERN = re.compile(
 _BASH_TOOL_NAME = "Bash"
 
 _CORRECTIVE_MESSAGE = (
-    "BLOCKED [gh-body-file]: gh --body <string> escapes backticks as \\` on GitHub, "
-    "corrupting inline code and code fences in issues, PRs, comments, and reviews. "
-    "Write the body to a temp file and use --body-file instead.\n\n"
+    "BLOCKED [gh-body-file]: Write the markdown body to a temporary file and pass "
+    "it with --body-file. This preserves inline code and code fences on GitHub.\n\n"
     "Safe Python pattern:\n"
     "  import tempfile\n"
     "  with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:\n"

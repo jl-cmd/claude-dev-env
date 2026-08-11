@@ -28,33 +28,32 @@ ALL_GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
 )
 GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE: int = 2
 GATE_SCRIPT_NOT_FOUND_MESSAGE: str = (
-    "claude-dev-env pre-commit: gate script not found at {path}, skipping enforcement"
+    "claude-dev-env pre-commit: gate script unavailable at {path}; commit continues. "
+    "Install claude-dev-env to enable CODE_RULES enforcement."
 )
 PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE: str = (
-    "claude-dev-env pre-push: gate script not found at {path}, skipping enforcement"
+    "claude-dev-env pre-push: gate script unavailable at {path}; push continues. "
+    "Install claude-dev-env to enable CODE_RULES enforcement."
 )
 STDIN_READ_FAILURE_MESSAGE: str = (
-    "claude-dev-env pre-push: could not read stdin ({error}), aborting"
+    "claude-dev-env pre-push: restore hook input access ({error}), then retry the push."
 )
 INVOKE_GATE_FAILURE_MESSAGE: str = (
-    "claude-dev-env: could not launch gate script ({error}), aborting"
+    "claude-dev-env: restore the gate installation ({error}), then retry."
 )
 MALFORMED_STDIN_LINE_MESSAGE: str = (
-    "claude-dev-env pre-push: ignoring malformed stdin line: {line!r}"
+    "claude-dev-env pre-push: Git expects four ref-update fields; received {line!r}."
 )
 LOCAL_SHA_FIELD_INDEX: int = 1
 NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
-    "claude-dev-env pre-push: no parseable stdin lines; aborting"
+    "claude-dev-env pre-push: Git provided no parseable ref-update lines; retry the push."
 )
 NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
 UNRESOLVABLE_MERGE_BASE_SENTINEL: str = "__unresolvable_merge_base__"
 UNRESOLVABLE_MERGE_BASE_MESSAGE: str = (
-    "claude-dev-env pre-push: git found no merge base between the pushed object "
-    "and the default branch, so the gate scope is unknown and "
-    "enforcement is skipped. That happens when the pushed branch and the "
-    "default branch hold unrelated histories, or when a default-branch ref "
-    "resolved and merge-base still could not name a shared commit "
-    "(for example a shallow clone missing the connecting history)."
+    "claude-dev-env pre-push: CODE_RULES scope requires shared history between the "
+    "pushed object and the default branch. Fetch the default-branch history or "
+    "rebase onto it, then retry."
 )
 LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
 ORIGIN_HEAD_SYMBOLIC_REFERENCE: str = "refs/remotes/origin/HEAD"
@@ -79,11 +78,10 @@ GIT_REFERENCE_QUERY_TIMEOUT_SECONDS: int = 15
 ALL_PROTECTED_BRANCH_PUSH_NAMES: tuple[str, ...] = ("main", "master")
 PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE: int = 1
 PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE: str = (
-    "claude-dev-env pre-push: blocked a push of local branch {local_branch!r} "
-    "onto protected remote branch {remote_branch!r}.\n"
+    "claude-dev-env pre-push: Feature branch required for {remote_branch!r}.\n"
     "A local branch that tracks origin/{remote_branch}, with push.default=upstream, "
-    "resolves a bare 'git push' to {remote_branch}.\n"
-    "To push the feature branch to its own ref, name the destination: "
+    "targets {remote_branch} with a bare 'git push'.\n"
+    "Push the feature branch to its own ref with: "
     "git push origin {local_branch}:refs/heads/{local_branch}"
 )
 GIT_EXECUTABLE_NAME: str = "git"
@@ -91,7 +89,7 @@ GIT_COMMAND_SUCCESS_EXIT_CODE: int = 0
 GIT_OUTPUT_ENCODING_NAME: str = "utf-8"
 GIT_OUTPUT_DECODE_ERRORS_POLICY: str = "replace"
 GIT_COMMAND_UNAVAILABLE_MESSAGE: str = (
-    "claude-dev-env pre-push: could not run git ({error}), aborting"
+    "claude-dev-env pre-push: restore Git access ({error}), then retry the push."
 )
 GIT_REV_PARSE_SUBCOMMAND: str = "rev-parse"
 GIT_REV_PARSE_VERIFY_FLAG: str = "--verify"
@@ -122,7 +120,6 @@ ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES: tuple[str, ...] = (
     "develop",
 )
 UNRESOLVABLE_BASE_REFERENCE_MESSAGE: str = (
-    "claude-dev-env pre-push: no usable gate base -- {reference} names no commit and "
-    "the default branch of remote {remote!r} could not be read.\n"
-    "Set the remote head so the gate has a base: git remote set-head {remote} --auto"
+    "claude-dev-env pre-push: Set a usable gate base for {reference} and remote "
+    "{remote!r}. Set the remote head with: git remote set-head {remote} --auto"
 )

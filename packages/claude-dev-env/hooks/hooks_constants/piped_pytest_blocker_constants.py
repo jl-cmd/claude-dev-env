@@ -356,8 +356,8 @@ DENY_DECISION = "deny"
 CALLING_HOOK_NAME = "piped_pytest_blocker.py"
 
 CORRECTIVE_MESSAGE = (
-    "Piped pytest run blocked. Run pytest alone; the pipe makes the tool report "
-    "the downstream command's exit code, so a failing suite reads as a pass. "
-    "When you need the output on disk, redirect it "
-    "(`python -m pytest tests > run.log 2>&1`) and read the file."
+    "Run pytest alone as a standalone command. A pipe reports the downstream command's "
+    "exit code, so pytest result visibility depends on the downstream command. Redirect pytest "
+    "output to a file when you need a disk copy, then read the file after pytest "
+    "finishes."
 )

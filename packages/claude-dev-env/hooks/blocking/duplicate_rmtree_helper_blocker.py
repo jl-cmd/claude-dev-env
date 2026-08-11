@@ -110,16 +110,13 @@ def main() -> None:
     corrective_message = (
         "BLOCKED [duplicate-rmtree-helper]: this Write/Edit defines a local copy of "
         "the Windows-safe rmtree helper trio (_strip_read_only_and_retry, "
-        "_force_remove_tree / force_rmtree). The trio is already implemented once; a "
-        "second copy drifts from the original — a fix lands in one copy and the other "
-        "keeps the bug (CODE_RULES.md section 3, Reuse before create).\n\n"
-        "Import the shared force_rmtree helper rather than pasting the trio:\n\n"
+        "_force_remove_tree / force_rmtree). Use one shared helper module and import "
+        "it from every call site (CODE_RULES.md section 3, Reuse before create).\n\n"
+        "Import the shared force_rmtree helper:\n\n"
         "    from <shared_package>.windows_filesystem import force_rmtree\n"
         "    force_rmtree(staging_directory)\n\n"
-        "When no shared helper module exists yet, create ONE — a windows-filesystem "
-        "utility module the consuming packages can import — define the trio there once, "
-        "and import it from every call site. Do not paste the trio from the "
-        "windows_rmtree_blocker corrective message into each module.\n\n"
+        "Create one windows-filesystem utility module when the shared helper needs a "
+        "home, define the trio there once, and import it from every call site.\n\n"
         "See ~/.claude/rules/windows-filesystem-safe.md for the sanctioned pattern."
     )
     hook_input = read_hook_input_dictionary_from_stdin()

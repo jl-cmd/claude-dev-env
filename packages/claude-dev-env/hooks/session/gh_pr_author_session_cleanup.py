@@ -142,8 +142,9 @@ def _restore_stale_state_file(state_file: Path) -> None:
         _delete_state_file(state_file)
     else:
         _write_line(
-            f"[gh-pr-author-cleanup] failed to restore active gh account to {original_account!r} from "
-            f"stale state file {state_file}; left in place for next session",
+            f"[gh-pr-author-cleanup] Account restoration pending: active gh account "
+            f"remains {original_account!r}; state file {state_file} remains for the "
+            f"next session.",
             sys.stderr,
         )
 

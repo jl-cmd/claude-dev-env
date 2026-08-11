@@ -246,7 +246,7 @@ def test_bare_probably_still_blocks_with_positive_corrective() -> None:
     parsed_response = json.loads(completed_process.stdout)
     assert parsed_response["decision"] == "block"
     assert "probably" in parsed_response["reason"]
-    assert "label that claim unverified" in parsed_response["reason"]
+    assert "Label the claim unverified" in parsed_response["reason"]
     assert "AskUserQuestion" in parsed_response["reason"]
 
 

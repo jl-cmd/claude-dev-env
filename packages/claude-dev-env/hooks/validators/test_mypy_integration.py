@@ -215,7 +215,7 @@ def test_run_mypy_check_returns_passed_for_empty_files() -> None:
     result = run_mypy_check([])
     assert result.passed is True
     assert result.error_count == 0
-    assert "No files" in result.output
+    assert "File set is empty" in result.output
 
 
 def test_find_pyproject_returns_pyproject_with_tool_mypy(tmp_path: Path) -> None:

@@ -54,7 +54,7 @@ def main() -> None:
         sys.exit(0)
 
     if SIMPLE_PATTERN.search(content):
-        message = "BLOCKED: Hook uses python3 ~/.claude/hooks/... format which breaks cross-platform. Use this pattern: node -e \"process.argv.splice(1,0,'_');require(require('os').homedir()+'/.claude/hooks/run-hook-wrapper.js')\" \"subfolder/your-hook.py\""
+        message = "Use the cross-platform hook wrapper format: node -e \"process.argv.splice(1,0,'_');require(require('os').homedir()+'/.claude/hooks/run-hook-wrapper.js')\" \"subfolder/your-hook.py\""
         result = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",

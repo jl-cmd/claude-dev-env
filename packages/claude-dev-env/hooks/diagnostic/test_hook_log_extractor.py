@@ -632,7 +632,7 @@ def test_run_summary_prints_no_new_blocks_when_cursor_empty(
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "No new blocks since last run." in captured.out
+    assert "Block count matches the previous run." in captured.out
 
 
 def test_run_summary_prints_table_when_rows_returned(
@@ -827,7 +827,7 @@ def test_run_query_returns_nonzero_for_unknown_query(
 
     captured = capsys.readouterr()
     assert exit_code == EXIT_CODE_UNKNOWN_QUERY
-    assert "Unknown query" in captured.err
+    assert "Choose a supported query:" in captured.err
 
 
 def test_run_query_returns_nonzero_for_invalid_query_name(
@@ -837,7 +837,7 @@ def test_run_query_returns_nonzero_for_invalid_query_name(
 
     captured = capsys.readouterr()
     assert exit_code == EXIT_CODE_UNKNOWN_QUERY
-    assert "Invalid query name" in captured.err
+    assert "Choose a supported query name:" in captured.err
 
 
 def test_run_query_rejects_uppercase_and_hyphen_names(
@@ -849,7 +849,7 @@ def test_run_query_rejects_uppercase_and_hyphen_names(
     captured = capsys.readouterr()
     assert exit_code_upper == EXIT_CODE_UNKNOWN_QUERY
     assert exit_code_hyphen == EXIT_CODE_UNKNOWN_QUERY
-    assert captured.err.count("Invalid query name") == 2
+    assert captured.err.count("Choose a supported query name:") == 2
 
 
 def test_save_offsets_cleans_up_temp_file_when_replace_fails(

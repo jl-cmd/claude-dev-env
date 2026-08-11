@@ -60,7 +60,7 @@ def check_validator_exists(validator_path: Path) -> ValidatorHealth:
         return ValidatorHealth(
             name=name,
             healthy=False,
-            error=f"Validator not found: {validator_path}",
+            error=f"Validator path requires an existing file: {validator_path}",
         )
 
     try:
@@ -75,7 +75,7 @@ def check_validator_exists(validator_path: Path) -> ValidatorHealth:
         return ValidatorHealth(
             name=name,
             healthy=False,
-            error=f"Cannot read validator: {error}",
+            error=f"Validator read returned an error: {error}",
         )
 
 
@@ -187,15 +187,15 @@ def print_health_report(health: SystemHealth) -> None:
 
     print("Required Validators:")
     for name, validator in sorted(health.validators.items()):
-        status = "[OK]" if validator.healthy else "[MISSING]"
+        status = "[OK]" if validator.healthy else "[INSTALLATION REQUIRED]"
         print(f"  {status} {name}")
         if validator.error:
-            print(f"         Error: {validator.error}")
+            print(f"         Validator detail: {validator.error}")
     print()
 
     print("Optional Tools:")
     for tool, available in sorted(health.optional_tools.items()):
-        status = "[OK]" if available else "[NOT INSTALLED]"
+        status = "[OK]" if available else "[INSTALLATION REQUIRED]"
         print(f"  {status} {tool}")
     print()
 

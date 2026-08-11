@@ -84,9 +84,8 @@ DENY_FILE_BULLET_PREFIX: str = "  - "
 DENY_FILE_BULLET_LINE_SEPARATOR: str = "\n"
 DENY_PATHSPEC_SEPARATOR: str = " "
 SESSION_EDIT_DENY_TEMPLATE: str = (
-    "BLOCKED: these files were edited this session and are tracked but left "
-    "unstaged, so this commit would drop them:\n{file_list}\n"
-    "Stage them with `git add -- {space_joined_paths}`, or run `git commit -a` to "
-    "include every tracked change, or add `{bypass_marker}` to the command to "
-    "commit without them on purpose."
+    "BLOCKED: these tracked files need staging for this commit:\n{file_list}\n"
+    "Run `git add -- {space_joined_paths}`. Run `git commit -a` to include every "
+    "tracked change. Use `{bypass_marker}` when an intentional partial commit "
+    "should leave these files for a later commit."
 )

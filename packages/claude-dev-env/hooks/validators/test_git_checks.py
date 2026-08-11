@@ -59,7 +59,7 @@ class TestSingleCommitWhenPrExists:
         assert violations[0].file == ""
         assert violations[0].line == 0
         assert "exactly 1 commit" in violations[0].message
-        assert "0 commits" in violations[0].message
+        assert "current count: 0" in violations[0].message
 
     @patch("validators.git_checks.subprocess.run")
     def test_multiple_commits_ahead_fails(self, mock_run: MagicMock) -> None:
@@ -74,7 +74,7 @@ class TestSingleCommitWhenPrExists:
 
         assert len(violations) == 1
         assert "exactly 1 commit" in violations[0].message
-        assert "3 commits" in violations[0].message
+        assert "current count: 3" in violations[0].message
 
     @patch("validators.git_checks.subprocess.run")
     def test_gh_cli_not_available_returns_empty(self, mock_run: MagicMock) -> None:
@@ -325,7 +325,7 @@ class TestMain:
         """main() should print git violations without file:line: prefix."""
         mock_commit.return_value = []
         mock_draft.return_value = [
-            Violation(file="", line=0, message="PR must be in draft state")
+            Violation(file="", line=0, message="Set the PR to draft before pushing")
         ]
 
         with pytest.raises(SystemExit) as exc_info:
@@ -333,7 +333,7 @@ class TestMain:
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
-        assert captured.out == "PR must be in draft state\n"
+        assert captured.out == "Set the PR to draft before pushing\n"
         assert ":0:" not in captured.out
 
     @patch("validators.git_checks.check_single_commit_when_pr_exists")

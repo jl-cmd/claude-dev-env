@@ -39,8 +39,8 @@ def _render_annotation_source(annotation_node: ast.expr) -> str:
     if unparse_function is not None:
         return unparse_function(annotation_node)
     sys.stderr.write(
-        "code_rules_enforcer: ast.unparse unavailable on this interpreter; "
-        "falling back to ast.dump for Any detection.\n"
+        "code_rules_enforcer: this interpreter lacks ast.unparse; "
+        "using ast.dump for Any detection.\n"
     )
     return ast.dump(annotation_node)
 
@@ -649,7 +649,8 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
         wildcard_issues: list[str] = []
         for each_wildcard_line in _find_typing_wildcard_imports(content):
             wildcard_issues.append(
-                f"Line {each_wildcard_line}: 'from typing import *' wildcard import - import explicit names instead"
+                f"Line {each_wildcard_line}: 'from typing import *' uses wildcard "
+                "syntax; import explicit names from typing"
             )
         issues.extend(wildcard_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
@@ -663,10 +664,9 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
         object_parameter_issues: list[str] = []
         for each_object_line, each_parameter_name in _find_object_annotated_parameter_lines(content):
             object_parameter_issues.append(
-                f"Line {each_object_line}: parameter '{each_parameter_name}' typed 'object' but read as "
-                f"'{each_parameter_name}.attribute' on a path where its type is not narrowed - a bare "
-                "'object' read goes unchecked; narrow it with an isinstance guard before the read, or name "
-                "the concrete type the body relies on"
+                f"Line {each_object_line}: parameter '{each_parameter_name}' typed 'object' is read as "
+                f"'{each_parameter_name}.attribute'. Narrow it with an isinstance guard before the read "
+                "or name the concrete type the body relies on"
             )
         issues.extend(object_parameter_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 

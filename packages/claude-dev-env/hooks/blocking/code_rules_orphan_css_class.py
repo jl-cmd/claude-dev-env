@@ -188,7 +188,7 @@ def check_orphan_css_classes(content: str, file_path: str) -> list[str]:
         reported_classes.add(each_class_name)
         issues.append(
             f"Line {each_line}: CSS class {each_class_name!r} used in markup"
-            f" has no matching '.{each_class_name}' selector - "
+            f" requires a matching '.{each_class_name}' selector - "
             f"{ORPHAN_CSS_CLASS_MESSAGE_SUFFIX}"
         )
         if len(issues) >= MAX_ORPHAN_CSS_CLASS_ISSUES:

@@ -24,7 +24,7 @@ def check_untracked_todos(source: str, filename: str) -> List[Violation]:
                 Violation(
                     filename,
                     line_num,
-                    "TODO/FIXME without issue reference - add #<issue_number>",
+                    "TODO/FIXME requires an issue reference such as #<issue_number>",
                 )
             )
 

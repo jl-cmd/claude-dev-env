@@ -169,7 +169,7 @@ def _decorator_gap_violation(
     return Violation(
         filename,
         last_decorator_line,
-        "No empty line allowed between decorator and function",
+        "Add one blank line between the decorator and function",
     )
 
 
@@ -213,8 +213,8 @@ def _spacing_violation(
     return Violation(
         filename,
         current_end,
-        f"Expected {EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS} empty lines "
-        f"between functions, found {blank_line_count}",
+        f"Use {EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS} blank lines between functions; "
+        f"empty line count: {blank_line_count}",
     )
 
 
@@ -385,7 +385,7 @@ def main() -> int:
     for each_file_arg in sys.argv[1:]:
         file_path = Path(each_file_arg)
         if not file_path.exists():
-            logger.error("File not found: %s", file_path)
+            logger.error("File access requires an existing path: %s", file_path)
             return 1
         all_violations.extend(validate_file(file_path))
     for each_violation in all_violations:

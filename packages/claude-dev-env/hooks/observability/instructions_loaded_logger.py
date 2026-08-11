@@ -23,7 +23,10 @@ def main() -> int:
     except Exception as exception:
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": str(exception),
+            "error": (
+                f"Instructions-loaded hook input processing raised "
+                f"{type(exception).__name__}: {exception}"
+            ),
         }
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)

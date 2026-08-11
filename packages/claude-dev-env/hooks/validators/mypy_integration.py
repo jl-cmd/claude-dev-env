@@ -211,10 +211,10 @@ def run_mypy_check(
     target rather than the staged copy's own ancestors.
     """
     if not all_files:
-        return MypyResult(passed=True, output="No files to check", error_count=0)
+        return MypyResult(passed=True, output="File set is empty; check complete.", error_count=0)
 
     if not check_mypy_available():
-        return MypyResult(passed=True, output="Mypy not installed - skipping", error_count=0)
+        return MypyResult(passed=True, output="Mypy check awaits installation.", error_count=0)
 
     all_py_files = [
         str(each_file.resolve())
@@ -222,13 +222,13 @@ def run_mypy_check(
         if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not all_py_files:
-        return MypyResult(passed=True, output="No Python files", error_count=0)
+        return MypyResult(passed=True, output="File set contains zero Python files.", error_count=0)
 
     completed_process = _run_mypy_subprocess(all_py_files, config_source_path)
     error_count = completed_process.stdout.count(": error:")
 
     return MypyResult(
         passed=completed_process.returncode == 0,
-        output=completed_process.stdout or completed_process.stderr or "No type errors",
+        output=completed_process.stdout or completed_process.stderr or "Type check passed with zero errors.",
         error_count=error_count,
     )

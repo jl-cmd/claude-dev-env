@@ -269,10 +269,8 @@ def _build_deny_reason(file_path: str, all_detected_patterns: list[str]) -> str:
     """
     formatted = ", ".join(f'"{each_pattern}"' for each_pattern in all_detected_patterns)
     return (
-        f"Historical/comparative language detected in {file_path}: "
-        f"{formatted}. Describe current state only — no 'instead of', "
-        f"'previously', 'now uses', etc. The git log tracks what changed. "
-        f"Comments and docs describe what IS."
+        f"Current-state wording required in {file_path}: {formatted}. Describe "
+        f"the file as it exists today. The git log records changes."
     )
 
 
@@ -347,14 +345,14 @@ def build_deny_payload(deny_reason: str) -> dict[str, object]:
             "permissionDecision": "deny",
             "permissionDecisionReason": deny_reason,
             "additionalContext": (
-                "Rewrite the affected comments or documentation to describe "
-                "only the current state. For example:\n"
-                '  BAD: "Uses X instead of Y"  →  GOOD: "Uses X"\n'
-                '  BAD: "Previously configured via Z"  →  GOOD: "Configured via Z"\n'
-                "See ~/.claude/rules/doc-prose-cuts.md for full rules."
+                "Describe the affected comments or documentation as the current "
+                "state. Use examples such as:\n"
+                '  "Uses X"\n'
+                '  "Configured via Z"\n'
+                "See ~/.claude/rules/doc-prose-cuts.md for the full rules."
             ),
         },
-        "systemMessage": "Agent wrote comparative/historical language - describe current state only",
+        "systemMessage": "Current-state wording required: describe the file as it exists today.",
         "suppressOutput": True,
     }
 

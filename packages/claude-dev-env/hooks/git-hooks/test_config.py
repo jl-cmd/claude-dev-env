@@ -8,7 +8,7 @@ def test_pre_push_gate_script_not_found_message_contains_path_placeholder() -> N
 
 
 def test_no_parseable_stdin_lines_message_exists_and_describes_problem() -> None:
-    assert "no parseable stdin lines" in git_hooks_constants.NO_PARSEABLE_STDIN_LINES_MESSAGE
+    assert "no parseable ref-update lines" in git_hooks_constants.NO_PARSEABLE_STDIN_LINES_MESSAGE
 
 
 def test_no_parseable_stdin_lines_sentinel_is_distinct_sentinel_value() -> None:

@@ -248,11 +248,9 @@ def bare_ssh_binary_deny_message() -> str:
         The full deny-message text for the bare ssh-family case.
     """
     return (
-        f"BLOCKED [nas-ssh-binary]: Git Bash's MSYS ssh reads ~/.ssh/id_ed25519 as "
-        f"world-readable through its ACL mapping, rejects the key as bad permissions, "
-        f"and falls back to an interactive password prompt that hangs unattended "
-        f"sessions against the NAS at {nas_host()}.\n\n"
-        f"Use the Windows OpenSSH binary, which authenticates the key without prompting:\n"
+        f"BLOCKED [nas-ssh-binary]: Git Bash's MSYS ssh maps ~/.ssh/id_ed25519 to "
+        f"world-readable ACLs. Use the Windows OpenSSH binary to enforce the key "
+        f"permission contract for unattended NAS sessions at {nas_host()}:\n\n"
         f"  {_openssh_invocation_example()}\n\n"
         f"See {NAS_SSH_RULE_REFERENCE} for full guidance."
     )
@@ -274,10 +272,8 @@ def missing_batch_mode_deny_message() -> str:
     """
     return (
         f"BLOCKED [nas-ssh-binary]: this NAS ssh command uses the Windows OpenSSH binary "
-        f"but omits -o BatchMode=yes, so an authentication regression falls back to an "
-        f"interactive password prompt that hangs unattended sessions against the NAS at "
-        f"{nas_host()}.\n\n"
-        f"Add -o BatchMode=yes so a key failure exits loudly rather than prompting:\n"
+        f"and needs -o BatchMode=yes for authentication results to return in the "
+        f"command. Add -o BatchMode=yes for the NAS at {nas_host()}:\n\n"
         f"  {_openssh_invocation_example()}\n\n"
         f"See {NAS_SSH_RULE_REFERENCE} for full guidance."
     )

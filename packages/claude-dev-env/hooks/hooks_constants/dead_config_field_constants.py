@@ -20,9 +20,9 @@ ALL_CONFIG_CLASS_NAME_SUFFIXES: tuple[str, ...] = ("Config", "Selectors")
 DATACLASSES_MODULE_NAME: str = "dataclasses"
 MAX_DEAD_CONFIG_FIELD_ISSUES: int = 25
 DEAD_CONFIG_FIELD_GUIDANCE: str = (
-    "config or selectors dataclass field is defined but read by no production"
-    " module in the enclosing package tree - remove the dead field, or read it"
-    " where the value is needed (CODE_RULES §9.8)"
+    "Config or selectors dataclass field needs a production consumer in the"
+    " enclosing package tree. Read it where the value is needed or remove the"
+    " field (CODE_RULES §9.8)."
 )
 
 __all__ = [

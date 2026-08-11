@@ -36,5 +36,5 @@ MAX_SIBLING_MODULES_SCANNED: int = 60
 
 ORPHAN_CSS_CLASS_MESSAGE_SUFFIX: str = (
     "add a matching '.<class>' selector to the <style> block, "
-    "or drop the unused class attribute (CODE_RULES self-documenting markup)"
+    "or remove that class attribute (CODE_RULES self-documenting markup)"
 )

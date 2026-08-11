@@ -34,7 +34,7 @@ def check_mutable_default_args(tree: ast.AST, filename: str) -> List[Violation]:
                         Violation(
                             filename,
                             node.lineno,
-                            f"Mutable default argument in '{node.name}' - use None and initialize inside",
+                            f"Function '{node.name}' uses a mutable default argument; use None and initialize inside",
                         )
                     )
 
@@ -78,7 +78,7 @@ def check_print_in_production(tree: ast.AST, filename: str) -> List[Violation]:
                     Violation(
                         filename,
                         node.lineno,
-                        "print() in production code - use logging instead",
+                        "Production code uses print(); use logging for application output",
                     )
                 )
 
@@ -93,7 +93,7 @@ def validate_file(file_path: Path) -> List[Violation]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
     except Exception as error:
-        return [Violation(filename, 0, f"Error: {error}")]
+        return [Violation(filename, 0, f"Validation reported an error: {error}")]
 
     violations.extend(check_mutable_default_args(tree, filename))
     violations.extend(check_bare_except(tree, filename))
@@ -112,7 +112,7 @@ def main() -> int:
     for file_arg in sys.argv[1:]:
         file_path = Path(file_arg)
         if not file_path.exists():
-            print(f"Error: File not found: {file_path}", file=sys.stderr)
+            print(f"File access requires an existing path: {file_path}", file=sys.stderr)
             return 1
         all_violations.extend(validate_file(file_path))
 

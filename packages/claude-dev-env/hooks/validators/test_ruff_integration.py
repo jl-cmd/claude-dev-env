@@ -68,7 +68,7 @@ def test_run_ruff_check_returns_passed_for_empty_files() -> None:
     result = run_ruff_check([])
     assert result.passed is True
     assert result.fixed_count == 0
-    assert "No files" in result.output
+    assert "File set is empty" in result.output
 
 
 def test_run_ruff_check_applies_config_resolved_from_config_source_path(

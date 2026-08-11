@@ -20,16 +20,13 @@ MAX_DUPLICATE_BODY_ISSUES: int = 25
 DUNDER_INIT_FILENAME: str = "__init__.py"
 PYTHON_SOURCE_SUFFIX: str = ".py"
 DUPLICATE_BODY_GUIDANCE: str = (
-    "this function body is identical to one in a sibling module; "
-    "extract a single shared helper (for example in hooks_constants/) and "
-    "import it from both modules instead of copying it (Reuse before create / DRY)"
+    "This function body matches a sibling module. Extract one shared helper in "
+    "hooks_constants/ and import it from both modules (Reuse before create / DRY)."
 )
 SAME_FILE_INLINE_DUPLICATE_GUIDANCE: str = (
-    "this function body is also present inline as a contiguous statement block "
-    "inside another function in the same module; call this helper from that "
-    "function instead of repeating the block, so a single helper backs both call "
-    "sites and a fix cannot land in one copy while the other keeps the bug "
-    "(Reuse before create / DRY)"
+    "This function body also appears inline inside another function in the same "
+    "module. Call this helper from both sites so one implementation serves both "
+    "call sites (Reuse before create / DRY)."
 )
 SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE: str = (
     "(inline duplicate body spans: helper at line {helper_start} spanning "
@@ -42,9 +39,8 @@ SKILL_SCRIPTS_DIRECTORY_NAME: str = "scripts"
 MAX_CROSS_SKILL_ADVISORY_ISSUES: int = 25
 CROSS_SKILL_ADVISORY_PREFIX: str = "[CODE_RULES advisory]"
 CROSS_SKILL_DUPLICATE_GUIDANCE: str = (
-    "two skill folders install on their own, so this copy is a defensible "
-    "skill-isolation tradeoff; a shared module would couple the skills and "
-    "break independent install. Confirm the copy is intentional, or for a "
-    "large or behavior-bearing body raise the choice through AskUserQuestion "
-    "(see the no-cross-skill-duplicate-helpers rule)"
+    "Two skill folders install independently, so this copy supports skill "
+    "isolation. A shared module would couple the skills. Confirm the copy's "
+    "intent, and raise a large or behavior-bearing body through AskUserQuestion "
+    "(see the cross-skill duplicate-helper rule)."
 )

@@ -58,7 +58,7 @@ def check_sql_injection(source: str, filename: str) -> List[Violation]:
                 Violation(
                     filename,
                     line_num,
-                    "SQL injection risk - use parameterized queries instead of f-string/format",
+                    "SQL values require parameterized queries",
                 )
             )
 
@@ -121,7 +121,7 @@ def main() -> int:
     for file_arg in sys.argv[1:]:
         file_path = Path(file_arg)
         if not file_path.exists():
-            print(f"Error: File not found: {file_path}", file=sys.stderr)
+            print(f"File access requires an existing path: {file_path}", file=sys.stderr)
             return 1
         all_violations.extend(validate_file(file_path))
 

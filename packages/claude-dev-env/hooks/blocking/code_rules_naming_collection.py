@@ -259,7 +259,7 @@ def check_loop_variable_naming(content: str, file_path: str) -> list[str]:
                 continue
             if target_name == BARE_EACH_TOKEN:
                 issues.append(
-                    f"Line {each_name_node.lineno}: loop variable 'each' is a bare token without subject"
+                    f"Line {each_name_node.lineno}: loop variable 'each' needs a subject"
                     f" - rename to each_<subject> (CODE_RULES §5)"
                 )
                 continue

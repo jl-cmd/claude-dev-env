@@ -43,7 +43,8 @@ def log_hosted_hook_crash(hook_script_path: str, error: Exception) -> None:
     last_line = formatted_traceback.splitlines()[-1] if formatted_traceback else str(error)
     error_type_name = type(error).__name__
     sys.stderr.write(
-        f"[dispatcher] crash in {hook_script_path}: {error_type_name}: {error} | {last_line}\n"
+        f"[dispatcher] Hook execution raised {error_type_name} in {hook_script_path}: "
+        f"{error} | {last_line}\n"
     )
     sys.stderr.flush()
 

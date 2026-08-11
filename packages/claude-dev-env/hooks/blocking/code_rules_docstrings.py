@@ -55,6 +55,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT,
     DOCSTRING_LARGE_ZIP_FILE_EXCEPTION_NAME,
     DOCSTRING_NARRATIVE_LINE_JOIN_SEPARATOR,
+    DOCSTRING_PUBLIC_METHOD_NAME_SEPARATOR,
     DOCSTRING_NARRATIVE_PROSE_LINE_LIMIT,
     DOCSTRING_REFERENCE_MARKER_WINDOW,
     DOCSTRING_RUNON_SENTENCE_BOUNDARY_PATTERN,
@@ -289,7 +290,7 @@ def check_docstring_format(content: str, file_path: str) -> list[str]:
         if not missing_sections:
             continue
         issues.append(
-            f"Line {each_node.lineno}: {each_node.name}() docstring missing required "
+            f"Line {each_node.lineno}: {each_node.name}() docstring requires these "
             f"section(s): {', '.join(missing_sections)} — Google style required for public APIs"
         )
         if len(issues) >= MAX_DOCSTRING_FORMAT_ISSUES:
@@ -393,8 +394,8 @@ def check_docstring_args_match_signature(content: str, file_path: str) -> list[s
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() docstring Args: lists "
-                f"'{each_documented_name}' which is not a parameter - update the "
-                "docstring to match the signature"
+                f"'{each_documented_name}'; align the entry with the function "
+                "signature"
             )
             if len(issues) >= MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES:
                 return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
@@ -458,8 +459,8 @@ def check_docstring_documents_unreferenced_parameter(
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() docstring Args: documents "
-                f"'{each_documented_name}' but the body never references it - drop the "
-                "unused parameter and its Args line, or use it"
+                f"'{each_documented_name}'; the body needs a reference to this name. "
+                "Remove the parameter or use it"
             )
             if len(issues) >= MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES:
                 return issues[:MAX_DOCSTRING_ARGS_SIGNATURE_ISSUES]
@@ -608,10 +609,10 @@ def check_docstring_fallback_branch_coverage(content: str, file_path: str) -> li
         if route_count < DOCSTRING_FALLBACK_BRANCH_MINIMUM_ROUTE_COUNT:
             continue
         issues.append(
-            f"Line {each_node.lineno}: {each_node.name}() docstring scopes a fallback to "
-            f"one condition, but the body routes to {fallback_callee}() from {route_count} "
-            "distinct branches — enumerate every condition that reaches the fallback "
-            "(Category O6 docstring-vs-implementation drift)"
+            f"Line {each_node.lineno}: {each_node.name}() docstring scopes the fallback "
+            f"to one condition while the body routes to {fallback_callee}() from "
+            f"{route_count} distinct branches. Enumerate every condition that reaches "
+            "the fallback (Category O6 docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_DOCSTRING_FALLBACK_BRANCH_ISSUES:
             break
@@ -704,9 +705,10 @@ def check_class_docstring_names_public_methods(
         if len(unmentioned_names) < MINIMUM_PUBLIC_METHODS_FOR_CLASS_DOCSTRING_BREADTH:
             continue
         issues.append(
-            f"Line {each_node.lineno}: {each_node.name} one-line docstring omits "
-            f"public method(s) {', '.join(unmentioned_names)} — widen the summary "
-            "so it names the class's full public surface"
+            f"Line {each_node.lineno}: {each_node.name} one-line docstring needs public "
+            f"method(s) {DOCSTRING_PUBLIC_METHOD_NAME_SEPARATOR.join(unmentioned_names)}. "
+            "Widen the summary to name the "
+            "class's full public surface"
         )
         if len(issues) >= MAX_CLASS_DOCSTRING_PUBLIC_METHOD_ISSUES:
             break
@@ -762,9 +764,8 @@ def check_docstring_no_consumer_claim(content: str, file_path: str) -> list[str]
             continue
         issues.append(
             f"Line {each_node.lineno}: {each_node.name}() docstring claims "
-            f"'{matched_phrase}' — a no-consumer-yet claim drifts the moment a reader "
-            "lands and contradicts any companion SKILL.md; state what reads the artifact "
-            "or drop the sentence (Category O8 docstring / companion-doc drift)"
+            f"'{matched_phrase}'. State which code reads the artifact and align the "
+            "companion SKILL.md (Category O8 docstring / companion-doc drift)"
         )
         if len(issues) >= MAX_DOCSTRING_NO_CONSUMER_CLAIM_ISSUES:
             break
@@ -878,10 +879,10 @@ def check_docstring_unguarded_malformed_payload_claim(
             continue
         issues.append(
             f"Line {each_node.lineno}: {each_node.name}() docstring claims "
-            f"'{matched_phrase}' but a payload subscript sits outside the try/except that "
-            "returns None — a malformed-but-present payload raises rather than resolving to "
-            "None; move the dereference inside the guard or narrow the docstring "
-            "(Category O6 docstring-vs-implementation drift)"
+            f"'{matched_phrase}' while a payload subscript sits outside the guard. A "
+            "malformed present payload raises before the guard returns None. Move the "
+            "dereference inside the guard or narrow the docstring (Category O6 "
+            "docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_DOCSTRING_UNGUARDED_PAYLOAD_CLAIM_ISSUES:
             break
@@ -963,11 +964,10 @@ def check_docstring_no_network_claim_with_metadata_access(
             continue
         issues.append(
             f"Line {each_node.lineno}: {each_node.name}() docstring claims "
-            f"'{matched_phrase}' but the body calls .{accessed_method}() on a path — "
-            "a metadata stat is itself a network touch on a share, so the no-network "
-            "claim drifts; reword the docstring to state the path is stat-checked on "
-            "every call, or short-circuit before touching the share "
-            "(Category O6 docstring-vs-implementation drift)"
+            f"'{matched_phrase}' while the body calls .{accessed_method}() on a path. "
+            "A metadata stat touches a network share. State that every call stat-checks "
+            "the path or short-circuit before touching the share (Category O6 "
+            "docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_DOCSTRING_NO_NETWORK_CLAIM_ISSUES:
             break
@@ -1054,10 +1054,10 @@ def check_docstring_names_absent_type_checking_gate(
         if not matched_phrase:
             continue
         issues.append(
-            f"Line {each_line_number}: docstring names a '{matched_phrase}' the module's "
-            "code never performs — no identifier in the body handles TYPE_CHECKING, so the "
-            "gate-detection claim is stale; drop the TYPE_CHECKING gate wording or add the "
-            "detection (Category O6 docstring-vs-implementation drift)"
+            f"Line {each_line_number}: docstring names a '{matched_phrase}' while the "
+            "module body lacks TYPE_CHECKING handling. Align the docstring with the "
+            "module or add the gate detection (Category O6 docstring-vs-implementation "
+            "drift)"
         )
         if len(issues) >= MAX_DOCSTRING_TYPE_CHECKING_GATE_ISSUES:
             break
@@ -1104,10 +1104,9 @@ def check_docstring_no_inline_literal_claim(content: str, file_path: str) -> lis
     if not matched_phrase:
         return []
     issues = [
-        f"Line 1: module docstring claims '{matched_phrase}' about a companion file "
-        "— an unverifiable completeness claim that drifts the moment a literal lands "
-        "inline; state what the module centralizes instead (Category O6 docstring-vs-"
-        "implementation drift)"
+        f"Line 1: module docstring claims '{matched_phrase}' about a companion file. "
+        "State the values this module centralizes (Category O6 docstring-vs-implementation "
+        "drift)"
     ]
     return issues[:MAX_DOCSTRING_INLINE_LITERAL_CLAIM_ISSUES]
 
@@ -1234,7 +1233,7 @@ def check_module_docstring_names_public_checks(content: str, file_path: str) -> 
         if _docstring_mentions_check(module_docstring, each_name, all_shared_sibling_tokens):
             continue
         issues.append(
-            f"Line 1: module docstring omits public check {each_name}() — name every "
+            f"Line 1: module docstring needs public check {each_name}(). Name every "
             "public check_* function the module exposes so the roster is complete "
             "(Category O6/O8 docstring-vs-implementation drift)"
         )
@@ -1335,10 +1334,10 @@ def check_module_docstring_scope_omits_data_schema_constants(
         data_schema_constant_names[:MODULE_DOCSTRING_DATA_SCHEMA_CONSTANT_SAMPLE_LIMIT]
     )
     return [
-        "Line 1: module docstring scopes the module to user-facing text but the module "
-        f"defines data-schema or runtime-config constants ({sampled_names}) the summary "
-        "never names — broaden the summary to name the data-schema keys and "
-        "runtime-config constants it holds (Category O module-responsibility drift)"
+        "Line 1: module docstring scopes the module to user-facing text while the module "
+        f"defines data-schema or runtime-config constants ({sampled_names}). Broaden the "
+        "summary to name the data-schema keys and runtime-config constants it holds "
+        "(Category O module-responsibility drift)"
     ][:MAX_MODULE_DOCSTRING_DATA_SCHEMA_SCOPE_ISSUES]
 
 
@@ -1640,7 +1639,7 @@ def check_docstring_punctuation_mark_enumeration_coverage(
                 continue
             issues.append(
                 f"Line {each_line}: docstring names {sorted(named_glyphs)} from "
-                f"{each_constant_name} but omits {sorted(omitted_glyphs)} — name every "
+                f"{each_constant_name} and needs {sorted(omitted_glyphs)}. Name every "
                 "mark the tuple holds so the enumeration matches the detection set "
                 "(Category O6 docstring-vs-implementation drift)"
             )
@@ -1741,8 +1740,8 @@ def check_docstring_returns_plural_cardinality(content: str, file_path: str) -> 
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() Returns clause says "
-                f"'the {each_family} stops' (plural) but the returned dict holds a "
-                f"single {each_family}_ key — match the noun to the cardinality "
+                f"'the {each_family} stops' (plural) while the returned dict holds a "
+                f"single {each_family}_ key. Match the noun to the cardinality "
                 "(Category O6 docstring-vs-implementation drift)"
             )
             if len(issues) >= MAX_DOCSTRING_RETURNS_PLURAL_CARDINALITY_ISSUES:
@@ -1956,11 +1955,9 @@ def check_docstring_length_constant_superlative_vs_exact_gate(
         if not bound_phrase:
             continue
         issues.append(
-            f"Line 1: module docstring says '{bound_phrase}' about "
-            f"{each_constant}, but the package compares len(...) against it only "
-            "with ==/!= (an exact-length gate that rejects every other length) — "
-            "state the exact required length, not a longest/maximum range "
-            "(Category O6 docstring-vs-implementation drift)"
+            f"Line 1: module docstring says '{bound_phrase}' about {each_constant}. "
+            "The package applies an exact-length gate with ==/!=. State the exact "
+            "required length (Category O6 docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES:
             return issues[:MAX_LENGTH_CONSTANT_SUPERLATIVE_ISSUES]
@@ -2075,10 +2072,10 @@ def check_docstring_cardinal_count_matches_constant_family(
                 continue
             issues.append(
                 f"Line {each_line}: docstring names {sorted(stated_cardinals)} as the "
-                f"{each_family}_ count but the module references {len(family_members)} "
-                f"{each_family}_ constants — omits {sorted(omitted_members)}; match the "
-                "count and enumeration to the referenced family "
-                "(Category O6 docstring-vs-implementation drift)"
+                f"{each_family}_ count while the module references {len(family_members)} "
+                f"{each_family}_ constants and needs {sorted(omitted_members)}. Match "
+                "the count and enumeration to the referenced family (Category O6 "
+                "docstring-vs-implementation drift)"
             )
             if len(issues) >= MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES:
                 return issues[:MAX_DOCSTRING_CARDINAL_FAMILY_ISSUES]
@@ -2223,9 +2220,9 @@ def check_docstring_step_enumeration_dispatch_coverage(
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() docstring enumerates linear "
-                f"steps but omits the conditional dispatch step {each_callee}() the body "
-                "guards inside a branch — add the corrective-path step to the enumeration "
-                "(Category O4 step-ordering narrative drift)"
+                f"steps and needs the conditional dispatch step {each_callee}() that the "
+                "body guards inside a branch. Add the corrective-path step to the "
+                "enumeration (Category O4 step-ordering narrative drift)"
             )
             if len(issues) >= MAX_DOCSTRING_STEP_DISPATCH_ISSUES:
                 return issues[:MAX_DOCSTRING_STEP_DISPATCH_ISSUES]
@@ -2424,10 +2421,9 @@ def check_docstring_names_undefined_constant(content: str, file_path: str) -> li
             ):
                 continue
             issues.append(
-                f"Line {each_line_number}: docstring names '{each_token}' which the "
-                "module neither defines at module scope nor imports — name the real "
-                "symbol or drop the reference (Category O6 docstring-vs-implementation "
-                "drift)"
+                f"Line {each_line_number}: docstring names '{each_token}', which the "
+                "module does not define at module scope or import. Name the real symbol "
+                "(Category O6 docstring-vs-implementation drift)"
             )
             if len(issues) >= MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES:
                 return issues[:MAX_DOCSTRING_UNDEFINED_CONSTANT_ISSUES]
@@ -2552,11 +2548,9 @@ def check_docstring_args_single_line_scope_vs_span(content: str, file_path: str)
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() Args entry '{each_argument}' "
-                "scopes a finding to a single line ('anchor line is among the changed lines') "
-                "while the body builds a range() span and scopes by span intersection — an "
-                "edit touching any non-anchor line of the span still blocks; restate the Args "
-                "entry as 'any line of its span is among the changed lines' (Category O6 "
-                "docstring-vs-implementation drift)"
+                "describes an anchor line while the body builds a range() span and scopes "
+                "by span intersection. State that any line in the span participates "
+                "(Category O6 docstring-vs-implementation drift)"
             )
             if len(issues) >= MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES:
                 return issues[:MAX_DOCSTRING_ARGS_SPAN_SCOPE_ISSUES]
@@ -2870,9 +2864,9 @@ def check_docstring_prose_wall_without_illustration(
             continue
         message = (
             f"Line {each_line_number}: {each_label} summary runs {prose_line_count} "
-            "narrative lines with no worked example - show, don't tell: swap the wall for a "
-            "'::' listing (a sample input, an annotated outcome, ok/flag contrast rows) and "
-            "keep the narrative to a few short lines (plain-illustrative-docstrings)"
+            "narrative lines. Add a worked example in a '::' block with sample input, annotated "
+            "outcome, and ok/flag rows. Keep the narrative to a few short lines "
+            "(plain-illustrative-docstrings)"
         )
         all_violations_in_walk_order.append((each_span, message))
     scoped_issues = _scope_violations_to_changed_lines(
@@ -3064,9 +3058,9 @@ def check_docstring_field_runmode_outcome(content: str, file_path: str) -> list[
                 continue
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}.{each_field_name} is a "
-                "run-mode flag but its Attributes description claims a per-record "
-                "write outcome — restate it as the run-mode meaning the assignment "
-                "gives it (Category O6 run-mode-versus-per-record docstring drift)"
+                "run-mode flag while its Attributes description states a per-record "
+                "write outcome. Restate the run-mode meaning the assignment gives it "
+                "(Category O6 run-mode-versus-per-record docstring drift)"
             )
             if len(issues) >= MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES:
                 return issues[:MAX_DOCSTRING_FIELD_RUNMODE_OUTCOME_ISSUES]
@@ -3123,10 +3117,10 @@ def check_docstring_raises_unraisable_largezipfile(
             continue
         issues.append(
             f"Line {each_node.lineno}: {each_node.name}() docstring Raises lists "
-            "zipfile.LargeZipFile, but the function opens its ZipFile writer with ZIP64 "
-            "permitted (allowZip64 defaults to True) — LargeZipFile raises only when "
-            "allowZip64 is False, so drop the entry or pass allowZip64=False "
-            "(Category O6 docstring-vs-implementation drift)"
+            "zipfile.LargeZipFile while the function opens its ZipFile writer with ZIP64 "
+            "permitted (allowZip64 defaults to True). LargeZipFile raises when "
+            "allowZip64 is False. Drop the entry or pass allowZip64=False (Category O6 "
+            "docstring-vs-implementation drift)"
         )
         if len(issues) >= MAX_DOCSTRING_RAISES_LARGEZIPFILE_ISSUES:
             break
@@ -3266,9 +3260,9 @@ def _outbound_pointer_issues(parsed_tree: ast.Module, file_path: str) -> list[st
         for each_entry in _absent_entries(wrapper_summary, delegate_summary):
             issues.append(
                 f"Line {each_node.lineno}: {each_node.name}() names "
-                f"'{each_entry}' in its summary, but the summary of the "
-                f"same-named function in {target_stem} omits it - align the "
-                "two summaries (Category O6 docstring-vs-implementation drift)"
+                f"'{each_entry}' in its summary, while the summary of the same-named "
+                f"function in {target_stem} needs that entry. Align the two summaries "
+                "(Category O6 docstring-vs-implementation drift)"
             )
     return issues
 
@@ -3310,10 +3304,10 @@ def _inbound_pointer_issues(
         delegate_summary = _leading_summary_line(delegate_entry[1])
         for each_entry in _absent_entries(wrapper_summary, delegate_summary):
             issues.append(
-                f"Line {delegate_entry[0]}: {each_node.name}() summary omits "
-                f"'{each_entry}', named by the pointing wrapper docstring in "
-                f"{neighbor_name} - reword that wrapper docstring in the same "
-                "change (Category O6 docstring-vs-implementation drift)"
+                f"Line {delegate_entry[0]}: {each_node.name}() summary needs "
+                f"'{each_entry}', which the pointing wrapper docstring in {neighbor_name} "
+                "names. Align the two summaries in the same change (Category O6 "
+                "docstring-vs-implementation drift)"
             )
     return issues
 

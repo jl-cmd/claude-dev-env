@@ -213,7 +213,7 @@ def check_unused_optional_parameters(content: str, file_path: str) -> list[str]:
             if not is_param_varied:
                 issues.append(
                     f"Line {each_function_node.lineno}: optional parameter {each_param_name}"
-                    f" is never varied — inline default or drop"
+                    f" has one current value — inline the default or remove the parameter"
                 )
 
     return issues

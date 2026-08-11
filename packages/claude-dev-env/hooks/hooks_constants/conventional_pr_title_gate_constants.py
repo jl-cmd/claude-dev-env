@@ -48,10 +48,9 @@ SEMANTIC_ACTION_FLOW_TYPES_INPUT_PATTERN: re.Pattern[str] = re.compile(r"[{,]\s*
 YAML_LIST_ITEM_PREFIX: str = "- "
 
 CORRECTIVE_MESSAGE: str = (
-    "BLOCKED [conventional-pr-title]: this repository's CI validates PR titles "
-    "against Conventional Commits, and the --title value here does not match. "
-    "Required shape: type(scope)!: description, where the scope and the "
-    "breaking-change marker (!) are optional. Allowed types: "
+    "BLOCKED [conventional-pr-title]: Use Conventional Commits format for the "
+    "--title value: `type(scope)!: description`. The scope and breaking-change "
+    "marker (!) are optional. Allowed types: "
     f"{', '.join(ALL_CONVENTIONAL_COMMIT_TYPES)}.\n\n"
     "Example: feat(hooks): add the conventional PR title gate\n\n"
     "Fix the --title value and retry."

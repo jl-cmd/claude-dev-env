@@ -121,7 +121,7 @@ def test_main_emits_stderr_warning_when_gate_script_missing(
 
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "gate script not found" in captured.err
+    assert "gate script unavailable" in captured.err
 
 
 def test_invoke_gate_returns_infrastructure_failure_when_strict_resolve_raises(

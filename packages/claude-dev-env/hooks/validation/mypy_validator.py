@@ -398,7 +398,7 @@ def send_block_notification(error_summary: str) -> None:
         return
 
     notification_title = "Mypy Type Errors"
-    notification_body = f"Write blocked: {error_summary[:200]}"
+    notification_body = f"Resolve these mypy type errors before continuing: {error_summary[:200]}"
 
     try:
         if notification_module.is_wsl():
@@ -414,7 +414,7 @@ def send_block_notification(error_summary: str) -> None:
 def build_block_response(error_summary: str) -> dict[str, str | dict[str, str]]:
     return {
         "decision": "block",
-        "reason": f"[MYPY] Type errors: {error_summary}",
+        "reason": f"[MYPY] Resolve these type errors before continuing: {error_summary}",
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
         },

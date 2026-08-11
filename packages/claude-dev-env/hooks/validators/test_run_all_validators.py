@@ -205,7 +205,7 @@ class TestGracefulDegradation:
         )
 
         assert skipped_result.skipped is True
-        assert "skipped" in skipped_result.output.lower()
+        assert "pending" in skipped_result.output.lower()
         assert skipped_result.passed is False
 
     def test_validator_exception_returns_skipped_result(self) -> None:
@@ -219,7 +219,7 @@ class TestGracefulDegradation:
         )
 
         assert skipped_result.skipped is True
-        assert "skipped" in skipped_result.output.lower()
+        assert "pending" in skipped_result.output.lower()
 
     def test_successful_validator_returns_normal_result(self) -> None:
         def working_validator() -> ValidatorResult:

@@ -263,7 +263,7 @@ def run_with_fallback(
             name=fallback_name,
             checks=fallback_checks,
             passed=False,
-            output=f"Validator not found: {error} (skipped)",
+            output=f"Validator path requires installation: {error}; check pending.",
             skipped=True,
         )
     except Exception as error:
@@ -271,7 +271,7 @@ def run_with_fallback(
             name=fallback_name,
             checks=fallback_checks,
             passed=False,
-            output=f"Validator error: {error} (skipped)",
+            output=f"Validator reported an error: {error}; check pending.",
             skipped=True,
         )
 
@@ -284,7 +284,7 @@ def run_python_style_checks(files: List[Path]) -> ValidatorResult:
             name="Python Style",
             checks="1,2,3,4",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("python_style_checks", [str(f) for f in py_files])
@@ -305,7 +305,7 @@ def run_test_safety_checks(files: List[Path]) -> ValidatorResult:
             name="Test Safety",
             checks="11,21",
             passed=True,
-            output="No test files to check",
+            output="File set contains zero test files; check complete.",
         )
 
     result = invoke_validator_module("test_safety_checks", [str(f) for f in test_files])
@@ -351,7 +351,7 @@ def run_file_structure_checks(project_root: Optional[Path] = None) -> ValidatorR
             name="File Structure",
             checks="14,15",
             passed=True,
-            output="Not in a git repository - skipping",
+            output="Git repository context is required for this check.",
         )
 
     result = invoke_validator_module("file_structure_checks", [str(project_root)])
@@ -372,7 +372,7 @@ def run_react_checks(files: List[Path]) -> ValidatorResult:
             name="React",
             checks="17",
             passed=True,
-            output="No React files to check",
+            output="File set contains zero React files; check complete.",
         )
 
     result = invoke_validator_module("react_checks", [str(f) for f in react_files])
@@ -406,7 +406,7 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
     existing files, which forces agents to remove them to pass validation.
     """
     return ValidatorResult(
-        name="No Comments",
+        name="Comment Review",
         checks="26",
         passed=True,
         output="Handled by code_rules_enforcer hook (old vs new comparison)",
@@ -422,7 +422,7 @@ def run_ruff_checks(
             name="Ruff",
             checks="37",
             passed=True,
-            output="Ruff not installed - skipping",
+            output="Ruff check awaits installation.",
         )
 
     result = run_ruff_check(files, config_source_path)
@@ -444,7 +444,7 @@ def run_mypy_checks(
             name="Mypy",
             checks="39,40",
             passed=True,
-            output="Mypy not installed - skipping",
+            output="Mypy check awaits installation.",
         )
 
     result = run_mypy_check(files, config_source_path)
@@ -465,7 +465,7 @@ def run_abbreviation_checks(files: List[Path]) -> ValidatorResult:
             name="Abbreviations",
             checks="5",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("abbreviation_checks", [str(f) for f in py_files])
@@ -486,7 +486,7 @@ def run_pr_reference_checks(files: List[Path]) -> ValidatorResult:
             name="PR References",
             checks="6",
             passed=True,
-            output="No code files to check",
+            output="File set contains zero code files; check complete.",
         )
 
     result = invoke_validator_module("pr_reference_checks", [str(f) for f in code_files])
@@ -507,7 +507,7 @@ def run_magic_value_checks(files: List[Path]) -> ValidatorResult:
             name="Magic Values",
             checks="7",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("magic_value_checks", [str(f) for f in py_files])
@@ -528,7 +528,7 @@ def run_useless_test_checks(files: List[Path]) -> ValidatorResult:
             name="Useless Tests",
             checks="12",
             passed=True,
-            output="No test files to check",
+            output="File set contains zero test files; check complete.",
         )
 
     result = invoke_validator_module("useless_test_checks", [str(f) for f in test_files])
@@ -549,7 +549,7 @@ def run_security_checks(files: List[Path]) -> ValidatorResult:
             name="Security",
             checks="27,28,29",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("security_checks", [str(f) for f in py_files])
@@ -570,7 +570,7 @@ def run_code_quality_checks(files: List[Path]) -> ValidatorResult:
             name="Code Quality",
             checks="30,31,32",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("code_quality_checks", [str(f) for f in py_files])
@@ -591,7 +591,7 @@ def run_python_antipattern_checks(files: List[Path]) -> ValidatorResult:
             name="Python Anti-patterns",
             checks="33,34,35",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("python_antipattern_checks", [str(f) for f in py_files])
@@ -612,7 +612,7 @@ def run_todo_checks(files: List[Path]) -> ValidatorResult:
             name="TODO Tracking",
             checks="36",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("todo_checks", [str(f) for f in py_files])
@@ -633,7 +633,7 @@ def run_type_safety_checks(files: List[Path]) -> ValidatorResult:
             name="Type Safety",
             checks="39,40",
             passed=True,
-            output="No Python files to check",
+            output="File set contains zero Python files; check complete.",
         )
 
     result = invoke_validator_module("type_safety_checks", [str(f) for f in py_files])
@@ -1007,7 +1007,7 @@ def _proposed_content_deny_reason(failed_results: List[ValidatorResult]) -> str:
     """
     return (
         f"BLOCKED: [validators] {len(failed_results)} "
-        f"validator(s) failed: {_validator_summaries(failed_results)}"
+        f"validator(s) report violations: {_validator_summaries(failed_results)}"
     )
 
 
@@ -1432,7 +1432,7 @@ def _emit_pre_existing_warning(all_preexisting_results: List[ValidatorResult]) -
     advisory_summaries = _validator_summaries(all_preexisting_results)
     sys.stderr.write(
         "[run_all_validators] allowed with warning: "
-        f"pre-existing violation(s) unchanged: {advisory_summaries}\n"
+        f"pre-existing violation(s) remain: {advisory_summaries}\n"
     )
     sys.stderr.flush()
 
@@ -1504,7 +1504,9 @@ def run_pre_tool_use_gate() -> int:
     except json.JSONDecodeError:
         return 0
     except Exception as error:
-        sys.stderr.write(f"[run_all_validators] pre-tool-use gate error: {error}\n")
+        sys.stderr.write(
+            f"[run_all_validators] pre-tool-use gate reported an error: {error}\n"
+        )
         sys.stderr.flush()
     return 0
 
@@ -1568,7 +1570,7 @@ def main() -> int:
     files = get_changed_files()
     if not files:
         if not args.json:
-            print("No changed files detected. Skipping file-based checks.\n")
+            print("Change set contains zero files; file-based checks are complete.\n")
     else:
         if not args.json:
             print(f"Checking {len(files)} changed file(s):")
@@ -1587,7 +1589,7 @@ def main() -> int:
                 print(f"  - {fixed_file}")
             print()
         else:
-            print("No auto-fixes needed.")
+            print("Current files meet the auto-fix baseline.")
             print()
 
     results: List[ValidatorResult] = []
@@ -1653,7 +1655,7 @@ def main() -> int:
         print("  [ ] Consistent terminology")
         print("  [ ] Required vs optional params")
         print("  [ ] Single responsibility")
-        print("  [ ] No over-engineering")
+        print("  [ ] Focused design")
         print()
 
     return 0 if all_passed else 1

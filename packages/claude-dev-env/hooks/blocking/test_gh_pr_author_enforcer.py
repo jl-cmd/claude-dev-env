@@ -1066,7 +1066,7 @@ def test_build_state_write_failure_message_describes_rollback_success(
         state_file=isolated_state_directory / "stub_state.json",
         has_rollback_succeeded=True,
     )
-    assert "swap was reversed" in deny_text
+    assert "swap returned the active account" in deny_text
     assert "JonEcho" in deny_text
     assert "jl-cmd" in deny_text
 
@@ -1087,8 +1087,8 @@ def test_build_state_write_failure_message_describes_rollback_failure(
         has_rollback_succeeded=False,
     )
     assert "reverse" in deny_text.lower()
-    assert "ALSO failed" in deny_text
-    assert "still" in deny_text.lower()
+    assert "reverse `gh auth switch` returned an error" in deny_text
+    assert "remains `JonEcho`" in deny_text
     assert "JonEcho" in deny_text
     assert "jl-cmd" in deny_text
 
@@ -1128,8 +1128,8 @@ def test_main_deny_message_names_rollback_failure_when_reverse_switch_fails(
     assert switch_invocations == ["JonEcho", "jl-cmd"]
     payload = json.loads(captured_stdout.getvalue())
     deny_reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "ALSO failed" in deny_reason
-    assert "still" in deny_reason.lower()
+    assert "reverse `gh auth switch` returned an error" in deny_reason
+    assert "remains `JonEcho`" in deny_reason
 
 
 def test_main_deny_message_keeps_reversal_language_when_rollback_succeeds(
@@ -1162,5 +1162,5 @@ def test_main_deny_message_keeps_reversal_language_when_rollback_succeeds(
     assert switch_invocations == ["JonEcho", "jl-cmd"]
     payload = json.loads(captured_stdout.getvalue())
     deny_reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "swap was reversed" in deny_reason
+    assert "swap returned the active account" in deny_reason
     assert "ALSO failed" not in deny_reason

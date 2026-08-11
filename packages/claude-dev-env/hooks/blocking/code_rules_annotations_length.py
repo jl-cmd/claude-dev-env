@@ -51,7 +51,7 @@ def check_parameter_annotations(content: str, file_path: str) -> list[str]:
                 continue
             if each_arg.annotation is None:
                 issues.append(
-                    f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on {each_node.name!r} missing type annotation (CODE_RULES §6)"
+                    f"Line {each_arg.lineno}: parameter {each_arg.arg!r} on {each_node.name!r} requires a type annotation (CODE_RULES §6)"
                 )
     return issues
 
@@ -439,7 +439,7 @@ def check_return_annotations(
         if each_node.returns is not None:
             continue
         message = (
-            f"Line {each_node.lineno}: function {each_node.name!r} missing "
+            f"Line {each_node.lineno}: function {each_node.name!r} requires a "
             "return type annotation (CODE_RULES §6)"
         )
         all_violations_in_source_order.append(

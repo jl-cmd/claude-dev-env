@@ -49,11 +49,10 @@ def extract_payload_text(tool_name: str, tool_input: dict) -> str:
 
 def main() -> None:
     corrective_message = (
-        "BLOCKED [windows-rmtree]: shutil.rmtree(..., ignore_errors=True) silently "
-        "fails on Windows when a file carries the ReadOnly attribute "
-        "(FILE_ATTRIBUTE_READONLY). The PermissionError is swallowed and the tree "
-        "stays on disk -- cleanup looks successful but removes nothing. Linux is "
-        "unaffected because unlink only needs write on the parent directory.\n\n"
+        "BLOCKED [windows-rmtree]: Windows shutil.rmtree(..., ignore_errors=True) "
+        "preserves a tree when a file carries the ReadOnly attribute "
+        "(FILE_ATTRIBUTE_READONLY). Clear the attribute and retry the removal syscall. "
+        "Linux unlink uses write access on the parent directory.\n\n"
         "Use a Windows-safe handler that strips the attribute and retries the "
         "syscall:\n\n"
         "    import os\n"

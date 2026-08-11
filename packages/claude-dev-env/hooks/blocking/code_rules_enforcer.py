@@ -964,7 +964,7 @@ def _run_precheck(
         return 0
     candidate_content = _read_existing_file_content(candidate_path)
     if candidate_content is None:
-        error_stream.write(f"error: cannot read candidate file: {candidate_path}\n")
+        error_stream.write(f"error: candidate file read returned an error: {candidate_path}\n")
         return 1
     candidate_content = candidate_content.lstrip(UTF8_BYTE_ORDER_MARK)
     if runs_full_verdict:

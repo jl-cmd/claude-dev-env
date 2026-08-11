@@ -18,11 +18,8 @@ CLASS_METHOD_FIRST_PARAMETER_NAME: str = "cls"
 MINIMUM_CONSTANT_NAME_LENGTH: int = 2
 MAX_TEST_LAYOUT_ISSUES: int = 50
 DEAD_TEST_CONSTANT_GUIDANCE: str = (
-    "module-level constant is defined in this test module but read by no other"
-    " line in the file - remove the dead constant, or reference it where its"
-    " value is needed (CODE_RULES §9.8)"
+    "test-module constant needs a consumer; use its value or remove it"
 )
 UNUSED_TEST_HELPER_PARAMETER_GUIDANCE: str = (
-    "parameter is declared on this private test helper but read nowhere in its"
-    " body - drop the dead parameter and stop forwarding it at every call site"
+    "private test-helper parameter needs a body consumer; use it or remove it"
 )

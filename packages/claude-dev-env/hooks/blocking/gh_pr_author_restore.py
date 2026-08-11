@@ -73,8 +73,8 @@ def main() -> None:
     state_file = _state_file_path(session_id)
     if _state_file_is_attacker_planted(state_file):
         _write_line(
-            f"[gh-pr-author-restore] state file at {state_file} has unexpected mode/owner; "
-            f"skipping restore and preserving file for inspection",
+            f"[gh-pr-author-restore] State file at {state_file} has mode/owner metadata "
+            f"requiring inspection; restoration is pending",
             sys.stderr,
         )
         sys.exit(0)
@@ -89,8 +89,9 @@ def main() -> None:
         _delete_state_file(state_file)
     else:
         _write_line(
-            f"[gh-pr-author-restore] failed to restore active gh account to {original_account!r}; "
-            f"state file {state_file} left in place so the SessionStart cleanup hook can retry",
+            f"[gh-pr-author-restore] Account restoration needs attention: active gh "
+            f"account remains {original_account!r}; state file {state_file} remains "
+            f"for the SessionStart cleanup hook to retry",
             sys.stderr,
         )
     sys.exit(0)

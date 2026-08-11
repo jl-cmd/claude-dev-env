@@ -62,7 +62,7 @@ def rewrite_plugin_config_file(
         return False
     except json.JSONDecodeError as e:
         print(
-            f"[rewrite-paths] ERROR: Invalid JSON in {file_path}: {e}",
+            f"[rewrite-paths] ERROR: JSON parse error in {file_path}: {e}",
             file=sys.stderr,
         )
         return False

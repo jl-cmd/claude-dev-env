@@ -19,7 +19,6 @@ import io
 import json
 import runpy
 import sys
-import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -57,6 +56,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (
     HostedHookEntry,
 )
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+from hooks_constants.hosted_hook_runner import log_hosted_hook_crash
 
 NativeEvaluator = Callable[[dict[str, object]], str | None]
 DenyPayloadBuilder = Callable[[str], dict[str, object]]
@@ -120,22 +120,6 @@ class HostedHookResult:
     is_blocking: bool = field(default=True)
 
 
-def _log_hook_crash(hook_script_path: str, error: Exception) -> None:
-    """Write a one-line crash summary to stderr.
-
-    Args:
-        hook_script_path: The absolute path of the hook that crashed.
-        error: The exception the hook raised.
-    """
-    formatted_traceback = traceback.format_exc().strip()
-    last_line = formatted_traceback.splitlines()[-1] if formatted_traceback else str(error)
-    error_type_name = type(error).__name__
-    sys.stderr.write(
-        f"[dispatcher] crash in {hook_script_path}: {error_type_name}: {error} | {last_line}\n"
-    )
-    sys.stderr.flush()
-
-
 def run_hosted_hook(
     hook_script_path: str,
     payload_text: str,
@@ -176,7 +160,7 @@ def run_hosted_hook(
         raw_code = exit_signal.code
         hook_exit_code = raw_code if isinstance(raw_code, int) else 0
     except Exception as error:
-        _log_hook_crash(hook_script_path, error)
+        log_hosted_hook_crash(hook_script_path, error)
         hook_did_crash = True
         hook_exit_code = BLOCKING_CRASH_EXIT_CODE if is_blocking else 0
     finally:
@@ -225,7 +209,7 @@ def run_native_hook(
             deny_reason = native_hook.evaluate(payload_by_key)
             advisory_system_message = None
     except Exception as error:
-        _log_hook_crash(native_hook.evaluate.__module__, error)
+        log_hosted_hook_crash(native_hook.evaluate.__module__, error)
         return HostedHookResult(
             exit_code=BLOCKING_CRASH_EXIT_CODE if is_blocking else 0,
             captured_stdout="",

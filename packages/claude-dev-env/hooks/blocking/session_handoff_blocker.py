@@ -157,11 +157,9 @@ def main() -> None:
         sys.exit(0)
 
     block_reason = (
-        "LONG-HORIZON-AUTONOMY GUARDRAIL: You have ample context remaining. Do not "
-        "stop, summarize, or suggest a new session on account of context limits. "
-        "Continue the work.\n\n"
-        "Re-output your response continuing the task without the handoff suggestion, "
-        "per the long-horizon-autonomy rule."
+        "long-horizon-autonomy guardrail: The task has ample context remaining for "
+        "continued work in this turn. Continue the task and re-output the response "
+        "with the task continuing."
     )
     block_response = {
         "decision": "block",

@@ -64,27 +64,22 @@ ARGS_GATE_VALIDATOR_NAME: str = "check_docstring_args_match_signature"
 MAX_GATE_COUNT_ISSUES: int = 4
 
 GATE_COUNT_MESSAGE_TEMPLATE: str = (
-    "{rule_basename} states '{stated_phrase}' ({stated_count}) but names "
-    "{named_count} distinct free-form gate validator(s) ({named_validators}). The "
-    "rule's spelled-out gate count drifts from the validators it enumerates — the "
-    "companion-doc-vs-implementation drift this rule governs. Update the count "
-    "word to {named_count} and the '... gated slices' total to {total_count} in "
-    "this same change, and name every gate validator the prose counts."
+    "{rule_basename} states '{stated_phrase}' ({stated_count}) and names "
+    "{named_count} docstring gate validators ({named_validators}). Align the documented counts "
+    "with the validators it enumerates. Set the validator count to {named_count} "
+    "and the slice total to {total_count} in this same change. Name every gate "
+    "validator the prose counts."
 )
 
 GATE_COUNT_SYSTEM_MESSAGE: str = (
-    "Gate-validator count in docstring-prose-matches-implementation.md drifted "
-    "from the validators it names - update the count word in this same change"
+    "Gate-validator count in docstring-prose-matches-implementation.md requires "
+    "alignment with the named validators. Update the count word in this same change"
 )
 
 GATE_COUNT_ADDITIONAL_CONTEXT: str = (
-    "The rule docstring-prose-matches-implementation.md states a spelled-out "
-    "count of free-form docstring gate validators ('Four more gate validators') "
-    "and a total ('five gated slices'), then names each validator in backticks "
-    "(`check_docstring_fallback_branch_coverage`, ...). When a new "
-    "`check_docstring_*` gate is added, name it in the prose and bump both count "
-    "words: the 'N more gate validators' count equals the number of distinct "
-    "free-form validators named after it, and the 'M gated slices' total equals "
-    "that count plus one for check_docstring_args_match_signature. Keep the count "
-    "words and the named-validator list in step in the same change."
+    "The document lists named docstring gate validators and two counts. When a "
+    "new `check_docstring_*` gate is added, add its name and update both counts "
+    "in the same change. Set the validator count to the number of named "
+    "validators. Set the slice total to that count plus one for "
+    "`check_docstring_args_match_signature`."
 )

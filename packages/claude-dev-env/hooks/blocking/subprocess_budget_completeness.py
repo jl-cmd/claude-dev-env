@@ -330,9 +330,9 @@ def collect_module_constant_values(tree: ast.Module) -> dict[str, int]:
 def format_block_message(file_path: str, function_name: str, all_omitted_values: set[int]) -> str:
     omitted_text = ", ".join(f"{each_value}s" for each_value in sorted(all_omitted_values))
     return (
-        f"SUBPROCESS BUDGET INCOMPLETE: {function_name}() in {file_path} sums a subset of the "
-        f"subprocess timeouts reachable in one invocation and omits timeout value(s) {omitted_text} that "
-        "one invocation can reach. A named worst-case/budget helper must account for every subprocess timeout reachable "
+        f"SUBPROCESS BUDGET INCOMPLETE: {function_name}() in {file_path} models a subset of the "
+        f"subprocess timeouts reachable in one invocation and leaves timeout value(s) {omitted_text} "
+        "outside the budget. A named worst-case/budget helper must account for every subprocess timeout reachable "
         "in a single invocation, so its reported margin against the harness timeout is real. Either add the "
         f"omitted timeout(s) to the modeled total, or rename the helper to name the phases it actually covers "
         "and document the residual full-invocation margin separately."

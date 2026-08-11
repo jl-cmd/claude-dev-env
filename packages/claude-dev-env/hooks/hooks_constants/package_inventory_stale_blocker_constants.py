@@ -95,28 +95,20 @@ ALL_EXEMPT_DIRECTORY_NAMES: frozenset[str] = frozenset(
 MAX_INVENTORY_FILE_BYTES: int = 200_000
 
 STALE_INVENTORY_MESSAGE_TEMPLATE: str = (
-    "New production file `{filename}` lands in {directory}, whose inventory "
-    "document(s) ({inventories}) name {entry_count} sibling files but no entry "
-    "for `{filename}`. A package inventory names every production file in its "
-    "directory; a new file the inventory omits leaves the inventory and the "
-    "directory disagreeing on the package's file set. Add an entry naming "
-    "`{filename}` to the inventory in this same change."
+    "New production file `{filename}` requires an inventory entry in {directory}. "
+    "The inventory documents {entry_count} sibling files in {inventories}. Add a "
+    "descriptive entry for `{filename}` in the same change."
 )
 
 STALE_INVENTORY_SYSTEM_MESSAGE: str = (
-    "New production file is absent from its package inventory (README.md / "
-    "CLAUDE.md / SKILL.md) - add the inventory entry in this same change"
+    "Add the new production file to its package inventory (README.md / CLAUDE.md / "
+    "SKILL.md) in the same change"
 )
 
 STALE_INVENTORY_ADDITIONAL_CONTEXT: str = (
-    "A package directory whose README.md, CLAUDE.md, or SKILL.md lists its files "
-    "in backticks is a maintained inventory of the package's file set. A skill "
-    "SKILL.md Layout table that maps the scripts/ subdirectory counts as the "
-    "inventory for files in that subdirectory. A new production code file (.py, "
-    ".mjs, .js, .ts, .ps1, .sh) in an inventoried directory carries one entry "
-    "naming it. Add a row to the README.md or SKILL.md table or a bullet to the "
-    "CLAUDE.md list naming this file, describing what it does, in the same change "
-    "that creates the file. Exempt files (no entry needed): "
-    "__init__.py, conftest.py, setup.py, _path_setup.py, files under config/ or "
-    "tests/, and test files (test_*.py, *_test.py, *.spec.*, *.test.*)."
+    "The package inventory covers production files in README.md, CLAUDE.md, or "
+    "SKILL.md. Add one descriptive entry for each production file in .py, .mjs, "
+    ".js, .ts, .ps1, or .sh. The inventory uses a README.md or SKILL.md table, or "
+    "a CLAUDE.md bullet. __init__.py, conftest.py, setup.py, _path_setup.py, "
+    "config/, tests/, and test files use the inventory exemption."
 )

@@ -642,8 +642,9 @@ def test_additional_context_contains_examples():
     assert result.returncode == 0
     output = json.loads(result.stdout)
     ctx = output["hookSpecificOutput"].get("additionalContext", "")
-    assert "BAD:" in ctx
-    assert "GOOD:" in ctx
+    assert '"Uses X"' in ctx
+    assert '"Configured via Z"' in ctx
+    assert "doc-prose-cuts.md" in ctx
 
 
 def test_handles_non_dict_stdin():

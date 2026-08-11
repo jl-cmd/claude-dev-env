@@ -158,7 +158,7 @@ def validate_file(file_path: Path) -> List[Violation]:
         source_bytes = file_path.read_bytes()
         tree = ast.parse(source_bytes)
     except Exception as error:
-        return [Violation(filename, 0, f"Error: {error}")]
+        return [Violation(filename, 0, f"Validation reported an error: {error}")]
 
     return check_magic_values(tree, filename)
 

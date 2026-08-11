@@ -61,7 +61,7 @@ def check_no_class_components(file_paths: list[str]) -> list[Violation]:
                 violations.append(Violation(
                     file=file_path_str,
                     line=line_num,
-                    message="Use functional components with hooks instead of class components"
+                    message="Class component requires functional components with hooks"
                 ))
 
     return violations

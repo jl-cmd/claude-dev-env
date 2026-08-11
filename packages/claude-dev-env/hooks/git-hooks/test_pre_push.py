@@ -159,8 +159,8 @@ def test_run_git_reference_query_returns_replaced_text_on_locale_invalid_bytes(
 def test_unresolvable_merge_base_message_does_not_claim_dangling_origin_head() -> None:
     skip_message = git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE
     assert "origin/HEAD names a ref" not in skip_message
-    assert "unrelated histories" in skip_message
-    assert "merge-base still could not name a shared commit" in skip_message
+    assert "shared history" in skip_message
+    assert "Fetch the default-branch history" in skip_message
 
 
 def test_run_git_text_command_raises_when_git_cannot_launch(
@@ -197,7 +197,7 @@ def test_main_reports_infrastructure_failure_when_git_cannot_launch(
 
     captured_streams = capsys.readouterr()
     assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
-    assert GIT_UNAVAILABLE_REPORT_MARKER in captured_streams.err
+    assert "restore Git access" in captured_streams.err
     assert GIT_LAUNCH_FAILURE_DETAIL in captured_streams.err
     assert UNRESOLVABLE_BASE_REPORT_MARKER not in captured_streams.err
 
@@ -220,7 +220,7 @@ def test_main_reports_a_missing_default_branch_as_absence(
 
     captured_streams = capsys.readouterr()
     assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
-    assert UNRESOLVABLE_BASE_REPORT_MARKER in captured_streams.err
+    assert "Set a usable gate base" in captured_streams.err
     assert GIT_UNAVAILABLE_REPORT_MARKER not in captured_streams.err
 
 
@@ -440,7 +440,7 @@ def test_resolve_base_reference_from_stdin_emits_warning_for_malformed_line(
     pre_push.resolve_base_reference_from_stdin(malformed_stdin_text)
 
     captured = capsys.readouterr()
-    assert "malformed" in captured.err
+    assert "expects four ref-update fields" in captured.err
 
 
 def test_resolve_base_reference_from_stdin_returns_none_when_local_sha_is_all_zeros() -> None:
@@ -513,7 +513,7 @@ def test_main_exits_two_when_all_stdin_lines_are_malformed(
 
     assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     captured = capsys.readouterr()
-    assert "no parseable stdin lines" in captured.err
+    assert "no parseable ref-update lines" in captured.err
 
 
 def test_invoke_gate_returns_infrastructure_failure_when_strict_resolve_raises(

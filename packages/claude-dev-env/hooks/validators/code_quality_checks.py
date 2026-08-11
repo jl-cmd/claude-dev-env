@@ -101,7 +101,7 @@ def validate_file(file_path: Path) -> List[Violation]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
     except Exception as error:
-        return violations + [Violation(filename, 0, f"Error: {error}")]
+        return violations + [Violation(filename, 0, f"Validation reported an error: {error}")]
 
     violations.extend(check_function_length(tree, filename))
     violations.extend(check_nesting_depth(tree, filename))
@@ -119,7 +119,7 @@ def main() -> int:
     for file_arg in sys.argv[1:]:
         file_path = Path(file_arg)
         if not file_path.exists():
-            print(f"Error: File not found: {file_path}", file=sys.stderr)
+            print(f"File access requires an existing path: {file_path}", file=sys.stderr)
             return 1
         all_violations.extend(validate_file(file_path))
 

@@ -52,7 +52,7 @@ def test_should_flag_constant_used_only_in_class_level_decorator() -> None:
         source, PRODUCTION_FILE_PATH
     )
     assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
+        "TIMEOUT" in issue and "has one consumer" in issue for issue in issues
     ), f"Expected class-decorator usage to register as a caller, got: {issues}"
 
 
@@ -255,7 +255,7 @@ def test_use_count_flags_single_caller_constant_for_ordinary_production_path() -
         _SINGLE_CALLER_CONSTANT_SOURCE, PRODUCTION_FILE_PATH
     )
     assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
+        "TIMEOUT" in issue and "has one consumer" in issue for issue in issues
     ), f"Expected single-caller constant flagged on an ordinary production path, got: {issues}"
 
 

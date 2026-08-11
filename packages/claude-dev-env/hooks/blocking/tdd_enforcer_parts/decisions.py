@@ -47,14 +47,12 @@ def build_deny_reason(production_path: Path, all_candidates: list[Path]) -> str:
     hook_source_path = _entry_hook_path()
     return (
         f"[TDD] Blocking write to production file: {production_path}\n"
-        f"No matching test file exists, or it has not been modified within the last "
+        f"Add or update a matching test within the last "
         f"{FRESHNESS_WINDOW_SECONDS} seconds.\n"
         f"Expected one of:\n{candidate_lines}\n"
-        f"Write a failing test first (RED), then the minimum code to pass it (GREEN).\n\n"
-        f"If this file legitimately does not need a test (for example, a module containing only "
-        f"module-level constants with no behavior), that is a hook enhancement, not a bypass. "
-        f"Propose an exemption rule in {hook_source_path} so every similar file benefits "
-        f"automatically. Do not add escape-hatch markers to production files."
+        f"Write the behavior test first (RED), then the minimum code to pass it (GREEN).\n\n"
+        f"Route a constants-only module through a hook enhancement in {hook_source_path}. "
+        f"Propose an exemption rule so every similar file uses the same path."
     )
 
 

@@ -135,7 +135,7 @@ def run_staged_gate(repository_root: Path) -> tuple[int, str]:
     """
     gate_path = Path(__file__).resolve().parents[2] / GATE_RELATIVE_PATH
     if not gate_path.is_file():
-        return 1, f"precommit_code_rules_gate: gate engine missing at {gate_path}"
+        return 1, f"precommit_code_rules_gate: gate engine requires installation at {gate_path}"
     try:
         completed_process = subprocess.run(
             [
@@ -154,7 +154,7 @@ def run_staged_gate(repository_root: Path) -> tuple[int, str]:
         )
     except subprocess.TimeoutExpired:
         return 1, (
-            f"precommit_code_rules_gate: gate engine timed out after {GATE_TIMEOUT_SECONDS}s"
+            f"precommit_code_rules_gate: gate engine exceeded {GATE_TIMEOUT_SECONDS}s"
         )
     return completed_process.returncode, completed_process.stderr
 
@@ -169,7 +169,8 @@ def build_denial_response(gate_report: str) -> dict:
         The hookSpecificOutput deny mapping for the PreToolUse protocol.
     """
     denial_reason = (
-        f"BLOCKED: staged files violate CODE_RULES; fix before committing.\n{gate_report.strip()}"
+        f"BLOCKED: Apply the CODE_RULES fixes to the staged files before committing.\n"
+        f"{gate_report.strip()}"
     )
     return {
         "hookSpecificOutput": {

@@ -48,20 +48,9 @@ SINGLE_QUOTED_RUN_PATTERN = re.compile(r"'[^']*'")
 STRIPPED_RUN_REPLACEMENT = ""
 
 CORRECTIVE_MESSAGE = (
-    "BLOCKED [shell-substitution]: command contains $(...), backtick, or "
-    "<(...)/>(...) process substitution, which forces a permission prompt "
-    "because the Claude Code allowlist matcher does not descend into "
-    "substitutions.\n\n"
-    "Fix: split into two Bash tool calls, or rewrite without substitution.\n"
-    '  cd X && echo "$(git rev-parse HEAD)"\n'
-    "becomes either two calls:\n"
-    "  1) cd X\n"
-    "  2) git rev-parse HEAD\n"
-    "or one substitution-free call:\n"
-    "  git -C X rev-parse HEAD\n\n"
-    "Process substitution example:\n"
-    "  diff <(cat a) <(cat b)\n"
-    "becomes two separate Bash calls to `cat a` and `cat b`, with the diff "
-    "performed on the captured outputs.\n\n"
-    "See `shell-invocation.md` in the rules directory for full guidance."
+    "BLOCKED [shell-substitution]: Split the command into two Bash calls when it "
+    "contains `$(...)`, backticks, or process substitution. Use `git -C X "
+    "rev-parse HEAD` for the one-call form. For process substitution, run the "
+    "source commands separately and compare their captured outputs. See "
+    "`shell-invocation.md` for the full contract."
 )

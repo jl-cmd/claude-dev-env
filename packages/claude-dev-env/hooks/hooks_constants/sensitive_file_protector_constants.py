@@ -37,6 +37,7 @@ HOOK_EVENT_NAME = "PreToolUse"
 DENY_DECISION = "deny"
 
 DENY_REASON_TEMPLATE = (
-    "BLOCKED: Sensitive file '{filename}' (pattern: '{matched_pattern}'). "
-    "Edit manually outside Claude Code."
+    "BLOCKED: Route edits for sensitive file '{filename}' (pattern: "
+    "'{matched_pattern}') through Claude Code. Claude Code applies the protected-"
+    "file workflow for this pattern."
 )

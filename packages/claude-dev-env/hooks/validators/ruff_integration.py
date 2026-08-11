@@ -204,7 +204,7 @@ def _staged_ruff_result(
     )
     return RuffResult(
         passed=result.returncode == 0,
-        output=result.stdout or result.stderr or "No issues found",
+        output=result.stdout or result.stderr or "Checks passed.",
         fixed_count=0,
     )
 
@@ -250,7 +250,7 @@ def _run_native_ruff_check(
     )
     return RuffResult(
         passed=result.returncode == 0,
-        output=result.stdout or result.stderr or "No issues found",
+        output=result.stdout or result.stderr or "Checks passed.",
         fixed_count=0,
     )
 
@@ -264,16 +264,16 @@ def run_ruff_check(
     config resolved from the original target, applying its path-scoped
     per-file-ignores. Without it, the files are checked natively."""
     if not all_files:
-        return RuffResult(passed=True, output="No files to check", fixed_count=0)
+        return RuffResult(passed=True, output="File set is empty; check complete.", fixed_count=0)
 
     if not check_ruff_available():
-        return RuffResult(passed=True, output="Ruff not installed - skipping", fixed_count=0)
+        return RuffResult(passed=True, output="Ruff check awaits installation.", fixed_count=0)
 
     all_python_files = [
         str(each_file) for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not all_python_files:
-        return RuffResult(passed=True, output="No Python files", fixed_count=0)
+        return RuffResult(passed=True, output="File set contains zero Python files.", fixed_count=0)
     if config_source_path is not None:
         staged_result = _run_staged_ruff_check(all_files, config_source_path)
         if staged_result is not None:
@@ -296,12 +296,12 @@ def _parse_fixed_count(fix_output: str) -> int:
 def run_ruff_fix(all_files: list[Path]) -> RuffResult:
     """Run ruff with --fix to auto-fix violations."""
     if not check_ruff_available():
-        return RuffResult(passed=True, output="Ruff not installed", fixed_count=0)
+        return RuffResult(passed=True, output="Ruff fix awaits installation.", fixed_count=0)
     py_files = [
         str(each_file) for each_file in all_files if each_file.suffix == PYTHON_SOURCE_SUFFIX
     ]
     if not py_files:
-        return RuffResult(passed=True, output="No Python files", fixed_count=0)
+        return RuffResult(passed=True, output="File set contains zero Python files.", fixed_count=0)
     result = subprocess.run(
         ["ruff", "check", "--fix"] + py_files,
         check=False,
@@ -311,6 +311,6 @@ def run_ruff_fix(all_files: list[Path]) -> RuffResult:
     )
     return RuffResult(
         passed=result.returncode == 0,
-        output=result.stdout or "No fixes applied",
+        output=result.stdout or "Ruff applied zero fixes.",
         fixed_count=_parse_fixed_count(result.stdout),
     )

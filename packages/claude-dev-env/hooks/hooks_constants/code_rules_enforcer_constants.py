@@ -162,9 +162,8 @@ WHITESPACE_INDENTATION_MAGIC_MESSAGE_SUFFIX: str = (
 ALL_ALWAYS_NONEMPTY_SPLIT_METHOD_NAMES: frozenset[str] = frozenset({"split", "rsplit"})
 MAX_DEAD_SPLIT_BRANCH_ISSUES = 100
 DEAD_SPLIT_BRANCH_MESSAGE_SUFFIX: str = (
-    "is bound from a str.split() call with a separator, which never returns an "
-    "empty list, so this truthiness test's falsy branch is unreachable dead "
-    "code - remove the dead branch"
+    "is bound from a str.split() call with a separator, which returns a populated "
+    "list; this truthiness condition is always true, so remove the redundant branch"
 )
 DUPLICATED_FORMAT_MINIMUM_REPETITION_COUNT = 3
 DUPLICATED_FORMAT_MINIMUM_LITERAL_CHARACTER_COUNT = 5
@@ -299,9 +298,9 @@ KNOWN_PYTEST_FIXTURE_ANNOTATION_MESSAGE_SUFFIX: str = (
     "https://docs.pytest.org/en/stable/reference/fixtures.html)"
 )
 UNUSED_PYTEST_FIXTURE_PARAMETER_MESSAGE_SUFFIX: str = (
-    "known pytest fixture parameter is declared but never referenced in the "
-    "function body; pytest still materializes its setup, so drop the unused "
-    "parameter (pytest builtin fixture reference "
+    "known pytest fixture parameter participates in pytest setup without a body "
+    "reference; remove the parameter when setup is unnecessary (pytest builtin "
+    "fixture reference "
     "https://docs.pytest.org/en/stable/reference/fixtures.html)"
 )
 ALL_LOOP_INDEX_LETTER_EXEMPTIONS: frozenset[str] = frozenset({"i", "j", "k", "_"})
@@ -433,8 +432,7 @@ ALL_CANONICAL_DOTTED_NAMES_BY_BARE_IMPORT: dict[tuple[str, str], str] = {
     ("pathlib", "Path"): "Path",
 }
 TEST_ISOLATION_MESSAGE_SUFFIX: str = (
-    "must take a monkeypatch fixture and route HOME/TMP env reads through "
-    "monkeypatch.setenv; tmp_path / tmpdir allocate a sandbox path but do "
-    "not intercept env reads, so they leak across the suite (CODE_RULES — "
-    "see audits 2026-05-22 Theme M)"
+    "Use a monkeypatch fixture for HOME/TMP environment reads and route them "
+    "through monkeypatch.setenv. Use tmp_path or tmpdir for sandbox paths "
+    "(CODE_RULES)."
 )

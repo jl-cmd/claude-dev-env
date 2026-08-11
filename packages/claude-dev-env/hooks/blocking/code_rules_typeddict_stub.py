@@ -27,6 +27,7 @@ from hooks_constants.blocking_check_limits import (  # noqa: E402
     MAX_THIN_WRAPPER_ISSUES,
     MAX_TYPED_DICT_PAIR_ISSUES,
     MAX_ZERO_PAYLOAD_ALIAS_ISSUES,
+    TYPED_DICT_COMPANION_NAME_SEPARATOR,
 )
 
 def _pascal_to_snake_case(pascal_name: str) -> str:
@@ -131,8 +132,8 @@ def check_thin_wrapper_files(content: str, file_path: str) -> list[str]:
             return []
 
     issues = [
-        f"Line 1: {file_path}: thin wrapper file — module body is only imports (optionally with __all__); "
-        "callers should import from the real module instead of going through this indirection"
+        f"Line 1: {file_path}: thin wrapper file. The module body contains imports only "
+        "(optionally with __all__). Callers should import from the real module directly"
     ]
     return issues[:MAX_THIN_WRAPPER_ISSUES]
 
@@ -292,8 +293,8 @@ def check_zero_payload_function_alias(content: str, file_path: str) -> list[str]
             continue
         issues.append(
             f"Line {each_statement.lineno}: {file_path}: zero-payload alias — "
-            f"{each_statement.name} only forwards its parameters to {target_name}; "
-            f"callers should call {target_name} directly (indirection without payload)"
+                f"{each_statement.name} forwards its parameters directly to {target_name}. "
+                f"Callers should call {target_name} directly"
         )
     return issues[:MAX_ZERO_PAYLOAD_ALIAS_ISSUES]
 
@@ -333,8 +334,10 @@ def check_typed_dict_encode_decode(content: str, file_path: str) -> list[str]:
         if not is_decoder_present:
             missing_companions.append(decoder_function_name)
         issues.append(
-            f"Line {each_typed_dict_line}: TypedDict '{each_typed_dict_name}' missing companion "
-            f"{' and '.join(missing_companions)} — add explicit encode/decode functions"
+                f"Line {each_typed_dict_line}: TypedDict '{each_typed_dict_name}' requires "
+                f"companion {TYPED_DICT_COMPANION_NAME_SEPARATOR.join(missing_companions)}. "
+                "Add explicit encode/decode "
+                "functions"
         )
         if len(issues) >= MAX_TYPED_DICT_PAIR_ISSUES:
             break
@@ -469,7 +472,7 @@ def check_stub_implementations(content: str, file_path: str) -> list[str]:
     for each_function in stub_function_nodes:
         issues.append(
             f"Line {each_function.lineno}: Function '{each_function.name}' is a stub "
-            "(pass/.../raise NotImplementedError) — implement or remove"
+            "(pass/.../raise NotImplementedError). Implement the function or remove it"
         )
         if len(issues) >= MAX_STUB_IMPLEMENTATION_ISSUES:
             break

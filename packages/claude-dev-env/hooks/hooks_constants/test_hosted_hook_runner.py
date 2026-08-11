@@ -11,11 +11,17 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
 
-from hooks_constants.hosted_hook_runner import HostedHookRun, run_hook_capturing_output  # noqa: E402
+from hooks_constants.hosted_hook_runner import (  # noqa: E402
+    HostedHookRun,
+    log_hosted_hook_crash,
+    run_hook_capturing_output,
+)
 
 
 def _write_probe(tmp_path: Path, body: str) -> str:
@@ -76,6 +82,25 @@ def test_crash_reports_did_crash_and_does_not_propagate(tmp_path: Path) -> None:
     hook_run = run_hook_capturing_output(probe_path, "{}")
     assert hook_run.did_crash is True
     assert hook_run.captured_stdout == ""
+
+
+def test_crash_log_uses_stderr_with_the_exact_single_line(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A crash summary carries its exact one-line payload on stderr."""
+    hook_script_path = str(tmp_path / "probe_hook.py")
+    try:
+        raise ValueError("boom")
+    except ValueError as error:
+        log_hosted_hook_crash(hook_script_path, error)
+
+    captured_output = capsys.readouterr()
+    expected_stderr = (
+        f"[dispatcher] Hook execution raised ValueError in {hook_script_path}: "
+        "boom | ValueError: boom\n"
+    )
+    assert captured_output.out == ""
+    assert captured_output.err == expected_stderr
 
 
 def test_system_exit_zero_after_output_is_captured(tmp_path: Path) -> None:

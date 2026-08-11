@@ -173,32 +173,31 @@ def _extract_candidate_content(tool_name: str, tool_input: dict, file_path: str)
 
 def _block_reason(file_path: str) -> str:
     return (
-        f"BLOCKED: Plan file '{file_path}' contains an 'Open Questions' section. "
-        "Open questions in plans are unacceptable — they must be resolved before the plan is saved."
+        f"BLOCKED: Plan file '{file_path}' carries an 'Open Questions' section. "
+        "Resolve each question before saving the plan."
     )
 
 
 def _block_context() -> str:
     return (
-        "An 'Open Questions' section means the plan is not yet ready to commit. Resolve it before retrying:\n\n"
+        "Resolve the 'Open Questions' section before retrying:\n\n"
         "1. Investigate the codebase yourself first. For each open question, try to answer it by "
-        "reading source files, grepping, or dispatching an Explore agent. Do not skip this step — "
-        "always attempt to find the answer before bothering the user.\n\n"
+        "reading source files, grepping, or dispatching an Explore agent.\n\n"
         "2. Confirm interpretations via AskUserQuestion. Once you have a proposed answer or "
         "interpretation for each question, call the AskUserQuestion tool. Phrase the questions in "
         "plain everyday language: state what you found, what you think it means, and ask the user "
         "to confirm or correct. Make it easy to digest and comprehend exactly what you are doing. "
         "Prefer one AskUserQuestion call that covers all open questions where possible.\n\n"
-        "3. Re-write the plan. After the user confirms, remove the 'Open Questions' section "
-        "entirely and fold the resolved answers into the relevant sections of the plan, then "
-        "retry the Write/Edit/MultiEdit."
+        "3. Rewrite the plan after the user confirms. Replace the 'Open Questions' section "
+        "with the resolved answers in the relevant plan sections, then retry the "
+        "Write/Edit/MultiEdit."
     )
 
 
 def _block_system_message() -> str:
     return (
-        "Plan blocked — 'Open Questions' must be resolved (investigate the codebase, then confirm "
-        "interpretations via AskUserQuestion in plain language) before saving."
+        "Plan update required: resolve 'Open Questions' by investigating the codebase and "
+        "confirming interpretations through AskUserQuestion before saving."
     )
 
 

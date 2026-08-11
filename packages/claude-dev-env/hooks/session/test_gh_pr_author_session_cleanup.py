@@ -343,7 +343,7 @@ def test_restore_stale_state_file_logs_when_switch_fails(
 
     captured_streams = capsys.readouterr()
     assert state_file.exists()
-    assert "[gh-pr-author-cleanup] failed to restore" in captured_streams.err
+    assert "[gh-pr-author-cleanup] Account restoration pending" in captured_streams.err
     assert "'jl-cmd'" in captured_streams.err
     assert str(state_file) in captured_streams.err
 

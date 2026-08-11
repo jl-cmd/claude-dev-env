@@ -61,5 +61,5 @@ def test_banned_identifier_message_suffix_references_naming_section() -> None:
 
 
 def test_banned_identifier_skip_advisory_explains_skip_reason() -> None:
-    assert "skipped" in BANNED_IDENTIFIER_SKIP_ADVISORY
+    assert "paused" in BANNED_IDENTIFIER_SKIP_ADVISORY
     assert "parse" in BANNED_IDENTIFIER_SKIP_ADVISORY
