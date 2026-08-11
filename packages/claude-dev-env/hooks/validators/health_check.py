@@ -12,7 +12,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -26,7 +26,7 @@ VALIDATOR_FILES = [
 ]
 
 
-class ValidatorStatus(str, Enum):
+class ValidatorStatus(StrEnum):
     """Displayed state for one required validator."""
 
     READY = "[READY]"
