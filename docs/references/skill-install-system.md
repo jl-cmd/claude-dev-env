@@ -48,4 +48,3 @@ So a new skill that should ship as part of a named group (for example `core`) ne
 - `packages/claude-dev-env/bin/install.mjs` — the install pipeline.
 - `packages/claude-dev-env/bin/install.test.mjs` — install behavior tests.
 - `README.md` — the documented group and skill tables.
-- `docs/ai-rules-sync.md` — how rules sync to other tools.

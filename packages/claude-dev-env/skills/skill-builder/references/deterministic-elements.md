@@ -112,7 +112,7 @@ The seed list file lives under `reference/` (or is a named section of an existin
 
 ## CODE_RULES bar (every code file in the skill)
 
-Skill scripts are production code. They obey the same rules as the rest of the repo (`docs/CODE_RULES.md` / root `AGENTS.md`), including:
+Skill scripts are production code. They obey the same rules as the rest of the repo (`docs/CODE_RULES.md`), including:
 
 - **Named constants** — no bare magic numbers/strings in function bodies; skill-local values live in a `*_constants/` package the script imports.
 - **Types** — parameters and returns annotated; no bare `Any` / untyped escape hatches.

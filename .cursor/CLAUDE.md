@@ -6,7 +6,7 @@ Cursor IDE configuration for this repo. This directory has the auto-generated Bu
 
 | File | Purpose |
 |------|---------|
-| `BUGBOT.md` | Auto-generated AI review rules for Cursor BugBot. **Do not hand-edit.** The source of truth is `AGENTS.md` at the repo root; `.github/workflows/sync-ai-rules.yml` and `sync_ai_rules.py` regenerate this file and prepend a sync header on every `AGENTS.md` push to `main`. |
+| `BUGBOT.md` | Checked-in AI review rules for Cursor BugBot and other agents. |
 
 ## Subdirectories
 
@@ -16,6 +16,5 @@ Cursor IDE configuration for this repo. This directory has the auto-generated Bu
 
 ## Conventions
 
-- Edit `AGENTS.md` at the repo root to change review rules. Do not edit `BUGBOT.md` directly — the sync workflow overwrites it.
-- `BUGBOT.md` carries a `<!-- SYNC-HEADER-START -->` / `<!-- SYNC-HEADER-END -->` block at the top that records the source commit and sync timestamp; the workflow updates this block on each run.
+- Edit `BUGBOT.md` directly when review rules change.
 - The `.cursorignore` file at the repo root controls which files Cursor indexes.

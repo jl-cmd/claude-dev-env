@@ -7,10 +7,6 @@
 # root suite and skips the package suite. All of packages/claude-dev-env/** stays
 # in every filter because package markdown is fixture-bearing.
 #
-# Absorbs the former path-filter job (ci-sync-ai-rules.yml): the full root suite
-# covers tests/test_sync_ai_rules.py and tests/test_fan_out_dispatch.py on every
-# PR with Python 3.12, so that path-filter workflow is deleted on purpose.
-#
 # Deselect policy (single-source lists under .github/ci/):
 #   - LivePostAudit: permanently deselected (local register; no credential wiring;
 #     gh binary is present on runners but author-swap tokens are not).
@@ -71,24 +67,17 @@ jobs:
               - 'pyproject.toml'
               - 'packages/claude-dev-env/**'
               - 'tests/**'
-              - '.github/scripts/**'
               - '.github/workflows/ci-tests.yml'
               - '.github/ci/**'
-              - 'AGENTS.md'
-              - 'config/**'
             root_suite:
               - '**/*.py'
               - 'pytest.ini'
               - 'pyproject.toml'
               - 'packages/claude-dev-env/**'
               - 'tests/**'
-              - '.github/scripts/**'
               - '.github/workflows/ci-tests.yml'
               - '.github/ci/**'
-              - 'AGENTS.md'
-              - 'config/**'
               - 'docs/**'
-              - 'scripts/**'
               - '.github/workflows/**'
               - '.cursor/BUGBOT.md'
             javascript:

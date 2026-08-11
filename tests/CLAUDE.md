@@ -4,17 +4,15 @@ Root-level Python test suite covering repo-level scripts, contracts, and cross-f
 
 ## Purpose
 
-Holds tests for the scripts in `scripts/`, the `.github/scripts/` listener, the
-`AGENTS.md`/`BUGBOT.md` rules contract, and cross-repo doc integrity checks. These
+Holds tests for the repository contracts and cross-file integrity checks. These
 tests are separate from the hook tests (which live beside their hooks under
 `packages/claude-dev-env/hooks/`) and from the JS installer tests
 (`packages/claude-dev-env/bin/*.test.mjs`).
 
 ## Supported run commands
 
-Two Python suites share the root `pytest.ini`. Run them as **separate** sessions so the
-two `config` packages (repo-root `config/` and
-`packages/claude-dev-env/hooks/blocking/config/`) do not collide during collection.
+Two Python suites share the root `pytest.ini`. Run them as **separate** sessions so each
+suite keeps its own collection scope.
 
 | Scope | Command |
 |-------|---------|
@@ -23,7 +21,6 @@ two `config` packages (repo-root `config/` and
 | Default bare invocation | `python -m pytest` |
 | Root suite in parallel | `python -m pytest tests/ -n auto` |
 | Package suite in parallel | `python -m pytest packages/claude-dev-env -n auto` |
-| One Python test file | `python -m pytest tests/test_fan_out_dispatch.py` |
 | JS suite (installer + skill scripts) | `cd packages/claude-dev-env && npm test` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
 
@@ -55,9 +52,9 @@ Do not merge the two suites into one session. CI runs both suite sessions with
 `-n auto` (pytest-xdist is installed in the workflow). Local use is supported
 once the plugin is installed.
 
-`pytest.ini` at the repo root sets `--import-mode=importlib`, adds `.` and
-`.github/scripts` to `pythonpath`, scopes default collection to `tests/` via
-`testpaths`, and collects both `test_*` and `should_*` functions.
+`pytest.ini` at the repo root sets `--import-mode=importlib`, adds `.` to
+`pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects
+both `test_*` and `should_*` functions.
 
 ## Local-only register
 
@@ -88,20 +85,11 @@ matching list under `.github/ci/` with an owner disposition for that node ID.
 
 | File | What it covers |
 |------|----------------|
-| `test_fan_out_dispatch.py` | Unit specs for `scripts/fan_out_dispatch.py`: repo filtering (`is_target_repo`), dispatch retry logic, polling, exit-code computation, and summary formatting. |
-| `test_fan_out_conclusion_report.py` | Unit specs for `scripts/fan_out_conclusion_report.py`: private-target redaction, dispatch-correlation filtering by run `created_at`, the 404-to-`listener-missing` mapping, and the `no-matching-run` fallback. |
-| `test_local_identity.py` | Unit specs for `config/local_identity.py`: owner-scope resolution from the environment, a git-ignored local file, and the placeholder default, plus token environment-variable naming. |
-| `test_sync_ai_rules.py` | Specs for `.github/scripts/sync_ai_rules.py`: destination path logic, canonical-repo behaviour (writes `.cursor/BUGBOT.md` only), drift detection, and the listener's write logic against a real temporary git repo. |
-| `test_bugbot_rules_contract.py` | Contract test: verifies that `AGENTS.md` and `.cursor/BUGBOT.md` list the same CODE_RULES exemptions as `code_rules_enforcer.py`. Keeps the LLM review docs in step with the hook-enforced gate. |
+| `test_bugbot_rules_contract.py` | Contract tests for `.cursor/BUGBOT.md` review rules and the hook-enforced CODE_RULES exemptions. |
 | `test_bugteam_code_rules_gate.py` | Exercises the `code_rules_gate.py` CLI in `_shared/pr-loop/scripts/` against a known example module, confirming the gate exits zero on help and non-zero on violations. |
 | `test_bugteam_permission_scripts.py` | Verifies the bugteam grant/revoke permission scripts exist, are runnable, and produce expected exit codes. |
 | `test_bugteam_preflight.py` | Checks the bugteam preflight script logic. |
 | `test_doc_cross_references.py` | Walks Python docstrings and Markdown files for repo-relative path references and confirms each path exists on disk. |
-
-## Fixtures
-
-`fixtures/sync-ai-rules/` holds a `source_body.md` file used as the canonical source
-body in `test_sync_ai_rules.py` integration tests.
 
 ## Conventions
 

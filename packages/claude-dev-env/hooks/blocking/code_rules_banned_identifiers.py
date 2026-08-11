@@ -390,7 +390,7 @@ def check_banned_noun_word_boundary(
 def check_banned_prefixes(content: str, file_path: str) -> list[str]:
     """Flag function and method names using generic banned prefixes.
 
-    Per CODE_RULES.md / AGENTS.md Naming, function names use specific verbs.
+    Per CODE_RULES.md Naming, function names use specific verbs.
     Generic prefixes ``handle_``, ``process_``, ``manage_``, ``do_`` are
     placeholders that hide the actual responsibility and are flagged so the
     author renames the function to a specific verb.

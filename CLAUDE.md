@@ -14,7 +14,6 @@ A monorepo that builds and ships **`claude-dev-env`** — an npm package of shar
 
 When the code needs a private value at run time, that value lives in git-ignored local config with a committed placeholder:
 
-- Repo infrastructure reads `config/local-identity.json` (template: `config/local-identity.example.json`). The fan-out dispatcher resolves its owner scopes through `config/local_identity.py`.
 - The shipped NAS ssh hook reads the `CLAUDE_NAS_*` environment variables or `~/.claude/local-identity.json`, since it installs into `~/.claude/` and cannot read a repo file.
 
 The `pii_prevention_blocker` hook blocks a write or a staged commit that carries high-confidence personal data, and the `privacy-hygiene` skill scans the tree for the same.
@@ -31,14 +30,13 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 | Python tests (default bare = root suite) | `python -m pytest` |
 | Python tests in parallel (root suite) | `python -m pytest tests/ -n auto` |
 | Python tests in parallel (package suite) | `python -m pytest packages/claude-dev-env -n auto` |
-| One Python test file | `python -m pytest tests/test_fan_out_dispatch.py` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
 | Install locally to `~/.claude/` | `cd packages/claude-dev-env && node bin/install.mjs` |
 
 Notes:
 
 - `npm test` runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` — the installer and skill helper scripts.
-- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` and `.github/scripts` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`. Do not merge the two Python suites into one session — the two `config` packages collide during collection.
+- The root `pytest.ini` sets `--import-mode=importlib`, puts `.` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`.
 - Parallel runs need `pytest-xdist`. Install with `pip install -e "packages/claude-dev-env[dev]"` or `pip install pytest-xdist`, then pass `-n auto` on a single suite session.
 - CI (`.github/workflows/ci-tests.yml`) runs the same split Python sessions and the JS suite. Node IDs CI deselects live under `.github/ci/`; the why for each family is the local-only register in `tests/CLAUDE.md`.
 - Hook tests live next to the hooks they cover (for example `packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer*.py`). `check.ps1` runs ruff, mypy over `hooks/blocking` and `hooks/validators` using `hooks/pyproject.toml`, then runs the enforcer pytest suite. It exits on the first failing tool and prints `CHECK: OK` or `CHECK: FAILED tools=...`. The bare local `check.ps1` is the full ruff + mypy + pytest gate. In CI, the quality-gate job runs `check.ps1 -SkipTests` (ruff + mypy) and the package-suite job runs the enforcer pytest suite.
@@ -60,11 +58,9 @@ The largest blocking hook is `blocking/code_rules_enforcer.py`; its `validate_co
 
 CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designated config modules — and the hooks hold themselves to that rule. So every hook area has a companion constants package (`hooks/hooks_constants/`, `_shared/pr-loop/scripts/pr_loop_shared_constants/`, each skill's `*_constants/`, and so on). `packages/claude-dev-env/pyproject.toml` maps each logical package name to its nested directory. When you add a constant for a hook or skill script, it belongs in that area's constants package, not inline.
 
-### AI review rules (`AGENTS.md`)
+### AI review rules
 
-`AGENTS.md` at the root is the single source for PR-review criteria — the same CODE_RULES, restated as findings that an agent applies to the lines a PR changes. `.github/scripts/sync_ai_rules.py` (driven by `.github/workflows/sync-ai-rules.yml` and `fan-out-ai-rules.yml`) syncs it to the Cursor BugBot rules file `.cursor/BUGBOT.md`. Edit `AGENTS.md`; never hand-edit the generated `.cursor/BUGBOT.md` copy.
-
-CODE_RULES has two enforcement surfaces that must stay in step: `code_rules_enforcer.py` blocks violations at Write/Edit time, and `AGENTS.md` describes the same rules for PR review. A rule change usually touches both.
+`.cursor/BUGBOT.md` contains the checked-in review criteria for Cursor BugBot and other agents. Keep its rules aligned with `code_rules_enforcer.py`, which blocks violations at Write/Edit time.
 
 ### Skills, agents, commands
 

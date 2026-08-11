@@ -54,7 +54,7 @@ This rule sits beside three others; each cuts a different kind of dead prose.
 
 ## Enforcement
 
-The AI review lane carries this rule: `AGENTS.md` names it as a finding an agent applies to the `.md` lines a PR changes. No hook backs it, because telling a justification sentence from a load-bearing one needs meaning a regex cannot read.
+The AI review lane carries this rule as a finding an agent applies to the `.md` lines a PR changes. No hook backs it, because telling a justification sentence from a load-bearing one needs meaning a regex cannot read.
 
 ## Why
 

@@ -10,7 +10,7 @@ Standards re-engage on promotion through three surfaces that stand in for the wr
 
 - the `code-verifier` agent, in a fresh context, deriving and running the named gates against the real diff;
 - the `privacy-hygiene` sweep for personal data and secrets;
-- the pull-request review (AGENTS.md criteria and any PR-loop reviewers).
+- the pull-request review criteria and any PR-loop reviewers.
 
 Say plainly: the write-time rule engine did not see this code; the verifier and review are what cover it.
 

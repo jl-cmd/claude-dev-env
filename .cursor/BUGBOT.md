@@ -1,21 +1,11 @@
-<!-- SYNC-HEADER-START -->
-<!--
-AUTO-GENERATED — DO NOT EDIT.
-Source of truth: jl-cmd/claude-dev-env/AGENTS.md
-Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: dc117b29504385b0446cf1ad01595cfea75a5bfb
-Synced at: 2026-07-17T00:15:56.303558+00:00
--->
-<!-- SYNC-HEADER-END -->
-
 # Code rules for Claude, Cursor BugBot, Copilot, and other agents
 
-This file is the **canonical** review-criteria instruction set for every AI agent that audits pull requests in this repository:
+This file contains the review-criteria instruction set for every AI agent that audits pull requests in this repository:
 
 - **Claude** (PR review)
 - **Cursor BugBot** (PR review)
 - **GitHub Copilot** (PR review)
-- Any other agent that loads `AGENTS.md` or `.cursor/BUGBOT.md` for review
+- Any other agent that loads `.cursor/BUGBOT.md` for review
 
 These rules describe the green-light state of code in this repository. Agents apply them to the **lines a PR adds or modifies**, surface deviations as findings, and recommend corrections. Output is review feedback.
 
