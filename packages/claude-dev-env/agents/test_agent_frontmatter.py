@@ -79,7 +79,7 @@ import pytest
 import yaml
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
-EXEMPT_MARKDOWN_FILENAME = "CLAUDE.md"
+INSTRUCTION_ALIAS_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md"})
 FRONTMATTER_FENCE_LINE = "---"
 MATERIALIZER_MODULE_NAME = "codex_compat_materializer"
 MATERIALIZER_MODULE_PATH = (
@@ -113,20 +113,20 @@ def _extract_frontmatter_block(markdown_text: str) -> str | None:
 
 @cache
 def _agent_definition_candidate_paths() -> tuple[Path, ...]:
-    """Return every markdown file in this directory that must be a definition.
+    """Return every markdown file in this directory that is an agent definition.
 
     This is the floor the parametrized checks are measured against: each of
     these files is expected to yield a frontmatter block, so one that does not
     is a broken definition rather than a file to pass over.
 
     Returns:
-        Every `*.md` path in this directory except the exempt one, sorted.
+        Every agent-definition `*.md` path in this directory, sorted.
     """
     agents_directory = Path(__file__).parent
     return tuple(
         each_markdown_file
         for each_markdown_file in sorted(agents_directory.glob("*.md"))
-        if each_markdown_file.name != EXEMPT_MARKDOWN_FILENAME
+        if each_markdown_file.name not in INSTRUCTION_ALIAS_FILENAMES
     )
 
 

@@ -1667,6 +1667,31 @@ test('collectFiles skips every named cache directory and loose bytecode file', (
 });
 
 
+test('copyTree skips the AGENTS.md instruction alias while copying agent definitions', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-source-'));
+    const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-destination-'));
+    try {
+        writeFileSync(join(sourceRoot, 'AGENTS.md'), 'CLAUDE.md\n');
+        const agentDefinitionPath = join(sourceRoot, 'docs-agent.md');
+        writeFileSync(
+            agentDefinitionPath,
+            '---\nname: docs-agent\ndescription: fixture agent\n---\n',
+        );
+
+        const copyStats = copyTree(sourceRoot, destinationRoot);
+        const copiedAliasPath = join(destinationRoot, 'AGENTS.md');
+        const copiedAgentPath = join(destinationRoot, 'docs-agent.md');
+
+        assert.equal(existsSync(copiedAliasPath), false, 'the instruction alias stays in source');
+        assert.equal(existsSync(copiedAgentPath), true, 'the real agent definition installs');
+        assert.deepEqual(copyStats.paths, [copiedAgentPath]);
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+        rmSync(destinationRoot, { recursive: true, force: true });
+    }
+});
+
+
 const SHIPPED_README_NAME = 'README.md';
 const INSTALLED_README_NAME = 'Readme.md';
 const RETIRED_HOOK_RELATIVE_PATH = 'blocking/retired_gate.py';
