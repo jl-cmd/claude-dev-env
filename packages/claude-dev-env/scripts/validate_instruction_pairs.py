@@ -131,11 +131,11 @@ def _main() -> int:
     all_errors = validate_repository(repository_root)
     if all_errors:
         for each_error in all_errors:
-            print(each_error, file=sys.stderr)
+            sys.stderr.write(f"{each_error}\n")
         return 1
-    print(
+    sys.stdout.write(
         f"Validated {len(_discover_named_files(repository_root, 'CLAUDE.md'))} "
-        "exact instruction imports."
+        "exact instruction imports.\n"
     )
     return 0
 
