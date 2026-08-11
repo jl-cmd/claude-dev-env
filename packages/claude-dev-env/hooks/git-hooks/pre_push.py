@@ -22,9 +22,8 @@ object name is the base when no default-branch ref resolves and when the
 pushed branch is the default branch. When every remote object name is zero
 (new branch) or stdin is empty, the gate falls back to the remote's default
 branch symbolic ref. When a default-branch ref resolves and git still reports
-no merge base, the base is unknown, so CODE_RULES enforcement is skipped with
-a printed reason rather than scoped to the stdin remote object name, which on
-a rebased tip would re-flag replayed commits.
+no merge base, the base stays pending and the hook reports the infrastructure
+status with a printed reason, preserving the scope boundary for rebased tips.
 
 Gate scope: the gate process this hook launches diffs its `--base` against the
 current checkout's HEAD, so the surface is the commits between that base and
@@ -32,14 +31,13 @@ HEAD. A push whose pushed object is HEAD reads as the branch's own work; a
 push of any other object is still scoped to HEAD.
 
 Exit codes:
-  0 - the push destination is allowed and its commits pass the gate (or
-      the gate is not installed, or CODE_RULES is skipped because a
-      default-branch ref resolved and git still reported no merge base).
+  0 - the push destination is allowed and its commits pass the gate, or the
+      gate is not installed.
   1 - the push would land a non-protected local branch onto a protected
       remote branch, or a commit introduces a blocking violation.
-  2 - unexpected invocation failure (e.g., subprocess could not launch),
-      stdin carried no parseable line, or a new-branch/empty-stdin base
-      could not be turned into a usable commit name.
+  2 - infrastructure attention is required because a subprocess could not
+      launch, stdin carried no parseable line, a base could not be resolved,
+      or a usable commit name could not be produced.
 """
 
 from __future__ import annotations
@@ -49,8 +47,9 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+from gate_utils import is_safe_regular_file, resolve_gate_script_path
 from git_hooks_constants import (
-    ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES,
+    ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES,
     ALL_GIT_MERGE_BASE_COMMAND_PREFIX,
     ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX,
     ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX,
@@ -58,6 +57,7 @@ from git_hooks_constants import (
     ALL_ZEROS_OBJECT_NAME_CHARACTER,
     BASE_REFERENCE_ARGUMENT,
     DEFAULT_REMOTE_BASE_REFERENCE,
+    DEFAULT_REMOTE_NAME,
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     GIT_COMMAND_TIMEOUT_SECONDS,
     GIT_COMMAND_UNAVAILABLE_MESSAGE,
@@ -72,11 +72,10 @@ from git_hooks_constants import (
     MALFORMED_STDIN_LINE_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_MESSAGE,
     NO_PARSEABLE_STDIN_LINES_SENTINEL,
-    ORIGIN_HEAD_SYMBOLIC_REFERENCE,
-    ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX,
     PRE_PUSH_GATE_SCRIPT_NOT_FOUND_MESSAGE,
     PROTECTED_BRANCH_PUSH_BLOCK_EXIT_CODE,
     PROTECTED_BRANCH_PUSH_BLOCK_MESSAGE,
+    REMOTE_BRANCH_REFERENCE_TEMPLATE,
     REMOTE_REFERENCE_FIELD_INDEX,
     STDIN_LINE_FIELD_COUNT,
     STDIN_READ_FAILURE_MESSAGE,
@@ -84,7 +83,6 @@ from git_hooks_constants import (
     UNRESOLVABLE_MERGE_BASE_MESSAGE,
     UNRESOLVABLE_MERGE_BASE_SENTINEL,
 )
-from gate_utils import is_safe_regular_file, resolve_gate_script_path
 from pre_push_base_reference import (
     resolve_remote_name_from_arguments,
     resolve_usable_base_reference,
@@ -294,24 +292,24 @@ def run_git_reference_query(all_git_arguments: tuple[str, ...]) -> str | None:
     return decoded_output.strip() or None
 
 
-def resolve_default_branch_reference() -> str | None:
+def resolve_default_branch_reference(remote_name: str = DEFAULT_REMOTE_NAME) -> str | None:
     """Return the remote-tracking ref name of the remote's default branch.
 
-    The remote's HEAD symbolic ref answers first. When it is unset, each
-    candidate default-branch remote-tracking ref answers in turn.
+    The remote's HEAD symbolic ref answers first. When it is unset, the
+    supported default-branch tracking refs answer in turn.
 
-    Resolution reads ``origin`` alone and never the remote name git passes as
-    argv[1], and its unset-``origin/HEAD`` fallback prefers ``origin/main``
-    over ``origin/master``, so a repo whose default is another branch beside a
-    legacy ``main`` resolves the wrong base ΓÇö the assumption set tracked at
-    ~/.claude/orchestrator-runs/falsify-first/parked-items.md row 3.
+    Args:
+        remote_name: Remote whose default branch provides the gate base.
 
     Returns:
         A remote-tracking ref name, or None when no default-branch ref
         resolves.
     """
+    remote_head_reference = REMOTE_BRANCH_REFERENCE_TEMPLATE.format(
+        remote=remote_name, branch="HEAD"
+    )
     symbolic_reference = run_git_reference_query(
-        (*ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX, ORIGIN_HEAD_SYMBOLIC_REFERENCE)
+        (*ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX, remote_head_reference)
     )
     if symbolic_reference is not None:
         verified_symbolic_target = run_git_reference_query(
@@ -319,7 +317,10 @@ def resolve_default_branch_reference() -> str | None:
         )
         if verified_symbolic_target is not None:
             return symbolic_reference
-    for each_candidate_reference in ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES:
+    for each_branch_name in ALL_FALLBACK_REMOTE_DEFAULT_BRANCH_NAMES:
+        each_candidate_reference = REMOTE_BRANCH_REFERENCE_TEMPLATE.format(
+            remote=remote_name, branch=each_branch_name
+        )
         verified_reference = run_git_reference_query(
             (*ALL_GIT_VERIFY_REFERENCE_COMMAND_PREFIX, each_candidate_reference)
         )
@@ -360,7 +361,9 @@ def find_branch_update_push(stdin_text: str) -> PushLine | None:
 
 
 def resolve_default_branch_merge_base(
-    remote_branch_name: str, pushed_object_name: str
+    remote_branch_name: str,
+    pushed_object_name: str,
+    remote_name: str = DEFAULT_REMOTE_NAME,
 ) -> str | None:
     """Return the merge base of the pushed object and the default branch.
 
@@ -371,6 +374,7 @@ def resolve_default_branch_merge_base(
     Args:
         remote_branch_name: The remote branch the push updates.
         pushed_object_name: The object name the push carries.
+        remote_name: The remote whose default branch provides the gate base.
 
     Returns:
         The merge-base object name; None when no default-branch ref resolves or
@@ -378,12 +382,13 @@ def resolve_default_branch_merge_base(
         no merge base applies; or the unresolvable-merge-base sentinel when a
         default-branch ref resolves and git still reports no merge base.
     """
-    default_branch_reference = resolve_default_branch_reference()
+    default_branch_reference = resolve_default_branch_reference(remote_name)
     if default_branch_reference is None:
         return None
-    default_branch_name = default_branch_reference.removeprefix(
-        ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX
+    default_branch_prefix = REMOTE_BRANCH_REFERENCE_TEMPLATE.format(
+        remote=remote_name, branch=""
     )
+    default_branch_name = default_branch_reference.removeprefix(default_branch_prefix)
     if remote_branch_name == default_branch_name:
         return None
     # Anchors to the pushed object; deferring to the gate's HEAD-based merge-base would change behavior on non-HEAD pushes.
@@ -399,7 +404,9 @@ def resolve_default_branch_merge_base(
     return merge_base_object_name
 
 
-def resolve_gate_base_reference(stdin_text: str) -> str | None:
+def resolve_gate_base_reference(
+    stdin_text: str, remote_name: str = DEFAULT_REMOTE_NAME
+) -> str | None:
     """Return the reference the gate scopes its changed lines to.
 
     A branch update reads from the merge base with the remote default branch,
@@ -414,20 +421,24 @@ def resolve_gate_base_reference(stdin_text: str) -> str | None:
 
     Args:
         stdin_text: The pre-push stdin payload.
+        remote_name: The remote whose default branch provides the gate base.
 
     Returns:
         The gate's base reference, the no-parseable-lines sentinel, the
         unresolvable-merge-base sentinel, or None when the push only deletes
         remote branches.
     """
-    return _resolve_gate_base_from_parsed(_parse_push_stdin(stdin_text))
+    return _resolve_gate_base_from_parsed(_parse_push_stdin(stdin_text), remote_name)
 
 
-def _resolve_gate_base_from_parsed(parsed_stdin: ParsedPushStdin) -> str | None:
+def _resolve_gate_base_from_parsed(
+    parsed_stdin: ParsedPushStdin, remote_name: str = DEFAULT_REMOTE_NAME
+) -> str | None:
     """Return the gate's base reference for an already-parsed stdin payload.
 
     Args:
         parsed_stdin: The parsed stdin payload.
+        remote_name: The remote whose default branch provides the gate base.
 
     Returns:
         The merge base with the remote default branch for a branch update, the
@@ -440,7 +451,9 @@ def _resolve_gate_base_from_parsed(parsed_stdin: ParsedPushStdin) -> str | None:
     if branch_update is None:
         return _resolve_base_reference_from_lines(parsed_stdin)
     merge_base_object_name = resolve_default_branch_merge_base(
-        branch_update.remote_branch_name, branch_update.local_object_name
+        branch_update.remote_branch_name,
+        branch_update.local_object_name,
+        remote_name,
     )
     if merge_base_object_name is None:
         return branch_update.remote_object_name
@@ -542,7 +555,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 0
-    base_reference = _resolve_gate_base_from_parsed(parsed_stdin)
+    remote_name = resolve_remote_name_from_arguments(sys.argv)
+    base_reference = _resolve_gate_base_from_parsed(parsed_stdin, remote_name)
     if base_reference is None:
         return 0
     if base_reference == no_parseable_stdin_lines_sentinel:
@@ -550,8 +564,7 @@ def main() -> int:
         return gate_infrastructure_failure_exit_code
     if base_reference == unresolvable_merge_base_sentinel:
         print(unresolvable_merge_base_message, file=sys.stderr)
-        return 0
-    remote_name = resolve_remote_name_from_arguments(sys.argv)
+        return gate_infrastructure_failure_exit_code
     try:
         usable_base_reference = resolve_usable_base_reference(
             base_reference, remote_name, run_git_text_command

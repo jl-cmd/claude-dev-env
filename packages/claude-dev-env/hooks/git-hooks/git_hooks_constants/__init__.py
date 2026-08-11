@@ -49,12 +49,9 @@ NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
 NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
 UNRESOLVABLE_MERGE_BASE_SENTINEL: str = "__unresolvable_merge_base__"
 UNRESOLVABLE_MERGE_BASE_MESSAGE: str = (
-    "claude-dev-env pre-push: git found no merge base between the pushed object "
-    "and the default branch, so the gate scope is unknown and "
-    "enforcement is skipped. That happens when the pushed branch and the "
-    "default branch hold unrelated histories, or when a default-branch ref "
-    "resolved and merge-base still could not name a shared commit "
-    "(for example a shallow clone missing the connecting history)."
+    "claude-dev-env pre-push: CODE_RULES validation is pending because the pushed "
+    "object and default branch have no shared merge base. Restore shared history "
+    "or provide a reachable default branch, then run the push again."
 )
 LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
 ORIGIN_HEAD_SYMBOLIC_REFERENCE: str = "refs/remotes/origin/HEAD"
@@ -63,6 +60,7 @@ ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES: tuple[str, ...] = (
     "refs/remotes/origin/main",
     "refs/remotes/origin/master",
 )
+REMOTE_BRANCH_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/{branch}"
 ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX: tuple[str, ...] = (
     "git",
     "symbolic-ref",
