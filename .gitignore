@@ -47,8 +47,7 @@ project-paths.json
 claude-chain.json
 **/claude-chain.json
 
-# Private local identity (NAS values, fan-out owner scopes); the committed placeholder
-# template is config/local-identity.example.json
+# Protect local identity values from accidental commits in existing worktrees.
 config/local-identity.json
 
 # Local environment variables for packages/claude-dev-env/

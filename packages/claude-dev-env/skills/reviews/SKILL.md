@@ -8,7 +8,7 @@ description: >-
 # Code Review Guide
 
 Use this guide to evaluate a pull request or code change. Apply the repository's
-`AGENTS.md` and `CODE_RULES.md` as its project-specific quality rubric.
+the repository's checked-in review contract and `CODE_RULES.md` as its project-specific quality rubric.
 
 ## Review Judgment
 

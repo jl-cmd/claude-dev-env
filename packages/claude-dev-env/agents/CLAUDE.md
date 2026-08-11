@@ -8,7 +8,7 @@ Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. 
 |---|---|---|
 | `caveman.md` | Caveman Agent | Terse voice and smallest-possible artifacts; questions premise before building |
 | `clasp-deployment-orchestrator.md` | Clasp Deployment Orchestrator | Creates and deploys Google Apps Script projects with multiple files |
-| `clean-coder.md` | Clean Coder | Primary code-writing agent; links AGENTS.md / CODE_RULES / enforcer; task-local discovery and gate-clean first writes |
+| `clean-coder.md` | Clean Coder | Primary code-writing agent; links the review contract, CODE_RULES, and enforcer; task-local discovery and gate-clean first writes |
 | `code-advisor.md` | Code Advisor | Single-executor mid-run advisor (PLAN/CORRECTION/STOP as final text); distinct from session-advisor |
 | `code-quality-agent.md` | Code Quality Agent | Multi-file code quality review across an entire diff or set of files |
 | `deep-research.md` | Deep Research | Citation-grounded research with web search |

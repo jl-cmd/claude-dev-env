@@ -1,13 +1,3 @@
-<!-- SYNC-HEADER-START -->
-<!--
-AUTO-GENERATED — DO NOT EDIT.
-Source of truth: jl-cmd/claude-dev-env/AGENTS.md
-Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: e7868f98972c487db3a58b7ad06c7dde4c39eb5d
-Synced at: 2026-08-08T20:44:28.599572+00:00
--->
-<!-- SYNC-HEADER-END -->
-
 # Code rules for Claude, Cursor BugBot, Copilot, and other agents
 
 This file is the **canonical** review-criteria instruction set for every AI agent that audits pull requests in this repository:
@@ -15,7 +5,7 @@ This file is the **canonical** review-criteria instruction set for every AI agen
 - **Claude** (PR review)
 - **Cursor BugBot** (PR review)
 - **GitHub Copilot** (PR review)
-- Any other agent that loads `AGENTS.md` or `.cursor/BUGBOT.md` for review
+- Any other agent that loads `.cursor/BUGBOT.md` for review
 
 These rules describe the green-light state of code in this repository. Agents apply them to the **lines a PR adds or modifies**, surface deviations as findings, and recommend corrections. Output is review feedback.
 
@@ -23,7 +13,7 @@ Where a rule lists exemptions (test files, migrations, config files), the exempt
 
 This file is **rules-only**. Repo layout, build commands, and workflow guidance live elsewhere.
 
-**Surface map:** this file is the canonical human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement (not generated from this file). `.cursor/BUGBOT.md` is a sync projection of this file. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
+**Surface map:** this file is the checked-in human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
 
 ---
 

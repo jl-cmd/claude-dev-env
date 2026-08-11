@@ -85,4 +85,3 @@ Once the file loop ends, the purge walks up from each directory a removal touche
 - `packages/claude-dev-env/bin/install.test.mjs` — install behavior tests.
 - `packages/claude-dev-env/bin/install.prune.test.mjs` — end-to-end prune and uninstall tests against a sandbox home.
 - `README.md` — the documented group and skill tables.
-- `docs/ai-rules-sync.md` — how rules sync to other tools.

@@ -43,11 +43,3 @@ if [ "${deselect_flag_count}" -ne "${expected_deselect_count}" ]; then
   echo "ERROR: deselect_args length (${deselect_flag_count}) != expected non-comment line count (${expected_deselect_count})"
   exit 1
 fi
-
-for each_deselect_flag in "${deselect_args[@]}"; do
-  case "${each_deselect_flag}" in
-    *test_fan_out_dispatch.py*)
-      echo "known-pending deselect: ${each_deselect_flag}"
-      ;;
-  esac
-done

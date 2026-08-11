@@ -1,6 +1,6 @@
 # Code Rules Reference
 
-Compact **projection** of the repository-root canonical policy [`AGENTS.md`](../../../AGENTS.md). When this file and `AGENTS.md` disagree, **`AGENTS.md` wins** — update this projection in the same change.
+Compact **projection** of the checked-in review contract [`.cursor/BUGBOT.md`](../../../.cursor/BUGBOT.md). Update this reference alongside the full review contract when review rules change.
 
 ⚡ marks rules enforced by hand-maintained `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only. Session policy (question routing, task tracking) lives in `rules/*.md`; see [`code-standards.md`](../rules/code-standards.md).
 

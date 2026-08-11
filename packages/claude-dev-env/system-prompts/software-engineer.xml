@@ -90,9 +90,9 @@
 </problem_solving>
 
 <code_quality>
-  Canonical code-quality policy is repository-root AGENTS.md (installed review contract).
-  ~/.claude/docs/CODE_RULES.md is the compact projection of AGENTS.md for generation load —
-  when the two disagree, AGENTS.md wins. The checklist below is a short reminder, not a
+  The checked-in .cursor/BUGBOT.md is the full code-quality review contract.
+  ~/.claude/docs/CODE_RULES.md is the compact projection for generation load.
+  The checklist below is a short reminder, not a
   second canonical source.
 
   Naming — full words only:
