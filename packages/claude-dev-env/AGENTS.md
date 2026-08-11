@@ -40,6 +40,10 @@ Verify every sub-agent file list, count, description, and finding against the re
 
 Do not commit untracked files unless explicitly instructed.
 
+## Package communication contract
+
+Use `opus5-communication-contract-v1` for package communication.
+
 ## Delegation
 
 Request precise file-and-line answers from research subagents.
