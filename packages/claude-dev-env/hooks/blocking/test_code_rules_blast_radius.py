@@ -12,13 +12,13 @@ from code_rules_blast_radius import check_blast_radius_declared  # noqa: E402
 PRODUCTION_PATH = "pipeline/asset_run.py"
 
 
-def test_should_flag_undeclared_raise_inside_a_loop() -> None:
-    """An undeclared raise inside a loop body names no blast radius."""
+def test_should_report_a_loop_raise_with_pending_blast_radius_declaration() -> None:
+    """A loop-body raise gets an advisory requesting its blast-radius declaration."""
     content = (
         "def run(all_members):\n"
         "    for each_member in all_members:\n"
-        "        if not each_member.is_ready:\n"
-        "            raise AssetError('member is not ready')\n"
+        "        if each_member.requires_preparation:\n"
+        "            raise AssetError('member requires preparation')\n"
     )
 
     all_issues = check_blast_radius_declared(content, PRODUCTION_PATH)
@@ -40,25 +40,25 @@ def test_should_accept_a_run_fatal_raise_inside_a_loop() -> None:
 
 
 def test_should_accept_an_item_blocked_raise_inside_a_loop() -> None:
-    """An ItemBlocked type declares that only this member stops."""
+    """An ItemBlocked type declares a member-scoped stop."""
     content = (
         "def run(all_members):\n"
         "    for each_member in all_members:\n"
-        "        if each_member.is_oversized:\n"
-        "            raise AssetItemBlocked('member is one pixel too wide')\n"
+        "        if each_member.requires_resize:\n"
+        "            raise AssetItemBlocked('member requires resizing')\n"
     )
 
     assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
 
 
 def test_should_accept_a_raise_wrapped_by_a_blast_radius_boundary() -> None:
-    """A per-member boundary catching a declared type already parks the failure."""
+    """A per-member boundary catches a declared type and parks the failure."""
     content = (
         "def run(all_members):\n"
         "    for each_member in all_members:\n"
         "        try:\n"
-        "            if each_member.is_oversized:\n"
-        "                raise AssetError('member is one pixel too wide')\n"
+        "            if each_member.requires_resize:\n"
+        "                raise AssetError('member requires resizing')\n"
         "        except AssetItemBlocked as failure:\n"
         "            park(each_member, failure)\n"
     )
@@ -66,19 +66,19 @@ def test_should_accept_a_raise_wrapped_by_a_blast_radius_boundary() -> None:
     assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
 
 
-def test_should_ignore_a_raise_outside_every_loop() -> None:
-    """A run-level raise sits outside per-member work and needs no declaration."""
+def test_should_accept_a_run_level_raise_during_manifest_preparation() -> None:
+    """A run-level raise belongs to manifest preparation."""
     content = (
         "def prepare(manifest):\n"
-        "    if manifest is None:\n"
-        "        raise AssetError('manifest is absent')\n"
+        "    if manifest.requires_preparation:\n"
+        "        raise AssetError('manifest requires preparation')\n"
     )
 
     assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
 
 
-def test_should_ignore_a_bare_reraise_inside_a_loop() -> None:
-    """A bare re-raise propagates an error whose radius is already declared."""
+def test_should_accept_a_bare_reraise_inside_a_loop() -> None:
+    """A bare re-raise propagates an error carrying a declared radius."""
     content = (
         "def run(all_members):\n"
         "    for each_member in all_members:\n"
@@ -91,26 +91,26 @@ def test_should_ignore_a_bare_reraise_inside_a_loop() -> None:
     assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
 
 
-def test_should_ignore_test_files() -> None:
-    """Test modules raise freely to drive their own scenarios."""
+def test_should_accept_test_files() -> None:
+    """Test modules raise freely during scenario coverage."""
     content = (
-        "def test_rejects_bad_member(all_members):\n"
+        "def test_records_member_failure(all_members):\n"
         "    for each_member in all_members:\n"
-        "        raise AssetError('boom')\n"
+        "        raise AssetError('member failure')\n"
     )
 
     assert check_blast_radius_declared(content, "pipeline/test_asset_run.py") == []
 
 
-def test_should_report_every_undeclared_raise_in_one_loop() -> None:
-    """Each undeclared raise inside per-member work earns its own advisory line."""
+def test_should_report_each_loop_raise_with_pending_blast_radius_declaration() -> None:
+    """Each loop-body raise gets an advisory requesting its blast-radius declaration."""
     content = (
         "def run(all_members):\n"
         "    for each_member in all_members:\n"
-        "        if each_member.is_missing:\n"
-        "            raise AssetError('absent')\n"
-        "        if each_member.is_oversized:\n"
-        "            raise AssetError('too wide')\n"
+        "        if each_member.requires_source:\n"
+        "            raise AssetError('member requires a source')\n"
+        "        if each_member.requires_resize:\n"
+        "            raise AssetError('member requires resizing')\n"
     )
 
     assert len(check_blast_radius_declared(content, PRODUCTION_PATH)) == 2

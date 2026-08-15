@@ -30,7 +30,8 @@ def _raised_type_name(raise_node: ast.Raise) -> str | None:
         raise_node: The raise statement to read.
 
     Returns:
-        The type name, or ``None`` for a bare re-raise or an unreadable form.
+        The exception type name. A ``None`` return classifies bare re-raises and
+        alternate AST forms.
     """
     raised = raise_node.exc
     if raised is None:
@@ -103,8 +104,9 @@ def _boundary_guarded_raise_lines(tree: ast.Module) -> set[int]:
 def _per_item_raise_nodes(tree: ast.Module) -> list[ast.Raise]:
     """Collect raise statements that sit inside a loop body.
 
-    A raise reached only through per-item iteration ends every remaining item
-    unless something declares otherwise, so those are the ones worth naming.
+    A raise reached through per-item iteration ends every remaining item by
+    default. A declared radius identifies the intended scope, so each raise
+    in this path benefits from an explicit name.
 
     Args:
         tree: The parsed module to walk.
@@ -124,7 +126,7 @@ def _per_item_raise_nodes(tree: ast.Module) -> list[ast.Raise]:
 
 
 def check_blast_radius_declared(content: str, file_path: str) -> list[str]:
-    """Flag raises inside per-item work that never say what they stop.
+    """Check that raises inside per-item work name their stopping scope.
 
     A raise reached through a loop body ends the whole batch by default, so a
     one-item defect discards every item that already succeeded. Naming the type
@@ -136,7 +138,8 @@ def check_blast_radius_declared(content: str, file_path: str) -> list[str]:
         file_path: The path the body will be written to.
 
     Returns:
-        One advisory line per undeclared raise, capped at the configured maximum.
+        One advisory line per raise that needs a declared blast radius, capped
+        at the configured maximum.
     """
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return []
