@@ -1,9 +1,10 @@
 import json
-from pathlib import Path
+import subprocess
 import sys
-import tomllib
+from pathlib import Path
 
 import pytest
+import tomllib
 
 module_directory = str(Path(__file__).parents[1])
 if module_directory not in sys.path:
@@ -17,8 +18,8 @@ from codex_compat_materializer import (
     PlannedFile,
     atomic_write,
     build_plan,
-    convert_agent,
     content_to_bytes,
+    convert_agent,
     hash_content,
     load_manifest,
     parse_frontmatter,
@@ -698,3 +699,220 @@ def test_frontmatter_rejects_non_string_name() -> None:
             "---\nname: 1\ndescription: y\n---\n",
             "bad.md",
         )
+
+
+def test_failure_blast_radius_projection_uses_the_canonical_excerpt() -> None:
+    canonical_rule_path = Path(__file__).parents[2] / "rules" / "failure-blast-radius.md"
+    canonical_rule = canonical_rule_path.read_text(encoding="utf-8")
+
+    projected_instruction = materializer.render_codex_failure_blast_radius(canonical_rule)
+
+    assert projected_instruction.startswith("Failure handling for this run")
+    assert "Three real attempts, then park." in projected_instruction
+    assert "Report as: N of M complete" in projected_instruction
+
+
+def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
+    tmp_path: Path,
+) -> None:
+    canonical_rule_path = Path(__file__).parents[2] / "rules" / "failure-blast-radius.md"
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    rule_path = source / "rules" / "failure-blast-radius.md"
+    rule_path.parent.mkdir(parents=True)
+    rule_path.write_text(canonical_rule_path.read_text(encoding="utf-8"), encoding="utf-8")
+    config = MaterializerConfig(source, target, should_apply=True)
+
+    planned, report = build_plan(config, all_agents=[])
+    publish_plan(config, planned, report)
+
+    projected_path = target / "AGENTS.md"
+    first_projection = projected_path.read_text(encoding="utf-8")
+    manifest_record = load_manifest(config.manifest_path)["files"]["AGENTS.md"]
+    assert manifest_record["ownership"] == "codex-compat"
+    assert manifest_record["source"] == "rules/failure-blast-radius.md"
+
+    rule_path.write_text(
+        rule_path.read_text(encoding="utf-8").replace("Three real attempts, then park.", "Three tested attempts, then park."),
+        encoding="utf-8",
+    )
+    drifted_plan, _ = build_plan(config, all_agents=[])
+
+    drifted_projection = next(
+        each_file.content
+        for each_file in drifted_plan
+        if each_file.target_relative_path == "AGENTS.md"
+    )
+    assert drifted_projection != first_projection
+
+
+def test_codex_hook_manifest_keeps_dispatcher_order_and_adds_enforcer() -> None:
+    hooks_path = Path(__file__).parents[2] / "hooks" / "hooks.json"
+    hooks_configuration = json.loads(hooks_path.read_text(encoding="utf-8"))
+    pre_tool_use_entries = hooks_configuration["hooks"]["PreToolUse"]
+    matcher_names = [each_entry.get("matcher") for each_entry in pre_tool_use_entries]
+
+    dispatcher_index = matcher_names.index("Write|Edit|MultiEdit")
+    enforcer_entries = [
+        each_entry
+        for each_entry in pre_tool_use_entries
+        if each_entry.get("matcher") == "apply_patch"
+    ]
+    assert len(enforcer_entries) == 1
+    assert matcher_names.index("apply_patch") > dispatcher_index
+    assert enforcer_entries[0]["hooks"][0]["command"].endswith(
+        "/hooks/blocking/code_rules_enforcer.py"
+    )
+
+
+def test_exact_cli_publishes_instruction_and_additive_hook_projection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path.parent / "codex-prod-target"
+    source_rule = source / "rules" / "failure-blast-radius.md"
+    source_hooks = source / "hooks" / "hooks.json"
+    source_rule.parent.mkdir(parents=True)
+    source_hooks.parent.mkdir(parents=True)
+    source_rule.write_text(
+        (Path(__file__).parents[2] / "rules" / "failure-blast-radius.md").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    source_hooks.write_text(
+        (Path(__file__).parents[2] / "hooks" / "hooks.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    package_root = Path(__file__).parents[2]
+    for each_relative_path in materializer.codex_hook_dependency_manifest:
+        target_dependency = source / each_relative_path
+        target_dependency.parent.mkdir(parents=True, exist_ok=True)
+        target_dependency.write_bytes((package_root / each_relative_path).read_bytes())
+    target.mkdir()
+    existing_hooks = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Write|Edit",
+                    "hooks": [{"type": "command", "command": "python existing.py"}],
+                },
+                {
+                    "matcher": "apply_patch",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python hooks/blocking/code_rules_enforcer.py",
+                        }
+                    ],
+                },
+                {
+                    "matcher": "apply_patch",
+                    "hooks": [
+                        {"type": "command", "command": "python not_code_rules_enforcer.py"}
+                    ],
+                },
+            ],
+            "Bash": [{"matcher": "", "hooks": []}],
+        }
+    }
+    (target / "hooks.json").write_text(json.dumps(existing_hooks), encoding="utf-8")
+    retired_owned_path = target / "hooks" / "obsolete.py"
+    retired_owned_path.parent.mkdir(parents=True)
+    retired_owned_path.write_text("retired owned hook\n", encoding="utf-8")
+    retired_manifest = {
+        "version": 1,
+        "files": {
+            "hooks/obsolete.py": {
+                "source": "hooks/obsolete.py",
+                "hash": materializer.hash_content(retired_owned_path.read_bytes()),
+                "ownership": "codex-compat",
+            }
+        },
+    }
+    (target / ".codex-compat-manifest.json").write_text(
+        json.dumps(retired_manifest), encoding="utf-8"
+    )
+
+    exit_code = materializer.main([str(source), str(target), "--apply"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["errors"] == 0
+    assert not retired_owned_path.exists()
+    projected_instruction = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Three real attempts, then park." in projected_instruction
+    manifest = json.loads((target / "hooks.json").read_text(encoding="utf-8"))
+    assert manifest["hooks"]["PreToolUse"][0] == existing_hooks["hooks"]["PreToolUse"][0]
+    apply_patch_entries = [
+        each_entry
+        for each_entry in manifest["hooks"]["PreToolUse"]
+        if each_entry["matcher"] == "apply_patch"
+    ]
+    assert len(apply_patch_entries) == 1
+    apply_patch_commands = [
+        each_hook["command"] for each_hook in apply_patch_entries[0]["hooks"]
+    ]
+    assert apply_patch_commands[0] == "python not_code_rules_enforcer.py"
+    managed_command = (
+        f'python3 "{target / "hooks" / "blocking" / "code_rules_enforcer.py"}"'
+    )
+    assert managed_command in apply_patch_commands
+    manifest_record = load_manifest(target / ".codex-compat-manifest.json")["files"]
+    assert manifest_record["AGENTS.md"]["ownership"] == "codex-compat"
+    assert manifest_record["hooks.json"]["source"] == "hooks/hooks.json"
+
+    hooks_before_second_run = (target / "hooks.json").read_bytes()
+    second_exit_code = materializer.main([str(source), str(target), "--apply"])
+    second_report = json.loads(capsys.readouterr().out)
+
+    assert second_exit_code == 0
+    assert second_report["errors"] == 0
+    assert second_report["written"] == 0
+    assert (target / "hooks.json").read_bytes() == hooks_before_second_run
+
+    source.rename(tmp_path / "source-detached")
+    target_entrypoint = target / materializer.codex_enforcer_script_relative_path
+    allow_payload = {
+        "tool_name": "apply_patch",
+        "cwd": str(target),
+        "tool_input": {
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: module.py\n"
+                "+for each_member in all_members:\n"
+                "+    raise AssetItemBlocked()\n"
+                "*** End Patch"
+            )
+        },
+    }
+    allow_run = subprocess.run(
+        [sys.executable, str(target_entrypoint)],
+        cwd=target,
+        input=json.dumps(allow_payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert allow_run.returncode == 0
+    assert allow_run.stdout == ""
+
+    deny_payload = {
+        **allow_payload,
+        "tool_input": {
+            "command": allow_payload["tool_input"]["command"].replace(
+                "AssetItemBlocked", "RuntimeError"
+            )
+        },
+    }
+    deny_run = subprocess.run(
+        [sys.executable, str(target_entrypoint)],
+        cwd=target,
+        input=json.dumps(deny_payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert deny_run.returncode == 0
+    assert json.loads(deny_run.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert target_entrypoint.is_file()
