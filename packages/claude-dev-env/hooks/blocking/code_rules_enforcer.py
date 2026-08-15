@@ -41,6 +41,9 @@ from code_rules_banned_identifiers import (  # noqa: E402
     check_banned_noun_word_boundary,
     check_banned_prefixes,
 )
+from code_rules_blast_radius import (  # noqa: E402
+    check_blast_radius_declared,
+)
 from code_rules_boolean_mustcheck import (  # noqa: E402
     check_boolean_naming,
     check_ignored_must_check_return,
@@ -289,6 +292,15 @@ def validate_content(
         all_issues.extend(
             _fragment_or_deferred_check(
                 check_magic_values,
+                old_content,
+                content,
+                file_path,
+                defer_scope_to_caller,
+            )
+        )
+        all_issues.extend(
+            _fragment_or_deferred_check(
+                check_blast_radius_declared,
                 old_content,
                 content,
                 file_path,
