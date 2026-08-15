@@ -10,13 +10,17 @@ An exception type ending in `RunFatal` says the whole run stops. An exception ty
 
 `RunFatal` must not inherit from any type the per-member boundary catches, so an escalation passes straight through a boundary meant for member failures.
 
-## What earns RunFatal
+## What ends a run
 
-Three kinds of failure, and they share one property: continuing produces work nobody can trust.
+Four failures end a run, and they share one property: continuing produces work nobody can trust.
+
+Three of them are declared, and carry a `RunFatal` type:
 
 - The source bytes changed under the run.
 - A provenance or digest comparison failed.
 - Authentication is required.
+
+The fourth is undeclared: the code crashed in a way nobody anticipated. It carries no `RunFatal` type and needs none — the per-member boundary catches named types only, so an unforeseen crash passes through it and ends the run on its own.
 
 Everything else is a member failure. A wrong size, an absent optional input, a path that does not resolve, a manifest field that is missing — each stops one member and leaves the rest of the batch untouched.
 
@@ -43,7 +47,7 @@ The re-raise comes first so an escalation is never parked.
 An agent that hits a member failure keeps working the problem. Three things bound how:
 
 - **Repair in place, never by restart.** Re-running the batch discards every member that already succeeded, which costs more than the defect.
-- **Bound each member, then park it.** Give one failing member a small number of real attempts. If it still fails, park it with its reason and move to the next. Parked is not abandoned — it returns after the batch.
+- **Three real attempts, then park.** An attempt is a theory of the cause, acted on. Re-running the same code on the same input is one attempt taken twice. Three theories covers the obvious cause, the second guess, and the one visible only after the first two fail. Judgment governs what to try; it does not govern when to stop. After the third theory fails, park the member with its reason and move to the next. Parked is not abandoned — it returns after the batch.
 - **The batch always reaches a deliverable.** Complete every member that can complete, produce the packaged artifact, then work the parked list. A run ending with 34 of 37 members and 3 parked beats a run ending on member 3.
 
 ## Three alike means one cause
@@ -51,6 +55,12 @@ An agent that hits a member failure keeps working the problem. Three things boun
 When three or more members park with the same failure signature — same exception type, same `file:line` — that is one shared defect wearing three costumes. Stop repairing members and fix the shared cause.
 
 The run report groups parked members by that signature and names any group of three or more as a suspected shared cause. Grouping on the raise site rather than the message text needs no normalization to be reliable.
+
+## Close the run with what broke
+
+Every issue the run hit gets one line in the closing report: what failed, and how it ended — repaired, worked around, or parked. Members that finished after a repair belong in that list beside the parked ones. A workaround patched past mid-run is the likeliest real defect in the batch, because no other record of it survives the run.
+
+The report then asks the owner whether a durable fix is wanted for any of them, names which ones the run would pick, and waits for the answer. Building that fix belongs to the next run — starting it inside this one is how a run stops reaching its deliverable.
 
 ## Enforcement
 
@@ -71,8 +81,13 @@ happens and what it is allowed to hold up.
 Repair in place, never by restart. A restart discards every asset that
 already succeeded.
 
-Bound each failing asset to a few real attempts, then park it with its
-reason and continue. Parked is not abandoned; return to it after the batch.
+Three real attempts, then park. An attempt is a theory of the cause, acted
+on. Re-running the same code on the same input is one attempt taken twice.
+Three theories covers the obvious cause, the second guess, and the one you
+only see after the first two fail. Use your judgment on what to try. Do not
+use your judgment on when to stop. After the third theory fails, park the
+asset with its reason and continue. Parked is not abandoned; return to it
+after the batch.
 
 The batch always reaches a deliverable. Finish every asset you can, produce
 the packaged artifact, then work the parked list.
@@ -80,15 +95,26 @@ the packaged artifact, then work the parked list.
 If three or more assets fail the same way, that is one shared defect, not
 three. Stop the per-asset repairs and fix the shared cause.
 
-Only three things end a run outright: the source bytes changed, a provenance
-or digest mismatch, or authentication is required. Everything else is yours
-to work.
+Four things end a run outright: the source bytes changed, a provenance or
+digest mismatch, authentication is required, or the code crashed in a way
+nobody declared. Everything else is yours to work. Never reach for a broad
+except to keep going.
 
 When you add a check that raises, name what it stops. End the type in
 RunFatal when the whole run stops, or ItemBlocked when only that one asset
 stops. If it stops only that asset, put the handling inside the loop body.
 
+Close the run by reporting what broke and what you did about it. Every issue
+gets one line: what failed, and how it ended — repaired, worked around, or
+parked. Include the ones you solved; a workaround you patched past in attempt
+two is the likeliest real defect in the list, because nothing else records it.
+Then ask whether the owner wants a durable fix built for any of them, say
+which ones you would pick and why, and wait for the answer. Do not build the
+durable fix inside this run.
+
 Report as: N of M complete, K parked, and what you are working now.
+Close with: what broke, how each one ended, and which of them deserve a
+durable fix.
 ```
 
 ## Sibling rules
