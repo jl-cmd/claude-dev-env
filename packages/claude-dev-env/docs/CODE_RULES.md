@@ -90,7 +90,7 @@ Removed code is removed: no renamed re-export aliases, no `_old_*` aliases, no k
 
 Never swallow a failure into a default unless the caller explicitly opted in at the boundary. Name the specific exception (`except KeyError:`) and propagate the rest — collapsing every error class to `None` masks programming errors and makes debugging impossible.
 
-**A per-member boundary is that opt-in, not swallowing.** In a batch loop, a `try`/`except` inside the loop body that catches a declared `*ItemBlocked` type, records the failure with its reason, and continues to the next member is a recorded outcome — the failure reaches the run report by name. Swallowing is a failure that leaves no trace. Escalations re-raise first so a `*RunFatal` passes through untouched, and `except Exception` stays banned. Types, boundary shape, and the parked-member report: [`rules/failure-blast-radius.md`](../rules/failure-blast-radius.md).
+**A per-member boundary records each member outcome.** In a batch loop, a `try`/`except` inside the loop body catches a declared `*ItemBlocked` type, records the failure with its reason, and continues to the next member — the failure reaches the run report by name. The boundary preserves the blast radius: escalations re-raise first so a `*RunFatal` passes through directly, while `except Exception` triggers the rule. Types, boundary shape, and the parked-member report: [`rules/failure-blast-radius.md`](../rules/failure-blast-radius.md).
 
 ## 9.8 REMOVE CODE YOU ORPHAN (Dead Code Elimination)
 
