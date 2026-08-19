@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.14.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.0...claude-dev-env-v2.14.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* add opus5 contract marker to package AGENTS.md ([6cbd485](https://github.com/jl-cmd/claude-dev-env/commit/6cbd485f24f52c246a6d932ab95e65ed278cdd54))
+
+
+### Documentation
+
+* Update AGENTS.md ([8d7ba25](https://github.com/jl-cmd/claude-dev-env/commit/8d7ba256ca703deb263bd53cfde337b9a0a6bfac))
+
+
+### Maintenance
+
+* drop unshipped agents and slash commands ([9cd1a39](https://github.com/jl-cmd/claude-dev-env/commit/9cd1a398f97fe75a9dfb64a0270d2be4ee9a808d))
+* drop unshipped agents and slash commands ([f872dd8](https://github.com/jl-cmd/claude-dev-env/commit/f872dd8e89f79c5c69cf4944daaecf332f76cff6))
+
 ## [2.14.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.13.0...claude-dev-env-v2.14.0) (2026-08-11)
 
 
