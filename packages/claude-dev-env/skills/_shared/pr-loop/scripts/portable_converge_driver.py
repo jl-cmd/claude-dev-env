@@ -14,7 +14,7 @@ ready decisions from prose. It runs this CLI, reads JSON, and either:
         --has-workflow 0 --has-schedule-wakeup 0 \\
         --owner O --repo R --pr-number N --cwd DIR --state-dir DIR \\
         [--session-model third-party] [--copilot-down 0|1] [--bugbot-down 0|1] \\
-        [--codex-down 0|1] [--codex-required 0|1]
+        [--codex-down 0|1] [--codex-required 0|1] [--grok-mode 0|1]
 
     portable_converge_driver.py after-code-review --state-file PATH \\
         --returncode 0 --dirty-tree 0 --current-head SHA \\
@@ -71,6 +71,7 @@ from select_converge_pacer import (  # noqa: E402
     select_converge_pacer,
 )
 from skills_pr_loop_constants.pacer_constants import (  # noqa: E402
+    CLI_GROK_MODE_FLAG,
     CLI_HAS_SCHEDULE_WAKEUP_FLAG,
     CLI_HAS_WORKFLOW_FLAG,
     CLI_SKILL_FLAG,
@@ -731,6 +732,25 @@ def _seed_open_run_task_list_and_finish(
     )
 
 
+def _not_portable_error(pacer: str) -> tuple[dict[str, object], int]:
+    """Build the open-run error payload for a non-portable pacer.
+
+    Args:
+        pacer: The selected pacer that is not ``portable``.
+
+    Returns:
+        The error payload and the contract-error exit code.
+    """
+    return (
+        _error_payload(
+            "open-run is only for pacer=portable",
+            blocker=BLOCKER_NOT_PORTABLE,
+            pacer=pacer,
+        ),
+        EXIT_CONTRACT_ERROR,
+    )
+
+
 def run_open_run(
     *,
     entry_skill: str,
@@ -746,6 +766,7 @@ def run_open_run(
     is_bugbot_down: bool,
     is_codex_down: bool = False,
     is_codex_required: bool = False,
+    is_grok_mode: bool = False,
 ) -> tuple[dict[str, object], int]:
     """Select pacer, require portable, preflight worktree, seed state + tasks.
 
@@ -763,6 +784,8 @@ def run_open_run(
         is_bugbot_down: Skip Bugbot as a runnable review.
         is_codex_down: Skip Codex as a runnable review.
         is_codex_required: Codex is required by usage/policy for this run.
+        is_grok_mode: Route loop workers through the grok-first dispatcher;
+            for ``autoconverge`` this forces the portable pacer.
 
     Returns:
         Payload and process exit code. Payload includes the scripted task list
@@ -773,16 +796,10 @@ def run_open_run(
         entry_skill=entry_skill,
         has_workflow=has_workflow,
         has_schedule_wakeup=has_schedule_wakeup,
+        is_grok_mode=is_grok_mode,
     )
     if selection.pacer != PACER_PORTABLE:
-        return (
-            _error_payload(
-                "open-run is only for pacer=portable",
-                blocker=BLOCKER_NOT_PORTABLE,
-                pacer=selection.pacer,
-            ),
-            EXIT_CONTRACT_ERROR,
-        )
+        return _not_portable_error(selection.pacer)
     maybe_error, preflight_exit = _run_preflight(
         cwd_path=cwd_path, owner=owner, repo=repo
     )
@@ -1411,6 +1428,7 @@ def _register_open_run_arguments(
     open_run_parser.add_argument(CLI_BUGBOT_DOWN_FLAG, default="0")
     open_run_parser.add_argument(CLI_CODEX_DOWN_FLAG, default="0")
     open_run_parser.add_argument(CLI_CODEX_REQUIRED_FLAG, default="0")
+    open_run_parser.add_argument(CLI_GROK_MODE_FLAG, default="0")
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -1491,6 +1509,7 @@ def _dispatch_open_run(
         is_bugbot_down=parse_bool_flag(parsed_arguments.bugbot_down),
         is_codex_down=parse_bool_flag(parsed_arguments.codex_down),
         is_codex_required=parse_bool_flag(parsed_arguments.codex_required),
+        is_grok_mode=parse_bool_flag(parsed_arguments.grok_mode),
     )
 
 
