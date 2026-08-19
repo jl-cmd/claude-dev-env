@@ -140,15 +140,40 @@ def _sync_rules(
     return summary, new_entries
 
 
+def _layout_from_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
+    """Resolve Claude and Cursor roots from flags or the default layout.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Claude root, Cursor root, rules output directory, and manifest path.
+
+    Raises:
+        SystemExit: When only one of `--claude-root` / `--cursor-root` is set.
+    """
+    claude_root = args.claude_root
+    cursor_root = args.cursor_root
+    if (claude_root is None) != (cursor_root is None):
+        raise SystemExit("both --claude-root and --cursor-root are required")
+    if claude_root is None:
+        return llm_layout_paths()
+    claude = Path(claude_root).expanduser().resolve()
+    cursor = Path(cursor_root).expanduser().resolve()
+    return claude, cursor, cursor / "rules", cursor / ".sync-manifest.json"
+
+
 def run(argv: list[str] | None = None) -> int:
     argument_parser = argparse.ArgumentParser(description="Sync Claude rules to Cursor .mdc files")
     argument_parser.add_argument("--force", action="store_true", help="Regenerate all outputs")
     argument_parser.add_argument("--dry-run", action="store_true", help="Print actions only")
     argument_parser.add_argument("--check", action="store_true", help="Exit 1 if anything stale")
     argument_parser.add_argument("--quiet", action="store_true", help="Minimal output when up to date")
+    argument_parser.add_argument("--claude-root", help="Claude layout root holding rules/ and docs/")
+    argument_parser.add_argument("--cursor-root", help="Cursor layout root receiving rules/ and docs/")
     args = argument_parser.parse_args(argv)
 
-    claude, cursor, out_dir, manifest_path = llm_layout_paths()
+    claude, cursor, out_dir, manifest_path = _layout_from_args(args)
     mappings = build_mappings(claude)
     old_manifest = _load_manifest(manifest_path)
     entries_meta: dict = old_manifest.get("entries", {})

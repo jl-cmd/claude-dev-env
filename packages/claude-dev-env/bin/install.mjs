@@ -23,6 +23,8 @@ import {
     MANAGED_HOOKS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
+    CURSOR_SYNC_SCRIPT_FILE_NAME,
+    WINDOWS_PYTHON_LAUNCHER_COMMAND,
 } from './install-constants.mjs';
 import {
     resolveInstallRoot,
@@ -303,6 +305,75 @@ export function pythonCandidatesForPlatform(platform) {
  */
 export function isWindowsStorePythonStub(executablePath) {
     return /[\\/]windowsapps[\\/]/i.test(executablePath);
+}
+
+/**
+ * Split a stored Python command into an executable and prefix arguments.
+ *
+ * Args:
+ *   pythonCommand: The command the installer detected (`py -3`, `python3`, or a path).
+ *
+ * Returns:
+ *   `{ file, prefixArguments }` for `execFileSync`.
+ */
+export function pythonFileAndPrefixArguments(pythonCommand) {
+    if (pythonCommand === WINDOWS_PYTHON_LAUNCHER_COMMAND) {
+        return { file: 'py', prefixArguments: ['-3'] };
+    }
+    const unquoted = pythonCommand.replace(/^"(.*)"$/, '$1');
+    return { file: unquoted, prefixArguments: [] };
+}
+
+/**
+ * Read generated Cursor paths from the sync manifest under a Cursor home.
+ *
+ * Args:
+ *   cursorRoot: Absolute `.cursor` directory.
+ *
+ * Returns:
+ *   Absolute paths the installer may record, including the sync manifest.
+ */
+export function collectManagedCursorSyncPaths(cursorRoot) {
+    const manifestPath = join(cursorRoot, '.sync-manifest.json');
+    if (!existsSync(manifestPath)) return [];
+    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const generatedPaths = [manifestPath];
+    const allEntries = { ...(parsed.entries || {}), ...(parsed.docs_entries || {}) };
+    for (const eachRelativePath of Object.keys(allEntries)) {
+        generatedPaths.push(join(cursorRoot, eachRelativePath));
+    }
+    return generatedPaths;
+}
+
+/**
+ * Run the installed Cursor rule generator against Claude and Cursor roots.
+ *
+ * Args:
+ *   pythonCommand: Interpreter command from install preflight.
+ *   scriptPath: Absolute `sync_to_cursor.py` path.
+ *   claudeRoot: Managed Claude root that holds `rules/` and `docs/`.
+ *   cursorRoot: Cursor home that receives `rules/*.mdc`.
+ *
+ * Returns:
+ *   void
+ */
+export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorRoot) {
+    mkdirSync(cursorRoot, { recursive: true });
+    const { file, prefixArguments } = pythonFileAndPrefixArguments(pythonCommand);
+    execFileSync(
+        file,
+        [
+            ...prefixArguments,
+            scriptPath,
+            '--force',
+            '--quiet',
+            '--claude-root',
+            claudeRoot,
+            '--cursor-root',
+            cursorRoot,
+        ],
+        { stdio: 'inherit' },
+    );
 }
 
 /**
@@ -654,6 +725,8 @@ function owningManagedRoot(installedFilePath) {
     }
     const codexRulesDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
     if (isInsideDirectory(resolvedPath, codexRulesDirectory)) return codexRulesDirectory;
+    const cursorInstallDirectory = INSTALL_ROOT_RESOLUTION.cursorInstallDirectory;
+    if (isInsideDirectory(resolvedPath, cursorInstallDirectory)) return cursorInstallDirectory;
     return null;
 }
 
@@ -1955,6 +2028,19 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             allInstalledFiles.push(...stats.paths);
         }
     }
+    const shouldInstallCursorRules = !selectedGroups
+        || activeGroups.some((eachGroup) => (eachGroup.includeDirectories || []).includes('rules'));
+    if (shouldInstallCursorRules) {
+        const scriptPath = join(CLAUDE_HOME, 'scripts', CURSOR_SYNC_SCRIPT_FILE_NAME);
+        if (!existsSync(scriptPath)) {
+            throw new Error(`cursor rule sync script missing: ${scriptPath}`);
+        }
+        const cursorRoot = dirname(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory);
+        runCursorRuleSync(pythonCommand, scriptPath, CLAUDE_HOME, cursorRoot);
+        const generatedCursorPaths = collectManagedCursorSyncPaths(cursorRoot);
+        allInstalledFiles.push(...generatedCursorPaths);
+        summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
+    }
     let skillsCreated = 0;
     let skillsUpdated = 0;
     const skillPaths = [];
@@ -2155,6 +2241,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         const { created, updated } = summary.codexRules;
         console.log(`  ${CODEX_RULES_PACKAGE_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
     }
+    if (summary.cursorRules) {
+        const { created } = summary.cursorRules;
+        console.log(`  cursor-rules: ${created} generated files`);
+    }
     if (summary.skills) {
         const { created, updated, pruned } = summary.skills;
         const staleClause = pruned > 0 ? `, ${pruned} stale moved aside` : '';
@@ -2285,7 +2375,7 @@ function executeUninstallPlan(plan, helpers = {}) {
     }
     if (plan.skippedFiles.length > 0) {
         console.warn(
-            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, and outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}`,
+            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}, and outside ${INSTALL_ROOT_RESOLUTION.cursorInstallDirectory}`,
         );
     }
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
@@ -2453,6 +2543,7 @@ Examples:
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
 Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
+Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.
