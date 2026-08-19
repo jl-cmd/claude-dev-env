@@ -14,6 +14,7 @@
     "audit-rubrics"
   ],
   "root_files": [
+    "AGENTS.md",
     "CLAUDE.md",
     "codex-capability-map.json",
     "installable-surfaces.manifest.json"

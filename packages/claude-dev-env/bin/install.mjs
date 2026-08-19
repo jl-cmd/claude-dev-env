@@ -117,7 +117,6 @@ export const CORE_INCLUDE_DIRECTORIES = [
 ];
 
 export const CORE_SKILLS = [
-    'imagegen',
     'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
     'grok-spawn',
     'small-cl', 'comments', 'reviews', 'descriptions', 'emergencies',
@@ -900,9 +899,14 @@ export function copyTree(sourceBase, destBase, options = {}) {
 
 /**
  * If destPath exists and differs from incomingPath, copy the existing file to
- * ~/.claude/backups/CLAUDE.md.<timestamp>.bak before the installer overwrites it.
+ * ~/.claude/backups/<backupName>.<timestamp>.bak before the installer overwrites it.
+ *
+ * @param {string} destPath The managed file the installer writes.
+ * @param {string} incomingPath The package file that replaces it.
+ * @param {string} backupName The managed file name used in the backup path.
+ * @returns {string|null} The backup path when existing content differs.
  */
-function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
+function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
     if (!existsSync(destPath)) return null;
     const existingBytes = readFileSync(destPath);
     const incomingBytes = readFileSync(incomingPath);
@@ -910,7 +914,7 @@ function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
     const backupsDir = join(CLAUDE_HOME, 'backups');
     mkdirSync(backupsDir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = join(backupsDir, `CLAUDE.md.${stamp}.bak`);
+    const backupPath = join(backupsDir, `${backupName}.${stamp}.bak`);
     copyFileSync(destPath, backupPath);
     return backupPath;
 }
@@ -2075,7 +2079,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
         const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
-        const backupPath = backupClaudeHubBeforeOverwrite(claudeHubDest, claudeHubSource);
+        const backupPath = backupHubBeforeOverwrite(claudeHubDest, claudeHubSource, 'CLAUDE.md');
         if (backupPath) {
             console.log(
                 `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous CLAUDE.md hub preserved)`
@@ -2084,6 +2088,19 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         copyFileSync(claudeHubSource, claudeHubDest);
         allInstalledFiles.push(claudeHubDest);
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
+    }
+    const agentsHubSource = join(PACKAGE_ROOT, 'AGENTS.md');
+    if (existsSync(agentsHubSource)) {
+        const agentsHubDest = join(CLAUDE_HOME, 'AGENTS.md');
+        const backupPath = backupHubBeforeOverwrite(agentsHubDest, agentsHubSource, 'AGENTS.md');
+        if (backupPath) {
+            console.log(
+                `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous AGENTS.md guidance preserved)`
+            );
+        }
+        copyFileSync(agentsHubSource, agentsHubDest);
+        allInstalledFiles.push(agentsHubDest);
+        console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
@@ -2444,6 +2461,8 @@ with package, version, targetIdentity, managedRoot, files, and skills.
 
 If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
 writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
+If ~/.claude/AGENTS.md already exists and differs from the package copy, the installer
+writes the previous contents to ~/.claude/backups/AGENTS.md.<timestamp>.bak first.
 `);
 }
 

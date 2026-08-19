@@ -1,6 +1,6 @@
 """Tests for check_banned_prefixes — flags function names with generic prefixes.
 
-CODE_RULES.md §5 / AGENTS.md "Naming → Function names use specific verbs:
+CODE_RULES.md §5 "Naming → Function names use specific verbs:
 parse_invoice, dispatch_event, migrate_schema. Generic prefixes to replace:
 handle_, process_, manage_, do_."
 

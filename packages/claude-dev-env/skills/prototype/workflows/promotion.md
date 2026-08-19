@@ -16,7 +16,7 @@ The task seeds carry the full ordered detail. The shape:
 4. **Cleanup.** Remove scratch files, debug dumps, and temp helpers the POC created (`cleanup-temp-files` rule).
 5. **Privacy sweep** via `privacy-hygiene` over the diff.
 6. **Review and verify** the real diff against the [review guide](../../reviews/SKILL.md#review-workflow). Record the checks run and repair every required finding.
-7. **Commit and PR.** After the review and verification record is complete, run `/commit`, then open a draft PR per the `git-workflow` rule.
+7. **Commit and PR.** After the review and verification record is complete, commit by hand per the `git-workflow` rule, then open a draft PR.
 8. **State the honest limitations** from `reference/honest-limitations.md` in the PR body or to the user.
 9. **Converge** by handing the PR to `autoconverge` by default; use `pr-converge` for paced ticks or `bugteam` for an open-loop audit.
 

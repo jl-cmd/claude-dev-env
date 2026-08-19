@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-Stop hook that blocks Claude responses ending on a promise about undone work.
+"""Stop hook that blocks a turn ending with a promise of future work.
 
-When a turn ends on a forward-looking statement of intent ("I'll now run the
-tests", "Let me implement the fix") instead of actually doing the work, the
-agent is forced to do the work now with tool calls, or - when genuinely blocked
-on input only the user can supply - route through AskUserQuestion and end
-cleanly. The rule name is long-horizon-autonomy.
+When a turn ends with a forward-looking statement of intent ("I'll now run the
+tests", "Let me implement the fix"), complete the work with tool calls during
+the turn. Route work requiring user-only input through AskUserQuestion. The
+rule name is long-horizon-autonomy.
 """
 
 import json
@@ -104,7 +102,7 @@ def find_intent_only_ending(text: str) -> bool:
 
 
 def main() -> None:
-    """Read the stop-hook payload and block turns that end on a promise of undone work."""
+    """Read the stop-hook payload and block turns that promise future work."""
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -125,14 +123,11 @@ def main() -> None:
         sys.exit(0)
 
     block_reason = (
-        "LONG-HORIZON-AUTONOMY GUARDRAIL: Your turn ends on a promise about work "
-        "that is not yet done, rather than doing it. Do the work NOW with tool calls "
-        "instead of describing what you are about to do.\n\n"
-        "If the work is genuinely blocked on input only the user can give, route the "
-        "ask through an AskUserQuestion tool call and end the turn cleanly. Otherwise, "
-        "carry out the stated action this turn.\n\n"
-        "You MUST re-output the complete response with the work actually performed, "
-        "per the long-horizon-autonomy rule."
+        "LONG-HORIZON-AUTONOMY GUARDRAIL: This turn ends with a promise of future "
+        "work. Complete that work with tool calls during this turn. Route questions "
+        "requiring user-only input through AskUserQuestion, then end the turn cleanly.\n\n"
+        "Re-output the complete response with the work performed, per the "
+        "long-horizon-autonomy rule."
     )
     block_response = {
         "decision": "block",

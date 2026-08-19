@@ -19,7 +19,7 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 27 agents, 10 commands, and 12 skills to `~/.claude/`
+2. Copy 13 rules, 5 docs, 8 agents, 1 command, and 12 skills to `~/.claude/`
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
@@ -48,7 +48,7 @@ npx claude-dev-env --only prompts,research  # combine groups
 
 ### Verify
 
-Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run any slash command like `/commit` or `/plan` to confirm commands loaded.
+Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run `/sr-loop` to confirm commands loaded.
 
 ### Update
 
@@ -130,44 +130,27 @@ Reference documents that rules and agents point to for detailed standards.
 | `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
 
-### Agents (28)
+### Agents (8)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
-**Code Quality:** clean-coder, code-advisor, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
+| Agent | Role |
+|---------|------|
+| `clean-coder` | Primary code-writing agent |
+| `code-quality-agent` | Multi-file code quality review |
+| `git-commit-crafter` | Conventional commit messages |
+| `issue-tracker` | GitHub issue create, update, and close |
+| `plan-packet-validator` | Fresh-context plan-packet validator |
+| `pr-description-writer` | PR descriptions from the current diff |
+| `session-advisor` | Standing reviewer; endorse/correction/plan/stop |
+| `skill-writer-agent` | SKILL.md authoring specialist |
 
-**Testing:** tdd-test-writer, test-data-builder, validation-expert
-
-**Planning:** parallel-workflow-coordinator, mandatory-agent-workflow-agent, stub-detector-agent
-
-**Documentation:** docs-agent, doc-orchestrator
-
-**Configuration:** config-extraction-agent, config-centralizer, magic-value-eliminator-agent
-
-**Tooling:** agent-writer, tooling-builder
-
-**Git:** git-commit-crafter, pr-description-writer, session-continuity-manager
-
-**File Formats:** docx-agent, pdf-agent, xlsx-agent
-
-**Research:** deep-research
-
-**Other:** clasp-deployment-orchestrator, project-context-loader
-
-### Commands (9)
+### Commands (1)
 
 Slash commands for common workflows.
 
 | Command | Purpose |
 |---------|---------|
-| `/commit` | Structured git commit with conventional format |
-| `/plan` | Create implementation plans with config search |
-| `/implement` | Execute plans with TDD workflow |
-| `/review-plan` | Review and critique implementation plans |
-| `/right-size` | Check for over/under-engineering |
-| `/pr-comments` | Process PR review comments systematically |
-| `/docupdate` | Update documentation after changes |
-| `/sum` | Summarize current work context |
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
 ### Skills (12)
@@ -202,7 +185,6 @@ Slash commands for common workflows.
 | `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
-| `imagegen` | Generate exact-resolution images through OpenAI API or Codex OAuth with verified receipts |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |

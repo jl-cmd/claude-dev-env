@@ -1,0 +1,33 @@
+name: Validate instruction pairs
+
+on:
+  pull_request:
+    paths:
+      - "**/CLAUDE.md"
+      - "**/AGENTS.md"
+      - "**/*.md"
+      - ".github/workflows/instruction-pairs-reusable.yml"
+      - ".github/workflows/validate-instruction-pairs.yml"
+      - "packages/claude-dev-env/scripts/validate_instruction_pairs.py"
+      - ".pre-commit-config.yaml"
+      - ".gitattributes"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/CLAUDE.md"
+      - "**/AGENTS.md"
+      - "**/*.md"
+      - ".github/workflows/instruction-pairs-reusable.yml"
+      - ".github/workflows/validate-instruction-pairs.yml"
+      - "packages/claude-dev-env/scripts/validate_instruction_pairs.py"
+      - ".pre-commit-config.yaml"
+      - ".gitattributes"
+
+jobs:
+  instruction-pairs:
+    uses: ./.github/workflows/instruction-pairs-reusable.yml
+    with:
+      validator-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+    permissions:
+      contents: read

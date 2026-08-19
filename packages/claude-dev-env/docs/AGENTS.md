@@ -1,0 +1,32 @@
+# docs
+
+Reference documentation installed into `~/.claude/docs/` by `bin/install.mjs`. These files are loaded on demand by rules, skills, and agents — they are not always-on context.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `CODE_RULES.md` | Compact agent reference for all code rules; ⚡ marks hook-enforced rules; canonical source agents load before writing code |
+| `TEST_QUALITY.md` | Test writing standards: what to test, what to remove, React testing patterns, anti-patterns |
+| `BDD_DISCOVERY_PROTOCOL.md` | Example Mapping algorithm for discovery before implementation; based on Smart & Molak *BDD in Action* §6.4 |
+| `BDD_SCENARIO_QUALITY.md` | Seven scenario quality patterns (§7.6-style catalog) |
+| `BDD_TEST_LAYOUT.md` | `describe/when/should` test layout and soap-opera personas |
+| `DJANGO_PATTERNS.md` | Django-specific coding patterns |
+| `REACT_PATTERNS.md` | React-specific coding patterns |
+| `agent-spawn-protocol.md` | Full agent-spawn protocol behind the `rules/agent-spawn-protocol.md` kernel: context-sufficiency check, `/prompt-generator` prompt crafting, and the spawn step |
+| `nas-ssh-invocation.md` | Full NAS ssh policy behind the `rules/nas-ssh-invocation.md` kernel: the OpenSSH binary form, config sources, and hook enforcement |
+| `worker-completion-gate.md` | Full worker-completion gate behind the `rules/workers-done-before-complete.md` kernel: the checklist, examples, and run-state records |
+| `wsl-docker-cowork-starter-matrix.md` | Host matrix: WSL/Docker/cowork component → starter → required? → shutdown; policy options with costs; no unmeasured `.wslconfig` memory cap |
+| `host-pool-health-monitor.md` | Operator recipe for Windows pool/handle health: thresholds, clean-shell re-run of `Capture-PoolHealth.ps1`, RC2/RC3/RC4 remediation map |
+
+## Subdirectory
+
+| Entry | Description |
+|---|---|
+| `references/` | Pointer documents to external sources and standard terminology; loaded on demand |
+
+## Load pattern
+
+A rule points to a doc with the path wrapped in backticks, such as `@~/.claude/docs/<file>.md`. The backticks make it a plain pointer: Claude Code reads the doc only when a rule, skill, or agent opens it, so the doc stays out of session-start context. The same path without backticks expands into context at launch when it sits in a file that loads at session start.
+
+The `InstructionsLoaded` hook confirms this: a bare `@`-import fires an `include` load event; a backtick-wrapped path fires none.

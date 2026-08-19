@@ -1,4 +1,8 @@
-"""Attribute-chain and os.environ alias-resolution primitives for the test-isolation check."""
+"""Attribute-chain and os.environ alias-resolution primitives.
+
+Serves the test-isolation check, and lends ``_dotted_attribute_chain`` to the
+dead-module-constant check's widened attribute-read scan.
+"""
 
 import ast
 import sys
@@ -143,7 +147,7 @@ def _attribute_chain_resolves_to_os_environ(
     return canonical_chain == OS_ENVIRON_DOTTED_NAME
 
 
-def _dotted_attribute_chain(attribute_node: ast.Attribute) -> str | None:
+def _dotted_attribute_chain(attribute_node: ast.expr) -> str | None:
     chain_parts: list[str] = []
     walker: ast.expr = attribute_node
     while isinstance(walker, ast.Attribute):

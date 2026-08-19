@@ -36,12 +36,17 @@ class TestWorkingStylePrompt:
         emitted = json.loads(_run_main())
         assert emitted["additionalContext"] == WORKING_STYLE_PROMPT
 
-    def test_emitted_prompt_carries_ledger_and_scope_lines(self) -> None:
+    def test_emitted_prompt_preserves_existing_guidance_and_adds_policy(self) -> None:
         emitted = json.loads(_run_main())
         prompt_text = emitted["additionalContext"]
-        assert "scratch txt file you'll keep running as you go; ledger, if you will." in prompt_text
-        assert "Deliver what was asked, at the scope intended." in prompt_text
-        assert 'answer "what happened" or "what did you find,"' in prompt_text
+        assert "Document each task in a location that remains easy to find later." in prompt_text
+        assert "Deliver the requested work at its intended scope." in prompt_text
+        assert "Use positive prose throughout every generated text surface" in prompt_text
+        assert "Write each point as one direct affirmative statement" in prompt_text
+        assert "Use plain language, full terms, and simple descriptive names" in prompt_text
+        assert "When a request has multiple reasonable interpretations" in prompt_text
+        assert "Ask one focused clarification question" in prompt_text
+        assert "Pause for the user's choice before making a high-impact decision." in prompt_text
 
     def test_build_session_directive_returns_the_shared_constant(self) -> None:
         assert starter.build_session_directive() == WORKING_STYLE_PROMPT

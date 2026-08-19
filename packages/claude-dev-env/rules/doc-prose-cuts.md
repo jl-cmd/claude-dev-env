@@ -51,7 +51,7 @@ After writing, ask: read a year from now by someone who knew no earlier state, d
 ## Enforcement
 
 - **Write-time.** `state_description_blocker` (PreToolUse on Write|Edit) blocks historical and comparative phrases in `.md` prose, code comments, and Python docstrings. A phrase wrapped in double quotes or backticks inside a docstring counts as a mention and is skipped. The denial names the matched phrases and shows a rewrite.
-- **AI review.** The claude-dev-env repository's root `AGENTS.md`, the AI-review fan-out source, names the other three shapes as findings an agent applies to the `.md` lines a PR changes. No hook backs them: telling a justification sentence from a load-bearing one needs meaning a regex cannot read.
+- **AI review.** The claude-dev-env repository's `.cursor/BUGBOT.md` names the other three shapes as findings an agent applies to the `.md` lines a PR changes. Judgment-based review covers these shapes because a regex cannot read sentence meaning.
 
 ## Sibling rule
 

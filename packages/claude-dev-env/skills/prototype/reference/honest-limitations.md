@@ -10,7 +10,7 @@ Promotion records the controls applied to the real diff:
 
 - review and verification under the [review guide](../../reviews/SKILL.md#review-workflow);
 - the `privacy-hygiene` sweep for personal data and secrets;
-- the pull-request review (AGENTS.md criteria and any PR-loop reviewers).
+- the pull-request review criteria and any PR-loop reviewers.
 
 Say plainly: the write-time rule engine did not see this code; the verifier and review are what cover it.
 

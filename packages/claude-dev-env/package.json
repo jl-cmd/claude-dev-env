@@ -1,6 +1,6 @@
 {
     "name": "claude-dev-env",
-    "version": "2.13.0",
+    "version": "2.14.1",
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
@@ -27,6 +27,7 @@
         "_shared/",
         "audit-rubrics/",
         "codex-rules/",
+        "AGENTS.md",
         "CLAUDE.md",
         "!**/__pycache__/**",
         "!**/*.py[cod]",

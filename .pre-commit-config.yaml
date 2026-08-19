@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: validate-instruction-pairs
+        name: Validate exact instruction imports
+        entry: python packages/claude-dev-env/scripts/validate_instruction_pairs.py
+        language: system
+        pass_filenames: false
+        files: (^|/)(CLAUDE|AGENTS)\.md$|^\.gitattributes$

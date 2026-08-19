@@ -156,11 +156,10 @@ def test_run_git_reference_query_returns_replaced_text_on_locale_invalid_bytes(
     assert resolved_output == expected_replaced_reference
 
 
-def test_unresolvable_merge_base_message_does_not_claim_dangling_origin_head() -> None:
+def test_unresolvable_merge_base_message_describes_pending_validation() -> None:
     skip_message = git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE
-    assert "origin/HEAD names a ref" not in skip_message
-    assert "unrelated histories" in skip_message
-    assert "merge-base still could not name a shared commit" in skip_message
+    assert "CODE_RULES validation is pending" in skip_message
+    assert "Restore shared history" in skip_message
 
 
 def test_run_git_text_command_raises_when_git_cannot_launch(
@@ -239,6 +238,11 @@ def resolve_remote_head_reference(monkeypatch: pytest.MonkeyPatch) -> None:
         return GIT_RESOLVED_EXIT_CODE, RESOLVED_COMMIT_OBJECT_NAME
 
     monkeypatch.setattr(pre_push, "run_git_text_command", fake_run_git_text_command)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [HOOK_INVOCATION_NAME, git_hooks_constants.DEFAULT_REMOTE_NAME, PUSHED_REMOTE_URL],
+    )
 
 
 
@@ -994,6 +998,46 @@ def test_resolve_default_branch_reference_reads_the_origin_head_symbolic_referen
     assert pre_push.resolve_default_branch_reference() == ORIGIN_DEFAULT_BRANCH_REFERENCE
 
 
+def test_resolve_default_branch_reference_reads_the_requested_remote_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, default_branch_tip, _topic_branch_tip = _build_default_branch_repository(
+        tmp_path
+    )
+    upstream_reference = "refs/remotes/upstream/main"
+    upstream_head_reference = "refs/remotes/upstream/HEAD"
+    _run_fixture_git(repository, "update-ref", upstream_reference, default_branch_tip)
+    _run_fixture_git(
+        repository, "symbolic-ref", upstream_head_reference, upstream_reference
+    )
+    monkeypatch.chdir(repository)
+
+    assert pre_push.resolve_default_branch_reference("upstream") == upstream_reference
+
+
+def test_resolve_default_branch_merge_base_uses_requested_remote_trunk_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, default_branch_tip, topic_branch_tip = _build_default_branch_repository(
+        tmp_path
+    )
+    upstream_trunk_reference = "refs/remotes/upstream/trunk"
+    _run_fixture_git(
+        repository, "update-ref", upstream_trunk_reference, default_branch_tip
+    )
+    monkeypatch.chdir(repository)
+
+    merge_base_object_name = pre_push.resolve_default_branch_merge_base(
+        FEATURE_BRANCH_NAME,
+        topic_branch_tip,
+        "upstream",
+    )
+
+    assert merge_base_object_name == default_branch_tip
+
+
 def test_resolve_default_branch_reference_returns_none_without_remote_tracking_refs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1198,7 +1242,7 @@ def test_main_allows_the_push_when_origin_head_names_an_absent_reference(
     assert recorded_arguments == ["--base", remote_object_name]
 
 
-def test_main_skips_the_gate_when_no_merge_base_resolves(
+def test_main_keeps_the_gate_pending_when_no_merge_base_resolves(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1230,11 +1274,71 @@ def test_main_skips_the_gate_when_no_merge_base_resolves(
 
     exit_code = pre_push.main()
 
-    assert exit_code == 0
+    assert exit_code == git_hooks_constants.GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     assert not recorded_arguments_path.exists(), (
-        "the gate ran on a base the hook could not verify"
+        "the gate remains pending until the hook verifies a usable base"
     )
     assert git_hooks_constants.UNRESOLVABLE_MERGE_BASE_MESSAGE in capsys.readouterr().err
+
+
+def test_main_uses_the_pushed_remote_when_origin_has_unrelated_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, default_branch_tip, topic_branch_tip = _build_default_branch_repository(
+        tmp_path
+    )
+    _run_fixture_git(repository, "checkout", "--orphan", "unrelated-origin")
+    _run_fixture_git(repository, "rm", "-rf", ".")
+    unrelated_origin_tip = _commit_file(repository, "unrelated.txt")
+    _run_fixture_git(repository, "checkout", FEATURE_BRANCH_NAME)
+    _run_fixture_git(
+        repository,
+        "update-ref",
+        ORIGIN_DEFAULT_BRANCH_REFERENCE,
+        unrelated_origin_tip,
+    )
+    _set_origin_head(repository, ORIGIN_DEFAULT_BRANCH_REFERENCE)
+    upstream_reference = "refs/remotes/upstream/main"
+    upstream_head_reference = "refs/remotes/upstream/HEAD"
+    _run_fixture_git(repository, "update-ref", upstream_reference, default_branch_tip)
+    _run_fixture_git(
+        repository, "symbolic-ref", upstream_head_reference, upstream_reference
+    )
+    recorded_arguments_path = tmp_path / "upstream_recorded_arguments.txt"
+    recording_gate_script_path = tmp_path / "upstream_recording_gate.py"
+    recording_gate_script_path.write_text(
+        "import pathlib, sys\n"
+        f'pathlib.Path(r"{recorded_arguments_path}").write_text('
+        "'\\n'.join(sys.argv[1:]), encoding='utf-8')\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(
+        sys, "argv", [HOOK_INVOCATION_NAME, PUSHED_REMOTE_NAME, PUSHED_REMOTE_URL]
+    )
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            _push_stdin_line(
+                FEATURE_BRANCH_NAME,
+                topic_branch_tip,
+                FEATURE_BRANCH_NAME,
+                NON_ZERO_REMOTE_SHA_ONE,
+            )
+        ),
+    )
+
+    exit_code = pre_push.main()
+
+    assert exit_code == 0
+    assert recorded_arguments_path.read_text(encoding="utf-8").splitlines() == [
+        "--base",
+        default_branch_tip,
+    ]
 
 
 def test_main_allows_default_branch_file_the_rebase_replayed_onto(

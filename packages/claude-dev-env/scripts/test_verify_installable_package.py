@@ -31,6 +31,7 @@ def test_load_manifest_lists_hooks_and_claude_md() -> None:
     all_root_files = mod.required_root_file_names(manifest)
     assert "hooks" in all_directories
     assert "output-styles" in all_directories
+    assert "AGENTS.md" in all_root_files
     assert "CLAUDE.md" in all_root_files
     assert MANIFEST_FILENAME in all_root_files
 
@@ -58,10 +59,12 @@ def test_surface_appears_in_tarball_members_for_directory_children() -> None:
     all_members = frozenset(
         {
             f"{TARBALL_PACKAGE_PREFIX}hooks/hooks.json",
+            f"{TARBALL_PACKAGE_PREFIX}AGENTS.md",
             f"{TARBALL_PACKAGE_PREFIX}CLAUDE.md",
         }
     )
     assert mod.surface_appears_in_tarball_members("hooks", all_members)
+    assert mod.surface_appears_in_tarball_members("AGENTS.md", all_members)
     assert mod.surface_appears_in_tarball_members("CLAUDE.md", all_members)
     assert not mod.surface_appears_in_tarball_members("missing-dir", all_members)
 
@@ -69,11 +72,12 @@ def test_surface_appears_in_tarball_members_for_directory_children() -> None:
 def test_missing_manifest_surfaces_in_tarball_reports_absent_root_file() -> None:
     manifest = {
         "directories": ["hooks"],
-        "root_files": ["CLAUDE.md", "codex-capability-map.json"],
+        "root_files": ["AGENTS.md", "CLAUDE.md", "codex-capability-map.json"],
     }
     all_members = frozenset(
         {
             f"{TARBALL_PACKAGE_PREFIX}hooks/hooks.json",
+            f"{TARBALL_PACKAGE_PREFIX}AGENTS.md",
             f"{TARBALL_PACKAGE_PREFIX}CLAUDE.md",
         }
     )

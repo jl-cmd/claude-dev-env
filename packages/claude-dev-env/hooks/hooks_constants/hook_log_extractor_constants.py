@@ -123,7 +123,7 @@ SUMMARY_COLUMN_HEADINGS: tuple[str, str, str, str] = (
     "top_blocked_command_preview",
 )
 
-SUMMARY_NO_NEW_BLOCKS_MESSAGE: str = "No new blocks since last run."
+SUMMARY_ZERO_BLOCKED_EVENTS_MESSAGE: str = "Blocked events recorded in the last 24 hours: 0."
 
 QUERY_NO_ROWS_RETURNED_MESSAGE: str = "No rows returned."
 
@@ -231,4 +231,3 @@ WINDOWS_CREATE_NEW_PROCESS_GROUP_FLAG: int = 0x00000200
 
 LOCK_MAXIMUM_RETRY_COUNT: int = 30
 LOCK_RETRY_SLEEP_SECONDS: float = 0.1
-

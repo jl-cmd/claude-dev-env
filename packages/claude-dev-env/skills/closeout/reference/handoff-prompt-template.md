@@ -55,7 +55,7 @@ Open a PR per filed issue below and drive each to convergence.
 ## Safety — never do these
 - Never run, merge, deploy, or sync the claude-dev-env publish pipeline. It is live in production (publishes to npm).
 - Never run the host repo's automations.
-- Never hand-edit .cursor/BUGBOT.md; it is generated from AGENTS.md.
+- Keep `.cursor/BUGBOT.md` aligned with the repository's review rules.
 
 ## Base branch and verification
 - Base branch: main

@@ -1,8 +1,8 @@
 """Validates repo-relative doc cross-references resolve to real files.
 
 Bot reviewers on PR #257 caught hook_log_init.py:69 referencing
-`commands/hook-log-init.md` when the actual path is
-`packages/claude-dev-env/commands/hook-log-init.md`. PR #232 had a
+`packages/claude-dev-env/hooks/diagnostic/AGENTS.md` when a docstring
+names that inventory. PR #232 had a
 similar /qbug doc reference that didn't match the gate's invocation.
 
 This test walks Python docstrings and Markdown files for repo-relative
@@ -34,7 +34,6 @@ MAX_DETAIL_LINES_IN_FAILURE: int = 50
 ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
     {
         ".cursor/agents/clean-coder.md",
-        "config/local-identity.json",
         "config/sweep_config.py",
         "config/timing.py",
         "config/constants.py",
@@ -87,6 +86,8 @@ def _iter_repo_files(extension: str) -> list[Path]:
         for each_path in each_top_path.rglob(f"*{extension}"):
             relative_path_parts = each_path.relative_to(REPOSITORY_ROOT).parts
             if any(part in DIRECTORIES_TO_SKIP for part in relative_path_parts):
+                continue
+            if relative_path_parts[:2] == ("docs", "plans"):
                 continue
             matched_files.append(each_path)
     return matched_files

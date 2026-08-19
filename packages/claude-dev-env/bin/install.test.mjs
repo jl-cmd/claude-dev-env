@@ -42,6 +42,7 @@ import {
     pruneRetiredHookEntriesFromSettings,
     retainNewestRunBackupOnly,
 } from './install.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
     expandHomeDirectoryTokens,
     expandHomeDirectoryTokensInSettings,
@@ -200,6 +201,14 @@ test('CORE_SKILLS ships issue-tracker so the core group installs the skill the S
         INSTALL_GROUPS.core.skills,
         CORE_SKILLS,
         'the core group skills array must read CORE_SKILLS so the two never drift',
+    );
+});
+
+
+test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
+    assert.ok(
+        EVER_SHIPPED_SKILL_NAMES.has('imagegen'),
+        'imagegen must remain in the retirement registry after the package stops shipping it',
     );
 });
 
@@ -1654,6 +1663,31 @@ test('collectFiles skips every named cache directory and loose bytecode file', (
         assert.deepEqual(collectedFiles, [sourceFilePath], 'only the shipped file survives the walk');
     } finally {
         rmSync(sourceRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('copyTree copies AGENTS.md with agent definitions', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-source-'));
+    const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-destination-'));
+    try {
+        writeFileSync(join(sourceRoot, 'AGENTS.md'), '# Shared guidance\n');
+        const agentDefinitionPath = join(sourceRoot, 'clean-coder.md');
+        writeFileSync(
+            agentDefinitionPath,
+            '---\nname: clean-coder\ndescription: fixture agent\n---\n',
+        );
+
+        const copyStats = copyTree(sourceRoot, destinationRoot);
+        const copiedAgentsPath = join(destinationRoot, 'AGENTS.md');
+        const copiedAgentPath = join(destinationRoot, 'clean-coder.md');
+
+        assert.equal(existsSync(copiedAgentsPath), true, 'the canonical instructions install');
+        assert.equal(existsSync(copiedAgentPath), true, 'the real agent definition installs');
+        assert.deepEqual(copyStats.paths, [copiedAgentsPath, copiedAgentPath]);
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+        rmSync(destinationRoot, { recursive: true, force: true });
     }
 });
 

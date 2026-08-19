@@ -1,5 +1,67 @@
 # Changelog
 
+## [2.14.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.0...claude-dev-env-v2.14.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* add opus5 contract marker to package AGENTS.md ([6cbd485](https://github.com/jl-cmd/claude-dev-env/commit/6cbd485f24f52c246a6d932ab95e65ed278cdd54))
+
+
+### Documentation
+
+* Update AGENTS.md ([8d7ba25](https://github.com/jl-cmd/claude-dev-env/commit/8d7ba256ca703deb263bd53cfde337b9a0a6bfac))
+
+
+### Maintenance
+
+* drop unshipped agents and slash commands ([9cd1a39](https://github.com/jl-cmd/claude-dev-env/commit/9cd1a398f97fe75a9dfb64a0270d2be4ee9a808d))
+* drop unshipped agents and slash commands ([f872dd8](https://github.com/jl-cmd/claude-dev-env/commit/f872dd8e89f79c5c69cf4944daaecf332f76cff6))
+
+## [2.14.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.13.0...claude-dev-env-v2.14.0) (2026-08-11)
+
+
+### Features
+
+* enforce exact Claude instruction imports ([ac15d36](https://github.com/jl-cmd/claude-dev-env/commit/ac15d36877786cd635cf3f842a176c979e24e20f))
+* enforce positive prose at session start ([4321e4e](https://github.com/jl-cmd/claude-dev-env/commit/4321e4e4164c987c5a75cee57dccdc3461293561))
+* enforce positive prose at session start ([27dc2ef](https://github.com/jl-cmd/claude-dev-env/commit/27dc2ef456c8832294a9eedbe5ecbbd1f7f93ed4))
+
+
+### Bug Fixes
+
+* align hook status contracts ([59a578b](https://github.com/jl-cmd/claude-dev-env/commit/59a578b8a00021646104d44b7c75138e06401762))
+* clarify hook status messages ([8add12a](https://github.com/jl-cmd/claude-dev-env/commit/8add12af758a5cf00db74b2bf17ae30f5aecc23b))
+* clarify hook status messages ([2d17923](https://github.com/jl-cmd/claude-dev-env/commit/2d17923432b86c5fc036cdb517b44b28999f6c73))
+* **hooks:** count alias attribute reads in the widened dead-constant scan ([e9192f1](https://github.com/jl-cmd/claude-dev-env/commit/e9192f1e1f55243bc4b2d9bca3c253c6911514b7))
+* **hooks:** count alias attribute reads in the widened dead-constant scan ([6cd91f4](https://github.com/jl-cmd/claude-dev-env/commit/6cd91f4e3e311d0e1ad361d96229b0131f214947))
+* **hooks:** guard the probe-chains import like its siblings ([09f32ba](https://github.com/jl-cmd/claude-dev-env/commit/09f32ba8148acfa1924273590bd04bb98e31cdc6))
+* **installer:** retire removed imagegen skill ([6efa346](https://github.com/jl-cmd/claude-dev-env/commit/6efa3469a1eb2f30191a6424f1295dc81104d16e))
+* keep instruction aliases out of agent installation ([3e95b3f](https://github.com/jl-cmd/claude-dev-env/commit/3e95b3f74d81d3346fe640fcecf6411513e58316))
+* route validator messages through logging ([020cdbf](https://github.com/jl-cmd/claude-dev-env/commit/020cdbfe03bb243dfbf680b6555dab90bc7473fc))
+* use StrEnum for validator status ([89ada86](https://github.com/jl-cmd/claude-dev-env/commit/89ada86ac6bb188d230b4eddf5284f20b19e719a))
+* validate exact Claude instruction imports ([35f7a66](https://github.com/jl-cmd/claude-dev-env/commit/35f7a666b01b31f88fa56efcf245d5240f0a098c))
+* write validator output through explicit streams ([cf44ca2](https://github.com/jl-cmd/claude-dev-env/commit/cf44ca2286803aa15b2c823fb5a4dd4b56b1579f))
+
+
+### Maintenance
+
+* **imagegen:** remove duplicate skill ([611bf72](https://github.com/jl-cmd/claude-dev-env/commit/611bf7232dd665597c4ba2bbfd61b5d01ab92ee2))
+* **imagegen:** remove duplicate skill ([cf2ce9a](https://github.com/jl-cmd/claude-dev-env/commit/cf2ce9a721aa4e470d1bd1acbfde790fa504a5d3))
+* link AGENTS guidance to CLAUDE files ([a8f601a](https://github.com/jl-cmd/claude-dev-env/commit/a8f601aac91dcefd32031a034aa6ac3138c16985))
+* make AGENTS canonical for Claude imports ([9c9e0ff](https://github.com/jl-cmd/claude-dev-env/commit/9c9e0ff06685c8c2be6612f41eaef5f528fa2ac5))
+* make AGENTS canonical for Claude imports ([68fe686](https://github.com/jl-cmd/claude-dev-env/commit/68fe68650e0db6a207bdce8921013abbc6ba285d))
+* retire AGENTS fan-out sync ([d865cc2](https://github.com/jl-cmd/claude-dev-env/commit/d865cc280f413e712179b5b82f18ecf7e9df5f05))
+* retire AGENTS fan-out sync ([d35faec](https://github.com/jl-cmd/claude-dev-env/commit/d35faec5b78314a72bec73494ef61090343867f8))
+* retire AGENTS fan-out sync ([1b04483](https://github.com/jl-cmd/claude-dev-env/commit/1b044839ae6b3f13cd278e302317f990bbcebc2a))
+
+
+### Refactoring
+
+* **hooks:** collapse widened-scan collectors into one walk ([2c35c8f](https://github.com/jl-cmd/claude-dev-env/commit/2c35c8fa15bdcb5968d75e02296aadbc44b0a7ac))
+* **hooks:** match attribute reads through the chain speller alone ([b02e0a7](https://github.com/jl-cmd/claude-dev-env/commit/b02e0a74e12a8d0a175fd5e129fae9fc574121e5))
+* **hooks:** reuse the shared dotted-chain speller in the widened scan ([ccf58b9](https://github.com/jl-cmd/claude-dev-env/commit/ccf58b9564be73c4b464a251a6e59efa4de8205a))
+
 ## [2.13.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.12.0...claude-dev-env-v2.13.0) (2026-08-08)
 
 
