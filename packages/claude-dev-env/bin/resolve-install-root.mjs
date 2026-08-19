@@ -16,6 +16,8 @@ import {
     CODEX_HOME_ENVIRONMENT_VARIABLE,
     DEFAULT_CODEX_DIRECTORY_NAME,
     CODEX_RULES_DIRECTORY_NAME,
+    DEFAULT_CURSOR_DIRECTORY_NAME,
+    CURSOR_RULES_DIRECTORY_NAME,
 } from './install-constants.mjs';
 
 export const CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE = 'CLAUDE_CONFIG_DIR';
@@ -40,6 +42,8 @@ export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
  *   allDeclaredExternalPaths: string[],
  *   allDeclaredExternalDirectories: string[],
  *   codexRulesInstallDirectory: string,
+ *   cursorInstallDirectory: string,
+ *   cursorRulesInstallDirectory: string,
  * }} InstallRootResolution
  */
 
@@ -82,6 +86,12 @@ export function resolveInstallRoot(options = {}) {
     const codexRulesInstallDirectory = resolve(
         join(codexHomeDirectory, CODEX_RULES_DIRECTORY_NAME),
     );
+    const cursorInstallDirectory = resolve(
+        join(homeDirectory, DEFAULT_CURSOR_DIRECTORY_NAME),
+    );
+    const cursorRulesInstallDirectory = resolve(
+        join(cursorInstallDirectory, CURSOR_RULES_DIRECTORY_NAME),
+    );
     return {
         managedRoot,
         source,
@@ -89,8 +99,10 @@ export function resolveInstallRoot(options = {}) {
         manifestFilePath: join(managedRoot, MANIFEST_FILE_NAME),
         mypyIniInstallPath,
         allDeclaredExternalPaths: [mypyIniInstallPath],
-        allDeclaredExternalDirectories: [codexRulesInstallDirectory],
+        allDeclaredExternalDirectories: [codexRulesInstallDirectory, cursorInstallDirectory],
         codexRulesInstallDirectory,
+        cursorInstallDirectory,
+        cursorRulesInstallDirectory,
     };
 }
 
@@ -119,7 +131,8 @@ export function isPathWithinManagedRoot(candidatePath, managedRoot) {
 
 /**
  * True when a write destination is allowed: inside the managed root, the
- * home-directory `.mypy.ini`, or a file under the Codex rules directory.
+ * home-directory `.mypy.ini`, a file under the Codex rules directory, or a file
+ * under the Cursor rules directory.
  *
  * @param {string} candidatePath
  * @param {InstallRootResolution} resolution

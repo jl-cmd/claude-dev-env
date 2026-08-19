@@ -24,6 +24,7 @@ That's it. The installer will:
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
+7. Generate Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules
 
 The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
 
@@ -118,6 +119,10 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 ### Codex exec-policy files
 
 Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `claude-dev-env.rules` so a local `default.rules` stays in place.
+
+### Cursor rule files
+
+The installer runs `sync_to_cursor.py` so each Claude `rules/*.md` file becomes `~/.cursor/rules/<stem>.mdc` with Cursor frontmatter (`alwaysApply` or a `globs` list from Claude `paths:`). Inventory files `CLAUDE.md` and `AGENTS.md` stay out of that folder.
 
 ### Docs (5)
 

@@ -14,7 +14,7 @@ Skills are auto-discovered from the `skills/` directory. There is no manifest th
 
 ## How the installer copies content
 
-The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, writes `~/.mypy.ini` (so mypy finds the installed hooks), and copies Codex exec-policy files from `codex-rules/` into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set). Those destinations go on the manifest, so `--uninstall` names them.
+The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, writes `~/.mypy.ini` (so mypy finds the installed hooks), copies Codex exec-policy files from `codex-rules/` into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set), and generates Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules. Those destinations go on the manifest, so `--uninstall` names them.
 
 Two paths matter:
 

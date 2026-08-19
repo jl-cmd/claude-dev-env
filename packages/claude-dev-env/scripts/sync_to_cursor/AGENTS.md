@@ -6,12 +6,12 @@ Python package that syncs Claude rules and docs to Cursor `.mdc` files. Entry po
 
 | File | Purpose |
 |---|---|
-| `engine.py` | Main sync logic: loads the manifest, builds rule mappings, hashes sources, writes `.mdc` files, and updates the manifest |
-| `rules.py` | Builds `RuleMapping` objects from Claude rule markdown files; applies transforms to fit Cursor's `.mdc` format |
+| `engine.py` | Main sync logic: loads the manifest, builds rule mappings, hashes sources, writes `.mdc` files, and updates the manifest; `--claude-root` and `--cursor-root` select explicit layouts |
+| `rules.py` | Builds `RuleMapping` objects from Claude rule markdown files; applies transforms to fit Cursor's `.mdc` format; maps remaining `rules/*.md` files to `<stem>.mdc` |
 | `canonical_docs.py` | Checks and syncs canonical documentation files (`CODE_RULES.md`, `TEST_QUALITY.md`) to the Cursor rules directory |
 | `paths.py` | Resolves the Claude and Cursor layout paths; respects the `LLM_SETTINGS_ROOT` env var for non-home layouts |
 | `hashing.py` | SHA-256 helpers that detect whether source files changed since the last sync run |
-| `config.py` | Package-level constants: `GENERATOR_VERSION`, `CANONICAL_DOC_FILES`, `MAX_RULE_BODY_LINES` |
+| `config/` | Package-level constants: `GENERATOR_VERSION`, `ALL_CANONICAL_DOC_FILES`, `MAX_RULE_BODY_LINES`, skipped inventory filenames, markdown suffix |
 | `__init__.py` | Empty package marker |
 
 ## Layout resolution
