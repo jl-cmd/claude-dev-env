@@ -2543,7 +2543,7 @@ Examples:
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
 Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
-Cursor rule files generate into ~/.cursor/rules as `.mdc` files named after each Claude rule.
+Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.
