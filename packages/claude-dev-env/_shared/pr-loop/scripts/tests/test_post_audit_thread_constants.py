@@ -108,7 +108,9 @@ def test_template_contains_skeleton_markers() -> None:
     assert constants_module.AUDIT_BODY_SKELETON_CLOSE_MARKER in template_text
 
 
-def test_live_test_fixture_names_are_not_exposed_from_production_config_module() -> None:
+def test_live_test_fixture_names_are_not_exposed_from_production_config_module() -> (
+    None
+):
     forbidden_attribute_names = [
         "LIVE_TEST_OWNER",
         "LIVE_TEST_REPO",
@@ -127,3 +129,75 @@ def test_live_test_fixture_names_are_not_exposed_from_production_config_module()
             f"production config module exposes test-only fixture "
             f"{each_attribute_name!r}; move it to test_post_audit_thread.py"
         )
+
+
+def test_comment_event_is_distinct_from_approve_and_request_changes_events() -> None:
+    comment_event = constants_module.GITHUB_REVIEW_EVENT_COMMENT
+    all_events = {
+        constants_module.GITHUB_REVIEW_EVENT_APPROVE,
+        constants_module.GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+        comment_event,
+    }
+    assert comment_event not in {
+        constants_module.GITHUB_REVIEW_EVENT_APPROVE,
+        constants_module.GITHUB_REVIEW_EVENT_REQUEST_CHANGES,
+    }
+    assert len(all_events) == 3
+
+
+def test_clean_disclosure_discloses_comment_without_claiming_a_merge_block() -> None:
+    clean_disclosure = constants_module.SELF_APPROVAL_DOWNGRADE_DISCLOSURE_CLEAN
+    assert constants_module.GITHUB_REVIEW_EVENT_COMMENT in clean_disclosure
+    assert "approv" in clean_disclosure.lower()
+    assert "block merge" not in clean_disclosure.lower()
+    assert "block the merge" not in clean_disclosure.lower()
+
+
+def test_dirty_disclosure_names_the_lost_merge_block() -> None:
+    dirty_disclosure = constants_module.SELF_APPROVAL_DOWNGRADE_DISCLOSURE_DIRTY
+    assert constants_module.GITHUB_REVIEW_EVENT_COMMENT in dirty_disclosure
+    assert constants_module.GITHUB_REVIEW_EVENT_REQUEST_CHANGES in dirty_disclosure
+    assert "block" in dirty_disclosure.lower()
+    assert "merge" in dirty_disclosure.lower()
+
+
+def test_downgrade_stdout_marker_is_plain_self_describing_text() -> None:
+    downgrade_marker = constants_module.SELF_APPROVAL_DOWNGRADE_STDOUT_MARKER
+    assert constants_module.GITHUB_REVIEW_EVENT_COMMENT in downgrade_marker
+    assert "downgrade" in downgrade_marker.lower()
+    assert downgrade_marker == downgrade_marker.strip()
+
+
+def test_rejection_substring_is_a_fragment_of_the_github_self_approval_message() -> (
+    None
+):
+    github_self_approval_message = "Can not approve your own pull request"
+    rejection_substring = constants_module.SELF_APPROVAL_REJECTION_MESSAGE_SUBSTRING
+    assert rejection_substring.lower() in github_self_approval_message.lower()
+    assert rejection_substring != github_self_approval_message
+
+
+def test_details_block_bullet_separator_joins_bullets_on_separate_lines() -> None:
+    bullet_separator = constants_module.DETAILS_BLOCK_BULLET_SEPARATOR
+    joined_bullets = bullet_separator.join(["first bullet", "second bullet"])
+    assert joined_bullets.splitlines() == ["first bullet", "second bullet"]
+
+
+def test_disclosure_body_separator_appends_below_the_first_line() -> None:
+    body_separator = constants_module.DISCLOSURE_BODY_SEPARATOR
+    appended_body = "clean label line" + body_separator + "disclosure sentence"
+    assert appended_body.splitlines()[0] == "clean label line"
+    assert appended_body.endswith("disclosure sentence")
+
+
+def test_unprocessable_entity_status_is_a_client_error_code() -> None:
+    unprocessable_status = constants_module.HTTP_STATUS_UNPROCESSABLE_ENTITY
+    assert isinstance(unprocessable_status, int)
+    assert 400 <= unprocessable_status < 500
+    assert unprocessable_status >= constants_module.HTTP_STATUS_SUCCESS_RANGE_HIGH
+
+
+def test_error_message_field_reads_a_flat_top_level_message() -> None:
+    error_message_field = constants_module.GH_ERROR_MESSAGE_FIELD
+    flat_error_body = {error_message_field: "Can not approve your own pull request"}
+    assert flat_error_body.get(error_message_field, "").startswith("Can not approve")
