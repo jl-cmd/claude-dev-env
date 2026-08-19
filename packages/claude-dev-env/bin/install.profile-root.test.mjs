@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { CODEX_RULES_SHIPPED_FILE_NAME } from './install-constants.mjs';
 import {
     resolveInstallRoot,
     isPathWithinManagedRoot,
@@ -88,6 +89,13 @@ test('declared external mypy.ini is allowed; unrelated external paths are not', 
     );
     assert.equal(
         isAllowedInstallDestination(join(resolution.managedRoot, 'hooks', 'x.py'), resolution),
+        true,
+    );
+    assert.equal(
+        isAllowedInstallDestination(
+            join(resolution.codexRulesInstallDirectory, CODEX_RULES_SHIPPED_FILE_NAME),
+            resolution,
+        ),
         true,
     );
 });

@@ -238,6 +238,7 @@ function resolveInstallerInvocation(homeDirectory, options) {
         HOME: homeDirectory,
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+        CODEX_HOME: join(homeDirectory, '.codex'),
     };
     if (dependencyResolvable) {
         childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
@@ -1227,7 +1228,7 @@ test('an uninstall removes the home-directory .mypy.ini the install wrote and sk
         assert.equal(
             existsSync(mypyIniPath),
             false,
-            'the uninstall removes the one file the install writes outside ~/.claude',
+            'the uninstall removes the mypy configuration the install writes outside ~/.claude',
         );
         assert.equal(
             installerOutput.includes(`skipping ${mypyIniPath}`),
