@@ -327,8 +327,8 @@ class TestDeriveAreaLabels:
             "packages/claude-dev-env/skills/split-pr/SKILL.md",
             "packages/claude-dev-env/skills/split-pr/scripts/verify_plan.py",
             "packages/claude-dev-env/skills/split-pr/scripts/verify_slice_dependencies.py",
-            "packages/claude-dev-env/agents/caveman.md",
-            "packages/claude-dev-env/agents/code-advisor.md",
+            "packages/claude-dev-env/agents/clean-coder.md",
+            "packages/claude-dev-env/agents/session-advisor.md",
             "packages/claude-dev-env/rules/state-what-is.md",
             ".github/workflows/sync-labels.yml",
         ]

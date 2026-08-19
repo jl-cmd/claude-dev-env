@@ -16,7 +16,7 @@ Promotion runs in the **normal, fully-hooked session** — never inside the `--b
 
 6. **Review and verify the real diff.** Apply the [review guide](../../reviews/SKILL.md#review-workflow). Evidence: the checks run and each required finding repaired. Do not rely on sandbox testing as promotion evidence.
 
-7. **Commit and open a draft PR.** After the review and verification record is complete, run `/commit`, then open a draft PR per the `git-workflow` rule. Evidence: the commit hash and the PR URL.
+7. **Commit and open a draft PR.** After the review and verification record is complete, commit by hand per the `git-workflow` rule, then open a draft PR. Evidence: the commit hash and the PR URL.
 
 8. **State the honest limitations.** Post the two statements from `reference/honest-limitations.md` — write-time rules never ran; TDD ordering waived — in the PR body or to the user. Evidence: the text was included.
 

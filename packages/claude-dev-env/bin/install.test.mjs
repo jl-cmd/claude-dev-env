@@ -1672,15 +1672,15 @@ test('copyTree copies AGENTS.md with agent definitions', () => {
     const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-destination-'));
     try {
         writeFileSync(join(sourceRoot, 'AGENTS.md'), '# Shared guidance\n');
-        const agentDefinitionPath = join(sourceRoot, 'docs-agent.md');
+        const agentDefinitionPath = join(sourceRoot, 'clean-coder.md');
         writeFileSync(
             agentDefinitionPath,
-            '---\nname: docs-agent\ndescription: fixture agent\n---\n',
+            '---\nname: clean-coder\ndescription: fixture agent\n---\n',
         );
 
         const copyStats = copyTree(sourceRoot, destinationRoot);
         const copiedAgentsPath = join(destinationRoot, 'AGENTS.md');
-        const copiedAgentPath = join(destinationRoot, 'docs-agent.md');
+        const copiedAgentPath = join(destinationRoot, 'clean-coder.md');
 
         assert.equal(existsSync(copiedAgentsPath), true, 'the canonical instructions install');
         assert.equal(existsSync(copiedAgentPath), true, 'the real agent definition installs');

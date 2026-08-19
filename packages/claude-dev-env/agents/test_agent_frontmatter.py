@@ -42,8 +42,8 @@ non-empty string, and a `name` equal to its file stem — a mapping that loads
 but binds `description` to nothing, or names an agent the file does not,
 registers a subagent the caller cannot spawn::
 
-    ok:   docs-agent.md  -> name: docs-agent
-    flag: docs-agent.md  -> name: doc-manager   <- wrong spawn id
+    ok:   clean-coder.md  -> name: clean-coder
+    flag: clean-coder.md  -> name: doc-manager   <- wrong spawn id
     flag: description:                          <- loads as None, loader needs text
 
 Every check above is parametrized over the definitions that yield a
@@ -52,8 +52,8 @@ and leave the suite green while unreadable. The block is what the fence lines
 delimit, so the file that opens no fence or never closes one is exactly the
 broken file these checks exist to catch::
 
-    ok:   docs-agent.md  -> ---  name/description  ---   <- block found
-    flag: docs-agent.md  -> ---  name/description        <- no closing fence,
+    ok:   clean-coder.md  -> ---  name/description  ---   <- block found
+    flag: clean-coder.md  -> ---  name/description        <- no closing fence,
                                                             silently uncovered
 
 `test_every_agent_definition_yields_a_frontmatter_block` holds that floor: it
@@ -218,8 +218,8 @@ def _agent_name_problem(parsed_frontmatter: object, expected_name: str) -> str |
     A subagent registers under the name in its frontmatter, so a name that is
     not the file stem is spawned by an id no caller uses::
 
-        docs-agent.md -> name: docs-agent   -> ok:   None
-        docs-agent.md -> name: doc-manager  -> flag: wrong spawn id
+        clean-coder.md -> name: clean-coder   -> ok:   None
+        clean-coder.md -> name: doc-manager  -> flag: wrong spawn id
 
     Args:
         parsed_frontmatter: Value `yaml.safe_load` produced for the block.
@@ -289,7 +289,7 @@ def test_agent_frontmatter_loads_as_a_yaml_mapping(
 @pytest.mark.parametrize(
     "agent_file_name",
     (
-        "docs-agent.md",
+        "clean-coder.md",
         "issue-tracker.md",
         "skill-writer-agent.md",
     ),

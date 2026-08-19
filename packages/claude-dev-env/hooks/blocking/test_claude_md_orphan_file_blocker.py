@@ -47,7 +47,7 @@ TABLE_WITH_SLASH_COMMAND_AND_SUBDIR = (
     "# example\n\n"
     "| Entry | Description |\n"
     "|---|---|\n"
-    "| `/commit` | Slash command |\n"
+    "| `/sr-loop` | Slash command |\n"
     "| `scripts/` | A subdirectory |\n"
     "| Plain prose, no backticks | Not a file |\n"
 )

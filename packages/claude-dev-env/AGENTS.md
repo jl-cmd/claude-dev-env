@@ -15,7 +15,7 @@ Tests must exercise real behavior, real data, and production paths. Test theater
 
 For multi-step code tasks:
 
-Coders consult a warm & reusable tool-less code-advisor when blocked (Sol xHigh).
+Coders consult a warm session-advisor when blocked (Sol xHigh).
 Repair reported findings when that review mode is selected.
 
 Research and delegation
@@ -32,12 +32,14 @@ Scope every es.exe search.
 Never scan an entire drive or network share.
 
 Task tracking
-Track every task using using `update_plan` ; "C:\Users\jon\.agents\skills\task-build\SKILL.md".
+Track every task using `update_plan`.
 
 ## Definitions
 Warm agent: Any agent who has acted within the past 30 minutes.
 
   # Response and working style
+
+  Mid-run and closing narration follow `rules/opus5-communication-contract.md` (`opus5-communication-contract-v1`): first progress update is one sentence; later updates only for important discoveries or direction changes; the final starts with the outcome.
 
   Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
 
@@ -100,7 +102,7 @@ Warm agent: Any agent who has acted within the past 30 minutes.
 
   # Change size
 
-  When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read `C:/Users/jon/.claude-raw/references/small-changelists.md` for the numbers, the allowed exceptions, and how to split.
+  When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read the small-changelists guide for the numbers, the allowed exceptions, and how to split.
 
 ## Execution and delegation
 

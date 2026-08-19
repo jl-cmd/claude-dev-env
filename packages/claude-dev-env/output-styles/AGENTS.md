@@ -4,7 +4,7 @@ Output-style instruction files installed into `~/.claude/output-styles/` by `bin
 
 ## Files
 
-No output-style instruction files ship in this directory. The active caveman behavior lives in `agents/caveman.md`.
+No output-style instruction files ship in this directory.
 
 ## Format
 
