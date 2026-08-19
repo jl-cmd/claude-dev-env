@@ -39,6 +39,8 @@ Warm agent: Any agent who has acted within the past 30 minutes.
 
   # Response and working style
 
+  Mid-run and closing narration follow `rules/opus5-communication-contract.md` (`opus5-communication-contract-v1`): first progress update is one sentence; later updates only for important discoveries or direction changes; the final starts with the outcome.
+
   Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
 
   # Word budget
