@@ -11,7 +11,12 @@
 
 import { homedir } from 'node:os';
 import { join, normalize, resolve, sep } from 'node:path';
-import { MYPY_INI_FILE_NAME } from './install-constants.mjs';
+import {
+    MYPY_INI_FILE_NAME,
+    CODEX_HOME_ENVIRONMENT_VARIABLE,
+    DEFAULT_CODEX_DIRECTORY_NAME,
+    CODEX_RULES_DIRECTORY_NAME,
+} from './install-constants.mjs';
 
 export const CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE = 'CLAUDE_CONFIG_DIR';
 export const DEFAULT_CLAUDE_DIRECTORY_NAME = '.claude';
@@ -33,6 +38,8 @@ export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
  *   manifestFilePath: string,
  *   mypyIniInstallPath: string,
  *   allDeclaredExternalPaths: string[],
+ *   allDeclaredExternalDirectories: string[],
+ *   codexRulesInstallDirectory: string,
  * }} InstallRootResolution
  */
 
@@ -69,6 +76,12 @@ export function resolveInstallRoot(options = {}) {
     }
 
     const mypyIniInstallPath = resolve(join(homeDirectory, MYPY_INI_FILE_NAME));
+    const codexHomeDirectory = normalizeOptionalPath(
+        environment[CODEX_HOME_ENVIRONMENT_VARIABLE],
+    ) ?? resolve(join(homeDirectory, DEFAULT_CODEX_DIRECTORY_NAME));
+    const codexRulesInstallDirectory = resolve(
+        join(codexHomeDirectory, CODEX_RULES_DIRECTORY_NAME),
+    );
     return {
         managedRoot,
         source,
@@ -76,6 +89,8 @@ export function resolveInstallRoot(options = {}) {
         manifestFilePath: join(managedRoot, MANIFEST_FILE_NAME),
         mypyIniInstallPath,
         allDeclaredExternalPaths: [mypyIniInstallPath],
+        allDeclaredExternalDirectories: [codexRulesInstallDirectory],
+        codexRulesInstallDirectory,
     };
 }
 
@@ -103,8 +118,8 @@ export function isPathWithinManagedRoot(candidatePath, managedRoot) {
 }
 
 /**
- * True when a write destination is allowed: inside the managed root or on
- * the declared external allowlist (today: ~/.mypy.ini under the home dir).
+ * True when a write destination is allowed: inside the managed root, the
+ * home-directory `.mypy.ini`, or a file under the Codex rules directory.
  *
  * @param {string} candidatePath
  * @param {InstallRootResolution} resolution
@@ -115,8 +130,13 @@ export function isAllowedInstallDestination(candidatePath, resolution) {
         return true;
     }
     const normalizedCandidate = normalizePathForComparison(candidatePath);
-    return resolution.allDeclaredExternalPaths.some(
+    if (resolution.allDeclaredExternalPaths.some(
         (eachExternalPath) => normalizePathForComparison(eachExternalPath) === normalizedCandidate,
+    )) {
+        return true;
+    }
+    return (resolution.allDeclaredExternalDirectories ?? []).some(
+        (eachExternalDirectory) => isPathWithinManagedRoot(candidatePath, eachExternalDirectory),
     );
 }
 
@@ -130,18 +150,18 @@ export function parseExplicitTargetFromArgv(argv) {
     for (let index = 0; index < argv.length; index += 1) {
         const token = argv[index];
         if (token === '--target') {
-            const value = argv[index + 1];
-            if (!value || value.startsWith('--')) {
+            const targetPath = argv[index + 1];
+            if (!targetPath || targetPath.startsWith('--')) {
                 throw new Error('--target requires a path argument');
             }
-            return value;
+            return targetPath;
         }
         if (token.startsWith('--target=')) {
-            const value = token.slice('--target='.length);
-            if (!value) {
+            const targetPath = token.slice('--target='.length);
+            if (!targetPath) {
                 throw new Error('--target requires a path argument');
             }
-            return value;
+            return targetPath;
         }
     }
     return null;

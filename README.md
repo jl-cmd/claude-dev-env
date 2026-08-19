@@ -23,6 +23,7 @@ That's it. The installer will:
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
+6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
 
 The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
 
@@ -40,7 +41,7 @@ npx claude-dev-env --only prompts,research  # combine groups
 
 | Group | What's included |
 |-------|----------------|
-| `core` | Rules, docs, commands, agents, all hooks |
+| `core` | Rules, docs, commands, agents, all hooks, Codex exec-policy files |
 | `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
 | `journal` | session-log, session-tidy |
 | `research` | deep-research, research-mode |
@@ -100,6 +101,7 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
+
 | Rule | What it does |
 |------|-------------|
 | `code-standards` | References CODE_RULES.md for all code generation |
@@ -112,6 +114,10 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
+
+### Codex exec-policy files
+
+Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `claude-dev-env.rules` so a local `default.rules` stays in place.
 
 ### Docs (5)
 

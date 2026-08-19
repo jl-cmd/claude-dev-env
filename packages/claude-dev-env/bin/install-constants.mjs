@@ -85,3 +85,34 @@ export const SETTINGS_FILE_NAME = 'settings.json';
  * removes the file the install created.
  */
 export const MYPY_INI_FILE_NAME = '.mypy.ini';
+
+/**
+ * Environment variable Codex uses for its config home. When unset, Codex reads
+ * `~/.codex`. The installer copies shipped exec-policy files into
+ * `<that home>/rules`.
+ */
+export const CODEX_HOME_ENVIRONMENT_VARIABLE = 'CODEX_HOME';
+
+/**
+ * Directory name Codex uses under the user home when `CODEX_HOME` is unset.
+ */
+export const DEFAULT_CODEX_DIRECTORY_NAME = '.codex';
+
+/**
+ * Directory name under the Codex home that holds `*.rules` exec-policy files.
+ * Codex loads every file in that directory; see `load_exec_policy` in Codex.
+ */
+export const CODEX_RULES_DIRECTORY_NAME = 'rules';
+
+/**
+ * Package subdirectory that holds the shipped Codex exec-policy files. The
+ * installer copies this tree into the Codex rules directory, not into
+ * `~/.claude/`.
+ */
+export const CODEX_RULES_PACKAGE_DIRECTORY_NAME = 'codex-rules';
+
+/**
+ * Shipped exec-policy file name. A distinct name keeps a local `default.rules`
+ * file in place.
+ */
+export const CODEX_RULES_SHIPPED_FILE_NAME = 'claude-dev-env.rules';

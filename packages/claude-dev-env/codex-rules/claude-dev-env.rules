@@ -1,0 +1,12 @@
+# Shared Codex exec-policy prefix rules shipped by claude-dev-env.
+# Codex loads every *.rules file under $CODEX_HOME/rules (default ~/.codex/rules).
+# This file is named claude-dev-env.rules so a local default.rules stays in place.
+# Patterns use relative repo paths only. Personal home paths stay out of this file.
+
+prefix_rule(pattern=["gemini", "--version"], decision="allow")
+prefix_rule(pattern=["git", "status", "--short", "--branch"], decision="allow")
+prefix_rule(pattern=["git", "status", "--short"], decision="allow")
+prefix_rule(pattern=["git", "diff", "--", "packages/claude-dev-env/_shared/pr-loop/scripts/code_rules_gate_parts", "packages/claude-dev-env/_shared/pr-loop/scripts/tests/test_code_rules_gate.py"], decision="allow")
+prefix_rule(pattern=["Get-Content", "-LiteralPath", "packages/claude-dev-env/_shared/pr-loop/scripts/code_rules_gate_parts/tests/_repo_test_helpers.py"], decision="allow")
+prefix_rule(pattern=["rg", "-n", "-i", "--glob", "!**/__pycache__/**", "verified_commit_gate|verifier_verdict_minter|verdict_directory_write_blocker|verify-skip|code-verifier.*commit|commit.*code-verifier", "packages/claude-dev-env"], decision="allow")
+prefix_rule(pattern=["python", "-m", "pytest", "-q", "packages/claude-dev-env/hooks/hooks_constants/test_bash_pre_tool_use_dispatcher_constants.py", "packages/claude-dev-env/hooks/blocking/test_bash_pre_tool_use_dispatcher.py", "packages/claude-dev-env/hooks/blocking/test_pre_tool_use_dispatcher.py", "packages/claude-dev-env/hooks/blocking/test_verdict_directory_write_blocker.py"], decision="allow")

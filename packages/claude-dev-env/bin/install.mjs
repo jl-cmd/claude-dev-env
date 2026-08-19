@@ -22,10 +22,12 @@ import {
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
+    CODEX_RULES_PACKAGE_DIRECTORY_NAME,
 } from './install-constants.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
+    isAllowedInstallDestination,
 } from './resolve-install-root.mjs';
 import {
     parseInstallTargetSelectionFromArgv,
@@ -211,7 +213,7 @@ function discoverDependencyGroups() {
             readFileSync(join(dependencyRoot, 'package.json'), 'utf8')
         );
         const groupName = dependencyPackageJson.claudeDevEnv?.groupName
-            || dependencyName.replace(/^@[^/]+\//, '');
+            || dependencyName.replace(new RegExp('^@[^/]+/'), '');
         const group = {
             description: dependencyPackageJson.description || dependencyName,
             packageRoot: dependencyRoot,
@@ -257,6 +259,7 @@ export const INSTALL_GROUPS = {
         skills: CORE_SKILLS,
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
+        includeCodexRules: true,
     },
     journal: {
         description: 'Session logging and memory',
@@ -629,8 +632,7 @@ function isManagedPath(candidatePath, managedHomeDirectory = CLAUDE_HOME) {
  * @returns {boolean} True when the installer itself writes the path.
  */
 function isRemovableManifestRecord(candidatePath) {
-    if (isManagedPath(candidatePath)) return true;
-    return comparisonKeyForPath(candidatePath) === comparisonKeyForPath(MYPY_INI_INSTALL_PATH);
+    return isAllowedInstallDestination(candidatePath, INSTALL_ROOT_RESOLUTION);
 }
 
 /**
@@ -650,6 +652,8 @@ function owningManagedRoot(installedFilePath) {
         const managedRoot = join(CLAUDE_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
     }
+    const codexRulesDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
+    if (isInsideDirectory(resolvedPath, codexRulesDirectory)) return codexRulesDirectory;
     return null;
 }
 
@@ -1856,7 +1860,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             `${PACKAGE_NAME}: --update — removing prior managed files under ${CLAUDE_HOME}, then reinstalling from the package.\n`,
         );
         purgeManagedInstallation({
-            requireManifest: false,
+            isManifestRequired: false,
             throwIfFault,
         });
     } else if (isUpdateRefresh) {
@@ -1938,6 +1942,17 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
                     summary[directory].updated += rulesUpdated;
                 }
             }
+        }
+    }
+    const shouldInstallCodexRules = !selectedGroups
+        || activeGroups.some((eachGroup) => eachGroup.includeCodexRules);
+    if (shouldInstallCodexRules) {
+        const sourceDirectory = join(PACKAGE_ROOT, CODEX_RULES_PACKAGE_DIRECTORY_NAME);
+        if (existsSync(sourceDirectory)) {
+            const destinationDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
+            const stats = copyTree(sourceDirectory, destinationDirectory);
+            summary.codexRules = stats;
+            allInstalledFiles.push(...stats.paths);
         }
     }
     let skillsCreated = 0;
@@ -2136,6 +2151,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             console.log(`  ${directory}: ${created + updated} files (${created} new, ${updated} updated)`);
         }
     }
+    if (summary.codexRules) {
+        const { created, updated } = summary.codexRules;
+        console.log(`  ${CODEX_RULES_PACKAGE_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
+    }
     if (summary.skills) {
         const { created, updated, pruned } = summary.skills;
         const staleClause = pruned > 0 ? `, ${pruned} stale moved aside` : '';
@@ -2222,14 +2241,14 @@ function removeRecordedFile(filePath) {
 /**
  * Build the uninstall plan for this managed root.
  *
- * @param {boolean} requireManifest
+ * @param {boolean} isManifestRequired
  * @returns {ReturnType<typeof buildUninstallPlan>}
  */
-function resolveUninstallPlan(requireManifest) {
+function resolveUninstallPlan(isManifestRequired) {
     return buildUninstallPlan({
         managedRoot: CLAUDE_HOME,
         manifestFilePath: MANIFEST_FILE,
-        requireManifest,
+        requireManifest: isManifestRequired,
         isRemovableRecord: isRemovableManifestRecord,
     });
 }
@@ -2266,20 +2285,20 @@ function executeUninstallPlan(plan, helpers = {}) {
     }
     if (plan.skippedFiles.length > 0) {
         console.warn(
-            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME} and outside ${MYPY_INI_INSTALL_PATH}`,
+            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, and outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}`,
         );
     }
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
 
     if (existsSync(plan.settingsPath)) {
         const settings = JSON.parse(readFileSync(plan.settingsPath, 'utf8'));
-        let settingsChanged = false;
+        let didSettingsChange = false;
         if (settings.hooks) {
             const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
                 managedPackageSourceRoots(),
             );
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
-            settingsChanged = true;
+            didSettingsChange = true;
             console.log('  Hook entries removed from settings.json');
         }
         const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
@@ -2288,13 +2307,13 @@ function executeUninstallPlan(plan, helpers = {}) {
         if (managedDenyFromPlan.length > 0) {
             const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromPlan);
             if (pruneOutcome.removedCount > 0) {
-                settingsChanged = true;
+                didSettingsChange = true;
                 console.log(
                     `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed deny(s)`,
                 );
             }
         }
-        if (settingsChanged) {
+        if (didSettingsChange) {
             writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
@@ -2327,13 +2346,13 @@ function executeUninstallPlan(plan, helpers = {}) {
  * without nesting a second journal.
  *
  * @param {{
- *   requireManifest: boolean,
+ *   isManifestRequired: boolean,
  *   throwIfFault?: (phase: string) => void,
  * }} options
  * @returns {number|void} 0 when no manifest exists and none is required.
  */
-function purgeManagedInstallation({ requireManifest, throwIfFault }) {
-    const plan = resolveUninstallPlan(requireManifest);
+function purgeManagedInstallation({ isManifestRequired, throwIfFault }) {
+    const plan = resolveUninstallPlan(isManifestRequired);
     if (plan.isNoOp) {
         return 0;
     }
@@ -2433,6 +2452,7 @@ Examples:
 
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
+Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.
@@ -2564,7 +2584,7 @@ function runInstallForAllTargets(allTargets, childArgv) {
  * @returns {number | null}
  */
 function spawnInstallChild(target, childArgv) {
-    const result = spawnSync(
+    const childProcess = spawnSync(
         process.execPath,
         [
             fileURLToPath(import.meta.url),
@@ -2579,11 +2599,11 @@ function spawnInstallChild(target, childArgv) {
             env: process.env,
         },
     );
-    if (result.error) {
-        console.error(`ERROR: failed to spawn install child: ${result.error.message}`);
+    if (childProcess.error) {
+        console.error(`ERROR: failed to spawn install child: ${childProcess.error.message}`);
         return 1;
     }
-    return result.status === null ? 1 : result.status;
+    return childProcess.status === null ? 1 : childProcess.status;
 }
 
 if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {

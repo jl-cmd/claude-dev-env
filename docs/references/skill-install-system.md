@@ -14,7 +14,7 @@ Skills are auto-discovered from the `skills/` directory. There is no manifest th
 
 ## How the installer copies content
 
-The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, and writes one file beside that directory: `~/.mypy.ini`, which points mypy at the installed hooks. Both go on the manifest, so `--uninstall` names both.
+The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, writes `~/.mypy.ini` (so mypy finds the installed hooks), and copies Codex exec-policy files from `codex-rules/` into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set). Those destinations go on the manifest, so `--uninstall` names them.
 
 Two paths matter:
 
@@ -64,7 +64,7 @@ A run that moves nothing sweeps nothing, so every recovery point the user holds 
 
 `npx claude-dev-env --uninstall` reads `~/.claude/.claude-dev-env-manifest.json` and removes each file it records.
 
-Each record passes a containment guard first: the path resolves under `~/.claude`, or it names the `~/.mypy.ini` the install writes in the home directory. Every other record is skipped with a warning and counted. Skipping keeps one malformed record from stranding the user with a half-removed install — the purge removes every legitimate record, clears the manifest, and reports the skipped count.
+Each record passes a containment guard first: the path resolves under `~/.claude`, or it names the `~/.mypy.ini` the install writes in the home directory, or it sits under the Codex rules directory the install writes. Every other record is skipped with a warning and counted. Skipping keeps one malformed record from stranding the user with a half-removed install — the purge removes every legitimate record, clears the manifest, and reports the skipped count.
 
 Once the file loop ends, the purge walks up from each directory a removal touched to the managed top-level directory the file sits under, dropping each directory it finds empty. That reaches a nested tree such as `skills/<name>/scripts/`. A record under no managed root gets no walk, so `~/.claude` itself is never a stop root and a directory the installer never wrote stays.
 
