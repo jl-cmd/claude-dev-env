@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.15.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.1...claude-dev-env-v2.15.0) (2026-08-19)
+
+
+### Features
+
+* generate Cursor rules from Claude rules at install ([ac66a51](https://github.com/jl-cmd/claude-dev-env/commit/ac66a51b219ae64f153f61020df3697a5ff49c11))
+* generate Cursor rules from Claude rules at install ([7c99c1d](https://github.com/jl-cmd/claude-dev-env/commit/7c99c1dcb499ed5650aeab3f19365522047d702f))
+* ship Codex rules with claude-dev-env install ([b1a4257](https://github.com/jl-cmd/claude-dev-env/commit/b1a42572d48232db84c2298f9d29ec21f6fd0932))
+* ship Codex rules with claude-dev-env install ([51b1eaa](https://github.com/jl-cmd/claude-dev-env/commit/51b1eaa70dcfb7f35f54a4d2878d2ef8423f8534))
+
+
+### Bug Fixes
+
+* keep installer help from interpolating mdc backticks ([ae51a42](https://github.com/jl-cmd/claude-dev-env/commit/ae51a42c00e67994c6016d8411f3b91c2b76c9b7))
+
 ## [2.14.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.0...claude-dev-env-v2.14.1) (2026-08-19)
 
 
