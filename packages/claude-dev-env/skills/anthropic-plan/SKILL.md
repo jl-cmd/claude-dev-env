@@ -1,6 +1,6 @@
 ---
 name: anthropic-plan
-description: Workflow-backed implementation planning that creates a deep repo-local packet under docs/plans/<slug>/ before any code changes. Use for /anthropic-plan, /plan, "plan this first", "think before coding", "make a plan", "scope this out", "don't code yet", and non-trivial implementation requests that need source-grounded design, TDD steps, and validator approval before build work.
+description: Workflow-backed implementation planning that creates a deep repo-local packet under docs/plans/<slug>/ before any code changes. Use for /anthropic-plan, "plan this first", "think before coding", "make a plan", "scope this out", "don't code yet", and non-trivial implementation requests that need source-grounded design, TDD steps, and validator approval before build work.
 ---
 
 # Anthropic Plan

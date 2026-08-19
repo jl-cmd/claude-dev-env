@@ -41,3 +41,35 @@ The `blocked_commands` view filters to `outcome = 'blocked'`.
 - Extractor and Stop wrapper mains are disabled and exit 0 with no work.
 - Constants for the extractor (table name, offset state file, timeout) live in `hooks_constants/hook_log_extractor_constants.py`.
 - Tests run with `python -m pytest diagnostic/test_hook_log_*.py`.
+
+## Schema init
+
+Run `hook_log_init.py` once per machine, or after rotating the Neon project.
+
+Prerequisites: Bitwarden Secrets Manager CLI (`bws`) on PATH; a machine-account
+token in `BWS_ACCESS_TOKEN` for the user environment (`setx` on Windows, shell
+profile on macOS/Linux); Neon connection string stored as
+`NEON_HOOK_LOGS_DATABASE_URL`; Python deps from `requirements-hook-logs.txt`.
+
+```
+bws run -- python packages/claude-dev-env/hooks/diagnostic/hook_log_init.py
+```
+
+`bws run` strips `BWS_ACCESS_TOKEN` from the child environment so the Python
+process never sees it. The script verifies `NEON_HOOK_LOGS_DATABASE_URL`,
+connects with a 5-second timeout, applies `schema.sql` with idempotent DDL,
+runs a sentinel insert/select/delete round-trip, and prints the Neon host,
+table name, and row count.
+
+## Operator CLI flags
+
+`hook_log_extractor.py` and `hook_log_stop_wrapper.py` mains exit 0 with no work.
+The extractor body still documents these flags for a re-enable path:
+
+- default / `--incremental`: resume from `~/.claude/logs/hooks/.state/offsets.json`
+- `--full-rebuild`: clear offsets, truncate `hook_events`, re-read every JSONL
+- `--summary`: print the top-10 blockers of the last 24 hours
+- `--query <name>`: run `queries/<name>.sql` (`top_blockers_overall`,
+  `top_blockers_last_24_hours`, `blocks_last_7_days`, `blocks_by_category`,
+  `blocks_by_tool`, `block_details_for_hook`)
+

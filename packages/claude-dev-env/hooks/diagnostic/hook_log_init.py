@@ -66,7 +66,7 @@ def verify_environment_variables() -> list[str]:
     child process invoked via ``bws run -- python hook_log_init.py``
     would therefore always fail even when the machine is configured
     correctly. The one-time ``setx BWS_ACCESS_TOKEN`` prerequisite is
-    documented in ``packages/claude-dev-env/commands/hook-log-init.md``.
+    documented in ``packages/claude-dev-env/hooks/diagnostic/AGENTS.md``.
     """
     all_missing_variable_names: list[str] = []
     raw_database_url_value = os.environ.get(NEON_DATABASE_URL_ENVIRONMENT_VARIABLE)
@@ -172,7 +172,7 @@ def _print_missing_environment_variables(all_missing_variable_names: list[str]) 
 
 
 def main() -> int:
-    """Entry point for the ``/hook-log-init`` slash command."""
+    """CLI entry for one-time Neon schema init."""
     all_missing_variable_names = verify_environment_variables()
     if all_missing_variable_names:
         _print_missing_environment_variables(all_missing_variable_names)

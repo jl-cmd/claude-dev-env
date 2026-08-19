@@ -9,6 +9,7 @@ SKILL_DIRECTORY = Path(__file__).resolve().parent
 CLAUDE_DIRECTORY = SKILL_DIRECTORY.parent.parent
 SKILL_PATH = SKILL_DIRECTORY / "SKILL.md"
 PLAN_COMMAND_PATH = CLAUDE_DIRECTORY / "commands" / "plan.md"
+SR_LOOP_COMMAND_PATH = CLAUDE_DIRECTORY / "commands" / "sr-loop.md"
 VALIDATOR_AGENT_PATH = CLAUDE_DIRECTORY / "agents" / "plan-packet-validator.md"
 
 
@@ -57,13 +58,14 @@ def test_skill_names_validator_and_stop_before_code_rules() -> None:
     assert "stop before implementation" in skill_text.lower()
 
 
-def test_plan_command_routes_to_anthropic_plan_without_stale_skills() -> None:
-    command_text = PLAN_COMMAND_PATH.read_text(encoding="utf-8")
+def test_skill_keeps_anthropic_plan_slash_without_plan_command() -> None:
+    skill_text = SKILL_PATH.read_text(encoding="utf-8")
 
-    assert "anthropic-plan" in command_text
-    assert "write-plan" not in command_text
-    assert "review-plan" not in command_text
-    assert "plan-executor" not in command_text
+    assert "/anthropic-plan" in skill_text
+    assert not PLAN_COMMAND_PATH.exists()
+    assert SR_LOOP_COMMAND_PATH.exists()
+    assert "write-plan" not in skill_text
+    assert "plan-executor" not in skill_text
 
 
 def test_validator_agent_exists_and_is_read_only() -> None:
