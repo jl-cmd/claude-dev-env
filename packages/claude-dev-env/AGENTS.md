@@ -4,9 +4,6 @@
 
   A rule that names a form in order to forbid it passes its own check, and so does a two-column table that teaches a rewrite.
 
-## Execution and security
-Always execute as many parallel workers as you can, when tasks do not overlap or conflict.
-
 Ask when ambiguity materially changes scope or implementation. Collect credentials through secure UI only; never request secrets in chat.
 
 ## Documentation
@@ -18,7 +15,6 @@ Tests must exercise real behavior, real data, and production paths. Test theater
 
 For multi-step code tasks:
 
-Assign each scope to a Luna coder.
 Coders consult a warm & reusable tool-less code-advisor when blocked (Sol xHigh).
 Repair reported findings when that review mode is selected.
 
@@ -106,11 +102,19 @@ Warm agent: Any agent who has acted within the past 30 minutes.
 
   When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read `C:/Users/jon/.claude-raw/references/small-changelists.md` for the numbers, the allowed exceptions, and how to split.
 
-  # Delegating to subagents
+## Execution and delegation
 
-  Delegate to a subagent only for large tasks that are genuinely independent and parallelizable, such as a wide multi-file investigation. Do not delegate work you can finish yourself in a handful of tool calls, and do not use
-  subagents to verify or double-check your ownmplete the task, use one. Keep spawn counts
-  low.
+Delegate all task work to Tier 3 agents.
+
+Draft a separate assignment for each agent. Each assignment must be clear, concise, tightly scoped, independently executable, and explicit about ownership, constraints, deliverables, and verification.
+
+Run independent assignments in parallel. Keep overlapping work sequential. The primary agent coordinates agents, resolves dependencies, verifies results, and reports outcomes.
+
+## Definitions
+
+Tier 3 agent: A strong execution specialist that independently completes a bounded assignment, follows repository contracts, repairs routine failures, tests production behavior, and escalates decisions that materially affect architecture or scope.
+
+Warm agent: An agent that has acted within the past 30 minutes. Reuse warm agents for related follow-up work.
 
   # Corrections
 
