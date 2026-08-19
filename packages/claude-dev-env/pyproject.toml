@@ -33,6 +33,7 @@ packages = [
     "process_tree_scripts_constants",
     "fresh_branch_scripts_constants",
     "e_code_review_effort_constants",
+    "tr_sess_scripts_constants",
 ]
 
 [tool.setuptools.package-dir]
@@ -53,3 +54,4 @@ advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_cons
 process_tree_scripts_constants = "_shared/process-tree/scripts/config/process_tree_scripts_constants"
 fresh_branch_scripts_constants = "skills/fresh-branch/scripts/fresh_branch_scripts_constants"
 e_code_review_effort_constants = "skills/e-code-review/scripts/config/e_code_review_effort_constants"
+tr_sess_scripts_constants = "skills/tr-sess/scripts/config/tr_sess_scripts_constants"
