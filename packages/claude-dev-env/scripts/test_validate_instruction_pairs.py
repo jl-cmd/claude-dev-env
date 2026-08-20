@@ -4,6 +4,16 @@ from pathlib import Path
 from validate_instruction_pairs import validate_repository
 
 
+def read_workflow(workflow_filename: str) -> str:
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github"
+        / "workflows"
+        / workflow_filename
+    )
+    return workflow_path.read_text(encoding="utf-8")
+
+
 def initialize_repository(repository_root: Path) -> None:
     subprocess.run(["git", "init", "--quiet"], cwd=repository_root, check=True)
     subprocess.run(
@@ -88,3 +98,23 @@ def test_untracked_import_fails_tracking_check(tmp_path: Path) -> None:
     all_errors = validate_repository(tmp_path)
 
     assert any("Git mode 100644" in each_error for each_error in all_errors)
+
+
+def test_pull_request_trigger_is_unconditional() -> None:
+    workflow_text = read_workflow("validate-instruction-pairs.yml")
+
+    assert "  pull_request:\n  push:\n" in workflow_text
+
+
+def test_instruction_pairs_status_context_stays_exact() -> None:
+    workflow_text = read_workflow("validate-instruction-pairs.yml")
+    reusable_workflow_text = read_workflow("instruction-pairs-reusable.yml")
+
+    assert (
+        "  instruction-pairs:\n"
+        "    uses: ./.github/workflows/instruction-pairs-reusable.yml\n"
+        "    with:\n"
+        "      validator-ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
+        in workflow_text
+    )
+    assert "  instruction-pairs:\n    name: instruction-pairs\n" in reusable_workflow_text
