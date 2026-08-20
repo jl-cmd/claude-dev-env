@@ -6,7 +6,7 @@
 
 | Home | Path | Holds |
 |---|---|---|
-| **Skills shared** | `~/.claude/skills/_shared/` | Converge helpers, end-of-run gotcha ref, and `@` stubs |
+| **Skills shared** | `~/.agents/skills/_shared/` | Converge helpers, end-of-run gotcha ref, and `@` stubs. Claude Code looks this folder up at `~/.claude/skills/_shared/`. |
 | **Top-level shared** | `~/.claude/_shared/` | Advisor protocol, PR-loop contracts, runtime scripts |
 
 

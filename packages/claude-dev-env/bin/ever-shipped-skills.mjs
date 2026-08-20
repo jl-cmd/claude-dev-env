@@ -3,7 +3,7 @@
  *
  * The installer subtracts the skills the current package installs from this set
  * to learn which shipped skills have retired, so a full reinstall can remove a
- * retired skill left behind under ~/.claude/skills. Because the current set is
+ * retired skill left behind under ~/.agents/skills. Because the current set is
  * subtracted at runtime, restoring a retired skill to the package protects it
  * automatically — it re-enters the installed set and drops out of the retired
  * set on the next install.

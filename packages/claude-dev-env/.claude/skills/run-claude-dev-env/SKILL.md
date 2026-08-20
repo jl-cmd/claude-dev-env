@@ -3,7 +3,7 @@ name: run-claude-dev-env
 description: Build, install, run, and test the claude-dev-env installer. Use when asked to run claude-dev-env, install the Claude Code config into ~/.claude, drive the installer, smoke-test it against a sandbox, or run its test suite.
 ---
 
-`claude-dev-env` is the npm-distributed installer that copies this repo's rules, hooks, agents, commands, docs, and skills into `~/.claude/` and merges its hook entries into `~/.claude/settings.json`. Its entry point is `bin/install.mjs`. Drive it with the smoke driver at `.claude/skills/run-claude-dev-env/driver.mjs`, which runs the installer against a throwaway sandbox home directory so a run never touches the real `~/.claude/`.
+`claude-dev-env` is the npm-distributed installer that copies this repo's rules, hooks, commands, and docs into `~/.claude/`, copies skills and agents into `~/.agents/`, publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, and merges its hook entries into `~/.claude/settings.json`. Its entry point is `bin/install.mjs`. Drive it with the smoke driver at `.claude/skills/run-claude-dev-env/driver.mjs`, which runs the installer against a throwaway sandbox home directory so a run never touches the real `~/.claude/` or `~/.agents/`.
 
 All paths below are written from the `packages/claude-dev-env/` directory.
 
@@ -34,11 +34,11 @@ node .claude/skills/run-claude-dev-env/driver.mjs
 Expected tail:
 
 ```
-16/16 checks passed.
+21/21 checks passed.
 ALL CHECKS PASSED
 ```
 
-The driver proves a full install lands skills, hook scripts, rules, the `CLAUDE.md` hub, a populated `settings.json`, and a tracking manifest under `<sandbox>/.claude/`, and that `--uninstall` removes every manifest-tracked file. The real `~/.claude/` and the real global git config stay untouched. Exit code is 0 only when all checks hold.
+The driver proves a full install lands skills under `<sandbox>/.agents/skills` with a directory pointer at `<sandbox>/.claude/skills`, lands agents the same way, lands hook scripts, rules, the `CLAUDE.md` hub, a populated `settings.json`, and a tracking manifest, and that `--uninstall` removes every manifest-tracked file. The real `~/.claude/`, `~/.agents/`, and the real global git config stay untouched. Exit code is 0 only when all checks hold.
 
 ## Run (human path) — install for real
 
@@ -65,7 +65,7 @@ Runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` with Node's 
 ## Gotchas
 
 - **The install target is `os.homedir()/.claude` with no override flag** (the `CLAUDE_HOME` constant in `bin/install.mjs`). To drive the installer without overwriting your real config, redirect the home directory: set `USERPROFILE` (Windows) and `HOME` (POSIX) to a temp dir. The driver does this for you.
-- **The installer reaches outside `~/.claude/`.** It runs `git config --global core.hooksPath ...`, which applies to every git repo on the machine, and it writes `~/.mypy.ini`. The driver isolates both by pointing `GIT_CONFIG_GLOBAL` at a sandbox file and redirecting the home directory.
+- **The installer reaches outside `~/.claude/`.** It writes skills and agents under `~/.agents/`, runs `git config --global core.hooksPath ...`, which applies to every git repo on the machine, and it writes `~/.mypy.ini`. The driver isolates those writes by pointing `GIT_CONFIG_GLOBAL` at a sandbox file and redirecting the home directory.
 - **git "dubious ownership" aborts the install.** The source-conflict guard runs `git status`; when the checkout sits on a path git distrusts (a UNC network share owned by another account), git exits 128 with a dubious-ownership message that the installer rethrows. The driver seeds its sandbox git config with `safe.directory = *` so the guard runs. For a real install on such a checkout, add the exception: `git config --global --add safe.directory '<repo-path>'`.
 - **`npm install` at the repo root fails on a Windows network-share checkout.** npm symlinks the workspace package into root `node_modules` and the share rejects the symlink (`UNKNOWN ... symlink`, errno -4094). The package's own `node_modules` already carries its single dependency, so the driver and tests run without it. The installer also keeps working when `@jl-cmd/prompt-generator` cannot resolve — it skips that group with a warning (`discoverDependencyGroups` in `bin/install.mjs`).
 - **Microsoft Store Python is rejected on Windows.** The installer skips any interpreter under a `WindowsApps` directory because that stub cannot run as a hook subprocess (`isWindowsStorePythonStub` in `bin/install.mjs`). Install Python from python.org if detection fails.

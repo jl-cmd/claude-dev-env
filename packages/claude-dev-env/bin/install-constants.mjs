@@ -46,15 +46,27 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
 
 /**
  * The directory name skill directories carry in a package source and under
- * `~/.claude`.
+ * the agents home.
  *
- * The copy loop reads `<package-root>/skills` and writes `~/.claude/skills`, the
- * dependency walk reads `<dependency-root>/skills`, the retired-skill prune reads
- * the installed directory, and the per-root stale-file prune names it as one of
- * its roots. One spelling serves every one of them, so the copy destination and
- * the prune target stay the same directory.
+ * The copy loop reads `<package-root>/skills` and writes `~/.agents/skills`.
+ * Claude Code still looks up skills at `~/.claude/skills`, which the installer
+ * publishes as a directory pointer to that agents-home folder. The dependency
+ * walk reads `<dependency-root>/skills`, the retired-skill prune reads the
+ * installed directory through the pointer, and the per-root stale-file prune
+ * names it as one of its roots. One spelling serves every one of them, so the
+ * copy destination and the prune target stay the same directory.
  */
 export const MANAGED_SKILLS_DIRECTORY_NAME = 'skills';
+
+/**
+ * The directory name agent definition files carry in a package source and under
+ * the agents home.
+ *
+ * The copy loop reads `<package-root>/agents` and writes `~/.agents/agents`.
+ * Claude Code still looks up agents at `~/.claude/agents`, which the installer
+ * publishes as a directory pointer to that agents-home folder.
+ */
+export const MANAGED_AGENTS_DIRECTORY_NAME = 'agents';
 
 /**
  * The directory name hook scripts carry in a package source and under

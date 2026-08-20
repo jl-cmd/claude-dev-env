@@ -1,6 +1,8 @@
 # Skill and Config Install System
 
-How skills, rules, hooks, and other config travel from this repo to a user's `~/.claude/` directory. Read this before adding or changing a skill, or before touching the install pipeline.
+How skills, rules, hooks, and other config travel from this repo to a user's
+`~/.claude/` directory, with skills and agents living under `~/.agents/`. Read
+this before adding or changing a skill, or before touching the install pipeline.
 
 ## Where skills live
 
@@ -12,14 +14,18 @@ Each skill is a directory under `packages/claude-dev-env/skills/<name>/` with a 
 
 Skills are auto-discovered from the `skills/` directory. There is no manifest that lists them, so a new directory with a valid `SKILL.md` is a complete new skill on the source side.
 
+Installed skills live at `~/.agents/skills/<name>/`. Claude Code discovers them at `~/.claude/skills/<name>/`, which is a directory pointer (a POSIX symlink, or a Windows junction) to that agents-home folder. Agent definition files follow the same rule: they live at `~/.agents/agents/` and `~/.claude/agents` points there. Rules, hooks, commands, docs, and `settings.json` stay under `~/.claude/`.
+
 ## How the installer copies content
 
-The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, writes `~/.mypy.ini` (so mypy finds the installed hooks), copies Codex exec-policy files from `codex-rules/` into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set), and generates Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules. Those destinations go on the manifest, so `--uninstall` names them.
+The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude-dev-env` (full install) or `npx claude-dev-env --only <groups>` (scoped install). It copies into `~/.claude/`, writes skills and agents into `~/.agents/` and publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, writes `~/.mypy.ini` (so mypy finds the installed hooks), copies Codex exec-policy files from `codex-rules/` into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set), and generates Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules. Those destinations go on the manifest, so `--uninstall` names them.
 
 Two paths matter:
 
-- **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
-- **Skills.** Skill directories under `skills/` copy to `~/.claude/skills/<name>/`, with one filter described below. A full install also moves stale content out of every managed root, described below.
+- **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
+- **Skills and agents.** Skill directories under `skills/` copy to `~/.agents/skills/<name>/`. The `agents/` tree copies to `~/.agents/agents/`. The installer then publishes `~/.claude/skills` → `~/.agents/skills` and `~/.claude/agents` → `~/.agents/agents`. A full install also moves stale content out of every managed root, described below. A real directory already sitting at a Claude lookup path is merged into the agents home, then the pointer is written, so a personal skill next to the packaged ones stays reachable.
+
+The agents-home path is one rule in `resolveAgentsHome`: a managed root named `.claude` pairs with a sibling `.agents` (`~/.claude` → `~/.agents`). Any other managed root — a named profile directory or an explicit `--target` — pairs with a sibling named `<root-name>.agents`, so two profile directories keep separate skill and agent trees.
 
 A destination entry whose name differs from the shipped file name only in letter case is renamed to the shipped name before the bytes land, so a package shipping `README.md` over an installed `Readme.md` leaves one file carrying the shipped spelling. On a case-sensitive volume the two names are two files and each keeps its own content.
 
@@ -42,8 +48,8 @@ Nothing is moved aside unless a prior install recorded it. That single rule is w
 
 A full install moves three kinds of content into one timestamped backup directory per run, `~/.claude/.claude-dev-env-pruned/<timestamp>/`:
 
-- **A retired skill directory** — a whole skill directory that the package leaves out of the set it ships, and that either the prior manifest's skills list or the ever-shipped set names. The directory lands at `<timestamp>/skills/<skill-name>/`, mirroring `~/.claude`. A directory the user created themselves, such as `~/.claude/skills/my-notes`, sits in neither of those sets and stays in place, as does `~/.claude/skills/_shared`.
-- **A stale file under any managed root** — a file that the install manifest, `~/.claude/.claude-dev-env-manifest.json`, records under `rules`, `docs`, `commands`, `agents`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`, `skills`, or `hooks`, and that the run leaves unwritten. The prune runs once per root, so each call is confined to its own root: `~/.claude/_shared` and `~/.claude/skills/_shared` are distinct absolute paths and no file enters two diffs. Each moved file lands at `<timestamp>/<root-name>/<relative>`, and a directory the move empties is removed up to the root it sat under. A recorded path under no managed root — `~/.claude/CLAUDE.md`, `settings.json`, the manifest itself, and the `~/.mypy.ini` that sits in the home directory beside `~/.claude` — reaches no diff and stays where it is.
+- **A retired skill directory** — a whole skill directory that the package leaves out of the set it ships, and that either the prior manifest's skills list or the ever-shipped set names. The directory lands at `<timestamp>/skills/<skill-name>/`, mirroring the lookup tree Claude Code reads. A directory the user created themselves, such as `~/.agents/skills/my-notes`, sits in neither of those sets and stays in place, as does `~/.agents/skills/_shared`.
+- **A stale file under any managed root** — a file that the install manifest, `~/.claude/.claude-dev-env-manifest.json`, records under `rules`, `docs`, `commands`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`, `skills`, `agents`, or `hooks`, and that the run leaves unwritten. The prune runs once per root, so each call is confined to its own root: `~/.claude/_shared` and `~/.agents/skills/_shared` are distinct absolute paths and no file enters two diffs. Each moved file lands at `<timestamp>/<root-name>/<relative>`, and a directory the move empties is removed up to the root it sat under. A recorded path under no managed root — `~/.claude/CLAUDE.md`, `settings.json`, the manifest itself, and the `~/.mypy.ini` that sits in the home directory beside `~/.claude` — reaches no diff and stays where it is.
 - **The `settings.json` entry of a retired hook** — the entry that runs a hook script the run is moving aside. The entry goes first, before the script leaves `~/.claude/hooks`, so no window exists where a session start invokes a missing file. The retired set is the manifest diff under the hooks root, so a user-authored hook is outside it; each command is matched on the anchored `/.claude/hooks/<relative>` tail, so a command whose path is a retired tail plus a suffix names another file and stays. The walk covers every event type the settings file holds, so an entry under an event type the package stopped shipping is reached too. The file is written once, and only when an entry left it, so a run that retires no hook leaves `settings.json` byte-identical. Every settings walk — this prune, the hook merge, and the uninstall purge — recognizes the shapes the installer writes and steps around the rest: a matcher group carrying no `hooks` array and a hook entry whose `command` is not a string survive every walk untouched. An event type whose value is not an array of groups survives this prune and the uninstall purge; the hook merge replaces that value with the group list the package ships for that event type and warns with the event type named, and an event type the package ships no groups for keeps whatever value the file holds.
 
 The prunes move content rather than delete it, so anything caught by mistake is recoverable from that run's backup until the next pruning install writes its own. A move that fails logs a warning and leaves the content in place; a stale file whose move fails stays on the fresh manifest record, so the next full install retries it.
@@ -64,7 +70,7 @@ A run that moves nothing sweeps nothing, so every recovery point the user holds 
 
 `npx claude-dev-env --uninstall` reads `~/.claude/.claude-dev-env-manifest.json` and removes each file it records.
 
-Each record passes a containment guard first: the path resolves under `~/.claude`, or it names the `~/.mypy.ini` the install writes in the home directory, or it sits under the Codex rules directory the install writes. Every other record is skipped with a warning and counted. Skipping keeps one malformed record from stranding the user with a half-removed install — the purge removes every legitimate record, clears the manifest, and reports the skipped count.
+Each record passes a containment guard first: the path resolves under `~/.claude`, or it names the `~/.mypy.ini` the install writes in the home directory, or it sits under the Codex rules directory the install writes, or it sits under the Cursor home, or it sits under the agents home (`~/.agents` for the default managed root). Every other record is skipped with a warning and counted. Skipping keeps one malformed record from stranding the user with a half-removed install — the purge removes every legitimate record, clears the manifest, and reports the skipped count.
 
 Once the file loop ends, the purge walks up from each directory a removal touched to the managed top-level directory the file sits under, dropping each directory it finds empty. That reaches a nested tree such as `skills/<name>/scripts/`. A record under no managed root gets no walk, so `~/.claude` itself is never a stop root and a directory the installer never wrote stays.
 
@@ -82,6 +88,9 @@ Once the file loop ends, the purge walks up from each directory a removal touche
 ## Related files
 
 - `packages/claude-dev-env/bin/install.mjs` — the install pipeline.
+- `packages/claude-dev-env/bin/resolve-install-root.mjs` — managed Claude root, agents home, and allowed destinations.
+- `packages/claude-dev-env/bin/publish-directory-pointer.mjs` — lookup-path pointers (POSIX symlink or Windows junction).
 - `packages/claude-dev-env/bin/install.test.mjs` — install behavior tests.
+- `packages/claude-dev-env/bin/install.agents-home.test.mjs` — agents-home layout and pointer tests.
 - `packages/claude-dev-env/bin/install.prune.test.mjs` — end-to-end prune and uninstall tests against a sandbox home.
 - `README.md` — the documented group and skill tables.

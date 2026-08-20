@@ -2,8 +2,9 @@
 /**
  * Smoke driver for the claude-dev-env installer.
  *
- * The installer (bin/install.mjs) writes into os.homedir()/.claude and has
- * three global side effects: it copies files under ~/.claude/, sets
+ * The installer (bin/install.mjs) writes into os.homedir()/.claude and
+ * os.homedir()/.agents and has
+ * three global side effects: it copies files under ~/.claude/ and ~/.agents/, sets
  * `git config --global core.hooksPath`, and writes ~/.mypy.ini. There is no
  * flag to redirect the target, so this driver isolates every side effect by
  * spawning the installer with HOME, USERPROFILE, and GIT_CONFIG_GLOBAL all
@@ -28,7 +29,9 @@ import { spawnSync } from 'node:child_process';
 import {
     mkdtempSync,
     existsSync,
+    lstatSync,
     readFileSync,
+    realpathSync,
     writeFileSync,
     readdirSync,
     rmSync,
@@ -118,10 +121,50 @@ function main() {
         );
 
         const skillsDirectory = join(claudeHome, 'skills');
+        const agentsHomeSkillsDirectory = join(sandboxHome, '.agents', 'skills');
         const installedSkills = existsSync(skillsDirectory)
             ? readdirSync(skillsDirectory, { withFileTypes: true }).filter((entry) => entry.isDirectory())
             : [];
         record('skills installed', installedSkills.length > 0, `${installedSkills.length} skill dirs`);
+        record(
+            'skills live under ~/.agents/skills',
+            existsSync(agentsHomeSkillsDirectory)
+                && installedSkills.some((entry) => existsSync(join(agentsHomeSkillsDirectory, entry.name))),
+            agentsHomeSkillsDirectory,
+        );
+        record(
+            '~/.claude/skills is a directory pointer',
+            existsSync(skillsDirectory) && lstatSync(skillsDirectory).isSymbolicLink(),
+            skillsDirectory,
+        );
+        const sampleSkillName = installedSkills.find((entry) => existsSync(join(skillsDirectory, entry.name, 'SKILL.md')))?.name;
+        if (sampleSkillName) {
+            const lookupSkillPath = join(skillsDirectory, sampleSkillName, 'SKILL.md');
+            const canonicalSkillPath = join(agentsHomeSkillsDirectory, sampleSkillName, 'SKILL.md');
+            record(
+                'skill files match through the lookup pointer',
+                existsSync(lookupSkillPath)
+                    && existsSync(canonicalSkillPath)
+                    && realpathSync(lookupSkillPath) === realpathSync(canonicalSkillPath),
+                sampleSkillName,
+            );
+        } else {
+            record('skill files match through the lookup pointer', false, 'no skill dirs');
+        }
+
+        const agentsLookupDirectory = join(claudeHome, 'agents');
+        const agentsHomeAgentsDirectory = join(sandboxHome, '.agents', 'agents');
+        record(
+            'agents live under ~/.agents/agents',
+            existsSync(agentsHomeAgentsDirectory)
+                && readdirSync(agentsHomeAgentsDirectory).some((name) => name.endsWith('.md')),
+            agentsHomeAgentsDirectory,
+        );
+        record(
+            '~/.claude/agents is a directory pointer',
+            existsSync(agentsLookupDirectory) && lstatSync(agentsLookupDirectory).isSymbolicLink(),
+            agentsLookupDirectory,
+        );
 
         const hookFiles = collectFilesRecursive(join(claudeHome, 'hooks')).filter((file) =>
             file.endsWith('.py'),

@@ -31,7 +31,7 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 | Python tests in parallel (root suite) | `python -m pytest tests/ -n auto` |
 | Python tests in parallel (package suite) | `python -m pytest packages/claude-dev-env -n auto` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
-| Install locally to `~/.claude/` | `cd packages/claude-dev-env && node bin/install.mjs` |
+| Install locally to `~/.claude/` and `~/.agents/` | `cd packages/claude-dev-env && node bin/install.mjs` |
 
 Notes:
 
@@ -46,7 +46,7 @@ Notes:
 
 ### The install pipeline
 
-`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/`, `hooks/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
+`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, copies `skills/` and `agents/` into `~/.agents/` and publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
 
 ### Hooks
 
@@ -64,7 +64,7 @@ CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designa
 
 ### Skills, agents, commands
 
-These ship as plain files (`skills/<name>/SKILL.md` and helper scripts, `agents/*.md`, `commands/*.md`). The installer copies them verbatim into `~/.claude/`. A skill's executable helpers carry their own tests (`skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
+These ship as plain files (`skills/<name>/SKILL.md` and helper scripts, `agents/*.md`, `commands/*.md`). The installer copies skills and agents into `~/.agents/` and publishes `~/.claude/skills` and `~/.claude/agents` as directory pointers to that home. A skill's executable helpers carry their own tests (`skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
 
 ## Conventions specific to this repo
 

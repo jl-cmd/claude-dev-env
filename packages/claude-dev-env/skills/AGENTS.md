@@ -13,7 +13,7 @@ Each skill is a self-contained folder Claude Code loads on demand. At startup, o
 | `reference/` | Reference docs the skill cites or the workflow reads. |
 | `*_constants/` | Python package of named constants imported by `scripts/`. |
 
-Skills install to `~/.claude/skills/<skill-name>/` via `packages/claude-dev-env/bin/install.mjs`. See `docs/references/skill-install-system.md` for the install pipeline.
+Skills install to `~/.agents/skills/<skill-name>/` via `packages/claude-dev-env/bin/install.mjs`. Claude Code looks them up at `~/.claude/skills/<skill-name>/`, a directory pointer to that folder. See `docs/references/skill-install-system.md` for the install pipeline.
 
 ## Shared support code
 

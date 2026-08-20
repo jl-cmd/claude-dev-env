@@ -176,6 +176,15 @@ test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ 
 });
 
 
+test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
+    assert.equal(
+        CONTENT_DIRECTORIES.includes('agents'),
+        false,
+        'agents copies into ~/.agents/agents; ~/.claude/agents is the lookup pointer',
+    );
+});
+
+
 test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('_shared'),

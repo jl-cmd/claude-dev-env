@@ -20,6 +20,7 @@ import {
     SKIPPED_SOURCE_FILE_EXTENSIONS,
     RUN_BACKUP_DIRECTORY_NAME_PATTERN,
     MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_AGENTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
@@ -31,6 +32,9 @@ import {
     parseExplicitTargetFromArgv,
     isAllowedInstallDestination,
 } from './resolve-install-root.mjs';
+import {
+    ensureDirectoryPointer,
+} from './publish-directory-pointer.mjs';
 import {
     parseInstallTargetSelectionFromArgv,
     resolveInstallTargets,
@@ -67,6 +71,7 @@ const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
     })(),
 });
 const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
+const AGENTS_HOME = INSTALL_ROOT_RESOLUTION.agentsHome;
 const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;
 const MYPY_INI_INSTALL_PATH = INSTALL_ROOT_RESOLUTION.mypyIniInstallPath;
 const PACKAGE_NAME = 'claude-dev-env';
@@ -92,18 +97,21 @@ const INSTALL_TARGET_IDENTITY = (() => {
     }
 })();
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
 
 /**
- * Every top-level directory under ~/.claude the installer writes into: the
- * content directories plus the two it fills through their own copy loops. The
- * uninstall purge walks this list to find the root a recorded file belongs to and
- * to drop a managed directory the purge empties, and the full-install stale-file
- * prune walks it to give each root its own diff.
+ * Every top-level lookup directory the installer writes into under ~/.claude:
+ * the content directories plus skills, agents, and hooks. Skills and agents
+ * live under the agents home; `~/.claude/skills` and `~/.claude/agents` are
+ * directory pointers to that home. The uninstall purge walks this list to find
+ * the root a recorded file belongs to and to drop a managed directory the purge
+ * empties, and the full-install stale-file prune walks it to give each root its
+ * own diff.
  */
 export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     ...CONTENT_DIRECTORIES,
     MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_AGENTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
 ];
 
@@ -752,11 +760,34 @@ function owningManagedRoot(installedFilePath) {
         const managedRoot = join(CLAUDE_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
     }
+    for (const directoryName of [MANAGED_SKILLS_DIRECTORY_NAME, MANAGED_AGENTS_DIRECTORY_NAME]) {
+        const agentsRoot = join(AGENTS_HOME, directoryName);
+        if (isInsideDirectory(resolvedPath, agentsRoot)) return agentsRoot;
+    }
     const codexRulesDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
     if (isInsideDirectory(resolvedPath, codexRulesDirectory)) return codexRulesDirectory;
     const cursorInstallDirectory = INSTALL_ROOT_RESOLUTION.cursorInstallDirectory;
     if (isInsideDirectory(resolvedPath, cursorInstallDirectory)) return cursorInstallDirectory;
     return null;
+}
+
+/**
+ * Publish `~/.claude/skills` and `~/.claude/agents` as directory pointers to
+ * the agents home.
+ *
+ * Skills and agents live under `~/.agents` (or the per-root agents home).
+ * Claude Code discovers them at the lookup paths under the managed Claude root,
+ * so those two paths are pointers. A real directory from an older install at a
+ * lookup path is merged into the agents home before the pointer is written.
+ *
+ * @returns {string[]} The two lookup paths this run published.
+ */
+function publishSkillAndAgentLookupPointers() {
+    const skillsPointer = INSTALL_ROOT_RESOLUTION.skillsLookupDirectory;
+    const agentsPointer = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
+    ensureDirectoryPointer(skillsPointer, INSTALL_ROOT_RESOLUTION.skillsInstallDirectory);
+    ensureDirectoryPointer(agentsPointer, INSTALL_ROOT_RESOLUTION.agentsInstallDirectory);
+    return [skillsPointer, agentsPointer];
 }
 
 /**
@@ -1974,6 +2005,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
+    const publishedPointerPaths = publishSkillAndAgentLookupPointers();
 
     const activeGroups = selectedGroups
         ? selectedGroups.map(groupName => ({ groupName, ...INSTALL_GROUPS[groupName] }))
@@ -2047,6 +2079,24 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             }
         }
     }
+    const shouldCopyAgents = !allowedDirectories
+        || allowedDirectories.has(MANAGED_AGENTS_DIRECTORY_NAME);
+    if (shouldCopyAgents) {
+        for (const sourceRoot of allSourceRoots) {
+            const agentsSource = join(sourceRoot, MANAGED_AGENTS_DIRECTORY_NAME);
+            if (!existsSync(agentsSource)) continue;
+            const agentsDestination = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
+            const stats = copyTree(agentsSource, agentsDestination);
+            if (!summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
+                summary[MANAGED_AGENTS_DIRECTORY_NAME] = stats;
+            } else {
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].created += stats.created;
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].updated += stats.updated;
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].paths.push(...stats.paths);
+            }
+            allInstalledFiles.push(...stats.paths);
+        }
+    }
     const shouldInstallCodexRules = !selectedGroups
         || activeGroups.some((eachGroup) => eachGroup.includeCodexRules);
     if (shouldInstallCodexRules) {
@@ -2096,7 +2146,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
-    syncWrittenPaths(allInstalledFiles);
+    syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
     throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
@@ -2131,7 +2181,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
         console.warn(
@@ -2153,7 +2203,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
         }
         console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
         throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
 
@@ -2173,7 +2223,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             console.warn(`      ${mypyIniInstallResult.expectedLine}`);
         }
     } else {
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
         throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
         throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
@@ -2258,7 +2308,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             ? { deny: managedPermissionDenyEntries }
             : null,
     );
-    syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath]);
+    syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_MANIFEST_WRITE);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
@@ -2274,6 +2324,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (summary.cursorRules) {
         const { created } = summary.cursorRules;
         console.log(`  cursor-rules: ${created} generated files`);
+    }
+    if (summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
+        const { created, updated } = summary[MANAGED_AGENTS_DIRECTORY_NAME];
+        console.log(`  ${MANAGED_AGENTS_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
     }
     if (summary.skills) {
         const { created, updated, pruned } = summary.skills;
@@ -2405,7 +2459,7 @@ function executeUninstallPlan(plan, helpers = {}) {
     }
     if (plan.skippedFiles.length > 0) {
         console.warn(
-            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}, and outside ${INSTALL_ROOT_RESOLUTION.cursorInstallDirectory}`,
+            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}, outside ${INSTALL_ROOT_RESOLUTION.cursorInstallDirectory}, and outside ${AGENTS_HOME}`,
         );
     }
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
@@ -2453,6 +2507,9 @@ function executeUninstallPlan(plan, helpers = {}) {
             }
         } catch { /* leave non-empty dirs */ }
     }
+    removeEmptyDirectoryTree(INSTALL_ROOT_RESOLUTION.skillsInstallDirectory);
+    removeEmptyDirectoryTree(INSTALL_ROOT_RESOLUTION.agentsInstallDirectory);
+    removeEmptyDirectoryTree(AGENTS_HOME);
     console.log(`\nRemoved ${removed} files.\n`);
     return removed;
 }
@@ -2571,6 +2628,7 @@ Examples:
   npx ${PACKAGE_NAME} --profiles editor,mel --only core
 
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
+Skills and agents live under ~/.agents (sibling of ~/.claude). ~/.claude/skills and ~/.claude/agents are directory pointers to that home.
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
 Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
 Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.

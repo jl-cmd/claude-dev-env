@@ -1,6 +1,6 @@
 # agents
 
-Agent definition files installed into `~/.claude/agents/` by `bin/install.mjs`. Each `.md` file defines a named subagent: its description (shown in the Claude Code UI), allowed tools, and behavioral instructions.
+Agent definition files installed into `~/.agents/agents/` by `bin/install.mjs`. `~/.claude/agents` is a directory pointer to that folder. Each `.md` file defines a named subagent: its description (shown in the Claude Code UI), allowed tools, and behavioral instructions.
 
 ## Agent files
 
@@ -22,5 +22,5 @@ Each file uses YAML frontmatter (`name`, `description`, `tools`, optional `color
 ## Adding an agent
 
 1. Create a new `.md` file in this directory with valid frontmatter.
-2. Run `bin/install.mjs` to copy it to `~/.claude/agents/`.
+2. Run `bin/install.mjs` to copy it to `~/.agents/agents/`.
 3. Restart Claude Code to pick up the new agent.

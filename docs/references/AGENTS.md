@@ -12,7 +12,7 @@ edit third-party content.
 
 | File | Role |
 |------|------|
-| `skill-install-system.md` | Internal design doc: how skills, rules, hooks, and config travel from `packages/claude-dev-env/` to `~/.claude/` via the install pipeline. **Read this before adding a skill or changing install behavior.** |
+| `skill-install-system.md` | Internal design doc: how skills, rules, hooks, and config travel from `packages/claude-dev-env/` to `~/.claude/` and `~/.agents/` via the install pipeline. **Read this before adding a skill or changing install behavior.** |
 | `plugin-channel-inventory.json` | R2A measured inventory of plugin-channel consumers: classifications, selected-profile collision boolean with readback evidence, and version drift between package 2.8.0 and plugin metadata 1.0.0. |
 | `cloud-pr-loop-compatibility.md` | Zero-context runbook for running the PR-loop skill family in Claude Code cloud sessions: verified environment facts, root causes, the gh-to-MCP substitution matrix, a session preamble, a phased per-file remediation plan, a probe appendix, and account-owner actions. |
 | `anthropic-harnessing-claudes-intelligence-technique-inventory.md` | Inventory of prompting and agentic techniques from Anthropic research. |
