@@ -69,5 +69,5 @@ These ship as plain files (`.agents/skills/<name>/SKILL.md` and helper scripts, 
 ## Conventions specific to this repo
 
 - **Conventional Commits + release-please.** `release-please-config.json` drives versioning and `CHANGELOG.md` for the `claude-dev-env` package from commit types (`feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `ci`, `style`, `test`, `build`, `revert`). `publish.yml` releases to npm. `pr-check.yml` validates that the PR title is a semantic commit.
-- **Two `CLAUDE.md` files ship to users.** `packages/claude-dev-env/CLAUDE.md` installs to `~/.claude/CLAUDE.md`. This root `CLAUDE.md` is for contributors and is not packaged.
+- **Two `CLAUDE.md` files ship to users.** `packages/claude-dev-env/.claude/CLAUDE.md` installs to `~/.claude/CLAUDE.md`. This root `CLAUDE.md` is for contributors and is not packaged.
 - **Markdown is timeless and plain.** The `state-description-blocker` hook rejects historical or comparative phrasing (`previously`, `instead of`, `migrated from`, ...) in `.md` writes, and `plain_language_blocker` rejects heavy words in `.md` and `AskUserQuestion` content. Write what the system *is*, in everyday words.

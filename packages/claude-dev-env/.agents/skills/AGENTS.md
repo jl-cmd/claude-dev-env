@@ -19,7 +19,7 @@ Skills install to `~/.agents/skills/<skill-name>/` via `packages/claude-dev-env/
 
 **`skills/_shared/`** — skill-local PR-loop helpers plus `@` stubs that name
 canonical homes under **`@~/.claude/_shared/`** (advisor protocol, PR-loop
-contracts, runtime scripts). Map: `skills/_shared/CLAUDE.md`. End-of-run gotchas: `skills/_shared/end-of-run-gotcha-recommendations.md`.
+contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run gotchas: `skills/_shared/end-of-run-gotcha-recommendations.md`.
 
 ## Skill groups
 

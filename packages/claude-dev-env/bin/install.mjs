@@ -2254,7 +2254,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         );
     }
 
-    const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
+    const claudeHubSource = join(PACKAGE_ROOT, '.claude', 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
         const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
         const backupPath = backupHubBeforeOverwrite(claudeHubDest, claudeHubSource, 'CLAUDE.md');

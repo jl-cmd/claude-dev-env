@@ -182,11 +182,11 @@ def test_package_map_agents_md_exists() -> None:
 def test_reference_shell_pages_exist() -> None:
     assert (REFERENCE_DIRECTORY / "cli-contract.md").is_file()
     assert (REFERENCE_DIRECTORY / "loop-integration.md").is_file()
-    assert (REFERENCE_DIRECTORY / "CLAUDE.md").is_file()
+    assert (REFERENCE_DIRECTORY / ".claude" / "CLAUDE.md").is_file()
 
 
 def test_constants_package_directory_exists() -> None:
     constants_directory = SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants"
 
     assert (constants_directory / "__init__.py").is_file()
-    assert (constants_directory / "CLAUDE.md").is_file()
+    assert (constants_directory / ".claude" / "CLAUDE.md").is_file()

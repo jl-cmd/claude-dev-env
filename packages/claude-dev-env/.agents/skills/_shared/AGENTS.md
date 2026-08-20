@@ -28,7 +28,7 @@
 | Stub here | Load |
 |---|---|
 | `advisor/advisor-protocol.md` | `@~/.claude/_shared/advisor/advisor-protocol.md` |
-| `advisor/CLAUDE.md` | `@~/.claude/_shared/advisor/CLAUDE.md` |
+| `advisor/.claude/CLAUDE.md` | `@../AGENTS.md` |
 | `advisor/scripts/README.md` | `@~/.claude/_shared/advisor/scripts/` |
 | `pr-loop/audit-contract.md` | `@~/.claude/_shared/pr-loop/audit-contract.md` |
 | `pr-loop/audit-reply-template.md` | `@~/.claude/_shared/pr-loop/audit-reply-template.md` |

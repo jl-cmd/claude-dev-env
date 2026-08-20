@@ -27,7 +27,7 @@
         "audit-rubrics/",
         "codex-rules/",
         "AGENTS.md",
-        "CLAUDE.md",
+        ".claude/CLAUDE.md",
         "!**/__pycache__/**",
         "!**/*.py[cod]",
         "!**/.pytest_cache/**",

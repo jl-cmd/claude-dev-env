@@ -1,6 +1,6 @@
 # Deterministic skill elements
 
-Source: [Anthropic — Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) (scripts, progressive disclosure), [Lessons from Building Claude Code](thariq-x-post-skills.json), repo skill conventions (`skills/CLAUDE.md`), `docs/CODE_RULES.md`, host task tools (`TaskCreate`, `TodoWrite`, and equivalents).
+Source: [Anthropic — Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) (scripts, progressive disclosure), [Lessons from Building Claude Code](thariq-x-post-skills.json), repo skill conventions (`skills/.claude/CLAUDE.md`), `docs/CODE_RULES.md`, host task tools (`TaskCreate`, `TodoWrite`, and equivalents).
 
 ## Contents
 
