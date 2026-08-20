@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.16.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.1...claude-dev-env-v2.16.0) (2026-08-20)
+
+
+### Features
+
+* **install:** land skills and agents in .agents with claude pointers ([b2c28f3](https://github.com/jl-cmd/claude-dev-env/commit/b2c28f3bea14dd504d131a1efa360bc5e2016811))
+* **package:** keep canonical skills and agents under .agents ([e67d5d7](https://github.com/jl-cmd/claude-dev-env/commit/e67d5d71958ab7ab298b49de108b3117abe2f48b))
+* **package:** keep skills and agents under .agents with claude pointers ([f0f24b3](https://github.com/jl-cmd/claude-dev-env/commit/f0f24b30842e34e0d9d6a67c8fa5be65d6437883))
+
+
+### Bug Fixes
+
+* **package:** place CLAUDE.md under .claude ([9509361](https://github.com/jl-cmd/claude-dev-env/commit/9509361b7124f86d6fcb0172ebbca1e8c6d383fe))
+* **package:** resolve .agents source paths in tests and hooks ([31c8324](https://github.com/jl-cmd/claude-dev-env/commit/31c8324b401fe55c5ac0266c6b9fc0994dccecad))
+
 ## [2.15.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.0...claude-dev-env-v2.15.1) (2026-08-20)
 
 
