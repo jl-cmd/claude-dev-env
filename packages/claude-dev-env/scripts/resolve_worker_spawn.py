@@ -186,41 +186,34 @@ def _run_claude_with_headless_overrides(
     prompt_stdin: IO[str],
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
-    with chain_runner.chain_subprocess_runner_lock():
-        previous_runner: TextCapturingSubprocessRunner = (
-            chain_runner.chain_subprocess_runner
-        )
 
-        def _runner_with_headless_overrides(
-            all_invocation_tokens: Sequence[str],
-            *all_positionals: object,
-            **all_keywords: object,
-        ) -> subprocess.CompletedProcess[str]:
-            del all_positionals
-            prompt_stdin.seek(0)
-            forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
-            completed_process: subprocess.CompletedProcess[str] = previous_runner(
-                all_invocation_tokens,
-                capture_output=True,
-                text=True,
-                timeout=_timeout_seconds_from_keywords(all_keywords),
-                check=False,
-                stdin=prompt_stdin,
-                cwd=working_directory_path,
-                **forwarded_text_codec,
-            )
-            return completed_process
-
-        headless_runner: TextCapturingSubprocessRunner = (
-            _runner_with_headless_overrides
+    def _runner_with_headless_overrides(
+        all_invocation_tokens: Sequence[str],
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_positionals
+        prompt_stdin.seek(0)
+        forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
+        completed_process: subprocess.CompletedProcess[str] = previous_runner(
+            all_invocation_tokens,
+            capture_output=True,
+            text=True,
+            timeout=_timeout_seconds_from_keywords(all_keywords),
+            check=False,
+            stdin=prompt_stdin,
+            cwd=working_directory_path,
+            **forwarded_text_codec,
         )
-        setattr(chain_runner, "chain_subprocess_runner", headless_runner)
-        try:
-            return spawn_claude_runner(
-                all_claude_arguments, timeout_seconds=timeout_seconds
-            )
-        finally:
-            setattr(chain_runner, "chain_subprocess_runner", previous_runner)
+        return completed_process
+
+    headless_runner: TextCapturingSubprocessRunner = _runner_with_headless_overrides
+    with chain_runner.override_chain_subprocess_runner(
+        headless_runner
+    ) as previous_runner:
+        return spawn_claude_runner(
+            all_claude_arguments, timeout_seconds=timeout_seconds
+        )
 
 
 def _prompt_file_unreadable_outcome(

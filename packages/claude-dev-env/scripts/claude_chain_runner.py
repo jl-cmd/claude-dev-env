@@ -49,7 +49,8 @@ import subprocess
 import sys
 import tempfile
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -334,6 +335,29 @@ _shared_chain_subprocess_lock = threading.Lock()
 def chain_subprocess_runner_lock() -> threading.Lock:
     """Return the lock for adapters that temporarily configure the runner."""
     return _shared_chain_subprocess_lock
+
+
+@contextmanager
+def override_chain_subprocess_runner(
+    replacement_runner: Callable[..., subprocess.CompletedProcess[str]],
+) -> Iterator[Callable[..., subprocess.CompletedProcess[str]]]:
+    """Temporarily replace the chain subprocess seam under its shared lock.
+
+    Args:
+        replacement_runner: Callable used for subprocess invocations during the
+            context.
+
+    Yields:
+        The runner that was active before the replacement.
+    """
+    global chain_subprocess_runner
+    with chain_subprocess_runner_lock():
+        previous_runner = chain_subprocess_runner
+        chain_subprocess_runner = replacement_runner
+        try:
+            yield previous_runner
+        finally:
+            chain_subprocess_runner = previous_runner
 
 
 def _load_chain_usage_module() -> ModuleType:

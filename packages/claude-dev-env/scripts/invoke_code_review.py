@@ -304,44 +304,39 @@ def _run_claude_with_empty_stdin(
     working_directory: Path,
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
-    with chain_runner.chain_subprocess_runner_lock():
-        previous_runner: TextCapturingSubprocessRunner = (
-            chain_runner.chain_subprocess_runner
+
+    def _runner_with_empty_stdin(
+        all_invocation_tokens: Sequence[str],
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_positionals
+        maybe_timeout = all_keywords.get("timeout")
+        timeout_for_run: float | None
+        if isinstance(maybe_timeout, (int, float)):
+            timeout_for_run = float(maybe_timeout)
+        else:
+            timeout_for_run = None
+        forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
+        completed_process: subprocess.CompletedProcess[str] = previous_runner(
+            all_invocation_tokens,
+            capture_output=True,
+            text=True,
+            timeout=timeout_for_run,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            cwd=working_directory_path,
+            **forwarded_text_codec,
         )
+        return completed_process
 
-        def _runner_with_empty_stdin(
-            all_invocation_tokens: Sequence[str],
-            *all_positionals: object,
-            **all_keywords: object,
-        ) -> subprocess.CompletedProcess[str]:
-            del all_positionals
-            maybe_timeout = all_keywords.get("timeout")
-            timeout_for_run: float | None
-            if isinstance(maybe_timeout, (int, float)):
-                timeout_for_run = float(maybe_timeout)
-            else:
-                timeout_for_run = None
-            forwarded_text_codec = collect_forwarded_text_codec(all_keywords)
-            completed_process: subprocess.CompletedProcess[str] = previous_runner(
-                all_invocation_tokens,
-                capture_output=True,
-                text=True,
-                timeout=timeout_for_run,
-                check=False,
-                stdin=subprocess.DEVNULL,
-                cwd=working_directory_path,
-                **forwarded_text_codec,
-            )
-            return completed_process
-
-        empty_stdin_runner: TextCapturingSubprocessRunner = _runner_with_empty_stdin
-        setattr(chain_runner, "chain_subprocess_runner", empty_stdin_runner)
-        try:
-            return review_claude_runner(
-                all_claude_arguments, timeout_seconds=timeout_seconds
-            )
-        finally:
-            setattr(chain_runner, "chain_subprocess_runner", previous_runner)
+    empty_stdin_runner: TextCapturingSubprocessRunner = _runner_with_empty_stdin
+    with chain_runner.override_chain_subprocess_runner(
+        empty_stdin_runner
+    ) as previous_runner:
+        return review_claude_runner(
+            all_claude_arguments, timeout_seconds=timeout_seconds
+        )
 
 
 def _in_session_outcome() -> CodeReviewOutcome:
