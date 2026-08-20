@@ -42,6 +42,16 @@ _advisor_scripts_path = str(
 if _advisor_scripts_path not in sys.path:
     sys.path.insert(0, _advisor_scripts_path)
 
+_advisor_scripts_config_path = str(
+    Path(__file__).resolve().parent.parent
+    / "_shared"
+    / "advisor"
+    / "scripts"
+    / "config"
+)
+if _advisor_scripts_config_path not in sys.path:
+    sys.path.insert(0, _advisor_scripts_config_path)
+
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     HOST_PROFILE_CLAUDE,
 )
