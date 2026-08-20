@@ -28,30 +28,30 @@ import argparse
 import json
 import subprocess
 import sys
-import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+_scripts_directory_path = Path(__file__).resolve().parent
+_scripts_directory = str(_scripts_directory_path)
+sys.path[:] = [
+    each_existing_entry
+    for each_existing_entry in sys.path
+    if each_existing_entry != _scripts_directory
+]
+sys.path[:0] = [_scripts_directory]
 
 _advisor_scripts_path = str(
-    Path(__file__).resolve().parent.parent / "_shared" / "advisor" / "scripts"
+    _scripts_directory_path.parent / "_shared" / "advisor" / "scripts"
 )
-if _advisor_scripts_path not in sys.path:
-    sys.path.insert(0, _advisor_scripts_path)
+sys.path[:] = [
+    each_existing_entry
+    for each_existing_entry in sys.path
+    if each_existing_entry != _advisor_scripts_path
+]
+sys.path[:0] = [_advisor_scripts_path]
 
-_advisor_scripts_config_path = str(
-    Path(__file__).resolve().parent.parent
-    / "_shared"
-    / "advisor"
-    / "scripts"
-    / "config"
-)
-if _advisor_scripts_config_path not in sys.path:
-    sys.path.insert(0, _advisor_scripts_config_path)
-
+from tier_model_ids import detect_host_profile  # noqa: E402
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     HOST_PROFILE_CLAUDE,
 )
@@ -103,14 +103,6 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
 from dev_env_scripts_constants.timing import (  # noqa: E402
     DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
 )
-from tier_model_ids import detect_host_profile  # noqa: E402
-
-_CHAIN_RUNNER_LOCK = threading.Lock()
-
-
-def _chain_runner_lock() -> threading.Lock:
-    """Return the module lock that serializes chain-runner stdin/cwd swaps."""
-    return _CHAIN_RUNNER_LOCK
 
 
 @dataclass(frozen=True)
@@ -312,7 +304,7 @@ def _run_claude_with_empty_stdin(
     working_directory: Path,
 ) -> ChainInvocationOutcome:
     working_directory_path = str(working_directory)
-    with _CHAIN_RUNNER_LOCK:
+    with chain_runner.chain_subprocess_runner_lock():
         previous_runner: TextCapturingSubprocessRunner = (
             chain_runner.chain_subprocess_runner
         )

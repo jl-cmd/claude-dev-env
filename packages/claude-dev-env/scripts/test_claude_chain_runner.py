@@ -17,6 +17,7 @@ import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
     ChainEntry,
+    chain_subprocess_runner_lock,
     default_affinity_state_path,
     extract_resume_session_id,
     load_affinity_store,
@@ -78,6 +79,15 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 
 _LARGE_CAPTURE_BYTE_COUNT = 400_000
 _LARGE_CAPTURE_MARKER = "X"
+
+
+def test_chain_subprocess_runner_lock_is_shared() -> None:
+    first_lock = chain_subprocess_runner_lock()
+    second_lock = chain_subprocess_runner_lock()
+
+    assert first_lock is second_lock
+
+
 _STDIN_ECHO_PAYLOAD = "charter body for spool path"
 _UNDECODABLE_STDOUT_BYTES = b"ok \x90 end"
 _DECODED_UNDECODABLE_STDOUT = "ok \ufffd end"

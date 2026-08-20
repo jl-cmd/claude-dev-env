@@ -30,8 +30,12 @@ from collections.abc import Mapping
 from pathlib import Path
 
 _config_directory = str(Path(__file__).resolve().parent / "config")
-if _config_directory not in sys.path:
-    sys.path.insert(0, _config_directory)
+sys.path[:] = [
+    each_existing_entry
+    for each_existing_entry in sys.path
+    if each_existing_entry != _config_directory
+]
+sys.path[:0] = [_config_directory]
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
     ALL_CLI_MODEL_ID_BY_TIER,
