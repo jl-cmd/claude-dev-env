@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.15.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.0...claude-dev-env-v2.15.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **ci:** report instruction-pairs on every PR ([d5f3a9b](https://github.com/jl-cmd/claude-dev-env/commit/d5f3a9b9e55e4d31ee562cdec2606c891c032306))
+* **install:** stop shipping the profile launcher and stop pruning it ([5726871](https://github.com/jl-cmd/claude-dev-env/commit/57268715432d1491ca7dac485f3d9f2ae31aa9f5))
+* **install:** stop shipping the profile launcher and stop pruning it ([f488caf](https://github.com/jl-cmd/claude-dev-env/commit/f488cafe9b86572fd3237a710a45e2bc4783f292))
+* isolate dispatcher runtime bootstrap ([d7cc9d1](https://github.com/jl-cmd/claude-dev-env/commit/d7cc9d19dc05b04fd83c0889757efea9bdd18004))
+* load advisor constants from installed config ([bbe5632](https://github.com/jl-cmd/claude-dev-env/commit/bbe563241c07bfd87f8eb3f1ad920cc1c3186cf7))
+* **scripts:** resolve installed dispatcher imports across profiles ([f7c8fa5](https://github.com/jl-cmd/claude-dev-env/commit/f7c8fa51a20f9820102d43d2d41034329f8ed2ad))
+
+
+### Refactoring
+
+* **scripts:** centralize chain runner override ([21beabb](https://github.com/jl-cmd/claude-dev-env/commit/21beabb79414a40db0d445a24200da25afb88fbb))
+
 ## [2.15.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.1...claude-dev-env-v2.15.0) (2026-08-19)
 
 
