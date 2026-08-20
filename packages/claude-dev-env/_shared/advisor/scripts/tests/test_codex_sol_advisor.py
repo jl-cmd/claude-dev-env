@@ -475,7 +475,7 @@ def test_bind_runs_probe_then_codex_with_read_only_xhigh_settings() -> None:
 
 
 def test_team_advisor_path_preserves_sol_routing_fields() -> None:
-    team_advisor_path = SCRIPTS_ROOT.parents[2] / "skills" / "team-advisor" / "SKILL.md"
+    team_advisor_path = SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "team-advisor" / "SKILL.md"
     sol_rung_path = SCRIPTS_ROOT.parent / "reference" / "sol-rung.md"
     assert "advisor-protocol.md" in team_advisor_path.read_text(encoding="utf-8")
     sol_rung = sol_rung_path.read_text(encoding="utf-8")

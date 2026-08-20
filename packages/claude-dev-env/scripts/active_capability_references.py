@@ -28,6 +28,8 @@ from dev_env_scripts_constants.active_capability_constants import (
     NEWLINE_JOIN_SEPARATOR,
     PACKAGE_AGENTS_DIRECTORY,
     PACKAGE_COMMANDS_DIRECTORY,
+    PACKAGE_ROOT_AGENTS_DIRECTORY,
+    PACKAGE_ROOT_SKILLS_DIRECTORY,
     PACKAGE_SKILLS_DIRECTORY,
     SKILL_MANIFEST_FILENAME,
     SLASH_CAPABILITY_PATTERN,
@@ -58,6 +60,18 @@ class UnresolvedCapabilityReference:
     reason: str
 
 
+def _resolve_package_tree(
+    from_package_root: Path,
+    canonical_relative: str,
+    package_root_name: str,
+) -> Path:
+    """Return the canonical tree when it exists, else the package-root name."""
+    canonical_directory = from_package_root / canonical_relative
+    if canonical_directory.is_dir():
+        return canonical_directory
+    return from_package_root / package_root_name
+
+
 def build_capability_inventory(from_package_root: Path) -> CapabilityInventory:
     """Build inventories from committed skill/agent/command files.
 
@@ -67,8 +81,16 @@ def build_capability_inventory(from_package_root: Path) -> CapabilityInventory:
     Returns:
         Inventory of basenames present on disk.
     """
-    skills_root = from_package_root / PACKAGE_SKILLS_DIRECTORY
-    agents_root = from_package_root / PACKAGE_AGENTS_DIRECTORY
+    skills_root = _resolve_package_tree(
+        from_package_root,
+        PACKAGE_SKILLS_DIRECTORY,
+        PACKAGE_ROOT_SKILLS_DIRECTORY,
+    )
+    agents_root = _resolve_package_tree(
+        from_package_root,
+        PACKAGE_AGENTS_DIRECTORY,
+        PACKAGE_ROOT_AGENTS_DIRECTORY,
+    )
     commands_root = from_package_root / PACKAGE_COMMANDS_DIRECTORY
     all_skills: set[str] = set()
     if skills_root.is_dir():
@@ -203,12 +225,20 @@ def unresolved_active_capabilities(
 
 def _default_markdown_paths(from_package_root: Path) -> list[str]:
     all_paths: list[str] = []
-    for each_directory_name in (
-        PACKAGE_SKILLS_DIRECTORY,
-        PACKAGE_AGENTS_DIRECTORY,
-        PACKAGE_COMMANDS_DIRECTORY,
-    ):
-        directory_path = from_package_root / each_directory_name
+    directory_paths = [
+        _resolve_package_tree(
+            from_package_root,
+            PACKAGE_SKILLS_DIRECTORY,
+            PACKAGE_ROOT_SKILLS_DIRECTORY,
+        ),
+        _resolve_package_tree(
+            from_package_root,
+            PACKAGE_AGENTS_DIRECTORY,
+            PACKAGE_ROOT_AGENTS_DIRECTORY,
+        ),
+        from_package_root / PACKAGE_COMMANDS_DIRECTORY,
+    ]
+    for directory_path in directory_paths:
         if not directory_path.is_dir():
             continue
         for each_markdown_file in directory_path.rglob("*.md"):

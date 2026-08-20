@@ -33,8 +33,8 @@ eval-*
 **/eval_*
 **/eval-*
 # Shipped opt-in capability evals under grokify (not disposable artifacts)
-!packages/claude-dev-env/skills/grokify/evals/
-!packages/claude-dev-env/skills/grokify/evals/**
+!packages/claude-dev-env/.agents/skills/grokify/evals/
+!packages/claude-dev-env/.agents/skills/grokify/evals/**
 
 # Draft prompt artifacts (file-based validation loop)
 data/prompts/.draft-prompt.xml
@@ -56,8 +56,8 @@ packages/claude-dev-env/.env
 .claude/settings.local.json
 
 # Self-improve eval data artifacts
-packages/claude-dev-env/skills/self-improve-pr-converge/self-improve-eval-data/
-packages/claude-dev-env/skills/self-improve-pr-converge/scripts/self-improve-eval-data/
+packages/claude-dev-env/.agents/skills/self-improve-pr-converge/self-improve-eval-data/
+packages/claude-dev-env/.agents/skills/self-improve-pr-converge/scripts/self-improve-eval-data/
 **/self-improve-eval-data/*.temp-*
 
 # Local working documents — never committed per git-workflow rule

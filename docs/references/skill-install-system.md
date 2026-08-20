@@ -6,13 +6,13 @@ this before adding or changing a skill, or before touching the install pipeline.
 
 ## Where skills live
 
-Each skill is a directory under `packages/claude-dev-env/skills/<name>/` with a `SKILL.md` file. The `SKILL.md` frontmatter holds:
+Each skill is a directory under `packages/claude-dev-env/.agents/skills/<name>/` with a `SKILL.md` file. The `SKILL.md` frontmatter holds:
 
 - `name` — the skill id; this is what the user types as `/<name>`.
 - `description` — one line covering what the skill does and its trigger phrases.
 - `argument-hint` — optional, shown in the slash-command UI.
 
-Skills are auto-discovered from the `skills/` directory. There is no manifest that lists them, so a new directory with a valid `SKILL.md` is a complete new skill on the source side.
+Skills are auto-discovered from `packages/claude-dev-env/.agents/skills/`. `packages/claude-dev-env/.claude/skills` is a directory pointer to that folder. There is no manifest that lists them, so a new directory with a valid `SKILL.md` is a complete new skill on the source side.
 
 Installed skills live at `~/.agents/skills/<name>/`. Claude Code discovers them at `~/.claude/skills/<name>/`, which is a directory pointer (a POSIX symlink, or a Windows junction) to that agents-home folder. Agent definition files follow the same rule: they live at `~/.agents/agents/` and `~/.claude/agents` points there. Rules, hooks, commands, docs, and `settings.json` stay under `~/.claude/`.
 
@@ -23,7 +23,7 @@ The entry point is `packages/claude-dev-env/bin/install.mjs`, run as `npx claude
 Two paths matter:
 
 - **Whole directories.** `CONTENT_DIRECTORIES` lists folders copied as-is from the package root: `rules`, `docs`, `commands`, `system-prompts`, `scripts`, `_shared`, `audit-rubrics`. Each maps to the same folder name under `~/.claude/`.
-- **Skills and agents.** Skill directories under `skills/` copy to `~/.agents/skills/<name>/`. The `agents/` tree copies to `~/.agents/agents/`. The installer then publishes `~/.claude/skills` → `~/.agents/skills` and `~/.claude/agents` → `~/.agents/agents`. A full install also moves stale content out of every managed root, described below. A real directory already sitting at a Claude lookup path is merged into the agents home, then the pointer is written, so a personal skill next to the packaged ones stays reachable.
+- **Skills and agents.** Skill directories under `.agents/skills/` copy to `~/.agents/skills/<name>/`. The `.agents/agents/` tree copies to `~/.agents/agents/`. The installer then publishes `~/.claude/skills` → `~/.agents/skills` and `~/.claude/agents` → `~/.agents/agents`. A full install also moves stale content out of every managed root, described below. A real directory already sitting at a Claude lookup path is merged into the agents home, then the pointer is written, so a personal skill next to the packaged ones stays reachable.
 
 The agents-home path is one rule in `resolveAgentsHome`: a managed root named `.claude` pairs with a sibling `.agents` (`~/.claude` → `~/.agents`). Any other managed root — a named profile directory or an explicit `--target` — pairs with a sibling named `<root-name>.agents`, so two profile directories keep separate skill and agent trees.
 
@@ -37,7 +37,7 @@ The source walk skips the build artifacts a contributor's tooling writes beside 
 
 The filter on skills depends on whether the user scoped the install:
 
-- **Full install** (`npx claude-dev-env`, no `--only`): the allowlist is empty, so every skill directory under `skills/` copies. A new skill is picked up with no further wiring.
+- **Full install** (`npx claude-dev-env`, no `--only`): the allowlist is empty, so every skill directory under `.agents/skills/` copies. A new skill is picked up with no further wiring.
 - **Scoped install** (`npx claude-dev-env --only core`): only skills named in the active groups' `skills` arrays copy. A new skill must be added to a group's `skills` array to install under a scoped run.
 
 So a new skill that should ship as part of a named group (for example `core`) needs its name added to that group's `skills` array in `install.mjs`. A skill left out of every group still ships on a full install, but a scoped install skips it.
@@ -80,7 +80,7 @@ Once the file loop ends, the purge walks up from each directory a removal touche
 
 ## Checklist: adding a new skill
 
-1. Create `packages/claude-dev-env/skills/<name>/SKILL.md` with `name`, `description`, and trigger phrases.
+1. Create `packages/claude-dev-env/.agents/skills/<name>/SKILL.md` with `name`, `description`, and trigger phrases.
 2. To ship it in a scoped group, add `<name>` to that group's `skills` array in `packages/claude-dev-env/bin/install.mjs` (for example the `core` group).
 3. Add a row to the matching group table in `README.md` so the documented skill set stays correct.
 4. A full install copies the skill on its own; a scoped install relies on step 2.
@@ -89,6 +89,7 @@ Once the file loop ends, the purge walks up from each directory a removal touche
 
 - `packages/claude-dev-env/bin/install.mjs` — the install pipeline.
 - `packages/claude-dev-env/bin/resolve-install-root.mjs` — managed Claude root, agents home, and allowed destinations.
+- `packages/claude-dev-env/bin/resolve-package-managed-directory.mjs` — package-source skills/agents directory (`.agents/<name>` first).
 - `packages/claude-dev-env/bin/publish-directory-pointer.mjs` — lookup-path pointers (POSIX symlink or Windows junction).
 - `packages/claude-dev-env/bin/install.test.mjs` — install behavior tests.
 - `packages/claude-dev-env/bin/install.agents-home.test.mjs` — agents-home layout and pointer tests.

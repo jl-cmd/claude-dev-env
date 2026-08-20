@@ -161,7 +161,7 @@ When findings exist (either phase):
 
 1. Read each referenced `file:line`.
 2. Write a failing test first when the finding has behavior to test; skip for doc/naming nits.
-3. Implement the fix. For all production or test code edits, spawn a `Task` subagent (same split as **pr-converge** Fix protocol — `packages/claude-dev-env/skills/pr-converge/SKILL.md` §Fix protocol: subagent edits; **this session** runs commit/push in steps 4–5):
+3. Implement the fix. For all production or test code edits, spawn a `Task` subagent (same split as **pr-converge** Fix protocol — `packages/claude-dev-env/.agents/skills/pr-converge/SKILL.md` §Fix protocol: subagent edits; **this session** runs commit/push in steps 4–5):
    ```
    Task(
      subagent_type="generalPurpose",
@@ -198,7 +198,7 @@ gh pr ready <N> --repo jl-cmd/claude-dev-env
 
 Report: `PR #<N> converged: bugbot CLEAN at <SHA>, bugteam CLEAN at <SHA>; marked ready for review.`
 
-After all open PRs have converged, stop the AHK auto-typer (canonical **scoped** kill — matches `packages/claude-dev-env/skills/pr-converge/workflows/ahk-auto-continue-loop.md` **Convergence cleanup**; command-line match avoids killing unrelated AutoHotkey tools):
+After all open PRs have converged, stop the AHK auto-typer (canonical **scoped** kill — matches `packages/claude-dev-env/.agents/skills/pr-converge/workflows/ahk-auto-continue-loop.md` **Convergence cleanup**; command-line match avoids killing unrelated AutoHotkey tools):
 
 ```bash
 pwsh -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='AutoHotkey64.exe'\" | Where-Object CommandLine -like '*cursor-agents-continue.ahk*' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"

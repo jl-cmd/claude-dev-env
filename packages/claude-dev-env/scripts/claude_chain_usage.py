@@ -41,6 +41,7 @@ from dev_env_scripts_constants.claude_chain_usage_constants import (
     RESOLVE_USAGE_WINDOW_FILENAME,
     RESOLVE_USAGE_WINDOW_MISSING_ERROR_TEMPLATE,
     RESOLVE_USAGE_WINDOW_MODULE_NAME,
+    USAGE_PAUSE_AGENTS_HOME_DIRECTORY_NAME,
     USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PAUSE_SKILL_DIRECTORY_NAME,
     USAGE_PAUSE_SKILL_NAME,
@@ -83,6 +84,7 @@ def _usage_pause_scripts_directory() -> Path:
     package_root = Path(__file__).resolve().parent.parent
     return (
         package_root
+        / USAGE_PAUSE_AGENTS_HOME_DIRECTORY_NAME
         / USAGE_PAUSE_SKILL_DIRECTORY_NAME
         / USAGE_PAUSE_SKILL_NAME
         / USAGE_PAUSE_SCRIPTS_DIRECTORY_NAME

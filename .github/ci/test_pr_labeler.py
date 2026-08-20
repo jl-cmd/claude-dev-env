@@ -324,11 +324,11 @@ class TestDeriveAreaLabels:
             "packages/claude-dev-env/hooks/blocking/agent_model_pin_blocker.py",
             "packages/claude-dev-env/hooks/hooks_constants/pre_tool_use_dispatcher_constants.py",
             "packages/claude-dev-env/hooks/hooks_constants/agent_model_pin_blocker_constants.py",
-            "packages/claude-dev-env/skills/split-pr/SKILL.md",
-            "packages/claude-dev-env/skills/split-pr/scripts/verify_plan.py",
-            "packages/claude-dev-env/skills/split-pr/scripts/verify_slice_dependencies.py",
-            "packages/claude-dev-env/agents/clean-coder.md",
-            "packages/claude-dev-env/agents/session-advisor.md",
+            "packages/claude-dev-env/.agents/skills/split-pr/SKILL.md",
+            "packages/claude-dev-env/.agents/skills/split-pr/scripts/verify_plan.py",
+            "packages/claude-dev-env/.agents/skills/split-pr/scripts/verify_slice_dependencies.py",
+            "packages/claude-dev-env/.agents/agents/clean-coder.md",
+            "packages/claude-dev-env/.agents/agents/session-advisor.md",
             "packages/claude-dev-env/rules/state-what-is.md",
             ".github/workflows/sync-labels.yml",
         ]
@@ -353,7 +353,7 @@ class TestDeriveAreaLabels:
         them — always the same one, regardless of PYTHONHASHSEED.
         """
         changed_paths = [
-            "packages/claude-dev-env/skills/x.md",
+            "packages/claude-dev-env/.agents/skills/x.md",
             "packages/claude-dev-env/rules/y.md",
             "packages/claude-dev-env/hooks/test_z.py",
         ]
@@ -438,8 +438,8 @@ class TestAreaMapPrefixesStayLive:
         assert all_declared_prefixes == frozenset(
             {
                 "hooks/",
-                "skills/",
-                "agents/",
+                ".agents/skills/",
+                ".agents/agents/",
                 "commands/",
                 "rules/",
                 "bin/",
@@ -588,14 +588,14 @@ class TestIdempotence:
             default_branch_name="main",
             changed_line_count=1276 + 3,
             changed_file_paths=(
-                "packages/claude-dev-env/skills/split-pr/SKILL.md",
+                "packages/claude-dev-env/.agents/skills/split-pr/SKILL.md",
                 (
-                    "packages/claude-dev-env/skills/split-pr/scripts/split_pr_scripts_constants"
+                    "packages/claude-dev-env/.agents/skills/split-pr/scripts/split_pr_scripts_constants"
                     "/config/dependency_constants.py"
                 ),
-                "packages/claude-dev-env/skills/split-pr/scripts/test_verify_slice_dependencies.py",
-                "packages/claude-dev-env/skills/split-pr/scripts/verify_plan.py",
-                "packages/claude-dev-env/skills/split-pr/scripts/verify_slice_dependencies.py",
+                "packages/claude-dev-env/.agents/skills/split-pr/scripts/test_verify_slice_dependencies.py",
+                "packages/claude-dev-env/.agents/skills/split-pr/scripts/verify_plan.py",
+                "packages/claude-dev-env/.agents/skills/split-pr/scripts/verify_slice_dependencies.py",
             ),
             current_labels=frozenset(),
         )
@@ -975,7 +975,7 @@ class TestCountAreaLabelMatches:
     def should_count_matches_across_every_changed_path(self) -> None:
         changed_paths = [
             "packages/claude-dev-env/hooks/blocking/pre_tool_use_dispatcher.py",
-            "packages/claude-dev-env/skills/split-pr/SKILL.md",
+            "packages/claude-dev-env/.agents/skills/split-pr/SKILL.md",
             "packages/claude-dev-env/hooks/blocking/agent_model_pin_blocker.py",
         ]
         match_count_by_area_label = pr_labeler_derivation.count_area_label_matches(

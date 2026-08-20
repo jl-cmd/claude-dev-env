@@ -12,7 +12,7 @@ from code_rules_js_conventions import (  # noqa: E402
     check_js_boolean_naming,
 )
 
-CONVERGE_PATH = "packages/claude-dev-env/skills/autoconverge/workflow/converge.mjs"
+CONVERGE_PATH = "packages/claude-dev-env/.agents/skills/autoconverge/workflow/converge.mjs"
 
 
 def test_flags_unprefixed_boolean_let_declaration() -> None:

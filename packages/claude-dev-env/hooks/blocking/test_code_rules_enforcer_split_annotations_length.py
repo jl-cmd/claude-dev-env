@@ -37,7 +37,7 @@ def test_should_treat_backslash_repo_relative_hook_path_as_hook_infrastructure()
 
 
 def test_should_not_treat_unrelated_repo_relative_path_as_hook_infrastructure() -> None:
-    relative_source_path = "packages/claude-dev-env/skills/bugteam/scripts/runner.py"
+    relative_source_path = "packages/claude-dev-env/.agents/skills/bugteam/scripts/runner.py"
     assert code_rules_enforcer.is_hook_infrastructure(relative_source_path) is False
 
 

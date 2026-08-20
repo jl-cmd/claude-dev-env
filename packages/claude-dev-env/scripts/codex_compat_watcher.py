@@ -30,7 +30,7 @@ class _WatcherConfiguration:
     copy_link_kind = "copy"
     symlink_link_kind = "symlink"
     junction_link_kind = "junction"
-    all_configured_root_names = ("agents", "commands", "hooks", "rules", "skills")
+    all_configured_root_names = (".agents", "commands", "hooks", "rules")
     all_unsafe_event_kinds = {"overflow", "ambiguous", "inaccessible", "error", "unknown"}
     reparse_point_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 

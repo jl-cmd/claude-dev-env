@@ -9,8 +9,11 @@ from __future__ import annotations
 FULL_WEEKLY_PERCENT: float = 100.0
 """Percent scale ceiling for weekly utilization (remaining = this minus used)."""
 
+USAGE_PAUSE_AGENTS_HOME_DIRECTORY_NAME: str = ".agents"
+"""Package subdirectory that holds the canonical skill and agent source trees."""
+
 USAGE_PAUSE_SKILL_DIRECTORY_NAME: str = "skills"
-"""Package-root directory name that holds skill trees (sibling of ``scripts/``)."""
+"""Directory name under the agents home that holds skill trees."""
 
 USAGE_PAUSE_SKILL_NAME: str = "usage-pause"
 """Skill directory name under ``skills/`` that owns the OAuth usage probe."""

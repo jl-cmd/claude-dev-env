@@ -74,7 +74,7 @@ _ADVISOR_WARM_UP_TEXT = (_ADVISOR_REFERENCE_DIR / "warm-up.md").read_text(
 )
 _ALL_CONSUMING_SKILL_NAMES = ("team-advisor", "orchestrator", "orchestrator-refresh")
 _ALL_CONSUMING_SKILL_PATHS = tuple(
-    _PACKAGE_ROOT / "skills" / each_skill_name / "SKILL.md"
+    _PACKAGE_ROOT / ".agents" / "skills" / each_skill_name / "SKILL.md"
     for each_skill_name in _ALL_CONSUMING_SKILL_NAMES
 )
 _skill_pin_ids = _ALL_CONSUMING_SKILL_NAMES

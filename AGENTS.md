@@ -35,7 +35,7 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 
 Notes:
 
-- `npm test` runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` — the installer and skill helper scripts.
+- `npm test` runs `node --test` over `bin/*.test.mjs` and `.agents/skills/**/*.test.mjs` — the installer and skill helper scripts.
 - The root `pytest.ini` sets `--import-mode=importlib`, puts `.` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`.
 - Parallel runs need `pytest-xdist`. Install with `pip install -e "packages/claude-dev-env[dev]"` or `pip install pytest-xdist`, then pass `-n auto` on a single suite session.
 - CI (`.github/workflows/ci-tests.yml`) runs the same split Python sessions and the JS suite. Node IDs CI deselects live under `.github/ci/`; the why for each family is the local-only register in `tests/CLAUDE.md`.
@@ -46,7 +46,7 @@ Notes:
 
 ### The install pipeline
 
-`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, copies `skills/` and `agents/` into `~/.agents/` and publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
+`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, copies `.agents/skills/` and `.agents/agents/` into `~/.agents/` and publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
 
 ### Hooks
 
@@ -64,7 +64,7 @@ CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designa
 
 ### Skills, agents, commands
 
-These ship as plain files (`skills/<name>/SKILL.md` and helper scripts, `agents/*.md`, `commands/*.md`). The installer copies skills and agents into `~/.agents/` and publishes `~/.claude/skills` and `~/.claude/agents` as directory pointers to that home. A skill's executable helpers carry their own tests (`skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
+These ship as plain files (`.agents/skills/<name>/SKILL.md` and helper scripts, `.agents/agents/*.md`, `commands/*.md`). `packages/claude-dev-env/.claude/skills` and `.claude/agents` are directory pointers to those trees. The installer copies skills and agents into `~/.agents/` and publishes `~/.claude/skills` and `~/.claude/agents` as directory pointers to that home. A skill's executable helpers carry their own tests (`.agents/skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
 
 ## Conventions specific to this repo
 

@@ -33,6 +33,9 @@ import {
     isAllowedInstallDestination,
 } from './resolve-install-root.mjs';
 import {
+    resolvePackageManagedDirectory,
+} from './resolve-package-managed-directory.mjs';
+import {
     ensureDirectoryPointer,
 } from './publish-directory-pointer.mjs';
 import {
@@ -257,7 +260,10 @@ function discoverDependencyGroups() {
             description: dependencyPackageJson.description || dependencyName,
             packageRoot: dependencyRoot,
         };
-        const skillsDirectory = join(dependencyRoot, MANAGED_SKILLS_DIRECTORY_NAME);
+        const skillsDirectory = resolvePackageManagedDirectory(
+            dependencyRoot,
+            MANAGED_SKILLS_DIRECTORY_NAME,
+        );
         if (existsSync(skillsDirectory)) {
             group.skills = readdirSync(skillsDirectory, { withFileTypes: true })
                 .filter(entry => entry.isDirectory())
@@ -2083,7 +2089,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         || allowedDirectories.has(MANAGED_AGENTS_DIRECTORY_NAME);
     if (shouldCopyAgents) {
         for (const sourceRoot of allSourceRoots) {
-            const agentsSource = join(sourceRoot, MANAGED_AGENTS_DIRECTORY_NAME);
+            const agentsSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_AGENTS_DIRECTORY_NAME,
+            );
             if (!existsSync(agentsSource)) continue;
             const agentsDestination = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
             const stats = copyTree(agentsSource, agentsDestination);
@@ -2127,7 +2136,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     const installedSkillNames = new Set();
     const copiedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
-        const skillsSource = join(sourceRoot, MANAGED_SKILLS_DIRECTORY_NAME);
+        const skillsSource = resolvePackageManagedDirectory(
+            sourceRoot,
+            MANAGED_SKILLS_DIRECTORY_NAME,
+        );
         if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
