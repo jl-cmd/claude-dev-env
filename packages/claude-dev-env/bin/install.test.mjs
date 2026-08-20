@@ -1281,23 +1281,57 @@ const README_BASENAME_PATTERN = /^readme\.md$/i;
 
 
 /**
- * Build a sandbox holding an installed skills root and a run backup root.
+ * Build a sandbox holding one installed managed root and a run backup root.
  *
- * @param {object} installedFiles Forward-slash relative paths under the skills root mapped to contents.
- * @returns {{root: string, skillsRoot: string, backupRoot: string}} The sandbox paths.
+ * @param {object} installedFiles Forward-slash relative paths under the installed root mapped to contents.
+ * @param {string} [managedRootName] The managed top-level directory the files sit under.
+ * @returns {{root: string, skillsRoot: string, installedRoot: string, backupRoot: string}} The sandbox paths.
  */
-function createStalePruneSandbox(installedFiles) {
+function createStalePruneSandbox(installedFiles, managedRootName = 'skills') {
     const root = mkdtempSync(join(tmpdir(), 'cdev-stale-prune-'));
-    const skillsRoot = join(root, 'skills');
+    const installedRoot = join(root, managedRootName);
     const backupRoot = join(root, 'pruned', 'run-timestamp');
-    mkdirSync(skillsRoot, { recursive: true });
+    mkdirSync(installedRoot, { recursive: true });
     for (const [relativePath, contents] of Object.entries(installedFiles)) {
-        const targetPath = join(skillsRoot, relativePath);
+        const targetPath = join(installedRoot, relativePath);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, contents);
     }
-    return { root, skillsRoot, backupRoot };
+    return { root, skillsRoot: installedRoot, installedRoot, backupRoot };
 }
+
+
+test('pruneStaleInstalledFiles leaves a retained unmanaged path the package stopped shipping in place', () => {
+    const sandbox = createStalePruneSandbox({
+        'profile-isolation-launchers/config/mcp-bundles.json': '{"schemaVersion":1}\n',
+        'sync-to-cursor.py': 'print("shipped")\n',
+    }, 'scripts');
+    try {
+        const shippedFilePath = join(sandbox.installedRoot, 'sync-to-cursor.py');
+        const retainedFilePath = join(
+            sandbox.installedRoot, 'profile-isolation-launchers', 'config', 'mcp-bundles.json',
+        );
+
+        const pruneOutcome = pruneStaleInstalledFiles(
+            [shippedFilePath, retainedFilePath],
+            [shippedFilePath],
+            sandbox.installedRoot,
+            sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
+        );
+
+        assert.equal(pruneOutcome.prunedCount, 0, 'a retained unmanaged path never counts as pruned');
+        assert.deepEqual(pruneOutcome.failedPaths, [], 'skipping a retained path reports no failed move');
+        assert.equal(
+            existsSync(retainedFilePath),
+            true,
+            'the launcher file a prior install recorded stays where the live launcher reads it',
+        );
+        assert.equal(existsSync(shippedFilePath), true, 'a file this run wrote stays in place');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
 
 
 /**

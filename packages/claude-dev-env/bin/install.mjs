@@ -114,6 +114,35 @@ const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
 const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
+/**
+ * Managed-home-relative directories this package leaves to whoever deployed
+ * them: it writes nothing inside them and prunes nothing out of them.
+ *
+ * `scripts/profile-isolation-launchers` is the live CLI profile launcher. Its
+ * executable modules are deployed from a separate source, so a payload covering
+ * only part of that tree left config and code out of step. This package stopped
+ * shipping its part, and the stale-file prune reads a path the package no longer
+ * writes as stale, which would move the live files aside on the next install.
+ * Naming the directory here keeps both halves of the tree with their owner.
+ */
+const RETAINED_UNMANAGED_RELATIVE_PATHS = [
+    'scripts/profile-isolation-launchers',
+];
+
+/**
+ * Report whether a path a prior manifest recorded sits inside a directory this
+ * package leaves to another owner.
+ *
+ * @param {string} candidatePath The absolute path the prior manifest recorded.
+ * @param {string} managedHomeDirectory The managed home the relative names resolve against.
+ * @returns {boolean} True when the path sits inside a retained unmanaged directory.
+ */
+function isRetainedUnmanagedPath(candidatePath, managedHomeDirectory) {
+    return RETAINED_UNMANAGED_RELATIVE_PATHS.some(
+        relativePath => isInsideDirectory(candidatePath, join(managedHomeDirectory, relativePath)),
+    );
+}
+
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
 ];
@@ -832,6 +861,7 @@ export function pruneStaleInstalledFiles(
         const stalePath = resolve(priorFile);
         if (!isInsideDirectory(stalePath, resolvedRoot)) continue;
         if (currentFileKeys.has(comparisonKeyForPath(stalePath, options))) continue;
+        if (isRetainedUnmanagedPath(stalePath, managedHomeDirectory)) continue;
         if (!isMovableStaleFile(stalePath)) continue;
         const backupRelativePath = relative(resolvedRoot, stalePath);
         const didMove = moveIntoRunBackup(
@@ -2590,13 +2620,15 @@ function realPathOrSelf(filesystemPath) {
 }
 
 /**
- * Load profile id → directoryName from the A1 launcher contract when present.
- * Falls back to identity mapping when the file is missing, unreadable, or empty.
+ * Load profile id → directoryName for the install targets this package resolves.
+ *
+ * Each profile's directory carries the profile's own name, so the map is an
+ * identity over the ids a multi-target install accepts.
  *
  * @returns {Record<string, string>}
  */
 function loadDirectoryNameByProfileId() {
-    const fallbackDirectoryNameByProfileId = {
+    return {
         main: 'main',
         editor: 'editor',
         mel: 'mel',
@@ -2604,35 +2636,6 @@ function loadDirectoryNameByProfileId() {
         master: 'master',
         kimi: 'kimi',
     };
-    const manifestPath = join(
-        PACKAGE_ROOT,
-        'scripts',
-        'profile-isolation-launchers',
-        'config',
-        'profiles.manifest.json',
-    );
-    if (!existsSync(manifestPath)) {
-        return fallbackDirectoryNameByProfileId;
-    }
-    try {
-        const document = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        /** @type {Record<string, string>} */
-        const directoryNameByProfileId = {};
-        const profiles = document && typeof document === 'object' ? document.profiles : null;
-        if (profiles && typeof profiles === 'object') {
-            for (const [eachProfileId, eachProfile] of Object.entries(profiles)) {
-                if (eachProfile && typeof eachProfile === 'object' && typeof eachProfile.directoryName === 'string') {
-                    directoryNameByProfileId[eachProfileId] = eachProfile.directoryName;
-                }
-            }
-        }
-        if (Object.keys(directoryNameByProfileId).length === 0) {
-            return fallbackDirectoryNameByProfileId;
-        }
-        return directoryNameByProfileId;
-    } catch {
-        return fallbackDirectoryNameByProfileId;
-    }
 }
 
 /**
