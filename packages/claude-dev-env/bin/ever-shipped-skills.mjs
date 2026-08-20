@@ -13,8 +13,8 @@
  * it by running, from the repository root:
  *
  *   git log --all --pretty=format: --name-only -- \
- *     'packages/claude-dev-env/.agents/skills/*/SKILL.md' \
- *     'packages/claude-dev-env/skills/*/SKILL.md' | sort -u
+ *     'packages/claude-dev-env/.agents/skills/*\/SKILL.md' \
+ *     'packages/claude-dev-env/skills/*\/SKILL.md' | sort -u
  *
  * and pasting each distinct top-level skill directory name below.
  */

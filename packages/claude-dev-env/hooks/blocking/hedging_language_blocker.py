@@ -49,6 +49,7 @@ from observability.prose_matcher_advisory import emit_advisory_candidate  # noqa
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 RESEARCH_MODE_SKILL_SEARCH_PATHS = [
+    os.path.join(PLUGIN_ROOT, ".agents", "skills", "research-mode", "SKILL.md"),
     os.path.join(PLUGIN_ROOT, "skills", "research-mode", "SKILL.md"),
     os.path.join(os.path.expanduser("~"), ".claude", "skills", "research-mode", "SKILL.md"),
     os.path.join(os.path.expanduser("~"), ".claude", "plugins", "marketplaces", "claude-deep-research", "skills", "research-mode", "SKILL.md"),
