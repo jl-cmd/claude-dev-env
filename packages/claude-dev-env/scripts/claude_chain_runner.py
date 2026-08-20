@@ -48,7 +48,9 @@ import os
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+import threading
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -327,6 +329,35 @@ class WeeklyUsageAccountReport(Protocol):
 
 
 chain_subprocess_runner = _run_captured_subprocess
+_shared_chain_subprocess_lock = threading.Lock()
+
+
+def chain_subprocess_runner_lock() -> threading.Lock:
+    """Return the lock for adapters that temporarily configure the runner."""
+    return _shared_chain_subprocess_lock
+
+
+@contextmanager
+def override_chain_subprocess_runner(
+    replacement_runner: Callable[..., subprocess.CompletedProcess[str]],
+) -> Iterator[Callable[..., subprocess.CompletedProcess[str]]]:
+    """Temporarily replace the chain subprocess seam under its shared lock.
+
+    Args:
+        replacement_runner: Callable used for subprocess invocations during the
+            context.
+
+    Yields:
+        The runner that was active before the replacement.
+    """
+    global chain_subprocess_runner
+    with chain_subprocess_runner_lock():
+        previous_runner = chain_subprocess_runner
+        chain_subprocess_runner = replacement_runner
+        try:
+            yield previous_runner
+        finally:
+            chain_subprocess_runner = previous_runner
 
 
 def _load_chain_usage_module() -> ModuleType:
@@ -1138,6 +1169,22 @@ def _persist_served_affinity(
         return
 
 
+def _run_cli_chain(
+    all_claude_arguments: list[str],
+    *,
+    timeout_seconds: int,
+    stdin_text: str | None,
+    routing_mode: str,
+) -> ChainInvocationOutcome:
+    """Run the CLI-selected chain arguments through the public runner."""
+    return run_claude(
+        all_claude_arguments,
+        timeout_seconds=timeout_seconds,
+        stdin_text=stdin_text,
+        routing_mode=routing_mode,
+    )
+
+
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run a claude invocation through the fallback chain."
@@ -1206,7 +1253,7 @@ def main(all_command_arguments: list[str]) -> int:
     all_claude_arguments = _strip_leading_separator(parsed_arguments.passthrough)
     maybe_stdin_text = _read_piped_stdin_text()
     try:
-        chain_outcome = run_claude(
+        chain_outcome = _run_cli_chain(
             all_claude_arguments,
             timeout_seconds=parsed_arguments.timeout_seconds,
             stdin_text=maybe_stdin_text,

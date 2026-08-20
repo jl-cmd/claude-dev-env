@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -17,6 +19,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import claude_chain_runner as chain_runner  # noqa: E402
+import invoke_code_review as invoker
 import resolve_worker_spawn as dispatcher  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
     ChainAttempt,
@@ -87,6 +90,7 @@ FIXTURE_ROLE = "code-quality-agent"
 MIN_WORKER_TIMEOUT_SECONDS_CONSTANT_NAME = "MIN_WORKER_TIMEOUT_SECONDS"
 LARGE_PROMPT_CHARACTER_COUNT = 40000
 WINDOWS_SAFE_ARGV_ELEMENT_CEILING = 8192
+LOCK_WAIT_TIMEOUT_SECONDS = 1
 EXPECTED_PRIMARY_AGENT_FOR_DEFAULT_ROLE = Path(
     ALL_AGENT_FILENAMES_BY_ROLE[DEFAULT_ROLE][0]
 ).stem
@@ -1085,7 +1089,7 @@ def test_headless_chain_runner_lock_serializes_distinct_cwds(
         claude_outcome=_claude_served(),
         host_profile=HOST_PROFILE_THIRD_PARTY,
     )
-    all_errors: list[BaseException] = []
+    all_errors: list[Exception] = []
     barrier = threading.Barrier(2)
 
     def _run_with_working_directory(working_directory: Path) -> None:
@@ -1120,6 +1124,120 @@ def test_headless_chain_runner_lock_serializes_distinct_cwds(
         second_working_directory,
     }
     assert chain_runner.chain_subprocess_runner is not None
+
+
+def test_shared_chain_runner_lock_serializes_cross_dispatcher_cwds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    first_working_directory = tmp_path / "project-a"
+    second_working_directory = tmp_path / "project-b"
+    first_working_directory.mkdir()
+    second_working_directory.mkdir()
+    observed_working_directories: list[Path] = []
+    all_errors: list[BaseException] = []
+
+    class CoordinatedLock:
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self.first_acquired = threading.Event()
+            self.second_attempted = threading.Event()
+            self.enter_count = 0
+
+        def __enter__(self) -> Self:
+            self.enter_count += 1
+            if self.enter_count == 1:
+                self.first_acquired.set()
+            elif self.enter_count == 2:
+                self.second_attempted.set()
+            self._lock.acquire()
+            return self
+
+        def __exit__(self, *all_positionals: object) -> None:
+            del all_positionals
+            self._lock.release()
+
+    coordinated_lock = CoordinatedLock()
+
+    def tracking_subprocess_runner(
+        all_invocation_tokens: Sequence[str],
+        *all_positionals: object,
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_invocation_tokens, all_positionals
+        observed_working_directories.append(Path(str(all_keywords["cwd"])))
+        return subprocess.CompletedProcess(
+            args=["claude"], returncode=0, stdout="{}", stderr=""
+        )
+
+    def run_review_runner(
+        all_claude_arguments: list[str], *, timeout_seconds: int
+    ) -> ChainInvocationOutcome:
+        del all_claude_arguments, timeout_seconds
+        if not coordinated_lock.second_attempted.wait(
+            timeout=LOCK_WAIT_TIMEOUT_SECONDS
+        ):
+            all_errors.append(AssertionError("shared lock was never contended"))
+            return _claude_served()
+        chain_runner.chain_subprocess_runner(
+            ["claude"], capture_output=True, text=True, timeout=1, check=False
+        )
+        return _claude_served()
+
+    def run_spawn_runner(
+        all_claude_arguments: list[str], *, timeout_seconds: int
+    ) -> ChainInvocationOutcome:
+        del all_claude_arguments, timeout_seconds
+        chain_runner.chain_subprocess_runner(
+            ["claude"], capture_output=True, text=True, timeout=1, check=False
+        )
+        return _claude_served()
+
+    monkeypatch.setattr(
+        chain_runner, "chain_subprocess_runner", tracking_subprocess_runner
+    )
+    monkeypatch.setattr(
+        chain_runner, "chain_subprocess_runner_lock", lambda: coordinated_lock,
+        raising=False,
+    )
+    monkeypatch.setattr(invoker, "review_claude_runner", run_review_runner)
+    monkeypatch.setattr(dispatcher, "spawn_claude_runner", run_spawn_runner)
+
+    def run_review() -> None:
+        try:
+            invoker._run_claude_with_empty_stdin(
+                ["-p", "review"],
+                timeout_seconds=1,
+                working_directory=first_working_directory,
+            )
+        except Exception as raised_error:  # noqa: BLE001
+            all_errors.append(raised_error)
+
+    def run_spawn() -> None:
+        try:
+            dispatcher._run_claude_with_headless_overrides(
+                ["-p", "spawn"],
+                timeout_seconds=1,
+                working_directory=second_working_directory,
+                prompt_stdin=io.StringIO(FIXTURE_PROMPT_TEXT),
+            )
+        except Exception as raised_error:  # noqa: BLE001
+            all_errors.append(raised_error)
+
+    review_thread = threading.Thread(target=run_review)
+    spawn_thread = threading.Thread(target=run_spawn)
+    review_thread.start()
+    coordinated_lock.first_acquired.wait(timeout=LOCK_WAIT_TIMEOUT_SECONDS)
+    spawn_thread.start()
+    review_thread.join(timeout=10)
+    spawn_thread.join(timeout=10)
+
+    assert all_errors == []
+    assert coordinated_lock.enter_count == 2
+    assert observed_working_directories == [
+        first_working_directory,
+        second_working_directory,
+    ]
+    assert chain_runner.chain_subprocess_runner is tracking_subprocess_runner
 
 
 def test_usage_limit_fallover_delivers_full_prompt_to_each_binary(
