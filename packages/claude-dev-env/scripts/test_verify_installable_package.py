@@ -31,8 +31,9 @@ def test_load_manifest_lists_hooks_and_claude_md() -> None:
     all_root_files = mod.required_root_file_names(manifest)
     assert "hooks" in all_directories
     assert "output-styles" in all_directories
+    assert ".agents" in all_directories
     assert "AGENTS.md" in all_root_files
-    assert "CLAUDE.md" in all_root_files
+    assert ".claude/CLAUDE.md" in all_root_files
     assert MANIFEST_FILENAME in all_root_files
 
 

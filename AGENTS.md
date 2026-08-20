@@ -31,11 +31,11 @@ Run from the repo root unless noted. The shell is Windows `pwsh`.
 | Python tests in parallel (root suite) | `python -m pytest tests/ -n auto` |
 | Python tests in parallel (package suite) | `python -m pytest packages/claude-dev-env -n auto` |
 | Quality gate (ruff + mypy + enforcer tests) | `pwsh -File packages/claude-dev-env/scripts/check.ps1` |
-| Install locally to `~/.claude/` | `cd packages/claude-dev-env && node bin/install.mjs` |
+| Install locally to `~/.claude/` and `~/.agents/` | `cd packages/claude-dev-env && node bin/install.mjs` |
 
 Notes:
 
-- `npm test` runs `node --test` over `bin/*.test.mjs` and `skills/**/*.test.mjs` — the installer and skill helper scripts.
+- `npm test` runs `node --test` over `bin/*.test.mjs` and `.agents/skills/**/*.test.mjs` — the installer and skill helper scripts.
 - The root `pytest.ini` sets `--import-mode=importlib`, puts `.` on `pythonpath`, scopes default collection to `tests/` via `testpaths`, and collects both `test_*` and `should_*` functions. Run the package suite as a separate session: `python -m pytest packages/claude-dev-env`.
 - Parallel runs need `pytest-xdist`. Install with `pip install -e "packages/claude-dev-env[dev]"` or `pip install pytest-xdist`, then pass `-n auto` on a single suite session.
 - CI (`.github/workflows/ci-tests.yml`) runs the same split Python sessions and the JS suite. Node IDs CI deselects live under `.github/ci/`; the why for each family is the local-only register in `tests/CLAUDE.md`.
@@ -46,7 +46,7 @@ Notes:
 
 ### The install pipeline
 
-`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `agents/`, `skills/`, `hooks/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
+`packages/claude-dev-env/bin/install.mjs` is the entry point. It detects the user's Python command, copies each shipped directory (`rules/`, `docs/`, `commands/`, `system-prompts/`, `scripts/`, `_shared/`, `audit-rubrics/`, `CLAUDE.md`) into `~/.claude/`, copies `.agents/skills/` and `.agents/agents/` into `~/.agents/` and publishes directory pointers at `~/.claude/skills` and `~/.claude/agents`, leaving behind the build artifacts a contributor's tooling drops in the source tree (`__pycache__`, the ruff, pytest, and mypy caches, `node_modules`, `.DS_Store`, and loose `.pyc`/`.pyo` files), rewrites hook paths to absolute locations, merges hook groups into `~/.claude/settings.json` without dropping the user's own entries, and writes `~/.claude/.claude-dev-env-manifest.json` for a clean uninstall. The `--only <group>` flag installs a subset; the groups are `core`, `journal`, and the discovered `prompt-generator` dependency group (run `node bin/install.mjs --help` for the live list). When changing how anything installs or syncs, read `docs/references/skill-install-system.md` first — it maps this pipeline.
 
 ### Hooks
 
@@ -64,10 +64,10 @@ CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designa
 
 ### Skills, agents, commands
 
-These ship as plain files (`skills/<name>/SKILL.md` and helper scripts, `agents/*.md`, `commands/*.md`). The installer copies them verbatim into `~/.claude/`. A skill's executable helpers carry their own tests (`skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
+These ship as plain files (`.agents/skills/<name>/SKILL.md` and helper scripts, `.agents/agents/*.md`, `commands/*.md`). `packages/claude-dev-env/.claude/skills` and `.claude/agents` are directory pointers to those trees. The installer copies skills and agents into `~/.agents/` and publishes `~/.claude/skills` and `~/.claude/agents` as directory pointers to that home. A skill's executable helpers carry their own tests (`.agents/skills/**/*.test.mjs` for JS, `test_*.py` beside Python helpers).
 
 ## Conventions specific to this repo
 
 - **Conventional Commits + release-please.** `release-please-config.json` drives versioning and `CHANGELOG.md` for the `claude-dev-env` package from commit types (`feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `ci`, `style`, `test`, `build`, `revert`). `publish.yml` releases to npm. `pr-check.yml` validates that the PR title is a semantic commit.
-- **Two `CLAUDE.md` files ship to users.** `packages/claude-dev-env/CLAUDE.md` installs to `~/.claude/CLAUDE.md`. This root `CLAUDE.md` is for contributors and is not packaged.
+- **Two `CLAUDE.md` files ship to users.** `packages/claude-dev-env/.claude/CLAUDE.md` installs to `~/.claude/CLAUDE.md`. This root `CLAUDE.md` is for contributors and is not packaged.
 - **Markdown is timeless and plain.** The `state-description-blocker` hook rejects historical or comparative phrasing (`previously`, `instead of`, `migrated from`, ...) in `.md` writes, and `plain_language_blocker` rejects heavy words in `.md` and `AskUserQuestion` content. Write what the system *is*, in everyday words.

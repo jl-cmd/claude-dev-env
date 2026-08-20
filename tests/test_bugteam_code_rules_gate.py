@@ -9,7 +9,7 @@ SHARED_PR_LOOP_SCRIPTS = (
     REPO_ROOT / "packages" / "claude-dev-env" / "_shared" / "pr-loop" / "scripts"
 )
 GATE_SCRIPT = SHARED_PR_LOOP_SCRIPTS / "code_rules_gate.py"
-SRC_RELATIVE_PATH = "packages/claude-dev-env/skills/bugteam/example_module.py"
+SRC_RELATIVE_PATH = "packages/claude-dev-env/.agents/skills/bugteam/example_module.py"
 
 
 def test_gate_help_exits_zero() -> None:

@@ -9,7 +9,7 @@ Canonical: `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py` after install.
 Workflows reference it via:
 - all skills (bugteam, pr-converge): `${CLAUDE_SKILL_DIR}/../../_shared/pr-loop/scripts/code_rules_gate.py`
 
-Cross-skill path traversal works because every skill installs as a flat top-level dir under `~/.claude/skills/` and `_shared/` lives alongside `skills/` under `~/.claude/`.
+Cross-skill path traversal works because every skill installs as a flat top-level dir under the skills lookup path (`~/.claude/skills/`, a directory pointer to `~/.agents/skills/`) and `_shared/` lives alongside `skills/` under `~/.claude/`.
 
 ## Invocation
 

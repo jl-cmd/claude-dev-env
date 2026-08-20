@@ -79,7 +79,7 @@ def test_ignores_single_word_command_literal() -> None:
 
 
 def test_ignores_file_outside_hooks_blocking() -> None:
-    other_path = "packages/claude-dev-env/skills/thing/helper.py"
+    other_path = "packages/claude-dev-env/.agents/skills/thing/helper.py"
     assert check_unanchored_command_dispatch(UNANCHORED_SOURCE, other_path) == []
 
 

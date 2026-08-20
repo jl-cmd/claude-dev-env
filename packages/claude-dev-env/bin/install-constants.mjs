@@ -45,16 +45,41 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
     /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
 
 /**
- * The directory name skill directories carry in a package source and under
- * `~/.claude`.
+ * Package subdirectory that holds the canonical skill and agent source trees.
  *
- * The copy loop reads `<package-root>/skills` and writes `~/.claude/skills`, the
- * dependency walk reads `<dependency-root>/skills`, the retired-skill prune reads
- * the installed directory, and the per-root stale-file prune names it as one of
- * its roots. One spelling serves every one of them, so the copy destination and
- * the prune target stay the same directory.
+ * This package keeps those trees at `<package-root>/.agents/skills` and
+ * `<package-root>/.agents/agents`. `packages/claude-dev-env/.claude/skills` and
+ * `.claude/agents` are directory pointers to that home. A dependency package
+ * may still keep `skills/` and `agents/` at its package root; the source
+ * resolver tries this directory first and falls back to the package-root name.
+ */
+export const PACKAGE_AGENTS_HOME_DIRECTORY_NAME = '.agents';
+
+/**
+ * The directory name skill directories carry in a package source and under
+ * the agents home.
+ *
+ * The copy loop reads `<package-root>/.agents/skills` (or `<package-root>/skills`
+ * when a dependency still ships that layout) and writes `~/.agents/skills`.
+ * Claude Code still looks up skills at `~/.claude/skills`, which the installer
+ * publishes as a directory pointer to that agents-home folder. The dependency
+ * walk reads the resolved skills source, the retired-skill prune reads the
+ * installed directory through the pointer, and the per-root stale-file prune
+ * names it as one of its roots. One spelling serves every one of them, so the
+ * copy destination and the prune target stay the same directory.
  */
 export const MANAGED_SKILLS_DIRECTORY_NAME = 'skills';
+
+/**
+ * The directory name agent definition files carry in a package source and under
+ * the agents home.
+ *
+ * The copy loop reads `<package-root>/.agents/agents` (or `<package-root>/agents`
+ * when a dependency still ships that layout) and writes `~/.agents/agents`.
+ * Claude Code still looks up agents at `~/.claude/agents`, which the installer
+ * publishes as a directory pointer to that agents-home folder.
+ */
+export const MANAGED_AGENTS_DIRECTORY_NAME = 'agents';
 
 /**
  * The directory name hook scripts carry in a package source and under

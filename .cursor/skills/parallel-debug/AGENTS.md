@@ -23,5 +23,5 @@ AutoHotkey v2 must be installed at `C:\Program Files\AutoHotkey\v2\AutoHotkey64.
 
 ## Conventions
 
-- This skill is Cursor-only. The Claude Code equivalent is the `pr-converge` skill in `packages/claude-dev-env/skills/pr-converge/`.
+- This skill is Cursor-only. The Claude Code equivalent is the `pr-converge` skill in `packages/claude-dev-env/.agents/skills/pr-converge/`.
 - Do not run this skill from a Claude Code (non-Cursor) session — use the `pr-converge` or `loop` skill there instead.

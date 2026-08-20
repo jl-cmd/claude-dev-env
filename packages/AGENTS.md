@@ -6,7 +6,7 @@ This directory holds the npm packages that ship the Claude Code configuration to
 
 | Entry | Description |
 |---|---|
-| `claude-dev-env/` | The sole package — installs rules, hooks, agents, commands, scripts, and skills into `~/.claude/` |
+| `claude-dev-env/` | The sole package — installs rules, hooks, commands, and scripts into `~/.claude/`, and skills and agents into `~/.agents/` with lookup pointers under `~/.claude/` |
 
 ## Role in the monorepo
 

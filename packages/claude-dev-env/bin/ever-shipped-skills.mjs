@@ -3,7 +3,7 @@
  *
  * The installer subtracts the skills the current package installs from this set
  * to learn which shipped skills have retired, so a full reinstall can remove a
- * retired skill left behind under ~/.claude/skills. Because the current set is
+ * retired skill left behind under ~/.agents/skills. Because the current set is
  * subtracted at runtime, restoring a retired skill to the package protects it
  * automatically — it re-enters the installed set and drops out of the retired
  * set on the next install.
@@ -12,7 +12,9 @@
  * installs from the npm tarball, which carries no source-repo history. Refresh
  * it by running, from the repository root:
  *
- *   git log --all --pretty=format: --name-only -- 'packages/claude-dev-env/skills/*\/SKILL.md' | sort -u
+ *   git log --all --pretty=format: --name-only -- \
+ *     'packages/claude-dev-env/.agents/skills/*\/SKILL.md' \
+ *     'packages/claude-dev-env/skills/*\/SKILL.md' | sort -u
  *
  * and pasting each distinct top-level skill directory name below.
  */
@@ -64,6 +66,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'remember',
     'research-mode',
     'reviewer-gates',
+    'run-claude-dev-env',
     'session-log',
     'session-tidy',
     'skill-builder',

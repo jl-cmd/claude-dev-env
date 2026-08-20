@@ -19,7 +19,7 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 8 agents, 1 command, and 12 skills to `~/.claude/`
+2. Copy rules, docs, commands, and hooks to `~/.claude/`; copy agents and skills to `~/.agents/` and point `~/.claude/agents` and `~/.claude/skills` at that home
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall

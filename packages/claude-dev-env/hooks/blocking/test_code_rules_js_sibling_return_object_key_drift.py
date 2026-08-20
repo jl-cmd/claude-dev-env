@@ -34,7 +34,7 @@ check_js_sibling_return_object_key_drift = (
 _MJS_PATH = "skills/autoconverge/workflow/converge_multi.mjs"
 
 _SHIPPED_CONVERGE_MJS = (
-    _HOOK_DIRECTORY.parents[1] / "skills" / "autoconverge" / "workflow" / "converge.mjs"
+    _HOOK_DIRECTORY.parents[1] / ".agents" / "skills" / "autoconverge" / "workflow" / "converge.mjs"
 )
 
 _SHIPPED_INSTALL_MYPY_INI_MJS = (

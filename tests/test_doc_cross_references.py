@@ -265,6 +265,7 @@ AUTOCONVERGE_SKILL_MD: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "SKILL.md"
@@ -273,6 +274,7 @@ AUTOCONVERGE_CONVERGENCE_MD: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "reference"
@@ -282,6 +284,7 @@ AUTOCONVERGE_CONVERGE_MJS: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "workflow"

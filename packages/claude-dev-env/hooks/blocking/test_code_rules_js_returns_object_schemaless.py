@@ -35,7 +35,7 @@ check_js_returns_object_schemaless_branch = (
 _MJS_PATH = "skills/autoconverge/workflow/converge.mjs"
 
 _SHIPPED_CONVERGE_MJS = (
-    _HOOK_DIRECTORY.parents[1] / "skills" / "autoconverge" / "workflow" / "converge.mjs"
+    _HOOK_DIRECTORY.parents[1] / ".agents" / "skills" / "autoconverge" / "workflow" / "converge.mjs"
 )
 
 

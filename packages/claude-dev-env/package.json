@@ -8,16 +8,15 @@
         "codex-compat": "bin/codex-compat.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \"skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
     },
     "files": [
         "bin/",
         "rules/",
         "docs/",
         "commands/",
-        "agents/",
+        ".agents/",
         "output-styles/",
-        "skills/",
         "hooks/",
         "system-prompts/",
         "scripts/",
@@ -28,7 +27,7 @@
         "audit-rubrics/",
         "codex-rules/",
         "AGENTS.md",
-        "CLAUDE.md",
+        ".claude/CLAUDE.md",
         "!**/__pycache__/**",
         "!**/*.py[cod]",
         "!**/.pytest_cache/**",
