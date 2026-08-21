@@ -69,6 +69,10 @@ const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
 const MYPY_INI_FILE_NAME = '.mypy.ini';
 const SKIPPED_RECORD_SUMMARY_MARKER = 'manifest record(s) skipped';
+const PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST = 'probe-skill-without-manifest';
+const PROBE_SKILL_FILE_SEGMENTS = ['scripts', 'probe_helper.py'];
+const PYTHON_BYTECODE_CACHE_DIRECTORY_NAME = '__pycache__';
+const PYTHON_BYTECODE_FILE_NAME = 'probe_helper.cpython-312.pyc';
 
 /**
  * Create a stub node_modules tree the installer can resolve the declared
@@ -104,13 +108,38 @@ let isolatedPackageCopyRoot = null;
  */
 function ensureIsolatedInstallerPath() {
     if (isolatedInstallerPath !== null) return isolatedInstallerPath;
-    isolatedPackageCopyRoot = mkdtempSync(join(tmpdir(), 'cdev-prune-package-'));
-    cpSync(PACKAGE_DIRECTORY, isolatedPackageCopyRoot, {
+    isolatedPackageCopyRoot = copyPackageWithoutModules();
+    isolatedInstallerPath = installerPathUnder(isolatedPackageCopyRoot);
+    return isolatedInstallerPath;
+}
+
+/**
+ * Copy the package into a fresh temp directory, leaving node_modules behind.
+ *
+ * A test that plants or removes a skill directory works inside this copy, so
+ * the repository checkout stays untouched.
+ *
+ * @returns {string} The root of the package copy.
+ */
+function copyPackageWithoutModules() {
+    const packageCopyRoot = mkdtempSync(join(tmpdir(), 'cdev-prune-package-'));
+    cpSync(PACKAGE_DIRECTORY, packageCopyRoot, {
         recursive: true,
         filter: sourcePath => basename(sourcePath) !== EXCLUDED_PACKAGE_COPY_DIRECTORY,
     });
-    isolatedInstallerPath = join(isolatedPackageCopyRoot, 'bin', 'install.mjs');
-    return isolatedInstallerPath;
+    return packageCopyRoot;
+}
+
+/**
+ * Resolve the installer entry point inside a package source root.
+ *
+ * @param {string|undefined} packageSourceRoot The package root to run from, or
+ *   undefined to run the repository's own installer.
+ * @returns {string} The absolute path to the installer to run.
+ */
+function installerPathUnder(packageSourceRoot) {
+    if (!packageSourceRoot) return INSTALLER_PATH;
+    return join(packageSourceRoot, 'bin', 'install.mjs');
 }
 
 after(() => {
@@ -212,7 +241,8 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
  *
  * @param {string} homeDirectory The sandbox home the installer writes into.
  * @param {string[]} extraArguments Installer arguments (for example ``['--only', 'core']``).
- * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
+ * @param {{dependencyResolvable?: boolean, packageSourceRoot?: string}} options
+ *   Whether the dependency resolves, and the package source root to install from.
  * @returns {string} The installer's stdout.
  */
 function runInstaller(homeDirectory, extraArguments, options = {}) {
@@ -228,7 +258,8 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
  * Build the installer path and child environment one sandbox run uses.
  *
  * @param {string} homeDirectory The sandbox home the installer writes into.
- * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
+ * @param {{dependencyResolvable?: boolean, packageSourceRoot?: string}} options
+ *   Whether the dependency resolves, and the package source root to install from.
  * @returns {{installerPath: string, childEnvironment: object}} The invocation inputs.
  */
 function resolveInstallerInvocation(homeDirectory, options) {
@@ -242,7 +273,7 @@ function resolveInstallerInvocation(homeDirectory, options) {
     };
     if (dependencyResolvable) {
         childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
-        return { installerPath: INSTALLER_PATH, childEnvironment };
+        return { installerPath: installerPathUnder(options.packageSourceRoot), childEnvironment };
     }
     delete childEnvironment.NODE_PATH;
     return { installerPath: ensureIsolatedInstallerPath(), childEnvironment };
@@ -1300,6 +1331,94 @@ test('an uninstall of a clean install skips no manifest record at all', () => {
         );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+/**
+ * Plant a skill directory carrying only a helper script, plus a bytecode cache
+ * beside it, in a package source root.
+ *
+ * The skill directory holds no ``SKILL.md``, which is the shape whose manifest
+ * record decides whether a later install can retire it. The cache directory
+ * carries the name the copy walk skips, so one install exercises both the
+ * record rule and the names held back from it.
+ *
+ * @param {string} packageSourceRoot The package copy the install reads from.
+ * @returns {string} The planted skill directory inside the package source.
+ */
+function plantSourceSkillDirectoryWithoutManifest(packageSourceRoot) {
+    const skillsSourceDirectory = join(packageSourceRoot, SKILLS_DIRECTORY_NAME);
+    const probeSourceDirectory = join(
+        skillsSourceDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+    );
+    writeFileWithParents(
+        join(probeSourceDirectory, ...PROBE_SKILL_FILE_SEGMENTS),
+        'a helper the skill directory ships without a SKILL.md\n',
+    );
+    writeFileWithParents(
+        join(skillsSourceDirectory, PYTHON_BYTECODE_CACHE_DIRECTORY_NAME, PYTHON_BYTECODE_FILE_NAME),
+        'compiled bytecode a contributor test run left in the source\n',
+    );
+    return probeSourceDirectory;
+}
+
+test('a shipped skill directory without a SKILL.md reaches the manifest and is pruned once the package drops it', () => {
+    const sandbox = createSandbox();
+    const packageSourceRoot = copyPackageWithoutModules();
+    try {
+        const probeSourceDirectory = plantSourceSkillDirectoryWithoutManifest(packageSourceRoot);
+
+        runInstaller(sandbox.homeDirectory, [], { packageSourceRoot });
+
+        const installedProbeDirectory = join(
+            sandbox.skillsDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+        );
+        assert.equal(
+            existsSync(installedProbeDirectory),
+            true,
+            'the directory with no SKILL.md still ships onto the machine',
+        );
+        const manifestAfterShipping = readManifest(sandbox.manifestPath);
+        assert.equal(
+            manifestAfterShipping.skills.includes(PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST),
+            true,
+            'the manifest records the directory the run wrote, SKILL.md or not',
+        );
+        assert.equal(
+            manifestAfterShipping.skills.includes(SHARED_DIRECTORY_NAME),
+            false,
+            'manifest skills omits _shared',
+        );
+        assert.equal(
+            manifestAfterShipping.skills.includes(PYTHON_BYTECODE_CACHE_DIRECTORY_NAME),
+            false,
+            'manifest skills omits __pycache__',
+        );
+
+        rmSync(probeSourceDirectory, { recursive: true, force: true });
+        runInstaller(sandbox.homeDirectory, [], { packageSourceRoot });
+
+        assert.equal(
+            existsSync(installedProbeDirectory),
+            false,
+            'the retired directory leaves the installed skills root',
+        );
+        assert.equal(
+            prunedSkillBackupContains(
+                sandbox.claudeDirectory, PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST,
+            ),
+            true,
+            'the retired directory lands under the timestamped backup root',
+        );
+        assert.equal(
+            readManifest(sandbox.manifestPath).skills
+                .includes(PROBE_SKILL_DIRECTORY_WITHOUT_MANIFEST),
+            false,
+            'the fresh manifest drops the name the package stopped shipping',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+        rmSync(packageSourceRoot, { recursive: true, force: true });
     }
 });
 
