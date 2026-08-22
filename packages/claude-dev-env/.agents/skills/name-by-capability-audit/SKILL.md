@@ -35,7 +35,7 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 Register every bullet from `reference/task-seeds.md` on the host task tool (`TodoWrite` / `TaskCreate`). Mark each complete with evidence. Follow those seeds in order — do not restate them here.
 
-Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it first; always keep `reference/rule-checklist.md` as the fallback when the doc is missing. On disagreement after the docs PR merges, prefer the repo doc and update the skill checklist in a follow-up.
+Load order for the rule: read the optional repo doc named name-by-capability.md under docs/agents when that file is in the worktree; always keep `reference/rule-checklist.md` as the fallback. On disagreement, follow the repo doc and update the skill checklist in a follow-up.
 
 ## Composition
 

@@ -126,7 +126,7 @@ Use `reference/offense-taxonomy.md` beside this skill. Assign priority:
 | Fixed-STP promotion sweep | `shared_utils/samsung_utils/promote_fixed_stp_sweep.py` |
 | Cert queue orchestration only | `cert_fix_queue/pipeline/` (`queue_run`) and `run_cli` |
 
-See also `.claude/rules/reuse-existing-tooling.md` before adding helpers.
+See also the reuse-existing-tooling rule under .claude/rules before adding helpers.
 
 ### Verification
 
@@ -151,7 +151,7 @@ Provide evidence: pytest output counts, not "should work".
 - `fix_one.py` / `promote_one.py` / `promote_run.py` / `backup_upload.py` in orchestration packages
 - `shared_utils` importing `theme_dialer_pipeline` or `cert_fix_queue`
 - Second rembg/BiRefNet session in a skill while `background_removal` exists
-- Identical `tests/support.py` in two packages
+- Identical `support.py` helpers under two packages' tests folders
 - `config/constants.py` that only aliases extracted helpers
 
 ## Examples

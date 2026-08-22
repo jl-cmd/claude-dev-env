@@ -1,6 +1,6 @@
 # Name-by-capability rule (skill-local)
 
-Prefer `docs/agents/name-by-capability.md` when that file exists in the worktree. This file is the fallback so audits still run when the docs PR has not merged yet.
+This file is the fallback rule text. Read the optional repo doc named name-by-capability.md under docs/agents first when that file is in the worktree.
 
 ## Rule
 
