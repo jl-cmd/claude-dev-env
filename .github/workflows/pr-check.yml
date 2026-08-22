@@ -9,6 +9,7 @@ on:
       - edited
       - synchronize
       - reopened
+      - ready_for_review
 
 concurrency:
   group: pr-check-${{ github.ref }}
@@ -17,6 +18,7 @@ concurrency:
 jobs:
   validate:
     name: Validate PR title
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

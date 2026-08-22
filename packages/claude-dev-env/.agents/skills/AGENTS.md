@@ -35,6 +35,8 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 
 - `shared-extraction-audit` — audits workflow packages for helpers that belong in shared libraries; extracts in small tested CLs
 - `name-by-capability-audit` — audits PR paths/titles for driver/motive words on reusable capability code
+- `review-tier` — classifies `review_tier_constants` from change axes, hard triggers, and user overrides
+- `review-router` — resolves and arms one supported `route_review_config` route through the registered Agent|Task gate
 - `pr-cleanup` — one-agent end-to-end PR cleanup: extraction → naming → sr-loop → small-cl; apply and validate fixes as they return
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
 - `e-code-review` — max-recall code review at a selectable effort level
@@ -43,6 +45,14 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 
 **Research and discovery**
 - `everything-search` — file-system search via the Everything `es.exe` CLI on Windows
+- `eli5` — concise beginner-friendly HTML explanations with large visuals and minimal text
+
+**Source commands**
+- `source-command-logifix` — restore the Logitech Gaming Software tray icon on Windows
+- `source-command-sr-loop` — converging cleanup loop: simplify then code-review until clean
+
+**Samsung certification**
+- `cert-classification-rule` — add or change a Samsung cert-failure classification rule
 
 **Session and workflow management**
 - `session-log` — logs a session report to the Obsidian vault

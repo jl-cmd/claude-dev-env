@@ -1,10 +1,13 @@
 ---
 name: name-by-capability-audit
 description: >-
-  Use when auditing a GitHub PR for name-by-capability violations —
-  driver/motive words on reusable modules; triggers: name-by-capability audit,
-  capability naming review, cert_fix rename check.
+  Audit a GitHub PR for name-by-capability violations: driver/motive words on
+  reusable capability modules (queues and report routers may keep the driver
+  word). Triggers: /name-by-capability-audit, name-by-capability audit, audit PR
+  for naming, name by capability, capability naming review, cert_fix rename
+  check, driver word in package name.
 ---
+
 # Name-by-Capability Audit
 
 Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and title wording for driver/motive words on reusable capability code, then report findings with a rename direction. Apply renames when the user requests a fix.
@@ -35,7 +38,7 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 Register every bullet from `reference/task-seeds.md` on the host task tool (`TodoWrite` / `TaskCreate`). Mark each complete with evidence. Follow those seeds in order — do not restate them here.
 
-Load order for the rule: read the optional repo doc named name-by-capability.md under docs/agents when that file is in the worktree; always keep `reference/rule-checklist.md` as the fallback. On disagreement, follow the repo doc and update the skill checklist in a follow-up.
+Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it first; always keep `reference/rule-checklist.md` as the fallback when the doc is missing. On disagreement after the docs PR merges, prefer the repo doc and update the skill checklist in a follow-up.
 
 ## Composition
 
@@ -54,3 +57,8 @@ Load order for the rule: read the optional repo doc named name-by-capability.md 
 | `reference/fetch-commands.md` | Minimal `gh` fetch for PR naming surface |
 | `reference/report-template.md` | Compact report shape |
 | `reference/task-seeds.md` | Ordered task seeds for the audit run |
+
+## Folder map
+
+- `SKILL.md` — hub
+- `reference/` — rule, examples, fetch recipe, report template, task seeds

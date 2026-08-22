@@ -1,10 +1,8 @@
 ---
 name: shared-extraction-audit
-description: >-
-  Use when auditing PRs for helpers living in workflow packages instead of
-  shared_utils — extraction audit, shared_utils migration, orchestration-only
-  packages, thin wrappers, or layer inversions.
+description: Audits pull requests and packages for general helpers living in workflow-specific code instead of shared_utils, then extracts them in small tested CLs. Use when reviewing PRs for architectural layering, migrating utilities out of cert_fix_queue/theme_dialer_pipeline/skills, auditing "similar offenses", or when the user mentions extraction audit, shared_utils migration, orchestration-only packages, thin wrappers, or layer inversions.
 ---
+
 # Shared Extraction Audit
 
 Audit-first, fix-second workflow for keeping **orchestration packages thin** and **shared_utils canonical**.
@@ -74,7 +72,7 @@ rg 'fail_if_called|build_rejected_theme_row|preserve_supplied_alpha' --glob '**/
 
 ### Step 3 — Classify offenses
 
-Use `reference/offense-taxonomy.md` beside this skill. Assign priority:
+Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign priority:
 
 | Priority | Meaning |
 |----------|---------|
@@ -126,13 +124,16 @@ Use `reference/offense-taxonomy.md` beside this skill. Assign priority:
 | Fixed-STP promotion sweep | `shared_utils/samsung_utils/promote_fixed_stp_sweep.py` |
 | Cert queue orchestration only | `cert_fix_queue/pipeline/` (`queue_run`) and `run_cli` |
 
-See also the reuse-existing-tooling rule under .claude/rules before adding helpers.
+See also `.claude/rules/reuse-existing-tooling.md` before adding helpers.
 
 ### Verification
 
 ```bash
+# Package under change (from its directory or shared_utils)
 cd shared_utils && python -m pytest path/to/tests -n 0 -q
 cd cert_fix_queue && python -m pytest tests/ -n 0 -q
+
+# After moving tests: bump CI collect floor in .github/workflows/standalone-packages-tests.yml if applicable
 ```
 
 Provide evidence: pytest output counts, not "should work".
@@ -151,17 +152,9 @@ Provide evidence: pytest output counts, not "should work".
 - `fix_one.py` / `promote_one.py` / `promote_run.py` / `backup_upload.py` in orchestration packages
 - `shared_utils` importing `theme_dialer_pipeline` or `cert_fix_queue`
 - Second rembg/BiRefNet session in a skill while `background_removal` exists
-- Identical `support.py` helpers under two packages' tests folders
+- Identical `tests/support.py` in two packages
 - `config/constants.py` that only aliases extracted helpers
 
 ## Examples
 
-See `reference/examples.md` for cert_fix_queue (#1965) and background_removal (#1954) audits.
-
-## File index
-
-| File | Purpose |
-|------|---------|
-| `SKILL.md` | Hub |
-| `reference/offense-taxonomy.md` | O1–O10 offenses + priority guide |
-| `reference/examples.md` | Repo-specific audit examples |
+See [reference/examples.md](reference/examples.md) for cert_fix_queue (#1965) and background_removal (#1954) audits.

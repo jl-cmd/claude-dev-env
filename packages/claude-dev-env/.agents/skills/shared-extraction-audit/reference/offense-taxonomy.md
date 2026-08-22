@@ -68,7 +68,7 @@
 
 ## O8 — Duplicate test support
 
-**Signal:** Identical or near-identical `support.py` helpers under tests folders, conftest bypass fixtures, synthetic PNG writers in multiple packages.
+**Signal:** Identical or near-identical `tests/support.py`, conftest bypass fixtures, synthetic PNG writers in multiple packages.
 
 **Fix:** `shared_utils/theme_assets/testing/` or `shared_utils/.../tests/fixtures.py`; one import path.
 

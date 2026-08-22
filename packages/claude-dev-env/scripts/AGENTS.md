@@ -30,6 +30,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `check.ps1` | Runs the full code-quality check suite |
 | `Get-SessionAccount.ps1` | Reports which Claude account the current session is actually logged into by comparing `~/.claude.json`'s CLI login against a `CLAUDE_USER_DATA_DIR` desktop profile's `lastKnownAccountUuid`, recovering the desktop account's email from profile storage when the two accounts differ |
 | `Capture-PoolHealth.ps1` | Captures Windows memory pool counters, high-handle processes, and kernel pool tags (via `NtQuerySystemInformation` class 22), prints a threshold verdict with a remediation map, and exits non-zero when any alert threshold fires |
+| `Show-Asset.ps1` | Opens files on screen, sizing each image window to the image's pixel dimensions and falling back to the registered default application for non-image files |
 
 ## Subdirectories
 
@@ -38,6 +39,7 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
 | `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
+| `hook-log-delta-runner/` | Node runner and manifests for the scheduled hook-log delta updater |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
 ## Running tests
