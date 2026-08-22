@@ -159,14 +159,13 @@ export const CORE_INCLUDE_DIRECTORIES = [
 ];
 
 export const CORE_SKILLS = [
-    'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
+    'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
-    'small-cl', 'comments', 'reviews', 'descriptions', 'emergencies',
-    'anthropic-plan', 'everything-search',
+    'small-cl',
+    'everything-search',
     'privacy-hygiene',
     'issue-tracker',
-    'recall', 'remember', 'task-build',
-    'show',
+    'task-build',
 ];
 
 export function collectPackageSourceConflicts(packageDirectory) {

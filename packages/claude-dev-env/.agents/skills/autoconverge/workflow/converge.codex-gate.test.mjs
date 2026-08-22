@@ -413,7 +413,7 @@ test('CONFIG expands home for the codex-review scripts directory', () => {
   );
   assert.match(
     convergeSource,
-    /codexScripts:\s*`\$\{homeDirectory\}\/\.claude\/skills\/codex-review\/scripts`/,
+    /codexScripts:\s*`\$\{homeDirectory\}\/\.claude\/_shared\/pr-loop\/scripts`/,
     'expected codexScripts to expand homeDirectory rather than embed $HOME',
   );
   assert.doesNotMatch(
