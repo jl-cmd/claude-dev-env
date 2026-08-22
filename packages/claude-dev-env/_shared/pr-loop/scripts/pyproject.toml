@@ -1,0 +1,22 @@
+# mypy configuration for pr-loop production scripts.
+#
+# Scoped separately from hooks/pyproject.toml so pr-loop and hooks stay
+# independent. check.ps1 invokes this via the mypy-pr-loop tool label.
+
+[tool.mypy]
+mypy_path = "."
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true
+exclude = [
+    "tests/",
+    "test_",
+    "code_rules_gate_parts/tests/",
+]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
