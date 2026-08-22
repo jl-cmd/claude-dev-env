@@ -1,0 +1,17 @@
+{
+  "profiles": [
+    {
+      "profile_root": "C:\\Users\\jon\\.claude"
+    },
+    {
+      "profile_root": "C:\\Users\\jon\\.claude-profiles\\ev"
+    },
+    {
+      "profile_root": "C:\\Users\\jon\\.claude-profiles\\mel"
+    },
+    {
+      "profile_root": "C:\\Users\\jon\\.claude-editor"
+    }
+  ]
+}
+
