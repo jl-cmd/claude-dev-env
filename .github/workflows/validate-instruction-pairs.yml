@@ -1,7 +1,7 @@
 name: Validate instruction pairs
 
 on:
-  pull_request:
+  pull_request_target:
   push:
     branches:
       - main
@@ -19,6 +19,12 @@ jobs:
   instruction-pairs:
     uses: ./.github/workflows/instruction-pairs-reusable.yml
     with:
-      validator-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Validator script: github.sha (base commit on pull_request_target; pushed
+      # commit on push). Tree under validation: pull request head when present.
+      validator-ref: ${{ github.sha }}
+      checkout-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Release-please detection (any one): branch prefix release-please--,
+      # title chore(.*): release , label autorelease: pending.
+      skip-validation: ${{ github.event_name == 'pull_request_target' && (startsWith(github.head_ref, 'release-please--') || startsWith(github.event.pull_request.title, 'chore: release ') || (startsWith(github.event.pull_request.title, 'chore(') && contains(github.event.pull_request.title, '): release ')) || contains(github.event.pull_request.labels.*.name, 'autorelease: pending')) }}
     permissions:
       contents: read

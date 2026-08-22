@@ -100,21 +100,48 @@ def test_untracked_import_fails_tracking_check(tmp_path: Path) -> None:
     assert any("Git mode 100644" in each_error for each_error in all_errors)
 
 
-def test_pull_request_trigger_is_unconditional() -> None:
+def test_pull_request_target_trigger_is_unconditional() -> None:
     workflow_text = read_workflow("validate-instruction-pairs.yml")
 
-    assert "  pull_request:\n  push:\n" in workflow_text
+    assert "  pull_request_target:\n  push:\n" in workflow_text
 
 
 def test_instruction_pairs_status_context_stays_exact() -> None:
     workflow_text = read_workflow("validate-instruction-pairs.yml")
     reusable_workflow_text = read_workflow("instruction-pairs-reusable.yml")
+    caller_job_body = workflow_text.split("  instruction-pairs:\n", 1)[1]
+    caller_job_before_uses = caller_job_body.split("uses:", 1)[0]
 
     assert (
         "  instruction-pairs:\n"
         "    uses: ./.github/workflows/instruction-pairs-reusable.yml\n"
         "    with:\n"
-        "      validator-ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
         in workflow_text
     )
+    assert "      validator-ref: ${{ github.sha }}\n" in workflow_text
+    assert (
+        "      checkout-ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
+        in workflow_text
+    )
+    assert "if:" not in caller_job_before_uses
     assert "  instruction-pairs:\n    name: instruction-pairs\n" in reusable_workflow_text
+
+
+def test_release_please_short_circuit_exists_in_workflow() -> None:
+    workflow_text = read_workflow("validate-instruction-pairs.yml")
+    reusable_workflow_text = read_workflow("instruction-pairs-reusable.yml")
+
+    assert "skip-validation:" in reusable_workflow_text
+    assert "type: boolean" in reusable_workflow_text
+    assert "default: false" in reusable_workflow_text
+    assert "if: ${{ inputs.skip-validation }}" in reusable_workflow_text
+    assert "if: ${{ !inputs.skip-validation }}" in reusable_workflow_text
+    assert (
+        "Skipping instruction-pairs tree validation for a release-please pull request."
+        in reusable_workflow_text
+    )
+    assert "ref: ${{ inputs.checkout-ref }}" in reusable_workflow_text
+    assert "release-please--" in workflow_text
+    assert "chore(.*): release " in workflow_text
+    assert "autorelease: pending" in workflow_text
+    assert "skip-validation:" in workflow_text
