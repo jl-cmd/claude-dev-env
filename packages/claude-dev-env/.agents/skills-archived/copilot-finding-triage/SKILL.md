@@ -124,7 +124,7 @@ present when the caller has not selected a pacer):
 - **Portable pacer** (`pacer=portable`, or no durable wake): do not call
   `ScheduleWakeup` or `send_later`. Hold with an in-session deadline poll, or
   write handoff and stop, per
-  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+  [`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md).
   Callers may override this step after the ntfy page and apply their own
   portable hold.
 

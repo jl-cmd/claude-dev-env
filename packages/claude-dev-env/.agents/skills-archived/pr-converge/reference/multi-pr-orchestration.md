@@ -216,7 +216,7 @@ When bugfix (clean-coder) subagent completes after push:
 5. Advance the pacer: on `pacer=schedule_wakeup`, call `ScheduleWakeup`
    with the appropriate delay; on `pacer=portable`, continue or poll
    in-session per
-   [`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+   [`../../../skills/_shared/pr-loop/portable-driver.md`](../../../skills/_shared/pr-loop/portable-driver.md)
    (no `ScheduleWakeup`).
 6. Nothing else.
 
