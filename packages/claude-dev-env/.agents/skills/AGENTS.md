@@ -32,6 +32,10 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 - `grok-spawn` — orchestrator playbook for fleets of headless grok CLI workers
 
 **PR review and convergence**
+
+- `shared-extraction-audit` — audits workflow packages for helpers that belong in shared libraries; extracts in small tested CLs
+- `name-by-capability-audit` — audits PR paths/titles for driver/motive words on reusable capability code
+- `pr-cleanup` — one-agent end-to-end PR cleanup: extraction → naming → sr-loop → small-cl; apply and validate fixes as they return
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
 - `e-code-review` — max-recall code review at a selectable effort level
 - `e-simplify` — cleanup-only pass on the current diff
