@@ -40,15 +40,15 @@ const CONFIG = {
   codexReviewTimeoutSeconds: 2400,
   codexReviewPollIntervalSeconds: 120,
   codexReviewMaxPolls: 21,
-  sharedScripts: '$HOME/.claude/skills/pr-converge/scripts',
+  sharedScripts: '$HOME/.claude/_shared/pr-loop/scripts',
   prLoopScripts: '$HOME/.claude/_shared/pr-loop/scripts',
-  codexScripts: `${homeDirectory}/.claude/skills/codex-review/scripts`,
+  codexScripts: `${homeDirectory}/.claude/_shared/pr-loop/scripts`,
   bugteamRubric: '$HOME/.claude/_shared/pr-loop/audit-contract.md',
   precatchRubric: '$HOME/.claude/_shared/pr-loop/precatch-rubric.md',
 }
 
 const REVIEWER_GATE_SENTINEL = 'CLAUDE_REVIEWER_GATE=autoconverge '
-const REVIEW_GUIDE_REFERENCE = 'skills/reviews/SKILL.md#review-workflow'
+const REVIEW_GUIDE_REFERENCE = '_shared/pr-loop/precatch-rubric.md'
 const REVIEW_RESULT_PASS_MARKER = 'REVIEW_RESULT: PASS'
 const REVIEW_RESULT_FINDINGS_MARKER = 'REVIEW_RESULT: FINDINGS'
 const REVIEW_RESULT_INSTRUCTION =

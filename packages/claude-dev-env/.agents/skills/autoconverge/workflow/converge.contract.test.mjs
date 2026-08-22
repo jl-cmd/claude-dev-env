@@ -19,7 +19,7 @@ function loadReviewResultParser() {
 
 test('review tasks apply the canonical review guide and return a review result', () => {
   assert.match(workflowSource, /function runReviewTask\(task, context\)/)
-  assert.match(workflowSource, /skills\/reviews\/SKILL\.md#review-workflow/)
+  assert.match(workflowSource, /_shared\/pr-loop\/precatch-rubric\.md/)
   assert.match(workflowSource, /REVIEW_RESULT: PASS/)
   assert.match(workflowSource, /REVIEW_RESULT: FINDINGS/)
 })

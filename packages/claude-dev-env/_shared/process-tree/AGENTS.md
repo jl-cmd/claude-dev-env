@@ -9,10 +9,10 @@ never outlive the run and hold the capture pipe open.
 | Caller | Use |
 |---|---|
 | `scripts/grok_headless_runner.py` | Kills a timed-out worker's tree between drain attempts |
-| `skills/codex-review/scripts/run_codex_review.py` | Kills the review tree on timeout, then drains |
-| `skills/codex-review/scripts/codex_usage_probe.py` | Tears the app-server tree down after the rate-limits exchange |
+| `_shared/pr-loop/scripts/run_codex_review.py` | Kills the review tree on timeout, then drains |
+| `_shared/pr-loop/scripts/codex_usage_probe.py` | Tears the app-server tree down after the rate-limits exchange |
 
-A skill script reaches this home the way the bugteam scripts reach
+A PR-loop script reaches this home the way convergence scripts reach
 `_shared/pr-loop/scripts`: it puts the directory on `sys.path` and imports by
 module name. `bin/install.mjs` copies `_shared` and `scripts` together, and
 every install group that carries a consumer carries `_shared`, so the import

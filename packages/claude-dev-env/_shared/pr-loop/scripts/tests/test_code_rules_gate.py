@@ -1,4 +1,4 @@
-"""Tests for shared code_rules_gate.py extracted from skills/bugteam/scripts/.
+"""Tests for shared code_rules_gate.py (historically extracted from bugteam scripts).
 
 Covers:
 - Module loads from _shared/pr-loop/scripts/ location

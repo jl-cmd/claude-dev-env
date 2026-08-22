@@ -6,7 +6,7 @@ Before the first round, the workflow checks once whether the PR branch conflicts
 with `origin/main`. When GitHub reports a conflict (`mergeable` false or
 `mergeable_state` dirty), one `clean-coder` rebases the branch onto `origin/main`
 and resolves every conflict — the edit remains in the working tree, review and
-verification follow the [review guide](../../reviews/SKILL.md#review-workflow),
+verification follow the [precatch rubric](../../_shared/pr-loop/precatch-rubric.md),
 and the commit step force-pushes with lease. The bug checks then run on a
 conflict-free diff.
 
@@ -62,15 +62,14 @@ confirmation gates that are expected to return zero.
 3. Run three reading lenses in parallel on that HEAD, each over the full
    `origin/main...HEAD` diff. Each lens receives the preflight's changed-file
 list and diffstat and reads only the files it needs from that list rather than
-re-deriving the diff; each lens applies the [review guide](../../reviews/SKILL.md#review-judgment).
+re-deriving the diff; each lens applies the [precatch rubric](../../_shared/pr-loop/precatch-rubric.md#review-judgment).
    - **Code-review lens** — a correctness-focused review pass (`code-quality-agent`),
      report-only workflow agent — see runCodeReviewLens in workflow/converge.mjs for its configuration.
      The built-in `/code-review` command is a separate surface outside this
      workflow path. On `pacer=workflow`, this lens runs inside `converge.mjs`.
-     On `pacer=portable`, the continuous driver uses the pr-converge CODE_REVIEW
-     phase through `invoke_code_review.py` instead of `runCodeReviewLens`
-     ([`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md);
-     [`../../pr-converge/reference/per-tick.md`](../../pr-converge/reference/per-tick.md)).
+     On `pacer=portable`, the continuous driver uses the CODE_REVIEW phase
+     through `invoke_code_review.py` instead of `runCodeReviewLens`
+     ([`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)).
    - **Bug-audit lens** — the bug-audit (`code-quality-agent`) applying the
      shared A–P rubric from `_shared/pr-loop/audit-contract.md`, then its
      adversarial second pass, and the doc-parity, test-assertion, and
@@ -85,7 +84,7 @@ re-deriving the diff; each lens applies the [review guide](../../reviews/SKILL.m
    text, and collects every distinct bot thread id so the fix lens resolves all
    colliding threads.
 5. **Any findings** → one `clean-coder` applies every fix per the
-   `pr-fix-protocol` skill (`../../pr-fix-protocol/SKILL.md`): a single
+   shared [fix protocol](../../_shared/pr-loop/fix-protocol.md): a single
    test-first commit, a push, then a reply and resolve on each finding that
    carries a GitHub review thread. Before its turn ends, the edit step dry-runs
    the CODE_RULES commit gate (`code_rules_gate.py --staged`) over its staged
@@ -195,7 +194,7 @@ bugbot-flagged path does not satisfy the round; its clean verdict is not a clean
 
 ## The ready definition
 
-`check_convergence.py` (`pr-converge/scripts/check_convergence.py`) is the single
+`check_convergence.py` (`packages/claude-dev-env/_shared/pr-loop/scripts/check_convergence.py`) is the single
 source of truth for readiness. Ready means the script exits `0` and prints:
 
 ```
@@ -204,8 +203,7 @@ All pre-conditions met — PR is ready to mark ready.
 
 The script re-derives every condition from GitHub and prints one PASS/FAIL line
 per label. The exact printed labels (script order) live in
-[`pr-converge/reference/convergence-gates.md`](../../pr-converge/reference/convergence-gates.md)
-§ (f) Mark ready and report — the seven-label block under "Exact printed labels".
+[`convergence-gates.md`](convergence-gates.md).
 
 The script has no Claude APPROVED review gate. Agent-side checks (Claude
 reviewer presence, broader unresolved-thread sweeps) sit outside this machine

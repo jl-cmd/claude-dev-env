@@ -109,7 +109,7 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Symptom:** A cloud review step fails when it assumes a Windows-only executable path.
 - **Cause:** Cloud sessions provide their own runtime paths and do not expose local Windows tool locations.
 - **Evidence:** Cloud compatibility work runs through MCP and the available shell runtime; local desktop tooling remains unavailable to that session.
-- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/.agents/skills/reviews/SKILL.md#review-workflow) format.
+- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/.agents/skills-archived/reviews/SKILL.md#review-workflow) format.
 
 ### RC8 — Copilot quota gap
 
@@ -260,7 +260,7 @@ until Phase C lands the MCP matchers. Meanwhile, self-check by hand before an
 MCP post:
 
 - No volatile scratch path in a post body (job dirs, `/tmp`, worktrees).
-- Review comments follow the [review guide](../../packages/claude-dev-env/.agents/skills/reviews/SKILL.md#review-workflow).
+- Review comments follow the [review guide](../../packages/claude-dev-env/.agents/skills-archived/reviews/SKILL.md#review-workflow).
 - A PR title follows Conventional Commits.
 - A body with markdown goes through the structured `body` parameter, so
   backticks show as formatting.

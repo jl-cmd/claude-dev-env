@@ -14,7 +14,7 @@ Promotion runs in the **normal, fully-hooked session** — never inside the `--b
 
 5. **Privacy sweep.** Run the `privacy-hygiene` skill over the full applied working tree, not only the diff — a POC that pulled live data can leave a secret in a file the diff view hides. Evidence: its clean report, or the leak it found and how it was removed. If the skill is missing, do a manual PII and secret review and say so.
 
-6. **Review and verify the real diff.** Apply the [review guide](../../reviews/SKILL.md#review-workflow). Evidence: the checks run and each required finding repaired. Do not rely on sandbox testing as promotion evidence.
+6. **Review and verify the real diff.** Apply the [review guide](../../skills-archived/reviews/SKILL.md#review-workflow). Evidence: the checks run and each required finding repaired. Do not rely on sandbox testing as promotion evidence.
 
 7. **Commit and open a draft PR.** After the review and verification record is complete, commit by hand per the `git-workflow` rule, then open a draft PR. Evidence: the commit hash and the PR URL.
 

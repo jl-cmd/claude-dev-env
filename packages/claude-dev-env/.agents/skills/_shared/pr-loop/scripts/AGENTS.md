@@ -1,6 +1,6 @@
 # scripts
 
-Python scripts that run the PR audit-fix loop at runtime. Both `bugteam` and `pr-converge` invoke these scripts during each loop tick.
+Python scripts for autoconverge portable pacer control and loop helpers. Runtime convergence checks, Codex review, and shared gates live in `~/.claude/_shared/pr-loop/scripts/`.
 
 ## Two script homes
 

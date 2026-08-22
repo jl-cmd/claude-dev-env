@@ -16,10 +16,10 @@ Every fallback reply carries a `fallback_kind` field: `declined` when policy clo
 Flag on: run the Codex preflight first —
 
 ```
-python ~/.claude/skills/codex-review/scripts/codex_usage_probe.py
+python ~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py
 ```
 
-Repo home: `packages/claude-dev-env/.agents/skills/codex-review/scripts/`.
+Repo home: `packages/claude-dev-env/_shared/pr-loop/scripts/`.
 
 The shared entry point is `~/.claude/_shared/advisor/scripts/codex_sol_advisor.py`; it calls the installed probe and owns Sol bind or resume parsing. Bind with `python ~/.claude/_shared/advisor/scripts/codex_sol_advisor.py --bind --cwd <repo-root>` and pipe the charter on stdin. Resume with `--resume <session_id>` and pipe the delta consult on stdin.
 
