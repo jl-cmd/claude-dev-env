@@ -50,7 +50,7 @@ Notes:
 
 ### Hooks
 
-Hooks are Python scripts under `packages/claude-dev-env/hooks/`, grouped by role: `blocking/` (PreToolUse gates that deny a Write/Edit/Bash and return a corrective message), `advisory/`, `validation/` (the mypy and hook-format validators), `validators/` (the `run_all_validators` entry point and its check modules), `diagnostic/`, `session/`, `lifecycle/`, `observability/`, `workflow/`, and `git-hooks/`. `hooks/hooks.json` is the registration map — a script can sit in the tree without being wired to an event, so check `hooks.json` to know what actually runs.
+Hooks are Python scripts under `packages/claude-dev-env/hooks/`, grouped by role: `blocking/` (PreToolUse gates that deny a Write/Edit/Bash and return a corrective message), `advisory/`, `validation/` (the mypy and hook-format validators), `validators/` (the `run_all_validators` entry point and its check modules), `session/`, `lifecycle/`, `observability/`, `workflow/`, and `git-hooks/`. `hooks/hooks.json` is the registration map — a script can sit in the tree without being wired to an event, so check `hooks.json` to know what actually runs.
 
 The largest blocking hook is `blocking/code_rules_enforcer.py`; its `validate_content` runs the AST checks for Python (and a narrow JS/TS subset) that enforce CODE_RULES at write time. Many sibling `code_rules_*.py` modules hold individual checks it composes.
 

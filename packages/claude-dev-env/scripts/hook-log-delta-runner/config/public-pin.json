@@ -1,8 +1,0 @@
-{
-  "repositoryLabel": "claude-dev-env public pin",
-  "commitSha": "41205c6a9ff0a0891b8f4b326c47e21c790492e0",
-  "localWorktreePath": "C:\\Users\\jon\\.claude\\worktrees\\profile-isolation-telemetry-stage2-mi4kqftw",
-  "stopProducerRelativePath": "packages/claude-dev-env/hooks/diagnostic/hook_log_stop_wrapper.py",
-  "deltaUpdaterRelativePath": "packages/claude-dev-env/hooks/diagnostic/hook_log_delta_updater.py",
-  "eventIdMigrationRelativePath": "packages/claude-dev-env/hooks/diagnostic/migrations/2026-07-13-add-hook-events-event-id.sql"
-}

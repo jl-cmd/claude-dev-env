@@ -39,7 +39,6 @@ Utility scripts installed into `~/.claude/scripts/` by `bin/install.mjs`. Each s
 | `ci/` | CI-only adapters; `windows-installer-lifecycle.ps1` runs the Node installer 16-check driver under isolated HOME/USERPROFILE/GIT_CONFIG_GLOBAL and writes bounded evidence |
 | `dev_env_scripts_constants/` | Named constants (`timing.py`, `grok_worker_constants.py`, …) for scripts in this directory, including worker-advisor placeholder launcher/model/effort, four verdict signals, correction cap, and advisor timeout |
 | `sync_to_cursor/` | Package that builds Cursor `.mdc` files from Claude rules and docs |
-| `hook-log-delta-runner/` | Node runner and manifests for the scheduled hook-log delta updater |
 | `tests/` | pytest suite for the Python scripts and Pester (`*.Tests.ps1`) suite for the PowerShell scripts in this directory |
 
 ## Running tests

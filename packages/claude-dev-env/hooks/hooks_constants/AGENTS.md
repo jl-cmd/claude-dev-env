@@ -36,7 +36,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
 | `hedging_uncertainty_constants.py` | Sentence-boundary pattern, explicit uncertainty label patterns, hedge-term list separator, and positive corrective block text for OP-07C sentence-scoped hedging |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
-| `hook_log_extractor_constants.py` | Neon table name, offset state file path, timeouts, and outcome-type mapping for the hook-log extractor |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
 | `hosted_hook_runner.py` | `run_hook_capturing_output()` — shared runner that runs one dispatcher-hosted hook in-process via runpy and returns its captured stdout and crash flag |
 | `inline_tuple_string_magic_constants.py` | Patterns for detecting magic strings in inline tuple literals |
