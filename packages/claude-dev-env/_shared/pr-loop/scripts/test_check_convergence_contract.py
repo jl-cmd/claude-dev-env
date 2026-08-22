@@ -11,8 +11,8 @@
     _get_pr_head_sha raises SystemExit -> exit 2 propagates
     parse_arguments([... --bugteam-post-blocked]) -> bugteam_post_blocked True
 
-The pin tests fix the stdout the four consumers parse (converge.mjs, pr-converge,
-bugteam, qbug) byte-for-byte, plus the exit codes and CLI surface. The flag tests
+The pin tests fix the stdout consumers parse (converge.mjs, autoconverge,
+archived bugteam) byte-for-byte, plus the exit codes and CLI surface. The flag tests
 drive the ``--bugteam-post-blocked`` bypass.
 """
 

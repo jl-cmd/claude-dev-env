@@ -15,11 +15,11 @@ The task seeds carry the full ordered detail. The shape:
 3. **Bring content as an uncommitted diff.** Copy the POC's file changes into the new branch's working tree. Do not cherry-pick or merge the sandbox commits; the sandbox history stays behind.
 4. **Cleanup.** Remove scratch files, debug dumps, and temp helpers the POC created (`cleanup-temp-files` rule).
 5. **Privacy sweep** via `privacy-hygiene` over the diff.
-6. **Review and verify** the real diff against the [review guide](../../reviews/SKILL.md#review-workflow). Record the checks run and repair every required finding.
+6. **Review and verify** the real diff against the [review guide](../../skills-archived/reviews/SKILL.md#review-workflow). Record the checks run and repair every required finding.
 7. **Commit and PR.** After the review and verification record is complete, commit by hand per the `git-workflow` rule, then open a draft PR.
 8. **State the honest limitations** from `reference/honest-limitations.md` in the PR body or to the user.
 9. **Converge** by handing the PR to `autoconverge` by default; use `pr-converge` for paced ticks or `bugteam` for an open-loop audit.
 
 ## Why the clean room, not a push
 
-`code_rules_enforcer` is a write-time Write/Edit gate. Content that lands through `git apply`, `git checkout`, or cherry-pick receives the clean-room controls in steps 4–6: cleanup, privacy review, and review and verification under the [review guide](../../reviews/SKILL.md#review-workflow). The promotion record states the checks run and the remaining TDD limitation.
+`code_rules_enforcer` is a write-time Write/Edit gate. Content that lands through `git apply`, `git checkout`, or cherry-pick receives the clean-room controls in steps 4–6: cleanup, privacy review, and review and verification under the [review guide](../../skills-archived/reviews/SKILL.md#review-workflow). The promotion record states the checks run and the remaining TDD limitation.

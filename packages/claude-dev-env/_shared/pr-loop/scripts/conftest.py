@@ -1,4 +1,4 @@
-"""Put the pr-converge scripts directory on sys.path for the test suite."""
+"""Put the shared PR-loop scripts directory on sys.path for the test suite."""
 
 import sys
 from pathlib import Path

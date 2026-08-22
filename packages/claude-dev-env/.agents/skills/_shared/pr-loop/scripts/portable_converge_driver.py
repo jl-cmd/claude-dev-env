@@ -122,8 +122,6 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     CLI_SESSION_MODEL_FLAG,
     CLI_STATE_DIR_FLAG,
     CLI_STATE_FILE_FLAG,
-    CODEX_REVIEW_SCRIPTS_DIRNAME,
-    CODEX_REVIEW_SKILL_DIRNAME,
     COMMAND_AFTER_BUGBOT,
     COMMAND_AFTER_BUGTEAM,
     COMMAND_AFTER_CODE_REVIEW,
@@ -140,7 +138,6 @@ from skills_pr_loop_constants.portable_driver_constants import (  # noqa: E402
     EXIT_USAGE_ERROR,
     INLINE_LAG_STREAK_CAP,
     INVOKE_CODE_REVIEW_RELATIVE_PATH,
-    PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS,
     NEXT_APPLY_FIXES,
     NEXT_CHECK_READY,
     NEXT_MARK_READY,
@@ -200,19 +197,31 @@ from skills_pr_loop_constants.preflight_constants import (  # noqa: E402
     REPO_ARG_FLAG,
 )
 
-_skills_directory_for_codex = Path(__file__).resolve().parent
-_remaining_codex_path_hops = PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS
-while _remaining_codex_path_hops > 0:
-    _skills_directory_for_codex = _skills_directory_for_codex.parent
-    _remaining_codex_path_hops -= 1
-_codex_scripts_directory = (
-    _skills_directory_for_codex
-    / CODEX_REVIEW_SKILL_DIRNAME
-    / CODEX_REVIEW_SCRIPTS_DIRNAME
-)
-_codex_scripts_text = str(_codex_scripts_directory)
-if _codex_scripts_text not in sys.path:
-    sys.path.insert(0, _codex_scripts_text)
+def _resolve_shared_pr_loop_scripts_directory() -> Path:
+    """Return the installed or package ``_shared/pr-loop/scripts`` directory."""
+    scripts_directory = Path(__file__).resolve().parent
+    skill_directory = scripts_directory.parent
+    shared_skill_directory = skill_directory.parent
+    skills_directory = shared_skill_directory.parent
+    skills_home_directory = skills_directory.parent
+    package_or_user_home = (
+        skills_home_directory.parent
+        if skills_home_directory.name == ".agents"
+        else skills_home_directory
+    )
+    shared_under_package = package_or_user_home / "_shared" / "pr-loop" / "scripts"
+    shared_under_claude = (
+        package_or_user_home / ".claude" / "_shared" / "pr-loop" / "scripts"
+    )
+    if shared_under_package.is_dir():
+        return shared_under_package
+    return shared_under_claude
+
+
+_shared_pr_loop_scripts_directory = _resolve_shared_pr_loop_scripts_directory()
+_shared_scripts_text = str(_shared_pr_loop_scripts_directory)
+if _shared_scripts_text not in sys.path:
+    sys.path.insert(0, _shared_scripts_text)
 
 from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa: E402
     USAGE_REPORT_KEY_PERCENT_LEFT,

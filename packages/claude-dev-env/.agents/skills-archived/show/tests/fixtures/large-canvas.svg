@@ -1,0 +1,21 @@
+<svg width="100%" viewBox="0 0 1760 640" role="img">
+  <title>Large canvas review flow</title>
+  <desc>A three-step flow across a large infographic canvas, from request to review to result.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="80" y="240" width="440" height="120" rx="20"/>
+    <line x1="520" y1="300" x2="660" y2="300" fill="none" marker-end="url(#arrow)"/>
+    <rect x="660" y="240" width="440" height="120" rx="20"/>
+    <line x1="1100" y1="300" x2="1240" y2="300" fill="none" marker-end="url(#arrow)"/>
+    <rect x="1240" y="240" width="440" height="120" rx="20"/>
+  </g>
+  <g fill="currentColor" font-family="sans-serif" font-size="41" text-anchor="middle">
+    <text x="300" y="300" dominant-baseline="central">Request</text>
+    <text x="880" y="300" dominant-baseline="central">Review</text>
+    <text x="1460" y="300" dominant-baseline="central">Result</text>
+  </g>
+</svg>

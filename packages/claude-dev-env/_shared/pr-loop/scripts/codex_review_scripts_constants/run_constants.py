@@ -1,4 +1,4 @@
-"""Named constants for the codex-review headless wrapper."""
+"""Named constants for the Codex review headless wrapper."""
 
 from __future__ import annotations
 

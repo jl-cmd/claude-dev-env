@@ -1,6 +1,6 @@
-# codex-review/scripts/codex_review_scripts_constants
+# codex_review_scripts_constants
 
-Python package of named constants imported by codex-review scripts. Importing from this package keeps magic values out of script bodies.
+Python package of named constants imported by Codex review scripts under `_shared/pr-loop/scripts/`. Importing from this package keeps magic values out of script bodies.
 
 ## Modules
 

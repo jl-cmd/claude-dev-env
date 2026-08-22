@@ -15,6 +15,8 @@ Each skill is a self-contained folder Claude Code loads on demand. At startup, o
 
 Skills install to `~/.agents/skills/<skill-name>/` via `packages/claude-dev-env/bin/install.mjs`. Claude Code looks them up at `~/.claude/skills/<skill-name>/`, a directory pointer to that folder. See `docs/references/skill-install-system.md` for the install pipeline.
 
+Retired skills live in `../skills-archived/` — versioned in the repo, not installed, not under the `.claude/skills` pointer. See `../skills-archived/AGENTS.md` for the archive index.
+
 ## Shared support code
 
 **`skills/_shared/`** — skill-local PR-loop helpers plus `@` stubs that name

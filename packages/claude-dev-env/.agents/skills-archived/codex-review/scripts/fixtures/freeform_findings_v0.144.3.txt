@@ -1,0 +1,6 @@
+The change removes required empty-input handling, causing a deterministic exception and breaking an existing test.
+
+Review comment:
+
+- [P1] Restore empty-input handling — src/stats.py:2-2
+  When average([]) is called, including by the existing test_empty_input_returns_zero, this line divides by zero and raises ZeroDivisionError instead of returning 0.0. This directly breaks the established contract and test suite.

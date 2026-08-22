@@ -24,10 +24,7 @@ def test_path_setup_registers_skill_and_shared_directories() -> None:
         for each_path in sys.path
         if each_path.replace("\\", "/").endswith("_shared/pr-loop/scripts")
     ]
-    codex_scripts_directory = (
-        _SCRIPTS_DIRECTORY.parent.parent / "codex-review" / "scripts"
-    )
     assert str(skill_directory) in sys.path
     assert shared_entries
     assert Path(shared_entries[0]).is_dir()
-    assert str(codex_scripts_directory) in sys.path
+    assert str(_SCRIPTS_DIRECTORY) in sys.path

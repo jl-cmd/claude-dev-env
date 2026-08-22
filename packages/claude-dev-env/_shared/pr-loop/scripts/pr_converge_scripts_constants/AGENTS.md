@@ -1,6 +1,6 @@
 # pr_converge_scripts_constants
 
-Constants module for the `pr-converge` skill's Python scripts. Re-exports all runtime/API constants from the skill-level module and adds script-specific constants for CLI arguments, markdown patterns, and reflow settings.
+Constants module for shared PR-loop convergence scripts. Re-exports all runtime/API constants from `pr_converge_skill_constants` and adds script-specific constants for CLI arguments, markdown patterns, and reflow settings.
 
 ## Key files
 

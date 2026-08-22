@@ -1,8 +1,8 @@
-"""Constants for the pr-converge skill.
+"""Constants for shared PR-loop convergence scripts.
 
 All runtime and API constants live here. Script-specific constants
 (CLI args, markdown patterns, reflow settings) stay in
-``packages/claude-dev-env/.agents/skills/pr-converge/scripts/pr_converge_scripts_constants/pr_converge_constants.py``,
+``packages/claude-dev-env/_shared/pr-loop/scripts/pr_converge_scripts_constants/pr_converge_constants.py``,
 which imports from here.
 """
 

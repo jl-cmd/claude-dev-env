@@ -1,1 +1,1 @@
-"""Named constants for the codex-review skill scripts."""
+"""Named constants for Codex review scripts in _shared/pr-loop/scripts."""

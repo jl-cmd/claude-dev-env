@@ -40,10 +40,11 @@
     - `status=could_not_address`: `Could not address this loop` / one-line reason text.
     - `status=hook_blocked`: `Hook blocked the fix commit` / one-line hook summary.
 
-    Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`, see [`skills/bugteam/reference/obstacles/fix-resolve-thread.md`](../../skills/bugteam/reference/obstacles/fix-resolve-thread.md)).
+    Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`; see the archived [`fix-resolve-thread` runbook](../../.agents/skills-archived/bugteam/reference/obstacles/fix-resolve-thread.md)).
 13. **Re-trigger reviewer** when the calling workflow specifies. Workflow-specific:
-    - `pr-converge`: post `bugbot run` issue comment after every push (Cursor Bugbot); when the multi-PR path also needs Copilot, call `requested_reviewers` for Copilot as well
-    - `bugteam`: skip — Claude itself is the reviewer; the next loop iteration audits
+    - **autoconverge** — terminal Bugbot, Copilot, and Codex gates re-run after each fix push per [`../../.agents/skills/autoconverge/reference/convergence.md`](../../.agents/skills/autoconverge/reference/convergence.md)
+    - **Archived pr-converge** — post `bugbot run` after every push; see archived skill reference
+    - **Archived bugteam** — skip external re-trigger; the next loop iteration audits
 
 ## Stuck detection
 

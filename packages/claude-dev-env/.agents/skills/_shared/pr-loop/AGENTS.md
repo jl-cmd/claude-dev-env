@@ -1,16 +1,17 @@
 # pr-loop
 
-Shared infrastructure for the PR audit-fix loop used by `bugteam`,
-`pr-converge`, and `autoconverge`. Provides the XML prompt template, Python
-runtime scripts, the portable converge driver protocol, and named constants
-those skills invoke during each loop tick.
+Shared infrastructure for autoconverge PR convergence: XML prompt templates,
+portable-driver phase machine scripts under `skills/_shared/pr-loop/scripts/`,
+and runtime convergence/Codex scripts under `~/.claude/_shared/pr-loop/scripts/`.
+Retired entry skills (`bugteam`, `pr-converge`, and others) are archived under
+`packages/claude-dev-env/.agents/skills-archived/` for reference only.
 
 ## Subdirectories
 
 | Directory | Role |
 |---|---|
-| `prompts/` | XML agent prompt templates. |
-| `scripts/` | Python scripts for loop state management, prompt building, outcome recording, path resolution, pacer selection, and preflight checks. |
+| `prompts/` | XML agent prompt templates for internal lenses. |
+| `scripts/` | Portable pacer scripts: pacer selection, loop state, portable driver, prompt builders, handoff. |
 
 ## Canonical-path stubs (`~/.claude/_shared/pr-loop/`)
 
@@ -34,17 +35,23 @@ Open a stub, then load the `@` target:
 | File | Role |
 |---|---|
 | `portable-driver.md` | Continuous in-session pacer when Workflow / ScheduleWakeup are absent. |
-| `prompts/pr-consistency-audit.xml` | Structured prompt artifact for the cross-file consistency audit agent. |
+| `prompts/pr-consistency-audit.xml` | Cross-file consistency audit prompt for autoconverge self-review lanes. |
 | `scripts/select_converge_pacer.py` | Maps entry skill + host tool flags to `workflow`, `schedule_wakeup`, or `portable`. |
-| `scripts/build_audit_prompt.py` | Assembles the audit agent prompt from loop state and the constants module. |
-| `scripts/build_fix_prompt.py` | Assembles the fix agent prompt from loop state and findings. |
-| `scripts/init_loop_state.py` | Initializes the per-PR loop state JSON file. |
-| `scripts/write_audit_outcomes.py` | Writes the per-loop audit outcome XML into the workspace. |
-| `scripts/write_fix_outcomes.py` | Writes the per-loop fix outcome XML into the workspace. |
-| `scripts/preflight_worktree.py` | Verifies the working directory is a healthy worktree for the target PR's repo. |
+| `scripts/build_audit_prompt.py` | Assembles audit agent prompts from loop state (portable pacer). |
+| `scripts/build_fix_prompt.py` | Assembles fix agent prompts from loop state and findings. |
+| `scripts/init_loop_state.py` | Initializes per-PR loop state JSON for portable runs. |
+| `scripts/write_audit_outcomes.py` | Writes per-loop audit outcome XML into the workspace. |
+| `scripts/write_fix_outcomes.py` | Writes per-loop fix outcome XML into the workspace. |
+| `scripts/preflight_worktree.py` | Verifies the working directory is a healthy worktree for the target PR. |
 | `scripts/teardown_worktrees.py` | Removes loop worktrees on clean exit. |
-| `scripts/write_handoff.py` | Writes durable resume-handoff files under `~/.claude/runtime/pr-loop/<run-name>/` at each converge checkpoint. |
+| `scripts/write_handoff.py` | Writes durable resume-handoff files under `~/.claude/runtime/pr-loop/<run-name>/`. |
+| `scripts/portable_converge_driver.py` | Portable phase machine for autoconverge when `pacer=portable`. |
+| `scripts/build_converge_task_list.py` | Step-1 task list for portable runs. |
 | `scripts/_path_resolver.py` | Resolves workspace and worktree paths from PR metadata. |
 | `scripts/_cli_utils.py` | Shared CLI argument parsing helpers. |
 | `scripts/_xml_utils.py` | XML serialization helpers. |
-| `scripts/skills_pr_loop_constants/` | Named constants package imported by the scripts above. |
+| `scripts/skills_pr_loop_constants/` | Named constants for portable-driver scripts. |
+
+Runtime convergence checks, Codex review, and shared gates live in
+`packages/claude-dev-env/_shared/pr-loop/scripts/` (installed to
+`~/.claude/_shared/pr-loop/scripts/`).

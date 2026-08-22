@@ -1,6 +1,6 @@
 # pr_converge_skill_constants
 
-Importable Python constants module for the `pr-converge` skill. Script-specific constants (CLI args, markdown patterns, reflow settings) live in `scripts/pr_converge_scripts_constants/` and import from here.
+Importable Python constants module for shared PR-loop convergence scripts. Script-specific constants (CLI args, markdown patterns, reflow settings) live in `pr_converge_scripts_constants/` beside this package and import from here.
 
 ## Key files
 
@@ -23,4 +23,4 @@ Importable Python constants module for the `pr-converge` skill. Script-specific 
 ## Conventions
 
 - All path templates use `str.format(**kwargs)` with keys `owner`, `repo`, `number`.
-- `packages/claude-dev-env/.agents/skills/pr-converge/scripts/pr_converge_scripts_constants/pr_converge_constants.py` re-exports everything here via `from pr_converge_skill_constants.constants import ...` so scripts can import from either location.
+- `packages/claude-dev-env/_shared/pr-loop/scripts/pr_converge_scripts_constants/pr_converge_constants.py` re-exports everything here via `from pr_converge_skill_constants.constants import ...` so scripts can import from either location.

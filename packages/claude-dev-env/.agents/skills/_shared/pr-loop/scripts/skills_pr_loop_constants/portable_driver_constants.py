@@ -169,12 +169,8 @@ DEFAULT_SESSION_MODEL: str = "third-party"
 
 INVOKE_CODE_REVIEW_RELATIVE_PATH: str = ".claude/scripts/invoke_code_review.py"
 CHECK_CONVERGENCE_RELATIVE_PATH: str = (
-    ".claude/skills/pr-converge/scripts/check_convergence.py"
+    ".claude/_shared/pr-loop/scripts/check_convergence.py"
 )
-
-CODEX_REVIEW_SKILL_DIRNAME: str = "codex-review"
-CODEX_REVIEW_SCRIPTS_DIRNAME: str = "scripts"
-PORTABLE_SCRIPTS_TO_SKILLS_PARENT_HOPS: int = 3
 
 EXIT_SUCCESS: int = 0
 EXIT_USAGE_ERROR: int = 2
