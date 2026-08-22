@@ -46,20 +46,10 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 **Research and discovery**
 - `everything-search` — file-system search via the Everything `es.exe` CLI on Windows
 - `eli5` — concise beginner-friendly HTML explanations with large visuals and minimal text
-- `imagegen` — prompt-driven image generation at exact requested resolutions through OpenAI API or Codex OAuth
 
 **Source commands**
-- `source-command-commit` — commit and push changes to GitHub
-- `source-command-docupdate` — scan and update project documentation
-- `source-command-hook-log-extract` — extract hook-firing records from session transcripts into Neon
-- `source-command-hook-log-init` — initialize the Neon schema for the hook-log extractor
-- `source-command-implement` — provide full implementation context to a right-sized engineer in XML format
 - `source-command-logifix` — restore the Logitech Gaming Software tray icon on Windows
-- `source-command-right-size` — prevent over- and under-engineering
 - `source-command-sr-loop` — converging cleanup loop: simplify then code-review until clean
-- `source-command-stubcheck` — detect and fix stub implementations with agent or skill recommendations
-- `source-command-sum` — generate a formatted session summary for quick pickup
-- `source-command-update-theme-db` — weekly theme database update with orphan detection
 
 **Samsung certification**
 - `cert-classification-rule` — add or change a Samsung cert-failure classification rule
