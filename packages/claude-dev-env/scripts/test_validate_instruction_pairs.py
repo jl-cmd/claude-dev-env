@@ -103,7 +103,7 @@ def test_untracked_import_fails_tracking_check(tmp_path: Path) -> None:
 def test_pull_request_target_trigger_is_unconditional() -> None:
     workflow_text = read_workflow("validate-instruction-pairs.yml")
 
-    assert "  pull_request_target:\n  push:\n" in workflow_text
+    assert "  pull_request:\n  pull_request_target:\n  push:\n" in workflow_text
 
 
 def test_instruction_pairs_status_context_stays_exact() -> None:
