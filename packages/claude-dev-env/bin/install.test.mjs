@@ -214,6 +214,12 @@ test('CORE_SKILLS ships issue-tracker so the core group installs the skill the S
 });
 
 
+test('CORE_SKILLS ships ELI5 as the leaf presentation skill', () => {
+    assert.ok(CORE_SKILLS.includes('eli5'), 'eli5 must be in CORE_SKILLS');
+    assert.equal(INSTALL_GROUPS.core.skills.includes('eli5'), true);
+});
+
+
 test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
     assert.ok(
         EVER_SHIPPED_SKILL_NAMES.has('imagegen'),
@@ -980,7 +986,6 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/claude_md_orphan_file_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/pytest_testpaths_orphan_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/open_questions_in_plans_blocker.py', timeout: 10 },
-                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/plain_language_blocker.py', timeout: 10 },
                 ],
             },
         ],
@@ -988,10 +993,9 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
+test('FOLDED_HOOK_RELATIVE_PATHS contains all 14 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 15);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
-    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/md_to_html_blocker.py'));
@@ -1014,7 +1018,6 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         'blocking/env_var_table_code_drift_blocker.py',
         'blocking/pytest_testpaths_orphan_blocker.py',
         'blocking/open_questions_in_plans_blocker.py',
-        'blocking/plain_language_blocker.py',
     ];
     const retiredHooks = [
         'blocking/md_to_html_blocker.py',

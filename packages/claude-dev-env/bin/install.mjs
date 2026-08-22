@@ -166,6 +166,7 @@ export const CORE_SKILLS = [
     'privacy-hygiene',
     'issue-tracker',
     'task-build',
+    'eli5',
 ];
 
 export function collectPackageSourceConflicts(packageDirectory) {
@@ -1082,7 +1083,6 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/env_var_table_code_drift_blocker.py',
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
-    'blocking/plain_language_blocker.py',
     'blocking/md_to_html_blocker.py',
 ]);
 

@@ -1,14 +1,23 @@
 # Scope
 
-  Every rule in this file governs all text everywhere: chat replies, tool-call sentences, plans, questions you ask, code, code comments, test names, commit subjects, pull request and issue bodies, documentation, and every file you write. No rule stops at the edge of a chat message.
+## User-facing language hierarchy
 
-  A rule that names a form in order to forbid it passes its own check, and so does a two-column table that teaches a rewrite.
+ELI5 owns beginner framing and beginner-friendly presentation, large visuals, minimal text, one stable self-contained HTML artifact, update-in-place continuity, and sharing when a response needs that presentation.
+
+`rules/asd-ste100-language.md` owns sentence-level word choice, grammar, tone, punctuation, exact labels, and prose form in every user-facing response and every ELI5 page.
+
+Named capability rules own evidence, questions, current-state documentation, completion, code documentation, durable artifacts, and runtime enforcement. They apply ASD sentence rules and use ELI5 presentation when their user-facing output needs that envelope.
+
+Raw tool output, machine payloads, code, and native repository artifacts keep their required formats. Their user-visible explanations follow the ASD rule.
+
+A responsible human verifies technical accuracy, terminology, safety, confidentiality, and intended meaning.
 
 Ask when ambiguity materially changes scope or implementation. Collect credentials through secure UI only; never request secrets in chat.
 
 ## Documentation
 
-Describe only the current system state. Keep documentation self-contained and free of historical, transitional, conversational, or version-transition language. Never use negative prose or antipatterns. Always state what to do, specifically.
+Describe the current system state. Keep documentation self-contained. Apply `rules/asd-ste100-language.md` for sentence-level prose.
+
 Code and tests
 
 Tests must exercise real behavior, real data, and production paths. Test theater is forbidden.
@@ -17,6 +26,8 @@ For multi-step code tasks:
 
 Coders consult a warm session-advisor when blocked (Sol xHigh).
 Repair reported findings when that review mode is selected.
+
+Use `~/.claude/agents/session-advisor.md` for advisor selection and consultation protocol.
 
 Research and delegation
 Delegate fact extraction when multiple files or search patterns are required. Request precise file-and-line answers.
@@ -31,78 +42,41 @@ Scope every es.exe search.
 
 Never scan an entire drive or network share.
 
+Use `~/.claude/skills/everything-search/SKILL.md` for scoped filesystem searches that require Everything.
+
 Task tracking
 Track every task using `update_plan`.
 
 ## Definitions
 Warm agent: Any agent who has acted within the past 30 minutes.
 
-  # Response and working style
+# Response and working style
 
-  Mid-run and closing narration follow `rules/opus5-communication-contract.md` (`opus5-communication-contract-v1`): first progress update is one sentence; later updates only for important discoveries or direction changes; the final starts with the outcome.
+ELI5 presentation sets beginner framing, useful visuals, concise detail, stable HTML continuity, and sharing when that capability applies.
 
-  Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
+Sentence-level language follows `rules/asd-ste100-language.md`.
 
-  # Word budget
+Progress and final structure follow the named completion contract.
 
-  Say it in the fewest words that stay accurate and complete. Before sending, cut every sentence that does not change what the reader thinks or does.
+# Word budget
 
-  Cut these on sight:
+Keep ELI5 pages concise and useful. Use the ASD rule's 20-word procedure target and 25-word descriptive target when the technical content allows.
 
-  - Deliberation. State the decision, not the reasoning that reached it, unless the reader has to weigh it themselves.
-  - Why you did not do something. Say what you did; add the reason only if the reader must decide whether to do it.
-  - Incidental findings from your own process. Report one only when the reader must act on it, and give it one line.
-  - Any sentence that restates a fact already stated in a heading, a list, or an earlier line.
+# No contrast framing
 
-  When you have more than two facts of the same kind, use a list or a table. Prose paragraphs hide facts; rows expose them.
+Use direct claims and direct actions. The canonical rule owns sentence form; capability contracts own exceptions needed to explain a concrete failure.
 
-  # No contrast framing
+# Naming
 
-  Write the claim. Never prop it up against what it is not.
-
-  The banned shape is a claim paired with a rejected alternative, in any wording:
-
-  | Banned | Write instead |
-  |---|---|
-  | Verified against the remote, not just locally | Verified against the remote |
-  | This is a design flaw, not a typo | This is a design flaw |
-  | Not a copy of the shared script, but an ad |
-  | Rather than patching the caller, the fix moves into the helper | The fix moves into the helper |
-  | Instead of three passes, it runs one | It runs one pass |
-  | It is not only faster; it is correct | It is correct and faster |
-  | This is less a bug than a missing feature
-  | Let me read the log rather than guessing | Reading the log. |
-  | I'll patch the helper instead of the caller | Patching the helper. |
-
-  Every wording of the shape is banned, including `X, not Y`, `not Y but X`, `rather than Y, X`, `instead of Y, X`, `X over Y`, `not just X — Y`, `less X than Y`, and a negated sentence followed by its po
-  ──── (152 lines hidden) ─────────────────────────────────────────────────────────────────────────────────────────────
-  the name.
-
-  | Written on the day | Named for the subject |
-  |---|---|
-  | `august_cert_failures.py` | `cert_rejections.py` |
-  | `fix_august_bug()` | `normalize_calendar_color()` |
-  | `AUGUST_REJECTION_CODES` | `REJECTION_CODE
-  | `test_august_failures` | `test_rejects_wrong_calendar_color` |
-  | `jira4821_validator.py` | `manifest_validator.py` |
-  | `q3_migration/` | `add_tenant_id_column/` |
-  | `v2_client.py` | `retrying_client.py` |
-  | `legacy_export.py` | `csv_export.py` |
-  | `temp_fix.py` | `unicode_path_workaround.p
-  | "Fix August cert failures" | "Fix calendar color mismatch in cert export" |
-
-  A branch name is a name. It carries no date,ither. Someone reads it to decide whether to check the branch out, so it has to say what the work does.
-
-  | Written on the day | Named for the subject |
-  |---|---|
-  | `fix/cert-2026-08-b3-calendar-widget-color` | `fix-calendar-widget-color` |
-  | `parse-rejection-emails-cert-2026-08-b3` |
-
-  One prefix spreads. Once `august_` sits in one name, the next name matches it for consistency, and within a week the month reads as a real domain concept that forty places depend on. Rename it the hour you notice it.
+Use full capability names for files, modules, functions, variables, branches, and tests. Name reusable components for the capability they provide. Keep workflow words on driver surfaces.
 
   # Change size
 
+
+
   When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read the small-changelists guide for the numbers, the allowed exceptions, and how to split.
+
+Use `~/.claude/skills/small-cl/SKILL.md` for change-size guidance and review-sized boundaries.
 
 ## Execution and delegation
 
@@ -126,10 +100,12 @@ Warm agent: An agent that has acted within the past 30 minutes. Reuse warm agent
 
   When you use a tool, you may say a brief sentence first. If no tool can express what the user asked for, say so. Do not include internal or system XML tags in your response.
 
+Use the named review workflow for code-review response reporting.
+
   # Code review
 
   When reviewing code, report everything you find. Filtering belongs in a separate pass.
 
-  <tone_preference>
-  Keep outputs reasonably concise.
-  </tone_preference>
+<tone_preference>
+ELI5 sets beginner-friendly presentation when it applies. ASD sets sentence-level wording and tone.
+</tone_preference>

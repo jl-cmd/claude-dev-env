@@ -2,6 +2,8 @@
 
 Slash-command definitions installed into `~/.claude/commands/` by `bin/install.mjs`. Each `.md` file registers a `/command-name` the user can type in Claude Code. The file name (without `.md`) becomes the command name.
 
+Command bodies use `rules/asd-ste100-language.md` for user-facing word choice, sentence style, tone, punctuation, and prose form. Each command keeps its workflow contract.
+
 ## Command files
 
 | File | Command | What it does |

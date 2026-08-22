@@ -53,7 +53,7 @@ so a running cloud session sees the same files under `/root/.claude/`.
 | Session repo scope | An allowlist fixed at session start (here `example-org/example-repo`, `example-org-2/claude-dev-env`). `mcp__Claude_Code_Remote__add_repo` adds a repo mid-session when the user asks. |
 | Proxy noProxy list | Allows direct access to `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, so package installs work. |
 | Proxy CA bundle | `/root/.ccr/ca-bundle.crt`. A `curl` or Python REST client through the proxy trusts this bundle. |
-| `.md` write gates | The state-description gate and the plain-language gate fire on `.md` writes. A report author writes timeless, plain prose or the Write is denied. |
+| `.md` write gates | The state-description gate, hedging gate, intent-only ending gate, and hook-prose consistency gate apply on their named surfaces. AskUserQuestion shape uses `ask_user_question_shape_blocker`. |
 
 ## 3. Root causes
 

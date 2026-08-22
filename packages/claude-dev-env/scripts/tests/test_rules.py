@@ -40,8 +40,8 @@ def test_build_mappings_emits_stem_mdc_for_remaining_claude_rules(
     claude = tmp_path / ".claude"
     _write_minimal_curated_rules(claude / "rules")
     (claude / "docs").mkdir(parents=True, exist_ok=True)
-    (claude / "rules" / "plain-language.md").write_text(
-        "# Plain language\n\nBe brief.\n",
+    (claude / "rules" / "asd-ste100-language.md").write_text(
+        "# ASD-STE100 Language Policy\n\nBe brief.\n",
         encoding="utf-8",
     )
     (claude / "rules" / "CLAUDE.md").write_text(
@@ -50,10 +50,10 @@ def test_build_mappings_emits_stem_mdc_for_remaining_claude_rules(
     (claude / "rules" / "AGENTS.md").write_text("# Agent inventory\n", encoding="utf-8")
     mappings = build_mappings(claude)
     output_by_key = {each_mapping.key: each_mapping for each_mapping in mappings}
-    discovered = output_by_key["plain-language"]
-    assert discovered.output_name == "plain-language.mdc"
+    discovered = output_by_key["asd-ste100-language"]
+    assert discovered.output_name == "asd-ste100-language.mdc"
     assert discovered.always_apply is True
-    assert discovered.description == "Plain language"
+    assert discovered.description == "ASD-STE100 Language Policy"
     assert "CLAUDE.md" not in {
         each_source.name
         for each_mapping in mappings

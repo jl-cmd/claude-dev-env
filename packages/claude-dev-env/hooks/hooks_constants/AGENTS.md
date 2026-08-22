@@ -29,7 +29,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
 | `duplicate_rmtree_helper_blocker_constants.py` | Sanctioned Windows-safe rmtree helper names, the definition pattern, and the exempt-path set for the duplicate-rmtree-helper blocker |
 | `dynamic_stderr_handler.py` | `DynamicStderrHandler` — a logging handler that resolves `sys.stderr` at emit time (for testability) |
-| `eli11_reply_enforcer_constants.py` | Reply-shape thresholds (bullet cap, lead-line window, per-list-line word cap, overpacked list-line cap), the bullet / numbered-step / table-row / link-target / word patterns, the imperative instruction verbs, and the user-facing notice for the ELI11 reply-shape Stop hook |
 | `fable_spawn_gate_constants.py` | The spawn tool-name set, the fable model alias and the model-id segment split pattern, the `FABLE-SPAWN-AUTHORIZED` authorization token, the advisor-protocol document path, payload field names, the deny message, and the deny `additionalContext` recovery text for the fable-tier spawn gate |
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
@@ -55,7 +54,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pii_prevention_constants.py` | Patterns, allowlists, path exemptions, and deny-message text for `pii_prevention_blocker` |
 | `piped_pytest_blocker_constants.py` | Bash tool name, pytest program basenames and the python-interpreter basename pattern, the pipe and segment-reset operator token sets, and the deny message for the piped-pytest blocker; classification that consumes those program and wrapper constants lives in `pytest_invocation.py` |
 | `pytest_invocation.py` | Pure parsed-segment classifier for pytest runs through interpreters, shims, wrappers, and shell string-exec forms; no pipeline deny decision |
-| `plain_language_blocker_constants.py` | The list of heavy words and their everyday replacements |
 | `prose_matcher_precision_constants.py` | Sample floor, keep/narrow precision floors, matcher ids, label decisions, advisory log path, emit caps, and context fingerprint length for OP-07B prose-matcher advisory telemetry |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
 | `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
