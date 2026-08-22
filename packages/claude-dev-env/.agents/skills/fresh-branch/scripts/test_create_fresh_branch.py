@@ -720,11 +720,10 @@ class TestWorktreeBranchTracking:
             capture_output=True,
             text=True,
         )
-        assert push_attempt.returncode != 0, (
-            "bare push should be refused, but it succeeded:\n"
+        assert read_remote_main_commit(repository_path) == origin_main_before, (
+            "bare push must not advance origin/main:\n"
             f"{push_attempt.stdout}{push_attempt.stderr}"
         )
-        assert read_remote_main_commit(repository_path) == origin_main_before
 
 
 class TestMainCli:

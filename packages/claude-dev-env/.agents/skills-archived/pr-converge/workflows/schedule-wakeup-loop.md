@@ -2,7 +2,7 @@
 
 Load this document when pre-flight selects `pacer=schedule_wakeup`. When
 `pacer=portable`, use
-[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+[`../../_shared/pr-loop/portable-driver.md`](../../../skills/_shared/pr-loop/portable-driver.md)
 instead. Shared bugbot / bugteam / Fix protocol steps stay in the main
 `SKILL.md`.
 

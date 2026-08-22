@@ -19,7 +19,7 @@ Run every tick in the parent harness session. Pacing depends on the selected
 pacer from pre-flight (`select_converge_pacer.py`):
 
 - `schedule_wakeup` — [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
-- `portable` — [`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+- `portable` — [`../../_shared/pr-loop/portable-driver.md`](../../../skills/_shared/pr-loop/portable-driver.md)
 
 See [Pacing workflow](#pacing-workflow).
 
@@ -42,7 +42,7 @@ When `pacer=schedule_wakeup`, read
 [`../workflows/schedule-wakeup-loop.md`](../workflows/schedule-wakeup-loop.md)
 (installed copy under `$HOME/.claude/skills/pr-converge/workflows/`) before
 Step 4. When `pacer=portable`, read
-[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md)
+[`../../_shared/pr-loop/portable-driver.md`](../../../skills/_shared/pr-loop/portable-driver.md)
 and skip `ScheduleWakeup` calls.
 
 - **`/pr-converge`** (default): loops until convergence. After each tick
@@ -546,7 +546,7 @@ Do **not** call `ScheduleWakeup`. After writing state and handoff:
   `/pr-converge <PR URL>` and the persisted phase.
 
 Full portable rules:
-[`../../_shared/pr-loop/portable-driver.md`](../../_shared/pr-loop/portable-driver.md).
+[`../../_shared/pr-loop/portable-driver.md`](../../../skills/_shared/pr-loop/portable-driver.md).
 
 ## Bugteam execution
 

@@ -9,7 +9,7 @@ SKILL_ROOT = Path(__file__).resolve().parent
 SKILL_MARKDOWN_PATH = SKILL_ROOT / "SKILL.md"
 PER_TICK_MARKDOWN_PATH = SKILL_ROOT / "reference" / "per-tick.md"
 PORTABLE_DRIVER_PATH = (
-    SKILL_ROOT.parent / "_shared" / "pr-loop" / "portable-driver.md"
+    SKILL_ROOT.parent.parent / "skills" / "_shared" / "pr-loop" / "portable-driver.md"
 )
 
 SELECT_CONVERGE_PACER_SCRIPT = "select_converge_pacer.py"
@@ -18,7 +18,7 @@ PACER_SCHEDULE_WAKEUP_TOKEN = "pacer=schedule_wakeup"
 ABORT_ONLY_PHRASE = "pr-converge requires ScheduleWakeup; aborting"
 PORTABLE_DRIVER_DOC = "portable-driver.md"
 PORTABLE_DRIVER_LINK_PATTERN = re.compile(
-    r"\((?P<relative>(?:\.\./)+_shared/pr-loop/portable-driver\.md)\)"
+    r"\((?P<relative>(?:\.\./)+skills/_shared/pr-loop/portable-driver\.md)\)"
 )
 
 
