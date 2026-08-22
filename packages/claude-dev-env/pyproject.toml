@@ -22,10 +22,8 @@ packages = [
     "skills_pr_loop_constants",
     "pr_converge_skill_constants",
     "pr_converge_scripts_constants",
-    "bugteam_scripts_constants",
     "usage_pause_constants",
     "prototype_scripts_constants",
-    "copilot_finding_triage_constants",
     "codex_review_scripts_constants",
     "e_code_review_scripts_constants",
     "dev_env_scripts_constants",
@@ -40,13 +38,11 @@ hooks_constants = "hooks/hooks_constants"
 git_hooks_constants = "hooks/git-hooks/git_hooks_constants"
 pr_loop_shared_constants = "_shared/pr-loop/scripts/pr_loop_shared_constants"
 skills_pr_loop_constants = ".agents/skills/_shared/pr-loop/scripts/skills_pr_loop_constants"
-pr_converge_skill_constants = ".agents/skills/pr-converge/pr_converge_skill_constants"
-pr_converge_scripts_constants = ".agents/skills/pr-converge/scripts/pr_converge_scripts_constants"
-bugteam_scripts_constants = ".agents/skills/bugteam/scripts/bugteam_scripts_constants"
+pr_converge_skill_constants = "_shared/pr-loop/scripts/pr_converge_skill_constants"
+pr_converge_scripts_constants = "_shared/pr-loop/scripts/pr_converge_scripts_constants"
 usage_pause_constants = ".agents/skills/usage-pause/scripts/usage_pause_constants"
 prototype_scripts_constants = ".agents/skills/prototype/scripts/prototype_scripts_constants"
-copilot_finding_triage_constants = ".agents/skills/copilot-finding-triage/scripts/copilot_finding_triage_constants"
-codex_review_scripts_constants = ".agents/skills/codex-review/scripts/codex_review_scripts_constants"
+codex_review_scripts_constants = "_shared/pr-loop/scripts/codex_review_scripts_constants"
 e_code_review_scripts_constants = ".agents/skills/e-code-review/scripts/e_code_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"

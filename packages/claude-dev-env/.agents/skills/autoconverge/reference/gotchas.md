@@ -52,7 +52,7 @@ fails in a new way.
 
 - **Commit or push fails after a repair.** Read the hook or command output,
   repair the named issue, and record the rerun. Apply the
-  [review guide](../../reviews/SKILL.md#review-workflow) before retrying.
+  [precatch rubric](../../_shared/pr-loop/precatch-rubric.md) before retrying.
 
 - **A Copilot "down" verdict is valid only after the full poll budget.** A
   successful review request means the review is in flight — Copilot typically

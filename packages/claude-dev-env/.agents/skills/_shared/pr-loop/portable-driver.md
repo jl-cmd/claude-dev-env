@@ -5,7 +5,7 @@ clean stamps, ready decisions, task lists, and “what next” never live as pro
 for the agent to invent. The agent runs scripts, reads JSON, and only performs
 judgment steps the JSON names.
 
-## Step 1 — task list (every autoconverge / portable run)
+## Step 1 — task list (every autoconverge portable run)
 
 ```
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/build_converge_task_list.py" \
@@ -25,7 +25,7 @@ shared HEAD. Do not invent tasks in prose.
 
 ```
 python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
-  --skill <pr-converge|autoconverge> \
+  --skill autoconverge \
   --has-workflow <0|1> \
   --has-schedule-wakeup <0|1>
 ```
@@ -46,8 +46,7 @@ ScheduleWakeup path. When `pacer=portable`, use the control script below.
 3. Confirm the working directory is the PR’s own repo on the PR head SHA:
    `python "$HOME/.claude/skills/_shared/pr-loop/scripts/preflight_worktree.py" --owner <O> --repo <R> --mode strict`.
    Non-zero exit → report the `ABORT` line and stop.
-4. Cross-repo routing follows pr-converge Step 1.5: every local review and edit
-   runs with cwd set to the **PR worktree**.
+4. Cross-repo routing: every local review and edit runs with cwd set to the **PR worktree** (see autoconverge pre-flight and `preflight_worktree.py --mode strict`).
 
 `open-run` runs the same strict preflight before seeding state.
 
@@ -65,7 +64,7 @@ ok; `1` = contract failure; `2` = usage error.
 |---|---|
 | `open-run` | Require `portable`; preflight; seed state + task list; when `--codex-down` is off, set `codex_required` from CLI force-on or the weekly usage probe (same rule as `check_convergence`); next=`run_code_review` |
 | `after-code-review` | From returncode / dirty_tree / served_command |
-| `after-bugteam` | From pushed / converged |
+| `after-bugteam` | From pushed / converged (bug-audit phase on portable pacer) |
 | `after-bugbot` | From classification / inline lag |
 | `after-codex` | From classification clean / dirty / down |
 | `after-copilot-wait` | From review surfaced / wait cap |
@@ -105,7 +104,7 @@ Copilot quota pre-check:
 |---|---|---|
 | `run_code_review` | Run `commands` | `after-code-review` |
 | `apply_fixes_and_push` | Fix protocol; commit; push | re-review then `after-code-review` |
-| `run_bugteam` | resolve_worker_spawn / bugteam body | `after-bugteam` |
+| `run_bugteam` | Bug-audit lens / worker spawn body | `after-bugteam` |
 | `run_bugbot_gate` | Bugbot helper scripts | `after-bugbot` |
 | `run_codex_review` | Run Codex review step | `after-codex` |
 | `request_copilot_review` | Request Copilot | `after-copilot-wait` |
@@ -140,7 +139,7 @@ sections unchanged.
 | Worktree | `preflight_worktree.py` |
 | Code review | `$HOME/.claude/scripts/invoke_code_review.py` |
 | Workers | `$HOME/.claude/scripts/resolve_worker_spawn.py` |
-| Ready | `pr-converge/scripts/check_convergence.py` |
+| Ready | `$HOME/.claude/_shared/pr-loop/scripts/check_convergence.py` |
 | Handoff | `write_handoff.py` |
 
 ## Fail closed

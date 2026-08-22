@@ -19,6 +19,18 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 | `reviewer_availability.py` | Unified reviewer-availability entry point for Copilot and Bugbot: reuses `copilot_quota.py` and `reviews_disabled.py` and exits 0 when the named `--reviewer` may be spawned, non-zero when it is opted out or (for Copilot) out of quota |
 | `fix_hookspath.py` | Repairs a malformed `core.hooksPath` global git config entry |
 | `_claude_permissions_common.py` | Internal helpers shared by the grant/revoke scripts: atomic settings.json writes, list mutation, path helpers |
+| `check_convergence.py` | Single convergence gate check for autoconverge finalize and mark-ready hooks |
+| `check_bugbot_ci.py` | Bugbot CI check-run status on a given SHA |
+| `check_convergence_availability.py` | Reviewer waiver resolution for convergence gates |
+| `check_convergence_gates.py` | GitHub REST leaf checks for convergence gates |
+| `check_convergence_thread_gates.py` | GitHub GraphQL and REST thread gate checks |
+| `check_pending_reviews.py` | Pending review requests and reviewer states |
+| `fetch_copilot_reviews.py` | Copilot reviews filtered to the current HEAD |
+| `post_fix_reply.py` | Inline reply poster for review comment threads |
+| `run_codex_review.py` | Codex review capture wrapper for the autoconverge Codex gate |
+| `codex_usage_probe.py` | Weekly Codex usage probe for gate threshold decisions |
+| `codex_down_classifier.py` | Maps Codex run outcomes to completed or codex_down |
+| `parse_codex_findings.py` | Parses Codex reviewer output into findings |
 
 ## Subdirectories
 
@@ -26,6 +38,9 @@ Python scripts invoked at runtime by the PR-loop skills. Each script is a standa
 |---|---|
 | `code_rules_gate_parts/` | The decomposed modules `code_rules_gate.py` wires together: enforcer loading, git file sets, blob readers, added-line maps, violation scoping, wrapper plumb-through, gate running, staged-test running, and argument parsing |
 | `pr_loop_shared_constants/` | Named constants used by the scripts above |
+| `pr_converge_skill_constants/` | Bot logins, review states, and API templates for convergence scripts |
+| `pr_converge_scripts_constants/` | CLI and reflow constants for convergence scripts |
+| `codex_review_scripts_constants/` | Constants for Codex review capture and classification |
 | `tests/` | pytest suite for all scripts in this directory |
 
 ## Running tests

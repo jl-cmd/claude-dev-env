@@ -8,7 +8,7 @@ State both of these to the user, in these terms, whenever a proof-of-concept is 
 
 Promotion records the controls applied to the real diff:
 
-- review and verification under the [review guide](../../reviews/SKILL.md#review-workflow);
+- review and verification under the [review guide](../../skills-archived/reviews/SKILL.md#review-workflow);
 - the `privacy-hygiene` sweep for personal data and secrets;
 - the pull-request review criteria and any PR-loop reviewers.
 

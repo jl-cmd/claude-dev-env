@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"thread-fixture-success"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"git status --short","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"git status --short","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"No issues found.\n\n```json\n[]\n```"}}
+{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":0,"output_tokens":6,"reasoning_output_tokens":0}}

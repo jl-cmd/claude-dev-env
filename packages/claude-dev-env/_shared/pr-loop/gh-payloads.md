@@ -1,6 +1,7 @@
 # MCP-based payloads
 
-Shared payload shapes for posting PR reviews and replies. Used by `bugteam` and `pr-converge`.
+Shared payload shapes for posting PR reviews and replies. Used by autoconverge
+terminal gates and the archived `bugteam` / `pr-converge` skills.
 
 ## Build payloads with MCP tools
 
@@ -12,9 +13,11 @@ Posting the per-loop audit review is handled by
 [`_shared/pr-loop/scripts/post_audit_thread.py`](scripts/post_audit_thread.py).
 The script owns the review-create/POST/retry flow internally; callers no longer
 build the GitHub reviews-API payload themselves. See
-[`skills/bugteam/SKILL.md` § Audit posting](../../skills/bugteam/SKILL.md#audit-posting)
-for the contract and [`skills/bugteam/PROMPTS.md`](../../skills/bugteam/PROMPTS.md)
-for the AUDIT-step invocation shape.
+[`post-audit-thread-contract.md`](post-audit-thread-contract.md) for the contract
+and the archived
+[`bugteam` audit-posting section](../../.agents/skills-archived/bugteam/SKILL.md)
+for the historical invocation shape in
+[`PROMPTS.md`](../../.agents/skills-archived/bugteam/PROMPTS.md).
 
 ## Review body skeleton
 
@@ -57,7 +60,7 @@ user-facing output (chat reply to the user) rather than in the PR review body.
 
 There is no fallback payload to build. On retry exhaustion
 `post_audit_thread.py` exits `2` and the orchestrator halts — see
-[`./post-audit-thread-contract.md`](./post-audit-thread-contract.md) § Exit codes.
+[`post-audit-thread-contract.md`](post-audit-thread-contract.md) § Exit codes.
 A hard blocker on the audit-posting path is a halt condition, not a degraded
 flat-issue-comment fall-through.
 
@@ -70,4 +73,3 @@ flat-issue-comment fall-through.
 ## SHA capture timing
 
 `commit_id` and any `<head_sha_at_post_time>` reference: `git rev-parse HEAD` immediately before the POST, in the cwd of whichever subagent or process is posting.
-

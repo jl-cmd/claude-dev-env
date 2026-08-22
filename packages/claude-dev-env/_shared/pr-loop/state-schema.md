@@ -13,41 +13,33 @@ State each PR-loop workflow tracks across iterations. Workflows differ on persis
 | `starting_sha` | str | `git rev-parse HEAD` at workflow start |
 | `loop_comment_index` | dict | `{finding_id: {finding_comment_id, finding_comment_url, thread_node_id, fix_status, ...}}` (`thread_node_id` is the PR review thread node id — `PRRT_kwDOxxx` — captured at audit time when calling `get_review_comments`, used by `resolve_thread` at FIX time) |
 
-## Workflow-specific extensions
+## autoconverge (workflow and portable pacer)
 
-### bugteam
+Workflow runs hold round state in the workflow journal. On `pacer=portable`, the
+continuous driver seeds `pr-converge-state.json` under the job directory and
+advances phases through `portable_converge_driver.py`. Portable state carries
+`current_head`, `phase`, `codex_clean_at`, `codex_down`, `codex_required`, and
+pending `next` / `wait_seconds` stamps. Round shape and terminal gates are
+documented in
+[`../../.agents/skills/autoconverge/reference/convergence.md`](../../.agents/skills/autoconverge/reference/convergence.md).
+The machine readiness checklist is
+[`../../.agents/skills/autoconverge/reference/convergence-gates.md`](../../.agents/skills/autoconverge/reference/convergence-gates.md).
 
-Adds:
-- `team_name` — `bugteam-pr-<N>-<YYYYMMDDHHMMSS>` or `bugteam-<YYYYMMDDHHMMSS>` for multi-PR
-- `team_temp_dir` — absolute path resolved from `tempfile.gettempdir()`
-- `pre_fix_sha` — `git rev-parse HEAD` immediately before each FIX
-- `gate_round_count` — consecutive pre-audit gate failures (cap: 5 → exit `error`)
+## Archived workflow extensions
 
-State lives inline in the lead session (orchestrator). Cleared on TeamDelete. A single-subagent cycle returns its loop counter and findings in the exit payload (`{exit_reason, loop_count, final_commit_sha, audit_log, unresolved}`); the orchestrator discards intermediate state.
+Historical field lists for retired entry skills live under
+`packages/claude-dev-env/.agents/skills-archived/`:
 
-### pr-converge
-
-Normative field list, phase enum, dual persistence, and reset semantics: [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md). File-backed multi-PR `status` enum: [`../../skills/pr-converge/reference/multi-pr-orchestration.md`](../../skills/pr-converge/reference/multi-pr-orchestration.md).
-
-Multi-PR runs also keep a per-PR JSON state file at `~/.claude/skills/pr-converge/state/<owner>-<repo>-<pr_number>.json`:
-
-| Field | Type | Description |
-|---|---|---|
-| `repo_name` | str | Full `owner/repo` |
-| `pr_number` | int | PR number |
-| `status` | enum | `open`, `blocked_escalation`, `fixing`, `ready_candidate`, `closed` |
-| `copilot_review` | enum | `none`, `requested`, `pending`, `commented`, `approved` |
-| `bugbot_review` | enum | Same vocabulary as `copilot_review`; one of `none`, `requested`, `pending`, `commented`, `approved` |
-| `last_seen_comment_id` | int \| null | Highest processed review-comment id (incremental polling watermark) |
-| `review_comments` | list[object] | Optional cache; `{id, author, path, line}` per entry |
-| `escalation_queue` | list[object] | Pending human-judgment items: `{comment_id, summary, created_at}` |
+- **bugteam** — inline orchestrator state, `team_name`, `gate_round_count`, exit payload fields. See [`../../.agents/skills-archived/bugteam/SKILL.md`](../../.agents/skills-archived/bugteam/SKILL.md).
+- **pr-converge** — file-backed multi-PR state, phase enum, dual persistence. See [`../../.agents/skills-archived/pr-converge/reference/state-schema.md`](../../.agents/skills-archived/pr-converge/reference/state-schema.md) and [`../../.agents/skills-archived/pr-converge/reference/multi-pr-orchestration.md`](../../.agents/skills-archived/pr-converge/reference/multi-pr-orchestration.md).
 
 ## Reset semantics
 
-- bugteam: cleared on each new `/bugteam` invocation
-- pr-converge: see [`../../skills/pr-converge/reference/state-schema.md`](../../skills/pr-converge/reference/state-schema.md); multi-PR file state persists across orchestrator runs and only `last_seen_comment_id` advances monotonically
+- **autoconverge** — portable state resets on a fresh `open-run`; workflow journal is per run id.
+- **Archived bugteam** — cleared on each new invocation; see archived skill body.
+- **Archived pr-converge** — see archived [`state-schema.md`](../../.agents/skills-archived/pr-converge/reference/state-schema.md); multi-PR file state persists across orchestrator runs and only `last_seen_comment_id` advances monotonically.
 
 ## Convergence checks
 
-- bugteam: `last_action == "audited"` AND `last_findings.total == 0` → `converged`
-- pr-converge: see [`../../skills/pr-converge/reference/convergence-gates.md`](../../skills/pr-converge/reference/convergence-gates.md); multi-PR ready when no unresolved comments require code changes, required checks are green, and review policy is satisfied → `gh pr ready`
+- **autoconverge** — `packages/claude-dev-env/_shared/pr-loop/scripts/check_convergence.py` is the single readiness source; gate labels are listed in [`../../.agents/skills/autoconverge/reference/convergence-gates.md`](../../.agents/skills/autoconverge/reference/convergence-gates.md). On pass, mark the PR ready (`gh pr ready`).
+- **Archived pr-converge** — same script and archived [`convergence-gates.md`](../../.agents/skills-archived/pr-converge/reference/convergence-gates.md) reference.
