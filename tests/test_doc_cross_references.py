@@ -1,9 +1,7 @@
 """Validates repo-relative doc cross-references resolve to real files.
 
-Bot reviewers on PR #257 caught hook_log_init.py:69 referencing
-`packages/claude-dev-env/hooks/diagnostic/AGENTS.md` when a docstring
-names that inventory. PR #232 had a
-similar /qbug doc reference that didn't match the gate's invocation.
+The matcher covers repository documentation and Python docstrings that name
+source paths. It keeps cross-reference failures visible during review.
 
 This test walks Python docstrings and Markdown files for repo-relative
 path references, then confirms each one resolves on disk. The matcher
