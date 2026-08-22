@@ -15,7 +15,7 @@ Bugbot and Copilot run as terminal confirmation gates, until all are clean on
 the same `HEAD` and mergeable. On `pacer=schedule_wakeup`, one tick runs per
 invocation and the next tick is scheduled. On `pacer=portable`, ticks run
 continuously in-session (see
-[`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)).
+[`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md)).
 
 ## Transport check (before any GitHub step)
 
@@ -50,7 +50,7 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
 - `pacer=schedule_wakeup` — native tick pacing via `ScheduleWakeup` (see
   [`workflows/schedule-wakeup-loop.md`](workflows/schedule-wakeup-loop.md)).
 - `pacer=portable` — continuous in-session driver on
-  [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
+  [`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md).
   **Do not abort** because `ScheduleWakeup` is missing.
 
 ### Worktree isolation
@@ -62,7 +62,7 @@ working directory contains `.claude/worktrees/`. If `EnterWorktree` fails,
 report the failure and stop.
 
 When `EnterWorktree` is absent, isolate with git worktree machinery per
-[`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md)
+[`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md)
 § Isolation and worktree, then run strict
 `preflight_worktree.py` for the PR's owner/repo. Fail closed only when the
 checkout is not the PR's repo on the PR head ref.
@@ -110,7 +110,7 @@ auto-fix; code-concern verify then confirmed / refuted / inconclusive).
     `send_later` 45-minute hold across ticks; persist the deadline so each tick
     reads it on entry).
   - **`pacer=portable`** — in-session deadline poll or handoff per
-    [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md);
+    [`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md);
     never `ScheduleWakeup` or `send_later`.
   Act on the user's direction inside the window; on timeout, teardown and report
   the findings un-reviewed.
@@ -444,7 +444,7 @@ round as converged. This rule holds every tick, every loop, every PR.
 | `copilot-finding-triage` | Tier, verify, and route each Copilot finding |
 | `bugteam` | Full-diff bug audit in Step 6 (Skill invocation mandatory) |
 | `pr-loop-cloud-transport` | When `gh` is unavailable or unauthenticated |
-| [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md) | Continuous in-session pacer when `ScheduleWakeup` is absent |
+| [`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md) | Continuous in-session pacer when `ScheduleWakeup` is absent |
 | [`../../_shared/pr-loop/fix-protocol.md`](../../_shared/pr-loop/fix-protocol.md) | Shared 13-step fix sequence (TDD, commit, push, reply, resolve) |
 | [`reference/fix-protocol.md`](reference/fix-protocol.md) | pr-converge deltas on the shared fix protocol |
 
@@ -466,4 +466,4 @@ round as converged. This rule holds every tick, every loop, every PR.
 | `reference/obstacles/` | Per-obstacle fix runbooks |
 | `scripts/` | Convergence helpers, Copilot fetch, fix-reply poster, tests |
 | `workflows/schedule-wakeup-loop.md` | ScheduleWakeup pacing (`pacer=schedule_wakeup`) |
-| [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md) | Portable continuous pacer (`pacer=portable`) |
+| [`../../skills/_shared/pr-loop/portable-driver.md`](../../skills/_shared/pr-loop/portable-driver.md) | Portable continuous pacer (`pacer=portable`) |

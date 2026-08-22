@@ -15,7 +15,7 @@ PACKAGE_ROOT = SKILL_DIRECTORY.parents[2]
 PYPROJECT_PATH = PACKAGE_ROOT / "pyproject.toml"
 EVER_SHIPPED_SKILLS_PATH = PACKAGE_ROOT / "bin" / "ever-shipped-skills.mjs"
 CONSTANTS_PACKAGE_NAME = "codex_review_scripts_constants"
-CONSTANTS_PACKAGE_DIR = ".agents/skills-archived/codex-review/scripts/codex_review_scripts_constants"
+CONSTANTS_PACKAGE_DIR = "_shared/pr-loop/scripts/codex_review_scripts_constants"
 SKILL_NAME = "codex-review"
 MAXIMUM_SKILL_BODY_LINE_COUNT = 500
 
