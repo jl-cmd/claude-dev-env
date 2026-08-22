@@ -24,7 +24,6 @@ __all__ = [
     "ALL_WRITE_AND_EDIT_TOOL_NAMES",
     "ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES",
     "STATE_DESCRIPTION_BLOCKER_MODULE_NAME",
-    "PLAIN_LANGUAGE_BLOCKER_MODULE_NAME",
     "SYSTEM_MESSAGE_JOIN_SEPARATOR",
     "HostedHookEntry",
     "ALL_HOSTED_HOOK_ENTRIES",
@@ -51,7 +50,6 @@ ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
 
 
 STATE_DESCRIPTION_BLOCKER_MODULE_NAME = "state_description_blocker"
-PLAIN_LANGUAGE_BLOCKER_MODULE_NAME = "plain_language_blocker"
 
 
 @dataclass(frozen=True)
@@ -154,11 +152,6 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
     HostedHookEntry(
         script_relative_path="blocking/docstring_rule_gate_count_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/plain_language_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-        native_module_name=PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
     ),
     HostedHookEntry(
         script_relative_path="advisory/refactor_guard.py",

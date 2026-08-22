@@ -4,6 +4,10 @@ Canonical reply shape for every orchestrator-to-thread reply posted by the PR-lo
 
 Read this doc before authoring any code that posts a reply. The template is the contract emitted by every `clean-coder` reply path; the audit-skill wiring (`bugteam`, `pr-converge`) reads it before authoring a reply.
 
+Use `~/.claude/rules/asd-ste100-language.md` for user-facing word choice,
+sentence style, tone, punctuation, and prose form. This template owns review
+thread fields, evidence slots, and action/status structure.
+
 This doc has two surfaces, called out separately so consumers do not conflate them: the **reply template** (this section and below) shapes the body Claude posts back to a single review thread; the **audit body skeleton** in [Relationship to the audit review body](#relationship-to-the-audit-review-body) shapes the parent review `post_audit_thread.py` posts at audit time. The reply-template consumers are the skills/agents listed above (read-only `clean-room audit` is excluded — it posts an audit review via `post_audit_thread.py` but never authors thread replies). The audit-body-skeleton consumers include `clean-room audit` alongside `bugteam` because both post audit reviews via the same script.
 
 ## Provenance

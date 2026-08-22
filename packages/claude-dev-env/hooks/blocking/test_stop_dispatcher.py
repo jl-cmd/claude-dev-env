@@ -175,31 +175,6 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
 
 
-def test_dispatcher_blocks_eli11_shape_violation_matching_standalone() -> None:
-    """An ELI11 shape violation (too many bullets) blocks through the dispatcher."""
-    too_many_bullets_message = "\n".join(
-        f"- finding{each_index} detail for this line" for each_index in range(7)
-    )
-    payload_text = json.dumps(
-        {
-            "stop_hook_active": False,
-            "last_assistant_message": too_many_bullets_message,
-        }
-    )
-    completed = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    assert completed.returncode == 0
-    parsed = json.loads(completed.stdout)
-    assert parsed["decision"] == "block"
-    assert "ELI11 REPLY SHAPE" in parsed["reason"]
-
-
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:
     """The dispatcher's bootstrap resolves hooks_constants without hooks/ on PYTHONPATH."""
     subprocess_environment = {**os.environ, "PYTHONPATH": str(_BLOCKING_DIR)}

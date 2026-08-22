@@ -16,7 +16,6 @@ _EXPECTED_STOP_ORDER = (
     "blocking/question_to_user_enforcer.py",
     "blocking/intent_only_ending_blocker.py",
     "blocking/session_handoff_blocker.py",
-    "blocking/eli11_reply_enforcer.py",
 )
 
 

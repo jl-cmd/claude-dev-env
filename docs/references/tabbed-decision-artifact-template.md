@@ -49,7 +49,7 @@ That rule shapes the writing:
 - Reach for a table, chart, image, or diagram whenever the reader would otherwise hold several numbers in their head.
 - Draw the thing to scale when a decision turns on position, size, or layout. Two drawings side by side with the gap labelled between them carry a spatial disagreement that a pair of numbers leaves each reader to picture differently. Plain markup and styling draw this.
 - Put the measurements in a table beside any drawing, and name the command or measurement that produced them.
-- State a claim by naming what the thing is, and state guidance as the action to take. Reserve naming what to avoid for behaviour you can pin down only by its failure — the source rule is `doc-prose-cuts`.
+ - State a claim by naming what the thing is, and state guidance as the action to take. Apply `packages/claude-dev-env/rules/asd-ste100-language.md` for user-facing wording.
 
 The template's own tabs state these rules and follow them, so the fastest way to learn the format is to open it and read.
 
@@ -196,7 +196,7 @@ Each view answers a different question about the same items:
 
 The state machine view carries the lesson worth copying. The example counts alerts engineers acted on against alerts they ignored. It holds untriaged alerts out of that comparison. An alert nobody looked at is not an alert somebody rejected. Name the pile you hold out, and say why, wherever a view shows a split.
 
-Write every string in the example to the [`eli11-replies`](../../packages/claude-dev-env/rules/eli11-replies.md) shape: one idea per sentence, the action first, few words. A drawer holds four or five short lines, not two long paragraphs. A reader deciding five things reads every panel, so length costs them five times over.
+Write every string in the example with the [ASD-STE100 language policy](../../packages/claude-dev-env/rules/asd-ste100-language.md): one idea per sentence, the action first, and useful detail. A drawer holds four or five short lines. A reader deciding five things reads every panel, so length costs them five times over.
 
 Give the example's `STORE` constant a fresh value when you copy the file. Two artifacts sharing a storage key overwrite each other's answers.
 

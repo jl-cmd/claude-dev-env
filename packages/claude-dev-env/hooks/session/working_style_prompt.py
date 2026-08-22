@@ -2,8 +2,10 @@
 """SessionStart hook — inject working-style guidance into the session.
 
 At session start this hook emits an ``additionalContext`` block carrying a fixed
-working-style prompt: keep a running ledger, write in plain English, narrate
-before the first tool call, lead with the outcome, and stay at the asked scope.
+working-style prompt: use ELI5 for the beginner presentation envelope, follow
+``~/.claude/rules/asd-ste100-language.md`` for sentence prose, keep a running
+ledger, narrate before the first tool call, lead with the outcome, and stay at
+the asked scope.
 The hook writes nothing and runs no tools itself.
 """
 

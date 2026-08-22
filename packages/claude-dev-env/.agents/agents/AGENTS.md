@@ -2,6 +2,12 @@
 
 Agent definition files installed into `~/.agents/agents/` by `bin/install.mjs`. `~/.claude/agents` is a directory pointer to that folder. Each `.md` file defines a named subagent: its description (shown in the Claude Code UI), allowed tools, and behavioral instructions.
 
+Agent definitions use `~/.claude/rules/asd-ste100-language.md` for user-facing word choice, sentence style, tone, punctuation, and prose form. Each agent keeps its role-specific return format.
+
+When the global presentation envelope applies, ELI5 owns beginner framing,
+large visuals, minimal text, one stable self-contained HTML artifact,
+update-in-place continuity, and sharing.
+
 ## Agent files
 
 | File | Agent name | Role |

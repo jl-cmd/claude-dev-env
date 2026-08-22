@@ -5,12 +5,13 @@ paths:
 
 # rules
 
-Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule without `paths:` frontmatter loads at the start of every session; a rule with `paths:` frontmatter loads only when the session works with a file its globs match. The `InstructionsLoaded` log records that match as a `path_glob_match` event. Each `.md` file covers one named rule; hook-enforced rules are also backed by a Python hook in `hooks/`.
+Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule without `paths:` frontmatter loads at the start of every session; a rule with `paths:` frontmatter loads only when the session works with a file its globs match. The `InstructionsLoaded` log records that match as a `path_glob_match` event. The `asd-ste100-language.md` file owns general user-facing language. Each other `.md` file covers one named behavior contract; hook-enforced rules are also backed by a Python hook in `hooks/`.
 
 ## Files
 
 | File | Rule |
 |---|---|
+| `asd-ste100-language.md` | Sole general user-facing language authority; concise conversational adaptation of ASD-STE100 Issue 9 |
 | `agent-spawn-protocol.md` | Check context sufficiency before a spawn and ask subagents for file-and-line answers; `/prompt-generator` is recommended for a complex or user-facing spawn |
 | `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
 | `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
@@ -23,10 +24,8 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `context7.md` | Use Context7 MCP to fetch current library docs; always prefer live docs over built-in knowledge |
 | `destructive-commands.md` | Allowed removal forms and the ephemeral namespace the `destructive_command_blocker` auto-allows; keep destructive literals out of a Bash command string even as data |
 | `doc-inventory-integrity.md` | Three inventory shapes stay in step with the code: a per-directory `CLAUDE.md` file list, a package `README`/`SKILL.md` inventory, and an env-var summary table |
-| `doc-prose-cuts.md` | Four sentence shapes to cut from prose: exclusion claims, justification sentences, conversation references, and time references |
 | `docstring-prose-matches-implementation.md` | Prose enumerations in docstrings cover every behavior the body applies |
 | `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
-| `eli11-replies.md` | Every chat reply the user reads follows one shape: action first, detail last, few words; `plain-language.md` governs word choice, this rule governs reply length and shape |
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
 | `falsify-before-green.md` | A check's green counts as evidence only after that same check ran red on a named break, with a passing control beside it |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
@@ -39,11 +38,9 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |
 | `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
-| `opus5-communication-contract.md` | Visible concision, one-sentence first progress, important-change-only updates, outcome-first finals, thinking-disabled tool narration (`opus5-communication-contract-v1`) |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
 | `parallel-tools.md` | Make all independent tool calls in a single response |
 | `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
-| `plain-language.md` | Everyday words, short active sentences, lead with the answer |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
 | `re-stage-before-commit.md` | Stage the files edited this session before `git commit`; the session edit stage gate denies a commit that leaves a tracked session edit unstaged, with `-a`, a pathspec, a preceding `git add`, and `# partial-commit` as escapes |
 | `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |

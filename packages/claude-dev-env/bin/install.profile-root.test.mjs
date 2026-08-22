@@ -82,7 +82,7 @@ test('explicit target has precedence over CLAUDE_CONFIG_DIR and the home default
 
 test('isPathWithinManagedRoot requires a separator boundary', () => {
     const managedRoot = resolve(join(tmpdir(), 'containment-root', '.claude'));
-    const insideFile = join(managedRoot, 'rules', 'plain-language.md');
+    const insideFile = join(managedRoot, 'rules', 'asd-ste100-language.md');
     const evilSibling = `${managedRoot}-evil`;
     const evilChild = join(`${managedRoot}-evil`, 'rules', 'x.md');
 

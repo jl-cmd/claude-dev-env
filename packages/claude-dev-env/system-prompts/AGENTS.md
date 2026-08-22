@@ -2,6 +2,14 @@
 
 System-prompt reference files installed into `~/.claude/system-prompts/` by `bin/install.mjs`. Rules and skills pull a file (or one of its sections) into context on demand by citing its installed path.
 
+Use `~/.claude/rules/asd-ste100-language.md` for user-facing word choice,
+sentence style, tone, punctuation, and prose form. Each prompt keeps its
+role-specific behavior contract.
+
+ELI5 owns the global beginner presentation envelope: large visuals, minimal
+text, one stable self-contained HTML artifact, update-in-place continuity, and
+sharing.
+
 ## Files
 
 | File | Purpose |

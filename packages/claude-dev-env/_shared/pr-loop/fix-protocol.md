@@ -7,9 +7,9 @@
 3. **Capture pre-fix file contents** for every file this fix will touch. Used in step 8 for the post-fix self-audit diff.
 4. **TDD where applicable:** when the finding has behavior to test, write a failing test first; for pure doc, comment, or naming nits with no behavior, fix directly.
 5. **Apply each fix:**
-   - Preserve existing comments on lines left unchanged
-   - Add complete type hints on every signature touched
-   - Use positive framing in any new prose (no banned negatives)
+    - Preserve existing comments on lines left unchanged
+    - Add complete type hints on every signature touched
+    - Apply `~/.claude/rules/asd-ste100-language.md` to new user-facing prose
 6. **Validate each modified Python file:** `python -m py_compile <path>`. Halt on syntax error; fix and re-run.
 7. **Compute fix diff:** the diff between pre-fix and post-fix file contents for every modified file.
 8. **Post-fix self-audit:** follow [`audit-contract.md`](audit-contract.md) post-fix self-audit sequence. Internal iteration cap: 3. Three rounds with fresh findings → exit `stuck: post-fix audit not converging`. Only when `gate_findings` empty AND `post_fix_findings` empty → proceed to git add.

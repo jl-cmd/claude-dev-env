@@ -45,7 +45,7 @@ test('resolveInstallRoot names ~/.cursor/rules and allows generated mdc files un
     );
     assert.equal(resolution.cursorRulesInstallDirectory, expectedDirectory);
     assert.equal(
-        isAllowedInstallDestination(join(expectedDirectory, 'plain-language.mdc'), resolution),
+        isAllowedInstallDestination(join(expectedDirectory, 'asd-ste100-language.mdc'), resolution),
         true,
     );
     assert.equal(
@@ -72,7 +72,7 @@ test('a full install writes stem-named Cursor rules and leaves a local extra mdc
             homeDirectory,
             DEFAULT_CURSOR_DIRECTORY_NAME,
             CURSOR_RULES_DIRECTORY_NAME,
-            'plain-language.mdc',
+            'asd-ste100-language.mdc',
         );
         assert.equal(existsSync(generatedPath), true);
         const generatedText = readFileSync(generatedPath, 'utf8');
@@ -90,7 +90,7 @@ test('--only journal skips Cursor rule generation; --only core writes them', () 
             homeDirectory,
             DEFAULT_CURSOR_DIRECTORY_NAME,
             CURSOR_RULES_DIRECTORY_NAME,
-            'plain-language.mdc',
+            'asd-ste100-language.mdc',
         );
         runInstaller(homeDirectory, ['--only', 'journal']);
         assert.equal(existsSync(generatedPath), false);

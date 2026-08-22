@@ -27,7 +27,7 @@ DESTRUCTIVE_HOOK_BASENAME = ALL_SAFETY_HOOK_SCRIPT_BASENAMES[1]
 
 CODE_RULES_HOOK_BASENAME = "code_rules_enforcer.py"
 TDD_HOOK_BASENAME = "tdd_enforcer.py"
-PLAIN_LANGUAGE_HOOK_BASENAME = "plain_language_blocker.py"
+QUESTION_SHAPE_HOOK_BASENAME = "ask_user_question_shape_blocker.py"
 
 BASH_MATCHER = "Bash"
 WRITE_MATCHER = "Write"
@@ -186,7 +186,7 @@ def test_build_excludes_every_non_safety_hook() -> None:
     for each_excluded in (
         CODE_RULES_HOOK_BASENAME,
         TDD_HOOK_BASENAME,
-        PLAIN_LANGUAGE_HOOK_BASENAME,
+        QUESTION_SHAPE_HOOK_BASENAME,
     ):
         assert all(each_excluded not in each_command for each_command in all_commands)
 

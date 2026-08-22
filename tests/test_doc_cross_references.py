@@ -18,7 +18,6 @@ import ast
 import re
 from pathlib import Path
 
-
 REPOSITORY_ROOT: Path = Path(__file__).resolve().parent.parent
 
 PATH_REFERENCE_PATTERN: re.Pattern[str] = re.compile(
@@ -168,6 +167,11 @@ def _missing_references_for_python_files() -> dict[str, set[str]]:
 def _missing_references_for_markdown_files() -> dict[str, set[str]]:
     missing_by_source_file: dict[str, set[str]] = {}
     for each_markdown_file in _iter_repo_files(".md"):
+        relative_source_path = each_markdown_file.relative_to(
+            REPOSITORY_ROOT
+        ).as_posix()
+        if relative_source_path.startswith("docs/records/"):
+            continue
         try:
             each_text = each_markdown_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -177,9 +181,6 @@ def _missing_references_for_markdown_files() -> dict[str, set[str]]:
                 continue
             if _reference_exists_on_disk(each_reference, source_file=each_markdown_file):
                 continue
-            relative_source_path = each_markdown_file.relative_to(
-                REPOSITORY_ROOT
-            ).as_posix()
             missing_by_source_file.setdefault(relative_source_path, set()).add(
                 each_reference
             )

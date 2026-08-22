@@ -2,6 +2,8 @@
 
 Cross-cutting runtime assets shared by multiple skills. The PR-loop skills (`bugteam`, `pr-converge`, `findbugs`, `fixbugs`) are one such cluster; other clusters live here too. Files here are installed into `~/.claude/_shared/` by `bin/install.mjs` alongside the skill directories that import them.
 
+Shared assets use `~/.claude/rules/asd-ste100-language.md` for user-facing word choice, sentence style, tone, punctuation, and prose form. Each asset keeps its workflow-specific structure.
+
 ## Contents
 
 | Entry | Description |

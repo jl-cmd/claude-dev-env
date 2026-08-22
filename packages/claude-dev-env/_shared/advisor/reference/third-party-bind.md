@@ -14,7 +14,7 @@ Open this when binding or re-binding the advisor from a third-party (non-Claude)
    ```
 
    Use `--model fable --effort high` on Fable; use `--model opus --effort xhigh` on Opus.
-   Opus routing follows [`rules/opus5-communication-contract.md`](../../../rules/opus5-communication-contract.md).
+   User-facing wording follows [`rules/asd-ste100-language.md`](../../../rules/asd-ste100-language.md).
    The caller picks the Fable effort from task scope; when the caller cannot judge scope well enough to pick, it asks the user through AskUserQuestion before binding, and defaults to `high` when no caller choice arrives.
    A root advisor bind uses `--routing-mode ordered_account` — walk order, failover, and the `advisor_blocked` terminal status are in [`cli-chain.md`](cli-chain.md).
 4. Stop at the first successful bind.

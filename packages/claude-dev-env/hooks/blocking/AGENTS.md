@@ -74,7 +74,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
 | `docstring_rule_gate_count_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A stale spelled-out gate-validator count in `docstring-prose-matches-implementation.md` — the "N more gate validators" / "M gated slices" count drifting from the `check_docstring_*` validators the prose names |
 | `duplicate_rmtree_helper_blocker.py` | PreToolUse (Write/Edit) | A local re-definition of the Windows-safe rmtree helper trio (`_strip_read_only_and_retry`, `_force_remove_tree` / `force_rmtree`) in place of importing a shared helper |
-| `eli11_reply_enforcer.py` | Stop | Final replies breaking the `eli11-replies` shape — more than 6 bullet lines, more than 2 list lines over 20 words each, or multi-line instructions with no numbered step among the lead lines. Code fences, inline code, blockquotes, table rows, and link targets come off before the reply is judged. |
 | `env_var_table_code_drift_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A markdown env-var summary table row attributing an environment variable to a code file whose source never references that variable name |
 | `es_exe_path_rewriter.py` | PreToolUse | Rewrites paths referencing `.exe` under the Everything search path |
 | `fable_spawn_gate.py` | PreToolUse (Agent/Task) | An `Agent` or `Task` spawn whose prompt carries no `FABLE-SPAWN-AUTHORIZED` token and whose model field reads `fable` in any letter case — the bare alias, or a delimiter segment of a full model id, so `claude-fable-5` is denied too |
@@ -92,7 +91,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `piped_pytest_blocker.py` | PreToolUse (Bash) | A pytest run whose output feeds a pipe, where the pipeline reports the exit code of the command on the right |
-| `plain_language_blocker.py` | PreToolUse (Write/Edit/AskUserQuestion) | Heavy or jargon words in user-facing prose when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off); AskUserQuestion lean-block structure stays always on |
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |

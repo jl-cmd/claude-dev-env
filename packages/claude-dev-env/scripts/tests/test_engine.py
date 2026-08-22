@@ -71,8 +71,8 @@ def test_explicit_roots_write_stem_named_mdc(
     cursor = tmp_path / "cursor-home"
     _write_minimal_curated_rules(claude / "rules")
     _write_minimal_docs(claude / "docs")
-    (claude / "rules" / "plain-language.md").write_text(
-        "# Plain language\n\nUse short sentences.\n",
+    (claude / "rules" / "asd-ste100-language.md").write_text(
+        "# ASD-STE100 Language Policy\n\nUse short sentences.\n",
         encoding="utf-8",
     )
     (claude / "rules" / "CLAUDE.md").write_text("# Inventory\n", encoding="utf-8")
@@ -90,8 +90,8 @@ def test_explicit_roots_write_stem_named_mdc(
         )
         == 0
     )
-    generated = (cursor / "rules" / "plain-language.mdc").read_text(encoding="utf-8")
-    assert 'description: "Plain language"' in generated
+    generated = (cursor / "rules" / "asd-ste100-language.mdc").read_text(encoding="utf-8")
+    assert 'description: "ASD-STE100 Language Policy"' in generated
     assert "alwaysApply: true" in generated
     assert "Use short sentences." in generated
     assert not (cursor / "rules" / "CLAUDE.mdc").is_file()

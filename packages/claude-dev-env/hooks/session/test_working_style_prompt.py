@@ -36,14 +36,18 @@ class TestWorkingStylePrompt:
         emitted = json.loads(_run_main())
         assert emitted["additionalContext"] == WORKING_STYLE_PROMPT
 
-    def test_emitted_prompt_preserves_existing_guidance_and_adds_policy(self) -> None:
+    def test_emitted_prompt_contains_canonical_policy_and_scope_guidance(self) -> None:
         emitted = json.loads(_run_main())
         prompt_text = emitted["additionalContext"]
         assert "Document each task in a location that remains easy to find later." in prompt_text
         assert "Deliver the requested work at its intended scope." in prompt_text
-        assert "Use positive prose throughout every generated text surface" in prompt_text
-        assert "Write each point as one direct affirmative statement" in prompt_text
-        assert "Use plain language, full terms, and simple descriptive names" in prompt_text
+        assert "Use ELI5 for beginner framing, large visuals, minimal text" in prompt_text
+        assert "one stable self-contained HTML artifact" in prompt_text
+        assert "update-in-place continuity, and sharing" in prompt_text
+        assert "Apply ~/.claude/rules/asd-ste100-language.md for user-facing word choice" in prompt_text
+        assert "Use current, immediately relevant context." in prompt_text
+        assert "Name each action, fact, reason, and outcome." in prompt_text
+        assert "Use full terms and specific names for repository work." in prompt_text
         assert "When a request has multiple reasonable interpretations" in prompt_text
         assert "Ask one focused clarification question" in prompt_text
         assert "Pause for the user's choice before making a high-impact decision." in prompt_text
