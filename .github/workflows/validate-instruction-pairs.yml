@@ -29,6 +29,11 @@ jobs:
       checkout-ref: ${{ github.event.pull_request.head.sha || github.sha }}
       # Release-please detection (any one): branch prefix release-please--,
       # title chore(.*): release , label autorelease: pending.
-      skip-validation: ${{ startsWith(github.head_ref, 'release-please--') || startsWith(github.event.pull_request.title, 'chore: release ') || (startsWith(github.event.pull_request.title, 'chore(') && contains(github.event.pull_request.title, '): release ')) || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}
+      skip-validation: >-
+        ${{ startsWith(github.head_ref, 'release-please--')
+        || startsWith(github.event.pull_request.title, 'chore: release ')
+        || (startsWith(github.event.pull_request.title, 'chore(')
+        && contains(github.event.pull_request.title, '): release '))
+        || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}
     permissions:
       contents: read
