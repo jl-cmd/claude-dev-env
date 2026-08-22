@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.17.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.16.0...claude-dev-env-v2.17.0) (2026-08-22)
+
+
+### Features
+
+* add pr-cleanup skill (host-neutral PR cleanup composition) ([866b15d](https://github.com/jl-cmd/claude-dev-env/commit/866b15d0809cdf2b4b30b88b7fa2c3b49ebb34ea))
+* add reusable ELI5 response skill ([f99d7f7](https://github.com/jl-cmd/claude-dev-env/commit/f99d7f7152c55ceb8ef60801534f8492f14789e3))
+* **eli5:** add shared beginner-friendly response skill ([1338d2d](https://github.com/jl-cmd/claude-dev-env/commit/1338d2d79c5c26f93cf9c3fddff48ee7069aca10))
+
+
+### Bug Fixes
+
+* **check:** restore pr-loop scripts mypy pyproject.toml ([7b0b0e1](https://github.com/jl-cmd/claude-dev-env/commit/7b0b0e139d6c17206d64af39e7e5da5eb9f648c1))
+* **ci:** point archived skill tests at live shared paths ([40c5abb](https://github.com/jl-cmd/claude-dev-env/commit/40c5abb8a9b5cd285a9ca10094a4a2eba0b5bc6a))
+* **ci:** repair archived skill tests after pr-loop script move ([e017cbd](https://github.com/jl-cmd/claude-dev-env/commit/e017cbdc53ea48eaa5322e8175c7bee7c06ccf33))
+* **ci:** repair archived skill tests after pr-loop script move ([94035e1](https://github.com/jl-cmd/claude-dev-env/commit/94035e16d17173a0bdb8d4afae2570bd5fcabe68))
+* **ci:** run instruction-pairs on pull_request and pull_request_target ([dbb2d19](https://github.com/jl-cmd/claude-dev-env/commit/dbb2d196aed1c8bd363e25ce61d3f3cfd92464ca))
+* **ci:** skip archived skill tests and fix fresh-branch push assertion ([188c3c1](https://github.com/jl-cmd/claude-dev-env/commit/188c3c18f4f3666655e27dea6049d24af8bf145d))
+* **ci:** skip archived skill tests and fix fresh-branch push assertion ([e281d87](https://github.com/jl-cmd/claude-dev-env/commit/e281d877d04ea6f46831aa8709dc1932d2771e12))
+* **ci:** skip instruction-pairs validation on release-please PRs ([c1fef55](https://github.com/jl-cmd/claude-dev-env/commit/c1fef559753cb54f7cd00cc2e47a3f62567f21c9))
+* **ci:** skip instruction-pairs validation on release-please PRs ([48b7c60](https://github.com/jl-cmd/claude-dev-env/commit/48b7c60980986c7e94a49db90f6000b20931089d))
+* reword optional skill paths that failed doc cross-ref CI ([9a6f1eb](https://github.com/jl-cmd/claude-dev-env/commit/9a6f1eb7d0010522bdd9c32c8bfd6e935cb4fc22))
+
+
+### Refactoring
+
+* **skills:** archive retired skills and fix shared doc links ([69ce3a9](https://github.com/jl-cmd/claude-dev-env/commit/69ce3a981c3118bbad213939843f45701e0ffe22))
+* **skills:** retire legacy skill packages and drop prompt-generator dependency ([9d094b0](https://github.com/jl-cmd/claude-dev-env/commit/9d094b0457a67cfbdb463e3b5d6f0a042e0f8b5b))
+* **skills:** retire legacy skill packages and drop prompt-generator dependency ([97c7b04](https://github.com/jl-cmd/claude-dev-env/commit/97c7b04b7ff40fb1375d86cdae10e3343f8a42c3))
+
+
+### Tests
+
+* fix review-tier git branch setup ([fd9d0b5](https://github.com/jl-cmd/claude-dev-env/commit/fd9d0b5c49974ffd66c0b44dc5f76f88ac67fcb3))
+
 ## [2.16.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.1...claude-dev-env-v2.16.0) (2026-08-20)
 
 
