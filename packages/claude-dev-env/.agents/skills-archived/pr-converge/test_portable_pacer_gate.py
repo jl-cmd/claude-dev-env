@@ -9,7 +9,11 @@ SKILL_ROOT = Path(__file__).resolve().parent
 SKILL_MARKDOWN_PATH = SKILL_ROOT / "SKILL.md"
 PER_TICK_MARKDOWN_PATH = SKILL_ROOT / "reference" / "per-tick.md"
 PORTABLE_DRIVER_PATH = (
-    SKILL_ROOT.parent.parent / "skills" / "_shared" / "pr-loop" / "portable-driver.md"
+    SKILL_ROOT.parents[1]
+    / "skills"
+    / "_shared"
+    / "pr-loop"
+    / "portable-driver.md"
 )
 
 SELECT_CONVERGE_PACER_SCRIPT = "select_converge_pacer.py"
