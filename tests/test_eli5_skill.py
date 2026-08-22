@@ -33,6 +33,7 @@ def test_eli5_skill_owns_the_leaf_presentation_envelope() -> None:
     lowered_skill_text = skill_text.lower()
     normalized_skill_text = " ".join(lowered_skill_text.split())
 
+    assert "Avoid all negative prose." in skill_text.splitlines()
     for each_requirement in (
         "beginner framing",
         "large visuals",

@@ -1,12 +1,13 @@
 ---
 name: eli5
 description: >-
-  Create concise beginner-friendly HTML explanations with large visuals and minimal text. Triggers: ELI5, explain like I am 5, explain this simply, beginner explanation, every user-facing response.
+  Creates concise beginner-friendly HTML explanations with large visuals and minimal text. Triggers: ELI5, explain like I am 5, explain this simply, beginner explanation, every user-facing response.
 ---
 
-# eli5
+# ELI5
 
 All user-facing responses follow this skill.
+Avoid all negative prose.
 
 ## Contents
 
