@@ -9,13 +9,13 @@ import os
 import re
 import stat
 import tempfile
-import tomllib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import NoReturn
 
+import tomllib
 import yaml
-
 
 ManagedContent = str | bytes
 
@@ -27,6 +27,87 @@ publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
 frontmatter_unsupported_fields = ("tools", "model", "color")
 instruction_alias_filenames = frozenset({"AGENTS.md", "CLAUDE.md"})
+failure_blast_radius_rule_relative_path = "rules/failure-blast-radius.md"
+codex_instruction_target_path = "AGENTS.md"
+codex_instruction_section_heading = "## Excerpt for repository-instruction sessions"
+codex_hook_manifest_source_path = "hooks/hooks.json"
+codex_hook_manifest_target_path = "hooks.json"
+codex_hook_event_name = "PreToolUse"
+codex_hook_matcher = "apply_patch"
+codex_enforcer_script_relative_path = "hooks/blocking/code_rules_enforcer.py"
+codex_enforcer_script_name = "code_rules_enforcer.py"
+codex_enforcer_path_suffix = path_separator + codex_enforcer_script_relative_path
+codex_hook_command_token_pattern = r'''(?:"[^"]*"|'[^']*'|\S+)'''
+codex_hook_merge_action = "merge"
+codex_hook_timeout_seconds = 60
+codex_hook_dependency_manifest = (
+    "hooks/blocking/__init__.py",
+    "hooks/blocking/code_rules_annotations_length.py",
+    "hooks/blocking/code_rules_banned_identifiers.py",
+    "hooks/blocking/code_rules_blast_radius.py",
+    "hooks/blocking/code_rules_boolean_mustcheck.py",
+    "hooks/blocking/code_rules_command_dispatch.py",
+    "hooks/blocking/code_rules_comments.py",
+    "hooks/blocking/code_rules_constants_config.py",
+    "hooks/blocking/codex_apply_patch.py",
+    "hooks/blocking/code_rules_dead_argparse_argument.py",
+    "hooks/blocking/code_rules_dead_config_field.py",
+    "hooks/blocking/code_rules_dead_dataclass_field.py",
+    "hooks/blocking/code_rules_dead_module_constant.py",
+    "hooks/blocking/code_rules_dead_split_branch.py",
+    "hooks/blocking/code_rules_docstrings.py",
+    "hooks/blocking/code_rules_duplicate_body.py",
+    "hooks/blocking/code_rules_enforcer.py",
+    "hooks/blocking/code_rules_imports_logging.py",
+    "hooks/blocking/code_rules_js_conventions.py",
+    "hooks/blocking/code_rules_magic_values.py",
+    "hooks/blocking/code_rules_mock_completeness.py",
+    "hooks/blocking/code_rules_naming_collection.py",
+    "hooks/blocking/code_rules_optional_params.py",
+    "hooks/blocking/code_rules_orphan_css_class.py",
+    "hooks/blocking/code_rules_paired_test.py",
+    "hooks/blocking/code_rules_path_utils.py",
+    "hooks/blocking/code_rules_paths_syspath.py",
+    "hooks/blocking/code_rules_probe_chains.py",
+    "hooks/blocking/code_rules_probe_detection.py",
+    "hooks/blocking/code_rules_probe_recording.py",
+    "hooks/blocking/code_rules_scope_binding.py",
+    "hooks/blocking/code_rules_shared.py",
+    "hooks/blocking/code_rules_string_magic.py",
+    "hooks/blocking/code_rules_test_assertions.py",
+    "hooks/blocking/code_rules_test_branching_except.py",
+    "hooks/blocking/code_rules_test_isolation.py",
+    "hooks/blocking/code_rules_test_layout.py",
+    "hooks/blocking/code_rules_type_escape.py",
+    "hooks/blocking/code_rules_typeddict_stub.py",
+    "hooks/blocking/code_rules_unused_imports.py",
+    "hooks/hooks_constants/__init__.py",
+    "hooks/hooks_constants/any_type_config.py",
+    "hooks/hooks_constants/banned_identifiers_constants.py",
+    "hooks/hooks_constants/blast_radius_constants.py",
+    "hooks/hooks_constants/blocking_check_limits.py",
+    "hooks/hooks_constants/code_rules_enforcer_constants.py",
+    "hooks/hooks_constants/code_rules_path_utils_constants.py",
+    "hooks/hooks_constants/command_dispatch_constants.py",
+    "hooks/hooks_constants/dead_argparse_argument_constants.py",
+    "hooks/hooks_constants/dead_config_field_constants.py",
+    "hooks/hooks_constants/dead_dataclass_field_constants.py",
+    "hooks/hooks_constants/dead_module_constant_constants.py",
+    "hooks/hooks_constants/duplicate_function_body_constants.py",
+    "hooks/hooks_constants/hardcoded_user_path_constants.py",
+    "hooks/hooks_constants/harness_scratchpad_constants.py",
+    "hooks/hooks_constants/hook_block_logger.py",
+    "hooks/hooks_constants/inline_tuple_string_magic_constants.py",
+    "hooks/hooks_constants/js_conventions_constants.py",
+    "hooks/hooks_constants/orphan_css_class_constants.py",
+    "hooks/hooks_constants/paired_test_coverage_constants.py",
+    "hooks/hooks_constants/setup_project_paths_constants.py",
+    "hooks/hooks_constants/stuttering_check_config.py",
+    "hooks/hooks_constants/stuttering_import_binding_constants.py",
+    "hooks/hooks_constants/sys_path_insert_constants.py",
+    "hooks/hooks_constants/test_layout_constants.py",
+    "hooks/hooks_constants/unused_module_import_constants.py",
+)
 full_prune_opt_in_flag = "--allow-prune-all"
 unreadable_source_root_message = (
     "source root is missing or is not a directory, so nothing was planned or changed; "
@@ -50,6 +131,10 @@ class MaterializerError(ValueError):
     """Raised when a materialization request cannot be safely planned."""
 
 
+class MaterializerRunFatal(MaterializerError):
+    """Raised when invalid materializer state stops the whole run."""
+
+
 class ArgumentParserError(ValueError):
     """Raised when command-line arguments cannot be parsed."""
 
@@ -57,7 +142,7 @@ class ArgumentParserError(ValueError):
 class MaterializerArgumentParser(argparse.ArgumentParser):
     """Parse materializer arguments while keeping errors in the JSON contract."""
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         """Raise a reportable parser error instead of writing process output."""
         raise ArgumentParserError(message)
 
@@ -407,6 +492,246 @@ def convert_agent(agent: ClaudeAgent) -> str:
     return content
 
 
+def render_codex_failure_blast_radius(rule_content: str) -> str:
+    """Extract the repository-instruction contract from the canonical rule.
+
+    Args:
+        rule_content: Canonical failure blast-radius rule text.
+
+    Returns:
+        The fenced repository-instruction excerpt with a trailing newline.
+
+    Raises:
+        MaterializerError: If the canonical rule lacks the required excerpt.
+    """
+    heading_start = rule_content.find(codex_instruction_section_heading)
+    if heading_start < 0:
+        raise MaterializerError("failure blast-radius rule requires a Codex excerpt")
+    fence_start = rule_content.find("```", heading_start)
+    if fence_start < 0:
+        raise MaterializerError("failure blast-radius rule requires a Codex excerpt")
+    content_start = rule_content.find(line_separator, fence_start)
+    fence_end = rule_content.find(line_separator + "```", content_start + 1)
+    if content_start < 0 or fence_end < 0:
+        raise MaterializerError("failure blast-radius rule requires a complete Codex excerpt")
+    return rule_content[content_start + len(line_separator) : fence_end].rstrip() + line_separator
+
+
+def _build_codex_instruction_projection(config: MaterializerConfig) -> PlannedFile | None:
+    """Build the managed AGENTS.md projection when the canonical rule is present."""
+    source_path = config.source_root / failure_blast_radius_rule_relative_path
+    if not source_path.is_file():
+        return None
+    rule_content = source_path.read_text(encoding="utf-8")
+    projected_content = render_codex_failure_blast_radius(rule_content)
+    return PlannedFile(
+        failure_blast_radius_rule_relative_path,
+        codex_instruction_target_path,
+        projected_content,
+        hash_content(projected_content),
+    )
+
+
+def _read_json_object(file_path: Path, description: str) -> dict[str, object]:
+    """Read one JSON object and report the required content shape."""
+    try:
+        parsed_json = json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise MaterializerError(f"{description} requires readable UTF-8 content: {file_path}") from error
+    if not isinstance(parsed_json, dict):
+        raise MaterializerError(f"{description} must be a JSON object: {file_path}")
+    if not all(isinstance(each_key, str) for each_key in parsed_json):
+        raise MaterializerError(f"{description} requires string keys: {file_path}")
+    return {each_key: each_record for each_key, each_record in parsed_json.items()}
+
+
+def _validated_agent_iterable(candidate: object) -> tuple[ClaudeAgent, ...]:
+    """Validate the optional agent iterable used by the legacy call form."""
+    if not isinstance(candidate, Iterable):
+        raise TypeError("agent collection requires an iterable")
+    all_candidate_agents = tuple(candidate)
+    if not all(isinstance(each_agent, ClaudeAgent) for each_agent in all_candidate_agents):
+        raise TypeError("agent collection requires ClaudeAgent entries")
+    return all_candidate_agents
+
+
+def _validated_planned_file_iterable(candidate: object) -> tuple[PlannedFile, ...]:
+    """Validate planned files passed through the legacy publication call form."""
+    if not isinstance(candidate, Iterable):
+        raise TypeError("planned files require an iterable")
+    all_candidate_files = tuple(candidate)
+    if not all(isinstance(each_file, PlannedFile) for each_file in all_candidate_files):
+        raise TypeError("planned files require PlannedFile entries")
+    return all_candidate_files
+
+
+def _find_codex_hook_source(config: MaterializerConfig) -> Path | None:
+    """Find the source hook manifest alongside the compatibility sources."""
+    all_candidates = (
+        config.source_root / codex_hook_manifest_source_path,
+        config.source_root / Path(codex_hook_manifest_source_path).name,
+    )
+    return next((each_path for each_path in all_candidates if each_path.is_file()), None)
+
+
+def _resolved_codex_enforcer_command(config: MaterializerConfig) -> str:
+    """Build the target-root command for the focused Codex enforcer."""
+    script_path = (config.target_root / codex_enforcer_script_relative_path).resolve()
+    return f'python3 "{script_path}"'
+
+
+def _source_codex_enforcer_hook(
+    all_source_manifest: dict[str, object], command: str
+) -> dict[str, object]:
+    """Read the source enforcer hook shape and resolve its target command."""
+    all_events = all_source_manifest.get("hooks")
+    if not isinstance(all_events, dict):
+        raise MaterializerError("source Codex hook manifest requires a hooks object")
+    all_pre_tool_use = all_events.get(codex_hook_event_name)
+    if not isinstance(all_pre_tool_use, list):
+        raise MaterializerError("source Codex hook manifest requires a PreToolUse list")
+    for each_entry in all_pre_tool_use:
+        if not isinstance(each_entry, dict) or each_entry.get("matcher") != codex_hook_matcher:
+            continue
+        all_hook_records = each_entry.get("hooks")
+        if not isinstance(all_hook_records, list):
+            continue
+        for each_hook in all_hook_records:
+            if not isinstance(each_hook, dict):
+                continue
+            if not _is_code_rules_enforcer_hook(each_hook):
+                continue
+            resolved_hook = dict(each_hook)
+            resolved_hook["command"] = command
+            return resolved_hook
+    return {
+        "type": "command",
+        "command": command,
+        "timeout": codex_hook_timeout_seconds,
+    }
+
+
+def _hook_records(raw_hooks: object) -> list[dict[str, object]]:
+    """Validate and copy a Codex hook-record list."""
+    if not isinstance(raw_hooks, list):
+        raise MaterializerError("Codex hook manifest entry requires a hooks list")
+    if not all(isinstance(each_hook, dict) for each_hook in raw_hooks):
+        raise MaterializerError("Codex hook manifest requires valid hook entries")
+    return [dict(each_hook) for each_hook in raw_hooks]
+
+
+def _is_code_rules_enforcer_hook(all_hook_record: dict[str, object]) -> bool:
+    """Report whether a hook record names the focused code-rules enforcer."""
+    command = str(all_hook_record.get("command", ""))
+    normalized_command = command.replace("\\", path_separator)
+    all_command_tokens = (
+        each_token.strip("\"'")
+        for each_token in re.findall(codex_hook_command_token_pattern, normalized_command)
+    )
+    return any(
+        each_token in (codex_enforcer_script_name, codex_enforcer_script_relative_path)
+        or each_token.endswith(codex_enforcer_path_suffix)
+        for each_token in all_command_tokens
+    )
+
+
+def _merge_codex_hook_manifest(
+    all_target_manifest: dict[str, object], all_focused_hook: dict[str, object]
+) -> dict[str, object]:
+    """Preserve target hook order while merging one deterministic enforcer entry."""
+    all_events = all_target_manifest.get("hooks", {})
+    if not isinstance(all_events, dict):
+        raise MaterializerError("Codex hook manifest requires a hooks object")
+    all_pre_tool_use = all_events.get(codex_hook_event_name, [])
+    if not isinstance(all_pre_tool_use, list):
+        raise MaterializerError("Codex hook manifest requires a PreToolUse list")
+    merged_pre_tool_use: list[dict[str, object]] = []
+    merged_apply_patch_entry: dict[str, object] | None = None
+    merged_hooks: list[dict[str, object]] = []
+    for each_entry in all_pre_tool_use:
+        if not isinstance(each_entry, dict):
+            raise MaterializerRunFatal("Codex hook manifest requires valid matcher entries")
+        copied_entry = dict(each_entry)
+        if copied_entry.get("matcher") != codex_hook_matcher:
+            merged_pre_tool_use.append(copied_entry)
+            continue
+        all_hook_records = _hook_records(copied_entry.get("hooks", []))
+        if merged_apply_patch_entry is None:
+            merged_apply_patch_entry = copied_entry
+            merged_hooks = [
+                each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
+            ]
+            merged_apply_patch_entry["hooks"] = merged_hooks
+            merged_pre_tool_use.append(merged_apply_patch_entry)
+        else:
+            merged_hooks.extend(
+                each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
+            )
+    if merged_apply_patch_entry is None:
+        merged_apply_patch_entry = {"matcher": codex_hook_matcher, "hooks": merged_hooks}
+        merged_pre_tool_use.append(merged_apply_patch_entry)
+    merged_hooks.append(all_focused_hook)
+    merged_events = dict(all_events)
+    merged_events[codex_hook_event_name] = merged_pre_tool_use
+    merged_manifest = dict(all_target_manifest)
+    merged_manifest["hooks"] = merged_events
+    return merged_manifest
+
+
+def _build_codex_hook_projection(config: MaterializerConfig) -> PlannedFile | None:
+    """Build an additive managed hooks.json projection when its source exists."""
+    source_path = _find_codex_hook_source(config)
+    if source_path is None:
+        return None
+    source_manifest = _read_json_object(source_path, "source Codex hook manifest")
+    target_path = config.target_root / codex_hook_manifest_target_path
+    target_manifest = (
+        _read_json_object(target_path, "target Codex hook manifest")
+        if target_path.is_file()
+        else {"hooks": {}}
+    )
+    focused_hook = _source_codex_enforcer_hook(
+        source_manifest, _resolved_codex_enforcer_command(config)
+    )
+    projected_manifest = _merge_codex_hook_manifest(target_manifest, focused_hook)
+    projected_content = json.dumps(projected_manifest, ensure_ascii=False, indent=manifest_indentation_width) + line_separator
+    return PlannedFile(
+        codex_hook_manifest_source_path,
+        codex_hook_manifest_target_path,
+        projected_content,
+        hash_content(projected_content),
+        action=codex_hook_merge_action,
+    )
+
+
+def _build_codex_hook_dependency_projection(
+    config: MaterializerConfig,
+) -> list[PlannedFile]:
+    """Build the reviewed source files required by the target enforcer."""
+    all_dependencies: list[PlannedFile] = []
+    for each_relative_path in codex_hook_dependency_manifest:
+        source_path = config.source_root / each_relative_path
+        if not source_path.is_file():
+            raise MaterializerError(
+                f"source file is missing from the reviewed hook source list: {each_relative_path}"
+            )
+        try:
+            dependency_content = source_path.read_bytes()
+        except OSError as error:
+            raise MaterializerError(
+                f"reviewed Codex hook dependency has unreadable bytes: {each_relative_path}"
+            ) from error
+        all_dependencies.append(
+            PlannedFile(
+                each_relative_path,
+                each_relative_path,
+                dependency_content,
+                hash_content(dependency_content),
+            )
+        )
+    return all_dependencies
+
+
 def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
     """Discover and parse Markdown agents below the source root.
 
@@ -437,14 +762,17 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
         if _is_reparse_point(each_path):
             raise MaterializerError(f"source reparse point is not allowed: {each_path}")
         relative_source = each_path.relative_to(config.source_root).as_posix()
+        if relative_source == failure_blast_radius_rule_relative_path:
+            _validate_containment(config.source_root, each_path)
+            continue
         _validate_containment(config.source_root, each_path)
         all_agents.append(parse_frontmatter(each_path, each_path.read_text(encoding="utf-8"), relative_source))
     return all_agents
 
 
-def _case_fold_collision_error(target_relative_path: str) -> MaterializerError:
+def _case_fold_collision_error(target_relative_path: str) -> MaterializerRunFatal:
     """Build the error for two target names that differ only by letter case."""
-    return MaterializerError(f"case-fold collision: {target_relative_path}")
+    return MaterializerRunFatal(f"case-fold collision: {target_relative_path}")
 
 
 def _validate_orphan_target_is_adoptable(
@@ -479,6 +807,13 @@ def _validate_orphan_target_is_adoptable(
         raise MaterializerError(unmanaged_target_message.format(path=target_relative_path))
 
 
+def _configured_manifest_path(config: MaterializerConfig) -> Path:
+    """Return the manifest path established during configuration validation."""
+    if config.manifest_path is None:
+        raise MaterializerError("compatibility manifest path requires configuration")
+    return config.manifest_path
+
+
 def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -> tuple[list[PlannedFile], MaterializationReport]:
     """Build planned agent publications and their report.
 
@@ -495,7 +830,8 @@ def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -
     report = MaterializationReport()
     planned: list[PlannedFile] = []
     target_by_name: dict[str, str] = {}
-    previous_records = _manifest_record_by_path(load_manifest(config.manifest_path))
+    manifest_path = _configured_manifest_path(config)
+    previous_records = _manifest_record_by_path(load_manifest(manifest_path))
     existing_by_name = {
         each_path.relative_to(config.target_root).as_posix().casefold(): each_path
         for each_path in config.target_root.rglob("*")
@@ -506,16 +842,45 @@ def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -
         target_relative_path = _normalize_relative_path(each_agent.name + toml_suffix)
         folded_path = target_relative_path.casefold()
         if folded_path in target_by_name:
-            raise _case_fold_collision_error(target_relative_path)
+            raise MaterializerRunFatal(f"case-fold collision: {target_relative_path}")
         content = convert_agent(each_agent)
         _validate_orphan_target_is_adoptable(config, existing_by_name.get(folded_path), target_relative_path, content)
         target_by_name[folded_path] = target_relative_path
         target_path = validate_target_path(config.target_root, target_relative_path)
-        if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
-            raise MaterializerError("planned target collides with compatibility manifest")
+        if _casefold_normalized_path(target_path) == _casefold_normalized_path(manifest_path):
+            raise MaterializerRunFatal("planned target collides with compatibility manifest")
         planned.append(PlannedFile(source_identity, target_relative_path, content, hash_content(content)))
         report.unsupported += len(each_agent.unsupported)
         report.details["unsupported"].extend(f"{source_identity}:{each_key}" for each_key in each_agent.unsupported)
+    codex_instruction = _build_codex_instruction_projection(config)
+    if codex_instruction is not None:
+        folded_path = codex_instruction.target_relative_path.casefold()
+        if folded_path in target_by_name:
+            raise _case_fold_collision_error(codex_instruction.target_relative_path)
+        _validate_orphan_target_is_adoptable(
+            config,
+            existing_by_name.get(folded_path),
+            codex_instruction.target_relative_path,
+            codex_instruction.content,
+        )
+        validate_target_path(config.target_root, codex_instruction.target_relative_path)
+        planned.append(codex_instruction)
+        target_by_name[folded_path] = codex_instruction.target_relative_path
+    codex_hooks = _build_codex_hook_projection(config)
+    if codex_hooks is not None:
+        all_hook_dependencies = _build_codex_hook_dependency_projection(config)
+        for each_dependency in all_hook_dependencies:
+            folded_dependency_path = each_dependency.target_relative_path.casefold()
+            if folded_dependency_path in target_by_name:
+                raise _case_fold_collision_error(each_dependency.target_relative_path)
+            validate_target_path(config.target_root, each_dependency.target_relative_path)
+            target_by_name[folded_dependency_path] = each_dependency.target_relative_path
+            planned.append(each_dependency)
+        folded_path = codex_hooks.target_relative_path.casefold()
+        if folded_path in target_by_name:
+            raise _case_fold_collision_error(codex_hooks.target_relative_path)
+        validate_target_path(config.target_root, codex_hooks.target_relative_path)
+        planned.append(codex_hooks)
     report.planned_files = planned
     return planned, report
 
@@ -542,7 +907,11 @@ def build_plan(config: MaterializerConfig, *all_arguments: object, **all_keyword
         if supplied_agents is not None:
             raise TypeError("build_plan received duplicate all_agents")
         supplied_agents = all_arguments[0]
-    discovered_agents = discover_agents(config) if supplied_agents is None else supplied_agents
+    discovered_agents = (
+        discover_agents(config)
+        if supplied_agents is None
+        else _validated_agent_iterable(supplied_agents)
+    )
     return _build_plan(config, discovered_agents)
 
 
@@ -770,6 +1139,8 @@ def _record_target_state(config: MaterializerConfig, planned_file: PlannedFile, 
     if current_bytes == content_to_bytes(planned_file.content):
         _record_matching_target(report, planned_file.target_relative_path, previous_record)
         return target_path, current_bytes, False
+    if planned_file.action == codex_hook_merge_action:
+        return target_path, current_bytes, True
     if _is_pristine_managed(previous_record, current_bytes):
         return target_path, current_bytes, True
     _record_target_conflict(report, planned_file.target_relative_path, previous_record)
@@ -845,9 +1216,10 @@ def _publish_planned_targets(
     all_backups: dict[Path, bytes | None],
     failure_injector: Callable[[str], None] | None,
 ) -> None:
+    manifest_path = _configured_manifest_path(config)
     for each_planned_file in all_planned_files:
         target_path, current_bytes, is_publishable = _record_target_state(config, each_planned_file, all_previous_records, report)
-        if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
+        if _casefold_normalized_path(target_path) == _casefold_normalized_path(manifest_path):
             raise MaterializerError("planned target collides with compatibility manifest")
         if not is_publishable:
             continue
@@ -950,7 +1322,8 @@ def _publish_plan(
     publication.planned_files = all_planned_files
     if not config.should_apply:
         return publication
-    previous_manifest = load_manifest(config.manifest_path)
+    manifest_path = _configured_manifest_path(config)
+    previous_manifest = load_manifest(manifest_path)
     previous_records = _manifest_record_by_path(previous_manifest)
     _validate_full_prune_consent(config, all_planned_files, previous_records)
     backups: dict[Path, bytes | None] = {}
@@ -962,10 +1335,10 @@ def _publish_plan(
             config, all_planned_files, previous_records, publication, backups, failure_injector
         )
         _remove_stale_files(config, previous_records, all_planned_files, publication, backups)
-        save_manifest(config.manifest_path, _build_manifest(all_planned_files), failure_injector)
-    except (OSError, RuntimeError, ValueError) as error:
+        save_manifest(manifest_path, _build_manifest(all_planned_files), failure_injector)
+    except (OSError, RuntimeError, ValueError):
         _rollback_publication(backups, publication, initial_written, initial_deleted)
-        raise error
+        raise
     _sort_report_details(publication)
     return publication
 
@@ -1003,7 +1376,10 @@ def publish_plan(config: MaterializerConfig, *all_arguments: object, **all_keywo
             raise TypeError("publish_plan received duplicate failure injector")
         failure_injector = all_arguments[2]
     publication = report if isinstance(report, MaterializationReport) else MaterializationReport()
-    return _publish_plan(config, planned_files, publication, failure_injector)
+    all_planned_files = _validated_planned_file_iterable(planned_files)
+    if failure_injector is not None and not callable(failure_injector):
+        raise TypeError("failure injector requires a callable")
+    return _publish_plan(config, all_planned_files, publication, failure_injector)
 
 
 def _redact_private_paths(
@@ -1086,6 +1462,8 @@ def main(*all_arguments: object) -> int:
         should_apply = options.should_apply
         source_root = options.source_root
         target_root = options.target_root
+        if source_root is None or target_root is None:
+            raise TypeError("materializer roots are required")
         config = MaterializerConfig(
             source_root,
             target_root,

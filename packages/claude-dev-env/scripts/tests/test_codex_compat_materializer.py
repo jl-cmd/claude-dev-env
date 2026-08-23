@@ -144,6 +144,11 @@ def test_validation_rejects_overlap_and_unsafe_paths(tmp_path: Path) -> None:
             validate_target_path(config.target_root, name)
 
 
+def test_render_codex_failure_blast_radius_requires_the_excerpt_heading() -> None:
+    with pytest.raises(MaterializerError, match="requires a Codex excerpt"):
+        materializer.render_codex_failure_blast_radius("# No excerpt\n")
+
+
 def test_validation_rejects_reparse_point_from_portable_attribute_seam(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
