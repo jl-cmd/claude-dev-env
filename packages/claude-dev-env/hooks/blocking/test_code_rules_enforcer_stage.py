@@ -78,6 +78,22 @@ def _run_precheck_stage(candidate_path: Path, target_path: str) -> subprocess.Co
     )
 
 
+def _run_precheck_stage(candidate_path: Path, target_path: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(ENFORCER_SCRIPT_PATH),
+            "--check",
+            str(candidate_path),
+            "--as",
+            target_path,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_edit_stage_baselines_the_new_fragment_against_the_old_fragment() -> None:
     all_seen_contents: list[str] = []
 
@@ -164,8 +180,6 @@ def test_precheck_stage_runs_the_cli_and_uses_the_declared_target_path(
 
     assert completed_process.returncode == 1
     assert "process_data" in completed_process.stdout
-
-
 def test_gate_caller_scans_staged_content_with_commit_stage_scope(
     tmp_path: Path,
 ) -> None:
