@@ -13,6 +13,9 @@ import pytest
 
 SCRIPT_PATH = Path(__file__).parent / "destructive_command_blocker.py"
 DENY_MODE_ENV_VAR = "CLAUDE_DESTRUCTIVE_DENY_MODE"
+EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR = (
+    "CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW"
+)
 
 
 def _run_hook(
@@ -22,6 +25,7 @@ def _run_hook(
 ) -> subprocess.CompletedProcess[str]:
     child_environment = os.environ.copy()
     child_environment.pop(DENY_MODE_ENV_VAR, None)
+    child_environment.pop(EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR, None)
     if home_directory is not None:
         child_environment["HOME"] = str(home_directory)
         child_environment["USERPROFILE"] = str(home_directory)
@@ -66,12 +70,12 @@ def test_protected_command_asks_for_approval(
     filesystem_root = Path(Path.cwd().anchor)
     completed_hook = _run_hook(command, filesystem_root, tmp_path)
 
-    hook_response = json.loads(completed_hook.stdout)
+    hook_decision_payload = json.loads(completed_hook.stdout)
     assert completed_hook.returncode == 0
     assert completed_hook.stderr == ""
-    assert hook_response["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
-    assert hook_response["hookSpecificOutput"]["permissionDecision"] == "ask"
-    assert reason_fragment in hook_response["hookSpecificOutput"][
+    assert hook_decision_payload["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+    assert hook_decision_payload["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert reason_fragment in hook_decision_payload["hookSpecificOutput"][
         "permissionDecisionReason"
     ]
 
@@ -87,6 +91,18 @@ def test_protected_command_asks_for_approval(
 )
 def test_permitted_command_exits_silently(command: str) -> None:
     completed_hook = _run_hook(command)
+
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout == ""
+    assert completed_hook.stderr == ""
+
+
+def test_ephemeral_rm_exits_silently_when_parent_disables_auto_allow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR, "1")
+
+    completed_hook = _run_hook("rm -rf /tmp/destructive-command-blocker/build")
 
     assert completed_hook.returncode == 0
     assert completed_hook.stdout == ""
