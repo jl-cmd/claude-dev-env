@@ -22,6 +22,7 @@ import pytest
 
 BLOCKING_DIRECTORY = Path(__file__).resolve().parent
 HOOK_SCRIPT_PATH = BLOCKING_DIRECTORY / "sensitive_file_protector.py"
+DISPATCHER_SCRIPT_PATH = BLOCKING_DIRECTORY / "pre_tool_use_dispatcher.py"
 
 WRITE_TOOL_NAME = "Write"
 EDIT_TOOL_NAME = "Edit"
@@ -79,6 +80,19 @@ def _run_hook_with_stdin(stdin_text: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(HOOK_SCRIPT_PATH)],
         input=stdin_text,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_dispatcher(
+    tool_name: str, tool_input: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+    return subprocess.run(
+        [sys.executable, str(DISPATCHER_SCRIPT_PATH)],
+        input=payload,
         capture_output=True,
         text=True,
         check=False,
@@ -151,6 +165,53 @@ def test_edit_to_a_secrets_file_is_denied(tmp_path: Path) -> None:
     completed = _run_hook(EDIT_TOOL_NAME, tmp_path / ".env", PLACEHOLDER_TEMPLATE_BODY)
     assert completed.returncode == 0, completed.stderr
     assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_dispatcher_denies_write_to_a_secrets_file(tmp_path: Path) -> None:
+    completed = _run_dispatcher(
+        WRITE_TOOL_NAME,
+        {"file_path": str(tmp_path / ".env"), "content": PLACEHOLDER_TEMPLATE_BODY},
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_dispatcher_denies_edit_to_a_secrets_file(tmp_path: Path) -> None:
+    completed = _run_dispatcher(
+        EDIT_TOOL_NAME,
+        {
+            "file_path": str(tmp_path / ".env"),
+            "old_string": "API_TOKEN=old-token\n",
+            "new_string": PLACEHOLDER_TEMPLATE_BODY,
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_dispatcher_allows_write_to_a_template_file(tmp_path: Path) -> None:
+    completed = _run_dispatcher(
+        WRITE_TOOL_NAME,
+        {
+            "file_path": str(tmp_path / ".env.example"),
+            "content": PLACEHOLDER_TEMPLATE_BODY,
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) is None
+
+
+def test_dispatcher_allows_edit_to_a_template_file(tmp_path: Path) -> None:
+    completed = _run_dispatcher(
+        EDIT_TOOL_NAME,
+        {
+            "file_path": str(tmp_path / ".env.example"),
+            "old_string": "API_TOKEN=old-token\n",
+            "new_string": PLACEHOLDER_TEMPLATE_BODY,
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) is None
 
 
 def test_read_tool_is_not_evaluated(tmp_path: Path) -> None:
