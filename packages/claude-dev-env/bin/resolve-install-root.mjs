@@ -20,6 +20,9 @@ import {
     CURSOR_RULES_DIRECTORY_NAME,
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_AGENTS_DIRECTORY_NAME,
+    MANAGED_HOOKS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
+    CODEX_HOOKS_DIRECTORY_NAME,
 } from './install-constants.mjs';
 
 export const CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE = 'CLAUDE_CONFIG_DIR';
@@ -52,6 +55,11 @@ export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
  *   agentsInstallDirectory: string,
  *   skillsLookupDirectory: string,
  *   agentsLookupDirectory: string,
+ *   hooksInstallDirectory: string,
+ *   scriptsInstallDirectory: string,
+ *   hooksLookupDirectory: string,
+ *   scriptsLookupDirectory: string,
+ *   codexHooksInstallDirectory: string,
  * }} InstallRootResolution
  */
 
@@ -127,6 +135,9 @@ export function resolveInstallRoot(options = {}) {
     const codexRulesInstallDirectory = resolve(
         join(codexHomeDirectory, CODEX_RULES_DIRECTORY_NAME),
     );
+    const codexHooksInstallDirectory = resolve(
+        join(codexHomeDirectory, CODEX_HOOKS_DIRECTORY_NAME),
+    );
     const cursorInstallDirectory = resolve(
         join(homeDirectory, DEFAULT_CURSOR_DIRECTORY_NAME),
     );
@@ -136,8 +147,12 @@ export function resolveInstallRoot(options = {}) {
     const agentsHome = resolveAgentsHome(managedRoot);
     const skillsInstallDirectory = join(agentsHome, MANAGED_SKILLS_DIRECTORY_NAME);
     const agentsInstallDirectory = join(agentsHome, MANAGED_AGENTS_DIRECTORY_NAME);
+    const hooksInstallDirectory = join(agentsHome, MANAGED_HOOKS_DIRECTORY_NAME);
+    const scriptsInstallDirectory = join(agentsHome, MANAGED_SCRIPTS_DIRECTORY_NAME);
     const skillsLookupDirectory = join(managedRoot, MANAGED_SKILLS_DIRECTORY_NAME);
     const agentsLookupDirectory = join(managedRoot, MANAGED_AGENTS_DIRECTORY_NAME);
+    const hooksLookupDirectory = join(managedRoot, MANAGED_HOOKS_DIRECTORY_NAME);
+    const scriptsLookupDirectory = join(managedRoot, MANAGED_SCRIPTS_DIRECTORY_NAME);
     return {
         managedRoot,
         source,
@@ -147,6 +162,7 @@ export function resolveInstallRoot(options = {}) {
         allDeclaredExternalPaths: [mypyIniInstallPath],
         allDeclaredExternalDirectories: [
             codexRulesInstallDirectory,
+            codexHooksInstallDirectory,
             cursorInstallDirectory,
             agentsHome,
         ],
@@ -158,6 +174,11 @@ export function resolveInstallRoot(options = {}) {
         agentsInstallDirectory,
         skillsLookupDirectory,
         agentsLookupDirectory,
+        hooksInstallDirectory,
+        scriptsInstallDirectory,
+        hooksLookupDirectory,
+        scriptsLookupDirectory,
+        codexHooksInstallDirectory,
     };
 }
 
