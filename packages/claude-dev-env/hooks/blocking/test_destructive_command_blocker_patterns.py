@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -102,11 +103,15 @@ def test_ephemeral_rm_exits_silently_when_parent_disables_auto_allow(
 ) -> None:
     monkeypatch.setenv(EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR, "1")
 
-    completed_hook = _run_hook("rm -rf /tmp/destructive-command-blocker/build")
+    with tempfile.TemporaryDirectory(
+        dir=tempfile.gettempdir(),
+        prefix="destructive command blocker ",
+    ) as ephemeral_directory_path:
+        completed_hook = _run_hook(f'rm -rf "{ephemeral_directory_path}"')
 
-    assert completed_hook.returncode == 0
-    assert completed_hook.stdout == ""
-    assert completed_hook.stderr == ""
+        assert completed_hook.returncode == 0
+        assert completed_hook.stdout == ""
+        assert completed_hook.stderr == ""
 
 
 def test_git_reset_hard_in_ephemeral_project_exits_silently(tmp_path: Path) -> None:
