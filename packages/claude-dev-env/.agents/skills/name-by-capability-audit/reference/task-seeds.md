@@ -6,4 +6,4 @@ Register each item on `TodoWrite` / `TaskCreate` at audit start. Complete with e
 2. Fetch PR title, body, and changed/renamed paths via `reference/fetch-commands.md`.
 3. Classify each naming signal as violation, OK driver, or skip (`reference/offense-examples.md` classifier first).
 4. Emit report from `reference/report-template.md`.
-5. Apply renames when the user requests a fix.
+5. Apply the requested or suggested rename direction by default; an explicit audit-only request ends after the report.

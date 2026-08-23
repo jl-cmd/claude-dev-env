@@ -1,11 +1,11 @@
 ---
 name: shared-extraction-audit
-description: Audits pull requests and packages for general helpers living in workflow-specific code instead of shared_utils, then extracts them in small tested CLs. Use when reviewing PRs for architectural layering, migrating utilities out of cert_fix_queue/theme_dialer_pipeline/skills, auditing "similar offenses", or when the user mentions extraction audit, shared_utils migration, orchestration-only packages, thin wrappers, or layer inversions.
+description: Audits pull requests and packages for general helpers living in workflow-specific code instead of shared_utils, then applies extraction fixes by default in small tested CLs. Use when reviewing PRs for architectural layering, migrating utilities out of cert_fix_queue/theme_dialer_pipeline/skills, auditing "similar offenses", or when the user mentions extraction audit, shared_utils migration, orchestration-only packages, thin wrappers, or layer inversions.
 ---
 
 # Shared Extraction Audit
 
-Audit-first, fix-second workflow for keeping **orchestration packages thin** and **shared_utils canonical**.
+Audit PRs and packages, report findings, and apply extraction fixes by default to keep **orchestration packages thin** and **shared_utils canonical**.
 
 ## When to use
 
@@ -33,7 +33,7 @@ Shared extraction audit:
 - [ ] 2. Map canonical homes already in shared_utils
 - [ ] 3. Grep for offense patterns (see reference/offense-taxonomy.md)
 - [ ] 4. Write prioritized findings (P0–P3)
-- [ ] 5. User confirms fix band (audit-only vs implement)
+- [ ] 5. Apply the prioritized fix band by default; an explicit audit-only request ends after the report
 - [ ] 6. Extract in small CLs (~100 lines) + move/adjust tests
 - [ ] 7. Run scoped pytest, commit, push, update PR
 ```
@@ -97,9 +97,9 @@ Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign prior
 1. …
 ```
 
-**Audit-only:** stop after the report unless the user asks to implement.
+Apply the prioritized fixes after the report by default. An explicit audit-only request ends after the report.
 
-## Fix workflow (when implementing)
+## Fix workflow
 
 ### Extraction rules
 
