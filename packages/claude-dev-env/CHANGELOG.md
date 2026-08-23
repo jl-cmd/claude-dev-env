@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.18.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.17.0...claude-dev-env-v2.18.0) (2026-08-23)
+
+
+### Features
+
+* **advisor:** fall back to Sol low when Fable is out of usage ([05d27c3](https://github.com/jl-cmd/claude-dev-env/commit/05d27c31851ee399bf7aeca429b07f3f7f89b47d))
+* **advisor:** fall back to Sol low when Fable is out of usage ([819cfe5](https://github.com/jl-cmd/claude-dev-env/commit/819cfe5632200aa0bf3c67273f8c93d900faabda))
+* **advisor:** route bind by session identity ([68087a8](https://github.com/jl-cmd/claude-dev-env/commit/68087a8f1f17203e508d1faf44dd7e88240ec301))
+* **advisor:** route bind by session identity ([a42cb3a](https://github.com/jl-cmd/claude-dev-env/commit/a42cb3aff42d033a83eda1da1277f9fa594bfd94))
+* **advisor:** share ADVISOR_EFFORT for Fable and Sol ([a333097](https://github.com/jl-cmd/claude-dev-env/commit/a333097d92dc9bbc800e3c0cc3306911667da34e))
+* **advisor:** share ADVISOR_EFFORT for Fable and Sol ([0489cb8](https://github.com/jl-cmd/claude-dev-env/commit/0489cb8ca5dd2288253675c71c9162db330d9836))
+* **advisor:** split Sol enable from Sol effort ([c6aa4fd](https://github.com/jl-cmd/claude-dev-env/commit/c6aa4fd2db0cf4bcc91bf42dc99a22f29798e2e2))
+* **advisor:** split Sol enable from Sol effort ([5f43a8f](https://github.com/jl-cmd/claude-dev-env/commit/5f43a8f4e6517f08dbae70f4f20c2a22f8610e54))
+
+
+### Bug Fixes
+
+* **advisor:** point third-party bind wording at asd-ste100-language ([f1887b7](https://github.com/jl-cmd/claude-dev-env/commit/f1887b7eae121e1deb2409d046ab3b6b2a694bbf))
+
 ## [2.17.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.16.0...claude-dev-env-v2.17.0) (2026-08-23)
 
 
