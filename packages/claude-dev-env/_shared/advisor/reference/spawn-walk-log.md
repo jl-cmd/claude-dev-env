@@ -8,7 +8,7 @@ Write the log as JSON with these field names:
 
 - `own_tier` — the floor tier.
 - `candidate_tiers` — the ladder slice down to that floor.
-- `sol_enabled` — a boolean recorded before candidate selection; `true` adds Sol ahead of the Claude ladder and `false` walks the Claude ladder alone.
+- `sol_enabled` — a boolean recorded before candidate selection; `true` adds Sol after Fable and `false` walks the Claude ladder alone.
 - `attempts` — one `{tier, result}` entry appended as each bind try happens; `result` is `codex` only for Sol, `spawned` for a Claude Agent spawn, `cli` for a CLI Claude-chain bind, or a failure reason such as `unavailable`.
 - `selected_tier` — the tier of the first successful bind (first `codex`, `spawned`, or `cli` entry), or `null` paired with a `fallback_reason` string when none bound.
 
@@ -27,5 +27,5 @@ Exit code `1` means a ladder invariant failed.
 Exit code `2` means the path or JSON was unusable.
 The same checks are available in-process via `validate_model_tier_run(run)`.
 
-The validator checks ladder shape only: the candidate slice, the order of bind tries, and the success-token rules per tier. Sol is attempted before Fable when `sol_enabled` is true. `selected_tier: "Sol"` requires `result: "codex"`; `result: "codex"` requires Sol.
+The validator checks ladder shape only: the candidate slice, the order of bind tries, and the success-token rules per tier. Sol is attempted after Fable when `sol_enabled` is true. `selected_tier: "Sol"` requires `result: "codex"`; `result: "codex"` requires Sol.
 Host policy sits on top of it — see the Model floor section of the protocol.

@@ -66,6 +66,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     UNKNOWN_OWN_TIER_MESSAGE,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
+    ADVISOR_FALLBACK_TIER,
     ADVISOR_MODEL_TIER,
     CODEX_BIND_SUCCESS_TOKEN,
     CLI_BIND_SUCCESS_TOKEN,
@@ -114,7 +115,8 @@ def _expected_candidate_tiers(
         floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
     all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
     if is_sol_enabled:
-        all_expected_candidates.insert(0, ADVISOR_MODEL_TIER)
+        fable_index = all_expected_candidates.index(ADVISOR_FALLBACK_TIER)
+        all_expected_candidates.insert(fable_index + 1, ADVISOR_MODEL_TIER)
     return all_expected_candidates
 
 
@@ -146,10 +148,10 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
 
     Candidate tiers must match the floor slice. ``own_tier=ThirdParty`` maps to
     the third-party-host CLI advisor floor (Fable → Opus). Tries walk that
-    slice in order;
-    early stop only after ``spawned`` or ``cli``. A null selected_tier requires
-    a full walk plus fallback_reason (fail-closed on a third-party host when
-    the chain cannot serve).
+    slice in order; Sol sits after Fable when ``is_sol_enabled`` is true.
+    Early stop only after ``spawned``, ``cli``, or Sol ``codex``. A null
+    selected_tier requires a full walk plus fallback_reason (fail-closed on a
+    third-party host when the chain cannot serve).
 
     Args:
         run: The structured spawn-walk log to check.

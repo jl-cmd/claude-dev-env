@@ -1,4 +1,4 @@
-"""Bind and consult a read-only Codex CLI session at Sol xhigh."""
+"""Bind and consult a read-only Codex CLI session at Sol low effort."""
 
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def _resolved_setting_by_name(
 def is_sol_advisor_enabled(
     setting_by_name: Mapping[str, str] | None,
 ) -> bool:
-    """Return whether the optional Sol xhigh rung is enabled.
+    """Return whether the optional Sol rung is enabled.
 
     Args:
         setting_by_name: Optional environment-like settings mapping.
@@ -467,7 +467,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         The parser for the helper's bind and resume modes.
     """
     argument_parser = argparse.ArgumentParser(
-        description="Bind or consult a read-only Codex Sol xhigh advisor."
+        description="Bind or consult a read-only Codex Sol advisor."
     )
     mode_group = argument_parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument("--bind", action="store_true")

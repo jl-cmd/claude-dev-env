@@ -11,6 +11,14 @@ from types import ModuleType
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "config"))
+from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
+    FABLE_ADVISOR_CLI_EFFORT,
+)
+from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
+    SOL_REASONING_EFFORT,
+)
+
 _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -162,7 +170,7 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
         "--model",
         sol_advisor.ADVISOR_CODEX_MODEL_ID,
         "--config",
-        'model_reasoning_effort="xhigh"',
+        'model_reasoning_effort="low"',
         "--sandbox",
         "read-only",
         "--json",
@@ -472,6 +480,19 @@ def test_bind_runs_probe_then_codex_with_read_only_xhigh_settings() -> None:
     assert calls[1][1]["cwd"] == "."
     assert calls[1][1]["shell"] is False
     assert calls[1][1]["timeout"]
+
+
+def test_protocol_docs_name_fable_medium_and_sol_low_usage_fallback() -> None:
+    sol_rung_path = SCRIPTS_ROOT.parent / "reference" / "sol-rung.md"
+    protocol_path = SCRIPTS_ROOT.parent / "advisor-protocol.md"
+    third_party_bind_path = SCRIPTS_ROOT.parent / "reference" / "third-party-bind.md"
+    sol_rung = sol_rung_path.read_text(encoding="utf-8")
+    protocol_text = protocol_path.read_text(encoding="utf-8")
+    third_party_bind_text = third_party_bind_path.read_text(encoding="utf-8")
+
+    assert f'model_reasoning_effort="{SOL_REASONING_EFFORT}"' in sol_rung
+    assert "out of usage" in protocol_text
+    assert f"--effort {FABLE_ADVISOR_CLI_EFFORT}" in third_party_bind_text
 
 
 def test_team_advisor_path_preserves_sol_routing_fields() -> None:
