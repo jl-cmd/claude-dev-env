@@ -52,16 +52,12 @@ def _run_write_stage(
     capsys: pytest.CaptureFixture[str],
 ) -> str:
     payload = _write_payload(file_path, source)
-    getattr(monkeypatch, "setattr")(
-        sys,
-        "stdin",
-        io.StringIO(payload),
-    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
     try:
         main([])
     except SystemExit:
         pass
-    return getattr(capsys, "readouterr")().out
+    return capsys.readouterr().out
 
 
 def _run_precheck_stage(candidate_path: Path, target_path: str) -> subprocess.CompletedProcess[str]:
