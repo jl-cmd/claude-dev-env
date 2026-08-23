@@ -9,9 +9,6 @@ Python hook scripts wired into Claude Code's lifecycle via `settings.json`. Each
 | `advisory/` | Hooks that warn but do not block (`permissionDecision: "ask"`) |
 | `blocking/` | Hooks that deny tool calls when a rule is violated |
 | `blocking/config/` | Shared constants for blocking hooks |
-| `diagnostic/` | Hooks that record and extract hook-firing records into Neon |
-| `diagnostic/migrations/` | SQL migrations for the `hook_events` Neon schema |
-| `diagnostic/queries/` | Parameterized SQL queries for inspecting blocked commands |
 | `git-hooks/` | Native git hooks (`pre-commit`, `pre-push`, `post-commit`) installed via the git-hooks path |
 | `git-hooks/git_hooks_constants/` | Shared constants for the git-hook scripts |
 | `hooks_constants/` | Shared constant modules imported by multiple hooks across this tree (includes `pii_prevention_constants.py` for personal-data and secret scan patterns) |

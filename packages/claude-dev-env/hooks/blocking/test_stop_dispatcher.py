@@ -110,7 +110,7 @@ def test_dispatch_re_emits_first_block_with_system_message_and_suppress(
         (
             "blocking/hedging_language_blocker.py",
             "blocking/question_to_user_enforcer.py",
-            "diagnostic/hook_log_stop_wrapper.py",
+            "blocking/intent_only_ending_blocker.py",
         ),
     )
     dispatch('{"session_id": "test"}')
