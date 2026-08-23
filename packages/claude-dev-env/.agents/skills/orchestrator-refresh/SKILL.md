@@ -10,10 +10,10 @@ description: >-
 
 # Orchestrator Refresh
 
-Detect the host profile first (see Host profiles in
+Name the session identity first (see Host profiles in
 [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)).
 Re-assert the discipline for that host only — do not invent an Agent-tool
-Claude `session-advisor` spawn on a third-party host.
+Claude `session-advisor` spawn on a Codex or third-party host.
 
 ## 0. status_gate first (deterministic)
 
@@ -94,6 +94,10 @@ once, and reports the unreachable advisor.
      the protocol's warm-up rule states;
      `hooks/blocking/fable_spawn_gate.py` denies a fable spawn whose
      prompt lacks it.
+   - **Codex host:** advisor is a native in-session Sol subagent owned
+     by this session. Do **not** spawn Claude `session-advisor` via
+     Agent. Executors consult that Sol subagent in-session. If Sol does
+     not bind, fail closed.
    - **Third-party host:** advisor is a Claude CLI bind owned
      by this session (`claude_chain_runner.py`, Fable then Sol when Fable
      is out of usage, both at `ADVISOR_EFFORT`). Do **not** spawn `session-advisor` via Agent. Executors

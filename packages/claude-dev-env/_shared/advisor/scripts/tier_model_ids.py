@@ -12,6 +12,12 @@
     detect_host_profile(
         setting_by_name={"ADVISOR_HOST_PROFILE": "Claude"}
     )  # ok: "Claude"
+    detect_host_profile(
+        setting_by_name={"ADVISOR_HOST_PROFILE": "Codex"}
+    )  # ok: "Codex"
+    resolve_session_identity("I am Codex")  # ok: "Codex"
+    resolve_session_identity("Claude Code")  # ok: "Claude"
+    resolve_session_identity("grok")  # ok: "ThirdParty"
 
 Values are stable short aliases (``opus``, ``sonnet``, ``third-party``), not dated
 full model IDs such as ``claude-opus-4-…``. The map lives in
@@ -25,6 +31,7 @@ Args and returns for the public helpers are documented on each function.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -43,8 +50,12 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     ALL_KNOWN_TIER_NAMES,
     ALL_THIRD_PARTY_TRUTHY_VALUES,
     HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_CODEX,
     HOST_PROFILE_ENV_VAR,
     HOST_PROFILE_THIRD_PARTY,
+    SESSION_IDENTITY_CLAUDE_TOKEN,
+    SESSION_IDENTITY_CODEX_TOKEN,
+    SESSION_IDENTITY_WORD_PATTERN,
     THIRD_PARTY_ENV_VAR,
     UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_LADDER_NAME_ERROR,
@@ -139,6 +150,65 @@ def resolve_codex_model_id(tier: str) -> str:
     return maybe_model_id
 
 
+def canonical_host_profile(host_profile_name: str) -> str | None:
+    """Return the Title Case host profile for ``host_profile_name``, or ``None``.
+
+    ::
+
+        canonical_host_profile("codex")    # ok: "Codex"
+        canonical_host_profile(" Claude ") # ok: "Claude"
+        canonical_host_profile("Titan")    # ok: None
+        canonical_host_profile("")         # ok: None
+
+    Strips leading and trailing whitespace, then matches any letter case
+    against ``ALL_HOST_PROFILES``.
+
+    Args:
+        host_profile_name: Raw host profile text from env, a spawn log, or a
+            caller.
+
+    Returns:
+        The canonical Title Case host profile, or ``None`` when unknown.
+    """
+    stripped_host_profile_name = host_profile_name.strip()
+    if not stripped_host_profile_name:
+        return None
+    host_profile_by_lower_name = {
+        each_profile.lower(): each_profile for each_profile in ALL_HOST_PROFILES
+    }
+    return host_profile_by_lower_name.get(stripped_host_profile_name.lower())
+
+
+def resolve_session_identity(identity_text: str) -> str:
+    """Map a session's self-identified name to an advisor host profile.
+
+    ::
+
+        resolve_session_identity("I am Codex")   # ok: "Codex"
+        resolve_session_identity("Claude Code")  # ok: "Claude"
+        resolve_session_identity("grok")         # ok: "ThirdParty"
+        resolve_session_identity("")             # ok: "ThirdParty"
+
+    Split the text into letter-or-digit tokens. A ``codex`` token selects
+    Codex. A ``claude`` token selects Claude. Any other identity, including
+    empty text, selects ThirdParty. When both tokens appear, Codex wins.
+
+    Args:
+        identity_text: The session's named identity.
+
+    Returns:
+        ``HOST_PROFILE_CODEX``, ``HOST_PROFILE_CLAUDE``, or
+        ``HOST_PROFILE_THIRD_PARTY``.
+    """
+    identity_word_pattern = re.compile(SESSION_IDENTITY_WORD_PATTERN)
+    all_identity_tokens = identity_word_pattern.findall(identity_text.lower())
+    if SESSION_IDENTITY_CODEX_TOKEN in all_identity_tokens:
+        return HOST_PROFILE_CODEX
+    if SESSION_IDENTITY_CLAUDE_TOKEN in all_identity_tokens:
+        return HOST_PROFILE_CLAUDE
+    return HOST_PROFILE_THIRD_PARTY
+
+
 def detect_host_profile(
     setting_by_name: Mapping[str, str] | None = None,
 ) -> str:
@@ -148,6 +218,8 @@ def detect_host_profile(
 
         detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "ThirdParty"})
         # ok: "ThirdParty"
+        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "Codex"})
+        # ok: "Codex"
         detect_host_profile(setting_by_name={"THIRD_PARTY": "1"})  # ok: "ThirdParty"
         detect_host_profile(setting_by_name={})                   # ok: "Claude"
         detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "X"})
@@ -163,7 +235,8 @@ def detect_host_profile(
         setting_by_name: Env name → setting text (defaults to ``os.environ``).
 
     Returns:
-        ``HOST_PROFILE_THIRD_PARTY`` or ``HOST_PROFILE_CLAUDE``.
+        ``HOST_PROFILE_CODEX``, ``HOST_PROFILE_THIRD_PARTY``, or
+        ``HOST_PROFILE_CLAUDE``.
 
     Raises:
         ValueError: When ``ADVISOR_HOST_PROFILE`` is set to an unknown name.
@@ -175,12 +248,7 @@ def detect_host_profile(
         HOST_PROFILE_ENV_VAR, ""
     ).strip()
     if explicit_host_profile:
-        host_profile_by_lower_name = {
-            each_profile.lower(): each_profile for each_profile in ALL_HOST_PROFILES
-        }
-        maybe_canonical_host = host_profile_by_lower_name.get(
-            explicit_host_profile.lower()
-        )
+        maybe_canonical_host = canonical_host_profile(explicit_host_profile)
         if maybe_canonical_host is None:
             raise ValueError(UNKNOWN_HOST_PROFILE_ERROR.format(explicit_host_profile))
         return maybe_canonical_host

@@ -1,7 +1,7 @@
 """Constants for the model-tier-run validator and CLI / Agent alias map.
 
 They name the parts of a spawn-walk log: the tier ladder (strongest
-first), the two host profiles, and the validation messages. Shared log
+first), the three host profiles, and the validation messages. Shared log
 keys and bind-result tokens live in ``advisor_route_constants``.
 
 ::
@@ -11,9 +11,15 @@ The alias map turns each tier into its short CLI / Agent name (``opus``,
 
 Host-profile detection (see ``detect_host_profile``):
 
-- ``ADVISOR_HOST_PROFILE=ThirdParty`` or ``=Claude`` — explicit override
+- ``ADVISOR_HOST_PROFILE=ThirdParty``, ``=Claude``, or ``=Codex`` — explicit override
 - ``THIRD_PARTY=1`` (or ``true`` / ``yes``) — a third-party (non-Claude) harness
 - default when neither is set: Claude
+
+Session identity (see ``resolve_session_identity``):
+
+- a ``codex`` token maps to Codex
+- a ``claude`` token maps to Claude
+- any other identity maps to ThirdParty
 """
 
 from __future__ import annotations
@@ -24,11 +30,17 @@ from advisor_scripts_constants.advisor_route_constants import (
 )
 
 HOST_PROFILE_CLAUDE: str = "Claude"
+HOST_PROFILE_CODEX: str = "Codex"
 HOST_PROFILE_THIRD_PARTY: str = "ThirdParty"
 ALL_HOST_PROFILES: tuple[str, ...] = (
     HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_CODEX,
     HOST_PROFILE_THIRD_PARTY,
 )
+SESSION_IDENTITY_CLAUDE_TOKEN: str = "claude"
+SESSION_IDENTITY_CODEX_TOKEN: str = "codex"
+SESSION_IDENTITY_WORD_PATTERN: str = r"[a-z0-9]+"
+HOST_PROFILE_JSON_KEY: str = "host_profile"
 
 ALL_MODEL_TIERS: tuple[str, ...] = (
     ADVISOR_FALLBACK_TIER,
@@ -61,8 +73,9 @@ ALL_THIRD_PARTY_TRUTHY_VALUES: frozenset[str] = frozenset(
 UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
 UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"
 UNKNOWN_HOST_PROFILE_ERROR: str = "host profile is not a known profile: {!r}"
+HOST_PROFILE_MUST_BE_STRING_MESSAGE: str = "host_profile must be a string"
 CANDIDATE_TIERS_MISMATCH_MESSAGE: str = (
-    "candidate_tiers does not match the Fable then Sol advisor walk"
+    "candidate_tiers does not match the advisor walk for this host"
 )
 ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE: str = (
     "a spawn try names a tier outside the candidate slice"

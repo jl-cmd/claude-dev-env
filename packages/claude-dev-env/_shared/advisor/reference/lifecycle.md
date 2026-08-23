@@ -12,6 +12,13 @@ One shared advisor exists per orchestrated session, owned by the session that sp
 **Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter.
 A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in that fresh prompt, as a Fable-tier warm-up try does.
 
+## Codex host
+
+The session that spawns the shared Sol subagent owns its whole lifecycle — spawn, drift-respawn, and shutdown.
+Every other consumer reaches it by message alone; spawn, respawn, and shutdown belong to the owning session.
+
+**Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh native Sol subagent with a new charter.
+
 ## Third-party host
 
 The orchestrating session owns the Claude CLI advisor bind for the whole run — first bind, re-bind on drift or lost `session_id`, and fail-closed report when the chain cannot serve.

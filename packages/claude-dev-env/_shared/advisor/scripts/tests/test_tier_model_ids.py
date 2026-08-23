@@ -20,6 +20,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     ALL_KNOWN_TIER_NAMES,
     ALL_MODEL_TIERS,
     HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_CODEX,
     HOST_PROFILE_THIRD_PARTY,
     THIRD_PARTY_MODEL_TIER,
 )
@@ -49,6 +50,8 @@ resolve_cli_model_id = tier_model_ids.resolve_cli_model_id
 resolve_codex_model_id = tier_model_ids.resolve_codex_model_id
 canonical_tier_name = tier_model_ids.canonical_tier_name
 detect_host_profile = tier_model_ids.detect_host_profile
+resolve_session_identity = tier_model_ids.resolve_session_identity
+canonical_host_profile = tier_model_ids.canonical_host_profile
 
 SCRIPTS_ROOT = Path(__file__).parent.parent
 DOCUMENTED_RESOLVE_ONE_LINER = (
@@ -181,6 +184,46 @@ def test_detect_host_profile_reads_explicit_override() -> None:
 def test_detect_host_profile_rejects_unknown_explicit_value() -> None:
     with pytest.raises(ValueError, match="not a known profile"):
         detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "Titan"})
+
+
+def test_canonical_host_profile_normalizes_known_names() -> None:
+    assert canonical_host_profile("codex") == HOST_PROFILE_CODEX
+    assert canonical_host_profile(" Claude ") == HOST_PROFILE_CLAUDE
+    assert canonical_host_profile("Titan") is None
+    assert canonical_host_profile("") is None
+
+
+def test_detect_host_profile_reads_codex_override() -> None:
+    assert (
+        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "Codex"})
+        == HOST_PROFILE_CODEX
+    )
+    assert (
+        detect_host_profile(setting_by_name={"ADVISOR_HOST_PROFILE": "codex"})
+        == HOST_PROFILE_CODEX
+    )
+
+
+def test_resolve_session_identity_maps_codex_text_to_codex() -> None:
+    assert resolve_session_identity("codex") == HOST_PROFILE_CODEX
+    assert resolve_session_identity("I am Codex") == HOST_PROFILE_CODEX
+    assert resolve_session_identity("Codex CLI") == HOST_PROFILE_CODEX
+
+
+def test_resolve_session_identity_maps_claude_text_to_claude() -> None:
+    assert resolve_session_identity("claude") == HOST_PROFILE_CLAUDE
+    assert resolve_session_identity("Claude Code") == HOST_PROFILE_CLAUDE
+
+
+def test_resolve_session_identity_maps_neither_to_third_party() -> None:
+    assert resolve_session_identity("grok") == HOST_PROFILE_THIRD_PARTY
+    assert resolve_session_identity("cursor") == HOST_PROFILE_THIRD_PARTY
+    assert resolve_session_identity("") == HOST_PROFILE_THIRD_PARTY
+    assert resolve_session_identity("   ") == HOST_PROFILE_THIRD_PARTY
+
+
+def test_resolve_session_identity_prefers_codex_when_both_tokens_appear() -> None:
+    assert resolve_session_identity("claude using Codex") == HOST_PROFILE_CODEX
 
 
 def test_documented_resolve_one_liner_runs_without_prior_path_pollution() -> None:

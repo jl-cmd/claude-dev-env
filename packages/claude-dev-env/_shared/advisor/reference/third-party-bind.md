@@ -1,11 +1,11 @@
 # Third-party bind
 
 Detail behind the **Host profiles → Third-party host** section of [`advisor-protocol.md`](../advisor-protocol.md).
-Open this when binding or re-binding the advisor from a third-party (non-Claude) harness.
+Open this when binding or re-binding the advisor from a third-party (non-Claude, non-Codex) harness.
 
 ## Bind steps
 
-1. Detect the host profile first (protocol **Host profiles**).
+1. Name the session identity first (protocol **Host profiles**). This path is for a ThirdParty profile.
 2. Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the sol rung ([`sol-rung.md`](sol-rung.md)) binds Sol after Fable (`candidate_tiers = ["Fable", "Sol"]`).
 3. **CLI bind (primary path):** for each candidate top-down, pipe a charter file into:
 
