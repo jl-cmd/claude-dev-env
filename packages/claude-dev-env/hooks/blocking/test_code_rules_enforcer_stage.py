@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from code_rules_enforcer import (  # noqa: E402
 
 
 PRODUCTION_FILE_PATH = "packages/app/services.py"
+ENFORCER_SCRIPT_PATH = Path(__file__).with_name("code_rules_enforcer.py")
 
 
 def _write_payload(file_path: str, source: str) -> str:
@@ -51,6 +53,22 @@ def _run_write_stage(
     except SystemExit:
         pass
     return getattr(capsys, "readouterr")().out
+
+
+def _run_precheck_stage(candidate_path: Path, target_path: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(ENFORCER_SCRIPT_PATH),
+            "--check",
+            str(candidate_path),
+            "--as",
+            target_path,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_edit_stage_baselines_the_new_fragment_against_the_old_fragment() -> None:
@@ -122,3 +140,20 @@ def test_write_stage_allows_a_clean_candidate_through_the_real_entrypoint(
     captured_stdout = _run_write_stage(target_path, source, monkeypatch, capsys)
 
     assert captured_stdout == ""
+
+
+def test_precheck_stage_runs_the_cli_and_uses_the_declared_target_path(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    staging_directory = tmp_path_factory.mktemp("stage")
+    candidate_path = staging_directory / "candidate.py"
+    candidate_path.write_text(
+        "def process_data() -> None:\n    print('payload')\n",
+        encoding="utf-8",
+    )
+    target_path = str(staging_directory / "service.py")
+
+    completed_process = _run_precheck_stage(candidate_path, target_path)
+
+    assert completed_process.returncode == 1
+    assert "process_data" in completed_process.stdout
