@@ -601,6 +601,28 @@ def _build_denial(all_offending_paths: list[str]) -> dict:
     }
 
 
+def _resolve_hook_working_directory(
+    bash_command: str,
+    hook_payload: dict[str, object],
+) -> str | None:
+    """Resolve the commit directory from the command or its event payload.
+
+    Args:
+        bash_command: Bash command whose explicit directory takes precedence.
+        hook_payload: PreToolUse payload carrying the event ``cwd``.
+
+    Returns:
+        The validated commit directory, or None for the hook process directory.
+    """
+    command_directory = extract_git_working_directory(bash_command)
+    if command_directory is not None:
+        return resolve_directory(command_directory)
+    event_directory = hook_payload.get("cwd")
+    if not isinstance(event_directory, str) or not event_directory:
+        return None
+    return resolve_directory(event_directory)
+
+
 def main() -> None:
     """Deny a git commit that would drop a tracked file that was edited yet left unstaged."""
     hook_payload = read_hook_input_dictionary_from_stdin()
@@ -620,7 +642,7 @@ def main() -> None:
     session_edited_keys = _session_edited_keys(session_id)
     if not session_edited_keys:
         sys.exit(0)
-    working_directory = resolve_directory(extract_git_working_directory(bash_command))
+    working_directory = _resolve_hook_working_directory(bash_command, hook_payload)
     repository_root = resolve_repository_root(working_directory)
     if repository_root is None:
         sys.exit(0)

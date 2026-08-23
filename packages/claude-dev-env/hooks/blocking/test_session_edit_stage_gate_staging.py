@@ -9,8 +9,8 @@ _TEST_DIRECTORY = Path(__file__).resolve().parent
 if str(_TEST_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TEST_DIRECTORY))
 
-from test_session_edit_stage_gate import (  # noqa: E402
-    _make_directories,
+from test_session_edit_stage_gate_support import (  # noqa: E402
+    make_test_directories,
     parse_dispatcher_decision,
     prepare_repository_with_unstaged_edit,
     run_bash_dispatcher,
@@ -23,7 +23,7 @@ SESSION_ID = "staging-production-session"
 
 def test_dispatcher_denies_tracker_recorded_unstaged_edit(tmp_path: Path) -> None:
     """The Bash dispatcher denies a commit for a tracker-recorded edit."""
-    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    repository_root, temp_directory, home_directory = make_test_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
     tracker_run = run_tracker_event(
         tracked_file, SESSION_ID, repository_root, temp_directory, home_directory
@@ -46,7 +46,7 @@ def test_dispatcher_denies_tracker_recorded_unstaged_edit(tmp_path: Path) -> Non
 
 def test_dispatcher_allows_specific_staging_segment(tmp_path: Path) -> None:
     """The Bash dispatcher accepts a commit preceded by a specific git add."""
-    repository_root, temp_directory, home_directory = _make_directories(tmp_path)
+    repository_root, temp_directory, home_directory = make_test_directories(tmp_path)
     tracked_file = prepare_repository_with_unstaged_edit(repository_root)
     tracker_run = run_tracker_event(
         tracked_file, SESSION_ID, repository_root, temp_directory, home_directory
