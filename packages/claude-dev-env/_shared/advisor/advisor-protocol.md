@@ -15,7 +15,7 @@ The sections below hold the standing rules; open a reference file at the moment 
 |---|---|
 | Binding on a Claude host | [`reference/warm-up.md`](reference/warm-up.md) — spawn fields, Fable token, charter |
 | Binding from a third-party host | [`reference/third-party-bind.md`](reference/third-party-bind.md) — CLI bind steps, fail-closed rule |
-| Fable is out of usage | [`reference/sol-rung.md`](reference/sol-rung.md) — Sol low-effort fallback |
+| Fable is out of usage | [`reference/sol-rung.md`](reference/sol-rung.md) — Sol fallback at shared effort |
 | Composing a consult | [`reference/consult-format.md`](reference/consult-format.md) — packet, new-evidence and report-back rules |
 | Assembling an executor spawn prompt | [`reference/advisor-block.md`](reference/advisor-block.md) — the paste parts |
 | Advisor drifts, dies, or the task pivots | [`reference/lifecycle.md`](reference/lifecycle.md) — re-spawn and re-bind steps |
@@ -32,53 +32,48 @@ Detection order:
 2. `THIRD_PARTY=1` (or `true` / `yes` / `on`) — a third-party (non-Claude) harness.
 3. Default: Claude.
 
+### Shared effort — any host
+
+Fable and Sol both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). The default is `low`.
+Pass `--effort <level>` on the Sol helper to set effort for that Sol run.
+Pass `--effort <level>` on the Claude CLI bind for Fable. An unset or unrecognized value uses `low`.
+
 ### Sol rung — any host
 
 When Fable is out of usage, bind Sol through the Codex helper.
 Open that attempt with `ADVISOR_SOL=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-sol` on the helper invocation.
-Set effort with `ADVISOR_SOL_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`); the default is `low`. Pass `--effort <level>` on the helper to set effort for that run.
-Flag off both ways: continue the Claude ladder at Opus.
-Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight continues the Claude ladder at Opus.
+Flag off both ways: fail closed when Fable did not bind.
+Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight fails closed when Fable did not bind.
 
 ### Claude host
 
-Use the **Model floor** ladder below (Fable first, then Sol when Fable is out of usage, then Opus).
+Use the **Model floor** ladder below (Fable first, then Sol when Fable is out of usage).
 Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Third-party host
 
-On a third-party (non-Claude) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind a **max-tier Claude advisor** through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
+On a third-party (non-Claude) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind Fable through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
 The bound Claude session is the advisor; this third-party session stays the executor.
-Floor **Opus**; walk `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. When Fable is out of usage, the sol rung binds between Fable and Opus (`candidate_tiers = ["Fable", "Sol", "Opus"]`).
+Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the sol rung binds after Fable (`candidate_tiers = ["Fable", "Sol"]`).
 **Fail closed:** when every candidate fails, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop** — ENDORSE / CORRECTION / PLAN / STOP come only from a bound advisor.
 Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 
 ## Model floor
 
-**Claude host:** the advisor's model tier must be at or above the highest tier of any consumer that will reach it. Each consuming skill supplies its own consumer set when computing the floor:
-- `team-advisor`: the sole consumer is the calling session itself, so the floor is the stronger of Opus and that session's own tier.
-- `orchestrator`: the consumer set is the orchestrating session plus every tier named in its routing table, so the floor is the stronger of Opus and the max of those.
-
-Whatever the consumer set, the floor sits at Opus or above — use the stronger of Opus and the strongest consumer tier.
-
-**Third-party host:** the CLI advisor floor is fixed at **Opus** (walk Fable → Opus only), whatever the session's own tier.
-
-Ladder: `Fable` first, then sol (flag-gated, Codex CLI) when Fable is out of usage, then `Opus`.
-Advisors bind at Opus or above; `Sonnet` and `Haiku` are executor tiers only.
+The advisor ladder is `Fable` first, then sol (flag-gated, Codex CLI) when Fable is out of usage.
+Opus is not an advisor candidate. `Sonnet` and `Haiku` are executor tiers only.
+Consumer `own_tier` is recorded on the spawn-walk log; it does not add Opus to the advisor walk.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
-Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier.
-Each try resolves its candidate tier to the short model alias via the tier-to-alias map in [`reference/cli-chain.md`](reference/cli-chain.md).
-The advisor is created at `selected_tier` — the first ladder tier that binds — which may sit above the floor.
-When even the floor tier fails on a Claude host, move to the **CLI chain** fallback below.
-On a third-party host the CLI chain is already the primary path, so floor failure fails closed per **Host profiles → Third-party host**.
+Try binds top-down. Each try resolves its candidate tier to the short model alias via the tier-to-alias map in [`reference/cli-chain.md`](reference/cli-chain.md).
+The advisor is created at `selected_tier` — the first ladder tier that binds.
+When Fable fails on a Claude host, try Sol if the flag is on, else fail closed. The CLI chain is the Fable bind path on a third-party host and the Claude-host fallback for Fable; it does not bind Opus as advisor.
+On a third-party host the CLI chain is already the primary path, so a failed Fable (and Sol, when enabled) walk fails closed per **Host profiles → Third-party host**.
 
 Emit a structured spawn-walk log so the walk can be checked mechanically: [`reference/spawn-walk-log.md`](reference/spawn-walk-log.md).
 The validator checks ladder shape only; host policy sits on top.
 
-**Equal-tier pairings.** Bind a same-tier advisor when the goal is an independent second pass.
-For irreversible or security-sensitive work, pair a top-tier executor with a top-tier advisor for independent frontier review.
-The floor rule holds — the advisor sits at or above the strongest consumer's tier — and an equal-tier bind sits inside that bound.
+**Equal-tier pairings.** Bind Fable for an independent second pass on irreversible or security-sensitive work. The advisor is Fable or Sol.
 
 ## Warm-up (once per session)
 

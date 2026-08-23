@@ -17,5 +17,5 @@ A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in th
 The orchestrating session owns the Claude CLI advisor bind for the whole run — first bind, re-bind on drift or lost `session_id`, and fail-closed report when the chain cannot serve.
 
 **Re-bind on drift.** If a reply shows a stale picture, the task pivots, or `--resume` fails after a usage-limit failover (session stores are per binary/account), re-bind through `claude_chain_runner.py` with the charter plus a compact recap of consults so far.
-Capture the new `session_id`, and log a fresh Fable→Opus walk with `result: "cli"` on success.
+Capture the new `session_id`, and log a fresh Fable walk with `result: "cli"` on success, then Sol when that rung is open.
 Executors keep reporting to the orchestrating session; advisor binding stays with that session alone.

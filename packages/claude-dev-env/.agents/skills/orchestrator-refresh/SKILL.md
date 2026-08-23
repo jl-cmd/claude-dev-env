@@ -95,8 +95,8 @@ once, and reports the unreachable advisor.
      `hooks/blocking/fable_spawn_gate.py` denies a fable spawn whose
      prompt lacks it.
    - **Third-party host:** advisor is a Claude CLI bind owned
-     by this session (`claude_chain_runner.py`, Fable medium, then Sol
-     low when Fable is out of usage, then Opus xhigh). Do **not** spawn `session-advisor` via Agent. Executors
+     by this session (`claude_chain_runner.py`, Fable then Sol when Fable
+     is out of usage, both at `ADVISOR_EFFORT`). Do **not** spawn `session-advisor` via Agent. Executors
      report blockers here; consult the CLI advisor and relay signals.
      If the CLI bind is unreachable, fail closed — do not answer the
      four signals as this third-party session.

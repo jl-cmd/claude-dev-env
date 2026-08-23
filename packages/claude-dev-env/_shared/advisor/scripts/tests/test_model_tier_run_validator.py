@@ -40,7 +40,7 @@ CODEX_BIND_SUCCESS_TOKEN = model_tier_run_validator.CODEX_BIND_SUCCESS_TOKEN
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "spawned"}],
         selected_tier="Fable",
     )
@@ -50,7 +50,7 @@ def test_clean_single_spawn_at_top_of_slice_passes() -> None:
 def test_sol_codex_bind_succeeds_after_fable_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
@@ -64,7 +64,7 @@ def test_sol_codex_bind_succeeds_after_fable_when_enabled() -> None:
 def test_fable_success_with_sol_enabled_stops_before_sol() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[{"tier": "Fable", "result": "spawned"}],
         selected_tier="Fable",
         is_sol_enabled=True,
@@ -75,7 +75,7 @@ def test_fable_success_with_sol_enabled_stops_before_sol() -> None:
 def test_sol_first_walk_raises_when_sol_is_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable"],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
         selected_tier=ADVISOR_MODEL_TIER,
         is_sol_enabled=True,
@@ -87,7 +87,7 @@ def test_sol_first_walk_raises_when_sol_is_enabled() -> None:
 def test_sol_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
@@ -102,7 +102,7 @@ def test_sol_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
 def test_sol_codex_result_requires_sol_candidate() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": CODEX_BIND_SUCCESS_TOKEN}],
         selected_tier="Fable",
     )
@@ -113,7 +113,7 @@ def test_sol_codex_result_requires_sol_candidate() -> None:
 def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": "spawned"},
@@ -125,15 +125,13 @@ def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
         validate_model_tier_run(run)
 
 
-def test_fallthrough_to_floor_tier_passes() -> None:
+def test_exhausted_fable_walk_fails_closed() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "spawned"},
-        ],
-        selected_tier="Opus",
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        selected_tier=None,
+        fallback_reason="Fable did not bind; no advisor",
     )
     assert validate_model_tier_run(run) is None
 
@@ -141,21 +139,18 @@ def test_fallthrough_to_floor_tier_passes() -> None:
 def test_fully_exhausted_walk_with_fallback_reason_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "unavailable"},
-        ],
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="every candidate tier failed; CLI fallback took over",
+        fallback_reason="every candidate tier failed",
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_candidate_tiers_shorter_than_ladder_slice_raises() -> None:
+def test_opus_candidate_on_advisor_walk_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
+        candidate_tiers=["Fable", "Opus"],
         attempts=[{"tier": "Fable", "result": "spawned"}],
         selected_tier="Fable",
     )
@@ -166,7 +161,7 @@ def test_candidate_tiers_shorter_than_ladder_slice_raises() -> None:
 def test_attempt_tier_outside_candidate_slice_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Haiku", "result": "spawned"}],
         selected_tier="Haiku",
     )
@@ -177,12 +172,13 @@ def test_attempt_tier_outside_candidate_slice_raises() -> None:
 def test_attempts_out_of_ladder_order_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[
-            {"tier": "Opus", "result": "unavailable"},
-            {"tier": "Fable", "result": "spawned"},
+            {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
+            {"tier": "Fable", "result": "unavailable"},
         ],
-        selected_tier="Fable",
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -191,12 +187,13 @@ def test_attempts_out_of_ladder_order_raises() -> None:
 def test_selected_tier_not_first_spawned_attempt_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[
             {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "spawned"},
+            {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier="Fable",
+        is_sol_enabled=True,
     )
     with pytest.raises(
         ModelTierRunError,
@@ -211,12 +208,9 @@ def test_selected_tier_not_first_spawned_attempt_raises() -> None:
 def test_exhausted_walk_with_non_null_selected_tier_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "unavailable"},
-        ],
-        selected_tier="Opus",
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        selected_tier="Fable",
         fallback_reason="every candidate tier failed",
     )
     with pytest.raises(ModelTierRunError):
@@ -226,11 +220,8 @@ def test_exhausted_walk_with_non_null_selected_tier_raises() -> None:
 def test_exhausted_walk_missing_fallback_reason_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "unavailable"},
-        ],
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
     )
     with pytest.raises(ModelTierRunError):
@@ -251,7 +242,7 @@ def test_unknown_own_tier_raises() -> None:
 def test_empty_attempts_with_null_selected_tier_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[],
         selected_tier=None,
         fallback_reason="skipped straight to CLI fallback",
@@ -260,13 +251,14 @@ def test_empty_attempts_with_null_selected_tier_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_incomplete_fallback_walk_before_floor_raises() -> None:
+def test_incomplete_fallback_walk_before_sol_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="stopped after Fable without trying Opus",
+        fallback_reason="stopped after Fable without trying Sol",
+        is_sol_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -275,12 +267,9 @@ def test_incomplete_fallback_walk_before_floor_raises() -> None:
 def test_lowercase_own_tier_and_candidates_pass() -> None:
     run = ModelTierRun(
         own_tier="opus",
-        candidate_tiers=["fable", "opus"],
-        attempts=[
-            {"tier": "fable", "result": "unavailable"},
-            {"tier": "opus", "result": "spawned"},
-        ],
-        selected_tier="opus",
+        candidate_tiers=["fable"],
+        attempts=[{"tier": "fable", "result": "spawned"}],
+        selected_tier="fable",
     )
     assert validate_model_tier_run(run) is None
 
@@ -291,7 +280,7 @@ def test_cli_validates_json_log_file(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable", "Opus"],
+                "candidate_tiers": ["Fable"],
                 "attempts": [{"tier": "Fable", "result": "spawned"}],
                 "selected_tier": "Fable",
             }
@@ -309,7 +298,7 @@ def test_cli_rejects_non_boolean_sol_enabled(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable", "Opus"],
+                "candidate_tiers": ["Fable"],
                 "attempts": [{"tier": "Fable", "result": "spawned"}],
                 "selected_tier": "Fable",
                 "sol_enabled": "false",
@@ -326,10 +315,11 @@ def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable", "Opus"],
+                "candidate_tiers": ["Fable", "Sol"],
                 "attempts": [{"tier": "Fable", "result": "unavailable"}],
                 "selected_tier": None,
                 "fallback_reason": "incomplete",
+                "sol_enabled": True,
             }
         ),
         encoding="utf-8",
@@ -344,14 +334,14 @@ def test_cli_missing_path_returns_usage_exit_code() -> None:
 def test_cli_bind_at_fable_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Fable",
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_cli_bind_fallthrough_to_opus_passes() -> None:
+def test_cli_bind_fallthrough_to_opus_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", "Opus"],
@@ -361,13 +351,14 @@ def test_cli_bind_fallthrough_to_opus_passes() -> None:
         ],
         selected_tier="Opus",
     )
-    assert validate_model_tier_run(run) is None
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
 
 
-def test_third_party_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
+def test_third_party_own_tier_maps_to_fable_cli_bind_passes() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Fable",
     )
@@ -377,7 +368,7 @@ def test_third_party_own_tier_maps_to_fable_opus_cli_bind_passes() -> None:
 def test_third_party_own_tier_lowercase_cli_bind_passes() -> None:
     run = ModelTierRun(
         own_tier="thirdparty",
-        candidate_tiers=["fable", "opus"],
+        candidate_tiers=["fable"],
         attempts=[{"tier": "fable", "result": "cli"}],
         selected_tier="fable",
     )
@@ -387,7 +378,7 @@ def test_third_party_own_tier_lowercase_cli_bind_passes() -> None:
 def test_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "self"}],
         selected_tier="Fable",
     )
@@ -398,7 +389,7 @@ def test_self_token_is_not_bind_success_raises() -> None:
 def test_third_party_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "self"}],
         selected_tier="Fable",
     )
@@ -420,11 +411,8 @@ def test_third_party_host_legacy_single_tier_self_bind_raises() -> None:
 def test_third_party_cli_exhausted_fail_closed_passes() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "unavailable"},
-        ],
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
         fallback_reason=(
             "third-party host CLI Claude-chain exhausted; fail closed"
@@ -436,11 +424,8 @@ def test_third_party_cli_exhausted_fail_closed_passes() -> None:
 def test_third_party_cli_exhausted_without_fallback_reason_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "unavailable"},
-        ],
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
     )
     with pytest.raises(ModelTierRunError):
@@ -450,7 +435,7 @@ def test_third_party_cli_exhausted_without_fallback_reason_raises() -> None:
 def test_third_party_cli_selected_tier_mismatch_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Opus",
     )
@@ -461,7 +446,7 @@ def test_third_party_cli_selected_tier_mismatch_raises() -> None:
 def test_claude_host_self_token_is_not_spawn_success_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "self"}],
         selected_tier="Fable",
     )

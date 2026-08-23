@@ -8,7 +8,7 @@ Open this when binding the warm advisor on a Claude host, and for the charter te
 The consuming skill's session walks the candidate tiers top-down. For each try, spawn with:
 
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../../agents/session-advisor.md) for the full signal contract).
-- `model`: the short alias for that try's candidate tier via `resolve_cli_model_id` (alias table: [`cli-chain.md`](cli-chain.md)) — for example `opus`. The floor is the lower bound of the walk; the walk tries stronger tiers first.
+- `model`: the short alias for that try's candidate tier via `resolve_cli_model_id` (alias table: [`cli-chain.md`](cli-chain.md)) — for example `fable`. The walk tries Fable first, then Sol when that rung is open.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
 - `prompt`: the charter below. A **Fable**-tier try carries the exact token `FABLE-SPAWN-AUTHORIZED` in that prompt — `hooks/blocking/fable_spawn_gate.py` denies every `Agent` or `Task` spawn at `model: fable` whose prompt lacks that token. A try at any other tier needs no token.

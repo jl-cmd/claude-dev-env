@@ -2,7 +2,7 @@
 
 Warm-advisor bind-and-consult protocol shared by `team-advisor`, `orchestrator`, `orchestrator-refresh`, and every executor subagent `orchestrator` routes work to. Changes here affect all of these simultaneously — treat this as a breaking-change surface.
 
-Host profile (Claude vs third-party) is detected first; Claude walks the multi-tier Agent spawn ladder (CLI chain as fallback), a third-party host binds a max-tier Claude advisor through the CLI Claude-chain (fail closed when the chain cannot serve) with a separate executor paste block.
+Host profile (Claude vs third-party) is detected first; Claude walks Fable then Sol (CLI chain as the Fable fallback), a third-party host binds Fable through the CLI Claude-chain (fail closed when Fable and Sol cannot serve) with a separate executor paste block.
 
 ## Key documents
 
@@ -14,7 +14,7 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 
 | Entry | Description |
 |---|---|
-| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks, including optional Sol), `codex_sol_advisor.py` (read-only Sol low-effort bind and resume), `tier_model_ids.py` (Claude aliases, Codex model ids, and host detection), and `advisor_scripts_constants` under `scripts/config/` (ladder, bind tokens, aliases, host profiles, and SendMessage wait bound) |
+| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks, including optional Sol), `codex_sol_advisor.py` (read-only Sol bind and resume at shared `ADVISOR_EFFORT`), `tier_model_ids.py` (Claude aliases, Codex model ids, and host detection), and `advisor_scripts_constants` under `scripts/config/` (ladder, bind tokens, aliases, host profiles, shared effort, and SendMessage wait bound) |
 | `reference/` | Progressive-disclosure detail behind protocol stub sections: `warm-up.md`, `third-party-bind.md`, `sol-rung.md`, `consult-format.md`, `advisor-block.md`, `lifecycle.md`, `cli-chain.md`, and `spawn-walk-log.md` |
 
 ## Breaking-change rule

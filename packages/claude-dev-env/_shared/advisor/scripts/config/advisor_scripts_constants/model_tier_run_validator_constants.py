@@ -42,7 +42,6 @@ ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (
     *ALL_MODEL_TIERS,
     THIRD_PARTY_MODEL_TIER,
 )
-THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER: str = "Opus"
 
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
 
@@ -63,7 +62,7 @@ UNKNOWN_OWN_TIER_MESSAGE: str = "own_tier is not a known model tier"
 UNKNOWN_LADDER_NAME_ERROR: str = "ladder name is not a known model tier: {!r}"
 UNKNOWN_HOST_PROFILE_ERROR: str = "host profile is not a known profile: {!r}"
 CANDIDATE_TIERS_MISMATCH_MESSAGE: str = (
-    "candidate_tiers does not match the ladder slice down to own_tier"
+    "candidate_tiers does not match the Fable then Sol advisor walk"
 )
 ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE: str = (
     "a spawn try names a tier outside the candidate slice"

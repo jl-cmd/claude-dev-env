@@ -6,9 +6,9 @@ Detail behind the **Model floor** section of [`advisor-protocol.md`](../advisor-
 
 Write the log as JSON with these field names:
 
-- `own_tier` — the floor tier.
-- `candidate_tiers` — the ladder slice down to that floor.
-- `sol_enabled` — a boolean recorded before candidate selection; `true` adds Sol after Fable and `false` walks the Claude ladder alone.
+- `own_tier` — the consuming session's tier (recorded; it does not add Opus to the advisor walk).
+- `candidate_tiers` — Fable, plus Sol when `sol_enabled` is true.
+- `sol_enabled` — a boolean recorded before candidate selection; `true` adds Sol after Fable and `false` walks Fable alone.
 - `attempts` — one `{tier, result}` entry appended as each bind try happens; `result` is `codex` only for Sol, `spawned` for a Claude Agent spawn, `cli` for a CLI Claude-chain bind, or a failure reason such as `unavailable`.
 - `selected_tier` — the tier of the first successful bind (first `codex`, `spawned`, or `cli` entry), or `null` paired with a `fallback_reason` string when none bound.
 

@@ -22,7 +22,6 @@ if _config_directory_text not in sys.path:
 
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
-    ALL_SOL_EFFORT_LEVELS,
     ALL_SOL_TRUTHY_VALUES,
     CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
@@ -38,7 +37,6 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_BIND_FAILURE_REASON,
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
-    SOL_EFFORT_ENV_VAR,
     SOL_EFFORT_FLAG,
     SOL_ENABLE_FLAG,
     SOL_ENV_VAR,
@@ -50,16 +48,18 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_MISSING_SESSION_REASON,
     SOL_PREFLIGHT_FAILURE_REASON,
     SOL_PROBE_TIMEOUT_REASON,
-    SOL_REASONING_EFFORT,
     SOL_REPLY_FAILURE_REASON,
     SOL_SESSION_ID_METAVAR,
     SOL_USAGE_PROBE_TIMEOUT_SECONDS,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
     ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_EFFORT_DEFAULT,
+    ADVISOR_EFFORT_ENV_VAR,
     ADVISOR_FALLBACK_RESULT,
     ADVISOR_FALLBACK_TIER,
     ADVISOR_MODEL_TIER,
+    ALL_ADVISOR_EFFORT_LEVELS,
     ALL_ADVISOR_GUIDANCE_SIGNALS,
     CODEX_BIND_SUCCESS_TOKEN,
     SPAWN_OUTCOME_KEY,
@@ -162,24 +162,26 @@ def is_sol_advisor_enabled(
     )
 
 
-def resolve_sol_reasoning_effort(
+def resolve_advisor_effort(
     setting_by_name: Mapping[str, str] | None,
 ) -> str:
-    """Return the Codex Sol reasoning effort from settings, or the default.
+    """Return the shared advisor effort from settings, or the default.
 
     ::
 
-        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "medium"})
+        resolve_advisor_effort({"ADVISOR_EFFORT": "medium"})
         # ok: "medium"
-        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "MAX"})
+        resolve_advisor_effort({"ADVISOR_EFFORT": "MAX"})
         # ok: "max"
-        resolve_sol_reasoning_effort({})
+        resolve_advisor_effort({})
         # ok: default low
-        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "nope"})
+        resolve_advisor_effort({"ADVISOR_EFFORT": "nope"})
+        # ok: default low
+        resolve_advisor_effort({"ADVISOR_SOL_EFFORT": "high"})
         # ok: default low
 
-    Unset and unrecognized values use the default low effort so a typo
-    still binds Sol.
+    Fable and Sol both read this value. Unset and unrecognized values use
+    low. The Sol-only name does not set effort.
 
     Args:
         setting_by_name: Optional environment-like settings mapping.
@@ -189,11 +191,11 @@ def resolve_sol_reasoning_effort(
     """
     resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
     requested_effort = (
-        resolved_setting_by_name.get(SOL_EFFORT_ENV_VAR, "").strip().lower()
+        resolved_setting_by_name.get(ADVISOR_EFFORT_ENV_VAR, "").strip().lower()
     )
-    if requested_effort in ALL_SOL_EFFORT_LEVELS:
+    if requested_effort in ALL_ADVISOR_EFFORT_LEVELS:
         return requested_effort
-    return SOL_REASONING_EFFORT
+    return ADVISOR_EFFORT_DEFAULT
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
@@ -328,7 +330,7 @@ def resolve_codex_executable(
 def build_codex_arguments(
     codex_executable: str,
     session_id: str | None = None,
-    reasoning_effort: str = SOL_REASONING_EFFORT,
+    reasoning_effort: str = ADVISOR_EFFORT_DEFAULT,
 ) -> list[str]:
     """Build the installed CLI's shell-free bind or resume argv.
 
@@ -478,7 +480,7 @@ def run_codex_sol_advisor(
             build_codex_arguments(
                 codex_executable,
                 session_id=session_id,
-                reasoning_effort=resolve_sol_reasoning_effort(setting_by_name),
+                reasoning_effort=resolve_advisor_effort(setting_by_name),
             ),
             cwd=str(working_directory),
             input=prompt,
@@ -526,9 +528,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
     argument_parser.add_argument(
         SOL_EFFORT_FLAG,
         dest="sol_effort",
-        choices=ALL_SOL_EFFORT_LEVELS,
+        choices=ALL_ADVISOR_EFFORT_LEVELS,
         default=None,
-        help="Codex Sol reasoning effort for this invocation.",
+        help="Shared advisor effort for this invocation.",
     )
     return argument_parser
 
@@ -547,7 +549,7 @@ def main(all_cli_arguments: Sequence[str]) -> int:
     if parsed_arguments.is_sol_requested:
         setting_by_name[SOL_ENV_VAR] = "1"
     if parsed_arguments.sol_effort is not None:
-        setting_by_name[SOL_EFFORT_ENV_VAR] = parsed_arguments.sol_effort
+        setting_by_name[ADVISOR_EFFORT_ENV_VAR] = parsed_arguments.sol_effort
     advisor_reply = run_codex_sol_advisor(
         prompt=sys.stdin.read(),
         working_directory=parsed_arguments.cwd,
