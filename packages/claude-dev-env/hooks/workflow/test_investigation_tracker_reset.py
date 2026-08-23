@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import importlib.util
 import io
 import json
@@ -23,12 +22,15 @@ HOOK_MODULE = importlib.util.module_from_spec(HOOK_SPEC)
 HOOK_SPEC.loader.exec_module(HOOK_MODULE)
 
 
-def _run_main(input_text: str) -> None:
-    with (
-        mock.patch("sys.stdin", io.StringIO(input_text)),
-        contextlib.suppress(SystemExit),
-    ):
-        HOOK_MODULE.main()
+def _run_main(input_text: str) -> int | None:
+    with mock.patch("sys.stdin", io.StringIO(input_text)):
+        try:
+            HOOK_MODULE.main()
+        except SystemExit as system_exit:
+            if system_exit.code not in (None, 0):
+                raise
+            return system_exit.code if isinstance(system_exit.code, int) else None
+    return None
 
 
 @pytest.mark.parametrize("delegation_tool", ["Agent", "Task", "TeamCreate"])
@@ -40,8 +42,9 @@ def test_main_removes_tracker_after_delegation(
     tracker_path.write_text("{}", encoding="utf-8")
     HOOK_MODULE.__dict__["TRACKER_STATE_PATH"] = str(tracker_path)
 
-    _run_main(json.dumps({"tool_name": delegation_tool}))
+    exit_status = _run_main(json.dumps({"tool_name": delegation_tool}))
 
+    assert exit_status in (None, 0)
     assert not tracker_path.exists()
 
 
@@ -54,8 +57,9 @@ def test_main_keeps_tracker_for_unrelated_tool(
     tracker_path.write_text("{}", encoding="utf-8")
     HOOK_MODULE.__dict__["TRACKER_STATE_PATH"] = str(tracker_path)
 
-    _run_main(json.dumps({"tool_name": unrelated_tool}))
+    exit_status = _run_main(json.dumps({"tool_name": unrelated_tool}))
 
+    assert exit_status in (None, 0)
     assert tracker_path.exists()
 
 
@@ -68,8 +72,9 @@ def test_main_ignores_invalid_input(
     tracker_path.write_text("{}", encoding="utf-8")
     HOOK_MODULE.__dict__["TRACKER_STATE_PATH"] = str(tracker_path)
 
-    _run_main(invalid_input)
+    exit_status = _run_main(invalid_input)
 
+    assert exit_status in (None, 0)
     assert tracker_path.exists()
 
 
@@ -79,6 +84,7 @@ def test_main_keeps_running_when_tracker_removal_fails(tmp_path: Path) -> None:
     HOOK_MODULE.__dict__["TRACKER_STATE_PATH"] = str(tracker_path)
 
     with mock.patch.object(HOOK_MODULE.os, "remove", side_effect=OSError("locked")):
-        _run_main(json.dumps({"tool_name": "Agent"}))
+        exit_status = _run_main(json.dumps({"tool_name": "Agent"}))
 
+    assert exit_status in (None, 0)
     assert tracker_path.exists()
