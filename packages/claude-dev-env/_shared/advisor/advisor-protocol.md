@@ -34,8 +34,9 @@ Detection order:
 
 ### Sol rung — any host
 
-When Fable is out of usage, bind Sol at low effort through the Codex helper.
-Open that attempt with `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-sol` on the helper invocation.
+When Fable is out of usage, bind Sol through the Codex helper.
+Open that attempt with `ADVISOR_SOL=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-sol` on the helper invocation.
+Set effort with `ADVISOR_SOL_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`); the default is `low`. Pass `--effort <level>` on the helper to set effort for that run.
 Flag off both ways: continue the Claude ladder at Opus.
 Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight continues the Claude ladder at Opus.
 

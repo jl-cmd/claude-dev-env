@@ -22,6 +22,9 @@ if _config_directory_text not in sys.path:
 
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
+    ALL_SOL_EFFORT_LEVELS,
+    ALL_SOL_TRUTHY_VALUES,
+    CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
     CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
@@ -29,15 +32,16 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
     CODEX_READ_ONLY_SANDBOX,
-    CODEX_REASONING_CONFIG,
+    CODEX_REASONING_CONFIG_TEMPLATE,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
-    CLAUDE_CONFIG_DIRECTORY_NAME,
     SOL_BIND_FAILURE_REASON,
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
-    SOL_ENV_VAR,
+    SOL_EFFORT_ENV_VAR,
+    SOL_EFFORT_FLAG,
     SOL_ENABLE_FLAG,
+    SOL_ENV_VAR,
     SOL_EXECUTABLE_NOT_FOUND_REASON,
     SOL_FALLBACK_KIND_BROKEN,
     SOL_FALLBACK_KIND_DECLINED,
@@ -46,9 +50,9 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_MISSING_SESSION_REASON,
     SOL_PREFLIGHT_FAILURE_REASON,
     SOL_PROBE_TIMEOUT_REASON,
+    SOL_REASONING_EFFORT,
     SOL_REPLY_FAILURE_REASON,
     SOL_SESSION_ID_METAVAR,
-    ALL_SOL_TRUTHY_VALUES,
     SOL_USAGE_PROBE_TIMEOUT_SECONDS,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
@@ -156,6 +160,40 @@ def is_sol_advisor_enabled(
         resolved_setting_by_name.get(SOL_ENV_VAR, "").strip().lower()
         in ALL_SOL_TRUTHY_VALUES
     )
+
+
+def resolve_sol_reasoning_effort(
+    setting_by_name: Mapping[str, str] | None,
+) -> str:
+    """Return the Codex Sol reasoning effort from settings, or the default.
+
+    ::
+
+        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "medium"})
+        # ok: "medium"
+        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "MAX"})
+        # ok: "max"
+        resolve_sol_reasoning_effort({})
+        # ok: default low
+        resolve_sol_reasoning_effort({"ADVISOR_SOL_EFFORT": "nope"})
+        # ok: default low
+
+    Unset and unrecognized values use the default low effort so a typo
+    still binds Sol.
+
+    Args:
+        setting_by_name: Optional environment-like settings mapping.
+
+    Returns:
+        One of low, medium, high, xhigh, or max.
+    """
+    resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
+    requested_effort = (
+        resolved_setting_by_name.get(SOL_EFFORT_ENV_VAR, "").strip().lower()
+    )
+    if requested_effort in ALL_SOL_EFFORT_LEVELS:
+        return requested_effort
+    return SOL_REASONING_EFFORT
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
@@ -290,12 +328,14 @@ def resolve_codex_executable(
 def build_codex_arguments(
     codex_executable: str,
     session_id: str | None = None,
+    reasoning_effort: str = SOL_REASONING_EFFORT,
 ) -> list[str]:
     """Build the installed CLI's shell-free bind or resume argv.
 
     Args:
         codex_executable: Resolved executable name or path to invoke.
         session_id: Optional existing session to resume.
+        reasoning_effort: Codex model_reasoning_effort token.
 
     Returns:
         The shell-free Codex command argument vector.
@@ -306,7 +346,7 @@ def build_codex_arguments(
         CODEX_MODEL_FLAG,
         ADVISOR_CODEX_MODEL_ID,
         CODEX_CONFIG_FLAG,
-        CODEX_REASONING_CONFIG,
+        CODEX_REASONING_CONFIG_TEMPLATE.format(effort=reasoning_effort),
         CODEX_SANDBOX_FLAG,
         CODEX_READ_ONLY_SANDBOX,
         CODEX_JSON_FLAG,
@@ -435,7 +475,11 @@ def run_codex_sol_advisor(
         )
     try:
         completed_process = process_runner(
-            build_codex_arguments(codex_executable, session_id=session_id),
+            build_codex_arguments(
+                codex_executable,
+                session_id=session_id,
+                reasoning_effort=resolve_sol_reasoning_effort(setting_by_name),
+            ),
             cwd=str(working_directory),
             input=prompt,
             capture_output=True,
@@ -479,6 +523,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open the Sol rung for this invocation without an environment flag.",
     )
+    argument_parser.add_argument(
+        SOL_EFFORT_FLAG,
+        dest="sol_effort",
+        choices=ALL_SOL_EFFORT_LEVELS,
+        default=None,
+        help="Codex Sol reasoning effort for this invocation.",
+    )
     return argument_parser
 
 
@@ -492,9 +543,11 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         Zero for a successful Sol response, or one for an explicit fallback.
     """
     parsed_arguments = build_argument_parser().parse_args(list(all_cli_arguments))
-    setting_by_name: Mapping[str, str] = os.environ
+    setting_by_name: dict[str, str] = dict(os.environ)
     if parsed_arguments.is_sol_requested:
-        setting_by_name = {**os.environ, SOL_ENV_VAR: "1"}
+        setting_by_name[SOL_ENV_VAR] = "1"
+    if parsed_arguments.sol_effort is not None:
+        setting_by_name[SOL_EFFORT_ENV_VAR] = parsed_arguments.sol_effort
     advisor_reply = run_codex_sol_advisor(
         prompt=sys.stdin.read(),
         working_directory=parsed_arguments.cwd,

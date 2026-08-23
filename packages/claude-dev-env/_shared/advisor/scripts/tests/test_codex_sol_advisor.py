@@ -105,8 +105,40 @@ def _two_step_process_runner(calls: list[list[str]], guidance: str) -> _ProcessR
 
 
 def test_sol_flag_accepts_documented_truthy_values() -> None:
-    assert sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "yes"})
-    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "0"})
+    assert sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL": "yes"})
+    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL": "0"})
+    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "1"})
+
+
+def test_resolve_sol_reasoning_effort_defaults_and_accepts_documented_levels() -> None:
+    assert (
+        sol_advisor.resolve_sol_reasoning_effort({}) == SOL_REASONING_EFFORT
+    )
+    assert sol_advisor.resolve_sol_reasoning_effort(
+        {"ADVISOR_SOL_EFFORT": "MEDIUM"}
+    ) == "medium"
+    assert sol_advisor.resolve_sol_reasoning_effort(
+        {"ADVISOR_SOL_EFFORT": "nope"}
+    ) == SOL_REASONING_EFFORT
+
+
+@pytest.mark.parametrize(
+    "reasoning_effort",
+    ["low", "medium", "high", "xhigh", "max"],
+)
+def test_codex_arguments_use_selected_sol_reasoning_effort(
+    reasoning_effort: str,
+) -> None:
+    command_arguments = sol_advisor.build_codex_arguments(
+        "codex",
+        reasoning_effort=reasoning_effort,
+    )
+    config_flag_index = command_arguments.index("--config")
+
+    assert (
+        command_arguments[config_flag_index + 1]
+        == f'model_reasoning_effort="{reasoning_effort}"'
+    )
 
 
 def test_resolve_usage_probe_path_uses_supplied_home_directory(tmp_path: Path) -> None:
@@ -334,6 +366,40 @@ def test_enable_sol_flag_opens_the_rung_without_an_environment_flag(
     assert payload["fallback_kind"] == sol_advisor.SOL_FALLBACK_KIND_DECLINED
 
 
+def test_effort_cli_flag_overrides_environment_effort(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured_settings: dict[str, str] = {}
+
+    def fake_advisor(**kwargs: object) -> object:
+        captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
+        return sol_advisor._reply_fallback(
+            "probe declined",
+            True,
+            fallback_kind=sol_advisor.SOL_FALLBACK_KIND_DECLINED,
+        )
+
+    monkeypatch.setattr(sol_advisor, "run_codex_sol_advisor", fake_advisor)
+    monkeypatch.setenv("ADVISOR_SOL_EFFORT", "high")
+    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
+
+    exit_code = sol_advisor.main(
+        [
+            "--bind",
+            "--cwd",
+            ".",
+            sol_advisor.SOL_ENABLE_FLAG,
+            sol_advisor.SOL_EFFORT_FLAG,
+            "medium",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert captured_settings["ADVISOR_SOL_EFFORT"] == "medium"
+    assert payload["fallback_kind"] == sol_advisor.SOL_FALLBACK_KIND_DECLINED
+
+
 def test_successful_probe_requires_finite_meter_above_configured_gate() -> None:
     def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         return _probe_process({"percent_left": 90})
@@ -493,6 +559,10 @@ def test_protocol_docs_name_fable_medium_and_sol_low_usage_fallback() -> None:
     assert f'model_reasoning_effort="{SOL_REASONING_EFFORT}"' in sol_rung
     assert "out of usage" in protocol_text
     assert f"--effort {FABLE_ADVISOR_CLI_EFFORT}" in third_party_bind_text
+    assert "ADVISOR_SOL=1" in protocol_text
+    assert "ADVISOR_SOL_EFFORT" in sol_rung
+    assert "ADVISOR_SOL_XHIGH" not in protocol_text
+    assert "ADVISOR_SOL_XHIGH" not in sol_rung
 
 
 def test_team_advisor_path_preserves_sol_routing_fields() -> None:
