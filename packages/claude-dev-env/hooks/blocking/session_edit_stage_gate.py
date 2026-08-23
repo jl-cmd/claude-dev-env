@@ -18,6 +18,7 @@ blocks on infrastructure trouble.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -615,12 +616,19 @@ def _resolve_hook_working_directory(
         The validated commit directory, or None for the hook process directory.
     """
     command_directory = extract_git_working_directory(bash_command)
-    if command_directory is not None:
-        return resolve_directory(command_directory)
     event_directory = hook_payload.get("cwd")
     if not isinstance(event_directory, str) or not event_directory:
+        return resolve_directory(command_directory)
+    validated_event_directory = resolve_directory(event_directory)
+    if command_directory is None:
+        return validated_event_directory
+    expanded_command_directory = os.path.expanduser(command_directory)
+    command_path = Path(expanded_command_directory)
+    if command_path.is_absolute():
+        return resolve_directory(str(command_path))
+    if validated_event_directory is None:
         return None
-    return resolve_directory(event_directory)
+    return resolve_directory(str(Path(validated_event_directory) / command_path))
 
 
 def main() -> None:

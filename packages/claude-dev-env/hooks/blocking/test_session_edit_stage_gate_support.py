@@ -83,6 +83,21 @@ def make_test_directories(tmp_path: Path) -> tuple[Path, Path, Path]:
     return repository_root, temp_directory, home_directory
 
 
+def make_process_repository(tmp_path: Path) -> Path:
+    """Create a separate Git repository for the dispatcher process directory."""
+    process_repository = tmp_path / "process-repository"
+    process_repository.mkdir()
+    initialize_repository(process_repository)
+    return process_repository
+
+
+def prepare_process_child_repository(process_repository: Path) -> None:
+    """Create the relative command directory inside process repository B."""
+    process_child_repository = process_repository / "child"
+    process_child_repository.mkdir()
+    initialize_repository(process_child_repository)
+
+
 def build_hook_environment(
     temp_directory: Path,
     home_directory: Path,
