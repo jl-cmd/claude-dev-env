@@ -42,7 +42,6 @@ hook_spec.loader.exec_module(hook_module)
 
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
-    LOCK_ACQUIRE_TIMEOUT_SECONDS,
     SESSION_EDIT_FILE_PREFIX,
     SESSION_EDIT_FILE_SUFFIX,
     STATE_FILE_DEFAULT_SESSION_ID,
@@ -91,6 +90,16 @@ def _session_end_payload(session_id: str) -> str:
     return json.dumps({"session_id": session_id, "hook_event_name": "SessionEnd"})
 
 
+def _configured_cleanup_timeout_seconds() -> int:
+    hooks_configuration = json.loads((_HOOKS_TREE / "hooks.json").read_text(encoding="utf-8"))
+    for each_event_name in ("SessionStart", "SessionEnd"):
+        for each_matcher in hooks_configuration["hooks"][each_event_name]:
+            for each_hook in each_matcher["hooks"]:
+                if each_hook["command"].endswith("session_edit_tracker_cleanup.py"):
+                    return int(each_hook["timeout"])
+    raise AssertionError("session edit cleanup hook is not configured")
+
+
 def test_main_keeps_other_session_stale_tracker(
     redirected_temp_directory: pathlib.Path,
 ) -> None:
@@ -132,7 +141,7 @@ def test_should_keep_current_session_tracker_on_continuation(
     assert current_file.exists()
 
 
-def test_resume_preserves_edit_record_within_configured_cleanup_timeout(
+def test_resume_preserves_edit_record_within_configured_hook_timeout(
     redirected_temp_directory: pathlib.Path,
 ) -> None:
     current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
@@ -140,16 +149,22 @@ def test_resume_preserves_edit_record_within_configured_cleanup_timeout(
         json.dumps({ALL_EDITED_FILE_PATHS_KEY: ["packages/example.py"]}),
         encoding="utf-8",
     )
-    _age_file(current_file, LOCK_ACQUIRE_TIMEOUT_SECONDS * 2)
+    configured_timeout_seconds = _configured_cleanup_timeout_seconds()
+    _age_file(current_file, configured_timeout_seconds * 2)
 
-    started_at = time.perf_counter()
-    _run_main_with_stdin(_session_continuation_payload("currentsession", "resume"))
-    elapsed_seconds = time.perf_counter() - started_at
+    with mock.patch.object(
+        time,
+        "perf_counter",
+        side_effect=(0.0, configured_timeout_seconds / 2),
+    ):
+        started_at = time.perf_counter()
+        _run_main_with_stdin(_session_continuation_payload("currentsession", "resume"))
+        elapsed_seconds = time.perf_counter() - started_at
 
     assert json.loads(current_file.read_text(encoding="utf-8")) == {
         ALL_EDITED_FILE_PATHS_KEY: ["packages/example.py"]
     }
-    assert elapsed_seconds < LOCK_ACQUIRE_TIMEOUT_SECONDS
+    assert elapsed_seconds < configured_timeout_seconds
 
 
 def test_should_remove_current_session_tracker_on_session_end(
