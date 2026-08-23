@@ -61,6 +61,9 @@ ALL_SCOPE_AWARE_RULE_NAMES = frozenset(
 )
 
 
+SCOPE_AWARE_RULE_NAMES = ALL_SCOPE_AWARE_RULE_NAMES
+
+
 NARROW_EDIT_ACCEPTED_RULE_NAMES = frozenset(
     {
         "check_string_literal_magic",
@@ -236,6 +239,14 @@ def test_narrow_edit_acceptance_set_is_source_backed_and_complete() -> None:
 
     assert all_fixture_rule_names == NARROW_EDIT_ACCEPTED_RULE_NAMES
     assert NARROW_EDIT_ACCEPTED_RULE_NAMES <= ALL_SCOPE_AWARE_RULE_NAMES
+
+
+def test_required_rule_fixtures_name_scope_aware_dispatches() -> None:
+    all_fixture_rule_names = {
+        each_fixture.rule_name for each_fixture in ALL_REQUIRED_RULE_FIXTURES
+    }
+
+    assert all_fixture_rule_names <= SCOPE_AWARE_RULE_NAMES
 
 
 def test_narrow_edit_drops_an_untouched_banned_noun() -> None:
