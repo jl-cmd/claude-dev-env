@@ -122,10 +122,11 @@ pending, or when the tool is `CronCreate`.
    `rearm_pending` when already active, but still do not re-arm.)
 2. **Bind the shared advisor before any executor.** Follow
    [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-   end to end: detect the host profile, compute the floor from the
+   end to end: name the session identity, compute the floor from the
    orchestrator consumer set — this session plus every tier in the
-   routing table (its Model floor section) — walk the ladder (Fable first,
-   then Sol when Fable is out of usage),
+   routing table (its Model floor section) — walk the ladder for that
+   host (Claude: Fable first, then Sol when Fable is out of usage;
+   Codex: Sol in-session; ThirdParty: headless Fable then Sol),
    and fail closed when nothing binds. This session owns the advisor's
    whole lifecycle (its Lifecycle ownership section); executors only ever
    message the warm agent or report here, and an executor that finds the
@@ -262,8 +263,8 @@ Routing rules:
   way — the coding spawn stops and the orchestrator reports it.
 - Host detection follows
   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-  (Host profiles section, `detect_host_profile`) — the sole detection
-  system, with no second one.
+  (Host profiles section, `resolve_session_identity` then
+  `detect_host_profile`) — the sole detection system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
 - Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).

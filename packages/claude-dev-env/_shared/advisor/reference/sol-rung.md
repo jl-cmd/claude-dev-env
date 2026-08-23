@@ -1,7 +1,8 @@
 # Sol rung
 
-Detail behind the **Host profiles → Sol rung — any host** section of [`advisor-protocol.md`](../advisor-protocol.md).
-Open this when Fable is out of usage and a Sol fallback bind is starting.
+Detail behind the **Host profiles → Sol rung** section of [`advisor-protocol.md`](../advisor-protocol.md).
+Open this when Fable is out of usage on a Claude or ThirdParty host and a Sol fallback bind is starting.
+On a Codex host, Sol is the in-session default; see [`identity.md`](identity.md).
 
 ## Flag
 

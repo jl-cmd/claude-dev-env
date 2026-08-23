@@ -16,15 +16,15 @@ One warm advisor at the strongest tier this session can reach. This session is t
 | Doc | Holds |
 |---|---|
 | [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
-| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — host detect, model floor, warm-up, CLI fallback; its read map routes each moment to a `reference/` detail file. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — session identity, host detect, model floor, warm-up, CLI fallback; its read map routes each moment to a `reference/` detail file. |
 | [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
 | [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background — read it when tuning the bind, not on every consult. |
 
 ## Bind
 
-1. Detect the host profile first (protocol **Host profiles**), then walk the model floor.
-2. Ladder: Fable first at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Sol at the same effort. When neither binds, fail closed.
-3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); one CLI `session_id` on a third-party host via the protocol Claude-chain.
+1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
+2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Sol at the same effort. Codex: Sol in-session. Third-party: headless Fable then Sol. When the host's walk fails, fail closed.
+3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Sol subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain.
 4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
 5. Skip the multi-consumer "who you are" opener — sole consumer.
 6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
@@ -41,6 +41,6 @@ Aim for two consults on a normal task: one after orientation and one after write
 
 ## Constraints
 
-- One bind per session; this session owns spawn or CLI bind, drift re-bind, and shutdown.
+- One bind per session; this session owns spawn, in-session Sol spawn, or CLI bind, drift re-bind, and shutdown.
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.

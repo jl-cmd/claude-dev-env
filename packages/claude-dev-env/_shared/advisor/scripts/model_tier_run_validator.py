@@ -22,6 +22,15 @@ from data, not inferred from a transcript.
     )
     validate_model_tier_run(cli_bind)  # ok: third-party-host CLI Claude-chain bind
 
+    codex_bind = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Sol"],
+        attempts=[{"tier": "Sol", "result": "spawned"}],
+        selected_tier="Sol",
+        host_profile="Codex",
+    )
+    validate_model_tier_run(codex_bind)  # ok: Codex in-session Sol spawn
+
 A run whose selected_tier is not the first successful bind fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
 
@@ -53,11 +62,16 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     CLI_SUCCESS_EXIT_CODE,
     CLI_USAGE_MESSAGE,
     CLI_VALIDATION_FAILURE_EXIT_CODE,
+    HOST_PROFILE_CLAUDE,
+    HOST_PROFILE_CODEX,
+    HOST_PROFILE_JSON_KEY,
+    HOST_PROFILE_MUST_BE_STRING_MESSAGE,
     INCOMPLETE_FALLBACK_WALK_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
     THIRD_PARTY_MODEL_TIER,
+    UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
@@ -69,7 +83,7 @@ from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
     SPAWN_SUCCESS_TOKEN,
     TIER_KEY,
 )
-from tier_model_ids import canonical_tier_name  # noqa: E402
+from tier_model_ids import canonical_host_profile, canonical_tier_name  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -80,6 +94,7 @@ class ModelTierRun:
     selected_tier: str | None
     fallback_reason: str | None = None
     is_sol_enabled: bool = False
+    host_profile: str = HOST_PROFILE_CLAUDE
 
 
 class ModelTierRunError(ValueError):
@@ -97,13 +112,20 @@ def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
 
 
 def _expected_candidate_tiers(
-    own_tier: str, is_sol_enabled: bool = False
+    own_tier: str,
+    is_sol_enabled: bool = False,
+    host_profile: str = HOST_PROFILE_CLAUDE,
 ) -> list[str]:
     maybe_canonical_own_tier = canonical_tier_name(own_tier)
     if maybe_canonical_own_tier is None:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     if maybe_canonical_own_tier == ADVISOR_MODEL_TIER:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
+    maybe_canonical_host = canonical_host_profile(host_profile)
+    if maybe_canonical_host is None:
+        raise ModelTierRunError(UNKNOWN_HOST_PROFILE_ERROR.format(host_profile))
+    if maybe_canonical_host == HOST_PROFILE_CODEX:
+        return [ADVISOR_MODEL_TIER]
     all_expected_candidates = [ADVISOR_FALLBACK_TIER]
     if is_sol_enabled:
         all_expected_candidates.append(ADVISOR_MODEL_TIER)
@@ -113,10 +135,16 @@ def _expected_candidate_tiers(
 def _is_successful_attempt_outcome(
     canonical_tier: str,
     outcome_token: str,
+    host_profile: str = HOST_PROFILE_CLAUDE,
 ) -> bool:
+    maybe_canonical_host = canonical_host_profile(host_profile)
     if canonical_tier == THIRD_PARTY_MODEL_TIER:
         return False
     if canonical_tier == ADVISOR_MODEL_TIER:
+        if maybe_canonical_host == HOST_PROFILE_CODEX:
+            if outcome_token == SPAWN_SUCCESS_TOKEN:
+                return True
+            return outcome_token == CODEX_BIND_SUCCESS_TOKEN
         return outcome_token == CODEX_BIND_SUCCESS_TOKEN
     if outcome_token == CODEX_BIND_SUCCESS_TOKEN:
         return False
@@ -136,11 +164,13 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers are Fable, plus Sol when ``is_sol_enabled`` is true.
-    Consumer ``own_tier`` is recorded and must be a known tier; it does not
-    add Opus to the advisor walk. Tries walk that list in order. Early stop
-    only after ``spawned``, ``cli``, or Sol ``codex``. A null selected_tier
-    requires a full walk plus fallback_reason.
+    Candidate tiers are Fable, plus Sol when ``is_sol_enabled`` is true, on
+    Claude and ThirdParty hosts. A Codex host walks Sol only. Consumer
+    ``own_tier`` is recorded and must be a known tier; it does not add Opus
+    to the advisor walk. Tries walk that list in order. Early stop only
+    after ``spawned``, ``cli``, or Sol ``codex`` (and Sol ``spawned`` on a
+    Codex host). A null selected_tier requires a full walk plus
+    fallback_reason.
 
     Args:
         run: The structured spawn-walk log to check.
@@ -154,6 +184,7 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
     all_expected_candidates = _expected_candidate_tiers(
         run.own_tier,
         is_sol_enabled=run.is_sol_enabled,
+        host_profile=run.host_profile,
     )
     maybe_canonical_candidates = _canonical_tier_list(run.candidate_tiers)
     if maybe_canonical_candidates != all_expected_candidates:
@@ -190,6 +221,7 @@ def _validate_selected_tier(
         if _is_successful_attempt_outcome(
             canonical_tier=each_tier,
             outcome_token=each_attempt[SPAWN_OUTCOME_KEY],
+            host_profile=run.host_profile,
         )
     ]
     if all_bound_tiers:
@@ -228,6 +260,9 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
     raw_sol_enabled = parsed_payload.get("sol_enabled", False)
     if not isinstance(raw_sol_enabled, bool):
         raise TypeError("sol_enabled must be a boolean")
+    raw_host_profile = parsed_payload.get(HOST_PROFILE_JSON_KEY, HOST_PROFILE_CLAUDE)
+    if not isinstance(raw_host_profile, str):
+        raise TypeError(HOST_PROFILE_MUST_BE_STRING_MESSAGE)
     return ModelTierRun(
         own_tier=parsed_payload["own_tier"],
         candidate_tiers=list(parsed_payload["candidate_tiers"]),
@@ -235,6 +270,7 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         selected_tier=parsed_payload.get("selected_tier"),
         fallback_reason=parsed_payload.get("fallback_reason"),
         is_sol_enabled=raw_sol_enabled,
+        host_profile=raw_host_profile,
     )
 
 

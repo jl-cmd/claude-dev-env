@@ -290,6 +290,24 @@ def test_cli_validates_json_log_file(tmp_path: Path) -> None:
     assert main([str(log_path)]) == 0
     loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
     assert loaded_run.selected_tier == "Fable"
+    assert loaded_run.host_profile == "Claude"
+
+
+def test_cli_rejects_non_string_host_profile(tmp_path: Path) -> None:
+    log_path = tmp_path / "invalid-host-profile.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": ["Fable"],
+                "attempts": [{"tier": "Fable", "result": "spawned"}],
+                "selected_tier": "Fable",
+                "host_profile": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 2
 
 
 def test_cli_rejects_non_boolean_sol_enabled(tmp_path: Path) -> None:
@@ -452,3 +470,71 @@ def test_claude_host_self_token_is_not_spawn_success_raises() -> None:
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
+
+
+def test_codex_host_sol_in_session_spawn_passes() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_codex_host_sol_codex_token_counts_as_success() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[
+            {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}
+        ],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_codex_host_fable_then_sol_walk_raises() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
+        host_profile="Codex",
+    )
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
+
+
+def test_codex_host_exhausted_sol_fails_closed() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "unavailable"}],
+        selected_tier=None,
+        fallback_reason="Codex in-session Sol spawn did not bind",
+        host_profile="Codex",
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_cli_loads_codex_host_profile(tmp_path: Path) -> None:
+    log_path = tmp_path / "codex-host-walk.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": ["Sol"],
+                "attempts": [{"tier": "Sol", "result": "spawned"}],
+                "selected_tier": "Sol",
+                "host_profile": "Codex",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 0
+    loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
+    assert loaded_run.host_profile == "Codex"

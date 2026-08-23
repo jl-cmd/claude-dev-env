@@ -12,6 +12,10 @@ The consult rules it restates are owned by [`consult-format.md`](consult-format.
 
 > A shared session advisor named `<name>` is reachable via SendMessage; send each consult to it directly by that name.
 
+## Transport preamble — Codex host
+
+> A shared session advisor named `<name>` is reachable as a native Codex Sol subagent; send each consult to it in-session by that name.
+
 ## Transport preamble — third-party host
 
 > The orchestrating session owns a standing advisor for this run.
