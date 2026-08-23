@@ -2,6 +2,9 @@
 
 SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, injecting working-style guidance, and clearing PR-author swap state at shutdown.
 
+The working-style projection uses `~/.claude/rules/asd-ste100-language.md` for
+user-facing word choice, sentence style, tone, punctuation, and prose form.
+
 ## Key files
 
 | File | Event | What it does |
@@ -17,7 +20,7 @@ SessionStart and SessionEnd hooks for per-session setup and cleanup: removing st
 | `_path_setup.py` | — | Inserts the hooks directory on `sys.path` so SessionStart scripts import `hooks_constants` with top-level imports. |
 | `test_orchestrator_auto_starter.py` | — | Tests for `orchestrator_auto_starter.py` |
 | `test_issue_tracker_session_starter.py` | — | Tests for `issue_tracker_session_starter.py` |
-| `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, plain English, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
+| `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, canonical language policy, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
 | `test_session_env_cleanup.py` | — | Tests for `session_env_cleanup.py` |

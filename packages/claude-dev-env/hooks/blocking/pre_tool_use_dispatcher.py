@@ -26,16 +26,6 @@ from pathlib import Path
 
 import _path_setup  # noqa: F401
 
-from plain_language_blocker import (
-    build_allow_advisory_payload as build_plain_language_allow_advisory_payload,
-)
-from plain_language_blocker import (
-    build_deny_payload as build_plain_language_deny_payload,
-)
-from plain_language_blocker import evaluate as evaluate_plain_language
-from plain_language_blocker import (
-    evaluate_with_advisory as evaluate_plain_language_with_advisory,
-)
 from state_description_blocker import (
     build_deny_payload as build_state_description_deny_payload,
 )
@@ -50,7 +40,6 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (
     DENY_DECISION,
     EXIT_CODE_TWO_DENY_REASON,
     HOOK_EVENT_NAME,
-    PLAIN_LANGUAGE_BLOCKER_MODULE_NAME,
     REASON_JOIN_SEPARATOR,
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
     SYSTEM_MESSAGE_JOIN_SEPARATOR,
@@ -77,7 +66,7 @@ class NativeHook:
             additionalContext, and suppressOutput).
         evaluate_with_advisory: Optional evaluator that returns
             ``(deny_reason, advisory_system_message)`` so allow-path notices
-            match the standalone hook (plain_language OP-07D).
+            match the standalone hook.
         build_allow_advisory_payload: Optional builder for an allow payload that
             carries the advisory systemMessage without denying.
     """
@@ -92,12 +81,6 @@ _native_hook_by_module_name: dict[str, NativeHook] = {
     STATE_DESCRIPTION_BLOCKER_MODULE_NAME: NativeHook(
         evaluate=evaluate_state_description,
         build_deny_payload=build_state_description_deny_payload,
-    ),
-    PLAIN_LANGUAGE_BLOCKER_MODULE_NAME: NativeHook(
-        evaluate=evaluate_plain_language,
-        build_deny_payload=build_plain_language_deny_payload,
-        evaluate_with_advisory=evaluate_plain_language_with_advisory,
-        build_allow_advisory_payload=build_plain_language_allow_advisory_payload,
     ),
 }
 
@@ -504,7 +487,7 @@ def _emit_allow_decision(decision: DispatcherDecision) -> None:
     Matches the shape a standalone hosted hook emits when it auto-approves the
     write, so a write a hosted hook allows explicitly is auto-approved under the
     dispatcher rather than falling back to the default permission flow. When a
-    hook also carried an advisory systemMessage (plain-language heavy words),
+    hook also carried an advisory systemMessage,
     that notice rides on the allow payload without denying.
     """
     allow_payload: dict[str, object] = {

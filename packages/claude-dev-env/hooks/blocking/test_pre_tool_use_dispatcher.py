@@ -289,34 +289,6 @@ def test_clean_write_allows_on_multi_edit_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
-def test_plain_language_heavy_prose_allows_on_write_of_markdown_file() -> None:
-    """Dispatcher matches individual hooks: heavy prose allows (OP-07D advisory)."""
-    payload_text = _write_payload(
-        _MARKDOWN_FILE_PATH,
-        "# Guide\n\nPlease utilize this functionality to commence the process.\n",
-    )
-    _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
-
-
-def test_plain_language_heavy_prose_allows_on_edit_of_markdown_file() -> None:
-    """Dispatcher matches individual hooks: heavy prose Edit allows (OP-07D)."""
-    payload_text = _edit_payload(
-        _MARKDOWN_FILE_PATH,
-        "old line",
-        "Please utilize this functionality to commence the process.\n",
-    )
-    _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
-
-
-def test_plain_language_heavy_prose_allows_on_multi_edit_of_markdown_file() -> None:
-    """Dispatcher matches individual hooks: heavy prose MultiEdit allows (OP-07D)."""
-    payload_text = _multi_edit_payload(
-        _MARKDOWN_FILE_PATH,
-        [{"old_string": "old", "new_string": "Please utilize this functionality to commence."}],
-    )
-    _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
-
-
 def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
     """The dispatcher docstring names the roster, not per-tool counts that drift."""
     dispatcher_source = Path(_DISPATCHER_SCRIPT).read_text(encoding="utf-8")
@@ -331,9 +303,8 @@ def test_multi_edit_runs_only_group_b_hooks() -> None:
 
     The write_existing_file_blocker (Group A only) must not run on MultiEdit,
     so a MultiEdit to any path that would trip a Group-A hook must still allow.
-    Heavy prose no longer denies (OP-07D); this test proves Group A is absent
-    from MultiEdit and that plain_language_blocker stays in the MultiEdit set
-    and still runs (allow-with-advisory on heavy prose).
+    This test proves Group A is absent from MultiEdit and the remaining Group-B
+    hooks stay in the applicable set.
     """
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
     all_write_only_entries = [
@@ -349,20 +320,14 @@ def test_multi_edit_runs_only_group_b_hooks() -> None:
             f"Group-A hook {each_group_a_entry.script_relative_path!r} "
             "appears in the MultiEdit applicable set — it must not"
         )
-    assert "blocking/plain_language_blocker.py" in all_multi_edit_script_paths, (
-        "plain_language_blocker (Group B) must stay in the MultiEdit applicable set"
-    )
-    heavy_prose_payload = _multi_edit_payload(
+    clean_payload = _multi_edit_payload(
         _MARKDOWN_FILE_PATH,
-        [{"old_string": "old line", "new_string": "Utilize this to commence the process."}],
+        [{"old_string": "old line", "new_string": "New text."}],
     )
-    dispatcher_result = _run_dispatcher(heavy_prose_payload)
+    dispatcher_result = _run_dispatcher(clean_payload)
     dispatcher_is_deny, _reason = _parse_hook_decision(dispatcher_result)
     assert not dispatcher_is_deny, (
-        "Dispatcher should allow MultiEdit heavy prose (OP-07D advisory path)"
-    )
-    assert dispatcher_result.stdout.strip(), (
-        "plain_language_blocker should emit an allow advisory on MultiEdit heavy prose"
+        "Dispatcher should allow a clean MultiEdit payload"
     )
 
 
@@ -417,7 +382,7 @@ def test_write_existing_file_blocker_does_not_run_on_multi_edit() -> None:
 
     The dispatcher must allow a MultiEdit to an existing file path even though
     write_existing_file_blocker would deny the same path on a Write.
-    Uses a non-markdown file so plain_language_blocker stays silent.
+    Uses a non-markdown file so markdown-only hooks stay silent.
     """
     existing_file_path = str(Path(__file__).resolve())
     payload_text = _multi_edit_payload(
@@ -453,8 +418,7 @@ def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
 
     Uses a Write to an existing markdown path with a historical phrase
     ("previously") so write_existing_file_blocker and state_description_blocker
-    both deny. Heavy words no longer hard-deny (OP-07D), so plain_language is
-    not a denier.
+    both deny.
     """
     existing_markdown_path = str(Path(__file__).resolve().parent / "CLAUDE.md")
     multi_deny_content = (
@@ -689,9 +653,8 @@ def test_later_hook_deny_survives_early_hook_exit() -> None:
     """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
 
     state_description_blocker denies a markdown write with a historical phrase.
-    Earlier hooks exit 0 (allow). Heavy words no longer hard-deny (OP-07D). The
-    dispatcher must catch each hook's SystemExit and continue, so the later
-    denial reaches the aggregator.
+    Earlier hooks exit 0 (allow). The dispatcher must catch each hook's
+    SystemExit and continue, so the later denial reaches the aggregator.
     """
     payload_text = _write_payload(
         _MARKDOWN_FILE_PATH,
@@ -712,11 +675,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/write_existing_file_blocker.py" in all_write_script_paths, (
         "write_existing_file_blocker (Group A) must be in Write applicable set"
     )
-    assert "blocking/plain_language_blocker.py" in all_write_script_paths, (
-        "plain_language_blocker (Group B) must be in Write applicable set"
-    )
-    assert len(all_write_entries) == 19, (
-        f"Write tool must apply to all 19 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 18, (
+        f"Write tool must apply to all 18 hosted hooks, got {len(all_write_entries)}"
     )
 
 
@@ -732,16 +692,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "advisory/refactor_guard.py" in all_edit_script_paths, (
         "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 22, (
-        f"expected 22 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 21, (
+        f"expected 21 Edit entries, got {len(all_edit_entries)}"
     )
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (10 hooks), not Group A."""
+    """MultiEdit tool triggers only Group B (8 hooks), not Group A."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 9, (
-        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert len(all_multi_edit_entries) == 8, (
+        f"MultiEdit tool must apply to exactly 8 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
@@ -973,7 +933,6 @@ def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
         "blocking/claude_md_orphan_file_blocker.py",
         "blocking/pytest_testpaths_orphan_blocker.py",
         "blocking/open_questions_in_plans_blocker.py",
-        "blocking/plain_language_blocker.py",
     })
     for each_script_path in previously_registered_blocking_hooks:
         assert each_script_path in all_hosted_script_paths, (

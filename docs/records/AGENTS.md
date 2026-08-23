@@ -13,4 +13,5 @@ operations they supported finished.
 
 | Directory | Role |
 |-----------|------|
+| `asd-ste100-language-policy/` | Archive record for retired general language specifiers and the active ASD-STE100 policy owner. |
 | `pii-hygiene/` | Decision log for issue #945 current-tree PII scrub (what stays as-is, what changed in this branch, and what is still blocked on an owner decision). |

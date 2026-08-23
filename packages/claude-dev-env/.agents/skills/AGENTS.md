@@ -2,6 +2,8 @@
 
 Each skill is a self-contained folder Claude Code loads on demand. At startup, only the skill's `name` and `description` metadata load. The full `SKILL.md` body and any support files load only when a skill becomes relevant to the conversation.
 
+Skill bodies use `~/.claude/rules/asd-ste100-language.md` for user-facing word choice, sentence style, tone, punctuation, and prose form. Each skill keeps its capability-specific output contract.
+
 ## Skill folder convention
 
 | Item | Role |
@@ -45,7 +47,7 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 
 **Research and discovery**
 - `everything-search` — file-system search via the Everything `es.exe` CLI on Windows
-- `eli5` — concise beginner-friendly HTML explanations with large visuals and minimal text
+- `eli5` — owns beginner framing, large visuals, minimal text, one stable self-contained HTML artifact, update-in-place continuity, and sharing
 
 **Source commands**
 - `source-command-logifix` — restore the Logitech Gaming Software tray icon on Windows

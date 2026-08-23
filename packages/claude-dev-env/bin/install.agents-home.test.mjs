@@ -30,6 +30,7 @@ const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
 const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
 const SHIPPED_SKILL_NAME = 'privacy-hygiene';
+const ELI5_SKILL_NAME = 'eli5';
 const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
 const PERSONAL_SKILL_NAME = 'my-notes';
 
@@ -70,13 +71,20 @@ test('a full install writes skills and agents under .agents and points .claude a
         const canonicalSkillFile = join(
             skillsInstallDirectory, SHIPPED_SKILL_NAME, 'SKILL.md',
         );
+        const canonicalEli5SkillFile = join(
+            skillsInstallDirectory, ELI5_SKILL_NAME, 'SKILL.md',
+        );
         const lookupSkillFile = join(
             skillsLookupDirectory, SHIPPED_SKILL_NAME, 'SKILL.md',
+        );
+        const lookupEli5SkillFile = join(
+            skillsLookupDirectory, ELI5_SKILL_NAME, 'SKILL.md',
         );
         const canonicalAgentFile = join(agentsInstallDirectory, SHIPPED_AGENT_FILE_NAME);
         const lookupAgentFile = join(agentsLookupDirectory, SHIPPED_AGENT_FILE_NAME);
 
         assert.equal(existsSync(canonicalSkillFile), true, 'skill file lives under .agents/skills');
+        assert.equal(existsSync(canonicalEli5SkillFile), true, 'ELI5 skill file lives under .agents/skills');
         assert.equal(existsSync(canonicalAgentFile), true, 'agent file lives under .agents/agents');
         assert.equal(lstatSync(skillsLookupDirectory).isSymbolicLink(), true);
         assert.equal(lstatSync(agentsLookupDirectory).isSymbolicLink(), true);
@@ -92,7 +100,12 @@ test('a full install writes skills and agents under .agents and points .claude a
             readFileSync(lookupSkillFile, 'utf8'),
             readFileSync(canonicalSkillFile, 'utf8'),
         );
+        assert.equal(
+            readFileSync(lookupEli5SkillFile, 'utf8'),
+            readFileSync(canonicalEli5SkillFile, 'utf8'),
+        );
         assert.equal(realpathSync(lookupSkillFile), realpathSync(canonicalSkillFile));
+        assert.equal(realpathSync(lookupEli5SkillFile), realpathSync(canonicalEli5SkillFile));
         assert.equal(
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),

@@ -158,7 +158,7 @@ Slash commands for common workflows.
 |---------|---------|
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills (12)
+### Skills (27)
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -205,7 +205,7 @@ Slash commands for common workflows.
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 | `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
 | `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
-| `show` | Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations: routed by `routing.yaml`, held to a two-tier SVG canvas contract, and checked by `validate-artifact.py` for accessibility, dead references, undefined CSS variables, and text size |
+| `eli5` | Beginner-friendly presentation with large visuals, minimal text, one stable self-contained HTML artifact, update-in-place continuity, and sharing |
 
 ### Hooks
 

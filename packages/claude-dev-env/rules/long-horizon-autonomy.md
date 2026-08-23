@@ -30,7 +30,7 @@ On a long build, set a checkpoint cadence and hold to it. At each interval, chec
 
 Before you report progress, check each claim against a tool result from this session. State only what the evidence backs; name anything unverified as unverified. If tests fail, say so with the output; if a step was skipped, say that.
 
-Visible progress follows [`opus5-communication-contract.md`](opus5-communication-contract.md) (`opus5-communication-contract-v1`): the **first progress update is one sentence**; later updates mark only **important discoveries or a direction change**.
+Visible progress follows the [ASD-STE100 language policy](asd-ste100-language.md) and this rule's run-completion contract: the **first progress update is one sentence**; later updates mark only **important discoveries or a direction change**.
 
 ## Re-ground the final message
 
