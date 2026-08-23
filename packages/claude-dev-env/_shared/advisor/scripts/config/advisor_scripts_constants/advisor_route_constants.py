@@ -6,6 +6,7 @@ ADVISOR_MODEL_TIER: str = "Sol"
 ADVISOR_CODEX_MODEL_ID: str = "gpt-5.6-sol"
 ADVISOR_FALLBACK_TIER: str = "Fable"
 ADVISOR_FALLBACK_RESULT: str = "fable"
+FABLE_ADVISOR_CLI_EFFORT: str = "medium"
 ALL_ADVISOR_GUIDANCE_SIGNALS: frozenset[str] = frozenset(
     {"ENDORSE", "CORRECTION", "PLAN", "STOP"}
 )

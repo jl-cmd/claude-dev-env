@@ -23,7 +23,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 ## Bind
 
 1. Detect the host profile first (protocol **Host profiles**), then walk the model floor.
-2. Floor: the stronger of Opus and this session's own tier on Claude; Opus floor with Fable first on a third-party host.
+2. Floor: the stronger of Opus and this session's own tier on Claude; Opus floor with Fable first at effort medium on a third-party host. When Fable is out of usage, bind Sol at low, then Opus.
 3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); one CLI `session_id` on a third-party host via the protocol Claude-chain.
 4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
 5. Skip the multi-consumer "who you are" opener — sole consumer.

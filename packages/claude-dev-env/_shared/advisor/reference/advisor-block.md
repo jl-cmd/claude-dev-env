@@ -15,7 +15,7 @@ The consult rules it restates are owned by [`consult-format.md`](consult-format.
 ## Transport preamble — third-party host
 
 > The orchestrating session owns a standing advisor for this run.
-> The advisor chain, strongest first: sol xhigh through the Codex CLI when the sol flag and its preflight open that rung, then Claude Fable at effort high, then Claude Opus at effort xhigh through the CLI Claude-chain.
+> The advisor chain: Claude Fable at effort medium, then sol low through the Codex CLI when Fable is out of usage and the sol flag and its preflight open that rung, then Claude Opus at effort xhigh through the CLI Claude-chain.
 > The orchestrating session is your one path to it: send each consult as a report to the session that assigned you, and it relays the advisor's reply.
 
 ## Shared core — every host

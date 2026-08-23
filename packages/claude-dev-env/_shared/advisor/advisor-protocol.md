@@ -15,7 +15,7 @@ The sections below hold the standing rules; open a reference file at the moment 
 |---|---|
 | Binding on a Claude host | [`reference/warm-up.md`](reference/warm-up.md) — spawn fields, Fable token, charter |
 | Binding from a third-party host | [`reference/third-party-bind.md`](reference/third-party-bind.md) — CLI bind steps, fail-closed rule |
-| `ADVISOR_SOL_XHIGH` is set | [`reference/sol-rung.md`](reference/sol-rung.md) — preflight, bind, fallback |
+| Fable is out of usage | [`reference/sol-rung.md`](reference/sol-rung.md) — Sol low-effort fallback |
 | Composing a consult | [`reference/consult-format.md`](reference/consult-format.md) — packet, new-evidence and report-back rules |
 | Assembling an executor spawn prompt | [`reference/advisor-block.md`](reference/advisor-block.md) — the paste parts |
 | Advisor drifts, dies, or the task pivots | [`reference/lifecycle.md`](reference/lifecycle.md) — re-spawn and re-bind steps |
@@ -34,13 +34,14 @@ Detection order:
 
 ### Sol rung — any host
 
-An optional **sol xhigh** rung sits above the Claude ladder on every host, switched by the flag `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`), set in the environment or by the consuming skill's invocation.
-Flag off: the walk starts at the host's Claude ladder, Fable first.
-Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight falls back to the Claude ladder.
+When Fable is out of usage, bind Sol at low effort through the Codex helper.
+Open that attempt with `ADVISOR_SOL_XHIGH=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-sol` on the helper invocation.
+Flag off both ways: continue the Claude ladder at Opus.
+Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight continues the Claude ladder at Opus.
 
 ### Claude host
 
-Use the **Model floor** ladder below (sol when flagged, then Fable → Opus).
+Use the **Model floor** ladder below (Fable first, then Sol when Fable is out of usage, then Opus).
 Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
@@ -48,7 +49,7 @@ Assemble and paste each executor's Advisor block per the **Advisor block** secti
 
 On a third-party (non-Claude) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind a **max-tier Claude advisor** through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
 The bound Claude session is the advisor; this third-party session stays the executor.
-Floor **Opus**; walk `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`; the sol rung binds ahead of the chain when open.
+Floor **Opus**; walk `candidate_tiers = ["Fable", "Opus"]` with `own_tier = Opus`. When Fable is out of usage, the sol rung binds between Fable and Opus (`candidate_tiers = ["Fable", "Sol", "Opus"]`).
 **Fail closed:** when every candidate fails, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop** — ENDORSE / CORRECTION / PLAN / STOP come only from a bound advisor.
 Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 
@@ -62,7 +63,7 @@ Whatever the consumer set, the floor sits at Opus or above — use the stronger 
 
 **Third-party host:** the CLI advisor floor is fixed at **Opus** (walk Fable → Opus only), whatever the session's own tier.
 
-Ladder, strongest first: sol (flag-gated, Codex CLI) → `Fable` → `Opus`.
+Ladder: `Fable` first, then sol (flag-gated, Codex CLI) when Fable is out of usage, then `Opus`.
 Advisors bind at Opus or above; `Sonnet` and `Haiku` are executor tiers only.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
 Read the floor tier — the lower bound only — then try binds top-down, stopping at the floor tier.

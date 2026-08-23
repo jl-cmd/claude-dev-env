@@ -47,7 +47,32 @@ def test_clean_single_spawn_at_top_of_slice_passes() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_sol_codex_bind_is_first_success_when_enabled() -> None:
+def test_sol_codex_bind_succeeds_after_fable_when_enabled() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
+        ],
+        selected_tier=ADVISOR_MODEL_TIER,
+        is_sol_enabled=True,
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_fable_success_with_sol_enabled_stops_before_sol() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        attempts=[{"tier": "Fable", "result": "spawned"}],
+        selected_tier="Fable",
+        is_sol_enabled=True,
+    )
+    assert validate_model_tier_run(run) is None
+
+
+def test_sol_first_walk_raises_when_sol_is_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
@@ -55,28 +80,18 @@ def test_sol_codex_bind_is_first_success_when_enabled() -> None:
         selected_tier=ADVISOR_MODEL_TIER,
         is_sol_enabled=True,
     )
-    assert validate_model_tier_run(run) is None
+    with pytest.raises(ModelTierRunError):
+        validate_model_tier_run(run)
 
 
-def test_sol_failure_falls_through_to_fable_when_enabled() -> None:
-    run = ModelTierRun(
-        own_tier="Opus",
-        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
-        attempts=[
-            {"tier": ADVISOR_MODEL_TIER, "result": "unavailable"},
-            {"tier": "Fable", "result": "spawned"},
-        ],
-        selected_tier="Fable",
-        is_sol_enabled=True,
-    )
-    assert validate_model_tier_run(run) is None
-
-
-def test_sol_rung_precedes_third_party_cli_floor_when_enabled() -> None:
+def test_sol_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
-        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
+        ],
         selected_tier=ADVISOR_MODEL_TIER,
         is_sol_enabled=True,
     )
@@ -98,8 +113,11 @@ def test_sol_codex_result_requires_sol_candidate() -> None:
 def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable", "Opus"],
-        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        candidate_tiers=["Fable", ADVISOR_MODEL_TIER, "Opus"],
+        attempts=[
+            {"tier": "Fable", "result": "unavailable"},
+            {"tier": ADVISOR_MODEL_TIER, "result": "spawned"},
+        ],
         selected_tier=ADVISOR_MODEL_TIER,
         is_sol_enabled=True,
     )

@@ -14,7 +14,7 @@ Host profile (Claude vs third-party) is detected first; Claude walks the multi-t
 
 | Entry | Description |
 |---|---|
-| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks, including optional Sol), `codex_sol_advisor.py` (read-only Sol xhigh bind and resume), `tier_model_ids.py` (Claude aliases, Codex model ids, and host detection), and `advisor_scripts_constants` under `scripts/config/` (ladder, bind tokens, aliases, host profiles, and SendMessage wait bound) |
+| `scripts/` | `model_tier_run_validator.py` (spawn-walk log checks, including optional Sol), `codex_sol_advisor.py` (read-only Sol low-effort bind and resume), `tier_model_ids.py` (Claude aliases, Codex model ids, and host detection), and `advisor_scripts_constants` under `scripts/config/` (ladder, bind tokens, aliases, host profiles, and SendMessage wait bound) |
 | `reference/` | Progressive-disclosure detail behind protocol stub sections: `warm-up.md`, `third-party-bind.md`, `sol-rung.md`, `consult-format.md`, `advisor-block.md`, `lifecycle.md`, `cli-chain.md`, and `spawn-walk-log.md` |
 
 ## Breaking-change rule
