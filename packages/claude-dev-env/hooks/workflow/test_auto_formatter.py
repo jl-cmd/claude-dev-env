@@ -34,6 +34,14 @@ UNUSED_IMPORT_SOURCE = "import os\n\n\nVALUE = 1\n"
 HOOK_RUN_TIMEOUT_SECONDS = 60
 
 
+def build_fixture_git_environment() -> dict[str, str]:
+    return {
+        each_name: each_value
+        for each_name, each_value in os.environ.items()
+        if not each_name.upper().startswith("GIT_")
+    }
+
+
 def _strip_read_only_and_retry(removal_function, target_path, *_exc_info):
     try:
         os.chmod(target_path, stat.S_IWRITE)
@@ -68,7 +76,13 @@ def _cleanup_sandbox_parent_directory() -> Generator[None]:
 @pytest.fixture
 def git_repository() -> Generator[Path]:
     repository_path = Path(tempfile.mkdtemp(dir=_get_sandbox_parent_directory()))
-    subprocess.run(["git", "init"], cwd=repository_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "init"],
+        cwd=repository_path,
+        capture_output=True,
+        check=True,
+        env=build_fixture_git_environment(),
+    )
     yield repository_path
     _force_rmtree(str(repository_path))
 
@@ -82,6 +96,7 @@ def _run_hook(tool_name: str, file_path: Path) -> subprocess.CompletedProcess[st
         text=True,
         timeout=HOOK_RUN_TIMEOUT_SECONDS,
         check=False,
+        env=build_fixture_git_environment(),
     )
 
 
@@ -116,6 +131,7 @@ class TestRuffFixOnNewFiles:
             cwd=git_repository,
             capture_output=True,
             check=True,
+            env=build_fixture_git_environment(),
         )
 
         completed_hook = _run_hook("Write", tracked_file)
@@ -132,6 +148,7 @@ def test_tracked_write_leaves_unused_import_in_place(git_repository: Path) -> No
         cwd=git_repository,
         capture_output=True,
         check=True,
+        env=build_fixture_git_environment(),
     )
 
     completed_hook = _run_hook("Write", tracked_file)
@@ -174,6 +191,29 @@ def test_formatter_eligibility_protects_hook_tree(
     assert auto_formatter_module.is_protected_path(str(protected_file))
 
 
+def test_formatter_eligibility_protects_symlinked_hook_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    hooks_directory = tmp_path / "hooks"
+    hooks_directory.mkdir()
+    outside_file = tmp_path / "outside.py"
+    outside_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+    symlinked_file = hooks_directory / "linked.py"
+    try:
+        symlinked_file.symlink_to(outside_file)
+    except (OSError, NotImplementedError):
+        return
+    monkeypatch.setattr(
+        auto_formatter_module,
+        "HOOKS_DIR",
+        f"{hooks_directory}{os.sep}",
+    )
+    monkeypatch.setattr(auto_formatter_module, "is_untracked_in_git", lambda _: True)
+
+    assert auto_formatter_module.is_formatter_eligible("Write", str(symlinked_file)) is False
+
+
 def test_formatter_diagnostic_stays_on_stderr(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -182,14 +222,51 @@ def test_formatter_diagnostic_stays_on_stderr(
     def return_formatter_failure(
         command: list[str], **_options: object
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(command, 3, "", "formatter failure")
+        return subprocess.CompletedProcess(
+            command,
+            3,
+            "formatter stdout",
+            "formatter stderr",
+        )
 
     monkeypatch.setattr(subprocess, "run", return_formatter_failure)
     auto_formatter_module.run_eligible_formatter("broken.py")
 
     captured_output = capsys.readouterr()
-    assert "formatter failure" in captured_output.err
+    assert "formatter stdout" in captured_output.err
+    assert "formatter stderr" in captured_output.err
     assert captured_output.out == ""
+
+
+def test_tracked_write_ignores_redirected_git_dir(
+    git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tracked_file = git_repository / "redirected_git_dir.py"
+    tracked_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "redirected_git_dir.py"],
+        cwd=git_repository,
+        capture_output=True,
+        check=True,
+        env=build_fixture_git_environment(),
+    )
+    redirected_repository = tmp_path / "redirected_repository"
+    redirected_repository.mkdir()
+    subprocess.run(
+        ["git", "init"],
+        cwd=redirected_repository,
+        capture_output=True,
+        check=True,
+        env=build_fixture_git_environment(),
+    )
+    monkeypatch.setenv("GIT_DIR", str(redirected_repository / ".git"))
+
+    completed_hook = _run_hook("Write", tracked_file)
+
+    assert completed_hook.returncode == 0
+    assert "import os" in tracked_file.read_text(encoding="utf-8")
 
 
 def test_python_formatting_preserves_crlf_line_endings(git_repository: Path) -> None:

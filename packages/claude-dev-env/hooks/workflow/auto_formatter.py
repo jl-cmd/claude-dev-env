@@ -31,6 +31,7 @@ WRITE_TOOL_NAME = "Write"
 PYTHON_FORMATTER_NAME = "python"
 PRETTIER_FORMATTER_NAME = "prettier"
 FORMATTER_DIAGNOSTIC_TEMPLATE = "auto-formatter: %s: %s\n"
+FORMATTER_DIAGNOSTIC_SEPARATOR = "\n"
 FORMATTER_TIMEOUT_DIAGNOSTIC_TEMPLATE = "auto-formatter: %s timed out after %d seconds\n"
 PRETTIER_CONFIG_NAMES = frozenset(
     {
@@ -122,13 +123,12 @@ def is_untracked_in_git(file_path: str) -> bool:
 
 
 def is_protected_path(file_path: str) -> bool:
-    hooks_directory = Path(HOOKS_DIR).resolve()
-    candidate_path = Path(file_path).resolve()
+    hooks_directory = os.path.normcase(os.path.abspath(HOOKS_DIR))
+    candidate_path = os.path.normcase(os.path.abspath(file_path))
     try:
-        candidate_path.relative_to(hooks_directory)
+        return os.path.commonpath((candidate_path, hooks_directory)) == hooks_directory
     except ValueError:
         return False
-    return True
 
 
 def formatter_name_for_path(file_path: str) -> str | None:
@@ -159,6 +159,17 @@ def _write_command_diagnostic(file_path: str, command: list[str], diagnostic_tex
     )
 
 
+def _combine_command_diagnostics(
+    completed_process: subprocess.CompletedProcess[str],
+) -> str:
+    all_diagnostics = [
+        each_stream.strip()
+        for each_stream in (completed_process.stdout, completed_process.stderr)
+        if each_stream
+    ]
+    return FORMATTER_DIAGNOSTIC_SEPARATOR.join(all_diagnostics)
+
+
 def _run_command(
     command: list[str], file_path: str, timeout_seconds: int
 ) -> tuple[subprocess.CompletedProcess[str] | None, bool]:
@@ -180,7 +191,7 @@ def _run_command(
         _write_command_diagnostic(
             file_path,
             command,
-            completed_process.stderr or completed_process.stdout,
+            _combine_command_diagnostics(completed_process),
         )
     return completed_process, False
 
