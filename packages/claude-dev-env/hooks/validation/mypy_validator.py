@@ -17,6 +17,7 @@ import importlib
 import json
 import os
 import platform
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -67,6 +68,8 @@ MAXIMUM_DISPLAYED_ERRORS = 5
 
 SKIP_PATTERNS = {"test_", "_test.", "conftest", "/tests/", "\\tests\\", "fixture", "mock"}
 
+ConfigCacheEntry = tuple[str, str | None, tuple[str, ...]]
+
 
 def discover_project_root(target_file: str) -> Path | None:
     if env_root := os.environ.get("CLAUDE_PROJECT_ROOT"):
@@ -96,7 +99,7 @@ def is_file_within_project(target_file: str, project_root: Path) -> bool:
         return False
 
 
-_session_config_cache_by_target_directory: dict[str, tuple[str, str | None]] = {}
+_session_config_cache_by_target_directory: dict[str, ConfigCacheEntry] = {}
 
 
 def reset_session_config_cache() -> None:
@@ -154,34 +157,68 @@ def _walk_mypy_config(target_file: Path) -> Path | None:
     return discovered_config if isinstance(discovered_config, Path) else None
 
 
-def _config_search_signature(target_file: Path) -> str:
+def _config_candidate_paths(target_file: Path) -> tuple[str, ...]:
+    return tuple(
+        str(each_directory / PYPROJECT_FILENAME)
+        for each_directory in ancestor_directories(target_file)
+    )
+
+
+def _configuration_metadata_signature(all_candidate_paths: tuple[str, ...]) -> str:
     config_search_hasher = hashlib.sha256()
-    for each_directory in ancestor_directories(target_file):
-        candidate_config_path = each_directory / PYPROJECT_FILENAME
-        config_search_hasher.update(str(candidate_config_path).encode(CACHE_FILE_ENCODING))
-        is_configuration_file = candidate_config_path.is_file()
-        config_search_hasher.update(b"present" if is_configuration_file else b"missing")
-        if not is_configuration_file:
-            continue
+    for each_candidate_path in all_candidate_paths:
+        config_search_hasher.update(each_candidate_path.encode(CACHE_FILE_ENCODING))
         try:
-            config_search_hasher.update(candidate_config_path.read_bytes())
+            candidate_stat = Path(each_candidate_path).stat()
         except OSError:
+            config_search_hasher.update(b"missing")
             continue
+        if not stat.S_ISREG(candidate_stat.st_mode):
+            config_search_hasher.update(b"non-file")
+            continue
+        config_search_hasher.update(b"file")
+        for each_metadata_field in (
+            candidate_stat.st_ino,
+            candidate_stat.st_size,
+            candidate_stat.st_mtime_ns,
+            candidate_stat.st_ctime_ns,
+        ):
+            config_search_hasher.update(str(each_metadata_field).encode(CACHE_FILE_ENCODING))
+            config_search_hasher.update(b";")
     return config_search_hasher.hexdigest()
 
 
-def _read_cached_config_path(
-    cached_entry: object, config_search_signature: str
-) -> tuple[bool, str | None]:
+def _read_cached_config_entry(cached_entry: object) -> ConfigCacheEntry | None:
     if not isinstance(cached_entry, dict):
-        return False, None
+        return None
     cached_signature = cached_entry.get("signature")
     cached_config_path = cached_entry.get("config_path")
-    if cached_signature != config_search_signature:
-        return False, None
+    raw_candidate_paths = cached_entry.get("candidate_paths")
+    if not isinstance(cached_signature, str):
+        return None
     if cached_config_path is not None and not isinstance(cached_config_path, str):
-        return False, None
-    return True, cached_config_path
+        return None
+    if not isinstance(raw_candidate_paths, list):
+        return None
+    all_candidate_paths: list[str] = []
+    for each_candidate_path in raw_candidate_paths:
+        if not isinstance(each_candidate_path, str):
+            return None
+        all_candidate_paths.append(each_candidate_path)
+    if not all_candidate_paths:
+        return None
+    if cached_config_path is not None and cached_config_path not in all_candidate_paths:
+        return None
+    return cached_signature, cached_config_path, tuple(all_candidate_paths)
+
+
+def _serialize_config_cache_entry(cache_entry: ConfigCacheEntry) -> dict[str, object]:
+    config_signature, config_path, all_candidate_paths = cache_entry
+    return {
+        "signature": config_signature,
+        "config_path": config_path,
+        "candidate_paths": list(all_candidate_paths),
+    }
 
 
 def _config_cache_key_for(target_file: Path) -> str:
@@ -223,34 +260,39 @@ def discover_mypy_config(target_file: Path) -> Path | None:
         table, or None when none exists above the file.
     """
     cache_key = _config_cache_key_for(target_file)
-    config_search_signature = _config_search_signature(target_file)
     cached_entry = _session_config_cache_by_target_directory.get(cache_key)
-    if cached_entry is not None and cached_entry[0] == config_search_signature:
-        cached_config_path = cached_entry[1]
-        return Path(cached_config_path) if cached_config_path is not None else None
-
-    config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
-    persisted_cache = _read_cache_file(config_cache_path)
-    is_valid_cache_entry, persisted_config_path = _read_cached_config_path(
-        persisted_cache.get(cache_key), config_search_signature
-    )
-    if is_valid_cache_entry:
-        _session_config_cache_by_target_directory[cache_key] = (
-            config_search_signature,
-            persisted_config_path,
-        )
-        return Path(persisted_config_path) if persisted_config_path is not None else None
+    if cached_entry is not None:
+        config_search_signature = _configuration_metadata_signature(cached_entry[2])
+        if config_search_signature == cached_entry[0]:
+            cached_config_path = cached_entry[1]
+            return Path(cached_config_path) if cached_config_path is not None else None
+        all_candidate_paths = cached_entry[2]
+        config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
+        persisted_cache = _read_cache_file(config_cache_path)
+    else:
+        config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
+        persisted_cache = _read_cache_file(config_cache_path)
+        persisted_entry = _read_cached_config_entry(persisted_cache.get(cache_key))
+        if persisted_entry is not None:
+            config_search_signature = _configuration_metadata_signature(persisted_entry[2])
+            if config_search_signature == persisted_entry[0]:
+                _session_config_cache_by_target_directory[cache_key] = persisted_entry
+                cached_config_path = persisted_entry[1]
+                return Path(cached_config_path) if cached_config_path is not None else None
+            all_candidate_paths = persisted_entry[2]
+        else:
+            all_candidate_paths = _config_candidate_paths(target_file)
+            config_search_signature = _configuration_metadata_signature(all_candidate_paths)
 
     discovered_config = _walk_mypy_config(target_file)
     discovered_value = str(discovered_config) if discovered_config is not None else None
-    _session_config_cache_by_target_directory[cache_key] = (
+    refreshed_entry = (
         config_search_signature,
         discovered_value,
+        all_candidate_paths,
     )
-    persisted_cache[cache_key] = {
-        "signature": config_search_signature,
-        "config_path": discovered_value,
-    }
+    _session_config_cache_by_target_directory[cache_key] = refreshed_entry
+    persisted_cache[cache_key] = _serialize_config_cache_entry(refreshed_entry)
     _write_cache_file(config_cache_path, persisted_cache)
     return discovered_config
 
@@ -258,26 +300,30 @@ def discover_mypy_config(target_file: Path) -> Path | None:
 def _config_signature(mypy_config_file: Path | None) -> bytes:
     """Return a byte signature of the discovered mypy config's current contents.
 
-    The signature folds the config file's own bytes into the content-hash cache
-    key so a change to the project's ``[tool.mypy]`` settings invalidates a
-    previously recorded passing hash: when the file's bytes are restored to a
-    prior passing version under a tightened config, the composite hash differs
-    and mypy re-runs rather than returning a stale pass. An absent config
+    The signature folds the resolved config path and the config file's bytes
+    into the content-hash cache key so a configuration relocation or change
+    invalidates a previously recorded passing hash. An absent config
     contributes a fixed empty signature.
 
     Args:
         mypy_config_file: The discovered config path, or None when none exists.
 
     Returns:
-        The config file's bytes, or an empty signature when there is no config
-        or it cannot be read.
+        The resolved config path and bytes, or the path alone when the config
+        cannot be read.
     """
     if mypy_config_file is None:
         return b""
     try:
-        return mypy_config_file.read_bytes()
+        resolved_config_path = str(mypy_config_file.resolve())
     except OSError:
-        return b""
+        resolved_config_path = str(mypy_config_file)
+    resolved_config_path_bytes = resolved_config_path.encode(CACHE_FILE_ENCODING)
+    try:
+        config_bytes = mypy_config_file.read_bytes()
+    except OSError:
+        return resolved_config_path_bytes
+    return resolved_config_path_bytes + b"\0" + config_bytes
 
 
 def _composite_content_hash(target_file: str, mypy_config_file: Path | None) -> str | None:
@@ -367,20 +413,14 @@ def project_relative_path(target_file: str, project_root: str) -> str:
 def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
     """Run mypy on one file from the project root and return its result.
 
-    The mypy run is skipped when a composite hash over the target file's bytes
-    and its discovered mypy config's bytes matches the hash recorded the last
-    time mypy passed for that file; that recorded skip can only return a pass, so
-    a content change always re-runs mypy and a file edited to introduce a type
-    error still blocks. Folding the config bytes into the hash invalidates the
-    skip when the project's ``[tool.mypy]`` settings change, so a file whose
-    bytes are restored to a prior passing version under a tightened config
-    re-runs rather than returning a stale pass. The discovered config is reused
-    from the per-session cache keyed by the target file's own directory, so two
-    files in sibling subtrees under one project root each resolve their own
-    nearer config.
+    The mypy run is skipped when a composite hash over the target file's bytes,
+    resolved config path, and config bytes matches the hash recorded the last
+    time mypy passed for that file. A source or configuration change then
+    re-runs mypy, while the discovered config is reused from metadata cached by
+    the target file's own directory.
 
-    The composite hash covers the target file's own bytes and its config's
-    bytes only, so the skip is blind to a cross-file change in a dependency:
+    The composite hash covers the target file's own bytes, resolved config path,
+    and config bytes, so the skip is blind to a cross-file change in a dependency:
     when a dependency is edited in a way that breaks this file's call site and
     this file is later rewritten to its prior passing content, the cached pass
     returns without re-running mypy. The post-write hook already type-checks only
