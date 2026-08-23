@@ -57,6 +57,23 @@ def _declares_blast_radius(type_name: str) -> bool:
     return any(type_name.endswith(each_suffix) for each_suffix in ALL_BLAST_RADIUS_SUFFIXES)
 
 
+def _handler_type_names(handler: ast.ExceptHandler) -> list[str]:
+    """Return named exception types caught by one except clause."""
+    caught = handler.type
+    if caught is None:
+        return []
+    all_caught = caught.elts if isinstance(caught, ast.Tuple) else [caught]
+    return [
+        each_caught.id
+        for each_caught in all_caught
+        if isinstance(each_caught, ast.Name)
+    ] + [
+        each_caught.attr
+        for each_caught in all_caught
+        if isinstance(each_caught, ast.Attribute)
+    ]
+
+
 def _handler_names_blast_radius_type(handler: ast.ExceptHandler) -> bool:
     """Report whether an except clause catches a blast-radius-declaring type.
 
@@ -66,16 +83,15 @@ def _handler_names_blast_radius_type(handler: ast.ExceptHandler) -> bool:
     Returns:
         ``True`` when any caught type name carries a blast-radius suffix.
     """
-    caught = handler.type
-    if caught is None:
-        return False
-    all_caught = caught.elts if isinstance(caught, ast.Tuple) else [caught]
-    for each_caught in all_caught:
-        if isinstance(each_caught, ast.Name) and _declares_blast_radius(each_caught.id):
-            return True
-        if isinstance(each_caught, ast.Attribute) and _declares_blast_radius(each_caught.attr):
-            return True
-    return False
+    return any(_declares_blast_radius(each_name) for each_name in _handler_type_names(handler))
+
+
+def _handler_matches_raise(handler: ast.ExceptHandler, type_name: str | None) -> bool:
+    """Report whether a handler corresponds to the raise it encloses."""
+    all_handler_names = _handler_type_names(handler)
+    if type_name is None:
+        return _handler_names_blast_radius_type(handler)
+    return type_name in all_handler_names
 
 
 def _boundary_guarded_raise_lines(tree: ast.Module) -> set[int]:
@@ -92,11 +108,12 @@ def _boundary_guarded_raise_lines(tree: ast.Module) -> set[int]:
     for each_node in ast.walk(tree):
         if not isinstance(each_node, ast.Try):
             continue
-        if not any(_handler_names_blast_radius_type(each) for each in each_node.handlers):
-            continue
         for each_body_node in each_node.body:
             for each_inner in ast.walk(each_body_node):
-                if isinstance(each_inner, ast.Raise):
+                if isinstance(each_inner, ast.Raise) and any(
+                    _handler_matches_raise(each_handler, _raised_type_name(each_inner))
+                    for each_handler in each_node.handlers
+                ):
                     all_guarded.add(each_inner.lineno)
     return all_guarded
 
