@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import claude_md_orphan_file_blocker as blocker_module
 from claude_md_orphan_file_blocker import (
