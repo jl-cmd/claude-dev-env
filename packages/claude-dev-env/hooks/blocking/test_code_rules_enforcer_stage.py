@@ -12,14 +12,23 @@ import pytest
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+_PR_LOOP_SCRIPTS_DIRECTORY = str(Path(__file__).resolve().parents[2] / "_shared" / "pr-loop" / "scripts")
 if _BLOCKING_DIRECTORY not in sys.path:
     sys.path.insert(0, _BLOCKING_DIRECTORY)
 if _HOOKS_DIRECTORY not in sys.path:
     sys.path.insert(0, _HOOKS_DIRECTORY)
+if _PR_LOOP_SCRIPTS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _PR_LOOP_SCRIPTS_DIRECTORY)
 
 from code_rules_enforcer import (  # noqa: E402
     _fragment_or_deferred_check,
     main,
+    validate_content,
+)
+from code_rules_gate_parts import gate_running  # noqa: E402
+from code_rules_gate_parts.tests._repo_test_helpers import (  # noqa: E402
+    init_repository,
+    write_commit_and_stage_change,
 )
 
 
@@ -157,3 +166,35 @@ def test_precheck_stage_runs_the_cli_and_uses_the_declared_target_path(
 
     assert completed_process.returncode == 1
     assert "process_data" in completed_process.stdout
+
+
+def test_gate_caller_scans_staged_content_with_commit_stage_scope(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    init_repository(repository_root)
+    committed_source = "def calculate_total() -> int:\n    return 0\n"
+    staged_source = (
+        "def calculate_total() -> int:\n"
+        "    total = 9999\n"
+        "    return total\n"
+    )
+    file_path = write_commit_and_stage_change(
+        repository_root,
+        "service.py",
+        committed_source,
+        staged_source,
+    )
+
+    all_partitioned_violations = gate_running._scoped_violations_for_file(
+        validate_content=validate_content,
+        resolved_path=file_path,
+        repository_root=repository_root,
+        all_added_lines_for_file={2, 3},
+        should_read_staged_content=True,
+    )
+
+    assert all_partitioned_violations is not None
+    all_blocking_violations, _all_advisory_violations = all_partitioned_violations
+    assert any("9999" in each_issue for each_issue in all_blocking_violations)
