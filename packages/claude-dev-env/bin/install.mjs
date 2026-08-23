@@ -22,6 +22,7 @@ import {
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_AGENTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
@@ -100,7 +101,7 @@ const INSTALL_TARGET_IDENTITY = (() => {
     }
 })();
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'system-prompts', '_shared', 'audit-rubrics'];
 
 /**
  * Every top-level lookup directory the installer writes into under ~/.claude:
@@ -115,6 +116,7 @@ export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     ...CONTENT_DIRECTORIES,
     MANAGED_SKILLS_DIRECTORY_NAME,
     MANAGED_AGENTS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
 ];
 
@@ -765,34 +767,61 @@ function owningManagedRoot(installedFilePath) {
         const managedRoot = join(CLAUDE_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
     }
-    for (const directoryName of [MANAGED_SKILLS_DIRECTORY_NAME, MANAGED_AGENTS_DIRECTORY_NAME]) {
+    for (const directoryName of [
+        MANAGED_SKILLS_DIRECTORY_NAME,
+        MANAGED_AGENTS_DIRECTORY_NAME,
+        MANAGED_HOOKS_DIRECTORY_NAME,
+        MANAGED_SCRIPTS_DIRECTORY_NAME,
+    ]) {
         const agentsRoot = join(AGENTS_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, agentsRoot)) return agentsRoot;
     }
     const codexRulesDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
     if (isInsideDirectory(resolvedPath, codexRulesDirectory)) return codexRulesDirectory;
+    const codexHooksDirectory = INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory;
+    if (isInsideDirectory(resolvedPath, codexHooksDirectory)) return codexHooksDirectory;
     const cursorInstallDirectory = INSTALL_ROOT_RESOLUTION.cursorInstallDirectory;
     if (isInsideDirectory(resolvedPath, cursorInstallDirectory)) return cursorInstallDirectory;
     return null;
 }
 
 /**
- * Publish `~/.claude/skills` and `~/.claude/agents` as directory pointers to
- * the agents home.
+ * Publish harness lookup paths as directory pointers to the agents home.
  *
  * Skills and agents live under `~/.agents` (or the per-root agents home).
  * Claude Code discovers them at the lookup paths under the managed Claude root,
  * so those two paths are pointers. A real directory from an older install at a
  * lookup path is merged into the agents home before the pointer is written.
  *
- * @returns {string[]} The two lookup paths this run published.
+ * @returns {string[]} The lookup paths this run published.
  */
-function publishSkillAndAgentLookupPointers() {
-    const skillsPointer = INSTALL_ROOT_RESOLUTION.skillsLookupDirectory;
-    const agentsPointer = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
-    ensureDirectoryPointer(skillsPointer, INSTALL_ROOT_RESOLUTION.skillsInstallDirectory);
-    ensureDirectoryPointer(agentsPointer, INSTALL_ROOT_RESOLUTION.agentsInstallDirectory);
-    return [skillsPointer, agentsPointer];
+function publishManagedLookupPointers() {
+    const pointerPairs = [
+        [
+            INSTALL_ROOT_RESOLUTION.skillsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.skillsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.agentsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.agentsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.hooksLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.hooksInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.scriptsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.scriptsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory,
+            INSTALL_ROOT_RESOLUTION.hooksInstallDirectory,
+        ],
+    ];
+    for (const [pointerPath, targetPath] of pointerPairs) {
+        ensureDirectoryPointer(pointerPath, targetPath);
+    }
+    return pointerPairs.map(([pointerPath]) => pointerPath);
 }
 
 /**
@@ -1590,7 +1619,11 @@ function loadClaudeSettingsObjectOrExit(settingsPath) {
  * @returns {number} Count of matcher groups merged.
  */
 function mergeHooks(hooksSourceRoot, pythonCommand) {
-    const hooksJsonPath = join(hooksSourceRoot, MANAGED_HOOKS_DIRECTORY_NAME, 'hooks.json');
+    const hooksSource = resolvePackageManagedDirectory(
+        hooksSourceRoot,
+        MANAGED_HOOKS_DIRECTORY_NAME,
+    );
+    const hooksJsonPath = join(hooksSource, 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
@@ -2010,7 +2043,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
-    const publishedPointerPaths = publishSkillAndAgentLookupPointers();
+    const publishedPointerPaths = publishManagedLookupPointers();
 
     const activeGroups = selectedGroups
         ? selectedGroups.map(groupName => ({ groupName, ...INSTALL_GROUPS[groupName] }))
@@ -2105,6 +2138,27 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             allInstalledFiles.push(...stats.paths);
         }
     }
+    const shouldCopyScripts = !allowedDirectories
+        || allowedDirectories.has(MANAGED_SCRIPTS_DIRECTORY_NAME);
+    if (shouldCopyScripts) {
+        for (const sourceRoot of allSourceRoots) {
+            const scriptsSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_SCRIPTS_DIRECTORY_NAME,
+            );
+            if (!existsSync(scriptsSource)) continue;
+            const scriptsDestination = INSTALL_ROOT_RESOLUTION.scriptsLookupDirectory;
+            const stats = copyTree(scriptsSource, scriptsDestination);
+            if (!summary[MANAGED_SCRIPTS_DIRECTORY_NAME]) {
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME] = stats;
+            } else {
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].created += stats.created;
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].updated += stats.updated;
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].paths.push(...stats.paths);
+            }
+            allInstalledFiles.push(...stats.paths);
+        }
+    }
     const shouldInstallCodexRules = !selectedGroups
         || activeGroups.some((eachGroup) => eachGroup.includeCodexRules);
     if (shouldInstallCodexRules) {
@@ -2166,7 +2220,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         let totalHooksUpdated = 0;
         let totalHookGroups = 0;
         for (const sourceRoot of allSourceRoots) {
-            const hooksSource = join(sourceRoot, MANAGED_HOOKS_DIRECTORY_NAME);
+            const hooksSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_HOOKS_DIRECTORY_NAME,
+            );
             if (!existsSync(hooksSource)) continue;
             const hooksDestination = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME);
             const filesToCopy = collectFiles(hooksSource)
@@ -2339,6 +2396,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
         const { created, updated } = summary[MANAGED_AGENTS_DIRECTORY_NAME];
         console.log(`  ${MANAGED_AGENTS_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
+    }
+    if (summary[MANAGED_SCRIPTS_DIRECTORY_NAME]) {
+        const { created, updated } = summary[MANAGED_SCRIPTS_DIRECTORY_NAME];
+        console.log(`  ${MANAGED_SCRIPTS_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
     }
     if (summary.skills) {
         const { created, updated, pruned } = summary.skills;
