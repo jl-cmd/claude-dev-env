@@ -3,14 +3,15 @@ name: name-by-capability-audit
 description: >-
   Audit a GitHub PR for name-by-capability violations: driver/motive words on
   reusable capability modules (queues and report routers may keep the driver
-  word). Triggers: /name-by-capability-audit, name-by-capability audit, audit PR
-  for naming, name by capability, capability naming review, cert_fix rename
-  check, driver word in package name.
+  word), then apply capability-oriented renames by default. Triggers:
+  /name-by-capability-audit, name-by-capability audit, audit PR for naming, name
+  by capability, capability naming review, cert_fix rename check, driver word in
+  package name.
 ---
 
 # Name-by-Capability Audit
 
-Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and title wording for driver/motive words on reusable capability code, then report findings with a rename direction. Apply renames when the user requests a fix.
+Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and title wording for driver/motive words on reusable capability code, report findings with a rename direction, and apply the suggested renames by default. An explicit audit-only request ends after the report.
 
 ## Gotchas
 
@@ -26,7 +27,9 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 **First match wins:**
 
 - Missing PR number or URL → respond exactly: `Give a GitHub PR number or URL to audit for name-by-capability.`
-- User requests a rename or fix → finish the audit report, then apply the rename direction they asked for.
+- User requests audit-only → finish the audit report and stop.
+- User gives a rename or fix direction → finish the audit report, then apply the direction they gave.
+- A violation with no user-supplied direction → finish the audit report, then apply the suggested rename direction by default.
 
 ## Constraints
 
