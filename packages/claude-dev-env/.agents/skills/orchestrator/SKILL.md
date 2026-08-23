@@ -125,7 +125,7 @@ pending, or when the tool is `CronCreate`.
    end to end: detect the host profile, compute the floor from the
    orchestrator consumer set — this session plus every tier in the
    routing table (its Model floor section) — walk the ladder (Fable first,
-   then Sol when Fable is out of usage, then Opus),
+   then Sol when Fable is out of usage),
    and fail closed when nothing binds. This session owns the advisor's
    whole lifecycle (its Lifecycle ownership section); executors only ever
    message the warm agent or report here, and an executor that finds the

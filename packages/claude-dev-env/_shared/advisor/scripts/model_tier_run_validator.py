@@ -8,18 +8,15 @@ from data, not inferred from a transcript.
 
     ladder_walk = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[
-            {"tier": "Fable", "result": "unavailable"},
-            {"tier": "Opus", "result": "spawned"},
-        ],
-        selected_tier="Opus",
+        candidate_tiers=["Fable"],
+        attempts=[{"tier": "Fable", "result": "spawned"}],
+        selected_tier="Fable",
     )
     validate_model_tier_run(ladder_walk)  # ok: returns None, raises nothing
 
     cli_bind = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Fable"],
         attempts=[{"tier": "Fable", "result": "cli"}],
         selected_tier="Fable",
     )
@@ -48,7 +45,6 @@ if _scripts_directory not in sys.path:
     sys.path.insert(0, _scripts_directory)
 
 from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
-    ALL_MODEL_TIERS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
@@ -61,7 +57,6 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     MISSING_FALLBACK_REASON_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
-    THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER,
     THIRD_PARTY_MODEL_TIER,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
@@ -109,14 +104,9 @@ def _expected_candidate_tiers(
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
     if maybe_canonical_own_tier == ADVISOR_MODEL_TIER:
         raise ModelTierRunError(f"{UNKNOWN_OWN_TIER_MESSAGE}: {own_tier!r}")
-    if maybe_canonical_own_tier == THIRD_PARTY_MODEL_TIER:
-        floor_index = ALL_MODEL_TIERS.index(THIRD_PARTY_CLI_ADVISOR_FLOOR_TIER)
-    else:
-        floor_index = ALL_MODEL_TIERS.index(maybe_canonical_own_tier)
-    all_expected_candidates = list(ALL_MODEL_TIERS[: floor_index + 1])
+    all_expected_candidates = [ADVISOR_FALLBACK_TIER]
     if is_sol_enabled:
-        fable_index = all_expected_candidates.index(ADVISOR_FALLBACK_TIER)
-        all_expected_candidates.insert(fable_index + 1, ADVISOR_MODEL_TIER)
+        all_expected_candidates.append(ADVISOR_MODEL_TIER)
     return all_expected_candidates
 
 
@@ -146,12 +136,11 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers must match the floor slice. ``own_tier=ThirdParty`` maps to
-    the third-party-host CLI advisor floor (Fable → Opus). Tries walk that
-    slice in order; Sol sits after Fable when ``is_sol_enabled`` is true.
-    Early stop only after ``spawned``, ``cli``, or Sol ``codex``. A null
-    selected_tier requires a full walk plus fallback_reason (fail-closed on a
-    third-party host when the chain cannot serve).
+    Candidate tiers are Fable, plus Sol when ``is_sol_enabled`` is true.
+    Consumer ``own_tier`` is recorded and must be a known tier; it does not
+    add Opus to the advisor walk. Tries walk that list in order. Early stop
+    only after ``spawned``, ``cli``, or Sol ``codex``. A null selected_tier
+    requires a full walk plus fallback_reason.
 
     Args:
         run: The structured spawn-walk log to check.

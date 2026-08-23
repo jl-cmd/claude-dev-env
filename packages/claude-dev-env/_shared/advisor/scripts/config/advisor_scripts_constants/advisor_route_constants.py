@@ -6,7 +6,15 @@ ADVISOR_MODEL_TIER: str = "Sol"
 ADVISOR_CODEX_MODEL_ID: str = "gpt-5.6-sol"
 ADVISOR_FALLBACK_TIER: str = "Fable"
 ADVISOR_FALLBACK_RESULT: str = "fable"
-FABLE_ADVISOR_CLI_EFFORT: str = "medium"
+ADVISOR_EFFORT_ENV_VAR: str = "ADVISOR_EFFORT"
+ADVISOR_EFFORT_DEFAULT: str = "low"
+ALL_ADVISOR_EFFORT_LEVELS: tuple[str, ...] = (
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+)
 ALL_ADVISOR_GUIDANCE_SIGNALS: frozenset[str] = frozenset(
     {"ENDORSE", "CORRECTION", "PLAN", "STOP"}
 )
