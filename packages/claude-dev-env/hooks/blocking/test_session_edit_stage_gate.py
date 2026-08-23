@@ -30,6 +30,8 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
 )
 
 HOOK_PATH = _HOOK_DIR / "session_edit_stage_gate.py"
+TRACKER_HOOK_PATH = _HOOK_DIR.parent / "observability" / "session_file_edit_tracker.py"
+DISPATCHER_HOOK_PATH = _HOOK_DIR / "bash_pre_tool_use_dispatcher.py"
 _SESSION_ID = "gate-session-1"
 
 
@@ -52,6 +54,7 @@ def run_git(repository_root: Path, *git_arguments: str) -> None:
 
 def initialize_repository(repository_root: Path) -> None:
     run_git(repository_root, "init")
+    run_git(repository_root, "checkout", "-b", "test-session-stage")
     run_git(repository_root, "config", "user.email", "tests@example.com")
     run_git(repository_root, "config", "user.name", "Gate Tests")
 
@@ -64,6 +67,19 @@ def prepare_repository_with_unstaged_edit(repository_root: Path) -> Path:
     run_git(repository_root, "commit", "-m", "add widget")
     tracked_file.write_text("x = 2\n", encoding="utf-8")
     return tracked_file
+
+
+def prepare_repository_with_two_unstaged_edits(repository_root: Path) -> tuple[Path, Path]:
+    initialize_repository(repository_root)
+    tracked_file = repository_root / "widget.py"
+    second_file = repository_root / "second_widget.py"
+    tracked_file.write_text("x = 1\n", encoding="utf-8")
+    second_file.write_text("y = 1\n", encoding="utf-8")
+    run_git(repository_root, "add", "widget.py", "second_widget.py")
+    run_git(repository_root, "commit", "-m", "add widgets")
+    tracked_file.write_text("x = 2\n", encoding="utf-8")
+    second_file.write_text("y = 2\n", encoding="utf-8")
+    return tracked_file, second_file
 
 
 def write_session_edits(temp_directory: Path, session_id: str, absolute_paths: list[Path]) -> None:
@@ -95,6 +111,93 @@ def run_hook(
         cwd=str(cwd),
         env=environment,
         timeout=60,
+    )
+
+
+def _run_production_hook(
+    hook_path: Path,
+    payload: str,
+    repository_root: Path,
+    temp_directory: Path,
+    home_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    environment = _clean_git_environment()
+    environment["TMP"] = str(temp_directory)
+    environment["TEMP"] = str(temp_directory)
+    environment["TMPDIR"] = str(temp_directory)
+    environment["USERPROFILE"] = str(home_directory)
+    environment["HOME"] = str(home_directory)
+    return subprocess.run(
+        [sys.executable, str(hook_path)],
+        check=False,
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=str(repository_root),
+        env=environment,
+        timeout=60,
+    )
+
+
+def run_tracker_event(
+    tracked_file: Path,
+    session_id: str,
+    repository_root: Path,
+    temp_directory: Path,
+    home_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps(
+        {
+            "tool_name": "Edit",
+            "session_id": session_id,
+            "tool_input": {"file_path": str(tracked_file)},
+        }
+    )
+    return _run_production_hook(
+        TRACKER_HOOK_PATH,
+        payload,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+
+
+def run_bash_dispatcher(
+    bash_command: str,
+    session_id: str,
+    repository_root: Path,
+    temp_directory: Path,
+    home_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps(
+        {
+            "tool_name": "Bash",
+            "session_id": session_id,
+            "tool_input": {"command": bash_command},
+        }
+    )
+    return _run_production_hook(
+        DISPATCHER_HOOK_PATH,
+        payload,
+        repository_root,
+        temp_directory,
+        home_directory,
+    )
+
+
+def read_tracker_paths(temp_directory: Path, session_id: str) -> list[str]:
+    edit_file = temp_directory / f"{SESSION_EDIT_FILE_PREFIX}{session_id}{SESSION_EDIT_FILE_SUFFIX}"
+    tracker_payload = json.loads(edit_file.read_text(encoding="utf-8"))
+    return tracker_payload[ALL_EDITED_FILE_PATHS_KEY]
+
+
+def parse_dispatcher_decision(stdout_text: str) -> tuple[str, str]:
+    if not stdout_text.strip():
+        return "", ""
+    hook_specific_output = json.loads(stdout_text)["hookSpecificOutput"]
+    return (
+        hook_specific_output.get("permissionDecision", ""),
+        hook_specific_output.get("permissionDecisionReason", ""),
     )
 
 
