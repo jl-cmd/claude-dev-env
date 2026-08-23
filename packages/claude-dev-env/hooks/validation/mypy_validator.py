@@ -11,6 +11,7 @@ This catches:
 Works in both WSL and Windows for any Python project with a git root.
 Project root is discovered via CLAUDE_PROJECT_ROOT env var or git rev-parse.
 """
+
 import hashlib
 import importlib
 import json
@@ -33,9 +34,13 @@ if _validators_directory not in sys.path:
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
-from mypy_integration import find_pyproject_with_mypy_config  # noqa: E402
+from mypy_integration import (  # noqa: E402
+    ancestor_directories,
+    find_pyproject_with_mypy_config,
+)
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.mypy_integration_constants import PYPROJECT_FILENAME  # noqa: E402
 from hooks_constants.mypy_validator_cache_constants import (  # noqa: E402
     CACHE_FILE_ENCODING,
     CONTENT_HASH_CACHE_PASSING_EXIT_CODE,
@@ -70,7 +75,8 @@ def discover_project_root(target_file: str) -> Path | None:
     try:
         completed_process = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            check=False, capture_output=True,
+            check=False,
+            capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(Path(target_file).parent),
@@ -90,7 +96,7 @@ def is_file_within_project(target_file: str, project_root: Path) -> bool:
         return False
 
 
-_session_config_cache_by_target_directory: dict[str, str | None] = {}
+_session_config_cache_by_target_directory: dict[str, tuple[str, str | None]] = {}
 
 
 def reset_session_config_cache() -> None:
@@ -138,9 +144,7 @@ def _read_cache_file(cache_path: Path) -> dict[str, object]:
 def _write_cache_file(cache_path: Path, cache_by_key: dict[str, object]) -> None:
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(
-            json.dumps(cache_by_key), encoding=CACHE_FILE_ENCODING
-        )
+        cache_path.write_text(json.dumps(cache_by_key), encoding=CACHE_FILE_ENCODING)
     except OSError:
         return
 
@@ -148,6 +152,36 @@ def _write_cache_file(cache_path: Path, cache_by_key: dict[str, object]) -> None
 def _walk_mypy_config(target_file: Path) -> Path | None:
     discovered_config = find_pyproject_with_mypy_config(target_file)
     return discovered_config if isinstance(discovered_config, Path) else None
+
+
+def _config_search_signature(target_file: Path) -> str:
+    config_search_hasher = hashlib.sha256()
+    for each_directory in ancestor_directories(target_file):
+        candidate_config_path = each_directory / PYPROJECT_FILENAME
+        config_search_hasher.update(str(candidate_config_path).encode(CACHE_FILE_ENCODING))
+        is_configuration_file = candidate_config_path.is_file()
+        config_search_hasher.update(b"present" if is_configuration_file else b"missing")
+        if not is_configuration_file:
+            continue
+        try:
+            config_search_hasher.update(candidate_config_path.read_bytes())
+        except OSError:
+            continue
+    return config_search_hasher.hexdigest()
+
+
+def _read_cached_config_path(
+    cached_entry: object, config_search_signature: str
+) -> tuple[bool, str | None]:
+    if not isinstance(cached_entry, dict):
+        return False, None
+    cached_signature = cached_entry.get("signature")
+    cached_config_path = cached_entry.get("config_path")
+    if cached_signature != config_search_signature:
+        return False, None
+    if cached_config_path is not None and not isinstance(cached_config_path, str):
+        return False, None
+    return True, cached_config_path
 
 
 def _config_cache_key_for(target_file: Path) -> str:
@@ -189,22 +223,34 @@ def discover_mypy_config(target_file: Path) -> Path | None:
         table, or None when none exists above the file.
     """
     cache_key = _config_cache_key_for(target_file)
-    if cache_key in _session_config_cache_by_target_directory:
-        cached_value = _session_config_cache_by_target_directory[cache_key]
-        return Path(cached_value) if cached_value is not None else None
+    config_search_signature = _config_search_signature(target_file)
+    cached_entry = _session_config_cache_by_target_directory.get(cache_key)
+    if cached_entry is not None and cached_entry[0] == config_search_signature:
+        cached_config_path = cached_entry[1]
+        return Path(cached_config_path) if cached_config_path is not None else None
 
     config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
     persisted_cache = _read_cache_file(config_cache_path)
-    if cache_key in persisted_cache:
-        persisted_value = persisted_cache[cache_key]
-        resolved_persisted = persisted_value if isinstance(persisted_value, str) else None
-        _session_config_cache_by_target_directory[cache_key] = resolved_persisted
-        return Path(resolved_persisted) if resolved_persisted is not None else None
+    is_valid_cache_entry, persisted_config_path = _read_cached_config_path(
+        persisted_cache.get(cache_key), config_search_signature
+    )
+    if is_valid_cache_entry:
+        _session_config_cache_by_target_directory[cache_key] = (
+            config_search_signature,
+            persisted_config_path,
+        )
+        return Path(persisted_config_path) if persisted_config_path is not None else None
 
     discovered_config = _walk_mypy_config(target_file)
     discovered_value = str(discovered_config) if discovered_config is not None else None
-    _session_config_cache_by_target_directory[cache_key] = discovered_value
-    persisted_cache[cache_key] = discovered_value
+    _session_config_cache_by_target_directory[cache_key] = (
+        config_search_signature,
+        discovered_value,
+    )
+    persisted_cache[cache_key] = {
+        "signature": config_search_signature,
+        "config_path": discovered_value,
+    }
     _write_cache_file(config_cache_path, persisted_cache)
     return discovered_config
 
@@ -255,9 +301,7 @@ def _composite_content_hash(target_file: str, mypy_config_file: Path | None) -> 
 
 
 def _read_cached_passing_hash(target_file: str) -> str | None:
-    content_hash_cache = _read_cache_file(
-        _session_cache_path(MYPY_CONTENT_HASH_CACHE_FILENAME)
-    )
+    content_hash_cache = _read_cache_file(_session_cache_path(MYPY_CONTENT_HASH_CACHE_FILENAME))
     cached_hash = content_hash_cache.get(target_file)
     return cached_hash if isinstance(cached_hash, str) else None
 
@@ -286,12 +330,16 @@ def build_mypy_command(relative_file_path: str, mypy_config_file: Path | None) -
     config_arguments = (
         ["--config-file", str(mypy_config_file)] if mypy_config_file is not None else []
     )
-    return base_command + config_arguments + [
-        "--no-error-summary",
-        "--show-error-codes",
-        "--no-color",
-        relative_file_path,
-    ]
+    return (
+        base_command
+        + config_arguments
+        + [
+            "--no-error-summary",
+            "--show-error-codes",
+            "--no-color",
+            relative_file_path,
+        ]
+    )
 
 
 def project_relative_path(target_file: str, project_root: str) -> str:
@@ -359,7 +407,8 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
 
     completed_process = subprocess.run(
         mypy_command,
-        check=False, capture_output=True,
+        check=False,
+        capture_output=True,
         text=True,
         env=os.environ.copy(),
         timeout=MYPY_TIMEOUT_SECONDS,
@@ -368,9 +417,14 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
 
     stdout_output = completed_process.stdout.strip()
     stderr_output = completed_process.stderr.strip()
-    combined_output = f"{stdout_output}\n{stderr_output}".strip() if stderr_output else stdout_output
+    combined_output = (
+        f"{stdout_output}\n{stderr_output}".strip() if stderr_output else stdout_output
+    )
 
-    if completed_process.returncode == CONTENT_HASH_CACHE_PASSING_EXIT_CODE and content_hash is not None:
+    if (
+        completed_process.returncode == CONTENT_HASH_CACHE_PASSING_EXIT_CODE
+        and content_hash is not None
+    ):
         _record_passing_hash(target_file, content_hash)
 
     return completed_process.returncode, combined_output
@@ -435,8 +489,7 @@ def is_test_file(python_file: Path) -> bool:
     path_lower = str(python_file).lower()
 
     return any(
-        each_pattern in name_lower or each_pattern in path_lower
-        for each_pattern in SKIP_PATTERNS
+        each_pattern in name_lower or each_pattern in path_lower for each_pattern in SKIP_PATTERNS
     )
 
 

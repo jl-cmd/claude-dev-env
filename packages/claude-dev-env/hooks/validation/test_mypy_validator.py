@@ -83,6 +83,44 @@ def test_discover_mypy_config_returns_none_without_tool_mypy(tmp_path: Path) -> 
     assert validator.discover_mypy_config(standalone_module) is None
 
 
+def test_discover_mypy_config_refreshes_after_pyproject_changes(tmp_path: Path) -> None:
+    validator = _load_validator()
+    nested_module = tmp_path / "package" / "module.py"
+    nested_module.parent.mkdir(parents=True)
+    nested_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+
+    assert validator.discover_mypy_config(nested_module) is None
+
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    discovered_config = validator.discover_mypy_config(nested_module)
+
+    assert discovered_config is not None
+    assert discovered_config.resolve() == config_path.resolve()
+
+    config_path.unlink()
+
+    assert validator.discover_mypy_config(nested_module) is None
+
+
+def test_persisted_config_cache_refreshes_after_pyproject_changes(tmp_path: Path) -> None:
+    nested_module = tmp_path / "package" / "module.py"
+    nested_module.parent.mkdir(parents=True)
+    nested_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+
+    first_validator = _load_validator()
+    assert first_validator.discover_mypy_config(nested_module) is None
+
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(TOOL_MYPY_PYPROJECT, encoding="utf-8")
+
+    second_validator = _load_validator()
+    discovered_config = second_validator.discover_mypy_config(nested_module)
+
+    assert discovered_config is not None
+    assert discovered_config.resolve() == config_path.resolve()
+
+
 def test_build_mypy_command_includes_config_file_when_present(tmp_path: Path) -> None:
     validator = _load_validator()
     config_file = tmp_path / "pyproject.toml"
@@ -194,15 +232,11 @@ def test_warm_cache_still_blocks_file_edited_to_introduce_type_error(
     edited_module = project_root / "edited.py"
     edited_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
 
-    clean_exit_code, _clean_output = validator.run_mypy(
-        str(edited_module), str(project_root)
-    )
+    clean_exit_code, _clean_output = validator.run_mypy(str(edited_module), str(project_root))
     assert clean_exit_code == 0
 
     edited_module.write_text(TYPE_ERROR_MODULE_SOURCE, encoding="utf-8")
-    error_exit_code, error_output = validator.run_mypy(
-        str(edited_module), str(project_root)
-    )
+    error_exit_code, error_output = validator.run_mypy(str(edited_module), str(project_root))
 
     assert error_exit_code != 0
     assert ": error:" in error_output
@@ -230,9 +264,7 @@ def test_warm_cache_skips_mypy_run_when_content_unchanged(
 
     monkeypatch.setattr(validator.subprocess, "run", _counting_subprocess_run)
 
-    second_exit_code, _second_output = validator.run_mypy(
-        str(unchanged_module), str(project_root)
-    )
+    second_exit_code, _second_output = validator.run_mypy(str(unchanged_module), str(project_root))
 
     assert second_exit_code == 0
     assert subprocess_run_call_count == 0
@@ -250,13 +282,10 @@ def test_content_hash_skip_invalidated_when_mypy_config_tightens(
     checked_module = project_root / "checked.py"
     checked_module.write_text(UNTYPED_DEF_MODULE_SOURCE, encoding="utf-8")
 
-    loose_exit_code, _loose_output = validator.run_mypy(
-        str(checked_module), str(project_root)
-    )
+    loose_exit_code, _loose_output = validator.run_mypy(str(checked_module), str(project_root))
     assert loose_exit_code == 0
 
     config_path.write_text(STRICT_TOOL_MYPY_PYPROJECT, encoding="utf-8")
-    validator.reset_session_config_cache()
 
     subprocess_run_call_count = 0
     real_subprocess_run = validator.subprocess.run
