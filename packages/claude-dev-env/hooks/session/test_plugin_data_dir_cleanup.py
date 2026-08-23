@@ -60,7 +60,11 @@ def test_main_keeps_read_only_plugin_data_directory_with_files(
     state_file.chmod(stat.S_IREAD)
     _configure_plugin_data_directory(plugin_data_directory)
 
-    HOOK_MODULE.main()
+    try:
+        HOOK_MODULE.main()
 
-    assert retained_plugin_directory.is_dir()
-    state_file.chmod(stat.S_IREAD | stat.S_IWRITE)
+        assert retained_plugin_directory.is_dir()
+        assert state_file.is_file()
+        assert state_file.read_text(encoding="utf-8") == "{}"
+    finally:
+        state_file.chmod(stat.S_IREAD | stat.S_IWRITE)
