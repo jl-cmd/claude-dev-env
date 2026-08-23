@@ -12,7 +12,9 @@ import pytest
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
-_PR_LOOP_SCRIPTS_DIRECTORY = str(Path(__file__).resolve().parents[2] / "_shared" / "pr-loop" / "scripts")
+_PR_LOOP_SCRIPTS_DIRECTORY = str(
+    Path(__file__).resolve().parents[2] / "_shared" / "pr-loop" / "scripts"
+)
 if _BLOCKING_DIRECTORY not in sys.path:
     sys.path.insert(0, _BLOCKING_DIRECTORY)
 if _HOOKS_DIRECTORY not in sys.path:
@@ -121,7 +123,7 @@ def test_write_stage_runs_the_real_entrypoint_and_reports_a_deny_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    staging_directory = getattr(tmp_path_factory, "mktemp")("stage")
+    staging_directory = tmp_path_factory.mktemp("stage")
     target_path = str(staging_directory / "service.py")
     source = "def process_data() -> None:\n    print('payload')\n"
 
@@ -138,7 +140,7 @@ def test_write_stage_allows_a_clean_candidate_through_the_real_entrypoint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    staging_directory = getattr(tmp_path_factory, "mktemp")("stage")
+    staging_directory = tmp_path_factory.mktemp("stage")
     target_path = str(staging_directory / "service.py")
     source = "def calculate_total() -> int:\n    return 0\n"
 
