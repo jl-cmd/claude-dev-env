@@ -14,6 +14,7 @@ it stays denied.
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -21,8 +22,11 @@ from pathlib import Path
 import pytest
 
 BLOCKING_DIRECTORY = Path(__file__).resolve().parent
+CLAUDE_DEV_ENV_DIRECTORY = BLOCKING_DIRECTORY.parent.parent
 HOOK_SCRIPT_PATH = BLOCKING_DIRECTORY / "sensitive_file_protector.py"
 DISPATCHER_SCRIPT_PATH = BLOCKING_DIRECTORY / "pre_tool_use_dispatcher.py"
+HOOKS_JSON_PATH = BLOCKING_DIRECTORY.parent / "hooks.json"
+DIRECT_HOOK_TIMEOUT_SECONDS = 10
 
 WRITE_TOOL_NAME = "Write"
 EDIT_TOOL_NAME = "Edit"
@@ -66,6 +70,35 @@ ALL_UPPERCASE_DENIED_FILENAMES = (".ENV", "ID_RSA", "CREDENTIALS.JSON", "SERVER.
 ALL_ORDINARY_FILENAMES = ("main.py", "README.md", "settings.json")
 
 
+def _registered_dispatcher_command_and_timeout(
+    hooks_json_path: Path = HOOKS_JSON_PATH,
+) -> tuple[list[str], int]:
+    hooks_configuration = json.loads(hooks_json_path.read_text(encoding="utf-8"))
+    pre_tool_use_registrations = hooks_configuration["hooks"]["PreToolUse"]
+    for each_registration in pre_tool_use_registrations:
+        matcher_names = set(each_registration["matcher"].split("|"))
+        covers_write_and_edit = {WRITE_TOOL_NAME, EDIT_TOOL_NAME} <= matcher_names
+        if not covers_write_and_edit:
+            continue
+        for each_hook in each_registration["hooks"]:
+            command_parts = shlex.split(each_hook["command"])
+            if "pre_tool_use_dispatcher.py" not in command_parts[-1]:
+                continue
+            assert command_parts[0] == "python3"
+            dispatcher_script_path = Path(
+                command_parts[-1].replace(
+                    "${CLAUDE_PLUGIN_ROOT}", str(CLAUDE_DEV_ENV_DIRECTORY)
+                )
+            )
+            assert dispatcher_script_path.resolve() == DISPATCHER_SCRIPT_PATH.resolve()
+            registered_timeout_seconds = each_hook["timeout"]
+            assert isinstance(registered_timeout_seconds, int)
+            return [sys.executable, str(dispatcher_script_path)], registered_timeout_seconds
+    raise AssertionError(
+        "hooks.json must register pre_tool_use_dispatcher.py for Write and Edit"
+    )
+
+
 def _run_hook(tool_name: str, file_path: Path, content: str) -> subprocess.CompletedProcess:
     payload = json.dumps(
         {
@@ -83,6 +116,7 @@ def _run_hook_with_stdin(stdin_text: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=False,
+        timeout=DIRECT_HOOK_TIMEOUT_SECONDS,
     )
 
 
@@ -90,12 +124,16 @@ def _run_dispatcher(
     tool_name: str, tool_input: dict[str, str]
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+    dispatcher_command, dispatcher_timeout_seconds = (
+        _registered_dispatcher_command_and_timeout()
+    )
     return subprocess.run(
-        [sys.executable, str(DISPATCHER_SCRIPT_PATH)],
+        dispatcher_command,
         input=payload,
         capture_output=True,
         text=True,
         check=False,
+        timeout=dispatcher_timeout_seconds,
     )
 
 
@@ -165,6 +203,14 @@ def test_edit_to_a_secrets_file_is_denied(tmp_path: Path) -> None:
     completed = _run_hook(EDIT_TOOL_NAME, tmp_path / ".env", PLACEHOLDER_TEMPLATE_BODY)
     assert completed.returncode == 0, completed.stderr
     assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_hooks_json_registers_dispatcher_for_write_and_edit() -> None:
+    dispatcher_command, dispatcher_timeout_seconds = (
+        _registered_dispatcher_command_and_timeout()
+    )
+    assert dispatcher_command[1] == str(DISPATCHER_SCRIPT_PATH)
+    assert dispatcher_timeout_seconds > 0
 
 
 def test_dispatcher_denies_write_to_a_secrets_file(tmp_path: Path) -> None:
