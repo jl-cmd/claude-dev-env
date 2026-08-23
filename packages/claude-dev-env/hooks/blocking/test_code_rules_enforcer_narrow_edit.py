@@ -228,8 +228,6 @@ def test_narrow_edit_selects_each_accepted_rule(
 
 def test_scope_aware_inventory_matches_enforcer_dispatch() -> None:
     assert _scope_aware_rule_names_from_source() == ALL_SCOPE_AWARE_RULE_NAMES
-
-
 def test_narrow_edit_acceptance_set_is_source_backed_and_complete() -> None:
     all_fixture_rule_names = {
         each_fixture.rule_name for each_fixture in ALL_REQUIRED_RULE_FIXTURES
@@ -237,16 +235,6 @@ def test_narrow_edit_acceptance_set_is_source_backed_and_complete() -> None:
 
     assert all_fixture_rule_names == NARROW_EDIT_ACCEPTED_RULE_NAMES
     assert NARROW_EDIT_ACCEPTED_RULE_NAMES <= ALL_SCOPE_AWARE_RULE_NAMES
-
-
-def test_narrow_edit_acceptance_set_is_source_backed_and_complete() -> None:
-    all_fixture_rule_names = {
-        each_fixture.rule_name for each_fixture in ALL_REQUIRED_RULE_FIXTURES
-    }
-
-    assert all_fixture_rule_names == NARROW_EDIT_ACCEPTED_RULE_NAMES
-    assert NARROW_EDIT_ACCEPTED_RULE_NAMES <= SCOPE_AWARE_RULE_NAMES
-
 
 def test_narrow_edit_drops_an_untouched_banned_noun() -> None:
     untouched_source = "OLD_RESULT_PATH = 0\n"
