@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "human_timezone": "CONFIGURE_ME",
+  "slack_channel_env_var": "SLACK_CHANNEL_ID",
+  "bake_in_confirmations": {},
+  "items": {}
+}
