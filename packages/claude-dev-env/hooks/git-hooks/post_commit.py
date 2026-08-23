@@ -14,12 +14,21 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from enum import StrEnum
 from pathlib import Path
-from typing import Literal
 
 from git_hooks_constants import GIT_COMMAND_SUCCESS_EXIT_CODE, GIT_EXECUTABLE_NAME
 
-ParentPointerStatus = Literal["updated", "unchanged", "failed"]
+
+class ParentPointerStatus(StrEnum):
+    """States returned by a parent pointer update."""
+
+    UPDATED = "updated"
+    UNCHANGED = "unchanged"
+    FAILED = "failed"
+
+
+ParentPointerUpdate = tuple[ParentPointerStatus, str]
 
 
 def execute_git(
@@ -35,12 +44,12 @@ def execute_git(
             capture_output=True,
             text=True,
         )
-    except OSError:
+    except OSError as error:
         return subprocess.CompletedProcess(
             [GIT_EXECUTABLE_NAME, *arguments],
             1,
             "",
-            "",
+            str(error),
         )
 
 
@@ -81,6 +90,18 @@ def find_submodule_path(parent_repo: Path, repo_dir: Path) -> Path | None:
         return None
 
 
+def build_literal_pathspec(submodule_path: Path) -> str:
+    """Build a Git pathspec that treats every path character literally."""
+    return f":(literal){submodule_path.as_posix()}"
+
+
+def get_git_failure_diagnostic(
+    command_result: subprocess.CompletedProcess[str],
+) -> str:
+    """Return the most useful diagnostic from a failed Git command."""
+    return command_result.stderr.strip() or command_result.stdout.strip()
+
+
 def build_parent_commit_message(
     repo_name: str,
     commit_hash: str,
@@ -99,16 +120,16 @@ def update_parent_pointer(
     repo_dir: Path,
     commit_hash: str,
     commit_message: str,
-) -> ParentPointerStatus:
+) -> ParentPointerUpdate:
     """Commit the current submodule pointer in its parent repository."""
     submodule_path = find_submodule_path(parent_repo, repo_dir)
     if submodule_path is None:
-        return "failed"
+        return ParentPointerStatus.FAILED, "could not resolve the submodule path"
 
-    submodule_reference = submodule_path.as_posix()
+    submodule_reference = build_literal_pathspec(submodule_path)
     add_result = execute_git("add", "--", submodule_reference, cwd=parent_repo)
     if add_result.returncode != GIT_COMMAND_SUCCESS_EXIT_CODE:
-        return "failed"
+        return ParentPointerStatus.FAILED, get_git_failure_diagnostic(add_result)
 
     staged_difference = execute_git(
         "diff",
@@ -119,9 +140,9 @@ def update_parent_pointer(
         cwd=parent_repo,
     )
     if staged_difference.returncode == GIT_COMMAND_SUCCESS_EXIT_CODE:
-        return "unchanged"
+        return ParentPointerStatus.UNCHANGED, ""
     if staged_difference.returncode != 1:
-        return "failed"
+        return ParentPointerStatus.FAILED, get_git_failure_diagnostic(staged_difference)
 
     parent_commit_message = build_parent_commit_message(
         repo_dir.name,
@@ -138,8 +159,8 @@ def update_parent_pointer(
         cwd=parent_repo,
     )
     if commit_result.returncode != GIT_COMMAND_SUCCESS_EXIT_CODE:
-        return "failed"
-    return "updated"
+        return ParentPointerStatus.FAILED, get_git_failure_diagnostic(commit_result)
+    return ParentPointerStatus.UPDATED, ""
 
 
 def main() -> int:
@@ -164,16 +185,18 @@ def main() -> int:
     print(f"Submodule: {repo_dir.name} @ {short_commit_hash}")
     print(f"Parent:    {parent_repo}")
 
-    parent_pointer_status = update_parent_pointer(
+    parent_pointer_status, parent_pointer_diagnostic = update_parent_pointer(
         parent_repo,
         repo_dir,
         commit_hash,
         commit_msg,
     )
-    if parent_pointer_status == "failed":
+    if parent_pointer_status is ParentPointerStatus.FAILED:
         print("Parent update failed.")
+        if parent_pointer_diagnostic:
+            print(f"Git diagnostic: {parent_pointer_diagnostic}")
         return 0
-    if parent_pointer_status == "unchanged":
+    if parent_pointer_status is ParentPointerStatus.UNCHANGED:
         print("Parent already up to date.")
         return 0
 
