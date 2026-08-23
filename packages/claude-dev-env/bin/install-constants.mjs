@@ -83,15 +83,24 @@ export const MANAGED_AGENTS_DIRECTORY_NAME = 'agents';
 
 /**
  * The directory name hook scripts carry in a package source and under
- * `~/.claude`.
+ * the agents home.
  *
- * The copy loop reads `<package-root>/hooks` and writes `~/.claude/hooks`, the
- * hooks.json reads sit under the same name in each package source, the git-hook
- * shims and the mypy configuration point at the installed directory, the
- * retired-hook diff takes its relative paths against it, and the per-root
- * stale-file prune names it as one of its roots.
+ * The copy loop reads `<package-root>/.agents/hooks` (or `<package-root>/hooks`
+ * for a dependency with the legacy layout) and writes `~/.agents/hooks`.
+ * Claude and Codex lookup paths point at that canonical directory.
  */
 export const MANAGED_HOOKS_DIRECTORY_NAME = 'hooks';
+
+/**
+ * The directory name reusable scripts carry in a package source and under the
+ * agents home.
+ */
+export const MANAGED_SCRIPTS_DIRECTORY_NAME = 'scripts';
+
+/**
+ * Directory name Codex uses for installed hook scripts.
+ */
+export const CODEX_HOOKS_DIRECTORY_NAME = 'hooks';
 
 /**
  * The `~/.claude` file name that holds the user's harness settings.
