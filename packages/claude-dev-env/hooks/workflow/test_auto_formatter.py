@@ -21,6 +21,7 @@ import sys
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -139,12 +140,68 @@ def test_tracked_write_leaves_unused_import_in_place(git_repository: Path) -> No
     assert "import os" in tracked_file.read_text(encoding="utf-8")
 
 
-def _load_auto_formatter_module() -> object:
+def _load_auto_formatter_module() -> ModuleType:
     module_spec = importlib.util.spec_from_file_location("auto_formatter", HOOK_SCRIPT_PATH)
     assert module_spec is not None and module_spec.loader is not None
     auto_formatter_module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(auto_formatter_module)
     return auto_formatter_module
+
+
+def test_formatter_eligibility_requires_write_tool_and_untracked_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    source_file = tmp_path / "new_module.py"
+    monkeypatch.setattr(auto_formatter_module, "is_untracked_in_git", lambda _: True)
+
+    assert auto_formatter_module.is_formatter_eligible("Write", str(source_file))
+    assert not auto_formatter_module.is_formatter_eligible("Bash", str(source_file))
+
+
+def test_formatter_eligibility_protects_hook_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    hooks_directory = tmp_path / "hooks"
+    protected_file = hooks_directory / "generated.py"
+    monkeypatch.setattr(
+        auto_formatter_module,
+        "HOOKS_DIR",
+        f"{hooks_directory}{os.sep}",
+    )
+
+    assert auto_formatter_module.is_protected_path(str(protected_file))
+
+
+def test_formatter_diagnostic_stays_on_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+
+    def return_formatter_failure(
+        command: list[str], **_options: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 3, "", "formatter failure")
+
+    monkeypatch.setattr(subprocess, "run", return_formatter_failure)
+    auto_formatter_module.run_eligible_formatter("broken.py")
+
+    captured_output = capsys.readouterr()
+    assert "formatter failure" in captured_output.err
+    assert captured_output.out == ""
+
+
+def test_python_formatting_preserves_crlf_line_endings(git_repository: Path) -> None:
+    source_file = git_repository / "crlf_module.py"
+    source_file.write_bytes(b"x=1\r\ny  =  2\r\n")
+
+    completed_hook = _run_hook("Write", source_file)
+
+    assert completed_hook.returncode == 0
+    formatted_source = source_file.read_bytes()
+    assert b"\r\n" in formatted_source
+    assert b"\n" not in formatted_source.replace(b"\r\n", b"")
 
 
 def _registered_auto_formatter_timeout() -> int:
