@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 _blocking_directory = str(Path(__file__).resolve().parent)
 if _blocking_directory not in sys.path:
     sys.path.insert(0, _blocking_directory)
@@ -58,12 +60,43 @@ def test_should_accept_a_raise_wrapped_by_a_blast_radius_boundary() -> None:
         "    for each_member in all_members:\n"
         "        try:\n"
         "            if each_member.requires_resize:\n"
-        "                raise AssetError('member requires resizing')\n"
+                "                raise AssetItemBlocked('member requires resizing')\n"
         "        except AssetItemBlocked as failure:\n"
         "            park(each_member, failure)\n"
     )
 
     assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
+
+
+def test_should_report_runtime_error_with_a_different_declared_handler() -> None:
+    """A different declared handler leaves a runtime crash requiring a name."""
+    content = (
+        "def run(all_members):\n"
+        "    for each_member in all_members:\n"
+        "        try:\n"
+        "            raise RuntimeError('code defect')\n"
+        "        except AssetItemBlocked:\n"
+        "            park(each_member)\n"
+    )
+
+    assert len(check_blast_radius_declared(content, PRODUCTION_PATH)) == 1
+
+
+@pytest.mark.parametrize("raised_type", ["RuntimeError", "TypeError", "AttributeError", "ValueError"])
+def test_should_require_corresponding_handler_for_each_explicit_raise(
+    raised_type: str,
+) -> None:
+    """Each explicit raise needs a handler naming that same type."""
+    content = (
+        "def run(all_members):\n"
+        "    for each_member in all_members:\n"
+        "        try:\n"
+        f"            raise {raised_type}('code defect')\n"
+        "        except AssetItemBlocked:\n"
+        "            park(each_member)\n"
+    )
+
+    assert len(check_blast_radius_declared(content, PRODUCTION_PATH)) == 1
 
 
 def test_should_accept_a_run_level_raise_during_manifest_preparation() -> None:
