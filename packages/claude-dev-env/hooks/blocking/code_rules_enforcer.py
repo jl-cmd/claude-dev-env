@@ -16,6 +16,7 @@ concern focused. The separate ``tdd_enforcer.py`` hook accepts any
 ``code_rules_*`` module family, so the suffix files satisfy its gate.
 """
 import json
+import os
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -28,6 +29,8 @@ if _BLOCKING_DIRECTORY not in sys.path:
     sys.path.insert(0, _BLOCKING_DIRECTORY)
 if _HOOKS_DIRECTORY not in sys.path:
     sys.path.insert(0, _HOOKS_DIRECTORY)
+
+_codex_apply_patch_tool_name = "apply_patch"
 
 from code_rules_annotations_length import (  # noqa: E402
     check_function_length,
@@ -203,6 +206,11 @@ from code_rules_typeddict_stub import (  # noqa: E402
 from code_rules_unused_imports import (  # noqa: E402
     check_unused_module_level_imports,
 )
+from codex_apply_patch import (  # noqa: E402
+    CodexPatchError,
+    CodexPatchFile,
+    parse_codex_apply_patch,
+)
 
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CODE_EXTENSIONS,
@@ -211,11 +219,82 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     DENY_REASON_ISSUE_PREVIEW_COUNT,
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
+    VIOLATION_SEPARATOR,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
+
+
+def _codex_patch_issues(each_patch_file: CodexPatchFile) -> list[str]:
+    """Run the existing code-rules verdict over one Codex patch view."""
+    if not each_patch_file.post_content and each_patch_file.operation == "delete":
+        return []
+    if _is_hook_infrastructure_python_target(each_patch_file.file_path):
+        all_issues = _hook_infrastructure_blocking_issues(
+            each_patch_file.post_content,
+            each_patch_file.file_path,
+            each_patch_file.post_content,
+            each_patch_file.prior_content,
+        )
+    elif _is_validated_target(each_patch_file.file_path):
+        all_issues = validate_content(
+            each_patch_file.post_content,
+            each_patch_file.file_path,
+            each_patch_file.prior_content,
+            each_patch_file.post_content,
+            each_patch_file.prior_content,
+        )
+    else:
+        return []
+    return [
+        f"{each_patch_file.file_path}: {each_issue}"
+        for each_issue in all_issues
+    ]
+
+
+def _report_codex_patch_payload(
+    all_pretooluse_payload: dict[str, object], deny_stream: TextIO
+) -> None:
+    """Validate every file view carried by a Codex apply_patch payload."""
+    tool_input = all_pretooluse_payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        _write_deny_payload(
+            "BLOCKED: [CODE_RULES] apply_patch payload requires tool input",
+            deny_stream,
+        )
+        return
+    patch_command = tool_input.get("command")
+    if not isinstance(patch_command, str):
+        _write_deny_payload(
+            "BLOCKED: [CODE_RULES] apply_patch payload requires a string command",
+            deny_stream,
+        )
+        return
+    working_directory = all_pretooluse_payload.get("cwd")
+    if not isinstance(working_directory, str):
+        working_directory = os.getcwd()
+    try:
+        all_patch_files = parse_codex_apply_patch(patch_command, working_directory)
+    except CodexPatchError as error:
+        _write_deny_payload(
+            f"BLOCKED: [CODE_RULES] apply_patch payload requires accepted patch markers: {error}",
+            deny_stream,
+        )
+        return
+    all_issues = [
+        each_issue
+        for each_patch_file in all_patch_files
+        for each_issue in _codex_patch_issues(each_patch_file)
+    ]
+    if all_issues:
+        _write_deny_payload(
+            f"BLOCKED: [CODE_RULES] {len(all_issues)} violation(s): "
+            + VIOLATION_SEPARATOR.join(all_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
+            + _precheck_hint(),
+            deny_stream,
+        )
 
 
 def validate_content(
@@ -1259,6 +1338,10 @@ def main(all_arguments: list[str]) -> None:
         sys.exit(0)
 
     tool_name = pretooluse_payload.get("tool_name", "")
+    if tool_name == _codex_apply_patch_tool_name:
+        _report_codex_patch_payload(pretooluse_payload, sys.stdout)
+        sys.exit(0)
+
     tool_input = pretooluse_payload.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
 
