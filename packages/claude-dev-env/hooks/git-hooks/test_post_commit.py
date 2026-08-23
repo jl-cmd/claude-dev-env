@@ -8,6 +8,35 @@ import post_commit
 import pytest
 
 
+def build_fixture_git_environment() -> dict[str, str]:
+    """Copy the process environment without inherited Git state overrides."""
+    return {
+        each_name: each_value
+        for each_name, each_value in os.environ.items()
+        if not each_name.upper().startswith("GIT_")
+    }
+
+
+def clear_inherited_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove inherited Git state overrides from the current test process."""
+    for each_name in list(os.environ):
+        if each_name.upper().startswith("GIT_"):
+            monkeypatch.delenv(each_name, raising=False)
+
+
+def test_fixture_git_environment_preserves_process_execution_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fixture environment keeps PATH while removing Git overrides."""
+    monkeypatch.setenv("PATH", "fixture-execution-path")
+    monkeypatch.setenv("GIT_DIR", "unrelated-repository")
+
+    fixture_environment = build_fixture_git_environment()
+
+    assert fixture_environment["PATH"] == "fixture-execution-path"
+    assert all(not each_name.upper().startswith("GIT_") for each_name in fixture_environment)
+
+
 def run_fixture_git(repository_path: Path, *arguments: str) -> str:
     """Run Git in a fixture repository and return standard output."""
     completed_process = subprocess.run(
@@ -16,6 +45,7 @@ def run_fixture_git(repository_path: Path, *arguments: str) -> str:
         check=False,
         capture_output=True,
         text=True,
+        env=build_fixture_git_environment(),
     )
     assert completed_process.returncode == 0, completed_process.stderr
     return completed_process.stdout.strip()
@@ -50,8 +80,13 @@ def initialize_fixture_repository(repository_path: Path) -> None:
 
 def test_native_submodule_commit_records_parent_pointer(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A real submodule commit creates the matching parent pointer commit."""
+    unrelated_repository = tmp_path / "unrelated-repository"
+    initialize_fixture_repository(unrelated_repository)
+    monkeypatch.setenv("GIT_DIR", str(unrelated_repository / ".git"))
+
     source_repository = tmp_path / "source-repository"
     parent_repository = tmp_path / "parent-repository"
     initialize_fixture_repository(source_repository)
@@ -83,6 +118,7 @@ def test_native_submodule_commit_records_parent_pointer(
     run_fixture_git(submodule_repository, "commit", "-m", "Record fixture change")
     original_working_directory = Path.cwd()
     try:
+        clear_inherited_git_environment(monkeypatch)
         os.chdir(submodule_repository)
         assert post_commit.main() == 0
     finally:
