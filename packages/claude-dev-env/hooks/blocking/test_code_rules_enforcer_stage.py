@@ -74,7 +74,6 @@ def _run_precheck_stage(candidate_path: Path, target_path: str) -> subprocess.Co
         capture_output=True,
         text=True,
     )
-
 def test_edit_stage_baselines_the_new_fragment_against_the_old_fragment() -> None:
     all_seen_contents: list[str] = []
 
