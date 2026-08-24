@@ -44,6 +44,10 @@ Before writing ANY constant: search `config/` for the exact value → semantic m
 
 Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` for exception. Naming patterns: loop vars `each_*`; booleans `is_/has_/should_/can_/was_/did_`; collections `all_*`; maps `X_by_Y`; preposition params (`from_path=`, `to=`, `into=`). Banned names: `result`, `data`, `output`, `response`, `value`, `item`, `temp`. Banned prefixes: `handle`, `process`, `manage`, `do`. Name a component for what it IS — `Overlay`, `Validator`, `InvoicePreview`.
 
+### Public compatibility definitions
+
+A public function may use the exact inline marker `# pragma: no-banned-noun` on its `def` line. The banned-noun check permits the function name and parameters on that definition. Body local bindings, other definitions, and similar names remain checked.
+
 ---
 
 ## 6. COMPLETE TYPE HINTS
