@@ -68,7 +68,7 @@ MAXIMUM_DISPLAYED_ERRORS = 5
 
 SKIP_PATTERNS = {"test_", "_test.", "conftest", "/tests/", "\\tests\\", "fixture", "mock"}
 
-ConfigCacheEntry = tuple[str, str | None, tuple[str, ...]]
+ConfigCacheEntry = tuple[str, str | None, tuple[str, ...], str | None]
 
 
 def discover_project_root(target_file: str) -> Path | None:
@@ -188,15 +188,32 @@ def _configuration_metadata_signature(all_candidate_paths: tuple[str, ...]) -> s
     return config_search_hasher.hexdigest()
 
 
+def _configuration_content_digest(
+    config_path: str | None, all_candidate_paths: tuple[str, ...]
+) -> str | None:
+    paths_to_fingerprint = (config_path,) if config_path is not None else all_candidate_paths
+    content_hasher = hashlib.sha256()
+    for each_config_path in paths_to_fingerprint:
+        content_hasher.update(each_config_path.encode(CACHE_FILE_ENCODING))
+        try:
+            content_hasher.update(Path(each_config_path).read_bytes())
+        except OSError:
+            content_hasher.update(b"unreadable")
+    return content_hasher.hexdigest()
+
+
 def _read_cached_config_entry(cached_entry: object) -> ConfigCacheEntry | None:
     if not isinstance(cached_entry, dict):
         return None
     cached_signature = cached_entry.get("signature")
     cached_config_path = cached_entry.get("config_path")
     raw_candidate_paths = cached_entry.get("candidate_paths")
+    cached_content_digest = cached_entry.get("content_digest")
     if not isinstance(cached_signature, str):
         return None
     if cached_config_path is not None and not isinstance(cached_config_path, str):
+        return None
+    if cached_content_digest is not None and not isinstance(cached_content_digest, str):
         return None
     if not isinstance(raw_candidate_paths, list):
         return None
@@ -209,15 +226,21 @@ def _read_cached_config_entry(cached_entry: object) -> ConfigCacheEntry | None:
         return None
     if cached_config_path is not None and cached_config_path not in all_candidate_paths:
         return None
-    return cached_signature, cached_config_path, tuple(all_candidate_paths)
+    return (
+        cached_signature,
+        cached_config_path,
+        tuple(all_candidate_paths),
+        cached_content_digest,
+    )
 
 
 def _serialize_config_cache_entry(cache_entry: ConfigCacheEntry) -> dict[str, object]:
-    config_signature, config_path, all_candidate_paths = cache_entry
+    config_signature, config_path, all_candidate_paths, content_digest = cache_entry
     return {
         "signature": config_signature,
         "config_path": config_path,
         "candidate_paths": list(all_candidate_paths),
+        "content_digest": content_digest,
     }
 
 
@@ -263,7 +286,9 @@ def discover_mypy_config(target_file: Path) -> Path | None:
     cached_entry = _session_config_cache_by_target_directory.get(cache_key)
     if cached_entry is not None:
         config_search_signature = _configuration_metadata_signature(cached_entry[2])
-        if config_search_signature == cached_entry[0]:
+        current_content_digest = _configuration_content_digest(cached_entry[1], cached_entry[2])
+        is_content_unchanged = current_content_digest == cached_entry[3]
+        if config_search_signature == cached_entry[0] and is_content_unchanged:
             cached_config_path = cached_entry[1]
             return Path(cached_config_path) if cached_config_path is not None else None
         all_candidate_paths = cached_entry[2]
@@ -275,7 +300,11 @@ def discover_mypy_config(target_file: Path) -> Path | None:
         persisted_entry = _read_cached_config_entry(persisted_cache.get(cache_key))
         if persisted_entry is not None:
             config_search_signature = _configuration_metadata_signature(persisted_entry[2])
-            if config_search_signature == persisted_entry[0]:
+            current_content_digest = _configuration_content_digest(
+                persisted_entry[1], persisted_entry[2]
+            )
+            is_content_unchanged = current_content_digest == persisted_entry[3]
+            if config_search_signature == persisted_entry[0] and is_content_unchanged:
                 _session_config_cache_by_target_directory[cache_key] = persisted_entry
                 cached_config_path = persisted_entry[1]
                 return Path(cached_config_path) if cached_config_path is not None else None
@@ -286,10 +315,12 @@ def discover_mypy_config(target_file: Path) -> Path | None:
 
     discovered_config = _walk_mypy_config(target_file)
     discovered_value = str(discovered_config) if discovered_config is not None else None
+    content_digest = _configuration_content_digest(discovered_value, all_candidate_paths)
     refreshed_entry = (
         config_search_signature,
         discovered_value,
         all_candidate_paths,
+        content_digest,
     )
     _session_config_cache_by_target_directory[cache_key] = refreshed_entry
     persisted_cache[cache_key] = _serialize_config_cache_entry(refreshed_entry)

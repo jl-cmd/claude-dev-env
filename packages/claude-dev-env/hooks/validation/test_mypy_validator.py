@@ -38,6 +38,11 @@ LOOSE_TOOL_MYPY_PYPROJECT = "[tool.mypy]\nignore_missing_imports = true\n"
 STRICT_TOOL_MYPY_PYPROJECT = (
     "[tool.mypy]\nignore_missing_imports = true\ndisallow_untyped_defs = true\n"
 )
+SAME_SIZE_LOOSE_TOOL_MYPY_PYPROJECT = "[tool.mypy]\ndisallow_any_generics = false\n"
+SAME_SIZE_STRICT_TOOL_MYPY_PYPROJECT = "[tool.mypy]\ndisallow_any_generics = true \n"
+UNCHECKED_GENERIC_MODULE_SOURCE = "values: list = []\n"
+SAME_SIZE_NON_MYPY_PYPROJECT = "[tool.ruff]\nline-length = 100\n#123456789\n"
+SAME_SIZE_STRICT_MYPY_PYPROJECT = "[tool.mypy]\ndisallow_untyped_defs = true\n"
 
 
 def _load_validator() -> ModuleType:
@@ -121,6 +126,57 @@ def test_persisted_config_cache_refreshes_after_pyproject_changes(tmp_path: Path
     assert discovered_config.resolve() == config_path.resolve()
 
 
+def test_persisted_cache_reuses_metadata_and_refreshes_once_after_config_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    config_path = project_root / "pyproject.toml"
+    config_path.write_text(LOOSE_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    target_module = project_root / "module.py"
+    target_module.write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
+
+    first_validator = _load_validator()
+    assert first_validator.discover_mypy_config(target_module) == config_path
+
+    second_validator = _load_validator()
+    unchanged_walk_call_count = 0
+    real_ancestor_directories = second_validator.ancestor_directories
+
+    def _count_unchanged_ancestor_walks(starting_file: Path) -> list[Path]:
+        nonlocal unchanged_walk_call_count
+        unchanged_walk_call_count += 1
+        return real_ancestor_directories(starting_file)
+
+    monkeypatch.setattr(
+        second_validator,
+        "ancestor_directories",
+        _count_unchanged_ancestor_walks,
+    )
+
+    assert second_validator.discover_mypy_config(target_module) == config_path
+    assert unchanged_walk_call_count == 0
+
+    config_path.write_text(STRICT_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    third_validator = _load_validator()
+    changed_walk_call_count = 0
+    real_changed_walk = third_validator.find_pyproject_with_mypy_config
+
+    def _count_changed_config_walks(starting_file: Path) -> Path | None:
+        nonlocal changed_walk_call_count
+        changed_walk_call_count += 1
+        return real_changed_walk(starting_file)
+
+    monkeypatch.setattr(
+        third_validator,
+        "find_pyproject_with_mypy_config",
+        _count_changed_config_walks,
+    )
+
+    assert third_validator.discover_mypy_config(target_module) == config_path
+    assert changed_walk_call_count == 1
+
+
 def test_build_mypy_command_includes_config_file_when_present(tmp_path: Path) -> None:
     validator = _load_validator()
     config_file = tmp_path / "pyproject.toml"
@@ -195,7 +251,7 @@ def test_config_walk_runs_once_per_root_across_two_edits(
     assert walk_count_after_second_edit == walk_count_after_first_edit
 
 
-def test_warm_config_cache_uses_metadata_without_ancestor_walk_or_reads(
+def test_warm_config_cache_uses_metadata_and_config_digest_without_ancestor_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     validator = _load_validator()
@@ -229,7 +285,7 @@ def test_warm_config_cache_uses_metadata_without_ancestor_walk_or_reads(
 
     assert validator.discover_mypy_config(target_module) == config_path
     assert ancestor_walk_call_count == 0
-    assert config_read_call_count == 0
+    assert config_read_call_count == 1
 
 
 def test_sibling_subtrees_each_resolve_their_own_nested_config(
@@ -383,6 +439,99 @@ def test_identical_config_relocation_invalidates_content_hash(
     assert relocated_config == root_config_path
     assert subprocess_run_call_count == 1
     assert relocated_exit_code == 0, relocated_output
+
+
+def test_same_stat_config_rewrite_runs_mypy_and_reports_strict_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert len(SAME_SIZE_LOOSE_TOOL_MYPY_PYPROJECT) == len(SAME_SIZE_STRICT_TOOL_MYPY_PYPROJECT)
+    validator = _load_validator()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    config_path = project_root / "pyproject.toml"
+    config_path.write_text(SAME_SIZE_LOOSE_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    checked_module = project_root / "checked.py"
+    checked_module.write_text(UNCHECKED_GENERIC_MODULE_SOURCE, encoding="utf-8")
+
+    initial_exit_code, _initial_output = validator.run_mypy(str(checked_module), str(project_root))
+    assert initial_exit_code == 0
+    original_stat = config_path.stat()
+    config_path.write_text(SAME_SIZE_STRICT_TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    os.utime(
+        config_path,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+
+    real_path_stat = Path.stat
+
+    def _restore_original_config_stat(
+        file_path: Path, *, follow_symlinks: bool = True
+    ) -> os.stat_result:
+        if file_path == config_path:
+            return original_stat
+        return real_path_stat(file_path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", _restore_original_config_stat)
+    subprocess_run_call_count = 0
+    real_subprocess_run = validator.subprocess.run
+
+    def _counting_subprocess_run(*positional: object, **keyword: object) -> object:
+        nonlocal subprocess_run_call_count
+        subprocess_run_call_count += 1
+        return real_subprocess_run(*positional, **keyword)
+
+    monkeypatch.setattr(validator.subprocess, "run", _counting_subprocess_run)
+
+    strict_exit_code, strict_output = validator.run_mypy(str(checked_module), str(project_root))
+
+    assert subprocess_run_call_count == 1
+    assert strict_exit_code != 0
+    assert ": error:" in strict_output
+
+
+def test_same_stat_non_mypy_rewrite_discovers_strict_mypy_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert len(SAME_SIZE_NON_MYPY_PYPROJECT) == len(SAME_SIZE_STRICT_MYPY_PYPROJECT)
+    validator = _load_validator()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    config_path = project_root / "pyproject.toml"
+    config_path.write_text(SAME_SIZE_NON_MYPY_PYPROJECT, encoding="utf-8")
+    checked_module = project_root / "checked.py"
+    checked_module.write_text(UNTYPED_DEF_MODULE_SOURCE, encoding="utf-8")
+
+    initial_exit_code, _initial_output = validator.run_mypy(str(checked_module), str(project_root))
+    assert initial_exit_code == 0
+    original_stat = config_path.stat()
+    config_path.write_text(SAME_SIZE_STRICT_MYPY_PYPROJECT, encoding="utf-8")
+    os.utime(config_path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+    real_path_stat = Path.stat
+
+    def _restore_original_config_stat(
+        file_path: Path, *, follow_symlinks: bool = True
+    ) -> os.stat_result:
+        if file_path == config_path:
+            return original_stat
+        return real_path_stat(file_path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", _restore_original_config_stat)
+    subprocess_run_call_count = 0
+    real_subprocess_run = validator.subprocess.run
+
+    def _counting_subprocess_run(*positional: object, **keyword: object) -> object:
+        nonlocal subprocess_run_call_count
+        subprocess_run_call_count += 1
+        return real_subprocess_run(*positional, **keyword)
+
+    monkeypatch.setattr(validator.subprocess, "run", _counting_subprocess_run)
+
+    strict_exit_code, strict_output = validator.run_mypy(str(checked_module), str(project_root))
+
+    assert subprocess_run_call_count == 1
+    assert strict_exit_code != 0
+    assert ": error:" in strict_output
 
 
 def test_project_relative_path_within_root_returns_relative() -> None:
