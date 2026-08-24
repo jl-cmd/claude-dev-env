@@ -27,6 +27,7 @@ from code_rules_shared import (  # noqa: E402
 
 from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
+    ALL_BANNED_NOUN_COMPATIBILITY_IDENTIFIERS,
     ALL_BANNED_NOUN_WORDS,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
@@ -249,6 +250,8 @@ def _collect_banned_noun_word_bindings(
     seen_keys: set[tuple[str, int, int]] = set()
 
     def record(name: str, lineno: int, col_offset: int) -> None:
+        if name in ALL_BANNED_NOUN_COMPATIBILITY_IDENTIFIERS:
+            return
         if name in ALL_BANNED_IDENTIFIERS:
             return
         if _is_dunder_name(name):

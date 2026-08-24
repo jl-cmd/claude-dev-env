@@ -38,6 +38,12 @@ ALL_BANNED_NOUN_WORDS: frozenset[str] = frozenset(
         "temp",
     }
 )
+ALL_BANNED_NOUN_COMPATIBILITY_IDENTIFIERS: frozenset[str] = frozenset(
+    {
+        "validate_nine_patch_output_path",
+        "output_path",
+    }
+)
 CAMEL_CASE_WORD_PATTERN: re.Pattern[str] = re.compile(
     r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+"
 )

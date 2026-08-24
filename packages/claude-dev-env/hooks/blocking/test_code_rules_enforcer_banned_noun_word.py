@@ -107,6 +107,27 @@ def test_should_not_flag_exact_match_banned_identifier() -> None:
     assert issues == []
 
 
+def test_should_allow_exact_compatibility_identifiers() -> None:
+    source = (
+        "output_path = build_path()\n"
+        "validate_nine_patch_output_path = build_validator()\n"
+    )
+    issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
+    assert issues == []
+
+
+def test_should_reject_near_match_compatibility_identifiers() -> None:
+    source = (
+        "other_output_path = build_path()\n"
+        "validate_nine_patch_output_paths = build_validator()\n"
+    )
+    issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
+    assert any("other_output_path" in each_issue for each_issue in issues)
+    assert any(
+        "validate_nine_patch_output_paths" in each_issue for each_issue in issues
+    )
+
+
 def test_should_not_flag_dunder_method_with_banned_word() -> None:
     source = "class Foo:\n    def __init_data__(self) -> None: pass\n"
     issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
