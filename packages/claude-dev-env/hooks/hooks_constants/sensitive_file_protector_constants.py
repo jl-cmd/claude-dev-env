@@ -1,7 +1,7 @@
 """Constants for the ``sensitive_file_protector`` PreToolUse hook.
 
-The hook denies a Write or Edit whose target basename names a live secret or a
-lock file, and steps aside for a placeholders-only committed template.
+The hook denies a Write, Edit, or MultiEdit whose target basename names a live
+secret or a lock file, and steps aside for a placeholders-only committed template.
 """
 
 from __future__ import annotations
@@ -27,8 +27,6 @@ ALL_SENSITIVE_PATTERNS = (
 )
 
 ALL_TEMPLATE_SUFFIXES = (".example", ".sample", ".template")
-
-ALL_WRITE_EDIT_TOOLS = ("Write", "Edit")
 
 HOOK_SCRIPT_NAME = "sensitive_file_protector.py"
 
