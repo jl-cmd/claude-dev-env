@@ -27,6 +27,7 @@ import {
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
+    PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
 import {
     resolveInstallRoot,
@@ -435,6 +436,42 @@ export function interpreterCommandFromPath(executablePath) {
 }
 
 /**
+ * Formats a path as one shell argument for the selected platform.
+ *
+ * @param {string} path Path to format.
+ * @param {string} platform Platform whose shell will parse the argument.
+ * @returns {string} A quoted shell argument.
+ */
+export function commandArgumentFromPath(path, platform = process.platform) {
+    const forwardSlashedPath = path.replace(/\\/g, '/');
+    if (platform === 'win32') {
+        if (/^[A-Za-z0-9_./:@+=,-]+$/.test(forwardSlashedPath)) return forwardSlashedPath;
+        return forwardSlashedPath.split('%').map(segment => `"${segment}"`).join('^%');
+    }
+    if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(forwardSlashedPath)) return forwardSlashedPath;
+    return `'${forwardSlashedPath.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Quotes standalone plugin-root hook paths while preserving inline commands.
+ *
+ * @param {string} commandString Source hook command.
+ * @param {string} pluginRootForward Forward-slash plugin root directory.
+ * @returns {string} Rewritten hook command.
+ */
+function quoteStandalonePluginRootHookPath(commandString, pluginRootForward) {
+    const standalonePathPattern = /(^|\s)(["']?)\$\{CLAUDE_PLUGIN_ROOT\}(\/hooks\/[^\s"']*?\.py)\2(?=$|[\s;&|])/g;
+    return commandString.replace(
+        standalonePathPattern,
+        (_match, argumentPrefix, _sourceQuote, relativeHookPath) => (
+            `${argumentPrefix}${commandArgumentFromPath(
+                `${pluginRootForward}${relativeHookPath}`,
+            )}`
+        ),
+    );
+}
+
+/**
  * Picks the interpreter command baked into every managed hook in settings.json.
  * On win32 the first working candidate is resolved to its absolute
  * sys.executable and that path is baked in, so a later PATH change or Microsoft
@@ -444,14 +481,14 @@ export function interpreterCommandFromPath(executablePath) {
  *
  * @returns {string|null} The interpreter command, or null when none is usable.
  */
-function detectPython() {
+export function detectPython() {
     const candidates = pythonCandidatesForPlatform(process.platform);
     for (const { command, versionFlag } of candidates) {
         try {
-            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!version.includes('Python 3.')) continue;
             if (process.platform !== 'win32') return command;
-            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!executablePath || isWindowsStorePythonStub(executablePath)) continue;
             return interpreterCommandFromPath(executablePath);
         } catch { /* try next */ }
@@ -1266,11 +1303,13 @@ function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
  * @returns {boolean} True when the command is the inline validators runner.
  */
 export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
-    const inlineValidatorRunnerMarker = /sys\.path\.insert\([^)]*\.claude\/hooks[^)]*\)[\s\S]*run_all_validators/;
-    return (
-        normalizedCommand.includes('/.claude/hooks') &&
-        inlineValidatorRunnerMarker.test(normalizedCommand)
-    );
+    if (!normalizedCommand.includes('sys.path.insert(')) return false;
+    if (!normalizedCommand.includes('from validators.run_all_validators import main')) return false;
+    const hasLiteralHooksPath = normalizedCommand.includes('/.claude/hooks');
+    const hasShippedBase64Path = normalizedCommand.includes('__claude_dev_env_managed_hooks__');
+    if (!hasLiteralHooksPath && !hasShippedBase64Path) return false;
+    const inlineValidatorRunnerMarker = /sys\.path\.insert\([\s\S]*from validators\.run_all_validators import main/;
+    return inlineValidatorRunnerMarker.test(normalizedCommand);
 }
 
 /**
@@ -1348,6 +1387,7 @@ function startEventFromHookGroupList(settings, eventType) {
 export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
     const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
     const pluginRootForward = pluginRootDir.replace(/\\/g, '/');
+    const encodedPluginHooksPath = Buffer.from(`${pluginRootForward}/hooks`, 'utf8').toString('base64');
     if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
@@ -1356,6 +1396,14 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
+                command = command.replace(
+                    /r(['"])\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\1/g,
+                    () => (
+                        `(__import__('base64').b64decode('${encodedPluginHooksPath}').decode(), `
+                        + "'__claude_dev_env_managed_hooks__')[0]"
+                    ),
+                );
+                command = quoteStandalonePluginRootHookPath(command, pluginRootForward);
                 command = command.replace(
                     /\$\{CLAUDE_PLUGIN_ROOT\}/g,
                     () => pluginRootForward,

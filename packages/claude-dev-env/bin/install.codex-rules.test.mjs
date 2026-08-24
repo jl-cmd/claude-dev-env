@@ -23,16 +23,32 @@ import {
     CODEX_RULES_SHIPPED_FILE_NAME,
     DEFAULT_CODEX_DIRECTORY_NAME,
 } from './install-constants.mjs';
-import { CONTENT_DIRECTORIES, INSTALL_GROUPS } from './install.mjs';
+import {
+    CONTENT_DIRECTORIES,
+    detectPython,
+    INSTALL_GROUPS,
+    pythonFileAndPrefixArguments,
+} from './install.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
 const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
+const INSTALLER_PROCESS_TIMEOUT_MS = 60_000;
 const SHIPPED_RULES_SOURCE_PATH = join(
     PACKAGE_DIRECTORY,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CODEX_RULES_SHIPPED_FILE_NAME,
 );
+const BLOCKING_HOOKS_DIRECTORY = join(PACKAGE_DIRECTORY, 'hooks', 'blocking');
+const PYTHON_PII_SCAN_SCRIPT = [
+    'import json',
+    'import sys',
+    'from dataclasses import asdict',
+    'from pii_scanner import scan_text_for_pii',
+    'all_findings = scan_text_for_pii(sys.stdin.read())',
+    "home_path_findings = [asdict(each_finding) for each_finding in all_findings if each_finding.category == 'home-path']",
+    'print(json.dumps(home_path_findings))',
+].join('\n');
 
 function runInstaller(homeDirectory, extraArguments) {
     return execFileSync('node', [INSTALLER_PATH, ...extraArguments], {
@@ -45,7 +61,42 @@ function runInstaller(homeDirectory, extraArguments) {
             GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
             [CODEX_HOME_ENVIRONMENT_VARIABLE]: join(homeDirectory, DEFAULT_CODEX_DIRECTORY_NAME),
         },
+        timeout: INSTALLER_PROCESS_TIMEOUT_MS,
     });
+}
+
+function scanTextWithProductionPiiScanner(scannedText) {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'cdev-pii-scan-'));
+    try {
+        const detectedPythonCommand = detectPython();
+        if (!detectedPythonCommand) {
+            throw new Error('No usable Python interpreter found for the PII scanner test');
+        }
+        const { file, prefixArguments } = pythonFileAndPrefixArguments(
+            detectedPythonCommand,
+        );
+        const scannerJson = execFileSync(
+            file,
+            [...prefixArguments, '-c', PYTHON_PII_SCAN_SCRIPT],
+            {
+                cwd: PACKAGE_DIRECTORY,
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    PYTHONPATH: BLOCKING_HOOKS_DIRECTORY,
+                    CLAUDE_LOCAL_IDENTITY_PATH: join(
+                        temporaryDirectory,
+                        'missing-local-identity.json',
+                    ),
+                },
+                input: scannedText,
+                timeout: INSTALLER_PROCESS_TIMEOUT_MS,
+            },
+        );
+        return JSON.parse(scannerJson);
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
 }
 
 test('CONTENT_DIRECTORIES omits codex-rules because that tree installs to the Codex home', () => {
@@ -123,11 +174,15 @@ test('a full install copies shipped Codex rules and leaves a local default.rules
     }
 });
 
-test('a full install Codex rules file contains no personal home path', () => {
-    const shippedText = readFileSync(SHIPPED_RULES_SOURCE_PATH, 'utf8');
-    assert.equal(shippedText.includes('Users\\jon'), false);
-    assert.equal(shippedText.includes('Users/jon'), false);
-    assert.equal(shippedText.includes('JonEcho'), false);
+test('the shipped Codex rules file has no production-scanner home-path findings', () => {
+    const allHomePathFindings = scanTextWithProductionPiiScanner(
+        readFileSync(SHIPPED_RULES_SOURCE_PATH, 'utf8'),
+    );
+    assert.deepEqual(
+        allHomePathFindings,
+        [],
+        `home-path findings: ${JSON.stringify(allHomePathFindings, null, 2)}`,
+    );
 });
 
 test('--only journal skips Codex rules; --only core copies them', () => {
