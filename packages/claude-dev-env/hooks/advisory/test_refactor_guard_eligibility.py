@@ -84,13 +84,22 @@ def test_refactor_candidate_is_ineligible_when_old_lines_are_in_changed_surface(
     assert not refactor_guard.is_refactor_eligible(str(source_path), old_function, renamed_function)
 
 
-def test_changed_surface_reads_staged_and_unstaged_lines(git_repository: Path) -> None:
+def test_changed_surface_reads_staged_and_unstaged_lines(
+    git_repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source_path = git_repository / "module.py"
     _commit_file(git_repository, source_path, "baseline = 1\n")
 
     _stage_file(git_repository, source_path, "staged_line = 1\n")
     source_path.write_text("unstaged_line = 1\n", encoding="utf-8")
 
+    monkeypatch.setenv("GIT_DIR", str(git_repository / "missing-git-dir"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(git_repository / "missing-work-tree"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(git_repository / "missing-index"))
+    monkeypatch.setenv("GIT_COMMON_DIR", str(git_repository / "missing-common-dir"))
+    monkeypatch.setenv("GIT_PREFIX", "adversarial-prefix")
+    scrubbed_environment = refactor_guard._git_environment()
+    assert not any(each_name.startswith("GIT_") for each_name in scrubbed_environment)
     all_added_lines = refactor_guard.get_git_diff_added_lines(str(source_path))
 
     assert all_added_lines == {"staged_line = 1", "unstaged_line = 1"}

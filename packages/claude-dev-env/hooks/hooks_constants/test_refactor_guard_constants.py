@@ -14,6 +14,7 @@ from hooks_constants.refactor_guard_constants import (
     REFACTOR_LINE_DELTA_DIVISOR,
 )
 
+
 def test_refactor_threshold_constants_define_a_half_boundary() -> None:
     assert CHANGED_SURFACE_MATCH_RATIO * REFACTOR_LINE_DELTA_DIVISOR == 1
     assert MAXIMUM_REFACTOR_LINE_DELTA > REFACTOR_LINE_DELTA_DIVISOR

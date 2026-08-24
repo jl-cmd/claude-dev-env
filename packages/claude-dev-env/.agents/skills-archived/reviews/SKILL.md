@@ -81,5 +81,5 @@ the pull request record.
   or assess pull request context.
 - Use [emergencies](../emergencies/SKILL.md#emergency-classification) to classify
   an urgent production change.
-- Use [small-cl](../small-cl/SKILL.md#when-to-use-this-guide) to focus or split
+- Use [pr-small-cl](../../skills/pr-small-cl/SKILL.md#when-to-use-this-guide) to focus or split
   a change that exceeds a clear review boundary.

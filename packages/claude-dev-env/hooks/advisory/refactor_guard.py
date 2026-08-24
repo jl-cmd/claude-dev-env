@@ -66,17 +66,17 @@ def _read_added_lines_from_git(all_git_arguments: tuple[str, ...], file_path: st
     ]
 
 
-def get_git_diff_added_lines(file_path: str) -> set[str]:
-    """Return staged and unstaged added lines for a tracked file."""
-    return set(_get_added_line_occurrences(file_path))
-
-
 def _get_added_line_occurrences(file_path: str) -> list[str]:
     all_added_lines = _read_added_lines_from_git((GIT_EXECUTABLE_TOKEN, "diff"), file_path)
     all_added_lines.extend(
         _read_added_lines_from_git((GIT_EXECUTABLE_TOKEN, "diff", "--cached"), file_path)
     )
     return all_added_lines
+
+
+def get_git_diff_added_lines(file_path: str) -> set[str]:
+    """Return staged and unstaged added lines for a tracked file."""
+    return set(_get_added_line_occurrences(file_path))
 
 
 def is_new_file(file_path: str) -> bool:

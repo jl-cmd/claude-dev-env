@@ -13,10 +13,16 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+} from './install-constants.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
 const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
+const INSTALLER_PROCESS_TIMEOUT_MS = 60_000;
 const EXCLUDED_PACKAGE_COPY_DIRECTORY = 'node_modules';
 
 const RETIRED_SKILL_DIRECTORIES = [
@@ -35,7 +41,7 @@ const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
-    'small-cl',
+    'pr-small-cl',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',
@@ -102,14 +108,69 @@ function prunedSkillBackupContains(claudeDirectory, skillsRelativePath) {
  *
  * @returns {{homeDirectory: string, claudeDirectory: string, skillsDirectory: string, manifestPath: string}}
  */
-function createSandbox() {
-    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-prune-home-'));
+function createSandbox(homeDirectoryPrefix = 'cdev-prune-home-') {
+    const homeDirectory = mkdtempSync(join(tmpdir(), homeDirectoryPrefix));
     const claudeDirectory = join(homeDirectory, '.claude');
     const skillsDirectory = join(claudeDirectory, 'skills');
     mkdirSync(skillsDirectory, { recursive: true });
     const manifestPath = join(claudeDirectory, '.claude-dev-env-manifest.json');
     return { homeDirectory, claudeDirectory, skillsDirectory, manifestPath };
 }
+
+test('the retired-skill fallback covers every current shipped skill', () => {
+    const sourceSkillsDirectory = join(
+        PACKAGE_DIRECTORY,
+        PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+        MANAGED_SKILLS_DIRECTORY_NAME,
+    );
+    const allCurrentSkillNames = readdirSync(sourceSkillsDirectory, { withFileTypes: true })
+        .filter(eachEntry => eachEntry.isDirectory())
+        .filter(eachEntry => existsSync(join(sourceSkillsDirectory, eachEntry.name, 'SKILL.md')))
+        .map(eachEntry => eachEntry.name);
+    const allUncoveredSkillNames = allCurrentSkillNames.filter(
+        eachSkillName => !EVER_SHIPPED_SKILL_NAMES.has(eachSkillName),
+    );
+
+    assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
+});
+
+test('a core install runs the spaced-path Write dispatcher and captures its red denial', () => {
+    const sandbox = createSandbox('cdev prune & (home)-');
+    try {
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+        const settings = readSettings(sandbox.claudeDirectory);
+        const dispatcherHooks = settings.hooks.PreToolUse
+            .flatMap(eachGroup => eachGroup.hooks)
+            .filter(eachHook => /(?:^|[\\/])pre_tool_use_dispatcher\.py["']?(?:\s|$)/.test(eachHook.command));
+        assert.equal(dispatcherHooks.length, 1, 'the core install writes one PreToolUse dispatcher');
+
+        const protectedFilePath = join(sandbox.homeDirectory, 'protected file.txt');
+        writeFileSync(protectedFilePath, 'existing content\n');
+        const writePayload = JSON.stringify({
+            tool_name: 'Write',
+            tool_input: { file_path: protectedFilePath, content: 'replacement content\n' },
+        });
+        const { childEnvironment } = resolveInstallerInvocation(sandbox.homeDirectory);
+        const dispatcherRun = spawnSync(dispatcherHooks[0].command, {
+            cwd: dirname(INSTALLER_PATH),
+            encoding: 'utf8',
+            env: childEnvironment,
+            input: `${writePayload}\n`,
+            shell: true,
+            timeout: 30000,
+        });
+
+        assert.equal(dispatcherRun.status, 0, dispatcherRun.stderr);
+        const shownRedDecision = JSON.parse(dispatcherRun.stdout.trim());
+        assert.equal(shownRedDecision.hookSpecificOutput.permissionDecision, 'deny');
+        assert.match(
+            shownRedDecision.hookSpecificOutput.permissionDecisionReason,
+            /BLOCKED: Write on existing file/,
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
 
 /**
  * Plant a skill directory under the sandbox with a single marker file.
@@ -142,6 +203,7 @@ function runInstaller(homeDirectory, extraArguments) {
         cwd: dirname(installerPath),
         encoding: 'utf8',
         env: childEnvironment,
+        timeout: INSTALLER_PROCESS_TIMEOUT_MS,
     });
 }
 
