@@ -69,6 +69,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'midjourney-submit',
     'monitor-open-prs',
     'pr-name-by-capability-audit',
+    'pr-refinement',
     'orchestrator',
     'orchestrator-refresh',
     'plan-to-pr',
