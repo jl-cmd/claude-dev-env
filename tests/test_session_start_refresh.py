@@ -71,6 +71,12 @@ def should_register_a_hook_command_that_names_the_existing_script() -> None:
     assert HOOK_SCRIPT.is_file()
 
 
+def should_use_python_for_the_session_start_registration() -> None:
+    command = SESSION_START_REGISTRATION["command"]
+    assert isinstance(command, str)
+    assert command == "python .claude/hooks/session_start_refresh.py"
+
+
 def should_keep_the_subprocess_budgets_inside_the_registered_timeout() -> None:
     registered_timeout = SESSION_START_REGISTRATION["timeout"]
     assert isinstance(registered_timeout, int)
