@@ -37,6 +37,7 @@
 | `pr-loop/gh-payloads.md` | `@~/.claude/_shared/pr-loop/gh-payloads.md` |
 | `pr-loop/post-audit-thread-contract.md` | `@~/.claude/_shared/pr-loop/post-audit-thread-contract.md` |
 | `pr-loop/precatch-rubric.md` | `@~/.claude/_shared/pr-loop/precatch-rubric.md` |
+| `pr-loop/preflight-proposal.md` | `@~/.claude/_shared/pr-loop/preflight-proposal.md` |
 | `pr-loop/state-schema.md` | `@~/.claude/_shared/pr-loop/state-schema.md` |
 | `pr-loop/worker-spawn.md` | `@~/.claude/_shared/pr-loop/worker-spawn.md` |
 | `pr-loop/scripts/RUNTIME_SCRIPTS.md` | `@~/.claude/_shared/pr-loop/scripts/` |
