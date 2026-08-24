@@ -164,7 +164,7 @@ export const CORE_INCLUDE_DIRECTORIES = [
 export const CORE_SKILLS = [
     'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
-    'small-cl',
+    'pr-small-cl',
     'everything-search',
     'privacy-hygiene',
     'issue-tracker',
