@@ -20,7 +20,7 @@ from hooks_constants.ask_user_question_shape import (  # noqa: E402
     mask_inline_code,
     normalize_line_endings,
 )
-from hooks_constants.plain_language_blocker_constants import (  # noqa: E402
+from hooks_constants.ask_user_question_shape_constants import (  # noqa: E402
     MAXIMUM_OPTION_DESCRIPTION_WORD_COUNT,
     MAXIMUM_QUESTION_SENTENCE_COUNT,
     MAXIMUM_QUESTION_WORD_COUNT,

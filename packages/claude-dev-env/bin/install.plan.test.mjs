@@ -180,6 +180,7 @@ test('update plan marks purge and lists E2 mutation kinds; journal omits hooks',
         assert.equal(plan.shouldPurgeBeforeReinstall, true);
         const allMutations = describeInstallMutations(plan);
         assert.ok(allMutations.includes('purge_managed_installation'));
+        assert.ok(allMutations.includes('publish_directory_pointers'));
         assert.ok(allMutations.includes('merge_hooks_settings'));
         assert.ok(allMutations.includes('write_manifest'));
         assert.ok(Object.isFrozen(allMutations));

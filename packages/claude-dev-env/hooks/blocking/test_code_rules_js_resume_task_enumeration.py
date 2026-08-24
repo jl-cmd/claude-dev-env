@@ -18,7 +18,7 @@ import sys
 
 _PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _SHIPPED_CONVERGE_MJS = (
-    _PACKAGE_ROOT / "skills" / "autoconverge" / "workflow" / "converge.mjs"
+    _PACKAGE_ROOT / ".agents" / "skills" / "autoconverge" / "workflow" / "converge.mjs"
 )
 
 _HOOK_DIRECTORY = pathlib.Path(__file__).parent

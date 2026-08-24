@@ -20,13 +20,26 @@ import {
     SKIPPED_SOURCE_FILE_EXTENSIONS,
     RUN_BACKUP_DIRECTORY_NAME_PATTERN,
     MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_AGENTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
+    CODEX_RULES_PACKAGE_DIRECTORY_NAME,
+    CURSOR_SYNC_SCRIPT_FILE_NAME,
+    WINDOWS_PYTHON_LAUNCHER_COMMAND,
+    PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
+    isAllowedInstallDestination,
 } from './resolve-install-root.mjs';
+import {
+    resolvePackageManagedDirectory,
+} from './resolve-package-managed-directory.mjs';
+import {
+    ensureDirectoryPointer,
+} from './publish-directory-pointer.mjs';
 import {
     parseInstallTargetSelectionFromArgv,
     resolveInstallTargets,
@@ -63,6 +76,7 @@ const INSTALL_ROOT_RESOLUTION = resolveInstallRoot({
     })(),
 });
 const CLAUDE_HOME = INSTALL_ROOT_RESOLUTION.managedRoot;
+const AGENTS_HOME = INSTALL_ROOT_RESOLUTION.agentsHome;
 const MANIFEST_FILE = INSTALL_ROOT_RESOLUTION.manifestFilePath;
 const MYPY_INI_INSTALL_PATH = INSTALL_ROOT_RESOLUTION.mypyIniInstallPath;
 const PACKAGE_NAME = 'claude-dev-env';
@@ -88,18 +102,22 @@ const INSTALL_TARGET_IDENTITY = (() => {
     }
 })();
 
-export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'agents', 'system-prompts', 'scripts', '_shared', 'audit-rubrics'];
+export const CONTENT_DIRECTORIES = ['rules', 'docs', 'commands', 'system-prompts', '_shared', 'audit-rubrics'];
 
 /**
- * Every top-level directory under ~/.claude the installer writes into: the
- * content directories plus the two it fills through their own copy loops. The
- * uninstall purge walks this list to find the root a recorded file belongs to and
- * to drop a managed directory the purge empties, and the full-install stale-file
- * prune walks it to give each root its own diff.
+ * Every top-level lookup directory the installer writes into under ~/.claude:
+ * the content directories plus skills, agents, and hooks. Skills and agents
+ * live under the agents home; `~/.claude/skills` and `~/.claude/agents` are
+ * directory pointers to that home. The uninstall purge walks this list to find
+ * the root a recorded file belongs to and to drop a managed directory the purge
+ * empties, and the full-install stale-file prune walks it to give each root its
+ * own diff.
  */
 export const MANAGED_TOP_LEVEL_DIRECTORY_NAMES = [
     ...CONTENT_DIRECTORIES,
     MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_AGENTS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
     MANAGED_HOOKS_DIRECTORY_NAME,
 ];
 
@@ -110,20 +128,48 @@ const RETIRED_SKILL_REASON_LABEL = 'retired';
 const STALE_FILE_REASON_LABEL = 'stale';
 const MANIFEST_MANAGED_PERMISSIONS_KEY = 'managedPermissions';
 
+/**
+ * Managed-home-relative directories this package leaves to whoever deployed
+ * them: it writes nothing inside them and prunes nothing out of them.
+ *
+ * `scripts/profile-isolation-launchers` is the live CLI profile launcher. Its
+ * executable modules are deployed from a separate source, so a payload covering
+ * only part of that tree left config and code out of step. This package stopped
+ * shipping its part, and the stale-file prune reads a path the package no longer
+ * writes as stale, which would move the live files aside on the next install.
+ * Naming the directory here keeps both halves of the tree with their owner.
+ */
+const RETAINED_UNMANAGED_RELATIVE_PATHS = [
+    'scripts/profile-isolation-launchers',
+];
+
+/**
+ * Report whether a path a prior manifest recorded sits inside a directory this
+ * package leaves to another owner.
+ *
+ * @param {string} candidatePath The absolute path the prior manifest recorded.
+ * @param {string} managedHomeDirectory The managed home the relative names resolve against.
+ * @returns {boolean} True when the path sits inside a retained unmanaged directory.
+ */
+function isRetainedUnmanagedPath(candidatePath, managedHomeDirectory) {
+    return RETAINED_UNMANAGED_RELATIVE_PATHS.some(
+        relativePath => isInsideDirectory(candidatePath, join(managedHomeDirectory, relativePath)),
+    );
+}
+
 export const CORE_INCLUDE_DIRECTORIES = [
     'rules', 'docs', 'commands', 'agents', 'audit-rubrics', '_shared', 'scripts',
 ];
 
 export const CORE_SKILLS = [
-    'imagegen',
-    'orchestrator', 'orchestrator-refresh', 'team-advisor', 'grokify',
+    'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
-    'small-cl', 'comments', 'reviews', 'descriptions', 'emergencies',
-    'anthropic-plan', 'everything-search',
+    'pr-small-cl',
+    'everything-search',
     'privacy-hygiene',
     'issue-tracker',
-    'recall', 'remember', 'task-build',
-    'show',
+    'task-build',
+    'eli5',
 ];
 
 export function collectPackageSourceConflicts(packageDirectory) {
@@ -212,12 +258,15 @@ function discoverDependencyGroups() {
             readFileSync(join(dependencyRoot, 'package.json'), 'utf8')
         );
         const groupName = dependencyPackageJson.claudeDevEnv?.groupName
-            || dependencyName.replace(/^@[^/]+\//, '');
+            || dependencyName.replace(new RegExp('^@[^/]+/'), '');
         const group = {
             description: dependencyPackageJson.description || dependencyName,
             packageRoot: dependencyRoot,
         };
-        const skillsDirectory = join(dependencyRoot, MANAGED_SKILLS_DIRECTORY_NAME);
+        const skillsDirectory = resolvePackageManagedDirectory(
+            dependencyRoot,
+            MANAGED_SKILLS_DIRECTORY_NAME,
+        );
         if (existsSync(skillsDirectory)) {
             group.skills = readdirSync(skillsDirectory, { withFileTypes: true })
                 .filter(entry => entry.isDirectory())
@@ -258,6 +307,7 @@ export const INSTALL_GROUPS = {
         skills: CORE_SKILLS,
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
+        includeCodexRules: true,
     },
     journal: {
         description: 'Session logging and memory',
@@ -304,6 +354,75 @@ export function isWindowsStorePythonStub(executablePath) {
 }
 
 /**
+ * Split a stored Python command into an executable and prefix arguments.
+ *
+ * Args:
+ *   pythonCommand: The command the installer detected (`py -3`, `python3`, or a path).
+ *
+ * Returns:
+ *   `{ file, prefixArguments }` for `execFileSync`.
+ */
+export function pythonFileAndPrefixArguments(pythonCommand) {
+    if (pythonCommand === WINDOWS_PYTHON_LAUNCHER_COMMAND) {
+        return { file: 'py', prefixArguments: ['-3'] };
+    }
+    const unquoted = pythonCommand.replace(/^"(.*)"$/, '$1');
+    return { file: unquoted, prefixArguments: [] };
+}
+
+/**
+ * Read generated Cursor paths from the sync manifest under a Cursor home.
+ *
+ * Args:
+ *   cursorRoot: Absolute `.cursor` directory.
+ *
+ * Returns:
+ *   Absolute paths the installer may record, including the sync manifest.
+ */
+export function collectManagedCursorSyncPaths(cursorRoot) {
+    const manifestPath = join(cursorRoot, '.sync-manifest.json');
+    if (!existsSync(manifestPath)) return [];
+    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const generatedPaths = [manifestPath];
+    const allEntries = { ...(parsed.entries || {}), ...(parsed.docs_entries || {}) };
+    for (const eachRelativePath of Object.keys(allEntries)) {
+        generatedPaths.push(join(cursorRoot, eachRelativePath));
+    }
+    return generatedPaths;
+}
+
+/**
+ * Run the installed Cursor rule generator against Claude and Cursor roots.
+ *
+ * Args:
+ *   pythonCommand: Interpreter command from install preflight.
+ *   scriptPath: Absolute `sync_to_cursor.py` path.
+ *   claudeRoot: Managed Claude root that holds `rules/` and `docs/`.
+ *   cursorRoot: Cursor home that receives `rules/*.mdc`.
+ *
+ * Returns:
+ *   void
+ */
+export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorRoot) {
+    mkdirSync(cursorRoot, { recursive: true });
+    const { file, prefixArguments } = pythonFileAndPrefixArguments(pythonCommand);
+    execFileSync(
+        file,
+        [
+            ...prefixArguments,
+            scriptPath,
+            '--force',
+            '--quiet',
+            '--claude-root',
+            claudeRoot,
+            '--cursor-root',
+            cursorRoot,
+        ],
+        { stdio: 'inherit' },
+    );
+}
+
+/**
  * Formats an absolute interpreter path as a settings.json hook command prefix:
  * forward-slash separators, double-quoted when the path contains a space so the
  * harness parses the interpreter as a single argument.
@@ -317,6 +436,42 @@ export function interpreterCommandFromPath(executablePath) {
 }
 
 /**
+ * Formats a path as one shell argument for the selected platform.
+ *
+ * @param {string} path Path to format.
+ * @param {string} platform Platform whose shell will parse the argument.
+ * @returns {string} A quoted shell argument.
+ */
+export function commandArgumentFromPath(path, platform = process.platform) {
+    const forwardSlashedPath = path.replace(/\\/g, '/');
+    if (platform === 'win32') {
+        if (/^[A-Za-z0-9_./:@+=,-]+$/.test(forwardSlashedPath)) return forwardSlashedPath;
+        return forwardSlashedPath.split('%').map(segment => `"${segment}"`).join('^%');
+    }
+    if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(forwardSlashedPath)) return forwardSlashedPath;
+    return `'${forwardSlashedPath.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Quotes standalone plugin-root hook paths while preserving inline commands.
+ *
+ * @param {string} commandString Source hook command.
+ * @param {string} pluginRootForward Forward-slash plugin root directory.
+ * @returns {string} Rewritten hook command.
+ */
+function quoteStandalonePluginRootHookPath(commandString, pluginRootForward) {
+    const standalonePathPattern = /(^|\s)(["']?)\$\{CLAUDE_PLUGIN_ROOT\}(\/hooks\/[^\s"']*?\.py)\2(?=$|[\s;&|])/g;
+    return commandString.replace(
+        standalonePathPattern,
+        (_match, argumentPrefix, _sourceQuote, relativeHookPath) => (
+            `${argumentPrefix}${commandArgumentFromPath(
+                `${pluginRootForward}${relativeHookPath}`,
+            )}`
+        ),
+    );
+}
+
+/**
  * Picks the interpreter command baked into every managed hook in settings.json.
  * On win32 the first working candidate is resolved to its absolute
  * sys.executable and that path is baked in, so a later PATH change or Microsoft
@@ -326,14 +481,14 @@ export function interpreterCommandFromPath(executablePath) {
  *
  * @returns {string|null} The interpreter command, or null when none is usable.
  */
-function detectPython() {
+export function detectPython() {
     const candidates = pythonCandidatesForPlatform(process.platform);
     for (const { command, versionFlag } of candidates) {
         try {
-            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!version.includes('Python 3.')) continue;
             if (process.platform !== 'win32') return command;
-            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!executablePath || isWindowsStorePythonStub(executablePath)) continue;
             return interpreterCommandFromPath(executablePath);
         } catch { /* try next */ }
@@ -630,8 +785,7 @@ function isManagedPath(candidatePath, managedHomeDirectory = CLAUDE_HOME) {
  * @returns {boolean} True when the installer itself writes the path.
  */
 function isRemovableManifestRecord(candidatePath) {
-    if (isManagedPath(candidatePath)) return true;
-    return comparisonKeyForPath(candidatePath) === comparisonKeyForPath(MYPY_INI_INSTALL_PATH);
+    return isAllowedInstallDestination(candidatePath, INSTALL_ROOT_RESOLUTION);
 }
 
 /**
@@ -651,7 +805,61 @@ function owningManagedRoot(installedFilePath) {
         const managedRoot = join(CLAUDE_HOME, directoryName);
         if (isInsideDirectory(resolvedPath, managedRoot)) return managedRoot;
     }
+    for (const directoryName of [
+        MANAGED_SKILLS_DIRECTORY_NAME,
+        MANAGED_AGENTS_DIRECTORY_NAME,
+        MANAGED_HOOKS_DIRECTORY_NAME,
+        MANAGED_SCRIPTS_DIRECTORY_NAME,
+    ]) {
+        const agentsRoot = join(AGENTS_HOME, directoryName);
+        if (isInsideDirectory(resolvedPath, agentsRoot)) return agentsRoot;
+    }
+    const codexRulesDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
+    if (isInsideDirectory(resolvedPath, codexRulesDirectory)) return codexRulesDirectory;
+    const codexHooksDirectory = INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory;
+    if (isInsideDirectory(resolvedPath, codexHooksDirectory)) return codexHooksDirectory;
+    const cursorInstallDirectory = INSTALL_ROOT_RESOLUTION.cursorInstallDirectory;
+    if (isInsideDirectory(resolvedPath, cursorInstallDirectory)) return cursorInstallDirectory;
     return null;
+}
+
+/**
+ * Publish harness lookup paths as directory pointers to the agents home.
+ *
+ * Skills and agents live under `~/.agents` (or the per-root agents home).
+ * Claude Code discovers them at the lookup paths under the managed Claude root,
+ * so those two paths are pointers. A real directory from an older install at a
+ * lookup path is merged into the agents home before the pointer is written.
+ *
+ * @returns {string[]} The lookup paths this run published.
+ */
+function publishManagedLookupPointers() {
+    const pointerPairs = [
+        [
+            INSTALL_ROOT_RESOLUTION.skillsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.skillsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.agentsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.agentsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.hooksLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.hooksInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.scriptsLookupDirectory,
+            INSTALL_ROOT_RESOLUTION.scriptsInstallDirectory,
+        ],
+        [
+            INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory,
+            INSTALL_ROOT_RESOLUTION.hooksInstallDirectory,
+        ],
+    ];
+    for (const [pointerPath, targetPath] of pointerPairs) {
+        ensureDirectoryPointer(pointerPath, targetPath);
+    }
+    return pointerPairs.map(([pointerPath]) => pointerPath);
 }
 
 /**
@@ -756,6 +964,7 @@ export function pruneStaleInstalledFiles(
         const stalePath = resolve(priorFile);
         if (!isInsideDirectory(stalePath, resolvedRoot)) continue;
         if (currentFileKeys.has(comparisonKeyForPath(stalePath, options))) continue;
+        if (isRetainedUnmanagedPath(stalePath, managedHomeDirectory)) continue;
         if (!isMovableStaleFile(stalePath)) continue;
         const backupRelativePath = relative(resolvedRoot, stalePath);
         const didMove = moveIntoRunBackup(
@@ -896,9 +1105,14 @@ export function copyTree(sourceBase, destBase, options = {}) {
 
 /**
  * If destPath exists and differs from incomingPath, copy the existing file to
- * ~/.claude/backups/CLAUDE.md.<timestamp>.bak before the installer overwrites it.
+ * ~/.claude/backups/<backupName>.<timestamp>.bak before the installer overwrites it.
+ *
+ * @param {string} destPath The managed file the installer writes.
+ * @param {string} incomingPath The package file that replaces it.
+ * @param {string} backupName The managed file name used in the backup path.
+ * @returns {string|null} The backup path when existing content differs.
  */
-function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
+function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
     if (!existsSync(destPath)) return null;
     const existingBytes = readFileSync(destPath);
     const incomingBytes = readFileSync(incomingPath);
@@ -906,7 +1120,7 @@ function backupClaudeHubBeforeOverwrite(destPath, incomingPath) {
     const backupsDir = join(CLAUDE_HOME, 'backups');
     mkdirSync(backupsDir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = join(backupsDir, `CLAUDE.md.${stamp}.bak`);
+    const backupPath = join(backupsDir, `${backupName}.${stamp}.bak`);
     copyFileSync(destPath, backupPath);
     return backupPath;
 }
@@ -935,7 +1149,6 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/env_var_table_code_drift_blocker.py',
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
-    'blocking/plain_language_blocker.py',
     'blocking/md_to_html_blocker.py',
 ]);
 
@@ -1090,11 +1303,13 @@ function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
  * @returns {boolean} True when the command is the inline validators runner.
  */
 export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
-    const inlineValidatorRunnerMarker = /sys\.path\.insert\([^)]*\.claude\/hooks[^)]*\)[\s\S]*run_all_validators/;
-    return (
-        normalizedCommand.includes('/.claude/hooks') &&
-        inlineValidatorRunnerMarker.test(normalizedCommand)
-    );
+    if (!normalizedCommand.includes('sys.path.insert(')) return false;
+    if (!normalizedCommand.includes('from validators.run_all_validators import main')) return false;
+    const hasLiteralHooksPath = normalizedCommand.includes('/.claude/hooks');
+    const hasShippedBase64Path = normalizedCommand.includes('__claude_dev_env_managed_hooks__');
+    if (!hasLiteralHooksPath && !hasShippedBase64Path) return false;
+    const inlineValidatorRunnerMarker = /sys\.path\.insert\([\s\S]*from validators\.run_all_validators import main/;
+    return inlineValidatorRunnerMarker.test(normalizedCommand);
 }
 
 /**
@@ -1172,6 +1387,7 @@ function startEventFromHookGroupList(settings, eventType) {
 export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
     const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
     const pluginRootForward = pluginRootDir.replace(/\\/g, '/');
+    const encodedPluginHooksPath = Buffer.from(`${pluginRootForward}/hooks`, 'utf8').toString('base64');
     if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
@@ -1180,6 +1396,14 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
+                command = command.replace(
+                    /r(['"])\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\1/g,
+                    () => (
+                        `(__import__('base64').b64decode('${encodedPluginHooksPath}').decode(), `
+                        + "'__claude_dev_env_managed_hooks__')[0]"
+                    ),
+                );
+                command = quoteStandalonePluginRootHookPath(command, pluginRootForward);
                 command = command.replace(
                     /\$\{CLAUDE_PLUGIN_ROOT\}/g,
                     () => pluginRootForward,
@@ -1443,7 +1667,11 @@ function loadClaudeSettingsObjectOrExit(settingsPath) {
  * @returns {number} Count of matcher groups merged.
  */
 function mergeHooks(hooksSourceRoot, pythonCommand) {
-    const hooksJsonPath = join(hooksSourceRoot, MANAGED_HOOKS_DIRECTORY_NAME, 'hooks.json');
+    const hooksSource = resolvePackageManagedDirectory(
+        hooksSourceRoot,
+        MANAGED_HOOKS_DIRECTORY_NAME,
+    );
+    const hooksJsonPath = join(hooksSource, 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
     const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
@@ -1852,7 +2080,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             `${PACKAGE_NAME}: --update — removing prior managed files under ${CLAUDE_HOME}, then reinstalling from the package.\n`,
         );
         purgeManagedInstallation({
-            requireManifest: false,
+            isManifestRequired: false,
             throwIfFault,
         });
     } else if (isUpdateRefresh) {
@@ -1863,6 +2091,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     console.log(`\nInstalling ${PACKAGE_NAME} (${groupLabel})...\n`);
     console.log(`  Python: ${pythonCommand}`);
     mkdirSync(CLAUDE_HOME, { recursive: true });
+    const publishedPointerPaths = publishManagedLookupPointers();
 
     const activeGroups = selectedGroups
         ? selectedGroups.map(groupName => ({ groupName, ...INSTALL_GROUPS[groupName] }))
@@ -1936,13 +2165,82 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             }
         }
     }
+    const shouldCopyAgents = !allowedDirectories
+        || allowedDirectories.has(MANAGED_AGENTS_DIRECTORY_NAME);
+    if (shouldCopyAgents) {
+        for (const sourceRoot of allSourceRoots) {
+            const agentsSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_AGENTS_DIRECTORY_NAME,
+            );
+            if (!existsSync(agentsSource)) continue;
+            const agentsDestination = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
+            const stats = copyTree(agentsSource, agentsDestination);
+            if (!summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
+                summary[MANAGED_AGENTS_DIRECTORY_NAME] = stats;
+            } else {
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].created += stats.created;
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].updated += stats.updated;
+                summary[MANAGED_AGENTS_DIRECTORY_NAME].paths.push(...stats.paths);
+            }
+            allInstalledFiles.push(...stats.paths);
+        }
+    }
+    const shouldCopyScripts = !allowedDirectories
+        || allowedDirectories.has(MANAGED_SCRIPTS_DIRECTORY_NAME);
+    if (shouldCopyScripts) {
+        for (const sourceRoot of allSourceRoots) {
+            const scriptsSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_SCRIPTS_DIRECTORY_NAME,
+            );
+            if (!existsSync(scriptsSource)) continue;
+            const scriptsDestination = INSTALL_ROOT_RESOLUTION.scriptsLookupDirectory;
+            const stats = copyTree(scriptsSource, scriptsDestination);
+            if (!summary[MANAGED_SCRIPTS_DIRECTORY_NAME]) {
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME] = stats;
+            } else {
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].created += stats.created;
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].updated += stats.updated;
+                summary[MANAGED_SCRIPTS_DIRECTORY_NAME].paths.push(...stats.paths);
+            }
+            allInstalledFiles.push(...stats.paths);
+        }
+    }
+    const shouldInstallCodexRules = !selectedGroups
+        || activeGroups.some((eachGroup) => eachGroup.includeCodexRules);
+    if (shouldInstallCodexRules) {
+        const sourceDirectory = join(PACKAGE_ROOT, CODEX_RULES_PACKAGE_DIRECTORY_NAME);
+        if (existsSync(sourceDirectory)) {
+            const destinationDirectory = INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory;
+            const stats = copyTree(sourceDirectory, destinationDirectory);
+            summary.codexRules = stats;
+            allInstalledFiles.push(...stats.paths);
+        }
+    }
+    const shouldInstallCursorRules = !selectedGroups
+        || activeGroups.some((eachGroup) => (eachGroup.includeDirectories || []).includes('rules'));
+    if (shouldInstallCursorRules) {
+        const scriptPath = join(CLAUDE_HOME, 'scripts', CURSOR_SYNC_SCRIPT_FILE_NAME);
+        if (!existsSync(scriptPath)) {
+            throw new Error(`cursor rule sync script missing: ${scriptPath}`);
+        }
+        const cursorRoot = dirname(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory);
+        runCursorRuleSync(pythonCommand, scriptPath, CLAUDE_HOME, cursorRoot);
+        const generatedCursorPaths = collectManagedCursorSyncPaths(cursorRoot);
+        allInstalledFiles.push(...generatedCursorPaths);
+        summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
+    }
     let skillsCreated = 0;
     let skillsUpdated = 0;
     const skillPaths = [];
     const installedSkillNames = new Set();
     const copiedSkillNames = new Set();
     for (const sourceRoot of allSourceRoots) {
-        const skillsSource = join(sourceRoot, MANAGED_SKILLS_DIRECTORY_NAME);
+        const skillsSource = resolvePackageManagedDirectory(
+            sourceRoot,
+            MANAGED_SKILLS_DIRECTORY_NAME,
+        );
         if (!existsSync(skillsSource)) continue;
         const skillDirs = readdirSync(skillsSource, { withFileTypes: true }).filter(entry => entry.isDirectory());
         for (const skillDir of skillDirs) {
@@ -1961,7 +2259,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
-    syncWrittenPaths(allInstalledFiles);
+    syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
     throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);
     const shouldInstallAnyHooks = shouldInstallAllHooks || (allowedHookFiles && allowedHookFiles.size > 0);
@@ -1970,7 +2268,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         let totalHooksUpdated = 0;
         let totalHookGroups = 0;
         for (const sourceRoot of allSourceRoots) {
-            const hooksSource = join(sourceRoot, MANAGED_HOOKS_DIRECTORY_NAME);
+            const hooksSource = resolvePackageManagedDirectory(
+                sourceRoot,
+                MANAGED_HOOKS_DIRECTORY_NAME,
+            );
             if (!existsSync(hooksSource)) continue;
             const hooksDestination = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME);
             const filesToCopy = collectFiles(hooksSource)
@@ -1996,7 +2297,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
         console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
         console.warn(
@@ -2018,7 +2319,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
         }
         console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
         throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
 
@@ -2038,7 +2339,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             console.warn(`      ${mypyIniInstallResult.expectedLine}`);
         }
     } else {
-        syncWrittenPaths(allInstalledFiles);
+        syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
         throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
         throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);
@@ -2057,10 +2358,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         );
     }
 
-    const claudeHubSource = join(PACKAGE_ROOT, 'CLAUDE.md');
+    const claudeHubSource = join(PACKAGE_ROOT, '.claude', 'CLAUDE.md');
     if (existsSync(claudeHubSource)) {
         const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
-        const backupPath = backupClaudeHubBeforeOverwrite(claudeHubDest, claudeHubSource);
+        const backupPath = backupHubBeforeOverwrite(claudeHubDest, claudeHubSource, 'CLAUDE.md');
         if (backupPath) {
             console.log(
                 `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous CLAUDE.md hub preserved)`
@@ -2069,6 +2370,19 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         copyFileSync(claudeHubSource, claudeHubDest);
         allInstalledFiles.push(claudeHubDest);
         console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
+    }
+    const agentsHubSource = join(PACKAGE_ROOT, 'AGENTS.md');
+    if (existsSync(agentsHubSource)) {
+        const agentsHubDest = join(CLAUDE_HOME, 'AGENTS.md');
+        const backupPath = backupHubBeforeOverwrite(agentsHubDest, agentsHubSource, 'AGENTS.md');
+        if (backupPath) {
+            console.log(
+                `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous AGENTS.md guidance preserved)`
+            );
+        }
+        copyFileSync(agentsHubSource, agentsHubDest);
+        allInstalledFiles.push(agentsHubDest);
+        console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
@@ -2110,7 +2424,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             ? { deny: managedPermissionDenyEntries }
             : null,
     );
-    syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath]);
+    syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_MANIFEST_WRITE);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
     for (const directory of CONTENT_DIRECTORIES) {
@@ -2118,6 +2432,22 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             const { created, updated } = summary[directory];
             console.log(`  ${directory}: ${created + updated} files (${created} new, ${updated} updated)`);
         }
+    }
+    if (summary.codexRules) {
+        const { created, updated } = summary.codexRules;
+        console.log(`  ${CODEX_RULES_PACKAGE_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
+    }
+    if (summary.cursorRules) {
+        const { created } = summary.cursorRules;
+        console.log(`  cursor-rules: ${created} generated files`);
+    }
+    if (summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
+        const { created, updated } = summary[MANAGED_AGENTS_DIRECTORY_NAME];
+        console.log(`  ${MANAGED_AGENTS_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
+    }
+    if (summary[MANAGED_SCRIPTS_DIRECTORY_NAME]) {
+        const { created, updated } = summary[MANAGED_SCRIPTS_DIRECTORY_NAME];
+        console.log(`  ${MANAGED_SCRIPTS_DIRECTORY_NAME}: ${created + updated} files (${created} new, ${updated} updated)`);
     }
     if (summary.skills) {
         const { created, updated, pruned } = summary.skills;
@@ -2205,14 +2535,14 @@ function removeRecordedFile(filePath) {
 /**
  * Build the uninstall plan for this managed root.
  *
- * @param {boolean} requireManifest
+ * @param {boolean} isManifestRequired
  * @returns {ReturnType<typeof buildUninstallPlan>}
  */
-function resolveUninstallPlan(requireManifest) {
+function resolveUninstallPlan(isManifestRequired) {
     return buildUninstallPlan({
         managedRoot: CLAUDE_HOME,
         manifestFilePath: MANIFEST_FILE,
-        requireManifest,
+        requireManifest: isManifestRequired,
         isRemovableRecord: isRemovableManifestRecord,
     });
 }
@@ -2249,20 +2579,20 @@ function executeUninstallPlan(plan, helpers = {}) {
     }
     if (plan.skippedFiles.length > 0) {
         console.warn(
-            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME} and outside ${MYPY_INI_INSTALL_PATH}`,
+            `  ${plan.skippedFiles.length} manifest record(s) skipped — each names a path outside ${CLAUDE_HOME}, outside ${MYPY_INI_INSTALL_PATH}, outside ${INSTALL_ROOT_RESOLUTION.codexRulesInstallDirectory}, outside ${INSTALL_ROOT_RESOLUTION.cursorInstallDirectory}, and outside ${AGENTS_HOME}`,
         );
     }
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
 
     if (existsSync(plan.settingsPath)) {
         const settings = JSON.parse(readFileSync(plan.settingsPath, 'utf8'));
-        let settingsChanged = false;
+        let didSettingsChange = false;
         if (settings.hooks) {
             const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
                 managedPackageSourceRoots(),
             );
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
-            settingsChanged = true;
+            didSettingsChange = true;
             console.log('  Hook entries removed from settings.json');
         }
         const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
@@ -2271,13 +2601,13 @@ function executeUninstallPlan(plan, helpers = {}) {
         if (managedDenyFromPlan.length > 0) {
             const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromPlan);
             if (pruneOutcome.removedCount > 0) {
-                settingsChanged = true;
+                didSettingsChange = true;
                 console.log(
                     `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed deny(s)`,
                 );
             }
         }
-        if (settingsChanged) {
+        if (didSettingsChange) {
             writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
@@ -2297,6 +2627,9 @@ function executeUninstallPlan(plan, helpers = {}) {
             }
         } catch { /* leave non-empty dirs */ }
     }
+    removeEmptyDirectoryTree(INSTALL_ROOT_RESOLUTION.skillsInstallDirectory);
+    removeEmptyDirectoryTree(INSTALL_ROOT_RESOLUTION.agentsInstallDirectory);
+    removeEmptyDirectoryTree(AGENTS_HOME);
     console.log(`\nRemoved ${removed} files.\n`);
     return removed;
 }
@@ -2310,13 +2643,13 @@ function executeUninstallPlan(plan, helpers = {}) {
  * without nesting a second journal.
  *
  * @param {{
- *   requireManifest: boolean,
+ *   isManifestRequired: boolean,
  *   throwIfFault?: (phase: string) => void,
  * }} options
  * @returns {number|void} 0 when no manifest exists and none is required.
  */
-function purgeManagedInstallation({ requireManifest, throwIfFault }) {
-    const plan = resolveUninstallPlan(requireManifest);
+function purgeManagedInstallation({ isManifestRequired, throwIfFault }) {
+    const plan = resolveUninstallPlan(isManifestRequired);
     if (plan.isNoOp) {
         return 0;
     }
@@ -2415,7 +2748,10 @@ Examples:
   npx ${PACKAGE_NAME} --profiles editor,mel --only core
 
 Install location: ~/.claude/ by default; CLAUDE_CONFIG_DIR or --target selects another managed root.
+Skills and agents live under ~/.agents (sibling of ~/.claude). ~/.claude/skills and ~/.claude/agents are directory pointers to that home.
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
+Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
+Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.
@@ -2424,6 +2760,8 @@ with package, version, targetIdentity, managedRoot, files, and skills.
 
 If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
 writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
+If ~/.claude/AGENTS.md already exists and differs from the package copy, the installer
+writes the previous contents to ~/.claude/backups/AGENTS.md.<timestamp>.bak first.
 `);
 }
 
@@ -2460,13 +2798,15 @@ function realPathOrSelf(filesystemPath) {
 }
 
 /**
- * Load profile id → directoryName from the A1 launcher contract when present.
- * Falls back to identity mapping when the file is missing, unreadable, or empty.
+ * Load profile id → directoryName for the install targets this package resolves.
+ *
+ * Each profile's directory carries the profile's own name, so the map is an
+ * identity over the ids a multi-target install accepts.
  *
  * @returns {Record<string, string>}
  */
 function loadDirectoryNameByProfileId() {
-    const fallbackDirectoryNameByProfileId = {
+    return {
         main: 'main',
         editor: 'editor',
         mel: 'mel',
@@ -2474,35 +2814,6 @@ function loadDirectoryNameByProfileId() {
         master: 'master',
         kimi: 'kimi',
     };
-    const manifestPath = join(
-        PACKAGE_ROOT,
-        'scripts',
-        'profile-isolation-launchers',
-        'config',
-        'profiles.manifest.json',
-    );
-    if (!existsSync(manifestPath)) {
-        return fallbackDirectoryNameByProfileId;
-    }
-    try {
-        const document = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        /** @type {Record<string, string>} */
-        const directoryNameByProfileId = {};
-        const profiles = document && typeof document === 'object' ? document.profiles : null;
-        if (profiles && typeof profiles === 'object') {
-            for (const [eachProfileId, eachProfile] of Object.entries(profiles)) {
-                if (eachProfile && typeof eachProfile === 'object' && typeof eachProfile.directoryName === 'string') {
-                    directoryNameByProfileId[eachProfileId] = eachProfile.directoryName;
-                }
-            }
-        }
-        if (Object.keys(directoryNameByProfileId).length === 0) {
-            return fallbackDirectoryNameByProfileId;
-        }
-        return directoryNameByProfileId;
-    } catch {
-        return fallbackDirectoryNameByProfileId;
-    }
 }
 
 /**
@@ -2545,7 +2856,7 @@ function runInstallForAllTargets(allTargets, childArgv) {
  * @returns {number | null}
  */
 function spawnInstallChild(target, childArgv) {
-    const result = spawnSync(
+    const childProcess = spawnSync(
         process.execPath,
         [
             fileURLToPath(import.meta.url),
@@ -2560,11 +2871,11 @@ function spawnInstallChild(target, childArgv) {
             env: process.env,
         },
     );
-    if (result.error) {
-        console.error(`ERROR: failed to spawn install child: ${result.error.message}`);
+    if (childProcess.error) {
+        console.error(`ERROR: failed to spawn install child: ${childProcess.error.message}`);
         return 1;
     }
-    return result.status === null ? 1 : result.status;
+    return childProcess.status === null ? 1 : childProcess.status;
 }
 
 if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {

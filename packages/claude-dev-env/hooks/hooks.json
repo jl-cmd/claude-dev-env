@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/plain_language_blocker.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/ask_user_question_shape_blocker.py",
             "timeout": 10
           }
         ]

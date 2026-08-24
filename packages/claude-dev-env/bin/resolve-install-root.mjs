@@ -10,11 +10,24 @@
  */
 
 import { homedir } from 'node:os';
-import { join, normalize, resolve, sep } from 'node:path';
-import { MYPY_INI_FILE_NAME } from './install-constants.mjs';
+import { basename, dirname, join, normalize, resolve, sep } from 'node:path';
+import {
+    MYPY_INI_FILE_NAME,
+    CODEX_HOME_ENVIRONMENT_VARIABLE,
+    DEFAULT_CODEX_DIRECTORY_NAME,
+    CODEX_RULES_DIRECTORY_NAME,
+    DEFAULT_CURSOR_DIRECTORY_NAME,
+    CURSOR_RULES_DIRECTORY_NAME,
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    MANAGED_AGENTS_DIRECTORY_NAME,
+    MANAGED_HOOKS_DIRECTORY_NAME,
+    MANAGED_SCRIPTS_DIRECTORY_NAME,
+    CODEX_HOOKS_DIRECTORY_NAME,
+} from './install-constants.mjs';
 
 export const CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE = 'CLAUDE_CONFIG_DIR';
 export const DEFAULT_CLAUDE_DIRECTORY_NAME = '.claude';
+export const DEFAULT_AGENTS_DIRECTORY_NAME = '.agents';
 export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
 
 /**
@@ -33,8 +46,55 @@ export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
  *   manifestFilePath: string,
  *   mypyIniInstallPath: string,
  *   allDeclaredExternalPaths: string[],
+ *   allDeclaredExternalDirectories: string[],
+ *   codexRulesInstallDirectory: string,
+ *   cursorInstallDirectory: string,
+ *   cursorRulesInstallDirectory: string,
+ *   agentsHome: string,
+ *   skillsInstallDirectory: string,
+ *   agentsInstallDirectory: string,
+ *   skillsLookupDirectory: string,
+ *   agentsLookupDirectory: string,
+ *   hooksInstallDirectory: string,
+ *   scriptsInstallDirectory: string,
+ *   hooksLookupDirectory: string,
+ *   scriptsLookupDirectory: string,
+ *   codexHooksInstallDirectory: string,
  * }} InstallRootResolution
  */
+
+/**
+ * Resolve the canonical skills/agents home for one managed Claude root.
+ *
+ * When the managed root's base name is `.claude`, the agents home is the sibling
+ * `.agents` directory (so `~/.claude` pairs with `~/.agents`). Any other managed
+ * root — a named profile directory or an explicit `--target` — pairs with a
+ * sibling named `<root-name>.agents`, so two profile directories never share one
+ * agents home.
+ *
+ * @param {string} managedRoot Absolute managed Claude root.
+ * @returns {string} Absolute agents home.
+ */
+export function resolveAgentsHome(managedRoot) {
+    const resolvedManagedRoot = resolve(managedRoot);
+    const parentDirectory = dirname(resolvedManagedRoot);
+    const managedBaseName = basename(resolvedManagedRoot);
+    if (isClaudeDirectoryBaseName(managedBaseName)) {
+        return resolve(join(parentDirectory, DEFAULT_AGENTS_DIRECTORY_NAME));
+    }
+    return resolve(join(parentDirectory, `${managedBaseName}${DEFAULT_AGENTS_DIRECTORY_NAME}`));
+}
+
+/**
+ * @param {string} directoryName
+ * @returns {boolean}
+ */
+function isClaudeDirectoryBaseName(directoryName) {
+    if (process.platform === 'win32') {
+        return directoryName.toLowerCase() === DEFAULT_CLAUDE_DIRECTORY_NAME.toLowerCase();
+    }
+    return directoryName === DEFAULT_CLAUDE_DIRECTORY_NAME;
+}
 
 /**
  * Resolve the managed install root and declared external destinations.
@@ -69,6 +129,30 @@ export function resolveInstallRoot(options = {}) {
     }
 
     const mypyIniInstallPath = resolve(join(homeDirectory, MYPY_INI_FILE_NAME));
+    const codexHomeDirectory = normalizeOptionalPath(
+        environment[CODEX_HOME_ENVIRONMENT_VARIABLE],
+    ) ?? resolve(join(homeDirectory, DEFAULT_CODEX_DIRECTORY_NAME));
+    const codexRulesInstallDirectory = resolve(
+        join(codexHomeDirectory, CODEX_RULES_DIRECTORY_NAME),
+    );
+    const codexHooksInstallDirectory = resolve(
+        join(codexHomeDirectory, CODEX_HOOKS_DIRECTORY_NAME),
+    );
+    const cursorInstallDirectory = resolve(
+        join(homeDirectory, DEFAULT_CURSOR_DIRECTORY_NAME),
+    );
+    const cursorRulesInstallDirectory = resolve(
+        join(cursorInstallDirectory, CURSOR_RULES_DIRECTORY_NAME),
+    );
+    const agentsHome = resolveAgentsHome(managedRoot);
+    const skillsInstallDirectory = join(agentsHome, MANAGED_SKILLS_DIRECTORY_NAME);
+    const agentsInstallDirectory = join(agentsHome, MANAGED_AGENTS_DIRECTORY_NAME);
+    const hooksInstallDirectory = join(agentsHome, MANAGED_HOOKS_DIRECTORY_NAME);
+    const scriptsInstallDirectory = join(agentsHome, MANAGED_SCRIPTS_DIRECTORY_NAME);
+    const skillsLookupDirectory = join(managedRoot, MANAGED_SKILLS_DIRECTORY_NAME);
+    const agentsLookupDirectory = join(managedRoot, MANAGED_AGENTS_DIRECTORY_NAME);
+    const hooksLookupDirectory = join(managedRoot, MANAGED_HOOKS_DIRECTORY_NAME);
+    const scriptsLookupDirectory = join(managedRoot, MANAGED_SCRIPTS_DIRECTORY_NAME);
     return {
         managedRoot,
         source,
@@ -76,6 +160,25 @@ export function resolveInstallRoot(options = {}) {
         manifestFilePath: join(managedRoot, MANIFEST_FILE_NAME),
         mypyIniInstallPath,
         allDeclaredExternalPaths: [mypyIniInstallPath],
+        allDeclaredExternalDirectories: [
+            codexRulesInstallDirectory,
+            codexHooksInstallDirectory,
+            cursorInstallDirectory,
+            agentsHome,
+        ],
+        codexRulesInstallDirectory,
+        cursorInstallDirectory,
+        cursorRulesInstallDirectory,
+        agentsHome,
+        skillsInstallDirectory,
+        agentsInstallDirectory,
+        skillsLookupDirectory,
+        agentsLookupDirectory,
+        hooksInstallDirectory,
+        scriptsInstallDirectory,
+        hooksLookupDirectory,
+        scriptsLookupDirectory,
+        codexHooksInstallDirectory,
     };
 }
 
@@ -103,8 +206,9 @@ export function isPathWithinManagedRoot(candidatePath, managedRoot) {
 }
 
 /**
- * True when a write destination is allowed: inside the managed root or on
- * the declared external allowlist (today: ~/.mypy.ini under the home dir).
+ * True when a write destination is allowed: inside the managed root, the
+ * home-directory `.mypy.ini`, a file under the Codex rules directory, a file
+ * under the Cursor rules directory, or a file under the agents home.
  *
  * @param {string} candidatePath
  * @param {InstallRootResolution} resolution
@@ -115,8 +219,13 @@ export function isAllowedInstallDestination(candidatePath, resolution) {
         return true;
     }
     const normalizedCandidate = normalizePathForComparison(candidatePath);
-    return resolution.allDeclaredExternalPaths.some(
+    if (resolution.allDeclaredExternalPaths.some(
         (eachExternalPath) => normalizePathForComparison(eachExternalPath) === normalizedCandidate,
+    )) {
+        return true;
+    }
+    return (resolution.allDeclaredExternalDirectories ?? []).some(
+        (eachExternalDirectory) => isPathWithinManagedRoot(candidatePath, eachExternalDirectory),
     );
 }
 
@@ -130,18 +239,18 @@ export function parseExplicitTargetFromArgv(argv) {
     for (let index = 0; index < argv.length; index += 1) {
         const token = argv[index];
         if (token === '--target') {
-            const value = argv[index + 1];
-            if (!value || value.startsWith('--')) {
+            const targetPath = argv[index + 1];
+            if (!targetPath || targetPath.startsWith('--')) {
                 throw new Error('--target requires a path argument');
             }
-            return value;
+            return targetPath;
         }
         if (token.startsWith('--target=')) {
-            const value = token.slice('--target='.length);
-            if (!value) {
+            const targetPath = token.slice('--target='.length);
+            if (!targetPath) {
                 throw new Error('--target requires a path argument');
             }
-            return value;
+            return targetPath;
         }
     }
     return null;

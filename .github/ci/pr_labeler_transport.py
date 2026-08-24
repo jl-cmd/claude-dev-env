@@ -6,9 +6,8 @@
     ok:   call_api=recording_fake (in tests)   -> no network, calls recorded
 
 The only network calls in the labeler live here, made with `urllib.request`
-and a bearer token, matching the pattern already in
-`.github/scripts/sync_ai_rules.py` in this repository (no PyGithub or requests
-dependency). Every function that reaches the network takes the request-
+and a bearer token. The module uses the standard library and keeps every
+network boundary injectable for focused tests. Every function that reaches the network takes the request-
 performing callable as a parameter defaulting to the real one, so callers can
 inject a recording fake in tests without touching the network.
 """

@@ -27,7 +27,7 @@ def _load_enforcer_module() -> ModuleType:
 code_rules_enforcer = _load_enforcer_module()
 
 
-PRODUCTION_FILE_PATH = "packages/claude-dev-env/skills/example/workflow/example_render.py"
+PRODUCTION_FILE_PATH = "packages/claude-dev-env/.agents/skills/example/workflow/example_render.py"
 
 
 def test_check_magic_values_should_flag_short_sha_slice_bound() -> None:

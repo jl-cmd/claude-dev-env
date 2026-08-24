@@ -34,11 +34,20 @@ DENY_REASON_TEMPLATE = (
 CALLING_HOOK_NAME = "orchestrator_refresh_reschedule_gate.py"
 HOOK_EVENT_NAME = "PreToolUse"
 
+ALL_PACKAGE_AGENTS_SKILL_SCRIPTS_RELATIVE_PARTS: tuple[str, ...] = (
+    ".agents",
+    "skills",
+    "orchestrator",
+    "scripts",
+)
+"""Package-source path of orchestrator status_gate.py under the agents home."""
+
 ALL_SKILL_SCRIPTS_RELATIVE_PARTS: tuple[str, ...] = (
     "skills",
     "orchestrator",
     "scripts",
 )
+"""Package-root path of orchestrator status_gate.py for a dependency layout."""
 PLUGIN_ROOT_ENV_VAR = "CLAUDE_PLUGIN_ROOT"
 ALL_HOME_SKILLS_RELATIVE_PARTS: tuple[str, ...] = (
     ".claude",

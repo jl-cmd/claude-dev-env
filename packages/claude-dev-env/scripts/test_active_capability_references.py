@@ -32,7 +32,7 @@ def test_inventory_includes_shipped_skill_and_agent_names() -> None:
 
 def test_strip_inert_fenced_blocks_drops_historical_examples() -> None:
     markdown = (
-        "Use /commit for commits.\n"
+        "Use /sr-loop for cleanup.\n"
         "```historical\n"
         "Use /qbug for bugs.\n"
         "```\n"
@@ -40,7 +40,7 @@ def test_strip_inert_fenced_blocks_drops_historical_examples() -> None:
     )
     stripped = strip_inert_fenced_blocks(markdown)
     assert "/qbug" not in stripped
-    assert "/commit" in stripped
+    assert "/sr-loop" in stripped
 
 
 def test_extract_active_capability_names_finds_slash_and_backticks() -> None:

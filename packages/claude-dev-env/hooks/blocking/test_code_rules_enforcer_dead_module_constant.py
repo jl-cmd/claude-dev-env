@@ -506,3 +506,174 @@ def test_dead_constant_stays_denied_on_every_attempt(neutral_root: Path) -> None
             "re-issue this write" in each_issue for each_issue in each_attempt
         ), f"A dead constant stays denied with the retry escape, got: {each_attempt}"
 
+
+ALIAS_CONSTANTS_BODY = 'BASE_PROMPTS_DIRECTORY_NAME = "prompts"\nSTYLE_SHEET_FILENAME = "style.css"\n'
+
+ALIASED_IMPORT_CONSUMER_BODY = (
+    "from style_guide_gen_constants.config import constants as sg\n"
+    "\n"
+    "def prompts_directory() -> str:\n"
+    "    return sg.BASE_PROMPTS_DIRECTORY_NAME\n"
+    "\n"
+    "def style_sheet() -> str:\n"
+    "    return sg.STYLE_SHEET_FILENAME\n"
+)
+
+
+def _build_alias_repository(
+    package_parent: Path,
+    consumer_directory: Path,
+    consumer_body: str,
+) -> Path:
+    package_directory = package_parent / "style_guide_gen_constants"
+    config_directory = package_directory / "config"
+    config_directory.mkdir(parents=True)
+    (package_directory / "__init__.py").write_text("", encoding="utf-8")
+    (config_directory / "__init__.py").write_text("", encoding="utf-8")
+    constants_path = config_directory / "constants.py"
+    constants_path.write_text(ALIAS_CONSTANTS_BODY, encoding="utf-8")
+    consumer_directory.mkdir(parents=True, exist_ok=True)
+    (consumer_directory / "style_guide_gen.py").write_text(consumer_body, encoding="utf-8")
+    return constants_path
+
+
+def test_does_not_flag_constant_read_through_an_aliased_module_import(
+    neutral_root: Path,
+) -> None:
+    constants_path = _build_alias_repository(
+        neutral_root,
+        neutral_root / "style_guide_gen_constants",
+        ALIASED_IMPORT_CONSUMER_BODY,
+    )
+    issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
+    assert issues == [], (
+        f"A constant read as an attribute on an aliased module import stays live, got: {issues}"
+    )
+
+
+def test_does_not_flag_constant_read_through_an_alias_outside_the_package_tree(
+    neutral_root: Path,
+) -> None:
+    constants_path = _build_alias_repository(
+        neutral_root / "scripts",
+        neutral_root / "scripts",
+        ALIASED_IMPORT_CONSUMER_BODY,
+    )
+    issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
+    assert issues == [], (
+        "A constant an aliased module import reads from outside the package tree "
+        f"stays live through the widened scan, got: {issues}"
+    )
+
+
+def test_does_not_flag_constant_read_through_an_unaliased_module_import_outside_the_tree(
+    neutral_root: Path,
+) -> None:
+    consumer_body = (
+        "from style_guide_gen_constants.config import constants\n"
+        "\n"
+        "def prompts_directory() -> str:\n"
+        "    return constants.BASE_PROMPTS_DIRECTORY_NAME\n"
+        "\n"
+        "def style_sheet() -> str:\n"
+        "    return constants.STYLE_SHEET_FILENAME\n"
+    )
+    constants_path = _build_alias_repository(
+        neutral_root / "scripts",
+        neutral_root / "scripts",
+        consumer_body,
+    )
+    issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
+    assert issues == [], (
+        f"A constant read on an unaliased imported module object stays live, got: {issues}"
+    )
+
+
+def test_does_not_flag_constant_read_through_a_dotted_module_path_outside_the_tree(
+    neutral_root: Path,
+) -> None:
+    consumer_body = (
+        "import style_guide_gen_constants.config.constants\n"
+        "\n"
+        "def prompts_directory() -> str:\n"
+        "    return style_guide_gen_constants.config.constants.BASE_PROMPTS_DIRECTORY_NAME\n"
+        "\n"
+        "def style_sheet() -> str:\n"
+        "    return style_guide_gen_constants.config.constants.STYLE_SHEET_FILENAME\n"
+    )
+    constants_path = _build_alias_repository(
+        neutral_root / "scripts",
+        neutral_root / "scripts",
+        consumer_body,
+    )
+    issues = _check(ALIAS_CONSTANTS_BODY, str(constants_path))
+    assert issues == [], (
+        f"A constant read through the full dotted module path stays live, got: {issues}"
+    )
+
+
+def test_does_not_flag_constant_read_through_an_alias_in_a_sibling_tree(
+    neutral_root: Path,
+) -> None:
+    constants_body = 'CROSS_TREE_CONSTANT = "cross"\nLOCALLY_DEAD_CONSTANT = "dead"\n'
+    sibling_consumer_body = (
+        "from shared.theme_db.config import constants as theme_constants\n"
+        "\n"
+        "def tally() -> str:\n"
+        "    return theme_constants.CROSS_TREE_CONSTANT\n"
+    )
+    constants_path = _build_cross_tree_repository(
+        neutral_root, constants_body, sibling_consumer_body
+    )
+    issues = _check(constants_body, str(constants_path))
+    assert not any("CROSS_TREE_CONSTANT" in each_issue for each_issue in issues), (
+        "A constant a sibling tree reads as an attribute on an aliased module import "
+        f"must not be flagged, got: {issues}"
+    )
+    assert any("LOCALLY_DEAD_CONSTANT" in each_issue for each_issue in issues), (
+        f"A constant referenced nowhere in the repository stays flagged, got: {issues}"
+    )
+
+
+def _build_alias_collision_repository(
+    repository_root: Path,
+    promoter_constants_body: str,
+    harness_constants_body: str,
+    harness_consumer_body: str,
+) -> Path:
+    promoter_config = repository_root / "promoter" / "config"
+    promoter_config.mkdir(parents=True)
+    promoter_constants_path = promoter_config / "constants.py"
+    promoter_constants_path.write_text(promoter_constants_body, encoding="utf-8")
+    harness_config = repository_root / "harness" / "config"
+    harness_config.mkdir(parents=True)
+    (harness_config / "other_constants.py").write_text(harness_constants_body, encoding="utf-8")
+    (repository_root / "harness" / "lockfile.py").write_text(
+        harness_consumer_body, encoding="utf-8"
+    )
+    return promoter_constants_path
+
+
+def test_alias_attribute_read_on_an_unrelated_module_does_not_mask_a_dead_constant(
+    neutral_root: Path,
+) -> None:
+    promoter_constants_body = 'NEVER_READ_CONSTANT = "dead"\n'
+    harness_constants_body = 'NEVER_READ_CONSTANT = "twin"\n'
+    harness_consumer_body = (
+        "from harness.config import other_constants as oc\n"
+        "\n"
+        "def acquire() -> str:\n"
+        "    return oc.NEVER_READ_CONSTANT\n"
+    )
+    promoter_constants_path = _build_alias_collision_repository(
+        neutral_root,
+        promoter_constants_body,
+        harness_constants_body,
+        harness_consumer_body,
+    )
+    issues = _check(promoter_constants_body, str(promoter_constants_path))
+    assert any("NEVER_READ_CONSTANT" in each_issue for each_issue in issues), (
+        "A constant whose only same-named twin is read as an attribute on an "
+        f"unrelated aliased module must still be flagged dead, got: {issues}"
+    )
+

@@ -144,7 +144,7 @@ def test_path_exempts_existing_session_env_cleanup_definition_site() -> None:
 
 def test_path_exempts_existing_teardown_worktrees_definition_site() -> None:
     assert path_is_exempt(
-        "packages/claude-dev-env/skills/_shared/pr-loop/scripts/teardown_worktrees.py"
+        "packages/claude-dev-env/.agents/skills/_shared/pr-loop/scripts/teardown_worktrees.py"
     )
 
 

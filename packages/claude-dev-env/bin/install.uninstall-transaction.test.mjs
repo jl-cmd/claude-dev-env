@@ -74,6 +74,7 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
         HOME: homeDirectory,
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+        CODEX_HOME: join(homeDirectory, '.codex'),
     };
     if (options.faultPhase) {
         childEnvironment[INSTALL_FAULT_ENV] = options.faultPhase;

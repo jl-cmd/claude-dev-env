@@ -1,4 +1,4 @@
-"""Tests for shared code_rules_gate.py extracted from skills/bugteam/scripts/.
+"""Tests for shared code_rules_gate.py (historically extracted from bugteam scripts).
 
 Covers:
 - Module loads from _shared/pr-loop/scripts/ location
@@ -298,6 +298,45 @@ def test_main_staged_mode_blocks_when_staged_lines_introduce_violations(
     exit_code = gate_module.main(["--staged"])
 
     assert exit_code == 1
+
+
+def test_main_immediate_mode_blocks_staged_rule_violations(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "first_count = 1\n"
+        "def compute_total(operand):\n"
+        "    result = operand + 1\n"
+        "    return result\n",
+    )
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--immediate"])
+
+    assert exit_code == 1
+
+
+def test_main_immediate_mode_skips_staged_test_execution(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "first_count = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "test_staged_failure.py",
+        "def test_intentionally_fails() -> None:\n    assert False\n",
+    )
+    stage_file(temporary_git_repository, "test_staged_failure.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--immediate"])
+
+    assert exit_code == 0
 
 
 def test_main_staged_mode_passes_when_no_staged_violations(
@@ -2336,10 +2375,18 @@ def test_parse_arguments_reads_staged_base_and_prefix_flags() -> None:
     assert parsed_arguments.paths == [Path("explicit_file.py")]
 
 
+def test_parse_arguments_reads_immediate_scope_flag() -> None:
+    parsed_arguments = gate_module.parse_arguments(["--immediate"])
+
+    assert parsed_arguments.immediate is True
+    assert parsed_arguments.staged is False
+
+
 def test_parse_arguments_applies_documented_defaults() -> None:
     parsed_arguments = gate_module.parse_arguments([])
 
     assert parsed_arguments.staged is False
+    assert parsed_arguments.immediate is False
     assert parsed_arguments.base == "origin/main"
     assert parsed_arguments.repo_root is None
     assert parsed_arguments.only_under == []

@@ -155,6 +155,20 @@ def _switch_gh_account(to_account: str) -> bool:
     return completed_process.returncode == 0
 
 
+def _build_restore_failure_message(
+    hook_label: str,
+    original_account: str,
+    state_file: Path,
+    state_file_context: str,
+) -> str:
+    """Build the shared diagnostic for a failed account restoration."""
+    return (
+        f"[{hook_label}] Restore the gh account to {original_account!r}; "
+        f"gh account switch requires attention for {state_file_context} {state_file}. "
+        "The file remains for the next session."
+    )
+
+
 def _read_original_account(state_file: Path) -> str | None:
     """Read the original-account login from a swap-state file.
 

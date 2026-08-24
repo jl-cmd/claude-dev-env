@@ -77,6 +77,42 @@ def test_discover_agents_returns_sorted_parsed_agents(tmp_path: Path) -> None:
     assert [agent.name for agent in agents] == ["Alpha", "Zulu"]
 
 
+def test_discover_agents_skips_instruction_aliases_and_keeps_real_agents(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "real-agent.md").write_text(
+        "---\nname: Real Agent\ndescription: real\n---\n",
+        encoding="utf-8",
+    )
+    (source / "CLAUDE.md").write_text("# Guidance\n", encoding="utf-8")
+    try:
+        (source / "AGENTS.md").symlink_to("CLAUDE.md")
+    except OSError as error:
+        pytest.skip(f"symlinks unavailable: {error}")
+
+    agents = materializer.discover_agents(MaterializerConfig(source, tmp_path / "target"))
+
+    assert [agent.name for agent in agents] == ["Real Agent"]
+
+
+def test_discover_agents_rejects_non_alias_reparse_points(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "real-agent.md").write_text(
+        "---\nname: Real Agent\ndescription: real\n---\n",
+        encoding="utf-8",
+    )
+    try:
+        (source / "linked-agent.md").symlink_to("real-agent.md")
+    except OSError as error:
+        pytest.skip(f"symlinks unavailable: {error}")
+
+    with pytest.raises(MaterializerError, match="source reparse point is not allowed"):
+        materializer.discover_agents(MaterializerConfig(source, tmp_path / "target"))
+
+
 def test_content_to_bytes_preserves_bytes_and_encodes_text() -> None:
     assert content_to_bytes(b"payload") == b"payload"
     assert content_to_bytes("payload") == b"payload"
@@ -662,4 +698,3 @@ def test_frontmatter_rejects_non_string_name() -> None:
             "---\nname: 1\ndescription: y\n---\n",
             "bad.md",
         )
-

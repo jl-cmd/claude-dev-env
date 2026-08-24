@@ -1,7 +1,6 @@
 """Tests for the session-scratchpad exemption wired into code_rules_enforcer.main."""
 
 import importlib.util
-import io
 import json
 import os
 import sys
@@ -10,6 +9,13 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
+from blocking import _path_setup  # noqa: F401
+
+from code_rules_enforcer_test_support import run_serialized_payload_entrypoint
 
 ENFORCER_PATH = Path(__file__).parent / "code_rules_enforcer.py"
 FIXED_USER_ID = 6070
@@ -55,19 +61,11 @@ def _write_payload(target: Path) -> dict[str, object]:
     }
 
 
-def _run_main(
-    monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
-) -> tuple[int | None, str]:
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-    captured_stdout = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", captured_stdout)
-    exit_code: int | None = None
-    try:
-        _ENFORCER.main([])
-    except SystemExit as raised_exit:
-        raw_code = raised_exit.code
-        exit_code = raw_code if isinstance(raw_code, int) else None
-    return exit_code, captured_stdout.getvalue()
+def _run_main(payload_by_key: dict[str, object]) -> tuple[int | None, str]:
+    captured_stdout, exit_code = run_serialized_payload_entrypoint(
+        _ENFORCER.main, json.dumps(payload_by_key)
+    )
+    return exit_code, captured_stdout
 
 
 def _decision_from(stdout_text: str) -> str | None:
@@ -84,7 +82,7 @@ def test_scratchpad_write_is_exempt_from_code_rules(
     monkeypatch.setenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", "1")
     throwaway_script = scratchpad_directory / "one_off_probe.py"
 
-    exit_code, stdout_text = _run_main(monkeypatch, _write_payload(throwaway_script))
+    exit_code, stdout_text = _run_main(_write_payload(throwaway_script))
 
     assert exit_code == 0
     assert _decision_from(stdout_text) != "deny"
@@ -99,7 +97,7 @@ def test_identical_non_scratchpad_write_is_still_blocked(
     outside_directory.mkdir(parents=True)
     production_module = outside_directory / "one_off_probe.py"
 
-    exit_code, stdout_text = _run_main(monkeypatch, _write_payload(production_module))
+    exit_code, stdout_text = _run_main(_write_payload(production_module))
 
     assert exit_code == 0
     assert _decision_from(stdout_text) == "deny"

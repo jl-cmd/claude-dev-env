@@ -1,13 +1,3 @@
-<!-- SYNC-HEADER-START -->
-<!--
-AUTO-GENERATED — DO NOT EDIT.
-Source of truth: jl-cmd/claude-dev-env/AGENTS.md
-Synced by: .github/workflows/sync-ai-rules.yml
-Source commit: e7868f98972c487db3a58b7ad06c7dde4c39eb5d
-Synced at: 2026-08-08T20:44:28.599572+00:00
--->
-<!-- SYNC-HEADER-END -->
-
 # Code rules for Claude, Cursor BugBot, Copilot, and other agents
 
 This file is the **canonical** review-criteria instruction set for every AI agent that audits pull requests in this repository:
@@ -15,7 +5,7 @@ This file is the **canonical** review-criteria instruction set for every AI agen
 - **Claude** (PR review)
 - **Cursor BugBot** (PR review)
 - **GitHub Copilot** (PR review)
-- Any other agent that loads `AGENTS.md` or `.cursor/BUGBOT.md` for review
+- Any other agent that loads `.cursor/BUGBOT.md` for review
 
 These rules describe the green-light state of code in this repository. Agents apply them to the **lines a PR adds or modifies**, surface deviations as findings, and recommend corrections. Output is review feedback.
 
@@ -23,7 +13,7 @@ Where a rule lists exemptions (test files, migrations, config files), the exempt
 
 This file is **rules-only**. Repo layout, build commands, and workflow guidance live elsewhere.
 
-**Surface map:** this file is the canonical human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement (not generated from this file). `.cursor/BUGBOT.md` is a sync projection of this file. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
+**Surface map:** this file is the checked-in human and AI **code-quality** review contract. `packages/claude-dev-env/docs/CODE_RULES.md` is its compact projection. `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py` is hand-maintained production enforcement. Session policies (question routing, task tracking) live under `packages/claude-dev-env/rules/` — see `rules/code-standards.md`.
 
 ---
 
@@ -169,7 +159,7 @@ Test files are exempt from the file-global-constants rule above, yet a test modu
   - Helper files created to work around a tool limitation that the PR did not explicitly call out.
   - Any file the PR description does not reference and that a reviewer cannot trace to one of the listed changes.
 - In a per-directory `CLAUDE.md`, every backticked bare filename in a markdown table's first column names a file that exists in the directory subtree the `CLAUDE.md` describes (the directory, its subdirectories, or its siblings under the parent). A first-column cell naming a file that exists nowhere under that scan root points the reader at something that is not there — drop the row or correct the cell to name an existing file. Cells that hold a path, a subdirectory ending in `/`, or a slash-command are out of scope, as is a table whose content names an explicit relative-path source (a `../` token).
-- In a `.md` file, cut a sentence whose only job is to say why a stated choice is good, or to restate a gain a reader already works out from the behavior the doc states or from a rule a hook or another file enforces. A sentence like that carries no fact the reader acts on. Keep a rule's one-line reason when it names present behavior (`--jq` runs per page, so cross-page sorts give wrong results); flag a trailing sentence that only re-argues or restates a fact the doc already states. This finding is distinct from the historical-clutter finding (old-state references), the self-contained-docs finding (references to the chat that produced the doc), and the plain-language finding (heavy words): it targets a present-tense sentence that adds no actionable fact. Full rule: [`packages/claude-dev-env/rules/doc-prose-cuts.md`](packages/claude-dev-env/rules/doc-prose-cuts.md).
+- In a `.md` file, cut a sentence whose only job is to say why a stated choice is good, or to restate a gain a reader already works out from the behavior the doc states or from a rule a hook or another file enforces. A sentence like that carries no fact the reader acts on. Keep a rule's one-line reason when it names present behavior (`--jq` runs per page, so cross-page sorts give wrong results); flag a trailing sentence that only re-argues or restates a fact the doc already states. This finding is distinct from the historical-clutter finding (old-state references), the self-contained-docs finding (references to the chat that produced the doc), and the language-policy guidance: it targets a present-tense sentence that adds no actionable fact. Apply [`packages/claude-dev-env/rules/asd-ste100-language.md`](packages/claude-dev-env/rules/asd-ste100-language.md) for user-facing wording.
 
 ### Scope of review
 
