@@ -61,6 +61,87 @@ def test_flags_unix_home_path() -> None:
     assert any(each.category == "home-path" for each in all_unix_hits)
 
 
+def test_flags_raw_escaped_windows_home_path() -> None:
+    all_home_hits = scan_text_for_pii(r"path is C:\\Users\\concrete-user\\file")
+    assert [each.matched_text for each in all_home_hits] == [
+        r"C:\\Users\\concrete-user"
+    ]
+
+
+def test_flags_unc_windows_home_path_at_each_share_depth() -> None:
+    all_home_hits = scan_text_for_pii(
+        r"path is \\server\Users\concrete-user\file"
+        "\n"
+        r"path is \\server name\My Share\Users\other-user\file"
+    )
+    assert [each.matched_text for each in all_home_hits] == [
+        r"\\server\Users\concrete-user",
+        r"\\server name\My Share\Users\other-user",
+    ]
+
+
+def test_flags_forward_slash_unc_home_paths() -> None:
+    all_home_hits = scan_text_for_pii(
+        "path is //server/Users/concrete-user/file"
+        "\n"
+        "path is //server/share/Users/other-user/file"
+    )
+    assert [each.matched_text for each in all_home_hits] == [
+        "//server/Users/concrete-user",
+        "//server/share/Users/other-user",
+    ]
+
+
+def test_allows_http_urls_with_users_segments() -> None:
+    all_home_hits = scan_text_for_pii(
+        "https://docs-7.example.com/Users/concrete-user/file"
+    ) + scan_text_for_pii("http://server-2/share/Users/concrete-user/file")
+    assert all_home_hits == []
+
+
+def test_allows_http_urls_with_home_segments() -> None:
+    assert scan_text_for_pii("https://home/user/file") == []
+    assert scan_text_for_pii("https://Users/user/file") == []
+    assert scan_text_for_pii("https://[::1]/home/user/file") == []
+    assert scan_text_for_pii("https://[2001:db8::1]/Users/user/file") == []
+    assert scan_text_for_pii("https://docs-7.example.com/home/concrete-user/file") == []
+
+
+def test_flags_absolute_and_file_uri_home_paths() -> None:
+    all_home_hits = scan_text_for_pii("path is /home/concrete-user/file")
+    all_home_hits += scan_text_for_pii("path is file:///home/concrete-user/file")
+    all_home_hits += scan_text_for_pii("path is file://server/home/concrete-user/file")
+    all_home_hits += scan_text_for_pii("path is FILE://server/home/other-user/file")
+    all_home_hits += scan_text_for_pii(
+        "path is FILE://server/share/home/third-user/file"
+    )
+    assert [each.matched_text for each in all_home_hits] == [
+        "/home/concrete-user",
+        "file:///home/concrete-user",
+        "file://server/home/concrete-user",
+        "FILE://server/home/other-user",
+        "FILE://server/share/home/third-user",
+    ]
+
+
+def test_flags_file_uri_home_path() -> None:
+    all_home_hits = scan_text_for_pii(
+        "path is file:///Users/concrete-user/file"
+        "\n"
+        "path is file://server/Users/concrete-user/file"
+        "\n"
+        "path is FILE:///Users/other-user/file"
+        "\n"
+        "path is FILE://server/share/Users/third-user/file"
+    )
+    assert [each.matched_text for each in all_home_hits] == [
+        "file:///Users/concrete-user",
+        "file://server/Users/concrete-user",
+        "FILE:///Users/other-user",
+        "FILE://server/share/Users/third-user",
+    ]
+
+
 def test_flags_private_ip_and_allows_public_ip() -> None:
     all_lan_hits = scan_text_for_pii(f"host {SYNTHETIC_PRIVATE_IP}")
     all_dns_hits = scan_text_for_pii(f"dns {SYNTHETIC_PUBLIC_IP}")
