@@ -1,99 +1,150 @@
 ---
 name: pr-cleanup
 description: >-
-  Clean a PR end-to-end with one coding agent: shared-extraction-audit,
-  name-by-capability-audit, sr-loop, then small-cl — apply and validate fixes
-  as they return. Use when the user asks for /pr-cleanup or full PR cleanup
-  (place, name, converge, then shrink).
+  Clean pull requests through isolated preflight, one-agent cleanup, and strict
+  parent-to-child promotion. Triggers: /pr-cleanup, run PR cleanup, full PR
+  cleanup, extraction audit, capability naming audit, simplify and review a PR,
+  split a cleaned PR, parent Ready, child Ready.
 ---
 
 # PR cleanup
 
-One coding agent cleans a pull request end-to-end: put code in the right place,
-name it for what it does, run the converging cleanup loop, then shrink the
-change into a reviewable size.
+## Contents
 
-This skill is host-neutral. Any coding agent that can edit the PR head, run
-scoped tests, and invoke the composed skills may run it.
+- [Principle](#principle)
+- [Gotchas](#gotchas)
+- [When this applies](#when-this-applies)
+- [Composition](#composition)
+- [Task seeding](#task-seeding)
+- [Process](#process)
+- [Finish report](#finish-report)
+- [File index](#file-index)
+- [Folder map](#folder-map)
 
-## When to use
+## Principle
 
-- `/pr-cleanup <PR>` or “run pr-cleanup on this PR”
-- A PR needs extraction + naming + sr-loop + a smaller reviewable slice in one pass
+One coding agent owns the cleanup outcome. Parallel preflight work runs in
+isolated worktrees and produces findings, tested proposals, and evidence for
+the cleanup owner. Parent-to-child promotion uses exact commit ancestry and
+fresh child-head checks.
 
-## Inputs
+## Gotchas
 
-- Target: PR URL, number, or branch (required). Missing → ask:
-  `Give a GitHub PR number or URL for pr-cleanup.`
-- Repo: take from the PR URL when given; otherwise the user’s default monitored repo
+- Preflight worker changes stay in isolated worktrees. Keep parent branch
+  operations unavailable until the strict promotion gate.
+- Parent promotion uses the exact `parent_ready_sha`. Prove that SHA is an
+  ancestor of the child head.
+- Child promotion carries fresh validation. Reapply the relevant preflight
+  fixes and rerun tests, `e-simplify`, and `e-code-review` on the new child
+  head.
+- Finish reports carry every actionable finding with an applied fix or exact
+  disposition before promotion.
 
-## Composition (run in this order)
+## When this applies
 
-| Step | Skill | Role |
-|------|--------|------|
-| 1 | `shared-extraction-audit` | Wrong *place* (workflow package vs shared library) |
-| 2 | `name-by-capability-audit` | Wrong *name* (driver word on reusable capability) |
-| 3 | `sr-loop` / `e-simplify` then `e-code-review` | Converging simplify + high-effort review with `--fix` |
-| 4 | `small-cl` | Split / shrink into a focused reviewable PR |
+Use this skill for a pull request that needs extraction, capability-oriented
+naming, cleanup and review convergence, and a focused child increment.
 
-All four run under **one coding agent session** on the same worktree / PR head.
-For sr-loop advisor consults, bind `team-advisor` as a second session at equal
-tier when the host supports it (see `team-advisor` and the advisor docs).
+Required input: a PR URL, number, or branch. If the target is missing, respond
+exactly: `Give a GitHub PR number, URL, or branch for pr-cleanup.`
 
-## Fix-as-you-go (required)
+Use the repository that owns the target PR. Keep the parent and child PRs in
+draft state until their applicable Ready gate is complete.
 
-Some of these skills can report without changing code. For **pr-cleanup**, that
-is not enough:
+## Composition
 
-1. **Stream findings** — as each audit/loop returns an item (offense, rename,
-   simplify fix, review finding), treat it as work to do now, not a backlog.
-2. **Apply the fix** on the PR head (or the first small-cl increment if already
-   splitting) before moving on to the next item when practical.
-3. **Validate** after each applied fix: scoped tests beside touched files (or
-   `py_compile` / package tests when there is no adjacent suite). No test theater.
-4. **Commit + push** after each validated changing pass (one concern per commit
-   when possible; keep the PR draft).
-5. **Do not** finish with an audit-only report while known P0/P1 fixes sit
-   unapplied — either fix them or hard-block with why.
+The parent session keeps one coding agent as the cleanup owner. It invokes the
+named skills below. Preflight workers may run in parallel isolated worktrees;
+the cleanup owner selects and reapplies their tested proposals.
 
-If the user says **audit-only**, stop after reports and skip apply / small-cl.
+| Skill | When | Produces | Missing behavior |
+|---|---|---|---|
+| `shared-extraction-audit` | Preflight and parent cleanup | Placement findings and tested extraction proposal | Record the unavailable audit and ask for direction before promotion |
+| `name-by-capability-audit` | Preflight and parent cleanup | Capability-oriented naming findings and tested rename proposal | Record the unavailable audit and ask for direction before promotion |
+| `e-simplify` | Preflight and child confirmation | Cleanup findings and applied or dispositioned fixes | Record the unavailable pass and hold the affected Ready gate |
+| `e-code-review` | Preflight and child confirmation | Correctness findings, fixes, and clean review evidence | Record the unavailable review and hold the affected Ready gate |
+| `small-cl` | After parent convergence | Focused child boundary or keep decision | Record the unavailable scope decision and ask for direction |
+
+## Task seeding
+
+At skill start, register every item in `reference/task-seeds.md` as a session
+task through `TaskCreate`, `TodoWrite`, or the host task equivalent. Work from
+that task list. Mark each task complete with `PASS`, `FAIL` plus file and line
+evidence, or `N/A` plus the reason.
 
 ## Process
 
-1. Resolve PR → convert to draft if needed; clean worktree of the PR head;
-   never mark ready for review.
-2. Run the four composed skills in order on that head:
-   - `shared-extraction-audit` in the **implement** band (not audit-only)
-   - `name-by-capability-audit`; apply clear rename directions (or ones the user
-     already approved), noting rename direction in the commit message
-   - `sr-loop`: Phase A `e-simplify`, Phase B `e-code-review` at **xhigh** with
-     `--fix` (not the default low); consult `team-advisor` before the first
-     write and after writes + validation
-   - Apply fixes as each pass returns findings; validate → commit → push
-3. After the loop converges (or nits-only stop): run **small-cl** — identify the
-   first coherent reviewable increment; if the PR is still too wide, split or
-   retitle/scope per small-cl (do not invent extra PRs unless the user asked).
-4. Return the finish report below. Merge-ready email / chat delivery is owned by
-   the caller (for example a PR monitor host), not this skill.
+### 1. Resolve the target
 
-## Hard rules
+Resolve the PR, repository, parent head SHA, and intended child boundary. Record
+the immutable parent preflight SHA before creating worktrees.
 
-- No test theater.
-- Real spawn/behavior validation when the PR claims an external binary path.
-- Prefer cleanup; functional only for correctness. Label each commit
-  `cleanup` vs `functional`.
-- Keep the PR draft. Never mark ready for review during this skill.
-- Extraction before rename when both apply to the same symbol (move, then name
-  the new home).
-- small-cl last — shrink only after place / name / cleanup are settled enough
-  that the slice is honest.
+### 2. Run parallel preflight
+
+Create one isolated worktree per preflight stream from the recorded parent SHA.
+Run the extraction audit, capability-name audit, `e-simplify`, and
+`e-code-review` in parallel when their skills and workers are available.
+Proposed fixes may be tested and recorded in those isolated worktrees.
+
+The preflight parent scope is read-only. Parent merge, parent rebase, parent
+push, and parent Ready changes are unavailable during this phase. Report the
+worker worktree, base SHA, findings, proposed patch SHA or diff, and validation
+evidence for every stream.
+
+### 3. Keep one cleanup owner
+
+The parent session's one coding agent reviews the preflight results, applies
+the selected extraction, naming, simplify, and review fixes in the parent
+cleanup worktree, and validates each changed surface. Use the composed skills by
+name. Keep the parent PR draft through this phase.
+
+### 4. Complete the parent Ready gate
+
+Apply or disposition every actionable preflight finding. Run scoped tests and
+the required cleanup and review confirmations on the parent head. When the
+parent evidence is complete, promote the parent to Ready and record its exact
+remote `parent_ready_sha`.
+
+### 5. Promote a child from the exact parent
+
+Create the child from its intended pre-parent base, then merge the exact
+`parent_ready_sha`. Before child promotion, run
+`git merge-base --is-ancestor <parent_ready_sha> <child_head>` and require exit
+code `0`. A different result holds promotion and requires ancestry repair.
+
+Reapply each relevant preflight fix to the child. Run the child tests, then
+rerun `e-simplify` and `e-code-review` against the new child head. Record the
+new head SHA and every validation result.
+
+Promote the child to Ready only after the ancestry proof, reapplication record,
+tests, and fresh simplify/review evidence are complete.
+
+### 6. Report the result
+
+Report the parent and child PRs, each exact head SHA, preflight streams and
+worktrees, findings applied or dispositioned, validation commands and outcomes,
+Ready states, and any hard block. Keep the report factual and concise.
 
 ## Finish report
 
-- PR / repo / starting_sha / ending_sha
-- Per step: extraction findings applied, naming violations applied, sr-loop
-  passes + commits, small-cl outcome (kept / split plan)
-- `commits_pushed` with cleanup|functional labels
-- `validation_ran` + outcomes
-- `hard_block` or null
-- `draft_still: true`
+Include:
+
+- `parent_pr`, `parent_ready_sha`, `child_pr`, and `child_ready_sha`
+- preflight streams, isolated worktree paths, findings, and proposal SHAs
+- fixes applied or exact dispositions
+- ancestry command and exit code
+- tests, `e-simplify`, and `e-code-review` results for the parent and child
+- `parent_ready`, `child_ready`, and `hard_block`
+
+## File index
+
+| Path | Purpose |
+|---|---|
+| `SKILL.md` | Hub for one-agent cleanup, isolated preflight, and strict promotion |
+| `reference/task-seeds.md` | Ordered session tasks for every cleanup and promotion gate |
+| `reference/process-inventory.md` | Process classification, evidence homes, and paired task checks |
+
+## Folder map
+
+- `SKILL.md` — skill hub and routing contract.
+- `reference/` — task seeds and process inventory.
