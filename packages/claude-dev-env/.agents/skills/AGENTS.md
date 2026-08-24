@@ -35,15 +35,15 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 
 **PR review and convergence**
 
-- `shared-extraction-audit` — audits workflow packages for helpers that belong in shared libraries; extracts in small tested CLs
-- `name-by-capability-audit` — audits PR paths/titles for driver/motive words on reusable capability code
+- `pr-shared-extraction` — audits workflow packages for helpers that belong in shared libraries; extracts in small tested CLs
+- `pr-name-by-capability` — audits PR paths/titles for driver/motive words on reusable capability code
 - `review-tier` — classifies `review_tier_constants` from change axes, hard triggers, and user overrides
 - `review-router` — resolves and arms one supported `route_review_config` route through the registered Agent|Task gate
-- `pr-cleanup` — one-agent end-to-end PR cleanup: extraction → naming → sr-loop → small-cl; apply and validate fixes as they return
+- `pr-cleanup` — one-agent end-to-end PR cleanup: extraction → naming → sr-loop → pr-small-cl; apply and validate fixes as they return
 - `autoconverge` — autonomous single-run workflow that drives a PR to ready
 - `e-code-review` — max-recall code review at a selectable effort level
 - `e-simplify` — cleanup-only pass on the current diff
-- `small-cl` — the Small CLs guide for scope and split decisions
+- `pr-small-cl` — the Small CLs guide for scope and split decisions
 
 **Research and discovery**
 - `everything-search` — file-system search via the Everything `es.exe` CLI on Windows

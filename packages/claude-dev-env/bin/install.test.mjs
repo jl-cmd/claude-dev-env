@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
     mkdtempSync,
     rmSync,
@@ -27,6 +27,7 @@ import {
     pythonCandidatesForPlatform,
     isWindowsStorePythonStub,
     interpreterCommandFromPath,
+    commandArgumentFromPath,
     invokedAsEntryPoint,
     managedHookScriptRelativePaths,
     managedHookScriptRelativePathsFromSourceRoots,
@@ -504,7 +505,9 @@ test('mergeHooksIntoSettings inserts dollar characters in plugin root and interp
     const rewrittenCommand = settings.hooks.SessionStart[0].hooks[0].command;
     assert.equal(
         rewrittenCommand,
-        'C:/Users/$&evil$1/Python/python.exe C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py',
+        process.platform === 'win32'
+            ? 'C:/Users/$&evil$1/Python/python.exe "C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py"'
+            : "C:/Users/$&evil$1/Python/python.exe 'C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py'",
     );
     assert.equal(rewrittenCommand.includes('${CLAUDE_PLUGIN_ROOT}'), false);
 });
@@ -526,6 +529,191 @@ test('mergeHooksIntoSettings substitutes a quoted absolute interpreter path for 
     assert.equal(
         settings.hooks.PostToolUse[0].hooks[0].command,
         '"C:/Program Files/Python313/python.exe" C:/Users/x/.claude/hooks/workflow/auto_formatter.py',
+    );
+});
+
+
+test('mergeHooksIntoSettings quotes standalone plugin-root hook paths and preserves existing quotes', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py' },
+                    { type: 'command', command: 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py"' },
+                    { type: 'command', command: 'python3 -c "import sys; sys.path.insert(0, r\'${CLAUDE_PLUGIN_ROOT}/hooks\')"' },
+                    { type: 'command', command: 'python3 -c "import sys; sys.path.insert(0, r\"${CLAUDE_PLUGIN_ROOT}/hooks\")"' },
+                    { type: 'command', command: "python3 -c \"print('${CLAUDE_PLUGIN_ROOT}/hooks/foo.py')\"" },
+                ],
+            }],
+        },
+    };
+    const settings = {};
+
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Program Files/Claude/.claude', 'python3');
+
+    assert.deepEqual(
+        settings.hooks.PreToolUse[0].hooks.map(eachHook => eachHook.command),
+        [
+            process.platform === 'win32'
+                ? 'python3 "C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py"'
+                : "python3 'C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py'",
+            process.platform === 'win32'
+                ? 'python3 "C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py"'
+                : "python3 'C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py'",
+            "python3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovUHJvZ3JhbSBGaWxlcy9DbGF1ZGUvLmNsYXVkZS9ob29rcw==').decode(), '__claude_dev_env_managed_hooks__')[0])\"",
+            "python3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovUHJvZ3JhbSBGaWxlcy9DbGF1ZGUvLmNsYXVkZS9ob29rcw==').decode(), '__claude_dev_env_managed_hooks__')[0])\"",
+            "python3 -c \"print('C:/Program Files/Claude/.claude/hooks/foo.py')\"",
+        ],
+    );
+});
+
+
+test('mergeHooksIntoSettings embeds a decodable inline plugin-root path', () => {
+    const hooksConfig = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [{
+                    type: 'command',
+                    command: 'python3 -c "import sys; sys.path.insert(0, r\'${CLAUDE_PLUGIN_ROOT}/hooks\'); print(sys.path[0])"',
+                }],
+            }],
+        },
+    };
+    const settings = {};
+    const pluginRootDirectory = 'C:/Program Files/Claude/.claude';
+
+    mergeHooksIntoSettings(settings, hooksConfig, pluginRootDirectory, 'python3');
+
+    const rewrittenCommand = settings.hooks.SessionStart[0].hooks[0].command;
+    const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+    const inlineRun = spawnSync(rewrittenCommand.replace(/^python3\b/, pythonCommand), {
+        encoding: 'utf8',
+        shell: process.platform === 'win32' ? true : '/bin/sh',
+        timeout: 30000,
+    });
+    assert.equal(inlineRun.status, 0, inlineRun.stderr);
+    assert.equal(inlineRun.stdout.trim(), `${pluginRootDirectory}/hooks`);
+    assert.equal(rewrittenCommand.includes("r'${CLAUDE_PLUGIN_ROOT}/hooks'"), false);
+});
+
+
+test('commandArgumentFromPath returns raw shell-safe paths', () => {
+    assert.equal(
+        commandArgumentFromPath('/opt/claude/hooks/pre_tool_use_dispatcher.py', 'linux'),
+        '/opt/claude/hooks/pre_tool_use_dispatcher.py',
+    );
+    assert.equal(
+        commandArgumentFromPath('C:\\Python313\\python.exe', 'win32'),
+        'C:/Python313/python.exe',
+    );
+});
+
+
+test('commandArgumentFromPath quotes POSIX shell metacharacters', () => {
+    assert.equal(
+        commandArgumentFromPath("/opt/Claude's $hooks `pre_tool_use_dispatcher`.py", 'linux'),
+        "'/opt/Claude'\\''s $hooks `pre_tool_use_dispatcher`.py'",
+    );
+});
+
+
+test('commandArgumentFromPath quotes Windows percent and shell metacharacters', () => {
+    assert.equal(
+        commandArgumentFromPath('C:\\Program Files\\%PATH% & (x) ! ^.py', 'win32'),
+        '"C:/Program Files/"^%"PATH"^%" & (x) ! ^.py"',
+    );
+    assert.equal(
+        commandArgumentFromPath('C:\\safe\\%PATH%.py', 'win32'),
+        '"C:/safe/"^%"PATH"^%".py"',
+    );
+});
+
+
+test('commandArgumentFromPath launches a script from a metacharacter path', () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'cdev command & (path)!-'));
+    const isWindows = process.platform === 'win32';
+    const scriptPath = join(
+        temporaryDirectory,
+        isWindows ? 'launcher script %PATH% & (x) !.py' : "launcher script & (x) '$'.py",
+    );
+    try {
+        writeFileSync(scriptPath, 'print("launched")\n');
+        const pythonCommand = isWindows ? 'python' : 'python3';
+        const shellCommand = `${pythonCommand} ${commandArgumentFromPath(scriptPath, process.platform)}`;
+        const launcherRun = spawnSync(shellCommand, {
+            encoding: 'utf8',
+            shell: isWindows ? true : '/bin/sh',
+            timeout: 30000,
+        });
+        assert.equal(launcherRun.error, undefined);
+        assert.equal(launcherRun.signal, null);
+        assert.equal(launcherRun.status, 0, launcherRun.stderr);
+        assert.equal(launcherRun.stdout.trim(), 'launched');
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('commandArgumentFromPath launches a no-space percent path', () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'cdev-command-launch-'));
+    const isWindows = process.platform === 'win32';
+    const scriptName = isWindows ? 'launcher%PATH%.py' : 'launcher.py';
+    const scriptPath = join(temporaryDirectory, scriptName);
+    try {
+        writeFileSync(scriptPath, 'print("launched")\n');
+        const pythonCommand = isWindows ? 'python' : 'python3';
+        const shellCommand = `${pythonCommand} ${commandArgumentFromPath(scriptPath, process.platform)}`;
+        const launcherRun = spawnSync(shellCommand, {
+            encoding: 'utf8',
+            shell: isWindows ? true : '/bin/sh',
+            timeout: 30000,
+        });
+        assert.equal(launcherRun.error, undefined);
+        assert.equal(launcherRun.signal, null);
+        assert.equal(launcherRun.status, 0, launcherRun.stderr);
+        assert.equal(launcherRun.stdout.trim(), 'launched');
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('mergeHooksIntoSettings matches full standalone arguments at boundaries', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write',
+                hooks: [
+                    { type: 'command', command: 'python3 prefix${CLAUDE_PLUGIN_ROOT}/hooks/a.py' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py.bak' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py; next' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py& next' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py| next' },
+                ],
+            }],
+        },
+    };
+    const settings = {};
+
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Program Files/Claude/.claude', 'python3');
+
+    const expectedQuotedHookPath = process.platform === 'win32'
+        ? '"C:/Program Files/Claude/.claude/hooks/a.py"'
+        : "'C:/Program Files/Claude/.claude/hooks/a.py'";
+    assert.deepEqual(
+        settings.hooks.PreToolUse[0].hooks.map(eachHook => eachHook.command),
+        [
+            'python3 prefixC:/Program Files/Claude/.claude/hooks/a.py',
+            'python3 C:/Program Files/Claude/.claude/hooks/a.py.bak',
+            `python3 ${expectedQuotedHookPath}`,
+            `python3 ${expectedQuotedHookPath}; next`,
+            `python3 ${expectedQuotedHookPath}& next`,
+            `python3 ${expectedQuotedHookPath}| next`,
+        ],
     );
 });
 
@@ -687,6 +875,12 @@ test('commandReferencesManagedHook matches the rewritten inline validators-runne
     const rewrittenInlineCommand =
         "py -3 -c \"import sys; sys.path.insert(0, r'C:/Users/example/.claude/hooks'); from validators.run_all_validators import main; sys.exit(main())\"";
     assert.ok(commandReferencesManagedHook(rewrittenInlineCommand, managedPaths));
+    const base64InlineCommand =
+        "py -3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovVXNlcnMvZXhhbXBsZS8uY2xhdWRlL2hvb2tz').decode(), '__claude_dev_env_managed_hooks__')[0]); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.ok(commandReferencesManagedHook(base64InlineCommand, managedPaths));
+    const unmarkedBase64InlineCommand =
+        "py -3 -c \"import sys; sys.path.insert(0, __import__('base64').b64decode('QzovVXNlcnMvZXhhbXBsZS8uY2xhdWRlL2hvb2tz').decode()); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(unmarkedBase64InlineCommand, managedPaths), false);
 });
 
 
@@ -695,6 +889,12 @@ test('commandReferencesManagedHook leaves an unmanaged inline -c command that im
     const userInlineCommand =
         "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from my_tools.runner import main; sys.exit(main())\"";
     assert.equal(commandReferencesManagedHook(userInlineCommand, managedPaths), false);
+    const similarlyNamedUserInlineCommand =
+        "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from mypkg.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(similarlyNamedUserInlineCommand, managedPaths), false);
+    const userPathWithManagedImport =
+        "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(userPathWithManagedImport, managedPaths), false);
 });
 
 

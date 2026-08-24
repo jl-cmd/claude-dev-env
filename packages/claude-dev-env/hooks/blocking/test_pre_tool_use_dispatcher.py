@@ -42,6 +42,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I
 from pre_tool_use_dispatcher import (  # noqa: E402, I001
     DispatcherDecision,
     HostedHookResult,
+    _emit_allow_decision,
     _emit_deny_decision,
     aggregate_hosted_hook_results,
     run_hosted_hook,
@@ -649,6 +650,28 @@ def test_emit_deny_does_not_cross_collapse_reason_and_context(
     assert parsed["hookSpecificOutput"]["additionalContext"] == shared_text
 
 
+def test_emit_allow_preserves_system_message_and_additional_context(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An allow payload carries the advisory's system and context messages."""
+    decision = DispatcherDecision(
+        should_deny=False,
+        should_allow=True,
+        all_deny_reasons=[],
+        all_system_messages=["system-a", "system-b"],
+        all_additional_context=["context-a", "context-b"],
+        should_suppress_output=False,
+    )
+
+    _emit_allow_decision(decision)
+
+    parsed = json.loads(capsys.readouterr().out)
+    hook_specific = parsed["hookSpecificOutput"]
+    assert hook_specific["permissionDecision"] == "allow"
+    assert hook_specific["additionalContext"] == "context-a\ncontext-b"
+    assert parsed["systemMessage"] == "system-a\nsystem-b"
+
+
 def test_later_hook_deny_survives_early_hook_exit() -> None:
     """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
 
@@ -698,10 +721,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (8 hooks), not Group A."""
+    """MultiEdit applies to 9 hosted Group-B hooks, including the sensitive protector."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 8, (
-        f"MultiEdit tool must apply to exactly 8 Group-B hooks, got {len(all_multi_edit_entries)}"
+    all_multi_edit_script_paths = {
+        each_entry.script_relative_path for each_entry in all_multi_edit_entries
+    }
+    assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
+        "sensitive_file_protector belongs in the MultiEdit applicable set"
+    )
+    assert len(all_multi_edit_entries) == 9, (
+        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 

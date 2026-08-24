@@ -486,16 +486,20 @@ def _emit_allow_decision(decision: DispatcherDecision) -> None:
 
     Matches the shape a standalone hosted hook emits when it auto-approves the
     write, so a write a hosted hook allows explicitly is auto-approved under the
-    dispatcher rather than falling back to the default permission flow. When a
-    hook also carried an advisory systemMessage,
-    that notice rides on the allow payload without denying.
+    dispatcher rather than falling back to the default permission flow. Advisory
+    systemMessage and additionalContext fields ride on the allow payload.
     """
-    allow_payload: dict[str, object] = {
-        "hookSpecificOutput": {
-            "hookEventName": HOOK_EVENT_NAME,
-            "permissionDecision": ALLOW_DECISION,
-        }
+    allow_hook_specific: dict[str, object] = {
+        "hookEventName": HOOK_EVENT_NAME,
+        "permissionDecision": ALLOW_DECISION,
     }
+    allow_payload: dict[str, object] = {
+        "hookSpecificOutput": allow_hook_specific,
+    }
+    if decision.all_additional_context:
+        allow_hook_specific["additionalContext"] = CONTEXT_JOIN_SEPARATOR.join(
+            decision.all_additional_context
+        )
     if decision.all_system_messages:
         allow_payload["systemMessage"] = SYSTEM_MESSAGE_JOIN_SEPARATOR.join(
             decision.all_system_messages
