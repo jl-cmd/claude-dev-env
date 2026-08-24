@@ -24,20 +24,20 @@ from gate_utils import is_safe_regular_file, resolve_gate_script_path
 from git_hooks_constants import (
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     GATE_SCRIPT_NOT_FOUND_MESSAGE,
+    IMMEDIATE_SCOPE_ARGUMENT,
     INVOKE_GATE_FAILURE_MESSAGE,
-    STAGED_SCOPE_ARGUMENT,
 )
 
 
 def invoke_gate(gate_script_path: Path) -> int:
     """Invoke the shared staged gate and return its exit code."""
-    staged_scope_argument = STAGED_SCOPE_ARGUMENT
+    immediate_scope_argument = IMMEDIATE_SCOPE_ARGUMENT
     invoke_gate_failure_message = INVOKE_GATE_FAILURE_MESSAGE
     gate_infrastructure_failure_exit_code = GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     try:
         resolved_gate_path = gate_script_path.resolve(strict=True)
         completion = subprocess.run(
-            [sys.executable, str(resolved_gate_path), staged_scope_argument],
+            [sys.executable, str(resolved_gate_path), immediate_scope_argument],
             check=False,
         )
     except OSError as launch_error:

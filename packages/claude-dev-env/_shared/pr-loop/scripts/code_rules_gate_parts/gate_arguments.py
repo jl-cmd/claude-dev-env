@@ -3,9 +3,14 @@
 import argparse
 from pathlib import Path
 
+from pr_loop_shared_constants.code_rules_gate_constants import (
+    IMMEDIATE_SCOPE_ARGUMENT,
+    IMMEDIATE_SCOPE_HELP,
+)
+
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add the repo-root, base-ref, and staged-mode arguments to *parser*."""
+    """Add the repo-root, base-ref, and staged-scope arguments to *parser*."""
     parser.add_argument(
         "--repo-root",
         type=Path,
@@ -17,11 +22,18 @@ def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
         default="origin/main",
         help="Merge-base ref for git diff (default: origin/main).",
     )
-    parser.add_argument(
+    staged_scope_group = parser.add_mutually_exclusive_group()
+    staged_scope_group.add_argument(
         "--staged",
         action="store_true",
         default=False,
         help="Scope to staged changes only (git diff --cached).",
+    )
+    staged_scope_group.add_argument(
+        IMMEDIATE_SCOPE_ARGUMENT,
+        action="store_true",
+        default=False,
+        help=IMMEDIATE_SCOPE_HELP,
     )
 
 
@@ -65,6 +77,6 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
 
     Returns:
         The parsed namespace with ``repo_root``, ``base``, ``staged``,
-        ``only_under``, and ``paths`` attributes.
+        ``immediate``, ``only_under``, and ``paths`` attributes.
     """
     return _build_argument_parser().parse_args(all_arguments)

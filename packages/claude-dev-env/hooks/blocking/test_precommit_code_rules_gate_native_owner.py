@@ -7,6 +7,8 @@ native path runs the staged gate and controls the commit.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import json
 import shutil
 import stat
@@ -66,7 +68,7 @@ def write_gate_script(gate_path: Path, marker_path: Path, exit_code: int) -> Non
     )
 
 
-def install_native_pre_commit(repository_root: Path, hooks_path: Path) -> None:
+def install_native_pre_commit(hooks_path: Path) -> None:
     """Install the native pre-commit module and its self-contained imports."""
     hooks_path.mkdir()
     shutil.copyfile(PRE_COMMIT_SOURCE_PATH, hooks_path / "pre_commit.py")
@@ -87,7 +89,47 @@ def install_native_pre_commit(repository_root: Path, hooks_path: Path) -> None:
         encoding="utf-8",
     )
     pre_commit_path.chmod(pre_commit_path.stat().st_mode | stat.S_IXUSR)
-    run_git(repository_root, "config", "core.hooksPath", str(hooks_path))
+
+
+def configured_hooks_path(repository_root: Path) -> str | None:
+    """Return the repository-local hooks path when one is configured."""
+    completed_config = run_git(
+        repository_root,
+        "config",
+        "--local",
+        "--get",
+        "core.hooksPath",
+        check=False,
+    )
+    if completed_config.returncode != 0:
+        return None
+    return completed_config.stdout.strip()
+
+
+def restore_hooks_path(repository_root: Path, prior_hooks_path: str | None) -> None:
+    """Restore the repository-local hooks path captured before a benchmark."""
+    if prior_hooks_path is None:
+        run_git(
+            repository_root,
+            "config",
+            "--local",
+            "--unset-all",
+            "core.hooksPath",
+            check=False,
+        )
+        return
+    run_git(repository_root, "config", "--local", "core.hooksPath", prior_hooks_path)
+
+
+@contextmanager
+def temporary_hooks_path(repository_root: Path, benchmark_hooks_path: Path) -> Iterator[None]:
+    """Apply a benchmark hooks path and restore the prior local setting."""
+    prior_hooks_path = configured_hooks_path(repository_root)
+    run_git(repository_root, "config", "--local", "core.hooksPath", str(benchmark_hooks_path))
+    try:
+        yield
+    finally:
+        restore_hooks_path(repository_root, prior_hooks_path)
 
 
 def stage_module(repository_root: Path) -> None:
@@ -155,14 +197,38 @@ def test_installed_native_pre_commit_controls_staged_gate_decision(
     """The native Git hook runs the staged gate and returns its commit decision."""
     initialize_repository(tmp_path)
     native_hooks_path = tmp_path / "native_hooks"
-    install_native_pre_commit(tmp_path, native_hooks_path)
+    install_native_pre_commit(native_hooks_path)
     stage_module(tmp_path)
     gate_marker_path = tmp_path / "native_gate_invocation.txt"
     gate_path = tmp_path / "native_gate.py"
     write_gate_script(gate_path, gate_marker_path, gate_exit_code)
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(gate_path))
 
-    completed_commit = run_native_commit(tmp_path)
+    with temporary_hooks_path(tmp_path, native_hooks_path):
+        completed_commit = run_native_commit(tmp_path)
 
     assert completed_commit.returncode == expected_commit_exit_code
-    assert gate_marker_path.read_text(encoding="utf-8") == "--staged"
+    assert gate_marker_path.read_text(encoding="utf-8") == "--immediate"
+
+
+def test_temporary_hooks_path_restores_shared_worktree_config_on_timeout(
+    tmp_path: Path,
+) -> None:
+    initialize_repository(tmp_path)
+    supported_hooks_path = tmp_path / "supported_hooks"
+    supported_hooks_path.mkdir()
+    run_git(tmp_path, "config", "--local", "core.hooksPath", str(supported_hooks_path))
+    unrelated_worktree = tmp_path.parent / "unrelated_worktree"
+    run_git(tmp_path, "worktree", "add", "--detach", str(unrelated_worktree))
+    benchmark_hooks_path = tmp_path / "benchmark_hooks"
+    benchmark_hooks_path.mkdir()
+
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            with temporary_hooks_path(tmp_path, benchmark_hooks_path):
+                raise subprocess.TimeoutExpired("benchmark", 1)
+
+        assert configured_hooks_path(tmp_path) == str(supported_hooks_path)
+        assert configured_hooks_path(unrelated_worktree) == str(supported_hooks_path)
+    finally:
+        run_git(tmp_path, "worktree", "remove", "--force", str(unrelated_worktree))
