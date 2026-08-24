@@ -604,19 +604,19 @@ def _build_denial(all_offending_paths: list[str]) -> dict:
 
 def _resolve_hook_working_directory(
     bash_command: str,
-    hook_payload: dict[str, object],
+    all_hook_payload: dict[str, object],
 ) -> str | None:
     """Resolve the commit directory from the command or its event payload.
 
     Args:
         bash_command: Bash command whose explicit directory takes precedence.
-        hook_payload: PreToolUse payload carrying the event ``cwd``.
+        all_hook_payload: PreToolUse payload carrying the event ``cwd``.
 
     Returns:
         The validated commit directory, or None for the hook process directory.
     """
     command_directory = extract_git_working_directory(bash_command)
-    event_directory = hook_payload.get("cwd")
+    event_directory = all_hook_payload.get("cwd")
     if not isinstance(event_directory, str) or not event_directory:
         return resolve_directory(command_directory)
     validated_event_directory = resolve_directory(event_directory)
