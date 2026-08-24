@@ -17,12 +17,10 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 First-match routing selects the mode before the audit steps:
 
-1. `preflight-proposal` requires the resolved PR number, immutable base SHA, immutable head SHA, and caller-supplied isolated worktree. It verifies the exact base-to-head range, permits edits and tests inside that worktree, creates the immutable proposal evidence in [reference/preflight-proposal.md](reference/preflight-proposal.md), and returns selected-candidate-ready proposal evidence. The mode suppresses commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations.
+1. `preflight-proposal` runs `name-by-capability-audit preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with violation or OK-driver classification.
 2. `audit-only` is report-only and ends after the findings report.
 3. A user-supplied rename or fix direction follows the existing normal fix workflow.
 4. Normal mode applies the suggested rename direction by default.
-
-The downstream owner records selected proposal IDs before reapplication. Each new finding receives a new proposal ID.
 
 ## Gotchas
 
@@ -35,13 +33,7 @@ The downstream owner records selected proposal IDs before reapplication. Each ne
 - User invokes `/name-by-capability-audit <PR>` or asks to audit a PR for name-by-capability / capability naming.
 - PR adds or renames packages/modules, or frames a general shared operation with a driver/motive word (`cert_fix`, `cert_closeout`, `portal`, `export`, …).
 
-**First match wins:**
-
-- User requests `preflight-proposal` → follow [reference/preflight-proposal.md](reference/preflight-proposal.md) and return proposal evidence.
-- Missing PR number or URL → respond exactly: `Give a GitHub PR number or URL to audit for name-by-capability.`
-- User requests audit-only → finish the report-only audit and stop.
-- User gives a rename or fix direction → finish the audit report, then apply the direction they gave.
-- A violation with no user-supplied direction → finish the audit report, then apply the suggested rename direction by default.
+A missing PR number or URL returns exactly: `Give a GitHub PR number or URL to audit for name-by-capability.` Resolved targets follow **Mode routing**.
 
 ## Constraints
 
@@ -72,8 +64,8 @@ Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it 
 | `reference/fetch-commands.md` | Minimal `gh` fetch for PR naming surface |
 | `reference/report-template.md` | Compact report shape |
 | `reference/task-seeds.md` | Ordered task seeds for the audit run |
-| `reference/preflight-proposal.md` | Isolated proposal mode and evidence record |
-| `../shared-extraction-audit/reference/mode-contract.test.mjs` | Cross-skill mode boundary test |
+| `../_shared/pr-loop/preflight-proposal.md` | Shared isolated proposal mode and evidence record |
+| `../_shared/pr-loop/preflight-proposal.contract.test.mjs` | Cross-skill mode and package-pointer test |
 
 ## Folder map
 

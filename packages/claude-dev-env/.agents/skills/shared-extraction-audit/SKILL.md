@@ -17,11 +17,9 @@ Audit PRs and packages, report findings, and apply extraction fixes by default t
 
 Resolve the first matching mode before the audit steps:
 
-1. `preflight-proposal` requires the resolved PR number, immutable base SHA, immutable head SHA, and caller-supplied isolated worktree. It verifies the exact base-to-head range, permits edits and tests inside that worktree, creates the immutable proposal evidence in [reference/preflight-proposal.md](reference/preflight-proposal.md), and returns selected-candidate-ready proposal evidence. The mode suppresses commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations.
+1. `preflight-proposal` runs `shared-extraction-audit preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with priority and target.
 2. `audit-only` is report-only and ends after the findings report.
 3. Normal mode follows the existing audit workflow and applies the prioritized fix band by default.
-
-The downstream owner records selected proposal IDs before reapplication. Each new finding receives a new proposal ID.
 
 ## Target architecture
 
@@ -43,10 +41,10 @@ Shared extraction audit:
 - [ ] 2. Map canonical homes already in shared_utils
 - [ ] 3. Grep for offense patterns (see reference/offense-taxonomy.md)
 - [ ] 4. Write prioritized findings (P0–P3)
-- [ ] 5. Apply the prioritized fix band by default; an explicit audit-only request is report-only and ends after the report
+- [ ] 5. Apply **Mode routing** after the report
 - [ ] 6. Extract in small CLs (~100 lines) + move/adjust tests
-- [ ] 7. Run scoped pytest in every mode. Normal mode may then commit, push, and update the PR; preflight-proposal keeps those actions suppressed.
-- [ ] 8. When the mode is `preflight-proposal`, record proposal evidence from [reference/preflight-proposal.md](reference/preflight-proposal.md) and require downstream owner selection before reapplication
+- [ ] 7. Run scoped pytest, then follow the selected mode's mutation boundary
+- [ ] 8. When the mode is `preflight-proposal`, record proposal evidence from the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md) and require downstream owner selection before reapplication
 ```
 
 ### Step 1 — Scope
@@ -107,8 +105,6 @@ Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign prior
 ### Suggested fix order
 1. …
 ```
-
-Apply the prioritized fixes after the report by default. An explicit audit-only request is report-only and ends after the report.
 
 ## Fix workflow
 
@@ -177,5 +173,5 @@ See [reference/examples.md](reference/examples.md) for cert_fix_queue (#1965) an
 | `SKILL.md` | Hub — architecture, routing, audit checklist, and fix workflow |
 | `reference/offense-taxonomy.md` | Offense signals and priority guide |
 | `reference/examples.md` | Audit examples and fix order |
-| `reference/preflight-proposal.md` | Isolated proposal mode and evidence record |
-| `reference/mode-contract.test.mjs` | Cross-skill mode boundary test |
+| `../_shared/pr-loop/preflight-proposal.md` | Shared isolated proposal mode and evidence record |
+| `../_shared/pr-loop/preflight-proposal.contract.test.mjs` | Cross-skill mode and package-pointer test |
