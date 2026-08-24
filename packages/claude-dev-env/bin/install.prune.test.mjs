@@ -13,6 +13,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
+import {
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+} from './install-constants.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
@@ -21,12 +26,26 @@ const INSTALLER_PROCESS_TIMEOUT_MS = 60_000;
 const EXCLUDED_PACKAGE_COPY_DIRECTORY = 'node_modules';
 
 const RETIRED_SKILL_DIRECTORIES = [
+    'advisor',
+    'advisor-refresh',
+    'doc-gist',
+    'dream',
     'findbugs',
     'fixbugs',
+    'ingest',
+    'npm-creator',
     'pr-scope-resolve',
     'post-audit-findings',
     'pr-consistency-audit',
+    'readability-review',
+    'resume-review',
+    'rule-audit',
+    'rule-creator',
+    'searching-obsidian-vault',
+    'skill-writer',
+    'tdd-team',
     'bdd-protocol',
+    'team-advisor-refresh',
 ];
 const PERSONAL_SKILL_DIRECTORIES = ['credit-card-picker', 'midjourney-sref'];
 const SHIPPED_SKILL_DIRECTORY = 'autoconverge';
@@ -43,7 +62,6 @@ const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2021-06-15T12-30-45-123Z',
     '2022-11-30T23-59-59-999Z',
 ];
-const SKILLS_DIRECTORY_NAME = 'skills';
 const HOOKS_DIRECTORY_NAME = 'hooks';
 const SETTINGS_FILE_NAME = 'settings.json';
 const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
@@ -91,7 +109,7 @@ function prunedBackupContains(claudeDirectory, rootRelativePath) {
  * @returns {boolean} True when a timestamped backup holds the path.
  */
 function prunedSkillBackupContains(claudeDirectory, skillsRelativePath) {
-    return prunedBackupContains(claudeDirectory, join(SKILLS_DIRECTORY_NAME, skillsRelativePath));
+    return prunedBackupContains(claudeDirectory, join(MANAGED_SKILLS_DIRECTORY_NAME, skillsRelativePath));
 }
 
 /**
@@ -106,7 +124,7 @@ function prunedSkillBackupContains(claudeDirectory, skillsRelativePath) {
 function createSandbox(homeDirectoryPrefix = 'cdev-prune-home-') {
     const homeDirectory = mkdtempSync(join(tmpdir(), homeDirectoryPrefix));
     const claudeDirectory = join(homeDirectory, '.claude');
-    const skillsDirectory = join(claudeDirectory, 'skills');
+    const skillsDirectory = join(claudeDirectory, MANAGED_SKILLS_DIRECTORY_NAME);
     mkdirSync(skillsDirectory, { recursive: true });
     const manifestPath = join(claudeDirectory, '.claude-dev-env-manifest.json');
     return { homeDirectory, claudeDirectory, skillsDirectory, manifestPath };
@@ -148,6 +166,40 @@ test('a core install runs the spaced-path Write dispatcher and captures its red 
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }
+});
+
+/**
+ * Collect skill directory names from source roots that contain SKILL.md files.
+ *
+ * @param {string[]} allSkillSourceDirectories Candidate source roots.
+ * @returns {string[]} Unique skill directory names.
+ */
+function collectSkillNamesFromSourceDirectories(allSkillSourceDirectories) {
+    return [
+        ...new Set(allSkillSourceDirectories
+            .filter(eachDirectory => existsSync(eachDirectory))
+            .flatMap(sourceSkillsDirectory => (
+                readdirSync(sourceSkillsDirectory, { withFileTypes: true })
+                    .filter(eachEntry => eachEntry.isDirectory())
+                    .filter(eachEntry => existsSync(join(sourceSkillsDirectory, eachEntry.name, 'SKILL.md')))
+                    .map(eachEntry => eachEntry.name)
+            ))),
+    ];
+}
+
+test('the retired-skill fallback covers every current shipped skill', () => {
+    const allSkillSourceDirectories = [
+        join(PACKAGE_DIRECTORY, PACKAGE_AGENTS_HOME_DIRECTORY_NAME, MANAGED_SKILLS_DIRECTORY_NAME),
+        join(PACKAGE_DIRECTORY, MANAGED_SKILLS_DIRECTORY_NAME),
+    ];
+    const allCurrentSkillNames = collectSkillNamesFromSourceDirectories(
+        allSkillSourceDirectories,
+    );
+    const allUncoveredSkillNames = allCurrentSkillNames.filter(
+        eachSkillName => !EVER_SHIPPED_SKILL_NAMES.has(eachSkillName),
+    );
+
+    assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
 });
 
 /**
@@ -472,13 +524,13 @@ test('one install run collects retired skill directories and stale files under a
         assert.equal(allTimestampDirectories.length, 1, 'one run leaves one recovery point');
         const runBackupRoot = join(backupRoot, allTimestampDirectories[0]);
         assert.equal(
-            existsSync(join(runBackupRoot, SKILLS_DIRECTORY_NAME, retiredSkillName)),
+            existsSync(join(runBackupRoot, MANAGED_SKILLS_DIRECTORY_NAME, retiredSkillName)),
             true,
             'the retired skill directory sits under the shared root, mirroring ~/.claude/skills',
         );
         assert.equal(
             existsSync(join(
-                runBackupRoot, SKILLS_DIRECTORY_NAME, SHIPPED_SKILL_DIRECTORY,
+                runBackupRoot, MANAGED_SKILLS_DIRECTORY_NAME, SHIPPED_SKILL_DIRECTORY,
                 ...STALE_SKILL_FILE_RELATIVE_SEGMENTS,
             )),
             true,
@@ -912,7 +964,7 @@ test('a full reinstall moves a stale file out of every managed root into that ro
             sandbox, [SHARED_DIRECTORY_NAME, ...STALE_SHARED_FILE_SEGMENTS],
         );
         const staleSkillSharedPath = seedStaleFileUnderManagedRoot(
-            sandbox, [SKILLS_DIRECTORY_NAME, ...STALE_SHARED_SKILL_FILE_SEGMENTS],
+            sandbox, [MANAGED_SKILLS_DIRECTORY_NAME, ...STALE_SHARED_SKILL_FILE_SEGMENTS],
         );
 
         runInstaller(sandbox.homeDirectory, []);
