@@ -165,4 +165,4 @@ def test_installed_native_pre_commit_controls_staged_gate_decision(
     completed_commit = run_native_commit(tmp_path)
 
     assert completed_commit.returncode == expected_commit_exit_code
-    assert gate_marker_path.read_text(encoding="utf-8") == "--staged"
+    assert gate_marker_path.read_text(encoding="utf-8") == "--immediate"
