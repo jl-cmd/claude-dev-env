@@ -1,8 +1,8 @@
 """Production-path tests for native staged-gate ownership.
 
 The tests run the Agent Bash dispatcher and a native Git pre-commit hook against
-the same isolated repository. The agent path records staged-surface evidence.
-The native path runs the staged gate and controls the commit.
+the same isolated repository. The agent path passes the commit through. The
+native path runs the staged gate and controls the commit.
 """
 
 from __future__ import annotations
@@ -125,11 +125,11 @@ def run_native_commit(repository_root: Path) -> subprocess.CompletedProcess[str]
     )
 
 
-def test_agent_dispatcher_records_staged_surface_without_running_gate(
+def test_agent_dispatcher_passes_commit_through_without_running_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The Agent Bash path records staged files and leaves gate execution to Git."""
+    """The Agent Bash path continues the commit without running the staged gate."""
     initialize_repository(tmp_path)
     stage_module(tmp_path)
     gate_marker_path = tmp_path / "agent_gate_invocation.txt"
@@ -141,12 +141,12 @@ def test_agent_dispatcher_records_staged_surface_without_running_gate(
 
     assert completed_dispatcher.returncode == 0, completed_dispatcher.stderr
     assert completed_dispatcher.stdout.strip() == ""
-    assert "Staged Python files: 1." in completed_dispatcher.stderr
+    assert "Git commit proceeds to configured Git hooks." in completed_dispatcher.stderr
     assert not gate_marker_path.exists()
 
 
 @pytest.mark.parametrize("gate_exit_code, expected_commit_exit_code", [(1, 1), (0, 0)])
-def test_native_git_commit_controls_staged_gate_decision(
+def test_installed_native_pre_commit_controls_staged_gate_decision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     gate_exit_code: int,
