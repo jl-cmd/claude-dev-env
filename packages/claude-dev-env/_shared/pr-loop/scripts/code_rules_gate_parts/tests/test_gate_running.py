@@ -3,14 +3,23 @@
 from pathlib import Path
 
 import pytest
-from code_rules_gate_parts import gate_running
+
+from code_rules_gate_parts import enforcer_loading, gate_running
+from code_rules_gate_parts.tests._repo_test_helpers import (
+    init_repository,
+    write_commit_and_stage_change,
+)
 
 
-def _clean_validate(_content: str, _path: str, _prior: str = "", **_kwargs: object) -> list[str]:
+def _clean_validate(
+    _content: str, _path: str, _prior: str = "", **_kwargs: object
+) -> list[str]:
     return []
 
 
-def _dirty_validate(_content: str, _path: str, _prior: str = "", **_kwargs: object) -> list[str]:
+def _dirty_validate(
+    _content: str, _path: str, _prior: str = "", **_kwargs: object
+) -> list[str]:
     return ["Line 1: bad"]
 
 
@@ -92,8 +101,42 @@ def test_print_violation_section_groups_by_relative_path(
 ) -> None:
     module_path = (tmp_path / "module.py").resolve()
 
-    gate_running.print_violation_section("HEADER", {module_path: ["Line 1: issue"]}, tmp_path)
+    gate_running.print_violation_section(
+        "HEADER", {module_path: ["Line 1: issue"]}, tmp_path
+    )
 
     captured = capsys.readouterr()
     assert "HEADER" in captured.err
     assert "Line 1: issue" in captured.err
+
+
+def test_gate_caller_scans_staged_content_with_commit_stage_scope(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    init_repository(repository_root)
+    committed_source = "def calculate_total() -> int:\n    return 0\n"
+    staged_source = (
+        "def calculate_total() -> int:\n    total = 9999\n    return total\n"
+    )
+    file_path = write_commit_and_stage_change(
+        repository_root,
+        "service.py",
+        committed_source,
+        staged_source,
+    )
+
+    resolved_file_path = file_path.resolve()
+    exit_code = gate_running.run_gate(
+        validate_content=enforcer_loading.load_validate_content(),
+        all_file_paths=[resolved_file_path],
+        repository_root=repository_root,
+        all_added_lines_by_path={resolved_file_path: {2, 3}},
+        should_read_staged_content=True,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "9999" in captured.err
