@@ -6,6 +6,7 @@ from pathlib import Path
 
 import post_commit
 import pytest
+from git_hooks_constants import GIT_EXECUTABLE_NAME
 
 
 def build_fixture_git_environment() -> dict[str, str]:
@@ -40,7 +41,7 @@ def test_fixture_git_environment_preserves_process_execution_path(
 def run_fixture_git(repository_path: Path, *arguments: str) -> str:
     """Run Git in a fixture repository and return standard output."""
     completed_process = subprocess.run(
-        ["git", *arguments],
+        [GIT_EXECUTABLE_NAME, *arguments],
         cwd=repository_path,
         check=False,
         capture_output=True,
@@ -116,13 +117,9 @@ def test_native_submodule_commit_records_parent_pointer(
     (submodule_repository / "change.txt").write_text("fixture change\n", encoding="utf-8")
     run_fixture_git(submodule_repository, "add", "change.txt")
     run_fixture_git(submodule_repository, "commit", "-m", "Record fixture change")
-    original_working_directory = Path.cwd()
-    try:
-        clear_inherited_git_environment(monkeypatch)
-        os.chdir(submodule_repository)
-        assert post_commit.main() == 0
-    finally:
-        os.chdir(original_working_directory)
+    clear_inherited_git_environment(monkeypatch)
+    monkeypatch.chdir(submodule_repository)
+    assert post_commit.main() == 0
 
     submodule_commit_hash = run_fixture_git(submodule_repository, "rev-parse", "HEAD")
     parent_commit_subject = run_fixture_git(parent_repository, "log", "-1", "--pretty=%s")
