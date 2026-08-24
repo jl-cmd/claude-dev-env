@@ -1,15 +1,15 @@
 """Production-path tests for native staged-gate ownership.
 
 The tests run the Agent Bash dispatcher and a native Git pre-commit hook against
-the same isolated repository. The agent path records ownership evidence. The
-native path runs the staged gate and controls the commit.
+the same isolated repository. The agent path records staged-surface evidence.
+The native path runs the staged gate and controls the commit.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -30,14 +30,12 @@ CLEAN_MODULE_SOURCE = "def add_one(number: int) -> int:\n    return number + 1\n
 def run_git(
     repository_root: Path,
     *git_arguments: str,
-    environment: dict[str, str] | None = None,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run one isolated Git command and return its captured process record."""
     return subprocess.run(
         ["git", *git_arguments],
         cwd=str(repository_root),
-        env=environment,
         check=check,
         capture_output=True,
         text=True,
@@ -77,7 +75,8 @@ def install_native_pre_commit(repository_root: Path, hooks_path: Path) -> None:
         GIT_HOOKS_CONSTANTS_SOURCE_PATH,
         hooks_path / "git_hooks_constants",
     )
-    (hooks_path / "pre-commit").write_text(
+    pre_commit_path = hooks_path / "pre-commit"
+    pre_commit_path.write_text(
         "#!/usr/bin/env python3\n"
         "import sys\n"
         "from pathlib import Path\n"
@@ -87,6 +86,7 @@ def install_native_pre_commit(repository_root: Path, hooks_path: Path) -> None:
         "sys.exit(pre_commit.main())\n",
         encoding="utf-8",
     )
+    pre_commit_path.chmod(pre_commit_path.stat().st_mode | stat.S_IXUSR)
     run_git(repository_root, "config", "core.hooksPath", str(hooks_path))
 
 
@@ -114,26 +114,22 @@ def run_agent_dispatcher(repository_root: Path) -> subprocess.CompletedProcess[s
     )
 
 
-def run_native_commit(
-    repository_root: Path,
-    environment: dict[str, str],
-) -> subprocess.CompletedProcess[str]:
+def run_native_commit(repository_root: Path) -> subprocess.CompletedProcess[str]:
     """Run the real Git commit that invokes the configured native hook."""
     return run_git(
         repository_root,
         "commit",
         "-m",
         "add widget",
-        environment=environment,
         check=False,
     )
 
 
-def test_agent_dispatcher_records_native_owner_without_running_gate(
+def test_agent_dispatcher_records_staged_surface_without_running_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The Agent Bash path emits passive evidence and leaves gate execution to Git."""
+    """The Agent Bash path records staged files and leaves gate execution to Git."""
     initialize_repository(tmp_path)
     stage_module(tmp_path)
     gate_marker_path = tmp_path / "agent_gate_invocation.txt"
@@ -145,7 +141,6 @@ def test_agent_dispatcher_records_native_owner_without_running_gate(
 
     assert completed_dispatcher.returncode == 0, completed_dispatcher.stderr
     assert completed_dispatcher.stdout.strip() == ""
-    assert "Native pre-commit owns" in completed_dispatcher.stderr
     assert "Staged Python files: 1." in completed_dispatcher.stderr
     assert not gate_marker_path.exists()
 
@@ -167,7 +162,7 @@ def test_native_git_commit_controls_staged_gate_decision(
     write_gate_script(gate_path, gate_marker_path, gate_exit_code)
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(gate_path))
 
-    completed_commit = run_native_commit(tmp_path, os.environ.copy())
+    completed_commit = run_native_commit(tmp_path)
 
     assert completed_commit.returncode == expected_commit_exit_code
     assert gate_marker_path.read_text(encoding="utf-8") == "--staged"

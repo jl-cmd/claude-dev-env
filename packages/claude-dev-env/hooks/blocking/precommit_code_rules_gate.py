@@ -1,9 +1,8 @@
-"""PreToolUse hook that records the native staged CODE_RULES boundary.
+"""PreToolUse hook that records the staged Python surface.
 
 Intercepts Bash `git commit` invocations (including `git -C <path> commit`),
-resolves the repository root, and counts staged Python files. The native
-``pre-commit`` hook owns the staged validation decision. This agent surface
-emits passive staged-surface evidence for the commit path.
+resolves the repository root, and counts staged Python files. This agent
+surface emits passive staged-surface evidence for the commit path.
 """
 
 import re
@@ -30,11 +29,6 @@ from hooks_constants.precommit_code_rules_gate_constants import (  # noqa: E402
     ALL_STAGED_PYTHON_FILES_COMMAND,
     GIT_COMMAND_TIMEOUT_SECONDS,
     GIT_DASH_C_COMMIT_PATTERN,
-)
-
-_native_owner_context = (
-    "Native pre-commit owns staged CODE_RULES validation; "
-    "the agent commit path records passive staged-surface evidence."
 )
 
 
@@ -85,16 +79,15 @@ def resolve_repository_root(working_directory: str | None) -> Path | None:
     return Path(top_level_text)
 
 
-def list_staged_python_files(repository_root: Path) -> list[str]:
-    """List repository-relative paths of staged Python files.
+def count_staged_python_files(repository_root: Path) -> int:
+    """Count repository-relative paths of staged Python files.
 
     Args:
         repository_root: Repository root used as the git working directory.
 
     Returns:
-        Repository-relative paths of Python files staged for add, copy,
-        modify, or rename. Empty when the listing command fails — the
-        caller then allows the commit because git itself will surface the
+        Number of Python files staged for add, copy, modify, or rename.
+        Returns zero when the listing command fails, so Git can surface the
         repository problem.
     """
     try:
@@ -106,29 +99,18 @@ def list_staged_python_files(repository_root: Path) -> list[str]:
             cwd=str(repository_root),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return []
+        return 0
     if completed_process.returncode != 0:
-        return []
-    return [
-        each_line.strip()
+        return 0
+    return sum(
+        1
         for each_line in completed_process.stdout.splitlines()
         if each_line.strip()
-    ]
-
-
-def record_passive_owner_evidence(staged_file_count: int) -> None:
-    """Write passive staged-gate ownership evidence to the agent's stderr.
-
-    Args:
-        staged_file_count: Number of staged Python files observed for the commit.
-    """
-    sys.stderr.write(
-        f"{_native_owner_context} Staged Python files: {staged_file_count}.\n"
     )
 
 
 def main() -> None:
-    """Record staged-surface evidence for the native Git commit owner."""
+    """Record staged-surface evidence for Git commits."""
     bash_command = parse_bash_command_from_stdin()
     if not is_git_commit_invocation(bash_command):
         sys.exit(0)
@@ -136,10 +118,10 @@ def main() -> None:
     repository_root = resolve_repository_root(working_directory)
     if repository_root is None:
         sys.exit(0)
-    staged_python_files = list_staged_python_files(repository_root)
-    if not staged_python_files:
+    staged_python_file_count = count_staged_python_files(repository_root)
+    if staged_python_file_count == 0:
         sys.exit(0)
-    record_passive_owner_evidence(len(staged_python_files))
+    sys.stderr.write(f"Staged Python files: {staged_python_file_count}.\n")
     sys.exit(0)
 
 

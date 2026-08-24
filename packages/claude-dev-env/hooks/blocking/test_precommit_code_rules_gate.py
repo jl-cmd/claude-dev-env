@@ -1,4 +1,4 @@
-"""Behavior tests for the passive precommit_code_rules_gate PreToolUse hook.
+"""Behavior tests for the staged-surface precommit_code_rules_gate hook.
 
 Each test builds a real git repository in a temporary directory, stages
 real files, and runs the hook script as a subprocess with a PreToolUse
@@ -153,21 +153,19 @@ def test_commit_with_clean_staged_python_file_is_allowed(tmp_path: Path) -> None
     completed_hook = run_hook("git commit -m add", tmp_path)
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
-    assert "Native pre-commit owns" in completed_hook.stderr
     assert "Staged Python files: 1." in completed_hook.stderr
 
 
-def test_commit_with_staged_python_file_reports_native_owner(tmp_path: Path) -> None:
+def test_commit_with_staged_python_file_reports_staged_surface(tmp_path: Path) -> None:
     initialize_repository(tmp_path)
     stage_file(tmp_path, "totals.py", VIOLATING_MODULE_SOURCE)
     completed_hook = run_hook("git commit -m add", tmp_path)
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
-    assert "Native pre-commit owns" in completed_hook.stderr
     assert "Staged Python files: 1." in completed_hook.stderr
 
 
-def test_git_dash_c_commit_form_reports_native_owner(tmp_path: Path) -> None:
+def test_git_dash_c_commit_form_reports_staged_surface(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
     initialize_repository(repository_root)
