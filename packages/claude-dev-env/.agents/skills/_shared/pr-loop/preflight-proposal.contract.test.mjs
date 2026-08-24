@@ -10,15 +10,15 @@ const canonicalContractSource = readFileSync(
   'utf8',
 )
 const sharedSkillSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-shared-extraction-audit/SKILL.md'),
+  resolve(THIS_DIRECTORY, '../../pr-shared-extraction/SKILL.md'),
   'utf8',
 )
 const capabilitySkillSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-name-by-capability-audit/SKILL.md'),
+  resolve(THIS_DIRECTORY, '../../pr-name-by-capability/SKILL.md'),
   'utf8',
 )
 const capabilityTaskSeedsSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-name-by-capability-audit/reference/task-seeds.md'),
+  resolve(THIS_DIRECTORY, '../../pr-name-by-capability/reference/task-seeds.md'),
   'utf8',
 )
 
@@ -26,14 +26,14 @@ const allSkillContracts = [
   {
     name: 'shared extraction audit',
     skillSource: sharedSkillSource,
-    invocationPattern: /pr-shared-extraction-audit preflight-proposal/,
+    invocationPattern: /pr-shared-extraction preflight-proposal/,
     classificationPattern: /priority and target/,
     expectedDefaultBehavior: 'applies the prioritized fix band by default',
   },
   {
     name: 'name by capability audit',
     skillSource: capabilitySkillSource,
-    invocationPattern: /pr-name-by-capability-audit preflight-proposal/,
+    invocationPattern: /pr-name-by-capability preflight-proposal/,
     classificationPattern: /violation or OK-driver classification/,
     expectedDefaultBehavior: 'applies the suggested rename direction by default',
   },
