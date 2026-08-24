@@ -12,20 +12,21 @@ so the repository code rules do not govern it::
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
+from subprocess import CompletedProcess
 import tempfile
 from pathlib import Path
 
-from blocking import _path_setup  # noqa: F401  (pins this checkout ahead of sibling worktrees)
-from blocking.code_rules_shared import is_agent_home_tooling, is_ephemeral_path
+import pytest
 
-_ENFORCER_SCRIPT = Path(__file__).resolve().parent / "code_rules_enforcer.py"
+from blocking import _path_setup  # noqa: F401  (pins this checkout ahead of sibling worktrees)
+import code_rules_enforcer_test_support
+from blocking.code_rules_shared import is_agent_home_tooling, is_ephemeral_path
+from code_rules_enforcer_test_support import run_precheck
 
 _VIOLATING_PRODUCTION_SOURCE = "def process_data(payload: str) -> None:\n    print(payload)\n"
 
 
-def _check_as(candidate_source: str, target_path: str) -> subprocess.CompletedProcess[str]:
+def _check_as(candidate_source: str, target_path: str) -> CompletedProcess[str]:
     """Run the enforcer's pre-check on a candidate judged as another path.
 
     Args:
@@ -38,13 +39,37 @@ def _check_as(candidate_source: str, target_path: str) -> subprocess.CompletedPr
     with tempfile.TemporaryDirectory() as scratch:
         candidate = Path(scratch) / "candidate.py"
         candidate.write_text(candidate_source, encoding="utf-8")
-        return subprocess.run(
-            [sys.executable, str(_ENFORCER_SCRIPT), "--check", str(candidate), "--as", target_path],
-            input="",
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        return run_precheck(candidate, target_path, None)
+
+
+def test_run_precheck_forwards_environment_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_environment_by_name = {"CLAUDE_JOB_DIR": "/agent/jobs"}
+    captured_environment_by_name: dict[str, str] | None = None
+
+    def capture_run_enforcer_cli(
+        _script_path: Path,
+        _all_arguments: list[str],
+        extra_environment_by_name: dict[str, str] | None,
+    ) -> CompletedProcess[str]:
+        nonlocal captured_environment_by_name
+        captured_environment_by_name = extra_environment_by_name
+        return CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        code_rules_enforcer_test_support,
+        "run_enforcer_cli",
+        capture_run_enforcer_cli,
+    )
+    completed = run_precheck(
+        Path("candidate.py"),
+        "target.py",
+        expected_environment_by_name,
+    )
+
+    assert completed.returncode == 0
+    assert captured_environment_by_name == {"CLAUDE_JOB_DIR": "/agent/jobs"}
 
 
 def test_posix_agent_home_path_is_agent_tooling() -> None:
