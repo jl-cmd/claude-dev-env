@@ -13,6 +13,16 @@ Audit PRs and packages, report findings, and apply extraction fixes by default t
 - A package grew `fix_one`, `_default_*`, backup upload, rembg session, or residual gates alongside orchestration
 - Before merge: confirm consumers are adapters, not second implementations
 
+## Mode routing
+
+Resolve the first matching mode before the audit steps:
+
+1. `preflight-proposal` requires the resolved PR number, immutable base SHA, immutable head SHA, and caller-supplied isolated worktree. It verifies the exact base-to-head range, permits edits and tests inside that worktree, creates the immutable proposal evidence in [reference/preflight-proposal.md](reference/preflight-proposal.md), and returns selected-candidate-ready proposal evidence. The mode suppresses commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations.
+2. `audit-only` is report-only and ends after the findings report.
+3. Normal mode follows the existing audit workflow and applies the prioritized fix band by default.
+
+The downstream owner records selected proposal IDs before reapplication. Each new finding receives a new proposal ID.
+
 ## Target architecture
 
 | Layer | Holds | Examples |
@@ -25,7 +35,7 @@ Audit PRs and packages, report findings, and apply extraction fixes by default t
 
 ## Audit workflow
 
-Copy to TodoWrite:
+Register this checklist with `update_plan` and mark each step complete with evidence:
 
 ```
 Shared extraction audit:
@@ -33,9 +43,10 @@ Shared extraction audit:
 - [ ] 2. Map canonical homes already in shared_utils
 - [ ] 3. Grep for offense patterns (see reference/offense-taxonomy.md)
 - [ ] 4. Write prioritized findings (P0–P3)
-- [ ] 5. Apply the prioritized fix band by default; an explicit audit-only request ends after the report
+- [ ] 5. Apply the prioritized fix band by default; an explicit audit-only request is report-only and ends after the report
 - [ ] 6. Extract in small CLs (~100 lines) + move/adjust tests
-- [ ] 7. Run scoped pytest, commit, push, update PR
+- [ ] 7. Run scoped pytest in every mode. Normal mode may then commit, push, and update the PR; preflight-proposal keeps those actions suppressed.
+- [ ] 8. When the mode is `preflight-proposal`, record proposal evidence from [reference/preflight-proposal.md](reference/preflight-proposal.md) and require downstream owner selection before reapplication
 ```
 
 ### Step 1 — Scope
@@ -97,7 +108,7 @@ Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign prior
 1. …
 ```
 
-Apply the prioritized fixes after the report by default. An explicit audit-only request ends after the report.
+Apply the prioritized fixes after the report by default. An explicit audit-only request is report-only and ends after the report.
 
 ## Fix workflow
 
@@ -158,3 +169,13 @@ Provide evidence: pytest output counts, not "should work".
 ## Examples
 
 See [reference/examples.md](reference/examples.md) for cert_fix_queue (#1965) and background_removal (#1954) audits.
+
+## File index
+
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | Hub — architecture, routing, audit checklist, and fix workflow |
+| `reference/offense-taxonomy.md` | Offense signals and priority guide |
+| `reference/examples.md` | Audit examples and fix order |
+| `reference/preflight-proposal.md` | Isolated proposal mode and evidence record |
+| `reference/mode-contract.test.mjs` | Cross-skill mode boundary test |

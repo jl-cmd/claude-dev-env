@@ -13,6 +13,17 @@ description: >-
 
 Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and title wording for driver/motive words on reusable capability code, report findings with a rename direction, and apply the suggested renames by default. An explicit audit-only request ends after the report.
 
+## Mode routing
+
+First-match routing selects the mode before the audit steps:
+
+1. `preflight-proposal` requires the resolved PR number, immutable base SHA, immutable head SHA, and caller-supplied isolated worktree. It verifies the exact base-to-head range, permits edits and tests inside that worktree, creates the immutable proposal evidence in [reference/preflight-proposal.md](reference/preflight-proposal.md), and returns selected-candidate-ready proposal evidence. The mode suppresses commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations.
+2. `audit-only` is report-only and ends after the findings report.
+3. A user-supplied rename or fix direction follows the existing normal fix workflow.
+4. Normal mode applies the suggested rename direction by default.
+
+The downstream owner records selected proposal IDs before reapplication. Each new finding receives a new proposal ID.
+
 ## Gotchas
 
 - Name reusable libraries for the action they perform; a first cert caller still leaves the library capability-named. Score reuse potential alongside the PR title.
@@ -26,8 +37,9 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 **First match wins:**
 
+- User requests `preflight-proposal` → follow [reference/preflight-proposal.md](reference/preflight-proposal.md) and return proposal evidence.
 - Missing PR number or URL → respond exactly: `Give a GitHub PR number or URL to audit for name-by-capability.`
-- User requests audit-only → finish the audit report and stop.
+- User requests audit-only → finish the report-only audit and stop.
 - User gives a rename or fix direction → finish the audit report, then apply the direction they gave.
 - A violation with no user-supplied direction → finish the audit report, then apply the suggested rename direction by default.
 
@@ -39,7 +51,7 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 ## Process
 
-Register every bullet from `reference/task-seeds.md` on the host task tool (`TodoWrite` / `TaskCreate`). Mark each complete with evidence. Follow those seeds in order — do not restate them here.
+Register every bullet from `reference/task-seeds.md` with `update_plan`. Mark each complete with evidence. Follow those seeds in order — do not restate them here.
 
 Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it first; always keep `reference/rule-checklist.md` as the fallback when the doc is missing. On disagreement after the docs PR merges, prefer the repo doc and update the skill checklist in a follow-up.
 
@@ -60,6 +72,8 @@ Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it 
 | `reference/fetch-commands.md` | Minimal `gh` fetch for PR naming surface |
 | `reference/report-template.md` | Compact report shape |
 | `reference/task-seeds.md` | Ordered task seeds for the audit run |
+| `reference/preflight-proposal.md` | Isolated proposal mode and evidence record |
+| `../shared-extraction-audit/reference/mode-contract.test.mjs` | Cross-skill mode boundary test |
 
 ## Folder map
 
