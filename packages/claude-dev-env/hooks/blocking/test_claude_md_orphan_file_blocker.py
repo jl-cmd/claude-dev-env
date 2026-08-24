@@ -1,6 +1,7 @@
 """Tests for claude_md_orphan_file_blocker hook."""
 
 import json
+import importlib
 import os
 import subprocess
 import sys
@@ -9,7 +10,57 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_test_file_path = Path(__file__).resolve()
+_blocking_directory = str(_test_file_path.parent)
+_hooks_directory = str(_test_file_path.parent.parent)
+_blocking_directory_key = os.path.normcase(os.path.abspath(_blocking_directory))
+_hooks_directory_key = os.path.normcase(os.path.abspath(_hooks_directory))
+_hooks_directory_origin_key = _hooks_directory_key
+sys.path[:] = [_blocking_directory, _hooks_directory] + [
+    each_path
+    for each_path in sys.path
+    if not isinstance(each_path, str)
+    or os.path.normcase(os.path.abspath(each_path))
+    not in (_blocking_directory_key, _hooks_directory_key)
+]
+importlib.invalidate_caches()
+
+_all_cached_module_prefixes = (
+    "claude_md_orphan_file_blocker",
+    "claude_md_orphan_file_blocker_parts",
+    "inventory_intent_records",
+    "hooks_constants",
+    "code_rules_annotations_length",
+    "code_rules_boolean_mustcheck",
+    "code_rules_naming_collection",
+    "code_rules_path_utils",
+    "code_rules_shared",
+)
+
+
+for each_module_name, each_module in tuple(sys.modules.items()):
+    if not any(
+        each_module_name == each_prefix or each_module_name.startswith(f"{each_prefix}.")
+        for each_prefix in _all_cached_module_prefixes
+    ):
+        continue
+    module_file = getattr(each_module, "__file__", None)
+    is_cached_module_in_this_checkout = False
+    if isinstance(module_file, str):
+        module_file_key = os.path.normcase(str(Path(module_file).resolve()))
+        try:
+            is_cached_module_in_this_checkout = (
+                os.path.commonpath((_hooks_directory_origin_key, module_file_key))
+                == _hooks_directory_origin_key
+            )
+        except ValueError:
+            pass
+    if is_cached_module_in_this_checkout:
+        continue
+    raise ImportError(
+        "test_claude_md_orphan_file_blocker: cached module outside this checkout: "
+        f"{each_module_name} ({module_file!r})"
+    )
 
 import claude_md_orphan_file_blocker as blocker_module
 from claude_md_orphan_file_blocker import (
@@ -80,6 +131,125 @@ def _isolated_claude_md_path(tmp_path: Path) -> Path:
     isolated_directory = tmp_path / "package_directory"
     isolated_directory.mkdir()
     return isolated_directory / "CLAUDE.md"
+
+
+def _run_isolated_test_module_import(
+    driver_setup: str, driver_assertions: str
+) -> subprocess.CompletedProcess:
+    """Import this test module in an isolated interpreter with caller-supplied state."""
+    test_module_path = _test_file_path
+    driver = (
+        "import importlib.util\n"
+        "import os\n"
+        "import site\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        f"test_module_path = Path({str(test_module_path)!r})\n"
+        "sys.path.append(site.getusersitepackages())\n"
+        f"{driver_setup}"
+        "spec = importlib.util.spec_from_file_location('bootstrap_target_test', test_module_path)\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        f"{driver_assertions}"
+    )
+    return subprocess.run(
+        [sys.executable, "-I", "-c", driver],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_import_bootstrap_prioritizes_this_checkout(tmp_path: Path) -> None:
+    foreign_hooks_directory = tmp_path / "foreign_hooks"
+    foreign_blocking_directory = foreign_hooks_directory / "blocking"
+    foreign_constants_directory = foreign_hooks_directory / "hooks_constants"
+    foreign_blocking_directory.mkdir(parents=True)
+    foreign_constants_directory.mkdir()
+    (foreign_blocking_directory / "claude_md_orphan_file_blocker.py").write_text(
+        "raise RuntimeError('foreign blocker loaded')\n", encoding="utf-8"
+    )
+    (foreign_constants_directory / "__init__.py").write_text(
+        "raise RuntimeError('foreign constants loaded')\n", encoding="utf-8"
+    )
+    target_blocking_directory = Path(__file__).resolve().parent
+    target_hooks_directory = target_blocking_directory.parent
+    driver_setup = (
+        f"foreign_blocking_directory = Path({str(foreign_blocking_directory)!r})\n"
+        f"foreign_hooks_directory = Path({str(foreign_hooks_directory)!r})\n"
+        f"target_blocking_directory = Path({str(target_blocking_directory)!r})\n"
+        f"target_hooks_directory = Path({str(target_hooks_directory)!r})\n"
+        "sys.path[:0] = [\n"
+        "    str(foreign_blocking_directory), str(foreign_hooks_directory),\n"
+        "    str(target_blocking_directory), str(target_hooks_directory),\n"
+        "]\n"
+    )
+    driver_assertions = (
+        "import claude_md_orphan_file_blocker\n"
+        "import hooks_constants\n"
+        "assert Path(claude_md_orphan_file_blocker.__file__).resolve().parent "
+        "== target_blocking_directory\n"
+        "assert Path(hooks_constants.__file__).resolve().parent.parent "
+        "== target_hooks_directory\n"
+        "all_uncovered_module_names = [\n"
+        "    each_module_name\n"
+        "    for each_module_name, each_loaded_module in sys.modules.items()\n"
+        "    if each_loaded_module is not module\n"
+        "    and isinstance(getattr(each_loaded_module, '__file__', None), str)\n"
+        "    and Path(each_loaded_module.__file__).resolve().is_relative_to(\n"
+        "        target_hooks_directory\n"
+        "    )\n"
+        "    and not any(\n"
+        "        each_module_name == each_prefix\n"
+        "        or each_module_name.startswith(f'{each_prefix}.')\n"
+        "        for each_prefix in module._all_cached_module_prefixes\n"
+        "    )\n"
+        "]\n"
+        "assert not all_uncovered_module_names, all_uncovered_module_names\n"
+    )
+    completed = _run_isolated_test_module_import(driver_setup, driver_assertions)
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_import_bootstrap_preserves_non_string_path_entries() -> None:
+    completed = _run_isolated_test_module_import(
+        "sys.path.insert(0, None)\n", "assert None in sys.path\n"
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_import_bootstrap_invalidates_stale_importer_cache() -> None:
+    target_blocking_directory = Path(__file__).resolve().parent
+    driver_setup = (
+        f"target_blocking_directory = Path({str(target_blocking_directory)!r})\n"
+        "sys.path_importer_cache[str(target_blocking_directory)] = None\n"
+    )
+    completed = _run_isolated_test_module_import(driver_setup, "")
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize(
+    "cached_module_name",
+    (
+        "hooks_constants",
+        "claude_md_orphan_file_blocker",
+        "code_rules_path_utils",
+    ),
+)
+def test_import_bootstrap_rejects_foreign_cached_modules(
+    tmp_path: Path, cached_module_name: str
+) -> None:
+    foreign_module_path = tmp_path / "foreign_hooks" / f"{cached_module_name}.py"
+    driver_setup = (
+        "import types\n"
+        f"cached_module_name = {cached_module_name!r}\n"
+        "cached_module = types.ModuleType(cached_module_name)\n"
+        f"cached_module.__file__ = {str(foreign_module_path)!r}\n"
+        "sys.modules[cached_module_name] = cached_module\n"
+    )
+    completed = _run_isolated_test_module_import(driver_setup, "")
+    assert completed.returncode != 0
+    assert f"cached module outside this checkout: {cached_module_name}" in completed.stderr
 
 
 def test_blocks_write_naming_absent_python_file(tmp_path: Path):
