@@ -1,5 +1,6 @@
 ---
 name: skill-builder
+disable-model-invocation: true
 description: >-
   Skill lifecycle: classify, scaffold, write via the skill-writer-agent, self-audit, compose
   sub-skills, polish description triggers, enforce deterministic scripts. Triggers:
