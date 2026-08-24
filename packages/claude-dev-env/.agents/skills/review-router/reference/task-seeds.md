@@ -1,0 +1,1 @@
+Register resolve e-simplify, apply override, arm exact slot, enforce through the registered Agent|Task hook, close the decision, and report unsupported e-code-review as host tasks. Complete each with command output or the current decision/armed record.

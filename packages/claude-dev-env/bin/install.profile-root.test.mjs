@@ -8,13 +8,16 @@ import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { CODEX_RULES_SHIPPED_FILE_NAME } from './install-constants.mjs';
 import {
     resolveInstallRoot,
+    resolveAgentsHome,
     isPathWithinManagedRoot,
     isAllowedInstallDestination,
     parseExplicitTargetFromArgv,
     CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE,
     DEFAULT_CLAUDE_DIRECTORY_NAME,
+    DEFAULT_AGENTS_DIRECTORY_NAME,
 } from './resolve-install-root.mjs';
 
 const BIN_DIRECTORY = fileURLToPath(new URL('.', import.meta.url));
@@ -29,6 +32,23 @@ test('default target remains join(homeDirectory, .claude)', () => {
     });
     assert.equal(resolution.managedRoot, resolve(join(homeDirectory, DEFAULT_CLAUDE_DIRECTORY_NAME)));
     assert.equal(resolution.source, 'default-home');
+    assert.equal(resolution.agentsHome, resolve(join(homeDirectory, DEFAULT_AGENTS_DIRECTORY_NAME)));
+    assert.equal(
+        resolution.skillsInstallDirectory,
+        join(resolution.agentsHome, 'skills'),
+    );
+    assert.equal(
+        resolution.skillsLookupDirectory,
+        join(resolution.managedRoot, 'skills'),
+    );
+    assert.equal(
+        resolution.agentsInstallDirectory,
+        join(resolution.agentsHome, 'agents'),
+    );
+    assert.equal(
+        resolution.agentsLookupDirectory,
+        join(resolution.managedRoot, 'agents'),
+    );
 });
 
 test('CLAUDE_CONFIG_DIR selects the profile root over the home default', () => {
@@ -62,7 +82,7 @@ test('explicit target has precedence over CLAUDE_CONFIG_DIR and the home default
 
 test('isPathWithinManagedRoot requires a separator boundary', () => {
     const managedRoot = resolve(join(tmpdir(), 'containment-root', '.claude'));
-    const insideFile = join(managedRoot, 'rules', 'plain-language.md');
+    const insideFile = join(managedRoot, 'rules', 'asd-ste100-language.md');
     const evilSibling = `${managedRoot}-evil`;
     const evilChild = join(`${managedRoot}-evil`, 'rules', 'x.md');
 
@@ -88,6 +108,27 @@ test('declared external mypy.ini is allowed; unrelated external paths are not', 
     );
     assert.equal(
         isAllowedInstallDestination(join(resolution.managedRoot, 'hooks', 'x.py'), resolution),
+        true,
+    );
+    assert.equal(
+        isAllowedInstallDestination(
+            join(resolution.codexRulesInstallDirectory, CODEX_RULES_SHIPPED_FILE_NAME),
+            resolution,
+        ),
+        true,
+    );
+    assert.equal(
+        isAllowedInstallDestination(
+            join(resolution.skillsInstallDirectory, 'privacy-hygiene', 'SKILL.md'),
+            resolution,
+        ),
+        true,
+    );
+    assert.equal(
+        isAllowedInstallDestination(
+            join(resolution.agentsInstallDirectory, 'clean-coder.md'),
+            resolution,
+        ),
         true,
     );
 });
@@ -135,7 +176,27 @@ test('installer destinations for disposable main, profile-a, and profile-b stay 
                 isAllowedInstallDestination(resolution.mypyIniInstallPath, resolution),
                 true,
             );
+            assert.equal(
+                isAllowedInstallDestination(
+                    join(resolution.skillsInstallDirectory, 'fixture-skill', 'SKILL.md'),
+                    resolution,
+                ),
+                true,
+                `${eachProfileId}: skills install directory is an allowed destination`,
+            );
+            assert.equal(
+                resolution.agentsHome,
+                resolveAgentsHome(profileRoot),
+            );
+            assert.notEqual(
+                resolution.agentsHome,
+                resolve(join(homeDirectory, DEFAULT_AGENTS_DIRECTORY_NAME)),
+                `${eachProfileId}: a profile root keeps its own agents home`,
+            );
         }
+        const profileAHome = resolveAgentsHome(join(runRoot, 'profile-a'));
+        const profileBHome = resolveAgentsHome(join(runRoot, 'profile-b'));
+        assert.notEqual(profileAHome, profileBHome);
     } finally {
         rmSync(runRoot, { recursive: true, force: true });
     }

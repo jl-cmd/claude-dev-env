@@ -1,4 +1,4 @@
-"""Tests for shared fix_hookspath.py extracted from skills/bugteam/scripts/.
+"""Tests for shared fix_hookspath.py (historically extracted from bugteam scripts).
 
 Covers:
 - removes a local-scope core.hooksPath override and re-runs preflight

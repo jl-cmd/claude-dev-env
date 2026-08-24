@@ -1,5 +1,180 @@
 # Changelog
 
+## [2.18.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.17.0...claude-dev-env-v2.18.0) (2026-08-23)
+
+
+### Features
+
+* **advisor:** fall back to Sol low when Fable is out of usage ([05d27c3](https://github.com/jl-cmd/claude-dev-env/commit/05d27c31851ee399bf7aeca429b07f3f7f89b47d))
+* **advisor:** fall back to Sol low when Fable is out of usage ([819cfe5](https://github.com/jl-cmd/claude-dev-env/commit/819cfe5632200aa0bf3c67273f8c93d900faabda))
+* **advisor:** route bind by session identity ([68087a8](https://github.com/jl-cmd/claude-dev-env/commit/68087a8f1f17203e508d1faf44dd7e88240ec301))
+* **advisor:** route bind by session identity ([a42cb3a](https://github.com/jl-cmd/claude-dev-env/commit/a42cb3aff42d033a83eda1da1277f9fa594bfd94))
+* **advisor:** share ADVISOR_EFFORT for Fable and Sol ([a333097](https://github.com/jl-cmd/claude-dev-env/commit/a333097d92dc9bbc800e3c0cc3306911667da34e))
+* **advisor:** share ADVISOR_EFFORT for Fable and Sol ([0489cb8](https://github.com/jl-cmd/claude-dev-env/commit/0489cb8ca5dd2288253675c71c9162db330d9836))
+* **advisor:** split Sol enable from Sol effort ([c6aa4fd](https://github.com/jl-cmd/claude-dev-env/commit/c6aa4fd2db0cf4bcc91bf42dc99a22f29798e2e2))
+* **advisor:** split Sol enable from Sol effort ([5f43a8f](https://github.com/jl-cmd/claude-dev-env/commit/5f43a8f4e6517f08dbae70f4f20c2a22f8610e54))
+
+
+### Bug Fixes
+
+* **advisor:** point third-party bind wording at asd-ste100-language ([f1887b7](https://github.com/jl-cmd/claude-dev-env/commit/f1887b7eae121e1deb2409d046ab3b6b2a694bbf))
+
+## [2.17.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.16.0...claude-dev-env-v2.17.0) (2026-08-23)
+
+
+### Features
+
+* add pr-cleanup skill (host-neutral PR cleanup composition) ([866b15d](https://github.com/jl-cmd/claude-dev-env/commit/866b15d0809cdf2b4b30b88b7fa2c3b49ebb34ea))
+* add reusable ELI5 response skill ([f99d7f7](https://github.com/jl-cmd/claude-dev-env/commit/f99d7f7152c55ceb8ef60801534f8492f14789e3))
+* centralize hook and script installation ([9135cb3](https://github.com/jl-cmd/claude-dev-env/commit/9135cb3d772bd5a8c75781dc919381f0869470c1))
+* **eli5:** add shared beginner-friendly response skill ([1338d2d](https://github.com/jl-cmd/claude-dev-env/commit/1338d2d79c5c26f93cf9c3fddff48ee7069aca10))
+* **eli5:** avoid negative prose ([dce53b5](https://github.com/jl-cmd/claude-dev-env/commit/dce53b5267a6b347be7ac7a3a5cdfde737b8b1d9))
+* **package:** integrate ELI5 with ASD-STE100 ([d517988](https://github.com/jl-cmd/claude-dev-env/commit/d51798876657730ca2e0af53924d6ff6f8d90a5c))
+* **package:** integrate ELI5 with ASD-STE100 ([46c0b88](https://github.com/jl-cmd/claude-dev-env/commit/46c0b889bf6afee50f5f984baee93f30669751fe))
+* Project canonical hooks and scripts into Codex ([47d3cbe](https://github.com/jl-cmd/claude-dev-env/commit/47d3cbe4dbd5187f82a4be7bffcdb7a939ae1608))
+* **skills:** enable default autofix for audit skills ([2bd5a56](https://github.com/jl-cmd/claude-dev-env/commit/2bd5a56d723e21e91afd7d8e5f72c2b03125236f))
+* **skills:** enable default autofix for audit skills ([beb805e](https://github.com/jl-cmd/claude-dev-env/commit/beb805e288d745550b441233f8ade839ea006379))
+
+
+### Bug Fixes
+
+* **check:** restore pr-loop scripts mypy pyproject.toml ([7b0b0e1](https://github.com/jl-cmd/claude-dev-env/commit/7b0b0e139d6c17206d64af39e7e5da5eb9f648c1))
+* **ci:** point archived skill tests at live shared paths ([40c5abb](https://github.com/jl-cmd/claude-dev-env/commit/40c5abb8a9b5cd285a9ca10094a4a2eba0b5bc6a))
+* **ci:** repair archived skill tests after pr-loop script move ([e017cbd](https://github.com/jl-cmd/claude-dev-env/commit/e017cbdc53ea48eaa5322e8175c7bee7c06ccf33))
+* **ci:** repair archived skill tests after pr-loop script move ([94035e1](https://github.com/jl-cmd/claude-dev-env/commit/94035e16d17173a0bdb8d4afae2570bd5fcabe68))
+* **ci:** run instruction-pairs on pull_request and pull_request_target ([dbb2d19](https://github.com/jl-cmd/claude-dev-env/commit/dbb2d196aed1c8bd363e25ce61d3f3cfd92464ca))
+* **ci:** skip archived skill tests and fix fresh-branch push assertion ([188c3c1](https://github.com/jl-cmd/claude-dev-env/commit/188c3c18f4f3666655e27dea6049d24af8bf145d))
+* **ci:** skip archived skill tests and fix fresh-branch push assertion ([e281d87](https://github.com/jl-cmd/claude-dev-env/commit/e281d877d04ea6f46831aa8709dc1932d2771e12))
+* **ci:** skip instruction-pairs validation on release-please PRs ([c1fef55](https://github.com/jl-cmd/claude-dev-env/commit/c1fef559753cb54f7cd00cc2e47a3f62567f21c9))
+* **ci:** skip instruction-pairs validation on release-please PRs ([48b7c60](https://github.com/jl-cmd/claude-dev-env/commit/48b7c60980986c7e94a49db90f6000b20931089d))
+* reword optional skill paths that failed doc cross-ref CI ([9a6f1eb](https://github.com/jl-cmd/claude-dev-env/commit/9a6f1eb7d0010522bdd9c32c8bfd6e935cb4fc22))
+
+
+### Maintenance
+
+* remove persistent hook-error tracking ([9424775](https://github.com/jl-cmd/claude-dev-env/commit/94247752d330bc1e0c0ca08c706da6ff8ce99666))
+
+
+### Refactoring
+
+* **skills:** archive retired skills and fix shared doc links ([69ce3a9](https://github.com/jl-cmd/claude-dev-env/commit/69ce3a981c3118bbad213939843f45701e0ffe22))
+* **skills:** retire legacy skill packages and drop prompt-generator dependency ([9d094b0](https://github.com/jl-cmd/claude-dev-env/commit/9d094b0457a67cfbdb463e3b5d6f0a042e0f8b5b))
+* **skills:** retire legacy skill packages and drop prompt-generator dependency ([97c7b04](https://github.com/jl-cmd/claude-dev-env/commit/97c7b04b7ff40fb1375d86cdae10e3343f8a42c3))
+
+
+### Tests
+
+* fix review-tier git branch setup ([fd9d0b5](https://github.com/jl-cmd/claude-dev-env/commit/fd9d0b5c49974ffd66c0b44dc5f76f88ac67fcb3))
+
+## [2.16.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.1...claude-dev-env-v2.16.0) (2026-08-20)
+
+
+### Features
+
+* **install:** land skills and agents in .agents with claude pointers ([b2c28f3](https://github.com/jl-cmd/claude-dev-env/commit/b2c28f3bea14dd504d131a1efa360bc5e2016811))
+* **package:** keep canonical skills and agents under .agents ([e67d5d7](https://github.com/jl-cmd/claude-dev-env/commit/e67d5d71958ab7ab298b49de108b3117abe2f48b))
+* **package:** keep skills and agents under .agents with claude pointers ([f0f24b3](https://github.com/jl-cmd/claude-dev-env/commit/f0f24b30842e34e0d9d6a67c8fa5be65d6437883))
+
+
+### Bug Fixes
+
+* **package:** place CLAUDE.md under .claude ([9509361](https://github.com/jl-cmd/claude-dev-env/commit/9509361b7124f86d6fcb0172ebbca1e8c6d383fe))
+* **package:** resolve .agents source paths in tests and hooks ([31c8324](https://github.com/jl-cmd/claude-dev-env/commit/31c8324b401fe55c5ac0266c6b9fc0994dccecad))
+
+## [2.15.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.15.0...claude-dev-env-v2.15.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **ci:** report instruction-pairs on every PR ([d5f3a9b](https://github.com/jl-cmd/claude-dev-env/commit/d5f3a9b9e55e4d31ee562cdec2606c891c032306))
+* **install:** stop shipping the profile launcher and stop pruning it ([5726871](https://github.com/jl-cmd/claude-dev-env/commit/57268715432d1491ca7dac485f3d9f2ae31aa9f5))
+* **install:** stop shipping the profile launcher and stop pruning it ([f488caf](https://github.com/jl-cmd/claude-dev-env/commit/f488cafe9b86572fd3237a710a45e2bc4783f292))
+* isolate dispatcher runtime bootstrap ([d7cc9d1](https://github.com/jl-cmd/claude-dev-env/commit/d7cc9d19dc05b04fd83c0889757efea9bdd18004))
+* load advisor constants from installed config ([bbe5632](https://github.com/jl-cmd/claude-dev-env/commit/bbe563241c07bfd87f8eb3f1ad920cc1c3186cf7))
+* **scripts:** resolve installed dispatcher imports across profiles ([f7c8fa5](https://github.com/jl-cmd/claude-dev-env/commit/f7c8fa51a20f9820102d43d2d41034329f8ed2ad))
+
+
+### Refactoring
+
+* **scripts:** centralize chain runner override ([21beabb](https://github.com/jl-cmd/claude-dev-env/commit/21beabb79414a40db0d445a24200da25afb88fbb))
+
+## [2.15.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.1...claude-dev-env-v2.15.0) (2026-08-19)
+
+
+### Features
+
+* generate Cursor rules from Claude rules at install ([ac66a51](https://github.com/jl-cmd/claude-dev-env/commit/ac66a51b219ae64f153f61020df3697a5ff49c11))
+* generate Cursor rules from Claude rules at install ([7c99c1d](https://github.com/jl-cmd/claude-dev-env/commit/7c99c1dcb499ed5650aeab3f19365522047d702f))
+* ship Codex rules with claude-dev-env install ([b1a4257](https://github.com/jl-cmd/claude-dev-env/commit/b1a42572d48232db84c2298f9d29ec21f6fd0932))
+* ship Codex rules with claude-dev-env install ([51b1eaa](https://github.com/jl-cmd/claude-dev-env/commit/51b1eaa70dcfb7f35f54a4d2878d2ef8423f8534))
+
+
+### Bug Fixes
+
+* keep installer help from interpolating mdc backticks ([ae51a42](https://github.com/jl-cmd/claude-dev-env/commit/ae51a42c00e67994c6016d8411f3b91c2b76c9b7))
+
+## [2.14.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.14.0...claude-dev-env-v2.14.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* add opus5 contract marker to package AGENTS.md ([6cbd485](https://github.com/jl-cmd/claude-dev-env/commit/6cbd485f24f52c246a6d932ab95e65ed278cdd54))
+
+
+### Documentation
+
+* Update AGENTS.md ([8d7ba25](https://github.com/jl-cmd/claude-dev-env/commit/8d7ba256ca703deb263bd53cfde337b9a0a6bfac))
+
+
+### Maintenance
+
+* drop unshipped agents and slash commands ([9cd1a39](https://github.com/jl-cmd/claude-dev-env/commit/9cd1a398f97fe75a9dfb64a0270d2be4ee9a808d))
+* drop unshipped agents and slash commands ([f872dd8](https://github.com/jl-cmd/claude-dev-env/commit/f872dd8e89f79c5c69cf4944daaecf332f76cff6))
+
+## [2.14.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.13.0...claude-dev-env-v2.14.0) (2026-08-11)
+
+
+### Features
+
+* enforce exact Claude instruction imports ([ac15d36](https://github.com/jl-cmd/claude-dev-env/commit/ac15d36877786cd635cf3f842a176c979e24e20f))
+* enforce positive prose at session start ([4321e4e](https://github.com/jl-cmd/claude-dev-env/commit/4321e4e4164c987c5a75cee57dccdc3461293561))
+* enforce positive prose at session start ([27dc2ef](https://github.com/jl-cmd/claude-dev-env/commit/27dc2ef456c8832294a9eedbe5ecbbd1f7f93ed4))
+
+
+### Bug Fixes
+
+* align hook status contracts ([59a578b](https://github.com/jl-cmd/claude-dev-env/commit/59a578b8a00021646104d44b7c75138e06401762))
+* clarify hook status messages ([8add12a](https://github.com/jl-cmd/claude-dev-env/commit/8add12af758a5cf00db74b2bf17ae30f5aecc23b))
+* clarify hook status messages ([2d17923](https://github.com/jl-cmd/claude-dev-env/commit/2d17923432b86c5fc036cdb517b44b28999f6c73))
+* **hooks:** count alias attribute reads in the widened dead-constant scan ([e9192f1](https://github.com/jl-cmd/claude-dev-env/commit/e9192f1e1f55243bc4b2d9bca3c253c6911514b7))
+* **hooks:** count alias attribute reads in the widened dead-constant scan ([6cd91f4](https://github.com/jl-cmd/claude-dev-env/commit/6cd91f4e3e311d0e1ad361d96229b0131f214947))
+* **hooks:** guard the probe-chains import like its siblings ([09f32ba](https://github.com/jl-cmd/claude-dev-env/commit/09f32ba8148acfa1924273590bd04bb98e31cdc6))
+* **installer:** retire removed imagegen skill ([6efa346](https://github.com/jl-cmd/claude-dev-env/commit/6efa3469a1eb2f30191a6424f1295dc81104d16e))
+* keep instruction aliases out of agent installation ([3e95b3f](https://github.com/jl-cmd/claude-dev-env/commit/3e95b3f74d81d3346fe640fcecf6411513e58316))
+* route validator messages through logging ([020cdbf](https://github.com/jl-cmd/claude-dev-env/commit/020cdbfe03bb243dfbf680b6555dab90bc7473fc))
+* use StrEnum for validator status ([89ada86](https://github.com/jl-cmd/claude-dev-env/commit/89ada86ac6bb188d230b4eddf5284f20b19e719a))
+* validate exact Claude instruction imports ([35f7a66](https://github.com/jl-cmd/claude-dev-env/commit/35f7a666b01b31f88fa56efcf245d5240f0a098c))
+* write validator output through explicit streams ([cf44ca2](https://github.com/jl-cmd/claude-dev-env/commit/cf44ca2286803aa15b2c823fb5a4dd4b56b1579f))
+
+
+### Maintenance
+
+* **imagegen:** remove duplicate skill ([611bf72](https://github.com/jl-cmd/claude-dev-env/commit/611bf7232dd665597c4ba2bbfd61b5d01ab92ee2))
+* **imagegen:** remove duplicate skill ([cf2ce9a](https://github.com/jl-cmd/claude-dev-env/commit/cf2ce9a721aa4e470d1bd1acbfde790fa504a5d3))
+* link AGENTS guidance to CLAUDE files ([a8f601a](https://github.com/jl-cmd/claude-dev-env/commit/a8f601aac91dcefd32031a034aa6ac3138c16985))
+* make AGENTS canonical for Claude imports ([9c9e0ff](https://github.com/jl-cmd/claude-dev-env/commit/9c9e0ff06685c8c2be6612f41eaef5f528fa2ac5))
+* make AGENTS canonical for Claude imports ([68fe686](https://github.com/jl-cmd/claude-dev-env/commit/68fe68650e0db6a207bdce8921013abbc6ba285d))
+* retire AGENTS fan-out sync ([d865cc2](https://github.com/jl-cmd/claude-dev-env/commit/d865cc280f413e712179b5b82f18ecf7e9df5f05))
+* retire AGENTS fan-out sync ([d35faec](https://github.com/jl-cmd/claude-dev-env/commit/d35faec5b78314a72bec73494ef61090343867f8))
+* retire AGENTS fan-out sync ([1b04483](https://github.com/jl-cmd/claude-dev-env/commit/1b044839ae6b3f13cd278e302317f990bbcebc2a))
+
+
+### Refactoring
+
+* **hooks:** collapse widened-scan collectors into one walk ([2c35c8f](https://github.com/jl-cmd/claude-dev-env/commit/2c35c8fa15bdcb5968d75e02296aadbc44b0a7ac))
+* **hooks:** match attribute reads through the chain speller alone ([b02e0a7](https://github.com/jl-cmd/claude-dev-env/commit/b02e0a74e12a8d0a175fd5e129fae9fc574121e5))
+* **hooks:** reuse the shared dotted-chain speller in the widened scan ([ccf58b9](https://github.com/jl-cmd/claude-dev-env/commit/ccf58b9564be73c4b464a251a6e59efa4de8205a))
+
 ## [2.13.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.12.0...claude-dev-env-v2.13.0) (2026-08-08)
 
 

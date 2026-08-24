@@ -6,9 +6,12 @@ timing.py and the other per-script constant modules.
 
 from __future__ import annotations
 
-PACKAGE_SKILLS_DIRECTORY: str = "skills"
-PACKAGE_AGENTS_DIRECTORY: str = "agents"
+PACKAGE_AGENTS_HOME_DIRECTORY: str = ".agents"
+PACKAGE_SKILLS_DIRECTORY: str = ".agents/skills"
+PACKAGE_AGENTS_DIRECTORY: str = ".agents/agents"
 PACKAGE_COMMANDS_DIRECTORY: str = "commands"
+PACKAGE_ROOT_SKILLS_DIRECTORY: str = "skills"
+PACKAGE_ROOT_AGENTS_DIRECTORY: str = "agents"
 SKILL_MANIFEST_FILENAME: str = "SKILL.md"
 
 # Slash-command and skill names that must never appear as active instructions.

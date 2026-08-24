@@ -110,7 +110,7 @@ def test_dispatch_re_emits_first_block_with_system_message_and_suppress(
         (
             "blocking/hedging_language_blocker.py",
             "blocking/question_to_user_enforcer.py",
-            "diagnostic/hook_log_stop_wrapper.py",
+            "blocking/intent_only_ending_blocker.py",
         ),
     )
     dispatch('{"session_id": "test"}')
@@ -173,31 +173,6 @@ def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
     parsed = json.loads(completed.stdout)
     assert parsed["decision"] == "block"
     assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
-
-
-def test_dispatcher_blocks_eli11_shape_violation_matching_standalone() -> None:
-    """An ELI11 shape violation (too many bullets) blocks through the dispatcher."""
-    too_many_bullets_message = "\n".join(
-        f"- finding{each_index} detail for this line" for each_index in range(7)
-    )
-    payload_text = json.dumps(
-        {
-            "stop_hook_active": False,
-            "last_assistant_message": too_many_bullets_message,
-        }
-    )
-    completed = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    assert completed.returncode == 0
-    parsed = json.loads(completed.stdout)
-    assert parsed["decision"] == "block"
-    assert "ELI11 REPLY SHAPE" in parsed["reason"]
 
 
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:

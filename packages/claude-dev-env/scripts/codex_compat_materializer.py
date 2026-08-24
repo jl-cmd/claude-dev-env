@@ -26,6 +26,7 @@ manifest_indentation_width = 2
 publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
 frontmatter_unsupported_fields = ("tools", "model", "color")
+instruction_alias_filenames = frozenset({"AGENTS.md", "CLAUDE.md"})
 full_prune_opt_in_flag = "--allow-prune-all"
 unreadable_source_root_message = (
     "source root is missing or is not a directory, so nothing was planned or changed; "
@@ -430,6 +431,9 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
         raise MaterializerError(f"{reparse_source_root_message}: {config.source_root}")
     all_agents: list[ClaudeAgent] = []
     for each_path in sorted(config.source_root.rglob("*.md"), key=lambda path: path.as_posix().casefold()):
+        if each_path.name in instruction_alias_filenames:
+            _validate_containment(config.source_root, each_path)
+            continue
         if _is_reparse_point(each_path):
             raise MaterializerError(f"source reparse point is not allowed: {each_path}")
         relative_source = each_path.relative_to(config.source_root).as_posix()

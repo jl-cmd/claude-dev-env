@@ -7,6 +7,9 @@ Run the converging cleanup loop on the target: `$ARGUMENTS` (blank means the
 current branch's diff). Each phase invokes an existing skill with the Skill
 tool and repeats it until a pass returns zero new findings.
 
+Use `rules/asd-ste100-language.md` for user-facing wording. Keep the loop's
+cleanup, verification, commit, push, and finish-report fields.
+
 ## Phase A — loop /simplify
 
 1. Invoke the `simplify` skill on the target (the same review the user gets

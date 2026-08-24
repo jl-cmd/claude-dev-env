@@ -3,7 +3,7 @@
 import shutil
 from pathlib import Path
 
-from sync_to_cursor.config import CANONICAL_DOC_FILES
+from sync_to_cursor.config import ALL_CANONICAL_DOC_FILES
 from sync_to_cursor.hashing import sha256_bytes
 
 
@@ -17,19 +17,19 @@ def sync_canonical_docs(
     if not dry_run:
         docs_out.mkdir(parents=True, exist_ok=True)
     new_docs: dict = {}
-    for name in CANONICAL_DOC_FILES:
-        src = claude / "docs" / name
-        dst = docs_out / name
+    for each_name in ALL_CANONICAL_DOC_FILES:
+        src = claude / "docs" / each_name
+        dst = docs_out / each_name
         if not src.is_file():
             if dst.is_file():
                 if not dry_run:
                     dst.unlink()
                 if not quiet:
-                    print(f"WARN     docs/{name} (source removed — deleted stale copy at {dst})")
+                    print(f"WARN     docs/{each_name} (source removed — deleted stale copy at {dst})")
             elif not quiet:
-                print(f"WARN     docs/{name} (missing source: {src})")
+                print(f"WARN     docs/{each_name} (missing source: {src})")
             continue
-        key = f"docs/{name}"
+        key = f"docs/{each_name}"
         src_hash = sha256_bytes(src.read_bytes())
         if dry_run:
             if dst.is_file():
@@ -44,10 +44,10 @@ def sync_canonical_docs(
 
 
 def check_canonical_docs(claude: Path, cursor: Path, docs_entries: dict) -> bool:
-    for name in CANONICAL_DOC_FILES:
-        key = f"docs/{name}"
-        src = claude / "docs" / name
-        dst = cursor / "docs" / name
+    for each_name in ALL_CANONICAL_DOC_FILES:
+        key = f"docs/{each_name}"
+        src = claude / "docs" / each_name
+        dst = cursor / "docs" / each_name
         if not src.is_file():
             if key in docs_entries:
                 return False

@@ -53,7 +53,7 @@ so a running cloud session sees the same files under `/root/.claude/`.
 | Session repo scope | An allowlist fixed at session start (here `example-org/example-repo`, `example-org-2/claude-dev-env`). `mcp__Claude_Code_Remote__add_repo` adds a repo mid-session when the user asks. |
 | Proxy noProxy list | Allows direct access to `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, so package installs work. |
 | Proxy CA bundle | `/root/.ccr/ca-bundle.crt`. A `curl` or Python REST client through the proxy trusts this bundle. |
-| `.md` write gates | The state-description gate and the plain-language gate fire on `.md` writes. A report author writes timeless, plain prose or the Write is denied. |
+| `.md` write gates | The state-description gate, hedging gate, intent-only ending gate, and hook-prose consistency gate apply on their named surfaces. AskUserQuestion shape uses `ask_user_question_shape_blocker`. |
 
 ## 3. Root causes
 
@@ -109,7 +109,7 @@ evidence (the probe or inventory line that proves it), and a fix summary
 - **Symptom:** A cloud review step fails when it assumes a Windows-only executable path.
 - **Cause:** Cloud sessions provide their own runtime paths and do not expose local Windows tool locations.
 - **Evidence:** Cloud compatibility work runs through MCP and the available shell runtime; local desktop tooling remains unavailable to that session.
-- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow) format.
+- **Fix summary:** Resolve the available runtime at execution time and keep cloud review output in the [review guide](../../packages/claude-dev-env/.agents/skills-archived/reviews/SKILL.md#review-workflow) format.
 
 ### RC8 — Copilot quota gap
 
@@ -260,7 +260,7 @@ until Phase C lands the MCP matchers. Meanwhile, self-check by hand before an
 MCP post:
 
 - No volatile scratch path in a post body (job dirs, `/tmp`, worktrees).
-- Review comments follow the [review guide](../../packages/claude-dev-env/skills/reviews/SKILL.md#review-workflow).
+- Review comments follow the [review guide](../../packages/claude-dev-env/.agents/skills-archived/reviews/SKILL.md#review-workflow).
 - A PR title follows Conventional Commits.
 - A body with markdown goes through the structured `body` parameter, so
   backticks show as formatting.

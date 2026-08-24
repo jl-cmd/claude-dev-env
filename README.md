@@ -19,10 +19,12 @@ npx claude-dev-env
 That's it. The installer will:
 
 1. Detect your Python 3 command (`python3`, `python`, or `py -3`)
-2. Copy 13 rules, 5 docs, 27 agents, 10 commands, and 12 skills to `~/.claude/`
+2. Copy rules, docs, commands, and hooks to `~/.claude/`; copy agents and skills to `~/.agents/` and point `~/.claude/agents` and `~/.claude/skills` at that home
 3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
+6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
+7. Generate Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules
 
 The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
 
@@ -40,14 +42,14 @@ npx claude-dev-env --only prompts,research  # combine groups
 
 | Group | What's included |
 |-------|----------------|
-| `core` | Rules, docs, commands, agents, all hooks |
+| `core` | Rules, docs, commands, agents, all hooks, Codex exec-policy files |
 | `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
 | `journal` | session-log, session-tidy |
 | `research` | deep-research, research-mode |
 
 ### Verify
 
-Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run any slash command like `/commit` or `/plan` to confirm commands loaded.
+Start a new Claude Code session. You should see hook activity on your first prompt (code-rules-reminder, hook-structure-context). Run `/sr-loop` to confirm commands loaded.
 
 ### Update
 
@@ -100,6 +102,7 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
+
 | Rule | What it does |
 |------|-------------|
 | `code-standards` | References CODE_RULES.md for all code generation |
@@ -113,6 +116,14 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
 
+### Codex exec-policy files
+
+Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `claude-dev-env.rules` so a local `default.rules` stays in place.
+
+### Cursor rule files
+
+The installer runs `sync_to_cursor.py` so each Claude `rules/*.md` file becomes `~/.cursor/rules/<stem>.mdc` with Cursor frontmatter (`alwaysApply` or a `globs` list from Claude `paths:`). Inventory files `CLAUDE.md` and `AGENTS.md` stay out of that folder.
+
 ### Docs (5)
 
 Reference documents that rules and agents point to for detailed standards.
@@ -124,47 +135,30 @@ Reference documents that rules and agents point to for detailed standards.
 | `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
 
-### Agents (28)
+### Agents (8)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
-**Code Quality:** clean-coder, code-advisor, code-quality-agent, readability-review-agent, refactoring-specialist, right-sized-engineer
+| Agent | Role |
+|---------|------|
+| `clean-coder` | Primary code-writing agent |
+| `code-quality-agent` | Multi-file code quality review |
+| `git-commit-crafter` | Conventional commit messages |
+| `issue-tracker` | GitHub issue create, update, and close |
+| `plan-packet-validator` | Fresh-context plan-packet validator |
+| `pr-description-writer` | PR descriptions from the current diff |
+| `session-advisor` | Standing reviewer; endorse/correction/plan/stop |
+| `skill-writer-agent` | SKILL.md authoring specialist |
 
-**Testing:** tdd-test-writer, test-data-builder, validation-expert
-
-**Planning:** parallel-workflow-coordinator, mandatory-agent-workflow-agent, stub-detector-agent
-
-**Documentation:** docs-agent, doc-orchestrator
-
-**Configuration:** config-extraction-agent, config-centralizer, magic-value-eliminator-agent
-
-**Tooling:** agent-writer, tooling-builder
-
-**Git:** git-commit-crafter, pr-description-writer, session-continuity-manager
-
-**File Formats:** docx-agent, pdf-agent, xlsx-agent
-
-**Research:** deep-research
-
-**Other:** clasp-deployment-orchestrator, project-context-loader
-
-### Commands (9)
+### Commands (1)
 
 Slash commands for common workflows.
 
 | Command | Purpose |
 |---------|---------|
-| `/commit` | Structured git commit with conventional format |
-| `/plan` | Create implementation plans with config search |
-| `/implement` | Execute plans with TDD workflow |
-| `/review-plan` | Review and critique implementation plans |
-| `/right-size` | Check for over/under-engineering |
-| `/pr-comments` | Process PR review comments systematically |
-| `/docupdate` | Update documentation after changes |
-| `/sum` | Summarize current work context |
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills (12)
+### Skills (27)
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -196,7 +190,6 @@ Slash commands for common workflows.
 | `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
-| `imagegen` | Generate exact-resolution images through OpenAI API or Codex OAuth with verified receipts |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
@@ -212,7 +205,7 @@ Slash commands for common workflows.
 | `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
 | `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
 | `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
-| `show` | Create and review inline visual explanations, diagrams, interactive widgets, mockups, charts, and illustrations: routed by `routing.yaml`, held to a two-tier SVG canvas contract, and checked by `validate-artifact.py` for accessibility, dead references, undefined CSS variables, and text size |
+| `eli5` | Beginner-friendly presentation with large visuals, minimal text, one stable self-contained HTML artifact, update-in-place continuity, and sharing |
 
 ### Hooks
 
