@@ -27,6 +27,7 @@ import {
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
+    PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
 import {
     resolveInstallRoot,
@@ -444,14 +445,14 @@ export function interpreterCommandFromPath(executablePath) {
  *
  * @returns {string|null} The interpreter command, or null when none is usable.
  */
-function detectPython() {
+export function detectPython() {
     const candidates = pythonCandidatesForPlatform(process.platform);
     for (const { command, versionFlag } of candidates) {
         try {
-            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const version = execSync(`${command} ${versionFlag}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!version.includes('Python 3.')) continue;
             if (process.platform !== 'win32') return command;
-            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const executablePath = execSync(`${command} -c "import sys; print(sys.executable)"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MILLISECONDS }).trim();
             if (!executablePath || isWindowsStorePythonStub(executablePath)) continue;
             return interpreterCommandFromPath(executablePath);
         } catch { /* try next */ }
