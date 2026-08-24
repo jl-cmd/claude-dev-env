@@ -21,6 +21,14 @@ const capabilityTaskSeedsSource = readFileSync(
   resolve(THIS_DIRECTORY, '../../name-by-capability-audit/reference/task-seeds.md'),
   'utf8',
 )
+const reviewSkillSource = readFileSync(
+  resolve(THIS_DIRECTORY, '../../e-code-review/SKILL.md'),
+  'utf8',
+)
+const reviewProposalSource = readFileSync(
+  resolve(THIS_DIRECTORY, '../../e-code-review/reference/preflight-proposal.md'),
+  'utf8',
+)
 
 const allSkillContracts = [
   {
@@ -77,13 +85,35 @@ function assertSharedProposalContract(contractSource) {
   assert.match(contractSource, /Reapplication uses exactly the selected records/)
 }
 
+function assertReviewProposalAdapter() {
+  const preflightRoutingOffset = reviewSkillSource.indexOf('`preflight-proposal`')
+  const refusalRoutingOffset = reviewSkillSource.indexOf('**Refusal — first match wins:**')
+  const allProposalEntryMatches = reviewSkillSource.match(
+    /Route the selected mode through \[reference\/preflight-proposal.md\]\(reference\/preflight-proposal.md\) to establish proposal context/g,
+  ) ?? []
+
+  assert.ok(preflightRoutingOffset >= 0)
+  assert.ok(preflightRoutingOffset < refusalRoutingOffset)
+  assert.equal(allProposalEntryMatches.length, 1)
+  assert.match(reviewSkillSource, /e-code-review preflight-proposal/)
+  assert.match(reviewSkillSource, /`--level <low\|medium\|xhigh>`/)
+  assert.match(reviewSkillSource, /@~\/.claude\/_shared\/pr-loop\/preflight-proposal.md/)
+  assert.match(reviewSkillSource, /Normal mode follows the current level/)
+  assert.match(reviewProposalSource, /Keep Gate 1, Gate 2, the bare code-rules gate, and exact required tests/)
+  assert.match(reviewProposalSource, /review_level: low \| medium \| xhigh/)
+  assert.match(reviewProposalSource, /severity: blocker \| high \| medium \| low \| nit/)
+  assert.match(reviewProposalSource, /verdict: CONFIRMED \| PLAUSIBLE/)
+  assert.match(reviewProposalSource, /outcome: fixed \| no_change_needed \| skipped/)
+}
+
 test('audit modes retain their normal routing behavior', () => {
   assertTaskRoutingAndNormalMode()
 })
 
-test('one shared contract defines proposal evidence for both audit skills', () => {
+test('one shared contract defines proposal evidence for audit and review skills', () => {
   for (const eachSkillContract of allSkillContracts) {
     assertProposalAdapter(eachSkillContract)
   }
+  assertReviewProposalAdapter()
   assertSharedProposalContract(canonicalContractSource)
 })

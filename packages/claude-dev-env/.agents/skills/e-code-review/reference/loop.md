@@ -1,5 +1,9 @@
 # Loop until clean
 
+## Preflight-proposal mode
+
+When the hub selects `preflight-proposal`, continue the review loop with the established proposal context. Proposal mode ends with proposal evidence. Normal mode keeps its GitHub disclosure and Ready actions.
+
 ## Act
 
 `loop` on the hub command authorizes the full cycle. After the effort level procedure returns findings, run the gate sequence below immediately.
