@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
@@ -181,6 +182,19 @@ function createSandbox() {
     const manifestPath = join(claudeDirectory, '.claude-dev-env-manifest.json');
     return { homeDirectory, claudeDirectory, skillsDirectory, manifestPath };
 }
+
+test('the retired-skill fallback covers every current shipped skill', () => {
+    const sourceSkillsDirectory = join(PACKAGE_DIRECTORY, SKILLS_DIRECTORY_NAME);
+    const allCurrentSkillNames = readdirSync(sourceSkillsDirectory, { withFileTypes: true })
+        .filter(eachEntry => eachEntry.isDirectory())
+        .filter(eachEntry => existsSync(join(sourceSkillsDirectory, eachEntry.name, 'SKILL.md')))
+        .map(eachEntry => eachEntry.name);
+    const allUncoveredSkillNames = allCurrentSkillNames.filter(
+        eachSkillName => !EVER_SHIPPED_SKILL_NAMES.has(eachSkillName),
+    );
+
+    assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
+});
 
 /**
  * Plant a skill directory under the sandbox with a single marker file.
