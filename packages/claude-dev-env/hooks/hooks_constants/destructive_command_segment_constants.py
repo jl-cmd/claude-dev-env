@@ -1,4 +1,4 @@
-"""Segment-splitting, command-name, and deny-mode constants for the destructive command blocker."""
+"""Segment-splitting and command-name constants for the destructive command blocker."""
 
 ALL_SHELL_CONTROL_OPERATOR_TOKENS: frozenset[str] = frozenset({"&&", "||", ";", "|&", "|", "&", "\n", "\r"})
 ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS: frozenset[str] = frozenset(
@@ -183,13 +183,3 @@ ALL_LAUNCHER_OPTIONS_TAKING_SEPARATE_VALUE: frozenset[str] = frozenset(
     }
 )
 ALL_SUBSHELL_GROUPING_CHARACTERS: str = "({"
-ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
-    {
-        "TEMP",
-        "TMP",
-        "TMPDIR",
-        "CLAUDE_JOB_DIR",
-    }
-)
-DESTRUCTIVE_DENY_MODE_ENV_VAR: str = "CLAUDE_DESTRUCTIVE_DENY_MODE"
-ALL_TRUTHY_ENV_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})

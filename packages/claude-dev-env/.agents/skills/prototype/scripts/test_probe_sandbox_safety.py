@@ -33,6 +33,7 @@ from prototype_scripts_constants.config.probe_sandbox_safety_constants import (
 )
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+BUILDER_PATH = SCRIPTS_DIRECTORY / "build_sandbox_settings.py"
 PROBE_PATH = SCRIPTS_DIRECTORY / "probe_sandbox_safety.py"
 HOOKS_BLOCKING_DIRECTORY = SCRIPTS_DIRECTORY.parents[3] / "hooks" / "blocking"
 
@@ -52,13 +53,21 @@ ASK_HOOK_SOURCE = (
 ALLOW_HOOK_SOURCE = "import sys\nsys.exit(0)\n"
 
 
-def load_probe_module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("probe_sandbox_safety", PROBE_PATH)
+def load_module_from_path(module_name: str, module_path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     assert spec is not None
     assert spec.loader is not None
-    probe_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(probe_module)
-    return probe_module
+    loaded_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded_module)
+    return loaded_module
+
+
+def load_probe_module() -> ModuleType:
+    return load_module_from_path("probe_sandbox_safety", PROBE_PATH)
+
+
+def load_builder_module() -> ModuleType:
+    return load_module_from_path("build_sandbox_settings", BUILDER_PATH)
 
 
 def quoted_command(script_path: Path) -> str:
@@ -121,6 +130,25 @@ def test_main_exits_zero_when_the_real_destructive_hook_denies_in_deny_mode(
     )
     exit_code = probe.main(["--settings", str(settings_path)])
     assert exit_code == PROBE_SUCCESS_EXIT_CODE
+
+
+def test_built_deny_environment_denies_real_destructive_hook() -> None:
+    builder_module = load_builder_module()
+    settings_document = builder_module.build_minimal_settings(
+        builder_module.resolve_safety_hook_entries(real_hook_settings_document())
+    )
+    probe_module = load_probe_module()
+    probe_payload = probe_module.build_probe_payload_for_basename(DESTRUCTIVE_HOOK_BASENAME)
+    destructive_hook_path = HOOKS_BLOCKING_DIRECTORY / DESTRUCTIVE_HOOK_BASENAME
+    destructive_hook_tokens = probe_module.parse_command_argv(
+        quoted_command(destructive_hook_path)
+    )
+    is_hook_blocking = probe_module.hook_blocks_probe(
+        destructive_hook_tokens,
+        probe_payload,
+        settings_document["env"],
+    )
+    assert is_hook_blocking is True
 
 
 def test_pii_basename_probe_payload_carries_the_secret() -> None:
