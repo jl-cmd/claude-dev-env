@@ -1,5 +1,5 @@
 ---
-name: small-cl
+name: pr-small-cl
 description: >-
   Scope or split a pull request into a self-contained reviewable increment. Use
   when a user asks to "split this PR", "make this change smaller", or "small CL".

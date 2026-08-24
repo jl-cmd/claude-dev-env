@@ -26,4 +26,4 @@ def test_skill_routes_judgment_to_canonical_guides() -> None:
     assert "../comments/SKILL.md#writing-useful-review-comments" in skill_text
     assert "../descriptions/SKILL.md#reviewing-a-description" in skill_text
     assert "../emergencies/SKILL.md#while-the-incident-is-active" in skill_text
-    assert "../small-cl/SKILL.md#reviewable-scope" in skill_text
+    assert "../../skills/pr-small-cl/SKILL.md#reviewable-scope" in skill_text

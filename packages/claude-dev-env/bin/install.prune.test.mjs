@@ -13,6 +13,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+} from './install-constants.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
@@ -36,7 +41,7 @@ const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
-    'small-cl',
+    'pr-small-cl',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',
@@ -111,6 +116,23 @@ function createSandbox(homeDirectoryPrefix = 'cdev-prune-home-') {
     const manifestPath = join(claudeDirectory, '.claude-dev-env-manifest.json');
     return { homeDirectory, claudeDirectory, skillsDirectory, manifestPath };
 }
+
+test('the retired-skill fallback covers every current shipped skill', () => {
+    const sourceSkillsDirectory = join(
+        PACKAGE_DIRECTORY,
+        PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+        MANAGED_SKILLS_DIRECTORY_NAME,
+    );
+    const allCurrentSkillNames = readdirSync(sourceSkillsDirectory, { withFileTypes: true })
+        .filter(eachEntry => eachEntry.isDirectory())
+        .filter(eachEntry => existsSync(join(sourceSkillsDirectory, eachEntry.name, 'SKILL.md')))
+        .map(eachEntry => eachEntry.name);
+    const allUncoveredSkillNames = allCurrentSkillNames.filter(
+        eachSkillName => !EVER_SHIPPED_SKILL_NAMES.has(eachSkillName),
+    );
+
+    assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
+});
 
 test('a core install runs the spaced-path Write dispatcher and captures its red denial', () => {
     const sandbox = createSandbox('cdev prune & (home)-');

@@ -1,5 +1,5 @@
 ---
-name: shared-extraction-audit
+name: pr-shared-extraction
 description: Audits pull requests and packages for general helpers living in workflow-specific code instead of shared_utils, then applies extraction fixes by default in small tested CLs. Use when reviewing PRs for architectural layering, migrating utilities out of cert_fix_queue/theme_dialer_pipeline/skills, auditing "similar offenses", or when the user mentions extraction audit, shared_utils migration, orchestration-only packages, thin wrappers, or layer inversions.
 ---
 
@@ -17,7 +17,7 @@ Audit PRs and packages for reusable behavior placed in workflow code. Keep **orc
 
 Resolve the first matching mode before the audit steps:
 
-1. `preflight-proposal` runs `shared-extraction-audit preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with priority and target.
+1. `preflight-proposal` runs `pr-shared-extraction preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with priority and target.
 2. `audit-only` is report-only and ends after the findings report.
 3. Normal mode follows the existing audit workflow and applies the prioritized fix band by default.
 

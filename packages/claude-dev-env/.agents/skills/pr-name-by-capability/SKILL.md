@@ -1,10 +1,10 @@
 ---
-name: name-by-capability-audit
+name: pr-name-by-capability
 description: >-
   Audit a GitHub PR for name-by-capability violations: driver/motive words on
   reusable capability modules (queues and report routers may keep the driver
   word), then apply capability-oriented renames by default. Triggers:
-  /name-by-capability-audit, name-by-capability audit, audit PR for naming, name
+  /pr-name-by-capability, name-by-capability audit, audit PR for naming, name
   by capability, capability naming review, cert_fix rename check, driver word in
   package name.
 ---
@@ -17,7 +17,7 @@ Audit a GitHub PR against the **name-by-capability** rule. Inspect paths and tit
 
 First-match routing selects the mode before the audit steps:
 
-1. `preflight-proposal` runs `name-by-capability-audit preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with violation or OK-driver classification.
+1. `preflight-proposal` runs `pr-name-by-capability preflight-proposal <pr_number> --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>` under the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md). Record each finding with violation or OK-driver classification.
 2. `audit-only` is report-only and ends after the findings report.
 3. A user-supplied rename or fix direction follows the existing normal fix workflow.
 4. Normal mode applies the suggested rename direction by default.
@@ -30,7 +30,7 @@ First-match routing selects the mode before the audit steps:
 
 ## When this applies
 
-- User invokes `/name-by-capability-audit <PR>` or asks to audit a PR for name-by-capability / capability naming.
+- User invokes `/pr-name-by-capability <PR>` or asks to audit a PR for name-by-capability / capability naming.
 - PR adds or renames packages/modules, or frames a general shared operation with a driver/motive word (`cert_fix`, `cert_closeout`, `portal`, `export`, …).
 
 A missing PR number or URL returns exactly: `Give a GitHub PR number or URL to audit for name-by-capability.` Resolved targets follow **Mode routing**.
@@ -51,7 +51,7 @@ Load order for the rule: if `docs/agents/name-by-capability.md` exists, read it 
 
 | Peer | Relationship |
 |------|----------------|
-| `shared-extraction-audit` | Layering and extraction (where code lives). Invoke when a path’s *role* is unclear; this skill only scores the *name*. |
+| `pr-shared-extraction` | Layering and extraction (where code lives). Invoke when a path’s *role* is unclear; this skill only scores the *name*. |
 | `reviews` / PR review skills | May invoke this skill by name when naming is in scope |
 
 ## File index
