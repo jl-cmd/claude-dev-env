@@ -96,6 +96,28 @@ def test_changed_surface_reads_staged_and_unstaged_lines(git_repository: Path) -
     assert all_added_lines == {"staged_line = 1", "unstaged_line = 1"}
 
 
+def test_duplicate_old_lines_require_duplicate_changed_occurrences(
+    git_repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_path = git_repository / "module.py"
+    _commit_file(git_repository, source_path, "pass\n")
+    old_function = "def calculate_total(amount: int) -> int:\n    return amount\n    return amount"
+    _stage_file(
+        git_repository,
+        source_path,
+        "def calculate_total(amount: int) -> int:\n    return amount\n",
+    )
+    renamed_function = old_function.replace("calculate_total", "compute_total")
+    monkeypatch.setattr(
+        refactor_guard,
+        "_get_added_line_occurrences",
+        lambda _file_path: ["def calculate_total(amount: int) -> int:", "    return amount"],
+    )
+
+    assert refactor_guard.is_refactor_edit(old_function, renamed_function)
+    assert not refactor_guard.is_edit_within_changed_surface(str(source_path), old_function)
+
+
 def test_ordinary_edit_is_not_a_refactor_candidate(git_repository: Path) -> None:
     source_path = git_repository / "module.py"
     _commit_file(git_repository, source_path, "return_amount = 1\n")
@@ -132,4 +154,40 @@ def test_hook_infrastructure_is_not_a_refactor_candidate(
         hook_path,
         "def calculate_total(amount: int) -> int:\n    return amount",
         "def compute_total(amount: int) -> int:\n    return amount",
+    )
+
+
+def test_changed_surface_below_half_is_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        refactor_guard,
+        "_get_added_line_occurrences",
+        lambda _file_path: ["changed line"],
+    )
+
+    assert not refactor_guard.is_edit_within_changed_surface(
+        "module.py", "changed line\noriginal line\noriginal line"
+    )
+
+
+def test_changed_surface_at_half_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        refactor_guard,
+        "_get_added_line_occurrences",
+        lambda _file_path: ["changed one", "changed two"],
+    )
+
+    assert refactor_guard.is_edit_within_changed_surface(
+        "module.py", "changed one\nchanged two\noriginal one\noriginal two"
+    )
+
+
+def test_changed_surface_above_half_is_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        refactor_guard,
+        "_get_added_line_occurrences",
+        lambda _file_path: ["changed one", "changed two", "changed three"],
+    )
+
+    assert refactor_guard.is_edit_within_changed_surface(
+        "module.py", "changed one\nchanged two\nchanged three\noriginal line"
     )
