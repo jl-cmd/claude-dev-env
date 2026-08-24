@@ -11,6 +11,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `ask_user_question_shape.py` | Pure AskUserQuestion lean-block shape analyzer: grades question and option-description prose against shared chat-detail markers and sentence/word caps with no hook I/O |
 | `banned_identifiers_constants.py` | The set of banned short identifiers and banned function-name prefixes |
 | `bash_pre_tool_use_dispatcher_constants.py` | Permission outcomes, tool-name sets, and the ordered hosted-hook roster for the Bash PreToolUse dispatcher (also covers PowerShell-shared gates) |
+| `pre_tool_use_dispatcher_constants.py` | Shared Write, Edit, and MultiEdit tool-name set and the ordered hosted-hook roster for the Write/Edit/MultiEdit PreToolUse dispatcher |
 | `blocking_check_limits.py` | Max issue counts and preview lengths for blocking hooks |
 | `bot_mention_comment_blocker_constants.py` | Patterns for detecting bot @-mentions in PR comments |
 | `claude_md_orphan_file_blocker_constants.py` | Table patterns, file extensions, scan budget, and block-message text for the CLAUDE.md orphan-file blocker |
@@ -63,7 +64,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
 | `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
 | `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
-| `sensitive_file_protector_constants.py` | Sensitive filename patterns, the committed-template suffixes that earn an exemption, the write/edit tool names, and the deny decision and message template for `sensitive_file_protector` |
+| `sensitive_file_protector_constants.py` | Sensitive filename patterns, committed-template suffixes that earn an exemption, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
 | `session_start_injector.py` | Pure SessionStart context injector: normalize `source` (`startup`/`resume`/`clear`/`compact`), honor enable/timeout, return structured injection results for starter hooks |
