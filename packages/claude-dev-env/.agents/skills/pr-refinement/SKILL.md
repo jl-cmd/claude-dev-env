@@ -9,8 +9,8 @@ Turn audit findings into a focused existing pull-request update or a required de
 
 ## Peer skills
 
-1. Run `pr-shared-extraction-audit` for reusable-code placement, canonical shared homes, and extraction findings.
-2. Run `pr-name-by-capability-audit` for module, symbol, path, branch, and pull-request naming findings.
+1. Run `pr-shared-extraction` for reusable-code placement, canonical shared homes, and extraction findings.
+2. Run `pr-name-by-capability` for module, symbol, path, branch, and pull-request naming findings.
 3. Use `pr-small-cl` to divide approved fixes into coherent, independently reviewable pull requests.
 
 The peer skills own their audit rules and finding priorities.
