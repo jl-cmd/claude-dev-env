@@ -9,39 +9,54 @@ a ``deny`` so the sandbox can be contained.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT_PATH = Path(__file__).parent / "destructive_command_blocker.py"
+_BLOCKING_DIRECTORY = Path(__file__).resolve().parent
+if str(_BLOCKING_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_BLOCKING_DIRECTORY))
+
+SCRIPT_PATH = _BLOCKING_DIRECTORY / "destructive_command_blocker.py"
+
+import _path_setup  # noqa: E402, F401
+
+from test_hook_subprocess_support import (  # noqa: E402
+    build_bash_payload,
+    run_hook_as_subprocess,
+)
 
 
-def _run_hook_with_environment(command: str, extra_environment: dict[str, str]) -> dict:
-    child_environment = os.environ.copy()
-    child_environment.pop("CLAUDE_DESTRUCTIVE_DENY_MODE", None)
-    child_environment.update(extra_environment)
-    completed_process = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH)],
-        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": command}}),
-        text=True,
-        capture_output=True,
-        check=False,
-        env=child_environment,
+def _run_hook_with_environment(
+    command: str,
+    environment_update_by_name: dict[str, str],
+    temporary_home_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    return run_hook_as_subprocess(
+        hook_script_path=SCRIPT_PATH,
+        payload_text=build_bash_payload(command),
+        working_directory=temporary_home_directory,
+        home_directory=temporary_home_directory,
+        all_environment_names_to_remove=("CLAUDE_DESTRUCTIVE_DENY_MODE",),
+        environment_updates_by_name=environment_update_by_name,
     )
-    return json.loads(completed_process.stdout)
 
 
-def test_rm_rf_denies_when_deny_mode_env_is_set() -> None:
-    response = _run_hook_with_environment(
+def test_rm_rf_denies_when_deny_mode_env_is_set(tmp_path: Path) -> None:
+    completed_hook = _run_hook_with_environment(
         "rm -rf /var/log/myapp",
         {"CLAUDE_DESTRUCTIVE_DENY_MODE": "1"},
+        tmp_path,
     )
-    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "rm -rf" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    hook_decision_by_field = json.loads(completed_hook.stdout)
+
+    assert hook_decision_by_field["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "rm -rf" in hook_decision_by_field["hookSpecificOutput"]["permissionDecisionReason"]
 
 
-def test_rm_rf_asks_when_deny_mode_env_is_absent() -> None:
-    response = _run_hook_with_environment("rm -rf /var/log/myapp", {})
-    assert response["hookSpecificOutput"]["permissionDecision"] == "ask"
-    assert "rm -rf" in response["hookSpecificOutput"]["permissionDecisionReason"]
+def test_rm_rf_asks_when_deny_mode_env_is_absent(tmp_path: Path) -> None:
+    completed_hook = _run_hook_with_environment("rm -rf /var/log/myapp", {}, tmp_path)
+    hook_decision_by_field = json.loads(completed_hook.stdout)
+
+    assert hook_decision_by_field["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert "rm -rf" in hook_decision_by_field["hookSpecificOutput"]["permissionDecisionReason"]
