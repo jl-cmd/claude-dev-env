@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
-from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -14,53 +12,19 @@ if str(ADVISORY_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(ADVISORY_DIRECTORY))
 
 import refactor_guard  # noqa: E402
-
-
-@pytest.fixture
-def git_repository(tmp_path: Path) -> Generator[Path]:
-    """Create a committed temporary repository for changed-surface checks."""
-    repository_path = tmp_path / "repository"
-    repository_path.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repository_path, check=True)
-    yield repository_path
-
-
-def _commit_file(repository_path: Path, file_path: Path, file_content: str) -> None:
-    file_path.write_text(file_content, encoding="utf-8")
-    subprocess.run(["git", "add", str(file_path)], cwd=repository_path, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Refactor Guard Test",
-            "-c",
-            "user.email=refactor-guard@example.invalid",
-            "commit",
-            "-q",
-            "-m",
-            "baseline",
-            "--no-verify",
-        ],
-        cwd=repository_path,
-        check=True,
-    )
-
-
-def _stage_file(repository_path: Path, file_path: Path, file_content: str) -> None:
-    file_path.write_text(file_content, encoding="utf-8")
-    subprocess.run(["git", "add", str(file_path)], cwd=repository_path, check=True)
+from refactor_guard_test_support import commit_file, stage_file  # noqa: E402
 
 
 def test_refactor_candidate_is_eligible_when_old_lines_are_outside_changed_surface(
     git_repository: Path,
 ) -> None:
     source_path = git_repository / "module.py"
-    _commit_file(
+    commit_file(
         git_repository,
         source_path,
         "def calculate_total(amount: int) -> int:\n    return amount\n",
     )
-    _stage_file(
+    stage_file(
         git_repository,
         source_path,
         "def calculate_total(amount: int) -> int:\n    return amount + 1\n",
@@ -76,9 +40,9 @@ def test_refactor_candidate_is_ineligible_when_old_lines_are_in_changed_surface(
     git_repository: Path,
 ) -> None:
     source_path = git_repository / "module.py"
-    _commit_file(git_repository, source_path, "pass\n")
+    commit_file(git_repository, source_path, "pass\n")
     old_function = "def calculate_total(amount: int) -> int:\n    return amount"
-    _stage_file(git_repository, source_path, f"{old_function}\n")
+    stage_file(git_repository, source_path, f"{old_function}\n")
     renamed_function = "def compute_total(amount: int) -> int:\n    return amount"
 
     assert not refactor_guard.is_refactor_eligible(str(source_path), old_function, renamed_function)
@@ -88,9 +52,9 @@ def test_changed_surface_reads_staged_and_unstaged_lines(
     git_repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source_path = git_repository / "module.py"
-    _commit_file(git_repository, source_path, "baseline = 1\n")
+    commit_file(git_repository, source_path, "baseline = 1\n")
 
-    _stage_file(git_repository, source_path, "staged_line = 1\n")
+    stage_file(git_repository, source_path, "staged_line = 1\n")
     source_path.write_text("unstaged_line = 1\n", encoding="utf-8")
 
     monkeypatch.setenv("GIT_DIR", str(git_repository / "missing-git-dir"))
@@ -109,9 +73,9 @@ def test_duplicate_old_lines_require_duplicate_changed_occurrences(
     git_repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source_path = git_repository / "module.py"
-    _commit_file(git_repository, source_path, "pass\n")
+    commit_file(git_repository, source_path, "pass\n")
     old_function = "def calculate_total(amount: int) -> int:\n    return amount\n    return amount"
-    _stage_file(
+    stage_file(
         git_repository,
         source_path,
         "def calculate_total(amount: int) -> int:\n    return amount\n",
@@ -129,7 +93,7 @@ def test_duplicate_old_lines_require_duplicate_changed_occurrences(
 
 def test_ordinary_edit_is_not_a_refactor_candidate(git_repository: Path) -> None:
     source_path = git_repository / "module.py"
-    _commit_file(git_repository, source_path, "return_amount = 1\n")
+    commit_file(git_repository, source_path, "return_amount = 1\n")
 
     assert not refactor_guard.is_refactor_eligible(
         str(source_path), "return_amount = 1", "return_amount = 2"
