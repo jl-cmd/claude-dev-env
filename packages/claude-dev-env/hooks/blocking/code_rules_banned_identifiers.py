@@ -1,7 +1,9 @@
 """Banned identifier, banned noun-word, and banned function-prefix naming checks."""
 
 import ast
+import io
 import sys
+import tokenize
 from pathlib import Path
 
 _blocking_directory = str(Path(__file__).resolve().parent)
@@ -27,8 +29,8 @@ from code_rules_shared import (  # noqa: E402
 
 from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
-    ALL_BANNED_NOUN_COMPATIBILITY_IDENTIFIERS,
     ALL_BANNED_NOUN_WORDS,
+    BANNED_NOUN_COMPATIBILITY_COMMENT,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
     BANNED_NOUN_WORD_MESSAGE_SUFFIX,
@@ -236,8 +238,31 @@ def _is_dunder_name(identifier: str) -> bool:
     return identifier.startswith("__") and identifier.endswith("__")
 
 
+def _collect_annotated_public_definition_lines(
+    content: str, parsed_tree: ast.AST
+) -> frozenset[int]:
+    all_annotation_lines: set[int] = set()
+    try:
+        for each_token in tokenize.generate_tokens(io.StringIO(content).readline):
+            if each_token.type != tokenize.COMMENT:
+                continue
+            if each_token.string.strip() == BANNED_NOUN_COMPATIBILITY_COMMENT:
+                all_annotation_lines.add(each_token.start[0])
+    except (IndentationError, SyntaxError, tokenize.TokenError):
+        return frozenset()
+
+    return frozenset(
+        each_node.lineno
+        for each_node in ast.walk(parsed_tree)
+        if isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not each_node.name.startswith("_")
+        and each_node.lineno in all_annotation_lines
+    )
+
+
 def _collect_banned_noun_word_bindings(
     parsed_tree: ast.AST,
+    all_annotated_public_definition_lines: frozenset[int],
 ) -> list[tuple[str, int, int, str]]:
     """Yield ``(identifier, lineno, col_offset, banned_word)`` for each binding.
 
@@ -249,8 +274,13 @@ def _collect_banned_noun_word_bindings(
     flagged_bindings: list[tuple[str, int, int, str]] = []
     seen_keys: set[tuple[str, int, int]] = set()
 
-    def record(name: str, lineno: int, col_offset: int) -> None:
-        if name in ALL_BANNED_NOUN_COMPATIBILITY_IDENTIFIERS:
+    def record(
+        name: str,
+        lineno: int,
+        col_offset: int,
+        is_annotated_public_definition: bool = False,
+    ) -> None:
+        if is_annotated_public_definition:
             return
         if name in ALL_BANNED_IDENTIFIERS:
             return
@@ -285,11 +315,24 @@ def _collect_banned_noun_word_bindings(
             for each_name_node in _collect_target_names(each_node.optional_vars):
                 record(each_name_node.id, each_name_node.lineno, each_name_node.col_offset)
         elif isinstance(each_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            record(each_node.name, each_node.lineno, each_node.col_offset)
+            is_annotated_public_definition = (
+                each_node.lineno in all_annotated_public_definition_lines
+            )
+            record(
+                each_node.name,
+                each_node.lineno,
+                each_node.col_offset,
+                is_annotated_public_definition,
+            )
             for each_arg in _collect_annotated_arguments(each_node):
                 if each_arg.arg in ALL_SELF_AND_CLS_PARAMETER_NAMES:
                     continue
-                record(each_arg.arg, each_arg.lineno, each_arg.col_offset)
+                record(
+                    each_arg.arg,
+                    each_arg.lineno,
+                    each_arg.col_offset,
+                    is_annotated_public_definition,
+                )
         elif isinstance(each_node, ast.ClassDef):
             record(each_node.name, each_node.lineno, each_node.col_offset)
         elif isinstance(each_node, (ast.Import, ast.ImportFrom)):
@@ -371,9 +414,14 @@ def check_banned_noun_word_boundary(
     except SyntaxError:
         return []
 
+    all_annotated_public_definition_lines = _collect_annotated_public_definition_lines(
+        content, parsed_tree
+    )
     single_line_span = 1
     all_violations_in_walk_order: list[tuple[range, str]] = []
-    for each_name, each_lineno, _, each_word in _collect_banned_noun_word_bindings(parsed_tree):
+    for each_name, each_lineno, _, each_word in _collect_banned_noun_word_bindings(
+        parsed_tree, all_annotated_public_definition_lines
+    ):
         span_range = range(each_lineno, each_lineno + single_line_span)
         span_fragment = BANNED_NOUN_SPAN_FRAGMENT_TEMPLATE.format(
             definition_line=each_lineno, line_span=single_line_span
