@@ -38,17 +38,19 @@ def _run_commit_gate(
     from_directory: Path,
     process_directory: Path,
     command: str = "git commit -m test",
+    include_event_cwd: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     hook_script = Path(__file__).with_name("block_main_commit.py")
     home_directory = from_directory.parent / "test-home"
     home_directory.mkdir(exist_ok=True)
     environment = os.environ.copy()
     environment.update({"HOME": str(home_directory), "USERPROFILE": str(home_directory)})
-    hook_payload = {
+    hook_payload: dict[str, object] = {
         "tool_name": "Bash",
-        "cwd": str(from_directory),
         "tool_input": {"command": command},
     }
+    if include_event_cwd:
+        hook_payload["cwd"] = str(from_directory)
     return subprocess.run(
         [sys.executable, str(hook_script)],
         cwd=process_directory,
@@ -96,6 +98,21 @@ def test_resolves_relative_git_c_from_hook_event_cwd(tmp_path: Path) -> None:
     hook_response = json.loads(completed_process.stdout)
     assert hook_response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert str(repository) in hook_response["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_preserves_dispatcher_ownership_without_event_cwd(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path, "main")
+    process_repository = _create_repository(tmp_path, "agent-owned-change")
+
+    completed_process = _run_commit_gate(
+        tmp_path,
+        process_repository,
+        command=f'git -C "{repository}" commit -m test',
+        include_event_cwd=False,
+    )
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""
 
 
 def test_matches_case_insensitive_shell_git_command(tmp_path: Path) -> None:

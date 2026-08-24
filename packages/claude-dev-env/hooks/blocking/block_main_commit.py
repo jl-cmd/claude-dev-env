@@ -28,13 +28,18 @@ PROTECTED_BRANCHES = ("main", "master")
 PROTECTED_REMOTE_PATTERNS: list[str] = []
 
 
-def parse_git_commit_directory(bash_command: str) -> tuple[bool, str | None]:
-    """Return the Git commit match state and selected working directory."""
-    git_c_match = re.search(
+def _match_git_c_commit(bash_command: str) -> re.Match[str] | None:
+    """Return the match for a Git commit with an explicit directory."""
+    return re.search(
         r"(?:^|(?<=[;&|]))\s*git\s+-C\s+[\"']?([^\"';&|]+?)[\"']?\s+commit(?:\s|$)",
         bash_command,
         flags=re.IGNORECASE,
     )
+
+
+def parse_git_commit_directory(bash_command: str) -> tuple[bool, str | None]:
+    """Return the Git commit match state and selected working directory."""
+    git_c_match = _match_git_c_commit(bash_command)
     if git_c_match:
         return True, git_c_match.group(1).strip()
 
@@ -69,6 +74,11 @@ def is_commit_command(bash_command: str) -> bool:
     """Return the Git commit match state for the shell command."""
     is_commit, _ = parse_git_commit_directory(bash_command)
     return is_commit
+
+
+def is_git_c_commit_command(bash_command: str) -> bool:
+    """Return whether the command names a Git commit target with ``-C``."""
+    return _match_git_c_commit(bash_command) is not None
 
 
 def resolve_directory(
@@ -183,6 +193,9 @@ def main() -> None:
         sys.exit(0)
 
     if is_main_commit_confirmed(bash_command):
+        sys.exit(0)
+
+    if event_cwd is None and is_git_c_commit_command(bash_command):
         sys.exit(0)
 
     target_dir = resolve_directory(target_dir_raw, from_directory=event_cwd)
