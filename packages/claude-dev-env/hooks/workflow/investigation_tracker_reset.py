@@ -33,6 +33,8 @@ def main() -> None:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:
         sys.exit(0)
+    if not isinstance(hook_input, dict):
+        sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")
     if tool_name not in DELEGATION_TOOLS:

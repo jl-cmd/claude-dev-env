@@ -170,3 +170,8 @@ export const CURSOR_SYNC_SCRIPT_FILE_NAME = 'sync_to_cursor.py';
  * Windows Python launcher command the installer may bake into hook settings.
  */
 export const WINDOWS_PYTHON_LAUNCHER_COMMAND = 'py -3';
+
+/**
+ * Maximum time each Python interpreter probe may run during detection.
+ */
+export const PYTHON_PROBE_TIMEOUT_MILLISECONDS = 10_000;
