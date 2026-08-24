@@ -26,9 +26,12 @@ from types import ModuleType
 import pytest
 
 HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "auto_formatter.py")
-HOOKS_JSON_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "hooks", "hooks.json"
+HOOKS_DIRECTORY_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+POST_TOOL_USE_DISPATCHER_PATH = os.path.join(
+    HOOKS_DIRECTORY_PATH, "validation", "post_tool_use_dispatcher.py"
 )
+PLUGIN_ROOT_PATH = os.path.dirname(HOOKS_DIRECTORY_PATH)
+HOOKS_JSON_PATH = os.path.join(HOOKS_DIRECTORY_PATH, "hooks.json")
 POST_TOOL_USE_DISPATCHER_COMMAND_FRAGMENT = "validation/post_tool_use_dispatcher.py"
 UNUSED_IMPORT_SOURCE = "import os\n\n\nVALUE = 1\n"
 HOOK_RUN_TIMEOUT_SECONDS = 60
@@ -42,6 +45,10 @@ def build_fixture_git_environment() -> dict[str, str]:
     }
 
 
+def build_dispatcher_payload(tool_name: str, file_path: Path) -> str:
+    return json.dumps({"tool_name": tool_name, "tool_input": {"file_path": str(file_path)}})
+
+
 def _strip_read_only_and_retry(removal_function, target_path, *_exc_info):
     try:
         os.chmod(target_path, stat.S_IWRITE)
@@ -51,13 +58,8 @@ def _strip_read_only_and_retry(removal_function, target_path, *_exc_info):
 
 
 def _force_rmtree(target_path: str) -> None:
-    handler_kw = (
-        {"onexc": _strip_read_only_and_retry}
-        if sys.version_info >= (3, 12)
-        else {"onerror": _strip_read_only_and_retry}
-    )
     with contextlib.suppress(OSError):
-        shutil.rmtree(target_path, **handler_kw)
+        shutil.rmtree(target_path, onexc=_strip_read_only_and_retry)
 
 
 @functools.lru_cache(maxsize=1)
@@ -88,15 +90,28 @@ def git_repository() -> Generator[Path]:
 
 
 def _run_hook(tool_name: str, file_path: Path) -> subprocess.CompletedProcess[str]:
-    hook_input = json.dumps({"tool_name": tool_name, "tool_input": {"file_path": str(file_path)}})
     return subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
-        input=hook_input,
+        input=build_dispatcher_payload(tool_name, file_path),
         capture_output=True,
         text=True,
         timeout=HOOK_RUN_TIMEOUT_SECONDS,
         check=False,
         env=build_fixture_git_environment(),
+    )
+
+
+def _run_post_tool_use_dispatcher(
+    tool_name: str, file_path: Path, environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, POST_TOOL_USE_DISPATCHER_PATH, PLUGIN_ROOT_PATH],
+        input=build_dispatcher_payload(tool_name, file_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=HOOK_RUN_TIMEOUT_SECONDS,
+        env=environment,
     )
 
 
@@ -214,6 +229,29 @@ def test_formatter_eligibility_protects_symlinked_hook_tree(
     assert auto_formatter_module.is_formatter_eligible("Write", str(symlinked_file)) is False
 
 
+def test_formatter_eligibility_protects_symlink_target_inside_hook_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    hooks_directory = tmp_path / "hooks"
+    hooks_directory.mkdir()
+    protected_file = hooks_directory / "protected.py"
+    protected_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+    symlinked_file = tmp_path / "linked.py"
+    try:
+        symlinked_file.symlink_to(protected_file)
+    except (OSError, NotImplementedError):
+        return
+    monkeypatch.setattr(
+        auto_formatter_module,
+        "HOOKS_DIR",
+        f"{hooks_directory}{os.sep}",
+    )
+    monkeypatch.setattr(auto_formatter_module, "is_untracked_in_git", lambda _: True)
+
+    assert auto_formatter_module.is_formatter_eligible("Write", str(symlinked_file)) is False
+
+
 def test_formatter_diagnostic_stays_on_stderr(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -236,6 +274,34 @@ def test_formatter_diagnostic_stays_on_stderr(
     assert "formatter stdout" in captured_output.err
     assert "formatter stderr" in captured_output.err
     assert captured_output.out == ""
+
+
+def test_prettier_command_uses_windows_npx_and_resolved_file_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    candidate_file = tmp_path / "linked_module.js"
+    captured_commands: list[list[str]] = []
+
+    def capture_formatter_command(
+        command: list[str], _file_path: str, _timeout_seconds: int
+    ) -> tuple[subprocess.CompletedProcess[str], bool]:
+        captured_commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", ""), False
+
+    monkeypatch.setattr(auto_formatter_module, "_run_command", capture_formatter_command)
+
+    auto_formatter_module._run_prettier(str(candidate_file))
+
+    assert captured_commands == [
+        [
+            auto_formatter_module.NPX_EXECUTABLE,
+            "--yes",
+            "prettier",
+            "--write",
+            os.path.realpath(candidate_file),
+        ]
+    ]
 
 
 def test_tracked_write_ignores_redirected_git_dir(
@@ -267,6 +333,55 @@ def test_tracked_write_ignores_redirected_git_dir(
 
     assert completed_hook.returncode == 0
     assert "import os" in tracked_file.read_text(encoding="utf-8")
+
+
+def test_dispatcher_preserves_redirected_git_dir_until_formatter_hook(
+    git_repository: Path,
+    tmp_path: Path,
+) -> None:
+    tracked_file = git_repository / "dispatcher_redirected_git_dir.py"
+    tracked_file.write_text(UNUSED_IMPORT_SOURCE, encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "dispatcher_redirected_git_dir.py"],
+        cwd=git_repository,
+        capture_output=True,
+        check=True,
+        env=build_fixture_git_environment(),
+    )
+    redirected_repository = tmp_path / "dispatcher_redirected_repository"
+    redirected_repository.mkdir()
+    subprocess.run(
+        ["git", "init"],
+        cwd=redirected_repository,
+        capture_output=True,
+        check=True,
+        env=build_fixture_git_environment(),
+    )
+    dispatcher_environment = os.environ.copy()
+    dispatcher_environment["GIT_DIR"] = str(redirected_repository / ".git")
+
+    completed_dispatcher = _run_post_tool_use_dispatcher(
+        "Write", tracked_file, dispatcher_environment
+    )
+
+    assert completed_dispatcher.returncode == 0
+    assert "import os" in tracked_file.read_text(encoding="utf-8")
+
+
+def test_dispatcher_run_uses_hook_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured_options: dict[str, object] = {}
+
+    def capture_dispatcher_run(
+        command: list[str], **options: object
+    ) -> subprocess.CompletedProcess[str]:
+        captured_options.update(options)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", capture_dispatcher_run)
+
+    _run_post_tool_use_dispatcher("Write", tmp_path / "module.py", {})
+
+    assert captured_options["timeout"] == HOOK_RUN_TIMEOUT_SECONDS
 
 
 def test_python_formatting_preserves_crlf_line_endings(git_repository: Path) -> None:

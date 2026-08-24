@@ -30,6 +30,7 @@ GIT_LS_FILES_TIMEOUT_SECONDS = 5
 WRITE_TOOL_NAME = "Write"
 PYTHON_FORMATTER_NAME = "python"
 PRETTIER_FORMATTER_NAME = "prettier"
+NPX_EXECUTABLE = "npx.cmd" if os.name == "nt" else "npx"
 FORMATTER_DIAGNOSTIC_TEMPLATE = "auto-formatter: %s: %s\n"
 FORMATTER_DIAGNOSTIC_SEPARATOR = "\n"
 FORMATTER_TIMEOUT_DIAGNOSTIC_TEMPLATE = "auto-formatter: %s timed out after %d seconds\n"
@@ -116,19 +117,36 @@ def is_untracked_in_git(file_path: str) -> bool:
             text=True,
             cwd=containing_directory,
             timeout=GIT_LS_FILES_TIMEOUT_SECONDS,
+            env=_build_git_command_environment(),
         )
         return git_check.returncode != 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
 
 
-def is_protected_path(file_path: str) -> bool:
-    hooks_directory = os.path.normcase(os.path.abspath(HOOKS_DIR))
-    candidate_path = os.path.normcase(os.path.abspath(file_path))
+def _build_git_command_environment() -> dict[str, str]:
+    return {
+        each_name: each_value
+        for each_name, each_value in os.environ.items()
+        if not each_name.upper().startswith("GIT_")
+    }
+
+
+def _is_path_under_directory(candidate_path: str, directory_path: str) -> bool:
     try:
-        return os.path.commonpath((candidate_path, hooks_directory)) == hooks_directory
+        return os.path.commonpath((candidate_path, directory_path)) == directory_path
     except ValueError:
         return False
+
+
+def is_protected_path(file_path: str) -> bool:
+    lexical_hooks_directory = os.path.normcase(os.path.abspath(HOOKS_DIR))
+    lexical_candidate_path = os.path.normcase(os.path.abspath(file_path))
+    resolved_hooks_directory = os.path.normcase(os.path.realpath(HOOKS_DIR))
+    resolved_candidate_path = os.path.normcase(os.path.realpath(file_path))
+    return _is_path_under_directory(
+        lexical_candidate_path, lexical_hooks_directory
+    ) or _is_path_under_directory(resolved_candidate_path, resolved_hooks_directory)
 
 
 def formatter_name_for_path(file_path: str) -> str | None:
@@ -234,7 +252,13 @@ def formatter_name_for_command(command: list[str]) -> str:
 
 
 def _run_prettier(file_path: str) -> None:
-    prettier_command = ["npx", "--yes", "prettier", "--write", file_path]
+    prettier_command = [
+        NPX_EXECUTABLE,
+        "--yes",
+        "prettier",
+        "--write",
+        os.path.realpath(file_path),
+    ]
     completed_process, _did_timeout = _run_command(
         prettier_command, file_path, JS_FORMAT_TIMEOUT_SECONDS
     )
