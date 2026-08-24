@@ -46,7 +46,7 @@ Use this skill for a pull request that needs extraction, capability-oriented
 naming, cleanup and review convergence, and a focused child increment.
 
 Required input: a PR URL, number, or branch. If the target is missing, respond
-exactly: `Give a GitHub PR number or URL for pr-cleanup.`
+exactly: `Give a GitHub PR number, URL, or branch for pr-cleanup.`
 
 Use the repository that owns the target PR. Keep the parent and child PRs in
 draft state until their applicable Ready gate is complete.
