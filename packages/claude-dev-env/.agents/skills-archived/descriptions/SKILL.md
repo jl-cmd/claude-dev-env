@@ -47,5 +47,5 @@ summary, scope, verification, and risk information aligned with the pull
 request's current contents.
 
 Use [reviews](../reviews/SKILL.md#review-workflow) for substantive code
-assessment and [small-cl](../small-cl/SKILL.md#what-a-focused-pull-request-contains)
+assessment and [pr-small-cl](../../skills/pr-small-cl/SKILL.md#what-a-focused-pull-request-contains)
 to establish a focused scope.

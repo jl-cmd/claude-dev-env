@@ -41,7 +41,7 @@ const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
-    'small-cl',
+    'pr-small-cl',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',

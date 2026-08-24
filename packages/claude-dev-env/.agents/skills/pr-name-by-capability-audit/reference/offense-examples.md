@@ -1,6 +1,6 @@
 # Offense examples (this repo)
 
-Classify by **role** — the reusable work the surface performs — not by matching a string list. For whether code belongs in `shared_utils` vs a workflow package, invoke `shared-extraction-audit`; this map only scores names.
+Classify by **role** — the reusable work the surface performs — not by matching a string list. For whether code belongs in `shared_utils` vs a workflow package, invoke `pr-shared-extraction-audit`; this map only scores names.
 
 ## Quick classifier
 
