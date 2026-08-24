@@ -114,6 +114,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | File | Role |
 |---|---|
 | `_gh_body_arg_utils.py` | Parsing helpers for `gh_body_arg_blocker.py` |
+| `test_hook_subprocess_support.py` | Shared subprocess runner for blocking-hook behavior tests |
 
 ## Conventions
 
