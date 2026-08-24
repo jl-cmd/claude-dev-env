@@ -24,6 +24,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
 | `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |
 | `dead_module_constant_constants.py` | Patterns for detecting unexported `UPPER_SNAKE` constants in `*_constants.py` modules |
+| `destructive_command_environment_constants.py` | Environment keys and shared truthy values used by destructive-command hooks |
 | `destructive_command_segment_constants.py` | The list of destructive shell command patterns the blocker matches |
 | `docstring_rule_gate_count_blocker_constants.py` | Target rule basename, spelled-out-number lookup, count-clause and `check_*` validator patterns, and block-message text for the docstring-rule gate-count staleness blocker |
 | `duplicate_function_body_constants.py` | Hashing and comparison config for the duplicate-body check |
