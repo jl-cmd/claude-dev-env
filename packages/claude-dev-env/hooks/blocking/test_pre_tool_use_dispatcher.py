@@ -698,10 +698,16 @@ def test_dispatcher_edit_applies_both_groups() -> None:
 
 
 def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit tool triggers only Group B (8 hooks), not Group A."""
+    """MultiEdit applies to 9 hosted Group-B hooks, including the sensitive protector."""
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    assert len(all_multi_edit_entries) == 8, (
-        f"MultiEdit tool must apply to exactly 8 Group-B hooks, got {len(all_multi_edit_entries)}"
+    all_multi_edit_script_paths = {
+        each_entry.script_relative_path for each_entry in all_multi_edit_entries
+    }
+    assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
+        "sensitive_file_protector belongs in the MultiEdit applicable set"
+    )
+    assert len(all_multi_edit_entries) == 9, (
+        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
     )
 
 
