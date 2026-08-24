@@ -69,6 +69,17 @@ def build_bash_payload(command: str, *, tool_input_cwd: str | Path | None = None
     )
 
 
+def read_hook_permission_decision(stdout_text: str) -> tuple[str, str]:
+    """Read the hook permission decision and reason from serialized output."""
+    if not stdout_text.strip():
+        return "", ""
+    hook_output_by_name = json.loads(stdout_text)["hookSpecificOutput"]
+    return (
+        hook_output_by_name["permissionDecision"],
+        hook_output_by_name["permissionDecisionReason"],
+    )
+
+
 def _environment_name_comparison_key(environment_name: str) -> str:
     if os.name == "nt":
         return environment_name.casefold()
