@@ -6,7 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HOOK_DIRECTORY = Path(__file__).resolve().parent
+sys.path.insert(0, str(HOOK_DIRECTORY))
 
 from pytest_testpaths_orphan_blocker import (
     _explicit_testpaths,
@@ -15,7 +16,7 @@ from pytest_testpaths_orphan_blocker import (
     is_test_file,
 )
 
-HOOK_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "pytest_testpaths_orphan_blocker.py")
+HOOK_SCRIPT_PATH = HOOK_DIRECTORY / "pytest_testpaths_orphan_blocker.py"
 
 PYPROJECT_WITH_EXPLICIT_TESTPATHS = (
     "[tool.pytest.ini_options]\n"
@@ -51,21 +52,22 @@ def _write_package(package_root: Path, pyproject_text: str) -> None:
     (package_root / "pyproject.toml").write_text(pyproject_text, encoding="utf-8")
 
 
-class _RunHook:
-    """Helper to test the hook via subprocess, mirroring the sibling test style."""
-
-    def __call__(self, tool_name: str, tool_input: dict) -> subprocess.CompletedProcess:
-        payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
-        return subprocess.run(
-            [sys.executable, HOOK_SCRIPT_PATH],
-            input=payload,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-
-_run_hook = _RunHook()
+def _run_hook(
+    tool_name: str, tool_input: dict, home_directory: Path
+) -> subprocess.CompletedProcess:
+    """Run the hook in a subprocess with the supplied tool payload."""
+    payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+    child_environment = os.environ.copy()
+    child_environment["HOME"] = str(home_directory)
+    child_environment["USERPROFILE"] = str(home_directory)
+    return subprocess.run(
+        [sys.executable, HOOK_SCRIPT_PATH],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=child_environment,
+    )
 
 
 def test_is_test_file_accepts_test_prefixed_python_file() -> None:
@@ -129,11 +131,13 @@ def test_hook_blocks_create_of_unregistered_test_file(tmp_path: Path) -> None:
             "file_path": str(unregistered_test_file),
             "content": "def test_x() -> None:\n    assert True\n",
         },
+        tmp_path,
     )
     decision = json.loads(completed.stdout)
     hook_output = decision["hookSpecificOutput"]
     assert hook_output["permissionDecision"] == "deny"
     assert "theme_assets/tests" in hook_output["permissionDecisionReason"]
+    assert (tmp_path / ".claude" / "logs" / "hook-blocks.log").is_file()
 
 
 def test_hook_allows_create_of_registered_test_file(tmp_path: Path) -> None:
@@ -146,6 +150,7 @@ def test_hook_allows_create_of_registered_test_file(tmp_path: Path) -> None:
             "file_path": str(registered_test_file),
             "content": "def test_x() -> None:\n    assert True\n",
         },
+        tmp_path,
     )
     assert completed.stdout.strip() == ""
 
@@ -163,6 +168,7 @@ def test_hook_ignores_edit_of_existing_test_file(tmp_path: Path) -> None:
             "old_string": "assert True",
             "new_string": "assert 1 == 1",
         },
+        tmp_path,
     )
     assert completed.stdout.strip() == ""
 
@@ -174,6 +180,7 @@ def test_hook_ignores_non_test_python_file(tmp_path: Path) -> None:
     completed = _run_hook(
         "Write",
         {"file_path": str(production_module), "content": "VALUE = 1\n"},
+        tmp_path,
     )
     assert completed.stdout.strip() == ""
 
@@ -242,6 +249,6 @@ def test_hook_does_not_crash_on_scalar_tool_ancestor(tmp_path: Path) -> None:
             "file_path": str(any_test_file),
             "content": "def test_x() -> None:\n    assert True\n",
         },
+        tmp_path,
     )
-    assert completed.returncode == 0
     assert completed.stdout.strip() == ""
