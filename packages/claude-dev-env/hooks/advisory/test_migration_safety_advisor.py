@@ -100,6 +100,7 @@ def test_dispatcher_surfaces_migration_warning_for_edit(tmp_path: Path) -> None:
     permission_fields = _permission_fields(dispatched_payload)
 
     assert permission_fields["permissionDecision"] == "allow"
+    assert "RemoveField" in _text_field(permission_fields, "additionalContext")
     assert "MIGRATION SAFETY" in _text_field(dispatched_payload, "systemMessage")
 
 
