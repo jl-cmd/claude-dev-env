@@ -29,7 +29,7 @@ Each skill hub defines its command name and finding classification. Commands use
 8. Record exact tests and outcomes: each test command, exit code, and outcome.
 9. Return selected-candidate-ready proposal evidence with the proposal ID, isolated worktree path, changed paths, findings, tests, and outcomes.
 10. Keep commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations disabled.
-11. Add the proposal ID to the downstream owner's selected or dispositioned proposal collection. Give each later finding a new proposal ID and evidence record.
+11. Return the proposal for downstream disposition. The downstream owner adds the proposal ID to its selected or dispositioned proposal collection. Reapplication uses exactly the selected records and their changed paths. Give each later finding a new proposal ID and evidence record.
 
 ## Evidence record
 
@@ -54,5 +54,3 @@ tests:
     outcome: <exact outcome>
 downstream_selection: required
 ```
-
-The downstream owner adds proposal IDs from these records to selected or dispositioned collections. Reapplication uses exactly the selected records and their changed paths. New findings use new records.

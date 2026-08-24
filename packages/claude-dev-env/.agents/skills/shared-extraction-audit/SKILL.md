@@ -5,7 +5,7 @@ description: Audits pull requests and packages for general helpers living in wor
 
 # Shared Extraction Audit
 
-Audit PRs and packages, report findings, and apply extraction fixes by default to keep **orchestration packages thin** and **shared_utils canonical**.
+Audit PRs and packages for reusable behavior placed in workflow code. Keep **orchestration packages thin** and **shared_utils canonical**.
 
 ## When to use
 
@@ -174,4 +174,4 @@ See [reference/examples.md](reference/examples.md) for cert_fix_queue (#1965) an
 | `reference/offense-taxonomy.md` | Offense signals and priority guide |
 | `reference/examples.md` | Audit examples and fix order |
 | `../_shared/pr-loop/preflight-proposal.md` | Shared isolated proposal mode and evidence record |
-| `../_shared/pr-loop/preflight-proposal.contract.test.mjs` | Cross-skill mode and package-pointer test |
+| `../_shared/pr-loop/preflight-proposal.contract.test.mjs` | Cross-skill mode and contract test |

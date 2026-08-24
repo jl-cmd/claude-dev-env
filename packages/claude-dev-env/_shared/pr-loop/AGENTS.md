@@ -25,4 +25,4 @@ Runtime documents and scripts shared by every PR-loop skill. Changes here affect
 
 ## Breaking-change rule
 
-Any shape change in `audit-contract.md` or `audit-reply-template.md` requires updating every consuming skill in the same commit.
+Any shape change in a canonical contract listed under **Key documents** requires updating every consuming skill in the same commit.
