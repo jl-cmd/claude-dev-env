@@ -18,6 +18,7 @@ blocks on infrastructure trouble.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -601,6 +602,35 @@ def _build_denial(all_offending_paths: list[str]) -> dict:
     }
 
 
+def _resolve_hook_working_directory(
+    bash_command: str,
+    all_hook_payload: dict[str, object],
+) -> str | None:
+    """Resolve the commit directory from the command or its event payload.
+
+    Args:
+        bash_command: Bash command whose explicit directory takes precedence.
+        all_hook_payload: PreToolUse payload carrying the event ``cwd``.
+
+    Returns:
+        The validated commit directory, or None for the hook process directory.
+    """
+    command_directory = extract_git_working_directory(bash_command)
+    event_directory = all_hook_payload.get("cwd")
+    if not isinstance(event_directory, str) or not event_directory:
+        return resolve_directory(command_directory)
+    validated_event_directory = resolve_directory(event_directory)
+    if command_directory is None:
+        return validated_event_directory
+    expanded_command_directory = os.path.expanduser(command_directory)
+    command_path = Path(expanded_command_directory)
+    if command_path.is_absolute():
+        return resolve_directory(str(command_path))
+    if validated_event_directory is None:
+        return None
+    return resolve_directory(str(Path(validated_event_directory) / command_path))
+
+
 def main() -> None:
     """Deny a git commit that would drop a tracked file that was edited yet left unstaged."""
     hook_payload = read_hook_input_dictionary_from_stdin()
@@ -620,7 +650,7 @@ def main() -> None:
     session_edited_keys = _session_edited_keys(session_id)
     if not session_edited_keys:
         sys.exit(0)
-    working_directory = resolve_directory(extract_git_working_directory(bash_command))
+    working_directory = _resolve_hook_working_directory(bash_command, hook_payload)
     repository_root = resolve_repository_root(working_directory)
     if repository_root is None:
         sys.exit(0)
