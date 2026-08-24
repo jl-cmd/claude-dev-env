@@ -108,6 +108,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'pr-shared-extraction',
     'show',
     'skill-builder',
+    'small-cl',
     'pr-small-cl',
     'source-command-logifix',
     'source-command-sr-loop',
