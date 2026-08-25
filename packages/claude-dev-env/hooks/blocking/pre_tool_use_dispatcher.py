@@ -496,13 +496,15 @@ def _emit_allow_decision(decision: DispatcherDecision) -> None:
     allow_payload: dict[str, object] = {
         "hookSpecificOutput": allow_hook_specific,
     }
-    if decision.all_additional_context:
+    all_unique_additional_context = unique_first_seen_strings(decision.all_additional_context)
+    all_unique_system_messages = unique_first_seen_strings(decision.all_system_messages)
+    if all_unique_additional_context:
         allow_hook_specific["additionalContext"] = CONTEXT_JOIN_SEPARATOR.join(
-            decision.all_additional_context
+            all_unique_additional_context
         )
-    if decision.all_system_messages:
+    if all_unique_system_messages:
         allow_payload["systemMessage"] = SYSTEM_MESSAGE_JOIN_SEPARATOR.join(
-            decision.all_system_messages
+            all_unique_system_messages
         )
     sys.stdout.write(json.dumps(allow_payload) + "\n")
     sys.stdout.flush()
