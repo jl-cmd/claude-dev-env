@@ -8,17 +8,41 @@ environment variable to a code file whose source never references that variable.
 
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 
-_blocking_dir = str(Path(__file__).resolve().parent)
-if _blocking_dir not in sys.path:
-    sys.path.insert(0, _blocking_dir)
+_BLOCKING_DIRECTORY = Path(__file__).resolve().parent
+if str(_BLOCKING_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_BLOCKING_DIRECTORY))
 
 from env_var_table_code_drift_blocker import (  # noqa: E402
     find_drift_rows,
     is_markdown_file,
 )
+from test_hook_subprocess_support import (  # noqa: E402
+    assert_hook_deny_log_contains,
+    run_hook_as_subprocess,
+)
+
+HOOK_PATH = _BLOCKING_DIRECTORY / "env_var_table_code_drift_blocker.py"
+
+
+def _run_hook(
+    file_path: Path, content: str, temporary_repository_root: Path
+) -> subprocess.CompletedProcess[str]:
+    relative_file_path = file_path.relative_to(temporary_repository_root)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(relative_file_path), "content": content},
+    }
+    return run_hook_as_subprocess(
+        hook_script_path=HOOK_PATH,
+        payload_text=json.dumps(payload),
+        working_directory=temporary_repository_root,
+        home_directory=temporary_repository_root,
+    )
 
 
 def _write(file_path: Path, content: str) -> None:
@@ -62,6 +86,49 @@ def test_passes_when_variable_present_in_code_file(tmp_path: Path) -> None:
         "| `NTFY_TOPIC` | `automation_logging/__init__.py` | ntfy topic |\n"
     )
     assert find_drift_rows(content, doc_path.parent) == []
+
+
+def test_production_entrypoint_allows_aligned_table(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(
+        tmp_path / "automation_logging" / "__init__.py",
+        'topic = os.environ["NTFY_TOPIC"]\n',
+    )
+    doc_path = tmp_path / "docs" / "configuration.md"
+    doc_path.parent.mkdir()
+    content = (
+        "| Variable | Used By | Purpose |\n"
+        "|----------|---------|---------|\n"
+        "| `NTFY_TOPIC` | `automation_logging/__init__.py` | ntfy topic |\n"
+    )
+
+    completed = _run_hook(doc_path, content, tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
+
+
+def test_production_entrypoint_denies_drifted_table(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "auth" / "google_auth.py", "def load():\n    return read_bws_secret()\n")
+    doc_path = tmp_path / "docs" / "configuration.md"
+    doc_path.parent.mkdir()
+    content = (
+        "| Variable | Used By | Purpose |\n"
+        "|----------|---------|---------|\n"
+        "| `GOOGLE_APPLICATION_CREDENTIALS` | `auth/google_auth.py` | Path to JSON |\n"
+    )
+
+    completed = _run_hook(doc_path, content, tmp_path)
+
+    parsed_payload = json.loads(completed.stdout)
+    hook_specific_output = parsed_payload["hookSpecificOutput"]
+    assert completed.returncode == 0, completed.stderr
+    assert hook_specific_output["permissionDecision"] == "deny"
+    assert "GOOGLE_APPLICATION_CREDENTIALS -> auth/google_auth.py" in hook_specific_output[
+        "permissionDecisionReason"
+    ]
+    assert_hook_deny_log_contains(tmp_path, "env_var_table_code_drift_blocker.py")
 
 
 def test_skips_row_whose_code_file_is_absent(tmp_path: Path) -> None:

@@ -76,7 +76,7 @@ Use full capability names for files, modules, functions, variables, branches, an
 
   When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read the small-changelists guide for the numbers, the allowed exceptions, and how to split.
 
-Use `~/.claude/skills/small-cl/SKILL.md` for change-size guidance and review-sized boundaries.
+Use `~/.claude/skills/pr-small-cl/SKILL.md` for change-size guidance and review-sized boundaries.
 
 ## Execution and delegation
 

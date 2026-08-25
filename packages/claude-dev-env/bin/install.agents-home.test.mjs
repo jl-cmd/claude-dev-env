@@ -33,6 +33,10 @@ const SHIPPED_SKILL_NAME = 'privacy-hygiene';
 const ELI5_SKILL_NAME = 'eli5';
 const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
 const PERSONAL_SKILL_NAME = 'my-notes';
+const SHARED_DIRECTORY_NAME = '_shared';
+const PR_LOOP_DIRECTORY_NAME = 'pr-loop';
+const PREFLIGHT_PROPOSAL_FILE_NAME = 'preflight-proposal.md';
+const PREFLIGHT_PROPOSAL_POINTER = '@~/.claude/_shared/pr-loop/preflight-proposal.md';
 
 /**
  * @param {string} homeDirectory
@@ -51,6 +55,24 @@ function runInstaller(homeDirectory, extraArguments) {
             CODEX_HOME: join(homeDirectory, '.codex'),
         },
     });
+}
+
+/**
+ * @param {{ homeDirectory: string, skillsInstallDirectory: string }} installationPaths
+ */
+function assertProposalContractInstallation(installationPaths) {
+    const { homeDirectory, skillsInstallDirectory } = installationPaths;
+    const allContractPathSegments = [
+        SHARED_DIRECTORY_NAME, PR_LOOP_DIRECTORY_NAME, PREFLIGHT_PROPOSAL_FILE_NAME,
+    ];
+    const installedPointerPath = join(skillsInstallDirectory, ...allContractPathSegments);
+    const pointerLine = readFileSync(installedPointerPath, 'utf8').trimEnd().split('\n').at(-1);
+    const allTargetSegments = pointerLine.slice('@~/'.length).split('/');
+    const installedContractPath = join(homeDirectory, ...allTargetSegments);
+    const sourceContractPath = join(PACKAGE_DIRECTORY, ...allContractPathSegments);
+
+    assert.equal(pointerLine, PREFLIGHT_PROPOSAL_POINTER);
+    assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
 }
 
 test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
@@ -106,6 +128,7 @@ test('a full install writes skills and agents under .agents and points .claude a
         );
         assert.equal(realpathSync(lookupSkillFile), realpathSync(canonicalSkillFile));
         assert.equal(realpathSync(lookupEli5SkillFile), realpathSync(canonicalEli5SkillFile));
+        assertProposalContractInstallation({ homeDirectory, skillsInstallDirectory });
         assert.equal(
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),

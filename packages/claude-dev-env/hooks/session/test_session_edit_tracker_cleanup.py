@@ -127,10 +127,23 @@ def test_should_keep_current_session_tracker_on_continuation(
     redirected_temp_directory: pathlib.Path, continuation_source: str
 ) -> None:
     current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
-    _run_main_with_stdin(
-        _session_continuation_payload("currentsession", continuation_source)
-    )
+    _run_main_with_stdin(_session_continuation_payload("currentsession", continuation_source))
     assert current_file.exists()
+
+
+def test_resume_preserves_edit_record(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    current_file = _seed_edit_file(redirected_temp_directory, "currentsession")
+    current_file.write_text(
+        json.dumps({ALL_EDITED_FILE_PATHS_KEY: ["packages/example.py"]}),
+        encoding="utf-8",
+    )
+    _run_main_with_stdin(_session_continuation_payload("currentsession", "resume"))
+
+    assert json.loads(current_file.read_text(encoding="utf-8")) == {
+        ALL_EDITED_FILE_PATHS_KEY: ["packages/example.py"]
+    }
 
 
 def test_should_remove_current_session_tracker_on_session_end(
