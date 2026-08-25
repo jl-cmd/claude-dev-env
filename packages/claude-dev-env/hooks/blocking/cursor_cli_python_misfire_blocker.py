@@ -87,7 +87,8 @@ def main() -> None:
     if tool_name not in ALL_SUPPORTED_TOOL_NAMES:
         sys.exit(0)
 
-    command = hook_input.get(TOOL_INPUT_KEY, {}).get(COMMAND_KEY, "")
+    tool_input = hook_input.get(TOOL_INPUT_KEY) or {}
+    command = tool_input.get(COMMAND_KEY, "") if isinstance(tool_input, dict) else ""
     if not is_cursor_python_gate_misfire(command):
         sys.exit(0)
 

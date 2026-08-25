@@ -51,7 +51,12 @@ PERMISSION_DECISION_REASON_KEY = "permissionDecisionReason"
 CALLING_HOOK_NAME = "cursor_cli_python_misfire_blocker.py"
 
 CURSOR_LAUNCH_PATTERN = re.compile(
-    r"(?i)(?:^|[\s;&|])(?:cursor(?:\.cmd|\.exe)?|Cursor\.exe)\b"
+    r"(?i)"
+    r"(?:"
+    r"(?:^|[\s;&|])(?:cursor(?:\.cmd|\.exe)?)(?=\s|[\"']|$)"
+    r"|"
+    r"[\\/](?:cursor(?:\.cmd|\.exe)?)(?=\s|[\"']|$)"
+    r")"
 )
 GATE_SCRIPT_PATTERN = re.compile(r"(?i)code_rules_gate\.py\b")
 GATE_FLAG_PATTERN = re.compile(

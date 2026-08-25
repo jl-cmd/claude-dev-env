@@ -79,6 +79,36 @@ def test_blocks_start_process_cursor_with_quoted_gate_flag() -> None:
     assert is_cursor_python_gate_misfire(command) is True
 
 
+def test_blocks_quoted_full_path_cursor_exe_with_gate_flags() -> None:
+    command = (
+        r"& 'C:\Program Files\Cursor\Cursor.exe' "
+        r"code_rules_gate.py --base origin/main"
+    )
+    assert is_cursor_python_gate_misfire(command) is True
+
+
+def test_blocks_unquoted_absolute_cursor_exe_with_gate_flags() -> None:
+    command = (
+        r"C:\Apps\Cursor\Cursor.exe code_rules_gate.py --base origin/main"
+    )
+    assert is_cursor_python_gate_misfire(command) is True
+
+
+def test_allows_relative_path_under_cursor_directory() -> None:
+    assert (
+        is_cursor_python_gate_misfire(
+            r"cursor\fix\x\code_rules_gate.py --base origin/main"
+        )
+        is False
+    )
+    assert (
+        is_cursor_python_gate_misfire(
+            "cursor/fix/x/code_rules_gate.py --base origin/main"
+        )
+        is False
+    )
+
+
 def test_allows_cursor_open_of_non_python_file() -> None:
     assert is_cursor_python_gate_misfire("cursor README.md") is False
 
@@ -168,3 +198,11 @@ def test_main_passes_wrong_tool_name() -> None:
 
 def test_main_passes_malformed_json() -> None:
     assert _run_main_with_io("not valid json {{{") == ""
+
+
+def test_main_passes_when_tool_input_is_null() -> None:
+    hook_input = {
+        "tool_name": "Bash",
+        "tool_input": None,
+    }
+    assert _run_main_with_io(json.dumps(hook_input)) == ""
