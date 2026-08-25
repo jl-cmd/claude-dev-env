@@ -520,8 +520,9 @@ def render_codex_failure_blast_radius(rule_content: str) -> str:
 def _build_codex_instruction_projection(config: MaterializerConfig) -> PlannedFile | None:
     """Build the managed AGENTS.md projection when the canonical rule is present."""
     source_path = config.source_root / failure_blast_radius_rule_relative_path
-    if not source_path.is_file():
+    if not source_path.exists() and not _is_reparse_point(source_path):
         return None
+    source_path = _validated_source_file(config, failure_blast_radius_rule_relative_path, "failure blast-radius rule")
     rule_content = source_path.read_text(encoding="utf-8")
     projected_content = render_codex_failure_blast_radius(rule_content)
     return PlannedFile(
@@ -543,6 +544,22 @@ def _read_json_object(file_path: Path, description: str) -> dict[str, object]:
     if not all(isinstance(each_key, str) for each_key in parsed_json):
         raise MaterializerError(f"{description} requires string keys: {file_path}")
     return {each_key: each_record for each_key, each_record in parsed_json.items()}
+
+
+def _validated_source_file(
+    config: MaterializerConfig, relative_path: str, description: str
+) -> Path:
+    """Resolve one source file while rejecting reparse points and escapes."""
+    source_path = config.source_root.joinpath(*relative_path.split(path_separator))
+    current_path = config.source_root
+    for each_part in relative_path.split(path_separator):
+        current_path /= each_part
+        if current_path.exists() and _is_reparse_point(current_path):
+            raise MaterializerError(f"{description} source reparse point is not allowed: {relative_path}")
+    resolved_path = _validate_containment(config.source_root, source_path)
+    if not resolved_path.is_file():
+        raise MaterializerError(f"{description} source file is missing: {relative_path}")
+    return resolved_path
 
 
 def _validated_agent_iterable(candidate: object) -> tuple[ClaudeAgent, ...]:
@@ -571,7 +588,11 @@ def _find_codex_hook_source(config: MaterializerConfig) -> Path | None:
         config.source_root / codex_hook_manifest_source_path,
         config.source_root / Path(codex_hook_manifest_source_path).name,
     )
-    return next((each_path for each_path in all_candidates if each_path.is_file()), None)
+    for each_path in all_candidates:
+        if each_path.exists() or _is_reparse_point(each_path):
+            relative_path = each_path.relative_to(config.source_root).as_posix()
+            return _validated_source_file(config, relative_path, "Codex hook manifest")
+    return None
 
 
 def _resolved_codex_enforcer_command(config: MaterializerConfig) -> str:
@@ -633,6 +654,41 @@ def _is_code_rules_enforcer_hook(all_hook_record: dict[str, object]) -> bool:
         or each_token.endswith(codex_enforcer_path_suffix)
         for each_token in all_command_tokens
     )
+
+
+def _codex_enforcer_hooks(all_manifest: object) -> tuple[dict[str, object], ...]:
+    """Return enforcer records from the target apply-patch matcher."""
+    if not isinstance(all_manifest, dict):
+        return ()
+    all_events = all_manifest.get("hooks")
+    if not isinstance(all_events, dict):
+        return ()
+    all_pre_tool_use = all_events.get(codex_hook_event_name)
+    if not isinstance(all_pre_tool_use, list):
+        return ()
+    all_enforcer_hooks: list[dict[str, object]] = []
+    for each_entry in all_pre_tool_use:
+        if not isinstance(each_entry, dict) or each_entry.get("matcher") != codex_hook_matcher:
+            continue
+        for each_hook in _hook_records(each_entry.get("hooks", [])):
+            if _is_code_rules_enforcer_hook(each_hook):
+                all_enforcer_hooks.append(each_hook)
+    return tuple(all_enforcer_hooks)
+
+
+def _has_modified_codex_enforcer_hook(
+    current_bytes: bytes, planned_content: ManagedContent
+) -> bool:
+    """Report whether an existing enforcer record differs from the plan."""
+    try:
+        current_manifest = json.loads(current_bytes.decode("utf-8"))
+        planned_manifest = json.loads(content_to_bytes(planned_content).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return True
+    current_hooks = _codex_enforcer_hooks(current_manifest)
+    if not current_hooks:
+        return False
+    return current_hooks != _codex_enforcer_hooks(planned_manifest)
 
 
 def _merge_codex_hook_manifest(
@@ -710,11 +766,9 @@ def _build_codex_hook_dependency_projection(
     """Build the reviewed source files required by the target enforcer."""
     all_dependencies: list[PlannedFile] = []
     for each_relative_path in codex_hook_dependency_manifest:
-        source_path = config.source_root / each_relative_path
-        if not source_path.is_file():
-            raise MaterializerError(
-                f"source file is missing from the reviewed hook source list: {each_relative_path}"
-            )
+        source_path = _validated_source_file(
+            config, each_relative_path, "reviewed Codex hook dependency"
+        )
         try:
             dependency_content = source_path.read_bytes()
         except OSError as error:
@@ -1119,6 +1173,7 @@ def _record_target_state(config: MaterializerConfig, planned_file: PlannedFile, 
 
         target absent                    -> ok:   publish
         on-disk bytes == planned bytes   -> ok:   unchanged, no write
+        _has_modified_codex_enforcer_hook -> flag: conflicted, preserved untouched
         on-disk hash == manifest hash    -> ok:   publish, the tool owns these bytes
         on-disk hash != manifest hash    -> flag: conflicted, preserved untouched
 
@@ -1140,6 +1195,9 @@ def _record_target_state(config: MaterializerConfig, planned_file: PlannedFile, 
         _record_matching_target(report, planned_file.target_relative_path, previous_record)
         return target_path, current_bytes, False
     if planned_file.action == codex_hook_merge_action:
+        if _has_modified_codex_enforcer_hook(current_bytes, planned_file.content):
+            _record_target_conflict(report, planned_file.target_relative_path, previous_record)
+            return target_path, current_bytes, False
         return target_path, current_bytes, True
     if _is_pristine_managed(previous_record, current_bytes):
         return target_path, current_bytes, True
