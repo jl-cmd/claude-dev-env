@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.21.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.0...claude-dev-env-v2.21.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **hooks:** ship plain-language question guard ([a9cb8b6](https://github.com/jl-cmd/claude-dev-env/commit/a9cb8b682d67f90ad800a1260068ad95ec41898d))
+* **materializer:** name source reparse failures by run scope ([a7d34e4](https://github.com/jl-cmd/claude-dev-env/commit/a7d34e45f329d040518da3896a45d8c9e154fb53))
+* **materializer:** protect source and hook ownership boundaries ([952f407](https://github.com/jl-cmd/claude-dev-env/commit/952f4075c1fa97db5b496d5c8898cbf8ffd5ad3c))
+
+
+### Tests
+
+* **codex:** verify projection and registration contracts ([780cf65](https://github.com/jl-cmd/claude-dev-env/commit/780cf653786100b321e489e6edb263189abcca0e))
+
 ## [2.21.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.20.0...claude-dev-env-v2.21.0) (2026-08-25)
 
 
