@@ -59,7 +59,7 @@ needed. Record the resulting decision in the pull request thread.
 
 - Use [reviews](../reviews/SKILL.md#review-workflow) for substantive code
   assessment.
-- Use [small-cl](../small-cl/SKILL.md#responding-to-review) for author-side
+- Use [pr-small-cl](../../skills/pr-small-cl/SKILL.md#responding-to-review) for author-side
   review responses and focused follow-up work.
 - Use [emergencies](../emergencies/SKILL.md#while-the-incident-is-active) for
   urgent production-change communication.

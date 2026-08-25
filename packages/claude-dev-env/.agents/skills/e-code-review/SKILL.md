@@ -4,12 +4,22 @@ description: >-
   Max-recall code review at a selectable effort level (low, medium, xhigh), with
   optional auto-fix and an auto-execute loop for any level. Triggers:
   /e-code-review, /e-code-review low, /e-code-review medium, /e-code-review
-  xhigh, /e-code-review <level> --fix, /e-code-review <level> loop.
+  xhigh, /e-code-review <level> --fix, /e-code-review <level> loop,
+  /e-code-review preflight-proposal.
 ---
 
 # e-code-review
 
 **Pick a level, run that review, optionally fix and loop.** Each level has its own procedure file. Fix application lives in `reference/fix.md`; repeat-until-clean lives in `reference/loop.md`.
+
+## Mode routing
+
+Resolve the first matching invocation before the normal refusal and loop rules:
+
+1. `preflight-proposal` requires `<pr_number>`, `--level <low|medium|xhigh>`, `--base-sha <immutable SHA>`, `--head-sha <immutable SHA>`, and `--worktree <isolated path>`. The caller supplies `low` as the default level; `medium` and `xhigh` are valid selections. Route the selected mode through [reference/preflight-proposal.md](reference/preflight-proposal.md) to establish proposal context. The mode runs `<review_level> --fix loop` locally and returns selected-candidate-ready proposal evidence.
+2. Normal mode follows the current level, `--fix`, and `loop` behavior.
+
+The proposal mode applies the canonical proposal contract at `@~/.claude/_shared/pr-loop/preflight-proposal.md`. The local extension selects the review level and records finding outcomes. The downstream owner records selected proposal IDs before reapplication; each new finding receives a new ID.
 
 ## Gotchas
 
@@ -61,6 +71,7 @@ Detail: `reference/effort-evaluation.md`.
 | `reference/xhigh.md` | xhigh review procedure — 10 angles, 1-vote verify, gap sweep |
 | `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
 | `reference/loop.md` | Repeat review/fix rounds until clean |
+| `reference/preflight-proposal.md` | Isolated local review, immutable SHAs, proposal evidence, and mutation boundary |
 | `reference/effort-evaluation.md` | Effort evaluation fixtures, evidence, and skill defaults |
 | `reference/runner-selection.md` | Runner selection map |
 | `scripts/finding_pipeline.py` | Collect every real finding; filter severity only later |

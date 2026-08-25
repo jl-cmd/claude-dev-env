@@ -26,21 +26,21 @@ def main() -> None:
 
     if found_unsafe:
         operations = ", ".join(found_unsafe)
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "ask",
-                        "permissionDecisionReason": (
-                            f"MIGRATION SAFETY: Contains {operations}. "
-                            "Post-launch, model changes MUST be backwards-compatible. "
-                            "Verify this won't break running instances during deployment."
-                        ),
-                    }
-                }
-            )
+        advisory_message = (
+            f"MIGRATION SAFETY: Contains {operations}. "
+            "Post-launch, model changes MUST be backwards-compatible. "
+            "Verify this won't break running instances during deployment."
         )
+        advisory_payload = {
+            "systemMessage": advisory_message,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": advisory_message,
+                "additionalContext": advisory_message,
+            },
+        }
+        print(json.dumps(advisory_payload))
 
     sys.exit(0)
 

@@ -1,8 +1,8 @@
-"""Behavior tests for the precommit_code_rules_gate PreToolUse hook.
+"""Behavior tests for the pass-through precommit_code_rules_gate hook.
 
 Each test builds a real git repository in a temporary directory, stages
 real files, and runs the hook script as a subprocess with a PreToolUse
-JSON payload on stdin — the exact production invocation path.
+JSON payload on stdin through the exact production invocation path.
 """
 
 import json
@@ -140,10 +140,6 @@ def run_hook(bash_command: str, working_directory: Path) -> subprocess.Completed
     )
 
 
-def parse_denial(hook_stdout: str) -> dict:
-    return json.loads(hook_stdout)["hookSpecificOutput"]
-
-
 def test_non_commit_command_passes_through(tmp_path: Path) -> None:
     initialize_repository(tmp_path)
     completed_hook = run_hook("git status", tmp_path)
@@ -157,20 +153,19 @@ def test_commit_with_clean_staged_python_file_is_allowed(tmp_path: Path) -> None
     completed_hook = run_hook("git commit -m add", tmp_path)
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
+    assert "Git commit proceeds to configured Git hooks." in completed_hook.stderr
 
 
-def test_commit_with_violating_staged_file_is_blocked(tmp_path: Path) -> None:
+def test_commit_with_staged_python_file_passes_through(tmp_path: Path) -> None:
     initialize_repository(tmp_path)
     stage_file(tmp_path, "totals.py", VIOLATING_MODULE_SOURCE)
     completed_hook = run_hook("git commit -m add", tmp_path)
     assert completed_hook.returncode == 0
-    denial = parse_denial(completed_hook.stdout)
-    assert denial["permissionDecision"] == "deny"
-    assert "totals.py" in denial["permissionDecisionReason"]
-    assert "Line" in denial["permissionDecisionReason"]
+    assert completed_hook.stdout.strip() == ""
+    assert "Git commit proceeds to configured Git hooks." in completed_hook.stderr
 
 
-def test_git_dash_c_commit_form_is_blocked(tmp_path: Path) -> None:
+def test_git_dash_c_commit_form_passes_through(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
     initialize_repository(repository_root)
@@ -180,9 +175,8 @@ def test_git_dash_c_commit_form_is_blocked(tmp_path: Path) -> None:
     quoted_root = str(repository_root)
     completed_hook = run_hook(f'git -C "{quoted_root}" commit -m add', elsewhere)
     assert completed_hook.returncode == 0
-    denial = parse_denial(completed_hook.stdout)
-    assert denial["permissionDecision"] == "deny"
-    assert "totals.py" in denial["permissionDecisionReason"]
+    assert completed_hook.stdout.strip() == ""
+    assert "Git commit proceeds to configured Git hooks." in completed_hook.stderr
 
 
 def test_commit_with_no_staged_python_files_is_allowed(tmp_path: Path) -> None:
@@ -193,7 +187,7 @@ def test_commit_with_no_staged_python_files_is_allowed(tmp_path: Path) -> None:
     assert completed_hook.stdout.strip() == ""
 
 
-def test_worktree_commit_reads_worktree_paired_tests_not_sibling_checkout(
+def test_worktree_commit_passes_through(
     tmp_path: Path,
 ) -> None:
     main_checkout = tmp_path / "main_checkout"
@@ -213,3 +207,4 @@ def test_worktree_commit_reads_worktree_paired_tests_not_sibling_checkout(
     )
     assert completed_hook.returncode == 0
     assert completed_hook.stdout.strip() == ""
+    assert "Git commit proceeds to configured Git hooks." in completed_hook.stderr

@@ -2,6 +2,7 @@
 
 import ast
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 _blocking_directory = str(Path(__file__).resolve().parent)
@@ -94,6 +95,18 @@ def _handler_matches_raise(handler: ast.ExceptHandler, type_name: str | None) ->
     return type_name in all_handler_names
 
 
+def _walk_loop_body(node: ast.AST) -> Iterator[ast.AST]:
+    """Walk loop statements without entering nested definition scopes."""
+    for each_child in ast.iter_child_nodes(node):
+        if isinstance(
+            each_child,
+            (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef, ast.Lambda),
+        ):
+            continue
+        yield each_child
+        yield from _walk_loop_body(each_child)
+
+
 def _boundary_guarded_raise_lines(tree: ast.Module) -> set[int]:
     """Collect raise lines already sitting inside a blast-radius boundary.
 
@@ -135,10 +148,9 @@ def _per_item_raise_nodes(tree: ast.Module) -> list[ast.Raise]:
     for each_node in ast.walk(tree):
         if not isinstance(each_node, (ast.For, ast.AsyncFor, ast.While)):
             continue
-        for each_body_node in each_node.body:
-            for each_inner in ast.walk(each_body_node):
-                if isinstance(each_inner, ast.Raise):
-                    all_raises.append(each_inner)
+        for each_inner in _walk_loop_body(each_node):
+            if isinstance(each_inner, ast.Raise):
+                all_raises.append(each_inner)
     return all_raises
 
 

@@ -107,6 +107,60 @@ def test_should_not_flag_exact_match_banned_identifier() -> None:
     assert issues == []
 
 
+def test_should_allow_annotated_public_definition_name_and_parameters() -> None:
+    source = (
+        "def validate_nine_patch_output_path(output_path: str) -> str:  # pragma: no-banned-noun\n"
+        "    local_output_path = output_path\n"
+        "    return local_output_path\n"
+    )
+    issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
+    assert any("local_output_path" in each_issue for each_issue in issues)
+    assert not any(
+        "Identifier 'validate_nine_patch_output_path'" in each_issue
+        or "Identifier 'output_path'" in each_issue
+        for each_issue in issues
+    )
+
+
+def test_enforcer_keeps_annotation_scope_on_definition_signature() -> None:
+    source = (
+        "def validate_nine_patch_output_path(output_path: str) -> str:  # pragma: no-banned-noun\n"
+        "    local_output_path = output_path\n"
+        "    return local_output_path\n"
+    )
+    issues = validate_content(source, PRODUCTION_FILE_PATH)
+    assert any("Identifier 'local_output_path'" in each_issue for each_issue in issues)
+    assert not any(
+        "Identifier 'validate_nine_patch_output_path'" in each_issue
+        or "Identifier 'output_path'" in each_issue
+        for each_issue in issues
+    )
+
+
+def test_should_keep_annotation_scoped_to_other_definitions_and_near_matches() -> None:
+    source = (
+        "def validate_nine_patch_output_paths(output_path: str) -> str:\n"
+        "    return output_path\n"
+        "def other_handler(other_output_path: str) -> str:\n"
+        "    return other_output_path\n"
+    )
+    issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
+    assert any(
+        "validate_nine_patch_output_paths" in each_issue for each_issue in issues
+    )
+    assert any("other_output_path" in each_issue for each_issue in issues)
+
+
+def test_should_require_the_exact_compatibility_annotation() -> None:
+    source = (
+        "def validate_nine_patch_output_path(output_path: str) -> str:  # pragma: no-banned-nouns\n"
+        "    return output_path\n"
+    )
+    issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)
+    assert any("validate_nine_patch_output_path" in each_issue for each_issue in issues)
+    assert any("output_path" in each_issue for each_issue in issues)
+
+
 def test_should_not_flag_dunder_method_with_banned_word() -> None:
     source = "class Foo:\n    def __init_data__(self) -> None: pass\n"
     issues = check_banned_noun_word_boundary(source, PRODUCTION_FILE_PATH)

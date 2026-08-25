@@ -147,3 +147,15 @@ def test_should_report_each_loop_raise_with_pending_blast_radius_declaration() -
     )
 
     assert len(check_blast_radius_declared(content, PRODUCTION_PATH)) == 2
+
+
+def test_should_ignore_raise_in_nested_helper_body() -> None:
+    """A nested helper body is checked at its own call boundary."""
+    content = (
+        "def run(all_members):\n"
+        "    for each_member in all_members:\n"
+        "        def validate_member():\n"
+        "            raise AssetError('member validation failed')\n"
+    )
+
+    assert check_blast_radius_declared(content, PRODUCTION_PATH) == []
