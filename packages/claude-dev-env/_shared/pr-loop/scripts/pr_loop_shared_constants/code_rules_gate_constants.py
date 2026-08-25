@@ -97,6 +97,10 @@ CODE_RULES_GATE_PYTHON_ENV_VAR: str = "CODE_RULES_GATE_PYTHON"
 
 CODE_RULES_GATE_PYTHONPATH_ENV_VAR: str = "CODE_RULES_GATE_PYTHONPATH"
 
+IMMEDIATE_SCOPE_ARGUMENT: str = "--immediate"
+
+IMMEDIATE_SCOPE_HELP: str = "Validate staged rules without running staged tests."
+
 PYTHONPATH_ENV_VAR: str = "PYTHONPATH"
 
 ALL_VENV_DIRECTORY_NAMES: tuple[str, ...] = (".venv", "venv")

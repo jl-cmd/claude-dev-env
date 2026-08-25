@@ -2,11 +2,63 @@
 
 import json
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_local_hooks_directory = str(Path(__file__).resolve().parent.parent)
+_all_local_import_directories = (
+    str(Path(_local_hooks_directory) / "blocking"),
+    _local_hooks_directory,
+)
+_all_normalized_local_import_directories = tuple(
+    os.path.normcase(os.path.realpath(each_directory))
+    for each_directory in _all_local_import_directories
+)
+_all_normalized_import_directories = tuple(
+    (
+        os.path.normcase(os.path.realpath(os.fspath(each_directory)))
+        if each_directory != "" and isinstance(each_directory, (str, os.PathLike))
+        else None
+    )
+    for each_directory in sys.path
+)
+_all_prioritized_import_directories = [
+    *_all_local_import_directories,
+    *(
+        each_directory
+        for each_directory, normalized_directory in zip(
+            sys.path,
+            _all_normalized_import_directories,
+        )
+        if normalized_directory not in _all_normalized_local_import_directories
+    ),
+]
+if sys.path != _all_prioritized_import_directories:
+    sys.path[:] = _all_prioritized_import_directories
+
+_all_local_module_prefixes = ("docstring_rule_gate_count_blocker", "hooks_constants")
+for each_module_name, each_module in tuple(sys.modules.items()):
+    if not isinstance(each_module_name, str) or not any(
+        each_module_name == each_prefix or each_module_name.startswith(each_prefix + ".")
+        for each_prefix in _all_local_module_prefixes
+    ):
+        continue
+    module_file = getattr(each_module, "__file__", None)
+    is_local_module = False
+    if isinstance(module_file, (str, os.PathLike)):
+        try:
+            is_local_module = Path(module_file).resolve().is_relative_to(_local_hooks_directory)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            is_local_module = False
+    if not is_local_module:
+        sys.modules.pop(each_module_name, None)
+
+del _all_local_module_prefixes
+del _all_normalized_import_directories
+del _all_normalized_local_import_directories
+del _all_prioritized_import_directories
 
 from docstring_rule_gate_count_blocker import (
     find_gate_count_drift,
@@ -103,6 +155,66 @@ _run_hook = _RunHook()
 def _target_rule_path(tmp_path: Path) -> Path:
     """Return a path inside *tmp_path* named after the guarded rule basename."""
     return tmp_path / TARGET_RULE_BASENAME
+
+
+def _run_test_module_bootstrap(
+    all_import_directories: list[str], run_count: int
+) -> list[str]:
+    """Run this test module against a supplied import path.
+
+    Args:
+        all_import_directories: Import path entries supplied to the module.
+        run_count: Number of module executions.
+
+    Returns:
+        Import path after the final module execution.
+    """
+    all_original_import_directories = list(sys.path)
+    try:
+        sys.path[:] = all_import_directories
+        for each_run_number in range(run_count):
+            runpy.run_path(__file__, run_name=f"bootstrap_probe_{each_run_number}")
+        return list(sys.path)
+    finally:
+        sys.path[:] = all_original_import_directories
+
+
+def should_prioritize_local_import_directories_over_foreign_hooks(tmp_path: Path) -> None:
+    foreign_hooks_directory = str(tmp_path / "hooks")
+    all_import_directories = [
+        foreign_hooks_directory,
+        _local_hooks_directory,
+        "",
+        "tail",
+    ]
+
+    assert _run_test_module_bootstrap(all_import_directories, 1) == [
+        *_all_local_import_directories,
+        foreign_hooks_directory,
+        "",
+        "tail",
+    ]
+
+
+def should_prioritize_local_import_directories_idempotently(tmp_path: Path) -> None:
+    foreign_hooks_directory = str(tmp_path / "hooks")
+    all_import_directories = [
+        foreign_hooks_directory,
+        _local_hooks_directory,
+        _all_local_import_directories[0] + os.sep + ".",
+        _local_hooks_directory + os.sep + ".",
+        "tail",
+    ]
+
+    all_import_directories_after_runs = _run_test_module_bootstrap(all_import_directories, 2)
+
+    assert all_import_directories_after_runs == [
+        *_all_local_import_directories,
+        foreign_hooks_directory,
+        "tail",
+    ]
+    assert all_import_directories_after_runs.count(_all_local_import_directories[0]) == 1
+    assert all_import_directories_after_runs.count(_local_hooks_directory) == 1
 
 
 def should_flag_target_rule_basename() -> None:

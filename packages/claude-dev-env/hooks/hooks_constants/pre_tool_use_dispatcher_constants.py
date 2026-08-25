@@ -82,7 +82,7 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
     ),
     HostedHookEntry(
         script_relative_path="blocking/sensitive_file_protector.py",
-        applicable_tool_names=ALL_WRITE_AND_EDIT_TOOL_NAMES,
+        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
         script_relative_path="blocking/pii_prevention_blocker.py",

@@ -4,6 +4,7 @@
 
     default mode: git diff since merge-base, joined with untracked files
     --staged:     validate the staged index; --paths: validate explicit files
+    --immediate:  validate staged rules and terminology at commit time
     every mode ends by naming how many files it inspected
 
 This entry module wires the ``code_rules_gate_parts`` submodules into one CLI
@@ -43,6 +44,7 @@ try:
         ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         EMPTY_FILE_SET_EXIT_CODE,
         EMPTY_FILE_SET_MESSAGE,
+        IMMEDIATE_SCOPE_ARGUMENT,
         INSPECTED_COUNT_MESSAGE,
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
         MINIMUM_STAGED_PYTEST_PYTHON_MAJOR,
@@ -263,29 +265,48 @@ def _run_explicit_paths_mode(
     )
 
 
-def _run_staged_mode(
+def _run_staged_validation(
     validate_content: enforcer_loading.ValidateContentCallable,
     arguments: argparse.Namespace,
     repository_root: Path,
 ) -> int:
-    """Validate the staged changes, run staged tests, and sweep terminology."""
-    _report_terminology_findings(staged_terminology_findings(repository_root))
-    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    """Validate staged file content and report scoped rule findings."""
     staged_file_paths = filter_paths_under_prefixes(
         paths_from_git_staged(repository_root), repository_root, arguments.only_under
     )
     if not staged_file_paths:
         sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
-        return staged_test_exit_code
+        return 0
     staged_added_lines = added_lines_by_file_staged(repository_root, staged_file_paths)
-    gate_exit_code = run_gate(
+    return run_gate(
         validate_content,
         staged_file_paths,
         repository_root,
         all_added_lines_by_path=staged_added_lines,
         should_read_staged_content=True,
     )
+
+
+def _run_staged_mode(
+    validate_content: enforcer_loading.ValidateContentCallable,
+    arguments: argparse.Namespace,
+    repository_root: Path,
+) -> int:
+    """Validate staged rules, terminology, and staged-test behavior."""
+    _report_terminology_findings(staged_terminology_findings(repository_root))
+    staged_test_exit_code = _staged_pytest_exit_code_for_current_python(repository_root)
+    gate_exit_code = _run_staged_validation(validate_content, arguments, repository_root)
     return gate_exit_code or staged_test_exit_code
+
+
+def _run_immediate_mode(
+    validate_content: enforcer_loading.ValidateContentCallable,
+    arguments: argparse.Namespace,
+    repository_root: Path,
+) -> int:
+    """Validate staged rules and terminology at the native commit boundary."""
+    _report_terminology_findings(staged_terminology_findings(repository_root))
+    return _run_staged_validation(validate_content, arguments, repository_root)
 
 
 def _run_diff_mode(
@@ -339,6 +360,8 @@ def main(all_arguments: list[str]) -> int:
     validate_content = load_validate_content()
     if arguments.paths:
         return _run_explicit_paths_mode(validate_content, arguments, repository_root)
+    if arguments.immediate:
+        return _run_immediate_mode(validate_content, arguments, repository_root)
     if arguments.staged:
         return _run_staged_mode(validate_content, arguments, repository_root)
     return _run_diff_mode(validate_content, arguments, repository_root)

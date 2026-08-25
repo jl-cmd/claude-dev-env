@@ -26,6 +26,13 @@ from pathlib import Path
 import pytest
 
 _BLOCKING_DIRECTORY = Path(__file__).resolve().parent
+if str(_BLOCKING_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_BLOCKING_DIRECTORY))
+
+from test_hook_subprocess_support import (  # noqa: E402
+    assert_hook_deny_log_contains,
+    run_hook_as_subprocess,
+)
 
 ALL_CONVERTED_HOOK_FILENAMES = (
     "open_questions_in_plans_blocker.py",
@@ -48,15 +55,15 @@ ALL_FAIL_SOFT_PAYLOADS = (
 )
 
 
-def _run_hook_script(hook_filename: str, stdin_text: str) -> subprocess.CompletedProcess:
+def _run_hook_script(
+    hook_filename: str, stdin_text: str, temporary_home_directory: Path
+) -> subprocess.CompletedProcess[str]:
     hook_script_path = _BLOCKING_DIRECTORY / hook_filename
-    return subprocess.run(
-        [sys.executable, str(hook_script_path)],
-        input=stdin_text,
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=str(Path.home()),
+    return run_hook_as_subprocess(
+        hook_script_path=hook_script_path,
+        payload_text=stdin_text,
+        working_directory=temporary_home_directory,
+        home_directory=temporary_home_directory,
     )
 
 
@@ -69,8 +76,10 @@ def _decision_from_stdout(completed: subprocess.CompletedProcess) -> str | None:
 
 @pytest.mark.parametrize("hook_filename", ALL_CONVERTED_HOOK_FILENAMES)
 @pytest.mark.parametrize("stdin_text", ALL_FAIL_SOFT_PAYLOADS)
-def test_fail_soft_payload_exits_zero_with_no_decision(hook_filename: str, stdin_text: str) -> None:
-    completed = _run_hook_script(hook_filename, stdin_text)
+def test_fail_soft_payload_exits_zero_with_no_decision(
+    hook_filename: str, stdin_text: str, tmp_path: Path
+) -> None:
+    completed = _run_hook_script(hook_filename, stdin_text, tmp_path)
     assert completed.returncode == 0, (
         f"{hook_filename} must exit zero on fail-soft stdin; "
         f"got code {completed.returncode}, stderr {completed.stderr!r}"
@@ -93,9 +102,10 @@ def test_open_questions_blocker_still_denies_plan_with_open_questions(
             "tool_input": {"file_path": str(plan_path), "content": plan_body},
         }
     )
-    completed = _run_hook_script("open_questions_in_plans_blocker.py", payload)
-    assert completed.returncode == 0
+    completed = _run_hook_script("open_questions_in_plans_blocker.py", payload, tmp_path)
+    assert completed.returncode == 0, completed.stderr
     assert _decision_from_stdout(completed) == "deny"
+    assert_hook_deny_log_contains(tmp_path, "open_questions_in_plans_blocker.py")
 
 
 def test_open_questions_blocker_still_allows_plan_without_open_questions(
@@ -111,8 +121,8 @@ def test_open_questions_blocker_still_allows_plan_without_open_questions(
             "tool_input": {"file_path": str(plan_path), "content": plan_body},
         }
     )
-    completed = _run_hook_script("open_questions_in_plans_blocker.py", payload)
-    assert completed.returncode == 0
+    completed = _run_hook_script("open_questions_in_plans_blocker.py", payload, tmp_path)
+    assert completed.returncode == 0, completed.stderr
     assert _decision_from_stdout(completed) is None
 
 
@@ -130,9 +140,10 @@ def test_package_inventory_blocker_still_denies_uninventoried_new_file(
             "tool_input": {"file_path": str(new_file_path), "content": "x = 1\n"},
         }
     )
-    completed = _run_hook_script("package_inventory_stale_blocker.py", payload)
-    assert completed.returncode == 0
+    completed = _run_hook_script("package_inventory_stale_blocker.py", payload, tmp_path)
+    assert completed.returncode == 0, completed.stderr
     assert _decision_from_stdout(completed) == "deny"
+    assert_hook_deny_log_contains(tmp_path, "package_inventory_stale_blocker.py")
 
 
 def test_package_inventory_blocker_still_allows_inventoried_new_file(
@@ -152,15 +163,15 @@ def test_package_inventory_blocker_still_allows_inventoried_new_file(
             "tool_input": {"file_path": str(new_file_path), "content": "x = 1\n"},
         }
     )
-    completed = _run_hook_script("package_inventory_stale_blocker.py", payload)
-    assert completed.returncode == 0
+    completed = _run_hook_script("package_inventory_stale_blocker.py", payload, tmp_path)
+    assert completed.returncode == 0, completed.stderr
     assert _decision_from_stdout(completed) is None
 
 
-def test_converted_hooks_allow_unrelated_tool_name() -> None:
+def test_converted_hooks_allow_unrelated_tool_name(tmp_path: Path) -> None:
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
     for each_hook_filename in ALL_CONVERTED_HOOK_FILENAMES:
-        completed = _run_hook_script(each_hook_filename, payload)
+        completed = _run_hook_script(each_hook_filename, payload, tmp_path)
         assert completed.returncode == 0, (
             f"{each_hook_filename} must exit zero on an unrelated tool; stderr {completed.stderr!r}"
         )
