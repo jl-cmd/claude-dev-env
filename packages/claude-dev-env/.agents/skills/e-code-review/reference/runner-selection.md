@@ -35,6 +35,7 @@ Open issue for implementation work should link this file and keep PRs small
 ## Related always-on docs
 
 - Skill hub: `../SKILL.md` (levels, fix, loop — not runner internals).
+- Preflight proposal: `preflight-proposal.md` (immutable range, local runner, proposal evidence).
 - Medium procedure: `medium.md`.
 - Shared worker spawn (when applicable):
   `packages/claude-dev-env/_shared/pr-loop/worker-spawn.md` in the package tree.

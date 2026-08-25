@@ -555,7 +555,9 @@ def _validated_source_file(
     for each_part in relative_path.split(path_separator):
         current_path /= each_part
         if current_path.exists() and _is_reparse_point(current_path):
-            raise MaterializerError(f"{description} source reparse point is not allowed: {relative_path}")
+            raise MaterializerRunFatal(
+                f"{description} source reparse point is not allowed: {relative_path}"
+            )
     resolved_path = _validate_containment(config.source_root, source_path)
     if not resolved_path.is_file():
         raise MaterializerError(f"{description} source file is missing: {relative_path}")

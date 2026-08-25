@@ -10,6 +10,7 @@ import ...`` resolve against this file both inside the repo and under
 from __future__ import annotations
 
 STAGED_SCOPE_ARGUMENT: str = "--staged"
+IMMEDIATE_SCOPE_ARGUMENT: str = "--immediate"
 BASE_REFERENCE_ARGUMENT: str = "--base"
 DEFAULT_REMOTE_BASE_REFERENCE: str = "origin/HEAD"
 ALL_ZEROS_OBJECT_NAME_CHARACTER: str = "0"

@@ -38,6 +38,7 @@ ALL_BANNED_NOUN_WORDS: frozenset[str] = frozenset(
         "temp",
     }
 )
+BANNED_NOUN_COMPATIBILITY_COMMENT: str = "# pragma: no-banned-noun"
 CAMEL_CASE_WORD_PATTERN: re.Pattern[str] = re.compile(
     r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+"
 )

@@ -1567,6 +1567,63 @@ def test_main_reads_default_branch_tracking_reference_when_origin_head_is_unset(
     assert exit_code == 0
 
 
+def test_main_selects_stdin_bases_for_new_and_existing_branch_pushes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, default_branch_tip, topic_branch_tip = _build_default_branch_repository(
+        tmp_path
+    )
+    recorded_arguments_path = tmp_path / "recorded_arguments.txt"
+    recording_gate_script_path = tmp_path / "recording_gate.py"
+    recording_gate_script_path.write_text(
+        "import pathlib, sys\n"
+        f'pathlib.Path(r"{recorded_arguments_path}").write_text('
+        "'\\n'.join(sys.argv[1:]), encoding='utf-8')\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CODE_RULES_GATE_PATH", str(recording_gate_script_path))
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            _push_stdin_line(
+                FEATURE_BRANCH_NAME,
+                topic_branch_tip,
+                FEATURE_BRANCH_NAME,
+                ALL_ZEROS_OBJECT_NAME,
+            )
+        ),
+    )
+
+    assert pre_push.main() == 0
+    assert recorded_arguments_path.read_text(encoding="utf-8").splitlines() == [
+        "--base",
+        git_hooks_constants.DEFAULT_REMOTE_BASE_REFERENCE,
+    ]
+
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            _push_stdin_line(
+                FEATURE_BRANCH_NAME,
+                topic_branch_tip,
+                FEATURE_BRANCH_NAME,
+                NON_ZERO_REMOTE_SHA_ONE,
+            )
+        ),
+    )
+
+    assert pre_push.main() == 0
+    assert recorded_arguments_path.read_text(encoding="utf-8").splitlines() == [
+        "--base",
+        default_branch_tip,
+    ]
+
+
 def test_main_skips_a_deletion_line_to_reach_the_branch_update(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
