@@ -21,6 +21,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `code_rules_path_utils_constants.py` | Path-matching helpers used by the code-rules check modules |
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
+| `cursor_cli_python_misfire_blocker_constants.py` | Detection patterns and deny message for Cursor launches that mistreat a Python code-rules-gate script |
 | `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
 | `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
 | `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |
@@ -63,7 +64,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |
 | `python_style_checks_constants.py` | Command-line argument count and blank-line count between top-level functions for the style validator |
 | `ruff_integration_constants.py` | ``NO_COLOR`` / ``FORCE_COLOR`` environment variable names for plain ruff diagnostics |
-| `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the block message for the open-locally attach blocker |
+| `send_user_file_open_locally_blocker_constants.py` | Tool name, proactive status, and the `Invoke-Item` block message for the open-locally attach blocker |
 | `sensitive_file_protector_constants.py` | Sensitive filename patterns, committed-template suffixes that earn an exemption, and the deny decision and message template for `sensitive_file_protector` |
 | `session_edit_stage_gate_constants.py` | Tracker filename prefix/suffix, JSON payload key, edit tool name set, session-id sanitize pattern, lock filename suffix and lock-acquire timing, git diff command, commit flag escapes, and deny-message template shared by the session edit stage gate trio |
 | `session_env_cleanup_constants.py` | Stale-age threshold and directory names for the session-env cleanup hook |
