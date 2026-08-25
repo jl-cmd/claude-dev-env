@@ -28,46 +28,73 @@ PROTECTED_BRANCHES = ("main", "master")
 PROTECTED_REMOTE_PATTERNS: list[str] = []
 
 
-def extract_git_working_directory(bash_command: str) -> str | None:
-    """Extract the directory where git commit will actually execute.
-
-    Parses the bash command for directory-changing patterns that precede
-    the git commit, and for git's own -C flag.
-
-    Returns None if the commit runs in the hook's CWD.
-    """
-    git_c_match = re.search(
-        r"git\s+-C\s+[\"']?([^\"';&|]+?)[\"']?\s+commit",
+def _match_git_c_commit(bash_command: str) -> re.Match[str] | None:
+    """Return the match for a Git commit with an explicit directory."""
+    return re.search(
+        r"(?:^|(?<=[;&|]))\s*git\s+-C\s+[\"']?([^\"';&|]+?)[\"']?\s+commit(?:\s|$)",
         bash_command,
+        flags=re.IGNORECASE,
     )
+
+
+def parse_git_commit_directory(bash_command: str) -> tuple[bool, str | None]:
+    """Return the Git commit match state and selected working directory."""
+    git_c_match = _match_git_c_commit(bash_command)
     if git_c_match:
-        return git_c_match.group(1).strip()
+        return True, git_c_match.group(1).strip()
 
-    commit_pos = bash_command.lower().find("git commit")
-    if commit_pos == -1:
-        return None
+    git_commit_match = re.search(
+        r"(?:^|(?<=[;&|]))\s*git\s+commit(?:\s|$)",
+        bash_command,
+        flags=re.IGNORECASE,
+    )
+    if git_commit_match is None:
+        return False, None
 
-    prefix = bash_command[:commit_pos]
+    prefix = bash_command[:git_commit_match.start()]
 
     cd_matches = re.findall(
         r"(?:cd|pushd)\s+[\"']?([^\"';&|]+?)[\"']?\s*[;&|]",
         prefix,
+        flags=re.IGNORECASE,
     )
     if cd_matches:
-        return cd_matches[-1].strip()
+        return True, cd_matches[-1].strip()
 
-    return None
+    return True, None
 
 
-def resolve_directory(directory: str | None) -> str | None:
+def extract_git_working_directory(bash_command: str) -> str | None:
+    """Return the working directory selected by a Git commit command."""
+    _, working_directory = parse_git_commit_directory(bash_command)
+    return working_directory
+
+
+def is_commit_command(bash_command: str) -> bool:
+    """Return the Git commit match state for the shell command."""
+    is_commit, _ = parse_git_commit_directory(bash_command)
+    return is_commit
+
+
+def is_git_c_commit_command(bash_command: str) -> bool:
+    """Return whether the command names a Git commit target with ``-C``."""
+    return _match_git_c_commit(bash_command) is not None
+
+
+def resolve_directory(
+    directory: str | None,
+    from_directory: str | None = None,
+) -> str | None:
     """Resolve a directory path, expanding ~ and validating existence."""
-    if directory is None:
+    selected_directory = directory if directory is not None else from_directory
+    if selected_directory is None:
         return None
 
-    expanded = os.path.expanduser(directory)
+    expanded = os.path.expanduser(selected_directory)
 
     if not os.path.isabs(expanded):
-        expanded = os.path.abspath(expanded)
+        base_directory = from_directory or os.getcwd()
+        expanded = os.path.abspath(os.path.join(base_directory, expanded))
 
     if os.path.isdir(expanded):
         return expanded
@@ -112,22 +139,25 @@ def is_protected_repo(working_dir: str | None = None) -> bool:
     return False
 
 
-def is_commit_command(bash_command: str) -> bool:
-    return "git commit" in bash_command.lower().strip()
-
-
 def is_main_commit_confirmed(bash_command: str) -> bool:
     """Return True if the command includes the explicit confirmation sentinel."""
     return "--allow-main-commit" in bash_command
 
 
-def parse_bash_command_from_stdin() -> str:
+def parse_hook_context_from_stdin() -> tuple[str, str | None]:
     try:
         hook_event = json.load(sys.stdin)
     except json.JSONDecodeError:
-        return ""
+        return "", None
 
-    return hook_event.get("tool_input", {}).get("command", "")
+    bash_command = hook_event.get("tool_input", {}).get("command", "")
+    return bash_command, hook_event.get("cwd")
+
+
+def parse_bash_command_from_stdin() -> str:
+    """Return the Bash command from the hook payload on standard input."""
+    bash_command, _ = parse_hook_context_from_stdin()
+    return bash_command
 
 
 DRAFT_PR_INSTRUCTION = (
@@ -156,18 +186,21 @@ def build_denial_response(branch_name: str, repo_dir: str | None) -> dict:
 
 
 def main() -> None:
-    bash_command = parse_bash_command_from_stdin()
+    bash_command, event_cwd = parse_hook_context_from_stdin()
+    has_commit_command, target_dir_raw = parse_git_commit_directory(bash_command)
 
-    if not is_commit_command(bash_command):
+    if not has_commit_command:
         sys.exit(0)
 
     if is_main_commit_confirmed(bash_command):
         sys.exit(0)
 
-    target_dir_raw = extract_git_working_directory(bash_command)
-    target_dir = resolve_directory(target_dir_raw)
+    if event_cwd is None and is_git_c_commit_command(bash_command):
+        sys.exit(0)
 
-    if target_dir_raw and not target_dir:
+    target_dir = resolve_directory(target_dir_raw, from_directory=event_cwd)
+
+    if (target_dir_raw or event_cwd) and not target_dir:
         sys.exit(0)
 
     current_branch = get_branch_at_directory(working_dir=target_dir)

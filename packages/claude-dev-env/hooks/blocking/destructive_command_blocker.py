@@ -20,12 +20,16 @@ from hooks_constants.convergence_branch_constants import (  # noqa: E402
     CONVERGENCE_FORCE_PUSH_DETECTION_PATTERN,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
-    ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
-    ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
+from hooks_constants.destructive_command_environment_constants import (  # noqa: E402
     ALL_KNOWN_TEMPORARY_ENVIRONMENT_VARIABLE_NAMES,
     ALL_TRUTHY_ENV_VALUES,
     DESTRUCTIVE_DENY_MODE_ENV_VAR,
+    EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR,
+    GH_REDIRECT_ACTIVE_ENV_VAR,
+)
+from hooks_constants.destructive_command_segment_constants import (  # noqa: E402
+    ALL_BENIGN_COMPOUND_SEGMENT_COMMANDS,
+    ALL_COMMAND_LAUNCHER_WRAPPER_COMMANDS,
     ALL_FILE_WRITING_OUTPUT_FLAGS_BY_BENIGN_PROGRAM,
     ALL_FIND_EXEC_ACTION_FLAGS,
     ALL_FIND_EXEC_ACTION_TERMINATORS,
@@ -57,7 +61,6 @@ from hooks_constants.destructive_command_segment_constants import (  # noqa: E40
 )
 
 CLAUDE_DIRECTORY_PATH = os.path.normpath(os.path.expanduser("~/.claude"))
-GH_REDIRECT_ACTIVE_ENV_VAR = "CLAUDE_GH_REDIRECT_ACTIVE"
 
 
 def gh_redirect_is_active() -> bool:
@@ -87,9 +90,7 @@ def directory_is_ephemeral(directory_path: str) -> bool:
     Returns:
         True when the directory belongs to the ephemeral auto-allow namespace.
     """
-    ephemeral_auto_allow_disabled_env_var = "CLAUDE_DESTRUCTIVE_DISABLE_EPHEMERAL_AUTO_ALLOW"
-    truthy_string_values = frozenset({"1", "true", "yes", "on"})
-    if os.environ.get(ephemeral_auto_allow_disabled_env_var, "").strip().lower() in truthy_string_values:
+    if os.environ.get(EPHEMERAL_AUTO_ALLOW_DISABLE_ENV_VAR, "").strip().lower() in ALL_TRUTHY_ENV_VALUES:
         return False
     forward_slash_normalized_directory_path = os.path.normpath(directory_path).replace("\\", "/").lower()
     all_worktree_path_segments = ("/worktrees/", "/worktree/")

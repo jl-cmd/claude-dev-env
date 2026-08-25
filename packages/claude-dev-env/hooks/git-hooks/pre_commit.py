@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Git pre-commit hook: run the CODE_RULES gate over staged changes.
+"""Native Git pre-commit owner for staged CODE_RULES validation.
 
 Installed to the user's shared git-hooks directory via the claude-dev-env
 installer; git invokes this file as `pre-commit` (the installer strips the
 `_` and `.py` suffix when copying into the live hooks path).
+
+The Agent Bash commit surface records passive staged-surface evidence. This
+native hook invokes the shared gate and owns the staged commit decision.
 
 Exit codes:
   0 - staged changes pass the gate (or the gate is not installed locally).
@@ -17,23 +20,24 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gate_utils import is_safe_regular_file, resolve_gate_script_path
 from git_hooks_constants import (
     GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE,
     GATE_SCRIPT_NOT_FOUND_MESSAGE,
+    IMMEDIATE_SCOPE_ARGUMENT,
     INVOKE_GATE_FAILURE_MESSAGE,
-    STAGED_SCOPE_ARGUMENT,
 )
-from gate_utils import is_safe_regular_file, resolve_gate_script_path
 
 
 def invoke_gate(gate_script_path: Path) -> int:
-    staged_scope_argument = STAGED_SCOPE_ARGUMENT
+    """Invoke the shared staged gate and return its exit code."""
+    immediate_scope_argument = IMMEDIATE_SCOPE_ARGUMENT
     invoke_gate_failure_message = INVOKE_GATE_FAILURE_MESSAGE
     gate_infrastructure_failure_exit_code = GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
     try:
         resolved_gate_path = gate_script_path.resolve(strict=True)
         completion = subprocess.run(
-            [sys.executable, str(resolved_gate_path), staged_scope_argument],
+            [sys.executable, str(resolved_gate_path), immediate_scope_argument],
             check=False,
         )
     except OSError as launch_error:

@@ -21,6 +21,9 @@ from types import ModuleType
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 HOOK_SCRIPT = REPOSITORY_ROOT / ".claude" / "hooks" / "session_start_refresh.py"
+PYTHON_SCRIPT_LAUNCHER = (
+    REPOSITORY_ROOT / ".claude" / "hooks" / "python_script_launcher.js"
+)
 
 
 def _refresh_constants() -> ModuleType:
@@ -69,6 +72,41 @@ def should_register_a_hook_command_that_names_the_existing_script() -> None:
     assert isinstance(command, str)
     assert HOOK_SCRIPT.name in command
     assert HOOK_SCRIPT.is_file()
+
+
+def should_use_the_node_launcher_for_the_session_start_registration() -> None:
+    command = SESSION_START_REGISTRATION["command"]
+    assert isinstance(command, str)
+    assert command == (
+        "node .claude/hooks/python_script_launcher.js "
+        ".claude/hooks/session_start_refresh.py"
+    )
+
+
+def should_run_a_python_script_with_arguments_and_exit_status(
+    tmp_path: Path,
+) -> None:
+    python_script = tmp_path / "echo_arguments.py"
+    python_script.write_text(
+        "import sys\n"
+        "print('|'.join(sys.argv[1:]))\n"
+        "sys.exit(23)\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            "node",
+            str(PYTHON_SCRIPT_LAUNCHER),
+            str(python_script),
+            "first-argument",
+            "second-argument",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert completed.returncode == 23
+    assert completed.stdout.strip() == "first-argument|second-argument"
 
 
 def should_keep_the_subprocess_budgets_inside_the_registered_timeout() -> None:

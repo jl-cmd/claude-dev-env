@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deny a Write or Edit whose target filename names a secret or a lock file.
+"""Deny a Write, Edit, or MultiEdit whose target filename names a secret or a lock file.
 
 ::
 
@@ -35,10 +35,12 @@ import sys
 import _path_setup  # noqa: F401
 
 from hooks_constants.hook_block_logger import log_hook_block
+from hooks_constants.pre_tool_use_dispatcher_constants import (
+    ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+)
 from hooks_constants.sensitive_file_protector_constants import (
     ALL_SENSITIVE_PATTERNS,
     ALL_TEMPLATE_SUFFIXES,
-    ALL_WRITE_EDIT_TOOLS,
     DENY_DECISION,
     DENY_REASON_TEMPLATE,
     HOOK_EVENT_NAME,
@@ -57,7 +59,7 @@ def is_template_filename(filename: str) -> bool:
         .env.local       -> False
 
     Args:
-        filename: The basename of the file a Write or Edit targets.
+        filename: The basename of the file a Write, Edit, or MultiEdit targets.
 
     Returns:
         True when the basename's final suffix is a template suffix.
@@ -69,7 +71,7 @@ def is_sensitive_file(file_path: str) -> str | None:
     """Return the sensitive pattern a path's basename matches, or None.
 
     Args:
-        file_path: The path the Write or Edit targets.
+        file_path: The path the Write, Edit, or MultiEdit targets.
 
     Returns:
         The matched pattern, or None when the basename names a template or
@@ -106,7 +108,7 @@ def deny_write(file_path: str, matched_pattern: str) -> None:
     """Record the block in the hook-blocks log and emit the deny decision.
 
     Args:
-        file_path: The path the Write or Edit targets.
+        file_path: The path the Write, Edit, or MultiEdit targets.
         matched_pattern: The sensitive pattern the basename matched.
     """
     deny_reason = DENY_REASON_TEMPLATE.format(
@@ -132,7 +134,7 @@ def main() -> None:
     tool_name = hook_input.get("tool_name", "")
     tool_input = hook_input.get("tool_input", {})
 
-    if tool_name not in ALL_WRITE_EDIT_TOOLS:
+    if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
         sys.exit(0)
 
     file_path = tool_input.get("file_path", "")

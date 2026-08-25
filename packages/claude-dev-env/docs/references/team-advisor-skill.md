@@ -8,7 +8,7 @@
 |---|---|
 | `skills/team-advisor/SKILL.md` | Sole-consumer bind wiring and constraints |
 | `advisor-tool.md` | Consult timing, hard rule, how to treat advice |
-| `~/.claude/_shared/advisor/advisor-protocol.md` | Host bind, floor, lifecycle |
+| `~/.claude/_shared/advisor/advisor-protocol.md` | Session identity, host bind, floor, lifecycle |
 | `agents/session-advisor.md` | ENDORSE / CORRECTION / PLAN / STOP |
 
 ## When to use
@@ -17,4 +17,4 @@ Follow the call rules in `advisor-tool.md` (orientation first, then consult befo
 
 ## Selected path
 
-`/team-advisor` is the repository's advisor implementation. It provides explicit first-consult packets, delta consults, a standing warm reviewer, and a read-only Sol CLI option.
+`/team-advisor` is the repository's advisor implementation. It provides explicit first-consult packets, delta consults, a standing warm reviewer, an in-session Sol spawn on Codex, and a read-only Sol CLI option.
