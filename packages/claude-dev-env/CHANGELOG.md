@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.21.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.1...claude-dev-env-v2.21.2) (2026-08-25)
+
+
+### Bug Fixes
+
+* **hooks:** stop Cursor CLI from misfiring code_rules_gate opens ([4dbe0c2](https://github.com/jl-cmd/claude-dev-env/commit/4dbe0c2170f2baf0a21ba8323b8597d58e8653ea))
+* **hooks:** stop Cursor CLI from misfiring code_rules_gate opens ([d8e2891](https://github.com/jl-cmd/claude-dev-env/commit/d8e2891550f0c97ea33fa997d6ea5bd190e55da2))
+* **hooks:** tighten Cursor launch detection for gate misfires ([0194a58](https://github.com/jl-cmd/claude-dev-env/commit/0194a5855608edaf98403d0fe5cc3db264f017d7))
+* **hooks:** tighten Cursor launch detection for gate misfires ([fc45399](https://github.com/jl-cmd/claude-dev-env/commit/fc4539988fa8956b27c822a695050534db485af5))
+
+
+### Refactoring
+
+* **hooks:** reuse stdin helper and dedupe allow-path context ([763a846](https://github.com/jl-cmd/claude-dev-env/commit/763a8462f49536db4eb9fc77751d4bb684bc126f))
+* **hooks:** reuse stdin helper and dedupe allow-path context ([089d28e](https://github.com/jl-cmd/claude-dev-env/commit/089d28edbdf85d4ebc0c2e10fcaa271896181c0e))
+
 ## [2.21.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.0...claude-dev-env-v2.21.1) (2026-08-25)
 
 
