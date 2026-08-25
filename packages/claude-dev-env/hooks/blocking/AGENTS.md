@@ -71,6 +71,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `bot_mention_comment_blocker.py` | PreToolUse (Write/Edit) | PR review comments that @-mention a bot |
 | `claude_md_orphan_file_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | Per-directory `CLAUDE.md` table cells naming a bare filename absent from the directory subtree |
 | `conventional_pr_title_gate.py` | PreToolUse (Bash) | `gh pr create`/`gh pr edit` with a `--title` that is not a Conventional Commit, in a repo whose CI runs a semantic-pull-request title check |
+| `cursor_cli_python_misfire_blocker.py` | PreToolUse (Bash/PowerShell) | `cursor` / `Cursor.exe` launched against a Python script with code-rules-gate flags, which raises Cursor's EPIPE unknown-option dialog |
 | `destructive_command_blocker.py` | PreToolUse (Bash/PowerShell) | Shell commands with destructive literals (`rm -rf`, `git reset --hard`, etc.) |
 | `docstring_rule_gate_count_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | A stale spelled-out gate-validator count in `docstring-prose-matches-implementation.md` — the "N more gate validators" / "M gated slices" count drifting from the `check_docstring_*` validators the prose names |
 | `duplicate_rmtree_helper_blocker.py` | PreToolUse (Write/Edit) | A local re-definition of the Windows-safe rmtree helper trio (`_strip_read_only_and_retry`, `_force_remove_tree` / `force_rmtree`) in place of importing a shared helper |
@@ -94,7 +95,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
-| `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to opening the file with its native Windows app |
+| `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to `Invoke-Item -LiteralPath` for the native Windows app |
 | `sensitive_file_protector.py` | PreToolUse (Write/Edit/MultiEdit) | Writes to sensitive credential or config files |
 | `session_edit_stage_gate.py` | PreToolUse (Bash) | A `git commit` that would drop files edited this session because they are tracked but left unstaged |
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
