@@ -153,6 +153,11 @@ def test_public_legacy_call_forms_validate_collection_entries(tmp_path: Path) ->
         publish_plan(config, all_planned_files=[object()])
 
 
+def test_render_codex_failure_blast_radius_requires_the_excerpt_heading() -> None:
+    with pytest.raises(MaterializerError, match="requires a Codex excerpt"):
+        materializer.render_codex_failure_blast_radius("# No excerpt\n")
+
+
 def test_validation_rejects_reparse_point_from_portable_attribute_seam(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
