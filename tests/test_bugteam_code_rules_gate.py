@@ -61,7 +61,11 @@ def copy_enforcer_into(repository_root: Path) -> None:
     blocking_source = REPO_ROOT / "packages" / "claude-dev-env" / "hooks" / "blocking"
     blocking_destination = repository_root / "packages" / "claude-dev-env" / "hooks" / "blocking"
     blocking_destination.mkdir(parents=True, exist_ok=True)
-    for each_enforcer_module in sorted(blocking_source.glob("code_rules_*.py")):
+    all_enforcer_modules = (
+        *blocking_source.glob("code_rules_*.py"),
+        blocking_source / "codex_apply_patch.py",
+    )
+    for each_enforcer_module in sorted(all_enforcer_modules):
         destination_path = blocking_destination / each_enforcer_module.name
         destination_path.write_text(
             each_enforcer_module.read_text(encoding="utf-8"),
