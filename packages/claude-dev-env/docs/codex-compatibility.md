@@ -6,9 +6,11 @@
 
 Run `codex-compat materialize --source-root <claude-root> --target-root <codex-root>`. The command defaults to a dry run; add `--apply` to publish files. Use `--python <command>` or `CODEX_COMPAT_PYTHON` to select Python. If no usable interpreter is found, the command reports that condition. The launcher passes an argv array, never a shell command.
 
-The Python materializer maps Claude `_shared/`, `agents/`, `hooks/`, `rules/`, and `scripts/` into the target according to the package's compatibility materialization rules. Claude agent frontmatter is converted to Codex TOML metadata. Unsupported Claude metadata is reported, rather than silently treated as equivalent.
+The Python materializer maps Claude `_shared/`, `agents/`, `hooks/`, `rules/`, and `scripts/` into the target according to the package's compatibility materialization rules. Claude agent frontmatter is converted to Codex TOML metadata. The canonical failure blast-radius rule projects its repository-instruction excerpt into a managed `AGENTS.md` file. Claude metadata reports its supported-field shape.
 
-Rules, hooks, and scripts that have no safe Codex runtime equivalent remain inert or source-only. They are preserved for inspection and are not executed as translated target tools. The capability bridge likewise emits declarative records only; it never invokes the translated surface.
+The Codex hook projection merges a managed `apply_patch` entry for `code_rules_enforcer.py` into the target `hooks.json`. Existing Codex hook entries keep their order, repeated enforcer entries collapse to one deterministic record, and the command resolves under the target root. The enforcer reads the patch command, reconstructs every file's pre-edit and projected post-edit content, and returns a blocking diagnostic for patch shapes requiring correction or code-rule violations. The existing Claude `Write`, `Edit`, and `MultiEdit` dispatcher keeps its current order and behavior.
+
+The capability bridge emits declarative records and leaves translated surfaces for their owning runtime.
 
 Materialization uses a compatibility manifest to identify generated files. Dry runs report the plan without writing. Apply mode uses safe link/copy fallback where linking is unavailable, writes atomically, removes only stale managed files, and rolls back managed changes on failure. A failed rollback reports that reconciliation is required.
 
