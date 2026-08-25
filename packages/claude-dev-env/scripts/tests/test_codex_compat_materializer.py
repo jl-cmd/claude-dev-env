@@ -442,6 +442,69 @@ def _apply_source_agent(source_root: Path, target_root: Path, description: str) 
     return target_root / "Luna.toml"
 
 
+def _write_codex_hook_source(source_root: Path) -> None:
+    package_root = Path(__file__).parents[2]
+    source_hooks = source_root / "hooks"
+    source_hooks.mkdir(parents=True, exist_ok=True)
+    (source_hooks / "hooks.json").write_bytes(
+        (package_root / "hooks" / "hooks.json").read_bytes()
+    )
+    for each_relative_path in materializer.codex_hook_dependency_manifest:
+        source_path = source_root / each_relative_path
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes((package_root / each_relative_path).read_bytes())
+
+
+def test_build_plan_rejects_reparse_hook_dependencies(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    _write_codex_hook_source(source)
+    dependency_path = source / materializer.codex_enforcer_script_relative_path
+    outside_path = tmp_path / "outside.py"
+    outside_path.write_text("secret", encoding="utf-8")
+    try:
+        dependency_path.unlink()
+        dependency_path.symlink_to(outside_path)
+    except OSError as error:
+        pytest.skip(f"symlinks unavailable: {error}")
+
+    with pytest.raises(MaterializerError, match="reparse point"):
+        build_plan(MaterializerConfig(source, tmp_path / "target"))
+
+
+def test_publish_plan_preserves_modified_enforcer_hook_as_conflict(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_codex_hook_source(source)
+    target.mkdir()
+    modified_command = f'python3 "{target / materializer.codex_enforcer_script_relative_path}" --custom'
+    existing_manifest = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": materializer.codex_hook_matcher,
+                    "hooks": [
+                        {"type": "command", "command": modified_command, "timeout": 5}
+                    ],
+                }
+            ]
+        }
+    }
+    hooks_path = target / materializer.codex_hook_manifest_target_path
+    hooks_path.write_text(json.dumps(existing_manifest), encoding="utf-8")
+    config = MaterializerConfig(source, target, should_apply=True)
+
+    planned, report = build_plan(config)
+    publication = publish_plan(config, planned, report)
+
+    assert publication.conflicted == 1
+    assert publication.details["conflicted"] == ["hooks.json"]
+    assert json.loads(hooks_path.read_text(encoding="utf-8")) == existing_manifest
+
+
 def test_apply_with_a_missing_source_root_keeps_managed_files_and_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
