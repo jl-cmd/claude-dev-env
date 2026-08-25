@@ -1,5 +1,83 @@
 # Changelog
 
+## [2.20.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.19.0...claude-dev-env-v2.20.0) (2026-08-25)
+
+
+### Features
+
+* add investigation reset lifecycle evidence ([3624526](https://github.com/jl-cmd/claude-dev-env/commit/36245268f72f244511cfdc0effddb226d06dd35b))
+* add investigation reset lifecycle evidence ([41e24be](https://github.com/jl-cmd/claude-dev-env/commit/41e24be047da45551c5254783be51dacebd3e603))
+* add plugin data cleanup lifecycle evidence ([68c7bfe](https://github.com/jl-cmd/claude-dev-env/commit/68c7bfec3cdd14ad37b3bb646736caa81824ccae))
+* add plugin data cleanup lifecycle evidence ([33c7213](https://github.com/jl-cmd/claude-dev-env/commit/33c7213e8ca43164742064490e4e5a1854cb6fcd))
+* add review preflight proposal mode ([af8f413](https://github.com/jl-cmd/claude-dev-env/commit/af8f413753ccd904a282e81c6db58e808f0df32f))
+* add safe instruction logger evidence ([620eae2](https://github.com/jl-cmd/claude-dev-env/commit/620eae266c147724d28447db4706a596705af18b))
+* measure session tracker resume preservation ([cb956cd](https://github.com/jl-cmd/claude-dev-env/commit/cb956cd0fb8f29ac539960f445d5ebab01db9696))
+* measure session tracker resume preservation ([3a5350e](https://github.com/jl-cmd/claude-dev-env/commit/3a5350e289724484396c4595888a5fffbebb94f6))
+* **rules:** add failure blast-radius guardrail ([45ea391](https://github.com/jl-cmd/claude-dev-env/commit/45ea391473533cff4f90c1ddfa0216612575b4f5))
+* **rules:** make a failing item name what it stops ([6b15720](https://github.com/jl-cmd/claude-dev-env/commit/6b15720c25c89efe612ce83fff7adba84f43a050))
+
+
+### Bug Fixes
+
+* **blocking:** enforce commit branch ownership ([33618db](https://github.com/jl-cmd/claude-dev-env/commit/33618db452cfe7246aeee6e0c5f1ec8fa416290e))
+* **code-rules:** scope blast-radius scan to loop bodies ([ff0d7f6](https://github.com/jl-cmd/claude-dev-env/commit/ff0d7f6d4015173e3afe28329f7f9f88fed33b59))
+* enforce commit branch ownership from hook cwd ([9118047](https://github.com/jl-cmd/claude-dev-env/commit/9118047048defe96088eacf642f23ecd1f36ab6d))
+* **hooks:** harden formatter fixture and diagnostics ([eda86fc](https://github.com/jl-cmd/claude-dev-env/commit/eda86fc0b125d4c53dcc0866f180e6b46a6c760f))
+* **hooks:** preserve write-only formatter policy ([0b22b15](https://github.com/jl-cmd/claude-dev-env/commit/0b22b15a1a03440bf40495c5ab335417639eb7fe))
+* **hooks:** preserve write-only formatter policy ([2a2a018](https://github.com/jl-cmd/claude-dev-env/commit/2a2a0183475fcc2dba3209b5d154188a3be22ca6))
+* **hooks:** select Windows npx executable for Prettier ([f0b120c](https://github.com/jl-cmd/claude-dev-env/commit/f0b120c35c2555b1d0cab6f986b811c41cea23ef))
+* keep tracker evidence behavior focused ([a14a0a5](https://github.com/jl-cmd/claude-dev-env/commit/a14a0a5f2d34c18272af09df129f7067f2d8fe22))
+* measure tracker resume within hook timeout ([76905cc](https://github.com/jl-cmd/claude-dev-env/commit/76905cc604f13e3a01b493ec7d262c455a2e2783))
+* **mypy-validator:** invalidate cache on same-stat config rewrites ([f4a0b50](https://github.com/jl-cmd/claude-dev-env/commit/f4a0b50695e6d47008a94555b06bd2462840fc9d))
+* **mypy-validator:** refresh cached project configuration ([f90ac14](https://github.com/jl-cmd/claude-dev-env/commit/f90ac14c10f654769c470279541910c9008d8109))
+* **mypy-validator:** use shared cache file primitives ([788f8f0](https://github.com/jl-cmd/claude-dev-env/commit/788f8f0d25c5aac006fe7908e248945cb9973270))
+* preserve dispatcher ownership for explicit git targets ([58c8cb4](https://github.com/jl-cmd/claude-dev-env/commit/58c8cb45837a3c0684ddfc416b465b8e777a64cc))
+* preserve read-only plugin fixture cleanup ([4f792de](https://github.com/jl-cmd/claude-dev-env/commit/4f792de1b33170e43c74a733d4b958ff3b5c91b5))
+* register advisory test fixtures with conftest ([597a261](https://github.com/jl-cmd/claude-dev-env/commit/597a2610843e48ab26aa4b2ce01880714a9401a6))
+* **rules:** match blast-radius handlers to raised types ([1444807](https://github.com/jl-cmd/claude-dev-env/commit/14448076278c398579ca3f4aab83837df6c67f70))
+* simplify refactor guard eligibility paths ([dae3d94](https://github.com/jl-cmd/claude-dev-env/commit/dae3d9462aa4034e368aa7a220214ee3e53a85fc))
+* track nested submodule pointer after commit ([1b78032](https://github.com/jl-cmd/claude-dev-env/commit/1b78032b87d257027522a0660ed34fba97d20caf))
+* verify investigation reset exits cleanly ([39bba82](https://github.com/jl-cmd/claude-dev-env/commit/39bba82cd46764bd8f324a67e13989f99c96880d))
+
+
+### Documentation
+
+* **pr-cleanup:** restore current orchestration contract ([74f4f56](https://github.com/jl-cmd/claude-dev-env/commit/74f4f564155d0f916eb418879eca7fc61715d616))
+* restore PR cleanup contract orchestration ([087b1e2](https://github.com/jl-cmd/claude-dev-env/commit/087b1e28c4f952eb5312b8aeb25e4f9aa3845622))
+* **rules:** define an attempt, the fourth run-ender, and the closing report ([f646217](https://github.com/jl-cmd/claude-dev-env/commit/f6462171e5c9a52110675445d1633bf278d89b9a))
+* **rules:** state blast-radius guidance affirmatively ([72ed600](https://github.com/jl-cmd/claude-dev-env/commit/72ed600f8b0cbf020591f12d172a0be117dc9506))
+
+
+### Maintenance
+
+* refresh formatter stack onto current main ([243ad5d](https://github.com/jl-cmd/claude-dev-env/commit/243ad5da3b336f712dcd19453b195dae5ca61960))
+
+
+### Refactoring
+
+* guard eligibility and stage-aware advisories ([fbf3056](https://github.com/jl-cmd/claude-dev-env/commit/fbf30564303cc91bbe7ae0d9b9c706bc6a57144d))
+
+
+### Performance
+
+* **git-hooks:** keep native pre-commit within command window ([941db78](https://github.com/jl-cmd/claude-dev-env/commit/941db78fc8b8d93ac690dcc57d945e654654f7d8))
+* keep staged commit checks within the hook window ([e269ab9](https://github.com/jl-cmd/claude-dev-env/commit/e269ab99a2c3455c65316feee08349ea55814636))
+
+
+### Tests
+
+* **blocking:** add destructive command pattern coverage ([b4f9435](https://github.com/jl-cmd/claude-dev-env/commit/b4f94352710316e799ea2f91535be1c32e85e1db))
+* **blocking:** preserve deny-mode payload coverage ([bde8416](https://github.com/jl-cmd/claude-dev-env/commit/bde8416c548d113824d6839c06b5dd3eccc8505b))
+* **code-rules:** register blast-radius scope checker ([e02bded](https://github.com/jl-cmd/claude-dev-env/commit/e02bded14d339c0338047bb94494c5d7ee61a1fd))
+* cover destructive deny mode through dispatcher ([c467412](https://github.com/jl-cmd/claude-dev-env/commit/c467412065ba2c5591a4065abc9303ad4d411e60))
+* **hooks:** isolate destructive-command payload support ([17bc405](https://github.com/jl-cmd/claude-dev-env/commit/17bc405b3743a9b364677ae526f8ea696db1dc93))
+* isolate post-commit fixture execution state ([f88977c](https://github.com/jl-cmd/claude-dev-env/commit/f88977c7cd01f7cfcc7b0ae866fc63fb032667ce))
+* preserve safe instruction logger field boundaries ([868fa50](https://github.com/jl-cmd/claude-dev-env/commit/868fa504cc23d345fdb7cce6b6dc7953ced448ec))
+* restore benchmark hook configuration ([da50958](https://github.com/jl-cmd/claude-dev-env/commit/da509582a899f7035132a9fe4492029cd31434ea))
+* restore destructive command pattern coverage ([4cabf46](https://github.com/jl-cmd/claude-dev-env/commit/4cabf464183c0adf5e8f4483e6635514e44270d7))
+* reuse shared bash payload fixtures in destructive hook tests ([10f5ff2](https://github.com/jl-cmd/claude-dev-env/commit/10f5ff2bb2a5ee14dafe6dcb53b78b9a8e7120a0))
+* share refactor guard repository support ([873e204](https://github.com/jl-cmd/claude-dev-env/commit/873e204e402b73d2cc4fc4304bcd4335a0f55192))
+
 ## [2.19.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.18.0...claude-dev-env-v2.19.0) (2026-08-24)
 
 
