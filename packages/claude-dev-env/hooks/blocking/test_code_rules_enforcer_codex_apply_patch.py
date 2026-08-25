@@ -147,3 +147,29 @@ def test_codex_payload_blocks_malformed_patch(
     assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "payload requires accepted patch markers" in deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
 
+
+def test_codex_payload_blocks_a_nul_containing_patch_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A path containing NUL is converted into the standard JSON deny response."""
+    production_directory = _production_directory(tmp_path)
+    payload = {
+        "tool_name": "apply_patch",
+        "cwd": str(production_directory),
+        "tool_input": {
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: unsafe\x00.py\n"
+                "+raise RuntimeError()\n"
+                "*** End Patch"
+            )
+        },
+    }
+
+    stdout = _run_codex_payload(payload, monkeypatch, capsys)
+
+    deny_payload = json.loads(stdout)
+    assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "payload requires accepted patch markers" in deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
