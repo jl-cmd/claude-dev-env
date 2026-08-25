@@ -26,6 +26,7 @@ Open a stub, then load the `@` target:
 | `gh-payloads.md` | `@~/.claude/_shared/pr-loop/gh-payloads.md` |
 | `post-audit-thread-contract.md` | `@~/.claude/_shared/pr-loop/post-audit-thread-contract.md` |
 | `precatch-rubric.md` | `@~/.claude/_shared/pr-loop/precatch-rubric.md` |
+| `preflight-proposal.md` | `@~/.claude/_shared/pr-loop/preflight-proposal.md` |
 | `state-schema.md` | `@~/.claude/_shared/pr-loop/state-schema.md` |
 | `worker-spawn.md` | `@~/.claude/_shared/pr-loop/worker-spawn.md` |
 | `scripts/RUNTIME_SCRIPTS.md` | `@~/.claude/_shared/pr-loop/scripts/` |

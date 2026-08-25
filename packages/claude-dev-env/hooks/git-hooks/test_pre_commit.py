@@ -60,7 +60,7 @@ def test_main_propagates_passing_exit_code_from_gate(
     assert exit_code == 0
 
 
-def test_main_invokes_gate_with_staged_flag(
+def test_main_invokes_gate_with_immediate_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -84,7 +84,7 @@ def test_main_invokes_gate_with_staged_flag(
     recorded_arguments = recorded_arguments_path.read_text(
         encoding="utf-8"
     ).splitlines()
-    assert recorded_arguments == ["--staged"]
+    assert recorded_arguments == ["--immediate"]
 
 
 def test_main_exits_two_when_invoke_gate_raises_oserror(
