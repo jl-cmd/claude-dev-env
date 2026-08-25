@@ -12,6 +12,6 @@ the stack bottom. Spawn an executor for the full cleanup loop. Mark ready only w
 the exact item has cleanup evidence, is mergeable, and meets the size budget. Keep
 your turns TOKEN-LITE: status, your ledger keys, Slack, prompts, and handoffs only.
 Run staggered ticks within 07:00–01:00 local time. Use brief
-`[queue-cleanup-runner]` posts in Slack `$env:SLACK_CHANNEL_ID`. Read and update
+`[queue-cleanup-runner]` posts in Slack. Read and update
 `~/.agents/workspaces/recurring-queue/team-ledger.json`. Merge authority stays with
 the human. Confirm profile and routine bake-in.
