@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.21.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.20.0...claude-dev-env-v2.21.0) (2026-08-25)
+
+
+### Features
+
+* **codex:** guard apply-patch payloads ([a17a720](https://github.com/jl-cmd/claude-dev-env/commit/a17a72083420bcb0217383e1f88347495bd44367))
+* **materializer:** add validated publication foundations ([99f9097](https://github.com/jl-cmd/claude-dev-env/commit/99f90974b7b5bcea550c760366305fc8e402624a))
+* **materializer:** publish rule and hook runtime projections ([4c5ce35](https://github.com/jl-cmd/claude-dev-env/commit/4c5ce35f8ce93b30f8426c4dd7252e00ae2fa26a))
+
 ## [2.20.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.19.0...claude-dev-env-v2.20.0) (2026-08-25)
 
 
