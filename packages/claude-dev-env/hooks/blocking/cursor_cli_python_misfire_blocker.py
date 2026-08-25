@@ -48,18 +48,13 @@ from hooks_constants.cursor_cli_python_misfire_blocker_constants import (  # noq
     TOOL_NAME_KEY,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 
 
 def is_cursor_python_gate_misfire(command: str) -> bool:
     """Return True when *command* launches Cursor against a gate-shaped Python run.
-
-    ::
-
-        cursor code_rules_gate.py --base origin/main   flag
-        Cursor.exe x.py --staged                       flag
-        cursor code_rules_gate.py                      ok
-        cursor -g file.py:12                           ok
-        python code_rules_gate.py --base origin/main   ok
 
     Args:
         command: Raw Bash or PowerShell command string from the tool input.
@@ -72,15 +67,12 @@ def is_cursor_python_gate_misfire(command: str) -> bool:
         return False
     if not GATE_FLAG_PATTERN.search(command):
         return False
-    if GATE_SCRIPT_PATTERN.search(command):
-        return True
-    return PYTHON_PATH_PATTERN.search(command) is not None
+    return bool(GATE_SCRIPT_PATTERN.search(command) or PYTHON_PATH_PATTERN.search(command))
 
 
 def main() -> None:
-    try:
-        hook_input = json.load(sys.stdin)
-    except json.JSONDecodeError:
+    hook_input = read_hook_input_dictionary_from_stdin()
+    if hook_input is None:
         sys.exit(0)
 
     tool_name = hook_input.get(TOOL_NAME_KEY, "")
@@ -88,8 +80,10 @@ def main() -> None:
         sys.exit(0)
 
     tool_input = hook_input.get(TOOL_INPUT_KEY) or {}
-    command = tool_input.get(COMMAND_KEY, "") if isinstance(tool_input, dict) else ""
-    if not is_cursor_python_gate_misfire(command):
+    if not isinstance(tool_input, dict):
+        sys.exit(0)
+    command = tool_input.get(COMMAND_KEY, "")
+    if not isinstance(command, str) or not is_cursor_python_gate_misfire(command):
         sys.exit(0)
 
     deny_payload = {
@@ -103,7 +97,7 @@ def main() -> None:
         calling_hook_name=CALLING_HOOK_NAME,
         hook_event=HOOK_EVENT_NAME,
         block_reason=CORRECTIVE_MESSAGE,
-        tool_name=tool_name,
+        tool_name=str(tool_name),
     )
     print(json.dumps(deny_payload))
     sys.stdout.flush()
