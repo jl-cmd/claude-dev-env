@@ -1,9 +1,9 @@
 import json
-from pathlib import Path
 import sys
-import tomllib
+from pathlib import Path
 
 import pytest
+import tomllib
 
 module_directory = str(Path(__file__).parents[1])
 if module_directory not in sys.path:
@@ -17,8 +17,8 @@ from codex_compat_materializer import (
     PlannedFile,
     atomic_write,
     build_plan,
-    convert_agent,
     content_to_bytes,
+    convert_agent,
     hash_content,
     load_manifest,
     parse_frontmatter,
@@ -142,6 +142,15 @@ def test_validation_rejects_overlap_and_unsafe_paths(tmp_path: Path) -> None:
     for name in ("../escape", "C:/escape", "\\\\server\\share", "/rooted"):
         with pytest.raises(MaterializerError):
             validate_target_path(config.target_root, name)
+
+
+def test_public_legacy_call_forms_validate_collection_entries(tmp_path: Path) -> None:
+    config = MaterializerConfig(tmp_path / "source", tmp_path / "target")
+
+    with pytest.raises(TypeError, match="ClaudeAgent entries"):
+        build_plan(config, all_agents=[object()])
+    with pytest.raises(TypeError, match="PlannedFile entries"):
+        publish_plan(config, all_planned_files=[object()])
 
 
 def test_validation_rejects_reparse_point_from_portable_attribute_seam(
