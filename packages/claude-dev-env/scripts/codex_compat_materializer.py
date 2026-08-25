@@ -9,13 +9,13 @@ import os
 import re
 import stat
 import tempfile
-import tomllib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import NoReturn
 
+import tomllib
 import yaml
-
 
 ManagedContent = str | bytes
 
@@ -50,6 +50,10 @@ class MaterializerError(ValueError):
     """Raised when a materialization request cannot be safely planned."""
 
 
+class MaterializerRunFatal(MaterializerError):
+    """Raised when invalid materializer state stops the whole run."""
+
+
 class ArgumentParserError(ValueError):
     """Raised when command-line arguments cannot be parsed."""
 
@@ -57,7 +61,7 @@ class ArgumentParserError(ValueError):
 class MaterializerArgumentParser(argparse.ArgumentParser):
     """Parse materializer arguments while keeping errors in the JSON contract."""
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         """Raise a reportable parser error instead of writing process output."""
         raise ArgumentParserError(message)
 
@@ -407,6 +411,26 @@ def convert_agent(agent: ClaudeAgent) -> str:
     return content
 
 
+def _validated_agent_iterable(candidate: object) -> tuple[ClaudeAgent, ...]:
+    """Validate the optional agent iterable used by the legacy call form."""
+    if not isinstance(candidate, Iterable):
+        raise TypeError("agent collection requires an iterable")
+    all_candidate_agents = tuple(candidate)
+    if not all(isinstance(each_agent, ClaudeAgent) for each_agent in all_candidate_agents):
+        raise TypeError("agent collection requires ClaudeAgent entries")
+    return all_candidate_agents
+
+
+def _validated_planned_file_iterable(candidate: object) -> tuple[PlannedFile, ...]:
+    """Validate planned files passed through the legacy publication call form."""
+    if not isinstance(candidate, Iterable):
+        raise TypeError("planned files require an iterable")
+    all_candidate_files = tuple(candidate)
+    if not all(isinstance(each_file, PlannedFile) for each_file in all_candidate_files):
+        raise TypeError("planned files require PlannedFile entries")
+    return all_candidate_files
+
+
 def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
     """Discover and parse Markdown agents below the source root.
 
@@ -442,9 +466,9 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
     return all_agents
 
 
-def _case_fold_collision_error(target_relative_path: str) -> MaterializerError:
+def _case_fold_collision_error(target_relative_path: str) -> MaterializerRunFatal:
     """Build the error for two target names that differ only by letter case."""
-    return MaterializerError(f"case-fold collision: {target_relative_path}")
+    return MaterializerRunFatal(f"case-fold collision: {target_relative_path}")
 
 
 def _validate_orphan_target_is_adoptable(
@@ -479,6 +503,13 @@ def _validate_orphan_target_is_adoptable(
         raise MaterializerError(unmanaged_target_message.format(path=target_relative_path))
 
 
+def _configured_manifest_path(config: MaterializerConfig) -> Path:
+    """Return the manifest path established during configuration validation."""
+    if config.manifest_path is None:
+        raise MaterializerError("compatibility manifest path requires configuration")
+    return config.manifest_path
+
+
 def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -> tuple[list[PlannedFile], MaterializationReport]:
     """Build planned agent publications and their report.
 
@@ -495,7 +526,8 @@ def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -
     report = MaterializationReport()
     planned: list[PlannedFile] = []
     target_by_name: dict[str, str] = {}
-    previous_records = _manifest_record_by_path(load_manifest(config.manifest_path))
+    manifest_path = _configured_manifest_path(config)
+    previous_records = _manifest_record_by_path(load_manifest(manifest_path))
     existing_by_name = {
         each_path.relative_to(config.target_root).as_posix().casefold(): each_path
         for each_path in config.target_root.rglob("*")
@@ -506,13 +538,13 @@ def _build_plan(config: MaterializerConfig, all_agents: Iterable[ClaudeAgent]) -
         target_relative_path = _normalize_relative_path(each_agent.name + toml_suffix)
         folded_path = target_relative_path.casefold()
         if folded_path in target_by_name:
-            raise _case_fold_collision_error(target_relative_path)
+            raise MaterializerRunFatal(f"case-fold collision: {target_relative_path}")
         content = convert_agent(each_agent)
         _validate_orphan_target_is_adoptable(config, existing_by_name.get(folded_path), target_relative_path, content)
         target_by_name[folded_path] = target_relative_path
         target_path = validate_target_path(config.target_root, target_relative_path)
-        if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
-            raise MaterializerError("planned target collides with compatibility manifest")
+        if _casefold_normalized_path(target_path) == _casefold_normalized_path(manifest_path):
+            raise MaterializerRunFatal("planned target collides with compatibility manifest")
         planned.append(PlannedFile(source_identity, target_relative_path, content, hash_content(content)))
         report.unsupported += len(each_agent.unsupported)
         report.details["unsupported"].extend(f"{source_identity}:{each_key}" for each_key in each_agent.unsupported)
@@ -542,7 +574,11 @@ def build_plan(config: MaterializerConfig, *all_arguments: object, **all_keyword
         if supplied_agents is not None:
             raise TypeError("build_plan received duplicate all_agents")
         supplied_agents = all_arguments[0]
-    discovered_agents = discover_agents(config) if supplied_agents is None else supplied_agents
+    discovered_agents = (
+        discover_agents(config)
+        if supplied_agents is None
+        else _validated_agent_iterable(supplied_agents)
+    )
     return _build_plan(config, discovered_agents)
 
 
@@ -845,9 +881,10 @@ def _publish_planned_targets(
     all_backups: dict[Path, bytes | None],
     failure_injector: Callable[[str], None] | None,
 ) -> None:
+    manifest_path = _configured_manifest_path(config)
     for each_planned_file in all_planned_files:
         target_path, current_bytes, is_publishable = _record_target_state(config, each_planned_file, all_previous_records, report)
-        if _casefold_normalized_path(target_path) == _casefold_normalized_path(config.manifest_path):
+        if _casefold_normalized_path(target_path) == _casefold_normalized_path(manifest_path):
             raise MaterializerError("planned target collides with compatibility manifest")
         if not is_publishable:
             continue
@@ -950,7 +987,8 @@ def _publish_plan(
     publication.planned_files = all_planned_files
     if not config.should_apply:
         return publication
-    previous_manifest = load_manifest(config.manifest_path)
+    manifest_path = _configured_manifest_path(config)
+    previous_manifest = load_manifest(manifest_path)
     previous_records = _manifest_record_by_path(previous_manifest)
     _validate_full_prune_consent(config, all_planned_files, previous_records)
     backups: dict[Path, bytes | None] = {}
@@ -962,10 +1000,10 @@ def _publish_plan(
             config, all_planned_files, previous_records, publication, backups, failure_injector
         )
         _remove_stale_files(config, previous_records, all_planned_files, publication, backups)
-        save_manifest(config.manifest_path, _build_manifest(all_planned_files), failure_injector)
-    except (OSError, RuntimeError, ValueError) as error:
+        save_manifest(manifest_path, _build_manifest(all_planned_files), failure_injector)
+    except (OSError, RuntimeError, ValueError):
         _rollback_publication(backups, publication, initial_written, initial_deleted)
-        raise error
+        raise
     _sort_report_details(publication)
     return publication
 
@@ -1003,7 +1041,10 @@ def publish_plan(config: MaterializerConfig, *all_arguments: object, **all_keywo
             raise TypeError("publish_plan received duplicate failure injector")
         failure_injector = all_arguments[2]
     publication = report if isinstance(report, MaterializationReport) else MaterializationReport()
-    return _publish_plan(config, planned_files, publication, failure_injector)
+    all_planned_files = _validated_planned_file_iterable(planned_files)
+    if failure_injector is not None and not callable(failure_injector):
+        raise TypeError("failure injector requires a callable")
+    return _publish_plan(config, all_planned_files, publication, failure_injector)
 
 
 def _redact_private_paths(
@@ -1086,6 +1127,8 @@ def main(*all_arguments: object) -> int:
         should_apply = options.should_apply
         source_root = options.source_root
         target_root = options.target_root
+        if source_root is None or target_root is None:
+            raise TypeError("materializer roots are required")
         config = MaterializerConfig(
             source_root,
             target_root,
