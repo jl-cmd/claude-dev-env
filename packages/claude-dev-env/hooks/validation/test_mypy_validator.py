@@ -534,6 +534,26 @@ def test_same_stat_non_mypy_rewrite_discovers_strict_mypy_config(
     assert ": error:" in strict_output
 
 
+def test_config_signature_falls_back_when_config_resolution_hits_symlink_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    validator = _load_validator()
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(TOOL_MYPY_PYPROJECT, encoding="utf-8")
+    real_resolve = Path.resolve
+
+    def _raise_resolution_loop(file_path: Path, *, strict: bool = False) -> Path:
+        if file_path == config_path:
+            raise RuntimeError("symlink loop")
+        return real_resolve(file_path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", _raise_resolution_loop)
+
+    signature = validator._config_signature(config_path)
+
+    assert signature.startswith(str(config_path).encode(validator.CACHE_FILE_ENCODING))
+
+
 def test_project_relative_path_within_root_returns_relative() -> None:
     validator = _load_validator()
     project_root = os.path.join("base", "project")

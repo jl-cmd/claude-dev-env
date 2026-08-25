@@ -40,6 +40,10 @@ from mypy_integration import (  # noqa: E402
     find_pyproject_with_mypy_config,
 )
 
+from atomic_file_writer import write_text_atomically  # noqa: E402
+from hooks_constants.atomic_file_writer_constants import (  # noqa: E402
+    ATOMIC_WRITE_TEMPORARY_SUFFIX,
+)
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.mypy_integration_constants import PYPROJECT_FILENAME  # noqa: E402
 from hooks_constants.mypy_validator_cache_constants import (  # noqa: E402
@@ -51,6 +55,7 @@ from hooks_constants.mypy_validator_cache_constants import (  # noqa: E402
     SESSION_ID_ENVIRONMENT_VARIABLE,
     UNKNOWN_SESSION_IDENTIFIER,
 )
+from json_file_reader import read_json_object  # noqa: E402
 
 
 def load_notification_utils() -> ModuleType | None:
@@ -126,30 +131,6 @@ def resolve_session_identifier() -> str:
 def _session_cache_path(cache_filename: str) -> Path:
     session_identifier = resolve_session_identifier()
     return Path(HOOK_STATE_CACHE_DIRECTORY) / session_identifier / cache_filename
-
-
-def _read_cache_file(cache_path: Path) -> dict[str, object]:
-    if not cache_path.is_file():
-        return {}
-    try:
-        raw_text = cache_path.read_text(encoding=CACHE_FILE_ENCODING)
-    except OSError:
-        return {}
-    if not raw_text.strip():
-        return {}
-    try:
-        parsed_cache = json.loads(raw_text)
-    except json.JSONDecodeError:
-        return {}
-    return parsed_cache if isinstance(parsed_cache, dict) else {}
-
-
-def _write_cache_file(cache_path: Path, cache_by_key: dict[str, object]) -> None:
-    try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(cache_by_key), encoding=CACHE_FILE_ENCODING)
-    except OSError:
-        return
 
 
 def _walk_mypy_config(target_file: Path) -> Path | None:
@@ -293,10 +274,10 @@ def discover_mypy_config(target_file: Path) -> Path | None:
             return Path(cached_config_path) if cached_config_path is not None else None
         all_candidate_paths = cached_entry[2]
         config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
-        persisted_cache = _read_cache_file(config_cache_path)
+        persisted_cache = read_json_object(config_cache_path, encoding=CACHE_FILE_ENCODING) or {}
     else:
         config_cache_path = _session_cache_path(MYPY_CONFIG_CACHE_FILENAME)
-        persisted_cache = _read_cache_file(config_cache_path)
+        persisted_cache = read_json_object(config_cache_path, encoding=CACHE_FILE_ENCODING) or {}
         persisted_entry = _read_cached_config_entry(persisted_cache.get(cache_key))
         if persisted_entry is not None:
             config_search_signature = _configuration_metadata_signature(persisted_entry[2])
@@ -324,7 +305,17 @@ def discover_mypy_config(target_file: Path) -> Path | None:
     )
     _session_config_cache_by_target_directory[cache_key] = refreshed_entry
     persisted_cache[cache_key] = _serialize_config_cache_entry(refreshed_entry)
-    _write_cache_file(config_cache_path, persisted_cache)
+    try:
+        write_text_atomically(
+            config_cache_path,
+            json.dumps(persisted_cache),
+            encoding=CACHE_FILE_ENCODING,
+            temporary_prefix=f".{config_cache_path.name}-",
+            temporary_suffix=ATOMIC_WRITE_TEMPORARY_SUFFIX,
+            should_reap_orphans=True,
+        )
+    except OSError:
+        pass
     return discovered_config
 
 
@@ -347,7 +338,7 @@ def _config_signature(mypy_config_file: Path | None) -> bytes:
         return b""
     try:
         resolved_config_path = str(mypy_config_file.resolve())
-    except OSError:
+    except (OSError, RuntimeError):
         resolved_config_path = str(mypy_config_file)
     resolved_config_path_bytes = resolved_config_path.encode(CACHE_FILE_ENCODING)
     try:
@@ -378,16 +369,34 @@ def _composite_content_hash(target_file: str, mypy_config_file: Path | None) -> 
 
 
 def _read_cached_passing_hash(target_file: str) -> str | None:
-    content_hash_cache = _read_cache_file(_session_cache_path(MYPY_CONTENT_HASH_CACHE_FILENAME))
+    content_hash_cache = (
+        read_json_object(
+            _session_cache_path(MYPY_CONTENT_HASH_CACHE_FILENAME),
+            encoding=CACHE_FILE_ENCODING,
+        )
+        or {}
+    )
     cached_hash = content_hash_cache.get(target_file)
     return cached_hash if isinstance(cached_hash, str) else None
 
 
 def _record_passing_hash(target_file: str, content_hash: str) -> None:
     content_hash_cache_path = _session_cache_path(MYPY_CONTENT_HASH_CACHE_FILENAME)
-    content_hash_cache = _read_cache_file(content_hash_cache_path)
+    content_hash_cache = (
+        read_json_object(content_hash_cache_path, encoding=CACHE_FILE_ENCODING) or {}
+    )
     content_hash_cache[target_file] = content_hash
-    _write_cache_file(content_hash_cache_path, content_hash_cache)
+    try:
+        write_text_atomically(
+            content_hash_cache_path,
+            json.dumps(content_hash_cache),
+            encoding=CACHE_FILE_ENCODING,
+            temporary_prefix=f".{content_hash_cache_path.name}-",
+            temporary_suffix=ATOMIC_WRITE_TEMPORARY_SUFFIX,
+            should_reap_orphans=True,
+        )
+    except OSError:
+        pass
 
 
 def build_mypy_command(relative_file_path: str, mypy_config_file: Path | None) -> list[str]:
