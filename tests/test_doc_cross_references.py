@@ -40,6 +40,7 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         ".claude/rules/reuse-existing-tooling.md",
         ".claude/settings.json",
         ".claude/settings.local.json",
+        ".claude/skills/pr-summarizer/SKILL.md",
         "docs/.claude-notes.md",
         "docs/file1.md",
         "docs/file2.md",

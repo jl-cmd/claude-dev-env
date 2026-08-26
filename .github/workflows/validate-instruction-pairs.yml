@@ -18,6 +18,7 @@ on:
       - "packages/claude-dev-env/scripts/validate_instruction_pairs.py"
       - ".pre-commit-config.yaml"
       - ".gitattributes"
+  workflow_dispatch:
 
 jobs:
   instruction-pairs:
