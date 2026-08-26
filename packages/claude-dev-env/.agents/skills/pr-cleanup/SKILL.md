@@ -48,6 +48,7 @@ with the user.
 | `pr-name-by-capability` | Find driver or motive words on reusable capability surfaces | Naming findings and rename directions |
 | `pr-small-cl` | Choose one coherent pull request or an ordered replacement stack | Focused boundary and dependencies |
 | `source-command-sr-loop` | Run `e-simplify`, then `e-code-review low --fix` until clean | Review passes, fixes, and validation |
+| `pr-summarizer` (repo-local) | When the repository under cleanup ships `.claude/skills/pr-summarizer/`, run it after Ready and post the secret-gist preview comment | Preview URL and comment confirmation |
 
 ## Task seeding
 
@@ -89,7 +90,12 @@ review passes, fixes, skips, tests, and commit SHAs.
 
 ### 6. Promote and report
 
-After the applicable gate passes, complete the [Finish report](#finish-report).
+After the applicable gate passes, when the repository under cleanup includes
+`.claude/skills/pr-summarizer/SKILL.md`, load and run that skill for each pull
+request promoted to Ready in this cleanup run. Post the secret gist preview as a
+pull request comment before completing the [Finish report](#finish-report).
+
+When the skill is absent, record `N/A` for the summary step and continue.
 
 ## Promotion gates
 
@@ -110,6 +116,9 @@ Reapply every relevant fix to the child. Rerun child tests, `e-simplify`, and
 `e-code-review` after the merge. Record the new child head and every validation
 result before promoting the child to Ready.
 
+When the repository ships `pr-summarizer`, run it on the child after child Ready
+promotion if the child is in scope for this cleanup run.
+
 Use `reference/task-seeds.md` and `reference/process-inventory.md` to record promotion evidence.
 
 ## Finish report
@@ -118,6 +127,7 @@ Use `reference/task-seeds.md` and `reference/process-inventory.md` to record pro
 - `pr-refinement` outcome.
 - `source-command-sr-loop` passes, commits, and validation results.
 - Parent-ready and child-ready SHAs when a child is promoted.
+- `pr-summarizer` preview URLs and comment confirmation for each Ready pull request, or `N/A` when the repo does not ship the skill.
 - Remaining hard block, or `null`.
 
 ## File index
@@ -125,5 +135,5 @@ Use `reference/task-seeds.md` and `reference/process-inventory.md` to record pro
 | Path | Purpose |
 |---|---|
 | `SKILL.md` | Hub for refinement, cleanup convergence, promotion gates, and reporting |
-| `reference/task-seeds.md` | Ordered session tasks for audits, delivery, validation, and promotion |
+| `reference/task-seeds.md` | Ordered session tasks for audits, delivery, validation, promotion, and summary |
 | `reference/process-inventory.md` | Process classes, evidence homes, and paired task checks |
