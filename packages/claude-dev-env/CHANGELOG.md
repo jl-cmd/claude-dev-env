@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.22.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.2...claude-dev-env-v2.22.0) (2026-08-27)
+
+
+### Features
+
+* disable model invocation for orchestrator and team-advisor ([080e73d](https://github.com/jl-cmd/claude-dev-env/commit/080e73d4c6c55fe22c1465829b5387aaa75734d7))
+* disable model invocation for orchestrator and team-advisor ([2ebe49b](https://github.com/jl-cmd/claude-dev-env/commit/2ebe49bd27814b3814152f026eda7304e352d893))
+
+
+### Documentation
+
+* update AGENTS.md ([0f2345d](https://github.com/jl-cmd/claude-dev-env/commit/0f2345dda78d36fa60e0de2f761196735d772081))
+
+
+### CI
+
+* retrigger pull request checks ([430937d](https://github.com/jl-cmd/claude-dev-env/commit/430937d4d35f4b05ef4dd4e88d63f6cccc189e59))
+
 ## [2.21.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.1...claude-dev-env-v2.21.2) (2026-08-25)
 
 
