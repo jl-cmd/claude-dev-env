@@ -6,6 +6,7 @@ description: >-
   correction, plan, or stop. Triggers: '/orchestrator', 'orchestrator
   strategy', 'run with an orchestrator', 'executor-advisor mode',
   'orchestrator enforcement', 'agent routing', 'orchestrate'.
+disable-model-invocation: true
 ---
 
 # Orchestrator Strategy
