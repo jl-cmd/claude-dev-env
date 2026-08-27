@@ -5,6 +5,7 @@ description: >-
   it before substantive work, completion, commits, or when stuck. Triggers:
   'team-advisor', 'team advisor', 'second opinion', 'advisor', 'consult',
   'verify', 'validate', 'commit', 'push'.
+disable-model-invocation: true
 ---
 
 # Team Advisor
