@@ -93,7 +93,7 @@ def run_issue_tracker_session_starter(
     is_enabled: bool,
     is_repository_eligible: bool,
     timeout_milliseconds: int,
-) -> dict[str, str]:
+) -> dict[str, object]:
     """Return additionalContext when opt-in and repo gate both pass, else empty.
 
     Args:
@@ -103,7 +103,8 @@ def run_issue_tracker_session_starter(
         timeout_milliseconds: Injector timeout budget.
 
     Returns:
-        ``{"additionalContext": ...}`` when injected, else ``{}``.
+        ``{"hookSpecificOutput": {"hookEventName": "SessionStart", ...}}``
+        when injected, else ``{}``.
     """
     if not is_enabled or not is_repository_eligible:
         return {}

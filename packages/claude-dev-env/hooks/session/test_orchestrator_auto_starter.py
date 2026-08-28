@@ -51,13 +51,15 @@ def test_enabled_startup_emits_orchestrator_directive() -> None:
     payload = run_orchestrator_auto_starter(
         {"source": "startup"}, True, DEFAULT_TIMEOUT
     )
-    assert payload["additionalContext"] == ORCHESTRATOR_SESSION_START_DIRECTIVE
+    hook_output = payload["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "SessionStart"
+    assert hook_output["additionalContext"] == ORCHESTRATOR_SESSION_START_DIRECTIVE
 
 
 @pytest.mark.parametrize("source", ("startup", "resume", "clear", "compact"))
 def test_enabled_known_sources_emit_directive(source: str) -> None:
     payload = run_orchestrator_auto_starter({"source": source}, True, DEFAULT_TIMEOUT)
-    assert ORCHESTRATOR_SESSION_START_DIRECTIVE in payload.get("additionalContext", "")
+    assert ORCHESTRATOR_SESSION_START_DIRECTIVE in payload["hookSpecificOutput"]["additionalContext"]
 
 
 def test_enabled_unknown_source_emits_nothing() -> None:
@@ -81,7 +83,7 @@ def test_main_stdin_enabled_prints_json() -> None:
     )
     assert completed.returncode == 0
     parsed = json.loads(completed.stdout)
-    assert parsed["additionalContext"] == ORCHESTRATOR_SESSION_START_DIRECTIVE
+    assert parsed["hookSpecificOutput"]["additionalContext"] == ORCHESTRATOR_SESSION_START_DIRECTIVE
 
 
 def test_main_stdin_disabled_prints_nothing() -> None:
