@@ -22,6 +22,34 @@ A missing or unreadable source root is an error, and the run changes nothing. An
 
 Run `codex-compat bridge --surface <name> --payload '<json-object>'`. The bridge exposes the Python translation logic directly. `TaskCreate` and `TaskUpdate` map to `update_plan`; spawn, message, wait, and stop map to multi-agent surfaces. `ScheduleWakeup` is explicitly unsupported and requires manual review.
 
+## Per-message context injection (manual wiring)
+
+Codex reads the same `hookSpecificOutput.additionalContext` shape as Claude,
+on its own `UserPromptSubmit` event. `hooks/session/style_reminder_prompt.py`
+works for both, as is.
+
+The install already points `$CODEX_HOME/hooks` at the shared hooks folder.
+Once installed, the script sits at
+`$CODEX_HOME/hooks/session/style_reminder_prompt.py`.
+
+Add this by hand to `$CODEX_HOME/hooks.json` (merge it into an existing file):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": "python3 $CODEX_HOME/hooks/session/style_reminder_prompt.py"
+      }
+    ]
+  }
+}
+```
+
+Limits:
+
+- The installer skips Codex `hooks.json` for now. Wire it by hand.
+
 ## Roots and safety
 
 Both roots are caller-supplied. The tool never writes to `.agents` or `CODEX_HOME` automatically; pass those locations explicitly when desired. No personal paths or secrets are embedded in the package.
