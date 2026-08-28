@@ -64,7 +64,16 @@ def main() -> None:
         if registry_contains_path(known_registry, git_root):
             sys.exit(0)
         instruction = _build_confirm_instruction(git_root)
-        print(json.dumps({"additionalContext": instruction}))
+        print(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": instruction,
+                    }
+                }
+            )
+        )
     except Exception as e:
         _logger.error("%s", e)
     sys.exit(0)

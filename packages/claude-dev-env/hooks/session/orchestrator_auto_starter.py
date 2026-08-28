@@ -68,7 +68,7 @@ def run_orchestrator_auto_starter(
     payload_by_key: dict[str, object],
     is_enabled: bool,
     timeout_milliseconds: int,
-) -> dict[str, str]:
+) -> dict[str, object]:
     """Return additionalContext payload when opt-in injects, else empty dict.
 
     Args:
@@ -77,7 +77,8 @@ def run_orchestrator_auto_starter(
         timeout_milliseconds: Injector timeout budget.
 
     Returns:
-        ``{"additionalContext": ...}`` when injected, else ``{}``.
+        ``{"hookSpecificOutput": {"hookEventName": "SessionStart", ...}}``
+        when injected, else ``{}``.
     """
     if not is_enabled:
         return {}
