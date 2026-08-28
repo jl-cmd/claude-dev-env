@@ -10,6 +10,11 @@ tool and repeats it until a pass returns zero new findings.
 Use `rules/asd-ste100-language.md` for user-facing wording. Keep the loop's
 cleanup, verification, commit, push, and finish-report fields.
 
+## Effort
+
+Set every model call to `max` effort. If that model has no `max` effort, use
+`xhigh`.
+
 ## Stack context
 
 Before any fixes, load and review the full PR stack, from its base through the
