@@ -7,7 +7,12 @@ import types
 
 import gate_utils
 import pytest
-from git_hooks_constants import ALL_GATE_SCRIPT_RELATIVE_PATH
+from git_hooks_constants import (
+    ALL_GATE_SCRIPT_RELATIVE_PATH,
+    ALL_GH_PR_VIEW_COMMAND,
+    GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME,
+    GH_PR_VIEW_COMMAND_CONSTANT_NAME,
+)
 
 
 def test_resolve_gate_script_path_uses_override_env_var_when_set(
@@ -230,6 +235,52 @@ def test_git_hooks_constants_exports_canonical_gate_script_relative_path() -> No
     )
 
 
+def test_load_git_hooks_constant_prefers_canonical_name() -> None:
+    constants_module = types.SimpleNamespace(
+        ALL_GATE_SCRIPT_RELATIVE_PATH=("_shared", "pr-loop", "scripts", "code_rules_gate.py"),
+        GATE_SCRIPT_RELATIVE_PATH=("legacy", "path.py"),
+    )
+
+    loaded_path = gate_utils.load_git_hooks_constant(
+        GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME,
+        constants_module,
+    )
+
+    assert loaded_path == ("_shared", "pr-loop", "scripts", "code_rules_gate.py")
+
+
+def test_load_git_hooks_constant_falls_back_to_legacy_name() -> None:
+    constants_module = types.SimpleNamespace(
+        GATE_SCRIPT_RELATIVE_PATH=("_shared", "pr-loop", "scripts", "code_rules_gate.py"),
+    )
+
+    loaded_path = gate_utils.load_git_hooks_constant(
+        GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME,
+        constants_module,
+    )
+
+    assert loaded_path == ("_shared", "pr-loop", "scripts", "code_rules_gate.py")
+
+
+def test_load_git_hooks_constant_falls_back_for_gh_pr_view_command() -> None:
+    legacy_command = ("gh", "pr", "view", "--json", "url", "--jq", ".url")
+    constants_module = types.SimpleNamespace(GH_PR_VIEW_COMMAND=legacy_command)
+
+    loaded_command = gate_utils.load_git_hooks_constant(
+        GH_PR_VIEW_COMMAND_CONSTANT_NAME,
+        constants_module,
+    )
+
+    assert loaded_command == legacy_command
+
+
+def test_load_git_hooks_constant_raises_when_neither_name_exists() -> None:
+    constants_module = types.SimpleNamespace()
+
+    with pytest.raises(AttributeError, match="ALL_GH_PR_VIEW_COMMAND"):
+        gate_utils.load_git_hooks_constant(GH_PR_VIEW_COMMAND_CONSTANT_NAME, constants_module)
+
+
 def test_load_gate_script_relative_path_prefers_canonical_name() -> None:
     constants_module = types.SimpleNamespace(
         ALL_GATE_SCRIPT_RELATIVE_PATH=("_shared", "pr-loop", "scripts", "code_rules_gate.py"),
@@ -255,4 +306,5 @@ def test_gate_utils_module_import_resolves_live_constants() -> None:
     loaded_path = gate_utils.load_gate_script_relative_path()
 
     assert loaded_path == ALL_GATE_SCRIPT_RELATIVE_PATH
+    assert gate_utils.load_git_hooks_constant(GH_PR_VIEW_COMMAND_CONSTANT_NAME) == ALL_GH_PR_VIEW_COMMAND
 

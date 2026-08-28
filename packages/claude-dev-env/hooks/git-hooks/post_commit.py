@@ -17,7 +17,13 @@ import sys
 from enum import StrEnum
 from pathlib import Path
 
-from git_hooks_constants import GIT_COMMAND_SUCCESS_EXIT_CODE, GIT_EXECUTABLE_NAME
+from gate_utils import load_git_hooks_constant
+from git_hooks_constants import (
+    GIT_COMMAND_SUCCESS_EXIT_CODE,
+    GIT_EXECUTABLE_NAME,
+    GH_PR_VIEW_COMMAND_CONSTANT_NAME,
+    GH_PR_VIEW_COMMAND_TIMEOUT_SECONDS,
+)
 
 
 class ParentPointerStatus(StrEnum):
@@ -163,6 +169,34 @@ def update_parent_pointer(
     return ParentPointerStatus.UPDATED, ""
 
 
+
+def print_pr_handoff(repo_dir: Path) -> None:
+    """Print a PR handoff reminder when this repository has an open PR."""
+    try:
+        all_gh_pr_view_command = load_git_hooks_constant(GH_PR_VIEW_COMMAND_CONSTANT_NAME)
+    except AttributeError:
+        return
+    reminder = (
+        "PR handoff: {url}. Read the PR body and complete diff. Choose the title "
+        "from that evidence, never branch name, commit message, labels, current "
+        "title, or a shallow summary. Update the PR title/body. Report link, "
+        "commit, result, and checks."
+    )
+    try:
+        command_result = subprocess.run(
+            list(all_gh_pr_view_command),
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=GH_PR_VIEW_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired, TypeError):
+        return
+    if command_result.returncode == 0 and command_result.stdout.strip():
+        print(reminder.format(url=command_result.stdout.strip()))
+
+
 def main() -> int:
     """Update a parent repository after a submodule commit."""
     repo_path_text = run_git_from_current_directory("rev-parse", "--show-toplevel")
@@ -171,39 +205,34 @@ def main() -> int:
 
     repo_dir = Path(repo_path_text).resolve()
     parent_repo = find_parent_repo(repo_dir)
-    if parent_repo is None:
-        return 0
+    if parent_repo is not None:
+        commit_msg = run_git("log", "-1", "--pretty=%s", cwd=repo_dir)
+        commit_hash = run_git("rev-parse", "HEAD", cwd=repo_dir)
+        short_commit_hash = run_git("rev-parse", "--short", "HEAD", cwd=repo_dir)
+        if commit_hash and short_commit_hash:
+            print()
+            print("=== Submodule Parent Update ===")
+            print(f"Submodule: {repo_dir.name} @ {short_commit_hash}")
+            print(f"Parent:    {parent_repo}")
 
-    commit_msg = run_git("log", "-1", "--pretty=%s", cwd=repo_dir)
-    commit_hash = run_git("rev-parse", "HEAD", cwd=repo_dir)
-    short_commit_hash = run_git("rev-parse", "--short", "HEAD", cwd=repo_dir)
-    if not commit_hash or not short_commit_hash:
-        return 0
+            parent_pointer_status, parent_pointer_diagnostic = update_parent_pointer(
+                parent_repo,
+                repo_dir,
+                commit_hash,
+                commit_msg,
+            )
+            if parent_pointer_status is ParentPointerStatus.FAILED:
+                print("Parent update failed.")
+                if parent_pointer_diagnostic:
+                    print(f"Git diagnostic: {parent_pointer_diagnostic}")
+            elif parent_pointer_status is ParentPointerStatus.UNCHANGED:
+                print("Parent already up to date.")
+            else:
+                print("Parent updated successfully.")
+                print("================================")
+                print()
 
-    print()
-    print("=== Submodule Parent Update ===")
-    print(f"Submodule: {repo_dir.name} @ {short_commit_hash}")
-    print(f"Parent:    {parent_repo}")
-
-    parent_pointer_status, parent_pointer_diagnostic = update_parent_pointer(
-        parent_repo,
-        repo_dir,
-        commit_hash,
-        commit_msg,
-    )
-    if parent_pointer_status is ParentPointerStatus.FAILED:
-        print("Parent update failed.")
-        if parent_pointer_diagnostic:
-            print(f"Git diagnostic: {parent_pointer_diagnostic}")
-        return 0
-    if parent_pointer_status is ParentPointerStatus.UNCHANGED:
-        print("Parent already up to date.")
-        return 0
-
-    print("Parent updated successfully.")
-    print("================================")
-    print()
-
+    print_pr_handoff(repo_dir)
     return 0
 
 

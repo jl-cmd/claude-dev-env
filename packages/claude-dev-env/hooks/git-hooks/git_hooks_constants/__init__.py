@@ -27,6 +27,18 @@ ALL_GATE_SCRIPT_RELATIVE_PATH: tuple[str, ...] = (
     "scripts",
     "code_rules_gate.py",
 )
+ALL_GH_PR_VIEW_COMMAND: tuple[str, ...] = (
+    "gh",
+    "pr",
+    "view",
+    "--json",
+    "url",
+    "--jq",
+    ".url",
+)
+GH_PR_VIEW_COMMAND_TIMEOUT_SECONDS: int = 5
+GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME: str = "ALL_GATE_SCRIPT_RELATIVE_PATH"
+GH_PR_VIEW_COMMAND_CONSTANT_NAME: str = "ALL_GH_PR_VIEW_COMMAND"
 GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE: int = 2
 GATE_SCRIPT_NOT_FOUND_MESSAGE: str = (
     "claude-dev-env pre-commit: gate script not found at {path}, skipping enforcement"

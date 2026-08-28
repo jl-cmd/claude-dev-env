@@ -11,22 +11,50 @@ from git_hooks_constants import (
     CLAUDE_HOME_DEFAULT_SUBDIRECTORY,
     CLAUDE_HOME_ENV_VAR,
     GATE_PATH_OVERRIDE_ENV_VAR,
+    GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME,
 )
+
+
+def load_git_hooks_constant(
+    canonical_name: str,
+    constants_module: object | None = None,
+) -> object:
+    """Return a git_hooks_constants attribute by canonical name.
+
+    Prefer the canonical ALL_* name. Fall back to the same name without the
+    ALL_ prefix when an older installed constants module still uses the legacy
+    spelling.
+    """
+    module = git_hooks_constants if constants_module is None else constants_module
+    if hasattr(module, canonical_name):
+        return getattr(module, canonical_name)
+    if canonical_name.startswith("ALL_"):
+        legacy_name = canonical_name.removeprefix("ALL_")
+        if hasattr(module, legacy_name):
+            return getattr(module, legacy_name)
+    raise AttributeError(
+        f"git_hooks_constants has no attribute {canonical_name!r}"
+        + (
+            f" or legacy {canonical_name.removeprefix('ALL_')!r}"
+            if canonical_name.startswith("ALL_")
+            else ""
+        )
+    )
 
 
 def load_gate_script_relative_path(
     constants_module: object | None = None,
 ) -> tuple[str, ...]:
-    """Return the gate script path segments from git_hooks_constants.
-
-    Prefer ALL_GATE_SCRIPT_RELATIVE_PATH. Fall back to GATE_SCRIPT_RELATIVE_PATH
-    when an older installed constants module has not been updated yet.
-    """
-    module = git_hooks_constants if constants_module is None else constants_module
-    try:
-        return module.ALL_GATE_SCRIPT_RELATIVE_PATH
-    except AttributeError:
-        return module.GATE_SCRIPT_RELATIVE_PATH
+    """Return the gate script path segments from git_hooks_constants."""
+    relative_path = load_git_hooks_constant(
+        GATE_SCRIPT_RELATIVE_PATH_CONSTANT_NAME,
+        constants_module,
+    )
+    if not isinstance(relative_path, tuple):
+        raise TypeError(
+            "ALL_GATE_SCRIPT_RELATIVE_PATH must be a tuple of path segments"
+        )
+    return relative_path
 
 
 def resolve_gate_script_path() -> tuple[Path, Path | None]:

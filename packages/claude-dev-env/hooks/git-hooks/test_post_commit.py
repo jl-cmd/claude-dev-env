@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import post_commit
 import pytest
@@ -201,3 +202,45 @@ def test_main_prints_git_failure_diagnostic(
 
     assert post_commit.main() == 0
     assert "Git diagnostic: fatal: fixture commit failure" in capsys.readouterr().out
+
+def test_print_pr_handoff_skips_when_constant_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        post_commit,
+        "load_git_hooks_constant",
+        lambda name: (_ for _ in ()).throw(AttributeError(name)),
+    )
+
+    post_commit.print_pr_handoff(tmp_path)
+
+    assert capsys.readouterr().out == ""
+
+
+def test_print_pr_handoff_prints_url_when_gh_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        post_commit,
+        "load_git_hooks_constant",
+        lambda name: ("gh", "pr", "view"),
+    )
+
+    def fake_run(*args, **kwargs):
+        completed = MagicMock()
+        completed.returncode = 0
+        completed.stdout = "https://github.com/example/repo/pull/1\n"
+        return completed
+
+    monkeypatch.setattr(post_commit.subprocess, "run", fake_run)
+
+    post_commit.print_pr_handoff(tmp_path)
+
+    output = capsys.readouterr().out
+    assert "https://github.com/example/repo/pull/1" in output
+    assert output.startswith("PR handoff:")
+
