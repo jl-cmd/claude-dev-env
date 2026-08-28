@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.26.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.25.0...claude-dev-env-v2.26.0) (2026-08-28)
+
+
+### Features
+
+* add a PR plain-language cleanup skill ([b94c8ef](https://github.com/jl-cmd/claude-dev-env/commit/b94c8ef42503f4403ea2f506cf6995973abe74ac))
+* Add a skill for clear PR titles and descriptions. ([8f357b8](https://github.com/jl-cmd/claude-dev-env/commit/8f357b83cf3a962945b72bda9b3b0e28c06cca47))
+* add PR plain-language cleanup skill ([ae308eb](https://github.com/jl-cmd/claude-dev-env/commit/ae308eb3f222a51b7e4d9a5f8a8b0bd321ebcf71))
+* add pull request title description skill ([9e3497f](https://github.com/jl-cmd/claude-dev-env/commit/9e3497f9287c9fb39b5357e6c3120b12bdbfaead))
+* allow user-only skill frontmatter ([6f7d0c7](https://github.com/jl-cmd/claude-dev-env/commit/6f7d0c7e5e46619aba478b0f9a2ba510deac9871))
+* keep plain-language cleanup user-invoked ([43ad395](https://github.com/jl-cmd/claude-dev-env/commit/43ad395c848944e11e4d521c575f00c0ba3bf878))
+* let PR description skill save results ([cfa5d6b](https://github.com/jl-cmd/claude-dev-env/commit/cfa5d6b05f247030083b5012903e3d4ac3704606))
+* limit plain-language cleanup scope ([fcdbab6](https://github.com/jl-cmd/claude-dev-env/commit/fcdbab6ae1a6790e18b02a7d0f05f7a422b7e623))
+* Limit plain-language cleanup scope ([8e7a789](https://github.com/jl-cmd/claude-dev-env/commit/8e7a789241b6eaa1e5c476efadf053c0fdeee380))
+* Make PR cleanup user-invoked only ([1e9a517](https://github.com/jl-cmd/claude-dev-env/commit/1e9a5174f9d4d064ed15014dcb3d7e8e85ce0b83))
+* Make PR cleanup user-invoked only ([33a2a60](https://github.com/jl-cmd/claude-dev-env/commit/33a2a605538b5d71b08a2dc89a90a84b64a639d7))
+
+
+### Bug Fixes
+
+* emit valid SessionStart hook envelopes ([aa0c3e3](https://github.com/jl-cmd/claude-dev-env/commit/aa0c3e3e25d8d3f317a13d6dd33fa2de58c683c0))
+* emit valid SessionStart hook output ([aa8523d](https://github.com/jl-cmd/claude-dev-env/commit/aa8523d37eaabb61d17cfaedb845317929cbb0bb))
+* keep the PR skill prompt verbatim ([f71043c](https://github.com/jl-cmd/claude-dev-env/commit/f71043ccc54ebcae0cede97e9101cf49ee4d9963))
+
 ## [2.25.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.24.0...claude-dev-env-v2.25.0) (2026-08-28)
 
 
