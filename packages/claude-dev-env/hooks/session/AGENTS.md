@@ -1,6 +1,6 @@
 # hooks/session
 
-SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, injecting working-style guidance, and clearing PR-author swap state at shutdown.
+SessionStart and SessionEnd hooks for per-session setup and cleanup: removing stale session and plugin-data directories at startup, detecting unregistered repositories, starting the session's task-list maintenance loop, injecting working-style guidance, and clearing PR-author swap state at shutdown. Also holds the UserPromptSubmit hook. It adds a style reminder to each message.
 
 The working-style projection uses `~/.claude/rules/asd-ste100-language.md` for
 user-facing word choice, sentence style, tone, punctuation, and prose form.
@@ -21,6 +21,8 @@ user-facing word choice, sentence style, tone, punctuation, and prose form.
 | `test_orchestrator_auto_starter.py` | — | Tests for `orchestrator_auto_starter.py` |
 | `test_issue_tracker_session_starter.py` | — | Tests for `issue_tracker_session_starter.py` |
 | `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, canonical language policy, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
+| `style_reminder_prompt.py` | UserPromptSubmit | Adds the style reminder ("small words. few words. always. forever.") to every message, as `hookSpecificOutput.additionalContext`. Codex reads the same shape, so a manually wired Codex `hooks.json` can reuse this script too (see `docs/codex-compatibility.md`). Prints text and stops. |
+| `test_style_reminder_prompt.py` | — | Tests for `style_reminder_prompt.py` |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
 | `test_session_env_cleanup.py` | — | Tests for `session_env_cleanup.py` |

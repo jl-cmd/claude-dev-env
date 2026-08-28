@@ -29,6 +29,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
 | `falsify-before-green.md` | A check's green counts as evidence only after that same check ran red on a named break, with a passing control beside it |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
+| `few-words.md` | The style reminder. Syncs to Cursor as an always-on `.mdc` rule. |
 | `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
 | `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol and a See-also block for its seven siblings |
