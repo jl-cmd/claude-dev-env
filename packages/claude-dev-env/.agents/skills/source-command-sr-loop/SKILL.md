@@ -13,6 +13,13 @@ Run the converging cleanup loop on the target the user names (a PR URL,
 a branch, or blank for the current branch's diff). Each phase invokes an
 existing skill and repeats it until a pass returns zero new findings.
 
+### Stack context
+
+Before any fixes, load and review the full PR stack, from its base through the
+target PR. Read every PR and diff in the stack. Use that full context to judge
+each proposed simplify or code-review fix. Apply a fix only when it fits the
+stack's design, intent, and changes.
+
 ### Phase A — loop simplify
 
 1. Invoke the `simplify` skill (or its local equivalent, e.g. `e-simplify`)
@@ -43,6 +50,9 @@ existing skill and repeats it until a pass returns zero new findings.
    one pass when Phase A ran first.
 
 ### Finish
+
+When both phases are clean, or only fixed nits remain, mark the target PR ready
+with `gh pr ready`. Confirm that it is no longer a draft.
 
 Report: passes run per phase, commits pushed with hashes, fixes applied, and
 the standing skip list with reasons.
