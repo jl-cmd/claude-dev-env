@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import types
 
 import gate_utils
 import pytest
+from git_hooks_constants import ALL_GATE_SCRIPT_RELATIVE_PATH
 
 
 def test_resolve_gate_script_path_uses_override_env_var_when_set(
@@ -218,3 +220,39 @@ def test_is_safe_regular_file_rejects_path_outside_claude_home_env_trust_root(
     is_safe = gate_utils.is_safe_regular_file(outside_path, None)
 
     assert not is_safe
+
+def test_git_hooks_constants_exports_canonical_gate_script_relative_path() -> None:
+    assert ALL_GATE_SCRIPT_RELATIVE_PATH == (
+        "_shared",
+        "pr-loop",
+        "scripts",
+        "code_rules_gate.py",
+    )
+
+
+def test_load_gate_script_relative_path_prefers_canonical_name() -> None:
+    constants_module = types.SimpleNamespace(
+        ALL_GATE_SCRIPT_RELATIVE_PATH=("_shared", "pr-loop", "scripts", "code_rules_gate.py"),
+        GATE_SCRIPT_RELATIVE_PATH=("legacy", "path.py"),
+    )
+
+    loaded_path = gate_utils.load_gate_script_relative_path(constants_module)
+
+    assert loaded_path == ("_shared", "pr-loop", "scripts", "code_rules_gate.py")
+
+
+def test_load_gate_script_relative_path_falls_back_to_legacy_name() -> None:
+    constants_module = types.SimpleNamespace(
+        GATE_SCRIPT_RELATIVE_PATH=("_shared", "pr-loop", "scripts", "code_rules_gate.py"),
+    )
+
+    loaded_path = gate_utils.load_gate_script_relative_path(constants_module)
+
+    assert loaded_path == ("_shared", "pr-loop", "scripts", "code_rules_gate.py")
+
+
+def test_gate_utils_module_import_resolves_live_constants() -> None:
+    loaded_path = gate_utils.load_gate_script_relative_path()
+
+    assert loaded_path == ALL_GATE_SCRIPT_RELATIVE_PATH
+
