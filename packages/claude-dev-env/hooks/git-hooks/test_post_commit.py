@@ -201,3 +201,90 @@ def test_main_prints_git_failure_diagnostic(
 
     assert post_commit.main() == 0
     assert "Git diagnostic: fatal: fixture commit failure" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "completed_process",
+    [
+        subprocess.CompletedProcess(["gh"], 1, "", "no pull request"),
+        subprocess.CompletedProcess(["gh"], 1, "", "auth failed"),
+    ],
+)
+def test_pull_request_reminder_is_silent_without_successful_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    completed_process: subprocess.CompletedProcess[str],
+) -> None:
+    monkeypatch.setattr(post_commit.subprocess, "run", lambda *args, **kwargs: completed_process)
+
+    post_commit.print_pull_request_reminder(tmp_path)
+
+    assert capsys.readouterr().out == ""
+
+
+def test_pull_request_reminder_prints_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        post_commit.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            ["gh"], 0, "https://github.com/example/repo/pull/1\n", ""
+        ),
+    )
+
+    post_commit.print_pull_request_reminder(tmp_path)
+
+    assert capsys.readouterr().out == (
+        "Reminder: use https://github.com/example/repo/pull/1; read the PR body and "
+        "complete diff, never choose the title from the branch name, commit message, "
+        "labels, current title, or shallow summary; update the PR title/body and "
+        "report the link, commit, result, and checks.\n"
+    )
+
+
+@pytest.mark.parametrize("exception", [FileNotFoundError(), subprocess.TimeoutExpired("gh", 5)])
+def test_pull_request_reminder_ignores_missing_gh_and_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    exception: Exception,
+) -> None:
+    def raise_exception(*args: object, **kwargs: object) -> None:
+        raise exception
+
+    monkeypatch.setattr(post_commit.subprocess, "run", raise_exception)
+
+    post_commit.print_pull_request_reminder(tmp_path)
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_runs_pull_request_reminder_after_parent_update(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    repo = tmp_path / "repo"
+    parent = tmp_path / "parent"
+    repo.mkdir()
+    parent.mkdir()
+    monkeypatch.setattr(post_commit, "run_git_from_current_directory", lambda *args: str(repo))
+    monkeypatch.setattr(post_commit, "find_parent_repo", lambda repo_dir: parent)
+    monkeypatch.setattr(post_commit, "run_git", lambda *args, cwd: "a" * 40)
+    monkeypatch.setattr(
+        post_commit,
+        "update_parent_pointer",
+        lambda *args: events.append("parent") or (post_commit.ParentPointerStatus.UPDATED, ""),
+    )
+    monkeypatch.setattr(
+        post_commit,
+        "print_pull_request_reminder",
+        lambda repo_dir: events.append("reminder"),
+    )
+
+    assert post_commit.main() == 0
+    assert events == ["parent", "reminder"]

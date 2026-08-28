@@ -97,6 +97,9 @@ GIT_REV_PARSE_VERIFY_FLAG: str = "--verify"
 GIT_QUIET_FLAG: str = "--quiet"
 GIT_SYMBOLIC_REFERENCE_SUBCOMMAND: str = "symbolic-ref"
 GIT_COMMAND_TIMEOUT_SECONDS: int = 30
+GH_EXECUTABLE_NAME: str = "gh"
+GH_PR_VIEW_TIMEOUT_SECONDS: int = 5
+GH_PR_VIEW_ARGUMENTS: tuple[str, ...] = ("pr", "view", "--json", "url", "--jq", ".url")
 GIT_FOR_EACH_REF_SUBCOMMAND: str = "for-each-ref"
 GIT_REFERENCE_SHORT_NAME_FORMAT_ARGUMENT: str = "--format=%(refname:short)"
 COMMIT_OBJECT_NAME_SUFFIX: str = "^{commit}"
