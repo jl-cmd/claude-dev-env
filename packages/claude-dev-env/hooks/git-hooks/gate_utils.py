@@ -6,12 +6,27 @@ import os
 import stat
 from pathlib import Path
 
+import git_hooks_constants
 from git_hooks_constants import (
-    ALL_GATE_SCRIPT_RELATIVE_PATH,
     CLAUDE_HOME_DEFAULT_SUBDIRECTORY,
     CLAUDE_HOME_ENV_VAR,
     GATE_PATH_OVERRIDE_ENV_VAR,
 )
+
+
+def load_gate_script_relative_path(
+    constants_module: object | None = None,
+) -> tuple[str, ...]:
+    """Return the gate script path segments from git_hooks_constants.
+
+    Prefer ALL_GATE_SCRIPT_RELATIVE_PATH. Fall back to GATE_SCRIPT_RELATIVE_PATH
+    when an older installed constants module has not been updated yet.
+    """
+    module = git_hooks_constants if constants_module is None else constants_module
+    try:
+        return module.ALL_GATE_SCRIPT_RELATIVE_PATH
+    except AttributeError:
+        return module.GATE_SCRIPT_RELATIVE_PATH
 
 
 def resolve_gate_script_path() -> tuple[Path, Path | None]:
@@ -34,7 +49,7 @@ def resolve_gate_script_path() -> tuple[Path, Path | None]:
         claude_home_directory = Path(claude_home_override).resolve()
     else:
         claude_home_directory = Path.home() / CLAUDE_HOME_DEFAULT_SUBDIRECTORY
-    gate_path = claude_home_directory.joinpath(*ALL_GATE_SCRIPT_RELATIVE_PATH)
+    gate_path = claude_home_directory.joinpath(*load_gate_script_relative_path())
     return gate_path, None
 
 
