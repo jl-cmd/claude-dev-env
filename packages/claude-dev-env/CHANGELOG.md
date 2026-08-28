@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.23.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.1...claude-dev-env-v2.23.0) (2026-08-28)
+
+
+### Features
+
+* add a style reminder hook ([97644d3](https://github.com/jl-cmd/claude-dev-env/commit/97644d3b0b1f808f944b47c431d6f4615d5e9041))
+* add per-message style reminder hook for Claude and Codex ([3e54d04](https://github.com/jl-cmd/claude-dev-env/commit/3e54d049a20249ebe44af7732d4c3b4e2152c272))
+* **commands:** add stack context to sr-loop ([7cdd4b4](https://github.com/jl-cmd/claude-dev-env/commit/7cdd4b45af47f640676ce2680e73abc16da5ad99))
+
+
+### Documentation
+
+* add brevity directive to package AGENTS.md ([1627420](https://github.com/jl-cmd/claude-dev-env/commit/16274204b065ddcb1b86ab41ba8c42793b0b845d))
+* add brevity directive to package AGENTS.md ([a14bfaa](https://github.com/jl-cmd/claude-dev-env/commit/a14bfaa6b45e5dbc61762151b57b739cb27eb4bf))
+* rewrite hook prose with small words, positive framing ([abf44d0](https://github.com/jl-cmd/claude-dev-env/commit/abf44d07a6547adc7543c48ac216e3ff09cb47a7))
+* **sr-loop:** add stack-context and finalize PR readiness guidance ([76945c0](https://github.com/jl-cmd/claude-dev-env/commit/76945c06dbf7ff34683c1d1d4150cb058b11e11e))
+
+
+### Refactoring
+
+* **hooks:** drop session conftest from style reminder tests ([81ba4b0](https://github.com/jl-cmd/claude-dev-env/commit/81ba4b0e627edbe0ee7e7058eaf83919cbec02ba))
+* **hooks:** reuse session path setup in style reminder tests ([c56c6d3](https://github.com/jl-cmd/claude-dev-env/commit/c56c6d371dfbb0c48e1ad5cec13c6e15e1d692b1))
+
 ## [2.22.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.0...claude-dev-env-v2.22.1) (2026-08-28)
 
 
