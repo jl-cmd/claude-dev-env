@@ -1,4 +1,4 @@
-"""Put the session and hooks directories on sys.path for the session tests."""
+"""Add the session and hooks folders to sys.path for the tests."""
 
 import sys
 from pathlib import Path

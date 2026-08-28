@@ -24,17 +24,15 @@ Run `codex-compat bridge --surface <name> --payload '<json-object>'`. The bridge
 
 ## Per-message context injection (manual wiring)
 
-Codex CLI's own `UserPromptSubmit` event reads the same
-`hookSpecificOutput.additionalContext` shape Claude Code reads, so
-`hooks/session/style_reminder_prompt.py` serves both runtimes unchanged. The
-install already publishes `$CODEX_HOME/hooks` as a pointer to the shared hooks
-directory, so the script sits at
-`$CODEX_HOME/hooks/session/style_reminder_prompt.py` once installed.
+Codex reads the same `hookSpecificOutput.additionalContext` shape as Claude,
+on its own `UserPromptSubmit` event. `hooks/session/style_reminder_prompt.py`
+works for both, as is.
 
-Codex has no automated registration for this yet — unlike Claude's
-`settings.json`, `hooks.json` merge, there is no install-time writer, prune, or
-uninstall support for a Codex `hooks.json`. Wire it in by hand: create
-`$CODEX_HOME/hooks.json` (or merge into an existing one) with:
+The install already points `$CODEX_HOME/hooks` at the shared hooks folder.
+Once installed, the script sits at
+`$CODEX_HOME/hooks/session/style_reminder_prompt.py`.
+
+Add this by hand to `$CODEX_HOME/hooks.json` (merge it into an existing file):
 
 ```json
 {
@@ -47,6 +45,10 @@ uninstall support for a Codex `hooks.json`. Wire it in by hand: create
   }
 }
 ```
+
+Limits:
+
+- The installer skips Codex `hooks.json` for now. Wire it by hand.
 
 ## Roots and safety
 

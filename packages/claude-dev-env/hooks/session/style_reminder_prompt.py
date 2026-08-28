@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook — inject the style reminder into every message.
+"""UserPromptSubmit hook. Adds the style reminder to every message.
 
 ::
 
-    user types a prompt
+    user sends a message
              |
              v
-    UserPromptSubmit fires  ->  additionalContext: "small words. few words. always. forever."
+    UserPromptSubmit fires -> additionalContext: "small words. few words. always. forever."
              |
              v
-    the model sees the reminder on this turn, and every turn after it
+    the model sees the reminder this turn, and each turn after
 
-Claude Code and Codex CLI both read the ``hookSpecificOutput.additionalContext``
-shape on their ``UserPromptSubmit`` event, so one script serves both. The hook
-writes nothing and runs no tools itself.
+Claude Code and Codex CLI both read the same ``additionalContext`` shape on
+their ``UserPromptSubmit`` event. One script serves both. The hook prints
+text and stops.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ from hooks_constants.style_reminder_prompt_constants import STYLE_REMINDER_PROMP
 
 
 def build_style_reminder() -> str:
-    """Return the style reminder text emitted on every prompt."""
+    """Return the style reminder text."""
     return STYLE_REMINDER_PROMPT
 
 
 def main() -> None:
-    """Emit the style reminder as UserPromptSubmit additionalContext."""
+    """Print the style reminder as UserPromptSubmit additionalContext."""
     payload = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",

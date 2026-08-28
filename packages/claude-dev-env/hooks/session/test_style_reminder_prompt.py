@@ -1,4 +1,4 @@
-"""Tests for style_reminder_prompt — UserPromptSubmit hook that injects the style reminder."""
+"""Tests for style_reminder_prompt. Checks the hook adds the style reminder."""
 
 import json
 from io import StringIO
@@ -9,7 +9,7 @@ from hooks_constants.style_reminder_prompt_constants import STYLE_REMINDER_PROMP
 
 
 def _run_main() -> str:
-    """Return the stdout the hook's main() writes."""
+    """Return the text main() prints."""
     captured_stdout = StringIO()
     with patch("sys.stdout", captured_stdout):
         reminder.main()

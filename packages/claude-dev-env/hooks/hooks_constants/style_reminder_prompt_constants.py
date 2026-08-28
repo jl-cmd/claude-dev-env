@@ -1,4 +1,4 @@
-"""Style reminder text for the UserPromptSubmit style_reminder_prompt hook."""
+"""The style reminder text for the style_reminder_prompt hook."""
 
 from __future__ import annotations
 
