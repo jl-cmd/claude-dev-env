@@ -148,16 +148,23 @@ def inject_session_start_context(
     )
 
 
-def build_additional_context_payload(injection_result: InjectionResult) -> dict[str, str]:
+def build_additional_context_payload(
+    injection_result: InjectionResult,
+) -> dict[str, object]:
     """Return the SessionStart stdout object when context was injected.
 
     Args:
         injection_result: Result from inject_session_start_context.
 
     Returns:
-        ``{"additionalContext": ...}`` when injected, else empty dict.
+        ``{"hookSpecificOutput": {"hookEventName": "SessionStart", ...}}``
+        when injected, else an empty dict.
     """
     if not injection_result.is_context_injected:
         return {}
-    return {"additionalContext": injection_result.additional_context}
-
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": injection_result.additional_context,
+        }
+    }
