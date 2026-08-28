@@ -81,6 +81,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `stale_comment_reference_blocker_constants.py` | Identifier pattern, comment stopwords, and denial text for the stale-comment-reference blocker |
 | `state_description_blocker_constants.py` | The set of historical/comparative phrases the state-description blocker rejects, plus the docstring-extraction and mention-span patterns for its Python docstring scan |
 | `stop_dispatcher_constants.py` | Ordered hosted-hook roster and Stop block payload field names for the Stop-chain dispatcher |
+| `style_reminder_prompt_constants.py` | The fixed style reminder text ("small words. few words. always. forever.") for the UserPromptSubmit style_reminder_prompt hook |
 | `stuttering_check_config.py` | Config for the stuttering (repeated-phrase) check |
 | `stuttering_import_binding_constants.py` | Import-binding patterns for the stuttering check |
 | `subprocess_budget_completeness_constants.py` | Required argument names for the subprocess-budget completeness check |

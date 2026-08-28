@@ -22,6 +22,32 @@ A missing or unreadable source root is an error, and the run changes nothing. An
 
 Run `codex-compat bridge --surface <name> --payload '<json-object>'`. The bridge exposes the Python translation logic directly. `TaskCreate` and `TaskUpdate` map to `update_plan`; spawn, message, wait, and stop map to multi-agent surfaces. `ScheduleWakeup` is explicitly unsupported and requires manual review.
 
+## Per-message context injection (manual wiring)
+
+Codex CLI's own `UserPromptSubmit` event reads the same
+`hookSpecificOutput.additionalContext` shape Claude Code reads, so
+`hooks/session/style_reminder_prompt.py` serves both runtimes unchanged. The
+install already publishes `$CODEX_HOME/hooks` as a pointer to the shared hooks
+directory, so the script sits at
+`$CODEX_HOME/hooks/session/style_reminder_prompt.py` once installed.
+
+Codex has no automated registration for this yet — unlike Claude's
+`settings.json`, `hooks.json` merge, there is no install-time writer, prune, or
+uninstall support for a Codex `hooks.json`. Wire it in by hand: create
+`$CODEX_HOME/hooks.json` (or merge into an existing one) with:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": "python3 $CODEX_HOME/hooks/session/style_reminder_prompt.py"
+      }
+    ]
+  }
+}
+```
+
 ## Roots and safety
 
 Both roots are caller-supplied. The tool never writes to `.agents` or `CODEX_HOME` automatically; pass those locations explicitly when desired. No personal paths or secrets are embedded in the package.
