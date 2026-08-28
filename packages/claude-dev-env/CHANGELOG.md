@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.23.0...claude-dev-env-v2.24.0) (2026-08-28)
+
+
+### Features
+
+* **sr-loop:** set model effort to `max` with `xhigh` fallback ([ee540da](https://github.com/jl-cmd/claude-dev-env/commit/ee540da535f174012e78ef9f4f1b0fe8b121aad5))
+
 ## [2.23.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.1...claude-dev-env-v2.23.0) (2026-08-28)
 
 
