@@ -1,5 +1,6 @@
 ---
 name: pr-plain-language-cleanup
+disable-model-invocation: true
 description: Review every line of every changed PR file and trim words, names, docs, comments, and code while keeping real behavior.
 ---
 

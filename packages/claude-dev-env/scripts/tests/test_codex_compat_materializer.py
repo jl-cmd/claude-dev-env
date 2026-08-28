@@ -40,8 +40,8 @@ def test_conversion_escapes_toml_content() -> None:
 def test_malformed_and_unsupported_frontmatter() -> None:
     with pytest.raises(MaterializerError):
         parse_frontmatter(Path("bad.md"), "---\nname: x\n", "bad.md")
-    agent = parse_frontmatter(Path("ok.md"), "---\nname: x\ndescription: y\nmodel: sonnet\ncolor: blue\n---\n", "ok.md")
-    assert agent.unsupported == ("color", "model")
+    agent = parse_frontmatter(Path("ok.md"), "---\nname: x\ndescription: y\nmodel: sonnet\ncolor: blue\ndisable-model-invocation: true\n---\n", "ok.md")
+    assert agent.unsupported == ("color", "disable-model-invocation", "model")
 
 
 @pytest.mark.parametrize(
