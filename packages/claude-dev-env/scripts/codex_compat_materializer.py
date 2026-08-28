@@ -25,7 +25,7 @@ reparse_point_attribute_name = "FILE_ATTRIBUTE_REPARSE_POINT"
 manifest_indentation_width = 2
 publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
-frontmatter_unsupported_fields = ("tools", "model", "color")
+frontmatter_unsupported_fields = ("tools", "model", "color", "disable-model-invocation")
 instruction_alias_filenames = frozenset({"AGENTS.md", "CLAUDE.md"})
 failure_blast_radius_rule_relative_path = "rules/failure-blast-radius.md"
 codex_instruction_target_path = "AGENTS.md"
@@ -152,7 +152,9 @@ report_categories = (
     "stale_managed", "deleted", "unsupported", "conflicted", "errors",
 )
 report_categories_public_name = "REPORT_CATEGORIES"
-frontmatter_allowed_fields = {"name", "description", "tools", "model", "color"}
+frontmatter_allowed_fields = {
+    "name", "description", "tools", "model", "color", "disable-model-invocation"
+}
 line_separator = "\n"
 comma_separator = ", "
 
