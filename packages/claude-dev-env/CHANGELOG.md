@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.25.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.24.0...claude-dev-env-v2.25.0) (2026-08-28)
+
+
+### Features
+
+* hand off PR updates after hook validation ([29b121b](https://github.com/jl-cmd/claude-dev-env/commit/29b121be4c0c11f2044c61c01cf492ccc49ee3c5))
+* remind agents to finish pull requests after commits ([146f661](https://github.com/jl-cmd/claude-dev-env/commit/146f66177905a803f914641c1d55921c9bf5b7d4))
+* Remind agents to finish pull requests after commits. ([babbfd7](https://github.com/jl-cmd/claude-dev-env/commit/babbfd7695c62cfd6191288bfc1e46c4ff1ea5a8))
+* show full PR handoff prompt ([077f5e4](https://github.com/jl-cmd/claude-dev-env/commit/077f5e42abedcdc5c3cd60cfb1c162c44178e93c))
+
+
+### Bug Fixes
+
+* **git-hooks:** tolerate stale gate path constant name ([91bfec1](https://github.com/jl-cmd/claude-dev-env/commit/91bfec1f69a40b9bbeaa6b7cdfa17579db2fcd1c))
+* **git-hooks:** tolerate stale gate path constant name ([2d8c81b](https://github.com/jl-cmd/claude-dev-env/commit/2d8c81b290045d07c0d34efd974c29da43b36c3b))
+
 ## [2.24.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.23.0...claude-dev-env-v2.24.0) (2026-08-28)
 
 
