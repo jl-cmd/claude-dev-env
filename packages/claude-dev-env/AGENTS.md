@@ -1,3 +1,5 @@
+less words. small words. few words. always. forever.
+
 Avoid all redundant text for all output. IE: instead of "the review found 2 real issues", simply state "the review found 2 issues".
 
 ## User-facing language hierarchy
