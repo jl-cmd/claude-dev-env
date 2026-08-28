@@ -238,12 +238,12 @@ def test_pull_request_reminder_prints_url(
 
     post_commit.print_pull_request_reminder(tmp_path)
 
-    assert capsys.readouterr().out == (
-        "Reminder: use https://github.com/example/repo/pull/1; read the PR body and "
-        "complete diff, never choose the title from the branch name, commit message, "
-        "labels, current title, or shallow summary; use gh pr edit to set the "
-        "title/body, read it back, and report the link, commit, result, and checks.\n"
-    )
+    output = capsys.readouterr().out
+    assert output.startswith("Review this pull request: https://github.com/example/repo/pull/1\n")
+    assert "<PR link>" not in output
+    assert "Do not use the branch name, commit message, labels, current title" in output
+    assert "gh pr edit https://github.com/example/repo/pull/1" in output
+    assert output.rstrip().endswith("Report the saved result.")
 
 
 @pytest.mark.parametrize("exception", [FileNotFoundError(), subprocess.TimeoutExpired("gh", 5)])
