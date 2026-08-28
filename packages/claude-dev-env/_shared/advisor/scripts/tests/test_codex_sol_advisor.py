@@ -31,9 +31,8 @@ def _load_sol_module() -> ModuleType:
 sol_advisor = _load_sol_module()
 SCRIPTS_ROOT = Path(__file__).parent.parent
 USAGE_PROBE_PATH = (
-    SCRIPTS_ROOT.parents[2]
-    / "skills"
-    / "codex-review"
+    SCRIPTS_ROOT.parents[1]
+    / "pr-loop"
     / "scripts"
     / "codex_usage_probe.py"
 )
@@ -134,8 +133,8 @@ def test_resolve_usage_probe_path_uses_supplied_home_directory(tmp_path: Path) -
     assert probe_path == (
         tmp_path
         / ".claude"
-        / "skills"
-        / "codex-review"
+        / "_shared"
+        / "pr-loop"
         / "scripts"
         / "codex_usage_probe.py"
     )

@@ -76,6 +76,7 @@ Assemble and paste each executor's Advisor block per the **Advisor block** secti
 On a third-party (non-Claude, non-Codex) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind Fable through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
 The bound Claude session is the advisor; this third-party session stays the executor.
 Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the sol rung binds after Fable (`candidate_tiers = ["Fable", "Sol"]`).
+**Cursor Sol first shot:** when the walk reaches Sol (or the user asks for Sol), bind through `codex_sol_advisor.py --bind --enable-sol` on the first tool call (see the GOTCHA in [`reference/third-party-bind.md`](reference/third-party-bind.md)) — not the Agent tool, and not a probe-path hunt.
 **Fail closed:** when every candidate fails, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop** — ENDORSE / CORRECTION / PLAN / STOP come only from a bound advisor.
 Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 

@@ -24,9 +24,9 @@ Flag on: run the Codex preflight first —
 python ~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py
 ```
 
-Repo home: `packages/claude-dev-env/_shared/pr-loop/scripts/`.
+**GOTCHA — probe path:** that installed path is the only one. `codex_sol_advisor.resolve_usage_probe_path` builds `~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py` and stops. Do not hunt `skills/codex-review/`, Codex worktrees under `C:\dev\.codex\worktrees\`, or other copies. Repo home: `packages/claude-dev-env/_shared/pr-loop/scripts/`.
 
-The shared entry point is `~/.claude/_shared/advisor/scripts/codex_sol_advisor.py`; it calls the installed probe and owns Sol bind or resume parsing. Bind with `python ~/.claude/_shared/advisor/scripts/codex_sol_advisor.py --bind --cwd <repo-root>` and pipe the charter on stdin. Resume with `--resume <session_id>` and pipe the delta consult on stdin.
+The shared entry point is `~/.claude/_shared/advisor/scripts/codex_sol_advisor.py`; it calls the installed probe and owns Sol bind or resume parsing. Bind with `python ~/.claude/_shared/advisor/scripts/codex_sol_advisor.py --bind --enable-sol --cwd <repo-root>` and pipe the charter on stdin. Resume with `--resume <session_id>` and pipe the delta consult on stdin.
 
 The gate passes only when the probe exits 0, `percent_left` is finite numeric data, and `percent_left` is strictly greater than `WEEKLY_USAGE_GATE_THRESHOLD_PERCENT` from the existing probe. The exact-threshold case fails closed when Fable did not bind.
 

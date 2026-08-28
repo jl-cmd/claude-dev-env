@@ -3,6 +3,18 @@
 Detail behind the **Host profiles → Third-party host** section of [`advisor-protocol.md`](../advisor-protocol.md).
 Open this when binding or re-binding the advisor from a third-party (non-Claude, non-Codex) harness.
 
+## GOTCHA — Cursor Sol first shot
+
+Cursor is a third-party host. When the walk reaches Sol (`ADVISOR_SOL=1` / `--enable-sol` after Fable is out of usage, or the user asks for Sol), bind Sol on the **first** tool call through the headless Codex helper. Do not use the Agent or Task tool, do not spawn Grok as a substitute, and do not search the filesystem for `codex_usage_probe.py`.
+
+```
+python "$HOME/.claude/_shared/advisor/scripts/codex_sol_advisor.py" --bind --enable-sol --cwd <repo-root>
+```
+
+Pipe the standing-reviewer charter on stdin. Persist `session_id` from the JSON reply. Later consults: `--resume <session_id>` with the delta on stdin. Capture helper / `codex` stdout as UTF-8 on Windows (`encoding="utf-8"`, `errors="replace"`). Probe path and preflight: [`sol-rung.md`](sol-rung.md).
+
+When the Sol flag is off, follow the Claude-chain steps below.
+
 ## Bind steps
 
 1. Name the session identity first (protocol **Host profiles**). This path is for a ThirdParty profile.

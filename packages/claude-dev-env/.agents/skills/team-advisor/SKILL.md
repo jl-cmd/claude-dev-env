@@ -30,6 +30,8 @@ One warm advisor at the strongest tier this session can reach. This session is t
 5. Skip the multi-consumer "who you are" opener — sole consumer.
 6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
+**GOTCHA (Cursor / ThirdParty + Sol):** when the walk reaches Sol or the user asks for Sol, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_sol_advisor.py --bind --enable-sol --cwd <repo-root>` with the charter on stdin — not Agent/Task, not a probe-path search. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`sol-rung.md`](../../_shared/advisor/reference/sol-rung.md).
+
 Full walk, charter, consult packet, Sol routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
 
 ## Consult
