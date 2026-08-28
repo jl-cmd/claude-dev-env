@@ -70,6 +70,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'monitor-open-prs',
     'pr-name-by-capability',
     'pr-title-description',
+    'pr-plain-language-cleanup',
     'pr-refinement',
     'orchestrator',
     'orchestrator-refresh',
