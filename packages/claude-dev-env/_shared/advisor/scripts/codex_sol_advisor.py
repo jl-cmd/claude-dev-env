@@ -34,6 +34,10 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_REASONING_CONFIG_TEMPLATE,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
+    USAGE_PROBE_FILENAME,
+    USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
+    USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
+    USAGE_PROBE_SHARED_DIRECTORY_NAME,
     SOL_BIND_FAILURE_REASON,
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
@@ -201,6 +205,14 @@ def resolve_advisor_effort(
 def resolve_usage_probe_path(home_directory: Path) -> Path:
     """Return the installed Codex weekly usage probe path.
 
+    ::
+
+        resolve_usage_probe_path(Path.home())
+            -> ~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py
+
+    This is the only probe path the Sol helper uses. Do not search worktrees
+    or archived ``skills/codex-review`` trees for a second copy.
+
     Args:
         home_directory: Home directory used to construct the path.
 
@@ -210,10 +222,10 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
     return (
         home_directory
         / CLAUDE_CONFIG_DIRECTORY_NAME
-        / "skills"
-        / "codex-review"
-        / "scripts"
-        / "codex_usage_probe.py"
+        / USAGE_PROBE_SHARED_DIRECTORY_NAME
+        / USAGE_PROBE_PACKAGE_DIRECTORY_NAME
+        / USAGE_PROBE_SCRIPTS_DIRECTORY_NAME
+        / USAGE_PROBE_FILENAME
     )
 
 
