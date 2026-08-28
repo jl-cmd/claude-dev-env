@@ -89,4 +89,4 @@ Do not invent behavior, tests, or benefits.
 Strip branch names, hashes, draft notes, agent notes, and merge notes.
 No vague words like “improve,” “enhance,” or “update.”
 Illustrative first. Abstract labels only if glossed in the same breath.
-Do not edit GitHub. Return the rewritten description only.
+Use the recommended title and paste-ready description to run `gh pr edit <PR link> --title ... --body-file ...`, then run `gh pr view <PR link> --json title,body` to confirm the saved title and body. Report the saved result.
