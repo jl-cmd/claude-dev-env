@@ -17,7 +17,14 @@ import sys
 from enum import StrEnum
 from pathlib import Path
 
-from git_hooks_constants import GIT_COMMAND_SUCCESS_EXIT_CODE, GIT_EXECUTABLE_NAME
+from git_hooks_constants import (
+    GH_EXECUTABLE_NAME,
+    GH_PR_VIEW_ARGUMENTS,
+    GH_PR_VIEW_TIMEOUT_SECONDS,
+    GIT_COMMAND_SUCCESS_EXIT_CODE,
+    GIT_EXECUTABLE_NAME,
+)
+from pull_request_handoff import build_pull_request_reminder
 
 
 class ParentPointerStatus(StrEnum):
@@ -163,6 +170,24 @@ def update_parent_pointer(
     return ParentPointerStatus.UPDATED, ""
 
 
+def print_pull_request_reminder(repo_dir: Path) -> None:
+    """Print a reminder when the committed repository has an open pull request."""
+    try:
+        result = subprocess.run(
+            [GH_EXECUTABLE_NAME, *GH_PR_VIEW_ARGUMENTS],
+            cwd=repo_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=GH_PR_VIEW_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    pull_request_url = result.stdout.strip()
+    if result.returncode == 0 and pull_request_url:
+        print(build_pull_request_reminder(pull_request_url))
+
+
 def main() -> int:
     """Update a parent repository after a submodule commit."""
     repo_path_text = run_git_from_current_directory("rev-parse", "--show-toplevel")
@@ -172,12 +197,14 @@ def main() -> int:
     repo_dir = Path(repo_path_text).resolve()
     parent_repo = find_parent_repo(repo_dir)
     if parent_repo is None:
+        print_pull_request_reminder(repo_dir)
         return 0
 
     commit_msg = run_git("log", "-1", "--pretty=%s", cwd=repo_dir)
     commit_hash = run_git("rev-parse", "HEAD", cwd=repo_dir)
     short_commit_hash = run_git("rev-parse", "--short", "HEAD", cwd=repo_dir)
     if not commit_hash or not short_commit_hash:
+        print_pull_request_reminder(repo_dir)
         return 0
 
     print()
@@ -195,14 +222,17 @@ def main() -> int:
         print("Parent update failed.")
         if parent_pointer_diagnostic:
             print(f"Git diagnostic: {parent_pointer_diagnostic}")
+        print_pull_request_reminder(repo_dir)
         return 0
     if parent_pointer_status is ParentPointerStatus.UNCHANGED:
         print("Parent already up to date.")
+        print_pull_request_reminder(repo_dir)
         return 0
 
     print("Parent updated successfully.")
     print("================================")
     print()
+    print_pull_request_reminder(repo_dir)
 
     return 0
 

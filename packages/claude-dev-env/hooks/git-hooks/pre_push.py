@@ -87,14 +87,13 @@ from pre_push_base_reference import (
     resolve_remote_name_from_arguments,
     resolve_usable_base_reference,
 )
+from pull_request_handoff import build_pull_request_reminder, get_pull_request_url
 
 
 def _report_unavailable_git(launch_error: Exception) -> int:
     """Report a git that would not run, and hand back the exit code to use."""
     git_command_unavailable_message = GIT_COMMAND_UNAVAILABLE_MESSAGE
-    sys.stderr.write(
-        git_command_unavailable_message.format(error=launch_error) + "\n"
-    )
+    sys.stderr.write(git_command_unavailable_message.format(error=launch_error) + "\n")
     return GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
 
 
@@ -145,8 +144,7 @@ def is_all_zeros_object_name(object_name: str) -> bool:
     if not stripped_object_name:
         return True
     return all(
-        each_character == all_zeros_object_name_character
-        for each_character in stripped_object_name
+        each_character == all_zeros_object_name_character for each_character in stripped_object_name
     )
 
 
@@ -385,9 +383,7 @@ def resolve_default_branch_merge_base(
     default_branch_reference = resolve_default_branch_reference(remote_name)
     if default_branch_reference is None:
         return None
-    default_branch_prefix = REMOTE_BRANCH_REFERENCE_TEMPLATE.format(
-        remote=remote_name, branch=""
-    )
+    default_branch_prefix = REMOTE_BRANCH_REFERENCE_TEMPLATE.format(remote=remote_name, branch="")
     default_branch_name = default_branch_reference.removeprefix(default_branch_prefix)
     if remote_branch_name == default_branch_name:
         return None
@@ -514,8 +510,6 @@ def invoke_gate(gate_script_path: Path, base_reference: str) -> int:
     return completion.returncode
 
 
-
-
 def main() -> int:
     stdin_read_failure_message = STDIN_READ_FAILURE_MESSAGE
     gate_infrastructure_failure_exit_code = GATE_INFRASTRUCTURE_FAILURE_EXIT_CODE
@@ -576,6 +570,9 @@ def main() -> int:
     code_rules_exit_code = invoke_gate(gate_script_path, usable_base_reference)
     if code_rules_exit_code != 0:
         return code_rules_exit_code
+    pull_request_url = get_pull_request_url(Path.cwd())
+    if pull_request_url:
+        print(build_pull_request_reminder(pull_request_url))
     return 0
 
 
