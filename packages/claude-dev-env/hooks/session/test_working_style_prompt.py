@@ -30,15 +30,17 @@ def _run_main() -> str:
 class TestWorkingStylePrompt:
     def test_main_emits_additional_context(self) -> None:
         emitted = json.loads(_run_main())
-        assert "additionalContext" in emitted
+        hook_output = emitted["hookSpecificOutput"]
+        assert hook_output["hookEventName"] == "SessionStart"
+        assert "additionalContext" in hook_output
 
     def test_additional_context_matches_prompt_exactly(self) -> None:
         emitted = json.loads(_run_main())
-        assert emitted["additionalContext"] == WORKING_STYLE_PROMPT
+        assert emitted["hookSpecificOutput"]["additionalContext"] == WORKING_STYLE_PROMPT
 
     def test_emitted_prompt_contains_canonical_policy_and_scope_guidance(self) -> None:
         emitted = json.loads(_run_main())
-        prompt_text = emitted["additionalContext"]
+        prompt_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert "Document each task in a location that remains easy to find later." in prompt_text
         assert "Deliver the requested work at its intended scope." in prompt_text
         assert "Use ELI5 for beginner framing, large visuals, minimal text" in prompt_text

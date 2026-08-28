@@ -143,7 +143,10 @@ def test_build_additional_context_payload_only_when_injected() -> None:
         is_context_injected=False,
     )
     assert build_additional_context_payload(injected) == {
-        "additionalContext": "hello"
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "hello",
+        }
     }
     assert build_additional_context_payload(empty) == {}
 
@@ -165,4 +168,3 @@ def test_default_injector_configuration_reads_env(
     monkeypatch.setenv(SESSION_START_INJECTOR_ENABLED_ENV_VAR, "off")
     configuration = default_injector_configuration()
     assert configuration.is_enabled is False
-

@@ -29,7 +29,16 @@ def build_session_directive() -> str:
 
 def main() -> None:
     """Emit the task-list loop directive as SessionStart additionalContext."""
-    print(json.dumps({"additionalContext": build_session_directive()}))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": build_session_directive(),
+                }
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

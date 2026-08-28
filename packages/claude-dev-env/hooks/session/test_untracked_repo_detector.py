@@ -99,7 +99,9 @@ class TestUntrackedRepoDetection:
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         assert stdout.strip() != ""
         emitted = json.loads(stdout)
-        assert "additionalContext" in emitted
+        hook_output = emitted["hookSpecificOutput"]
+        assert hook_output["hookEventName"] == "SessionStart"
+        assert "additionalContext" in hook_output
 
     def test_emitted_context_names_the_detected_repo_path(self, tmp_path: Path) -> None:
         repo_root = tmp_path / "new-repo"
@@ -107,7 +109,7 @@ class TestUntrackedRepoDetection:
         (repo_root / ".git").mkdir()
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         emitted = json.loads(stdout)
-        context_text = emitted["additionalContext"]
+        context_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert str(repo_root) in context_text
 
     def test_emitted_context_names_the_config_file_path(self, tmp_path: Path) -> None:
@@ -116,7 +118,7 @@ class TestUntrackedRepoDetection:
         (repo_root / ".git").mkdir()
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         emitted = json.loads(stdout)
-        context_text = emitted["additionalContext"]
+        context_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert "project-paths.json" in context_text
 
     def test_emitted_context_instructs_claude_to_use_ask_user_question(
@@ -127,7 +129,7 @@ class TestUntrackedRepoDetection:
         (repo_root / ".git").mkdir()
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         emitted = json.loads(stdout)
-        context_text = emitted["additionalContext"]
+        context_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert "AskUserQuestion" in context_text
 
     def test_emitted_context_states_hook_has_written_nothing(
@@ -138,7 +140,7 @@ class TestUntrackedRepoDetection:
         (repo_root / ".git").mkdir()
         stdout, _, _ = _run_main_with_cwd(str(repo_root), {})
         emitted = json.loads(stdout)
-        context_text = emitted["additionalContext"]
+        context_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert (
             "written nothing" in context_text.lower()
             or "has not written" in context_text.lower()
