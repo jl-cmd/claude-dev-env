@@ -26,17 +26,12 @@ import _path_setup  # noqa: F401
 from hooks_constants.style_reminder_prompt_constants import STYLE_REMINDER_PROMPT
 
 
-def build_style_reminder() -> str:
-    """Return the style reminder text."""
-    return STYLE_REMINDER_PROMPT
-
-
 def main() -> None:
     """Print the style reminder as UserPromptSubmit additionalContext."""
     payload = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": build_style_reminder(),
+            "additionalContext": STYLE_REMINDER_PROMPT,
         }
     }
     sys.stdout.write(json.dumps(payload) + "\n")

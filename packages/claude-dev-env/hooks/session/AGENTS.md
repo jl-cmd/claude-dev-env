@@ -23,7 +23,7 @@ user-facing word choice, sentence style, tone, punctuation, and prose form.
 | `working_style_prompt.py` | SessionStart | Emits an `additionalContext` block with the fixed working-style prompt (running ledger, canonical language policy, outcome-first finish, scope discipline). Writes nothing and runs no tools itself. |
 | `style_reminder_prompt.py` | UserPromptSubmit | Adds the style reminder ("small words. few words. always. forever.") to every message, as `hookSpecificOutput.additionalContext`. Codex reads the same shape, so a manually wired Codex `hooks.json` can reuse this script too (see `docs/codex-compatibility.md`). Prints text and stops. |
 | `test_style_reminder_prompt.py` | — | Tests for `style_reminder_prompt.py` |
-| `conftest.py` | — | Adds the session and hooks folders to `sys.path`. Keeps test imports at the top of the file. |
+| `conftest.py` | — | Adds the session folder to `sys.path`. Imports `_path_setup` for the hooks folder. Keeps test imports at the top of the file. |
 | `test_gh_pr_author_session_cleanup.py` | — | Tests for `gh_pr_author_session_cleanup.py` |
 | `test_session_edit_tracker_cleanup.py` | — | Tests for `session_edit_tracker_cleanup.py` |
 | `test_session_env_cleanup.py` | — | Tests for `session_env_cleanup.py` |

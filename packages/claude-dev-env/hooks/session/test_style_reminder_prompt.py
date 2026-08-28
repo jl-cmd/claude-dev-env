@@ -19,11 +19,6 @@ def _run_main() -> str:
 class TestStyleReminderPrompt:
     def test_main_emits_user_prompt_submit_hook_specific_output(self) -> None:
         emitted = json.loads(_run_main())
-        assert emitted["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
-
-    def test_additional_context_matches_style_reminder_exactly(self) -> None:
-        emitted = json.loads(_run_main())
-        assert emitted["hookSpecificOutput"]["additionalContext"] == STYLE_REMINDER_PROMPT
-
-    def test_build_style_reminder_returns_the_shared_constant(self) -> None:
-        assert reminder.build_style_reminder() == STYLE_REMINDER_PROMPT
+        hook_output = emitted["hookSpecificOutput"]
+        assert hook_output["hookEventName"] == "UserPromptSubmit"
+        assert hook_output["additionalContext"] == STYLE_REMINDER_PROMPT
