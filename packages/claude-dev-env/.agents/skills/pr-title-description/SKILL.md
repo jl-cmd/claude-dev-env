@@ -8,8 +8,7 @@ Accept one or more pull request links as arguments. Apply the prompt below to ea
 
 With no argument, use the current task, browser, worktree, or GitHub context to find the pull request or pull requests. If the context does not show a clear pull request, ask for a pull request link.
 
-here is the FINAL version of the hook prompt for title + descriptions: 
-\\\<PR link>
+Review this pull request: <PR link>
 
 Read the PR and its full diff. Do not use the branch name, commit message, labels, current title, or a shallow summary.
 
@@ -90,4 +89,4 @@ Do not invent behavior, tests, or benefits.
 Strip branch names, hashes, draft notes, agent notes, and merge notes.
 No vague words like “improve,” “enhance,” or “update.”
 Illustrative first. Abstract labels only if glossed in the same breath.
-Do not edit GitHub. Return the rewritten description only. I don't know if I'm just not seeing it or what, but I'm not. I don't see the full text. So here's the text as a reminder. This is supposed to be with agencies when they commit and push. When they push a commit to APR or they make a PR, this is what they should see every single time.
+Do not edit GitHub. Return the rewritten description only.
