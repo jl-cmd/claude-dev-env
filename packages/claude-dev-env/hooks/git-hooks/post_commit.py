@@ -24,6 +24,7 @@ from git_hooks_constants import (
     GIT_COMMAND_SUCCESS_EXIT_CODE,
     GIT_EXECUTABLE_NAME,
 )
+from pull_request_handoff import build_pull_request_reminder
 
 
 class ParentPointerStatus(StrEnum):
@@ -184,12 +185,7 @@ def print_pull_request_reminder(repo_dir: Path) -> None:
         return
     pull_request_url = result.stdout.strip()
     if result.returncode == 0 and pull_request_url:
-        print(
-            f"Reminder: use {pull_request_url}; read the PR body and complete diff, "
-            "never choose the title from the branch name, commit message, labels, "
-            "current title, or shallow summary; update the PR title/body and report "
-            "the link, commit, result, and checks."
-        )
+        print(build_pull_request_reminder(pull_request_url))
 
 
 def main() -> int:

@@ -241,8 +241,8 @@ def test_pull_request_reminder_prints_url(
     assert capsys.readouterr().out == (
         "Reminder: use https://github.com/example/repo/pull/1; read the PR body and "
         "complete diff, never choose the title from the branch name, commit message, "
-        "labels, current title, or shallow summary; update the PR title/body and "
-        "report the link, commit, result, and checks.\n"
+        "labels, current title, or shallow summary; use gh pr edit to set the "
+        "title/body, read it back, and report the link, commit, result, and checks.\n"
     )
 
 
