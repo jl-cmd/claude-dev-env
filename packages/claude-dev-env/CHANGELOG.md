@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.22.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.0...claude-dev-env-v2.22.1) (2026-08-28)
+
+
+### Documentation
+
+* **advisor:** Cursor Sol bind first-shot GOTCHA ([5763f8f](https://github.com/jl-cmd/claude-dev-env/commit/5763f8f5e9c0be4d9d8d4a5df4414fd769cb6228))
+* **advisor:** Cursor Sol bind first-shot GOTCHA ([6aca03e](https://github.com/jl-cmd/claude-dev-env/commit/6aca03e005417bb0fab7ca3745d62c927b720bd8))
+
 ## [2.22.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.21.2...claude-dev-env-v2.22.0) (2026-08-27)
 
 
