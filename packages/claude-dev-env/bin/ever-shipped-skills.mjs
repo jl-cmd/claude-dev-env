@@ -84,6 +84,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'pr-loop-cloud-transport',
     'pr-loop-lifecycle',
     'pr-review-responder',
+    'pr-plain-language-cleanup',
     'pr-scope-resolve',
     'pre-compact',
     'privacy-hygiene',
