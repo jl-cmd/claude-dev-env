@@ -3,9 +3,7 @@ name: pr-plain-language-cleanup
 disable-model-invocation: true
 description: >-
   Trim unnecessary words and improve readability in changed PR text while
-  preserving meaning and behavior. Triggers: /pr-plain-language-cleanup,
-  plain-language cleanup, PR prose cleanup, trim words in a PR, reduce wordiness,
-  remove filler, readability cleanup, avoid reflow churn, text-only cleanup.
+  preserving meaning and behavior. Triggers: /pr-plain-language-cleanup.
 ---
 
 # PR plain-language cleanup
@@ -41,9 +39,10 @@ At the start, register four session tasks through the host task tool:
 before/after word count, readability/scanability, changed-line/diff-churn, and
 meaning/behavior. Complete each with evidence.
 
-1. Read the full target PR and diff, every changed file, changed tests and docs,
-   and all applicable repo rules. For several files, keep review ownership
-   separate when workers are available.
+1. For a PR or branch target, read its diff, changed files, changed tests and
+   docs, and applicable repo rules. For a stated file set, read only those
+   named files. For several files, keep review ownership separate when workers
+   are available.
 2. **Word count:** record the edited text's before and after word counts and the
    delta. Remove filler, repeats, and needless words. If no words can be cut,
    report clean; do not add reflow churn.
