@@ -1,5 +1,75 @@
 # Changelog
 
+## [2.26.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.25.0...claude-dev-env-v2.26.0) (2026-08-28)
+
+
+### Features
+
+* add a PR plain-language cleanup skill ([b94c8ef](https://github.com/jl-cmd/claude-dev-env/commit/b94c8ef42503f4403ea2f506cf6995973abe74ac))
+* Add a skill for clear PR titles and descriptions. ([8f357b8](https://github.com/jl-cmd/claude-dev-env/commit/8f357b83cf3a962945b72bda9b3b0e28c06cca47))
+* add PR plain-language cleanup skill ([ae308eb](https://github.com/jl-cmd/claude-dev-env/commit/ae308eb3f222a51b7e4d9a5f8a8b0bd321ebcf71))
+* add pull request title description skill ([9e3497f](https://github.com/jl-cmd/claude-dev-env/commit/9e3497f9287c9fb39b5357e6c3120b12bdbfaead))
+* allow user-only skill frontmatter ([6f7d0c7](https://github.com/jl-cmd/claude-dev-env/commit/6f7d0c7e5e46619aba478b0f9a2ba510deac9871))
+* keep plain-language cleanup user-invoked ([43ad395](https://github.com/jl-cmd/claude-dev-env/commit/43ad395c848944e11e4d521c575f00c0ba3bf878))
+* let PR description skill save results ([cfa5d6b](https://github.com/jl-cmd/claude-dev-env/commit/cfa5d6b05f247030083b5012903e3d4ac3704606))
+* limit plain-language cleanup scope ([fcdbab6](https://github.com/jl-cmd/claude-dev-env/commit/fcdbab6ae1a6790e18b02a7d0f05f7a422b7e623))
+* Limit plain-language cleanup scope ([8e7a789](https://github.com/jl-cmd/claude-dev-env/commit/8e7a789241b6eaa1e5c476efadf053c0fdeee380))
+* Make PR cleanup user-invoked only ([1e9a517](https://github.com/jl-cmd/claude-dev-env/commit/1e9a5174f9d4d064ed15014dcb3d7e8e85ce0b83))
+* Make PR cleanup user-invoked only ([33a2a60](https://github.com/jl-cmd/claude-dev-env/commit/33a2a605538b5d71b08a2dc89a90a84b64a639d7))
+
+
+### Bug Fixes
+
+* emit valid SessionStart hook envelopes ([aa0c3e3](https://github.com/jl-cmd/claude-dev-env/commit/aa0c3e3e25d8d3f317a13d6dd33fa2de58c683c0))
+* emit valid SessionStart hook output ([aa8523d](https://github.com/jl-cmd/claude-dev-env/commit/aa8523d37eaabb61d17cfaedb845317929cbb0bb))
+* keep the PR skill prompt verbatim ([f71043c](https://github.com/jl-cmd/claude-dev-env/commit/f71043ccc54ebcae0cede97e9101cf49ee4d9963))
+
+## [2.25.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.24.0...claude-dev-env-v2.25.0) (2026-08-28)
+
+
+### Features
+
+* hand off PR updates after hook validation ([29b121b](https://github.com/jl-cmd/claude-dev-env/commit/29b121be4c0c11f2044c61c01cf492ccc49ee3c5))
+* remind agents to finish pull requests after commits ([146f661](https://github.com/jl-cmd/claude-dev-env/commit/146f66177905a803f914641c1d55921c9bf5b7d4))
+* Remind agents to finish pull requests after commits. ([babbfd7](https://github.com/jl-cmd/claude-dev-env/commit/babbfd7695c62cfd6191288bfc1e46c4ff1ea5a8))
+* show full PR handoff prompt ([077f5e4](https://github.com/jl-cmd/claude-dev-env/commit/077f5e42abedcdc5c3cd60cfb1c162c44178e93c))
+
+
+### Bug Fixes
+
+* **git-hooks:** tolerate stale gate path constant name ([91bfec1](https://github.com/jl-cmd/claude-dev-env/commit/91bfec1f69a40b9bbeaa6b7cdfa17579db2fcd1c))
+* **git-hooks:** tolerate stale gate path constant name ([2d8c81b](https://github.com/jl-cmd/claude-dev-env/commit/2d8c81b290045d07c0d34efd974c29da43b36c3b))
+
+## [2.24.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.23.0...claude-dev-env-v2.24.0) (2026-08-28)
+
+
+### Features
+
+* **sr-loop:** set model effort to `max` with `xhigh` fallback ([ee540da](https://github.com/jl-cmd/claude-dev-env/commit/ee540da535f174012e78ef9f4f1b0fe8b121aad5))
+
+## [2.23.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.1...claude-dev-env-v2.23.0) (2026-08-28)
+
+
+### Features
+
+* add a style reminder hook ([97644d3](https://github.com/jl-cmd/claude-dev-env/commit/97644d3b0b1f808f944b47c431d6f4615d5e9041))
+* add per-message style reminder hook for Claude and Codex ([3e54d04](https://github.com/jl-cmd/claude-dev-env/commit/3e54d049a20249ebe44af7732d4c3b4e2152c272))
+* **commands:** add stack context to sr-loop ([7cdd4b4](https://github.com/jl-cmd/claude-dev-env/commit/7cdd4b45af47f640676ce2680e73abc16da5ad99))
+
+
+### Documentation
+
+* add brevity directive to package AGENTS.md ([1627420](https://github.com/jl-cmd/claude-dev-env/commit/16274204b065ddcb1b86ab41ba8c42793b0b845d))
+* add brevity directive to package AGENTS.md ([a14bfaa](https://github.com/jl-cmd/claude-dev-env/commit/a14bfaa6b45e5dbc61762151b57b739cb27eb4bf))
+* rewrite hook prose with small words, positive framing ([abf44d0](https://github.com/jl-cmd/claude-dev-env/commit/abf44d07a6547adc7543c48ac216e3ff09cb47a7))
+* **sr-loop:** add stack-context and finalize PR readiness guidance ([76945c0](https://github.com/jl-cmd/claude-dev-env/commit/76945c06dbf7ff34683c1d1d4150cb058b11e11e))
+
+
+### Refactoring
+
+* **hooks:** drop session conftest from style reminder tests ([81ba4b0](https://github.com/jl-cmd/claude-dev-env/commit/81ba4b0e627edbe0ee7e7058eaf83919cbec02ba))
+* **hooks:** reuse session path setup in style reminder tests ([c56c6d3](https://github.com/jl-cmd/claude-dev-env/commit/c56c6d371dfbb0c48e1ad5cec13c6e15e1d692b1))
+
 ## [2.22.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.22.0...claude-dev-env-v2.22.1) (2026-08-28)
 
 

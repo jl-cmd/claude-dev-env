@@ -1,5 +1,6 @@
 ---
 name: pr-cleanup
+disable-model-invocation: true
 description: >-
   Refine pull requests through parallel placement and capability-name audits,
   focused delivery sizing, and a final simplify and code-review loop. Triggers:

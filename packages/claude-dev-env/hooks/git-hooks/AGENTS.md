@@ -9,7 +9,8 @@ Native git hooks that run outside the Claude Code lifecycle — invoked directly
 | `pre_commit.py` | `pre-commit` | Runs immediate CODE_RULES and terminology validation over staged changes; exits 1 when any staged file has a blocking violation. CI runs package tests for package Python changes. |
 | `pre_push.py` | `pre-push` | Blocks a push that would land a non-`main` local branch onto remote `main` (or `master`), then runs the CODE_RULES gate. An existing branch's gate base is the merge base with the remote default branch; the gate process still diffs that base against checkout HEAD, so the surface matches the pushed tip only when HEAD is that tip. |
 | `pre_push_base_reference.py` | — | Resolves a usable gate base for `pre_push.py`: reads the pushed remote name from git's arguments, then turns a symbolic default-branch head into a reference that git can resolve |
-| `post_commit.py` | `post-commit` | Runs after a commit lands; performs any post-commit bookkeeping |
+| `post_commit.py` | `post-commit` | Runs bookkeeping, then best-effort reminds the agent about its PR |
+| `pull_request_handoff.py` | — | Prints the full PR title and description handoff prompt |
 | `gate_utils.py` | — | Shared helpers: resolves the gate script path, checks that the path is a safe regular file |
 | `test_config.py` | — | Test configuration helpers |
 | `test_gate_utils.py` | — | Tests for `gate_utils.py` |

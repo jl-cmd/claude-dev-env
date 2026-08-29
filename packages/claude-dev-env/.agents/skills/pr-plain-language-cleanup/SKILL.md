@@ -1,82 +1,93 @@
 ---
 name: pr-plain-language-cleanup
 disable-model-invocation: true
-description: >-
-  Trim unnecessary words and improve readability in changed PR text while
-  preserving meaning and behavior. Triggers: /pr-plain-language-cleanup.
+description: Review every line of every changed PR file and trim words, names, docs, comments, and code while keeping real behavior.
 ---
 
 # PR plain-language cleanup
 
-## Principle
+## Balance compression and readability
 
-Make changed PR text shorter and easier to scan. Keep meaning, behavior, checks,
-data, error detail, context, and public names. This is a text-only cleanup.
+Shorten changed prose and make it easier to scan. Both matter.
 
-## Gotchas
+- **Word count:** record before and after counts and the delta. Count changed
+  prose only. Exclude code, frontmatter, and unchanged lines.
+- **Readability:** check sentence length, order, headings, jargon, and dense
+  blocks. Edit only when the result is easier to read.
+- **Diff churn:** count changed lines. Remove whitespace-only movement and
+  reflow-only churn.
+- **Meaning:** preserve behavior, APIs, data, test intent, conditions, warnings,
+  error detail, context, and public names.
 
-- Compression is required. Reflow alone is not cleanup.
-- Reflow is allowed only after a real trim and only when it materially improves
-  scanability.
-- Keep terms that carry meaning. Do not shorten a name when it loses meaning.
-- Do not invent behavior, benefits, tests, or findings.
-- If a material issue appears, report it and stop.
+Reflow is allowed only when it materially improves scanability after a real trim.
+Report the four results separately.
 
-## When this applies
+Review and trim this pull request:
 
-Use for a requested plain-language or word-count cleanup of a pull request,
-branch, or stated changed-file set. If no clear target exists, ask for a PR,
-branch, or file path.
+<PR LINK>
 
-Review only changed files and applicable repo rules. Refuse or redirect requests
-for correctness, bug, security, performance, architecture, feature, API, data,
-or test-logic work. Do not broaden the file set, commit, push, merge, or change
-GitHub state.
+If no link is given, find the clear PR in the current context. If none is clear, ask for one.
 
-## Process
+Read the full PR, full diff, every changed file, changed tests and docs, and all repo rules that apply.
 
-At the start, register four session tasks through the host task tool:
-before/after word count, readability/scanability, changed-line/diff-churn, and
-meaning/behavior. Complete each with evidence.
+Find the changed files. Send one capable agent to each file. If there are more files than agents, use small batches.
 
-1. For a PR or branch target, read its diff, changed files, changed tests and
-   docs, and applicable repo rules. For a stated file set, read only those
-   named files. For several files, keep review ownership separate when workers
-   are available.
-2. **Word count:** record the edited text's before and after word counts and the
-   delta. Remove filler, repeats, and needless words. If no words can be cut,
-   report clean; do not add reflow churn.
-3. **Readability/scanability:** check sentence length, order, headings, jargon,
-   repeated terms, and dense blocks. Edit only where the result is easier to
-   read or scan.
-4. **Changed lines/diff churn:** inspect the final diff and changed-line count.
-   Remove whitespace-only movement and reflow-only churn. Allow reflow only
-   when it materially improves scanability and follows compression.
-5. **Meaning:** compare before and after. Confirm no change to behavior, APIs,
-   data, test intent, conditions, warnings, error detail, context, or public
-   names. Keep code logic and data out of scope.
-6. Re-read every changed file and the full diff. Run only the smallest relevant
-   check, such as `git diff --check`. Stop and report any material issue.
+Each agent owns one file. Read every line. Review code, tests, names, comments, docstrings, strings, notes, Markdown, and examples.
 
-## Return
+Trim filler, repeats, vague words, needless code, needless names, dead notes, jargon, and steps that add no value. Use few words and small words.
 
-Report:
+Keep real behavior, checks, data, error detail, context, tests, and public names unless a safe full rename is clear. Do not change behavior for style. Do not shorten a name when it loses meaning.
 
-- What changed
-- Files checked
-- Before and after word counts, readability result, diff-churn result, and
-  meaning result as separate checks
-- Remaining items that need a user choice
+Follow the repo rules:
 
-## File index
+- Name modules for their capability.
+- Name functions for their action.
+- Name variables for the value they hold.
+- Name classes for what they are.
+- Use capability names for shared code.
+- Keep workflow words on workflow code.
+- Keep comments and docs true to the code.
+- Use real data and real behavior in tests.
 
-| Path | Purpose |
-|---|---|
-| `SKILL.md` | Text-only PR cleanup rules, process, limits, and report shape |
+## Hard limits
 
-## Folder map
+This is a non-material, text-only trim.
 
-```text
-pr-plain-language-cleanup/
-└── SKILL.md
-```
+DO NOT:
+
+- run `e-simplify`, `e-code-review`, or `source-command-sr-loop`;
+- run `pr-cleanup`, `pr-refinement`, `pr-small-cl`, placement audits, extraction audits, or capability-name audits;
+- run review loops, advisor gates, commit gates, promotion gates, or any other extra cleanup;
+- hunt bugs, change behavior, change APIs, change data, add features, or split the PR;
+- turn a text trim into a code fix.
+
+Run only the smallest checks needed for the files changed. Keep the repo rules. If a material issue appears, report it and stop.
+
+If a change needs another file, report it to the main agent. The main agent owns cross-file changes.
+
+After the file agents finish, apply safe edits, fix cross-file names and links, search for old names and wording, and read every changed file and the full diff again.
+
+Run only the smallest relevant check for the files changed. Fix failures. Check the final diff against the repo rules.
+
+Do not invent behavior, tests, or benefits. Stop and ask only when a change could alter behavior, break a public API, or exceed the PR scope.
+
+Commit and push the changes to the PR branch.
+
+Return:
+
+## What changed
+
+Short list of the main trims.
+
+## Files checked
+
+Every file reviewed.
+
+## Verification
+
+Checks run and results.
+
+## Remaining items
+
+Only items that need a user choice.
+

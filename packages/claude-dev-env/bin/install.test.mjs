@@ -221,18 +221,6 @@ test('CORE_SKILLS ships ELI5 as the leaf presentation skill', () => {
 });
 
 
-test('CORE_SKILLS ships the plain-language cleanup skill', () => {
-    assert.ok(
-        CORE_SKILLS.includes('pr-plain-language-cleanup'),
-        'pr-plain-language-cleanup must be in CORE_SKILLS',
-    );
-    assert.equal(
-        INSTALL_GROUPS.core.skills.includes('pr-plain-language-cleanup'),
-        true,
-    );
-});
-
-
 test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
     assert.ok(
         EVER_SHIPPED_SKILL_NAMES.has('imagegen'),

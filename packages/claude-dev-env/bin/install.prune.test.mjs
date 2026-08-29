@@ -42,7 +42,6 @@ const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cp
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
     'pr-small-cl',
-    'pr-plain-language-cleanup',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',

@@ -165,7 +165,6 @@ export const CORE_SKILLS = [
     'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
     'pr-small-cl',
-    'pr-plain-language-cleanup',
     'everything-search',
     'privacy-hygiene',
     'issue-tracker',

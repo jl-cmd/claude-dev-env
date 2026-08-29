@@ -158,7 +158,7 @@ Slash commands for common workflows.
 |---------|---------|
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills (28)
+### Skills (27)
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -186,7 +186,6 @@ Slash commands for common workflows.
 | Skill | Purpose |
 |-------|---------|
 | `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
-| `pr-plain-language-cleanup` | Trim changed PR text while measuring word count, readability, and diff churn |
 | `orchestrator` | Turns the session into the advisor-orchestrator (the user's sole interface): it spawns executor subagents to do all code edits and test runs, and answers a blocked executor with a plan, correction, or stop; caps consultations and reuses warm agents before spawning new ones |
 | `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |

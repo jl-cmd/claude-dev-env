@@ -13,6 +13,11 @@ Run the converging cleanup loop on the target the user names (a PR URL,
 a branch, or blank for the current branch's diff). Each phase invokes an
 existing skill and repeats it until a pass returns zero new findings.
 
+### Effort
+
+Set every model call to `max` effort. If that model has no `max` effort, use
+`xhigh`.
+
 ### Stack context
 
 Before any fixes, load and review the full PR stack, from its base through the
