@@ -6,6 +6,22 @@ description: Review every line of every changed PR file and trim words, names, d
 
 # PR plain-language cleanup
 
+## Balance compression and readability
+
+Shorten changed prose and make it easier to scan. Both matter.
+
+- **Word count:** record before and after counts and the delta. Count changed
+  prose only. Exclude code, frontmatter, and unchanged lines.
+- **Readability:** check sentence length, order, headings, jargon, and dense
+  blocks. Edit only when the result is easier to read.
+- **Diff churn:** count changed lines. Remove whitespace-only movement and
+  reflow-only churn.
+- **Meaning:** preserve behavior, APIs, data, test intent, conditions, warnings,
+  error detail, context, and public names.
+
+Reflow is allowed only when it materially improves scanability after a real trim.
+Report the four results separately.
+
 Review and trim this pull request:
 
 <PR LINK>
@@ -74,3 +90,4 @@ Checks run and results.
 ## Remaining items
 
 Only items that need a user choice.
+
