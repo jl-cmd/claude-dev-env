@@ -13,12 +13,12 @@ _validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
 try:
-    from .pyproject_config_discovery import (
+    from pyproject_config_discovery import (
         ancestor_directories,
         find_pyproject_configuring_tool,
     )
-    from .system_temporary_roots import enclosing_system_temporary_root
-except ImportError:
+    from system_temporary_roots import enclosing_system_temporary_root
+except ModuleNotFoundError:
     if _validators_directory not in sys.path:
         sys.path.insert(0, _validators_directory)
     from pyproject_config_discovery import (

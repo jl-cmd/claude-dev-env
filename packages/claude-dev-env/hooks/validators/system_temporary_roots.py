@@ -14,17 +14,17 @@ stop at that boundary asks here instead of re-coding membership in each caller.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
-try:
-    from .config.directory_exemption_constants import (
-        ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
-    )
-except ImportError:
-    from config.directory_exemption_constants import (
-        ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
-    )
+_hooks_directory = str(Path(__file__).resolve().parent.parent)
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
+
+from validators.config.directory_exemption_constants import (  # noqa: E402
+    ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
+)
 
 
 def all_system_temporary_roots() -> tuple[Path, ...]:
