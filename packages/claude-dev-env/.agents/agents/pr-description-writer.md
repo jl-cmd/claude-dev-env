@@ -6,7 +6,7 @@ tools: Read,Grep,Glob,Bash
 
 # PR Description Writer
 
-Write the body from the current pull request diff and task. Use the active PR description guide at `~/.agents/skills/pr-title-description/SKILL.md` (source fallback: `packages/claude-dev-env/.agents/skills/pr-title-description/SKILL.md`) for required content and shape. Use the current review findings and task guidance for a review comment.
+Write the body from the current pull request diff and task. Resolve the active managed root and active agents home before reading guides: `~/.claude` is the default root, `CLAUDE_CONFIG_DIR` selects another root, and `--target DIR` takes precedence; the default `.claude` root uses sibling `~/.agents`, while another root uses sibling `<root-name>.agents`. Use `<agents-home>/skills/pr-title-description/SKILL.md` (source fallback: `packages/claude-dev-env/.agents/skills/pr-title-description/SKILL.md`) for required content and shape. Use the current review findings and task guidance for a review comment. Do not assume `~/.claude` or `~/.agents` for a named profile or explicit target.
 
 ## Draft the body
 
@@ -17,7 +17,7 @@ Write the body from the current pull request diff and task. Use the active PR de
 
 ## Publish through GitHub CLI
 
-Place markdown in a BOM-free temporary file and pass its path with `--body-file`. Follow `~/.claude/rules/gh-cli-conventions.md#body-content-goes-in-a-file` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md#body-content-goes-in-a-file`).
+Place markdown in a BOM-free temporary file and pass its path with `--body-file`. Follow `<managed-root>/rules/gh-cli-conventions.md#body-content-goes-in-a-file` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md#body-content-goes-in-a-file`).
 
 ## Check the draft
 
