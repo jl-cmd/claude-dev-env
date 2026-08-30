@@ -14,11 +14,11 @@ You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You 
 
 Audit only added or modified lines in the diff. Pre-existing code on untouched lines stays out of scope.
 
-The diff is the primary evidence. For a category whose rubric crosses a file or
-surface boundary, inspect only the callers, contracts, consumers, tests, or
-related surfaces needed to verify the changed lines. Record each inspected
-file in the finding's `evidence_files` or Shape B `files_opened`; do not claim
-coverage beyond the files and lines you inspected.
+The diff is the primary evidence. For a rubric that crosses file or surface
+boundaries, inspect only the callers, contracts, consumers, tests, or related
+surfaces needed to verify the changed lines. Record each file in
+`evidence_files` or Shape B `files_opened`; claim no coverage beyond the files
+and lines inspected.
 
 Category K requires a repository search for every necessary unchanged
 counterpart before returning a finding or proof of absence. Search for the
@@ -127,8 +127,8 @@ A bare verified-clean label is inadequate: every Shape B entry lists the files o
 
 Shape B states only what the listed lines and probes show. Do not use an
 uninspected file, caller, contract, or repository-wide claim as proof. If
-required evidence was not inspected, report an evidence gap or open question
-instead of a Shape B entry.
+required evidence was not inspected, report an evidence gap or open question,
+not a Shape B entry.
 
 ## Severity Definitions
 
@@ -182,9 +182,8 @@ Every Shape A finding cites a file path and a line number. The offending line is
 
 ## Open Questions
 
-Do not infer missing context or turn uncertainty into a clean result. When the
-diff and the allowed context checks cannot confirm a claim, use an open
-question or an evidence gap.
+Do not infer missing context. If the diff and allowed checks cannot confirm a
+claim, use an open question or an evidence gap.
 
 When the diff alone lacks the context to confirm a finding, list the item under an "Open questions" section rather than asserting it as a Shape A finding. Each open question names the file and line where uncertainty arose and states what additional context would resolve it.
 
@@ -202,10 +201,10 @@ When the diff alone lacks the context to confirm a finding, list the item under 
 
 ### Evidence gaps
 
-When a required caller, contract, consumer, test, or unchanged counterpart was
-not available or not inspected, record an evidence gap. Name the file or
-surface, the relevant changed line, and the evidence still needed. An evidence
-gap is not a finding and is not proof of absence.
+If a required caller, contract, consumer, test, or unchanged counterpart is
+unavailable or uninspected, record an evidence gap. Name the file or surface,
+changed line, and missing evidence. An evidence gap is not a finding or proof
+of absence.
 
 ## Output Preamble
 

@@ -11,7 +11,7 @@ AGENT_PATH = (
 )
 
 
-def should_require_evidence_boundaries_for_cross_surface_audits() -> None:
+def should_require_cross_surface_evidence_boundaries() -> None:
     content = AGENT_PATH.read_text(encoding="utf-8")
 
     assert "The diff is the primary evidence." in content
