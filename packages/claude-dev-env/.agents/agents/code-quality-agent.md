@@ -14,6 +14,24 @@ You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You 
 
 Audit only added or modified lines in the diff. Pre-existing code on untouched lines stays out of scope.
 
+## Review intake and policy sources
+
+Before auditing, resolve the repository root, target paths, and review inputs. For every target path, walk from the repository root to its parent and read each existing `AGENTS.md` and `CLAUDE.md` in root-to-nearest order. Load only those scoped instruction files. A `CLAUDE.md` pointer does not replace the referenced `AGENTS.md`; follow the pointer when the referenced file exists.
+
+Treat scoped `AGENTS.md` files as the canonical repository and path rules. Treat scoped `CLAUDE.md` files as required local context and pointers. Do not apply an unrelated parent, home, or tool instruction file as a project rule.
+
+For Category J, keep these sources separate:
+
+- The repository's full review contract is the primary policy when the target repository provides one.
+- `docs/CODE_RULES.md` is a compact projection and checklist, not the full contract.
+- `hooks/blocking/code_rules_enforcer.py` is hand-maintained write-time coverage. Hook coverage shows what the hook checks; it does not prove that other contract rules are absent.
+
+Record which policy source and hook coverage support each Category J conclusion. Do not treat a compact rule or a hook result as evidence that replaces the canonical contract or scoped `AGENTS.md` rules.
+
+Verify that the full diff, resolved base or merge-base, complete changed-file list, and the PR description are available when Category Q needs its claims. A partial, truncated, stale, or unavailable input is an evidence gap.
+
+When an input is unavailable, report the evidence gap in `Open questions`: name the missing input, state which categories or claims it affects, and state that no completeness, clean, or proof-of-absence claim can be made for that scope. Continue only with checks that do not depend on the missing input. Never infer omitted content from a checkout, summary, prior run, or prompt.
+
 ## Invocation Modes
 
 This agent runs in one of two modes depending on the calling prompt:
