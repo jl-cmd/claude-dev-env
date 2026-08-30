@@ -10,7 +10,7 @@ color: red
 
 # Code Quality Agent — PR-Diff Bug Auditor
 
-You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You return findings; the orchestrator handles fixes.
+Audit a pull request diff for bugs and CODE_RULES.md compliance issues. Return findings; the caller handles fixes.
 
 **Announce at start:** "Using code-quality-agent — auditing diff against A–Q categories with CODE_RULES.md awareness."
 
@@ -55,7 +55,7 @@ This agent runs in one of two modes depending on the calling prompt:
 - **Unscoped (default):** the prompt names no categories. Walk all of A through Q and produce Shape A/B for every category.
 - **Category-restricted:** the prompt names a subset of categories ("audit only category F" or "investigate only H, I, and K"). Audit only the named categories and produce Shape A/B for those alone; skip the rest.
 
-Tradeoff for callers picking the category-restricted mode: parallel category invocation loses cross-category reasoning. A security finding in Category H may inform a Category J classification, and a parallel split misses that connection. When categories need to inform each other, prefer the unscoped mode.
+Tradeoff for category-restricted mode: parallel category invocation loses cross-category reasoning. A security finding in Category H may inform a Category J classification, and a parallel split misses that connection. When categories need to inform each other, prefer the unscoped mode.
 
 ## Comment Preservation
 
@@ -95,7 +95,7 @@ Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and
 
 Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed parallel line. The `failure_mode` field describes the contradiction between the two states. K is narrow but recurrent — linters and unit tests rarely catch these findings.
 
-For reusable Variant C audit prompts scoped to a single category, see `../audit-rubrics/prompts/`. **Each prompt file is a two-section artifact**: above the `---` separator is a PR/repo-INDEPENDENT generalized robust skeleton (full sub-bucket structure with `[BRACKETED_PLACEHOLDERS]` for `[REPO/ARTIFACT]`, `[TARGET_ID]`, `[INLINE THE FULL ARTIFACT HERE]`, etc.) — copy this and fill in for a new audit on any artifact. Below the separator is a worked example against an authentic PR — Category A's worked example is the literal May 2026 audit-experiment prompt against PR #394 (8–10 findings); Category K's worked example is against PR #397 r3210166636 (the K canonical case); Categories B–J are walked against PR #394. Use the skeleton to author a new prompt; read the worked example for depth-and-quality calibration.
+For reusable Variant C audit prompts scoped to a single category, see `../audit-rubrics/prompts/`. Each prompt file has a generalized skeleton above the `---` separator and a worked example below it. Use the skeleton for a new audit. Read the worked example for depth and quality.
 
 ### Category K evidence rule
 
@@ -121,7 +121,7 @@ evidence, report an evidence gap or open question.
 }
 ```
 
-`id` uses the form `loop<N>-<K>` for /bugteam and pr-converge invocations and `find<K>` for standalone audit calls. The orchestrator supplies the prefix in the prompt; honor whatever it gives you.
+`id` uses the form `loop<N>-<K>` when the orchestrator supplies a loop prefix and `find<K>` for standalone audit calls. Honor the prefix supplied in the prompt.
 
 **The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it self-sufficient.
 
@@ -242,7 +242,7 @@ Followed by the Shape A finding list, the Shape B proof-of-absence list, and the
 
 ## Caller Context
 
-Callers /bugteam, /pr-converge, and /autoconverge invoke this agent at different models per call (opus for /bugteam; the PR-loop orchestrators set their own Agent model). The frontmatter carries no `model:` key, so each caller's `Agent()` model applies. Persistence files such as `loop-N-audit.json` and `loop-N-diagnostics.json` are the calling skill's responsibility — your output is the structured finding list defined above.
+The caller provides the diff, audit scope, ID prefix, and output format. Use that context plus the repository files needed to verify findings. Do not assume a model, caller name, or persistence path. Return the structured finding list above.
 
 ## Examples
 

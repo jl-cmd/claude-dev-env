@@ -439,6 +439,26 @@ def test_code_quality_agent_default_scope_is_a_through_q() -> None:
     assert "| Q |" in agent_text
 
 
+def test_code_quality_agent_contract_is_caller_neutral() -> None:
+    agent_text = _CODE_QUALITY_AGENT_PATH.read_text(encoding="utf-8")
+    stale_terms = (
+        "PR #394",
+        "PR #397",
+        "May 2026",
+        "r3210166636",
+        "/bugteam",
+        "/pr-converge",
+        "/autoconverge",
+        "opus",
+        "sonnet",
+        "model:",
+    )
+    for stale_term in stale_terms:
+        assert stale_term not in agent_text
+    assert "The caller provides the diff, audit scope, ID prefix, and output format." in agent_text
+    assert "Do not assume a model, caller name, or persistence path." in agent_text
+
+
 def test_audit_contract_category_schema_includes_q() -> None:
     contract_text = _AUDIT_CONTRACT_PATH.read_text(encoding="utf-8")
     assert '"category": "A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q"' in (
