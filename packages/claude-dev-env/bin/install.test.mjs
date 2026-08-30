@@ -719,6 +719,26 @@ test('mergeHooksIntoSettings matches full standalone arguments at boundaries', (
 });
 
 
+test('mergeHooksIntoSettings substitutes an absolute interpreter path for the python prefix', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [
+                {
+                    matcher: 'Agent',
+                    hooks: [{ type: 'command', command: 'python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py' }],
+                },
+            ],
+        },
+    };
+    const settings = {};
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', 'C:/Python313/python.exe');
+    assert.equal(
+        settings.hooks.PreToolUse[0].hooks[0].command,
+        'C:/Python313/python.exe C:/Users/x/.claude/hooks/blocking/luna_fast_mode_gate.py',
+    );
+});
+
+
 test('mergeHooksIntoSettings prunes a prior py -3 managed hook when reinstalling with an absolute interpreter path', () => {
     const hooksConfig = {
         hooks: {
