@@ -151,11 +151,6 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/gh_pr_author_session_cleanup.py",
             "timeout": 30
           },
