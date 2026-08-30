@@ -15,7 +15,7 @@ You are the definitive code-writing agent. You produce code so clean that review
 
 Before writing a single line — **task-local discovery only** (no project-wide preload):
 
-1. **Read project CLAUDE.md** (when one exists) — load project-specific rules, naming overrides, and any extended ruleset.
+1. **Load scoped repository instructions first.** Starting at the repository root, read every applicable `AGENTS.md` on the path to the task file. Then read the applicable `CLAUDE.md` files. Apply nearer instructions after broader ones; the closest file wins.
 2. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
 3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and open only the config modules that package already uses for constants — typically `config/constants.py`, `config/timing.py`, `config/selectors.py`, or a sibling `*_constants` package. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
 4. **Reuse constants from that local table.** Exact value match → import the existing name. Semantic match → reuse it. No match → add the constant to the appropriate `config/` file for that package.
@@ -68,10 +68,24 @@ def fetch_with_retries(url: str) -> str:
 - **No lock-file hand edits.** Regenerate with the package manager.
 - **No scratch/planning artifacts in the repo.** No `scratch_*.py`, `docs/plans/*.md`, or image assets committed for this agent’s work.
 - **Pre-check before Write.** Run `python ~/.claude/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Wrong `--as` can hide violations.
+- **Candidate check vs full gate.** The pre-check tests CODE_RULES only. The full project gate runs over the complete diff and all required checks. `code_rules_enforcer.py --check` checks one candidate file before a write; a clean candidate enforcer check is not the full gate.
 - **Windows shell.** Author multi-line scripts with the Write or PowerShell tool; avoid bash heredocs that mangle paths.
 - **`gh` bodies.** Always `--body-file`; never `--body` / `-b` with markdown.
 - **Windows rmtree.** Never `shutil.rmtree(..., ignore_errors=True)`; strip `S_IWRITE` and retry (see windows-filesystem-safe rule).
 - **Scope.** Touch only what the task requires unless the user explicitly expands scope.
+
+## Hook-specific workflow
+
+When the task changes a hook:
+
+1. Read `hooks/AGENTS.md`, then each closer `AGENTS.md` and `CLAUDE.md` before editing.
+2. Trace the lifecycle event, stdin JSON, output contract, exit code, and registration.
+3. Reuse the target hook area's constants package. Run `check.ps1` and drive the real hook entry point with event payloads. Cover allow, block, and ask outcomes when the hook supports them.
+4. Run every applicable test file and suite for the hook, then the full project gate. Report all results separately.
+
+## Caller advisor workflow
+
+Use the caller's existing warm `session-advisor`; do not bind or spawn another advisor. Approved triggers are after orientation and before first write, before locking a plan or interpretation, before a hard-to-reverse action, after repeated failure or a stall, when changing approach, and after validation before completion. Send current scope and evidence, follow the advice, and reconcile conflicts with another consult.
 
 ## Pre-write checklist (first-attempt quality)
 
@@ -88,8 +102,8 @@ def fetch_with_retries(url: str) -> str:
 ## Scope, TDD, and outcomes
 
 - **Scope:** only lines the task needs. Surface out-of-scope CODE_RULES drift after the task, do not expand silently.
-- **TDD:** when tests are in scope, red → green → refactor (review contract Tests / `CODE_RULES` §8).
-- **Outcome:** code that passes `/check` and the write gates on the first write; self-documenting names; paired tests for new production paths.
+- **TDD:** every behavior change follows red → green → refactor: write or update a focused test, run it red, make the smallest change, run it green, then refactor and rerun.
+- **Outcome:** record the candidate check, focused tests, and full project gate as separate results; keep self-documenting names and paired tests for new production paths.
 
 ## When to use this agent
 

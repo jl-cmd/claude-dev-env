@@ -489,3 +489,51 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
     assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None
+
+
+def test_clean_coder_loads_scoped_agents_before_claude() -> None:
+    body = _clean_coder_body()
+    agents_instruction_at = body.index("Load scoped repository instructions first")
+    claude_instruction_at = body.index("Then read the applicable `CLAUDE.md`")
+    assert agents_instruction_at < claude_instruction_at
+    assert "every applicable `AGENTS.md`" in body
+    assert "closest file wins" in body
+
+
+def test_clean_coder_requires_red_green_refactor_for_behavior_changes() -> None:
+    body = _clean_coder_body()
+    assert "every behavior change" in body
+    assert "red → green → refactor" in body
+    assert "run it red" in body
+
+
+def test_clean_coder_distinguishes_full_gate_from_candidate_check() -> None:
+    body = _clean_coder_body()
+    assert "pre-check tests CODE_RULES only" in body
+    assert "full project gate" in body
+    assert "candidate enforcer check" in body
+    assert "not the full gate" in body
+
+
+def test_clean_coder_defines_a_hook_specific_workflow() -> None:
+    body = _clean_coder_body()
+    assert "Hook-specific workflow" in body
+    assert "hooks/AGENTS.md" in body
+    assert "stdin JSON" in body
+    assert "exit code" in body
+    assert "registration" in body
+    assert "constants package" in body
+    assert "check.ps1" in body
+    assert "every applicable test file and suite" in body
+
+
+def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> None:
+    body = _clean_coder_body()
+    assert "caller's existing warm `session-advisor`" in body
+    assert "before first write" in body
+    assert "before locking a plan or interpretation" in body
+    assert "before a hard-to-reverse action" in body
+    assert "after repeated failure or a stall" in body
+    assert "changing approach" in body
+    assert "before completion" in body
+    assert "do not bind or spawn another advisor" in body
