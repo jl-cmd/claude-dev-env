@@ -1126,13 +1126,13 @@ function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
 }
 
 /**
- * PreToolUse hook script paths the installer manages even though hooks.json
+ * Hook script paths the installer manages even though hooks.json
  * carries no standalone entry for them. Most were folded into the PreToolUse
- * dispatcher in Stage 1; md_to_html_blocker is a retired hook with no script on
- * disk. Each path stays in this set so a reinstall from an older settings shape
+ * dispatcher in Stage 1; retired hooks have no current registration.
+ * Each path stays in this set so a reinstall from an older settings shape
  * prunes its standalone entry — a folded hook would otherwise double-run
- * alongside the dispatcher, and the retired hook's entry would point at a
- * missing script.
+ * alongside the dispatcher, and a retired hook's entry would continue to run
+ * from the user's settings.json.
  */
 export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/write_existing_file_blocker.py',
@@ -1150,6 +1150,7 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
     'blocking/md_to_html_blocker.py',
+    'session/untracked_repo_detector.py',
 ]);
 
 /**
@@ -1168,14 +1169,19 @@ export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'workflow/md_to_html_companion.py',
 ]);
 
+/** Hook scripts that still ship but no longer run as registered hooks. */
+export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
+    'session/untracked_repo_detector.py',
+]);
+
 /**
  * Builds the set of hook script paths this installer manages, each relative to
  * the hooks directory (e.g. 'blocking/code_rules_enforcer.py'), parsed from the
  * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
  * `python3 -c` commands reference the hooks directory without a script tail and
  * contribute nothing. Also includes every path from FOLDED_HOOK_RELATIVE_PATHS
- * and POST_FOLDED_HOOK_RELATIVE_PATHS so a reinstall from an older settings shape
- * prunes both the PreToolUse and the PostToolUse folded entries.
+ * and the retained path sets so a reinstall from an older settings shape prunes
+ * folded and retired entries.
  *
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
  * @returns {Set<string>} Forward-slash relative script paths under hooks/.
@@ -1184,6 +1190,7 @@ export function managedHookScriptRelativePaths(hooksConfig) {
     const relativePaths = new Set([
         ...FOLDED_HOOK_RELATIVE_PATHS,
         ...POST_FOLDED_HOOK_RELATIVE_PATHS,
+        ...RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
     ]);
     const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {

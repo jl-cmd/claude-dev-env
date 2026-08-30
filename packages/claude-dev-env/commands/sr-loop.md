@@ -10,6 +10,14 @@ tool and repeats it until a pass returns zero new findings.
 Use `rules/asd-ste100-language.md` for user-facing wording. Keep the loop's
 cleanup, verification, commit, push, and finish-report fields.
 
+### Nit-only terminal
+
+When a pass finds only nits, apply them, run scoped checks, commit, and push.
+Treat that phase as clean. Do not run another simplify or review pass without
+the user's request. If later work creates an uncommitted out-of-scope diff,
+stop and report it. Do not inspect, repair, commit, or adopt that diff without
+new user instruction.
+
 ## Effort
 
 Set every model call to `max` effort. If that model has no `max` effort, use
@@ -32,7 +40,8 @@ stack's design, intent, and changes.
    written with the Write tool, Co-Authored-By line, 10-minute timeout — the
    pre-commit gate runs its own tests), and push to the PR head branch. The PR
    stays draft.
-3. Repeat the invocation. **Skips are sticky:** carry every adjudicated skip
+3. Repeat the invocation only after substantive findings or a user request.
+   **Skips are sticky:** carry every adjudicated skip
    forward into the next pass as "already adjudicated — do not re-report: ..."
    context, or the loop never converges.
 4. Phase A converges when a full pass returns zero new findings, or when a
