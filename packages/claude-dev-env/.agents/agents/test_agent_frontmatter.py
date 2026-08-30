@@ -609,6 +609,19 @@ def test_clean_coder_defines_a_hook_specific_workflow() -> None:
     assert "every applicable test file and suite" in body
 
 
+def test_clean_coder_uses_target_package_aware_hook_paths() -> None:
+    body = _clean_coder_body()
+    required_references = (
+        "<managed-root>/hooks/AGENTS.md",
+        "packages/claude-dev-env/hooks/AGENTS.md",
+        "<managed-root>/scripts/check.ps1",
+        "packages/claude-dev-env/scripts/check.ps1",
+    )
+    assert all(each_reference in body for each_reference in required_references)
+    assert "read `hooks/AGENTS.md`" not in body
+    assert "Run `check.ps1`" not in body
+
+
 def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> None:
     body = _clean_coder_body()
     assert "caller's existing warm `session-advisor`" in body
