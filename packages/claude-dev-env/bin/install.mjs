@@ -1169,14 +1169,19 @@ export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'workflow/md_to_html_companion.py',
 ]);
 
+/** Hook scripts that still ship but no longer run as registered hooks. */
+export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
+    'session/untracked_repo_detector.py',
+]);
+
 /**
  * Builds the set of hook script paths this installer manages, each relative to
  * the hooks directory (e.g. 'blocking/code_rules_enforcer.py'), parsed from the
  * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
  * `python3 -c` commands reference the hooks directory without a script tail and
  * contribute nothing. Also includes every path from FOLDED_HOOK_RELATIVE_PATHS
- * and POST_FOLDED_HOOK_RELATIVE_PATHS so a reinstall from an older settings shape
- * prunes both the PreToolUse and the PostToolUse folded entries.
+ * and the retained path sets so a reinstall from an older settings shape prunes
+ * folded and retired entries.
  *
  * @param {{hooks: object}} hooksConfig Parsed hooks.json.
  * @returns {Set<string>} Forward-slash relative script paths under hooks/.
@@ -1185,6 +1190,7 @@ export function managedHookScriptRelativePaths(hooksConfig) {
     const relativePaths = new Set([
         ...FOLDED_HOOK_RELATIVE_PATHS,
         ...POST_FOLDED_HOOK_RELATIVE_PATHS,
+        ...RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
     ]);
     const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {
