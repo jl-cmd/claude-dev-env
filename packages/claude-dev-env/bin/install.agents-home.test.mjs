@@ -25,6 +25,7 @@ import {
     MANAGED_SKILLS_DIRECTORY_NAME,
 } from './install-constants.mjs';
 import { isDirectoryPointerTo } from './publish-directory-pointer.mjs';
+import { resolvePackageManagedDirectory } from './resolve-package-managed-directory.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
@@ -36,6 +37,36 @@ const SHIPPED_AGENT_FILE_NAMES = [
     SHIPPED_AGENT_FILE_NAME,
     'code-quality-agent.md',
     'pr-description-writer.md',
+];
+const CLEAN_CODER_POLICY_REFERENCES = [
+    [
+        '<managed-root>/docs/CODE_RULES.md',
+        'packages/claude-dev-env/docs/CODE_RULES.md',
+    ],
+    [
+        '<managed-root>/hooks/blocking/code_rules_enforcer.py',
+        'packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py',
+    ],
+    [
+        '<managed-root>/rules/code-standards.md',
+        'packages/claude-dev-env/rules/code-standards.md',
+    ],
+    [
+        '<managed-root>/rules/file-global-constants.md',
+        'packages/claude-dev-env/rules/file-global-constants.md',
+    ],
+    [
+        '<managed-root>/rules/windows-filesystem-safe.md',
+        'packages/claude-dev-env/rules/windows-filesystem-safe.md',
+    ],
+    [
+        '<managed-root>/rules/gh-cli-conventions.md',
+        'packages/claude-dev-env/rules/gh-cli-conventions.md',
+    ],
+    [
+        '<managed-root>/rules/plain-illustrative-docstrings.md',
+        'packages/claude-dev-env/rules/plain-illustrative-docstrings.md',
+    ],
 ];
 const PERSONAL_SKILL_NAME = 'my-notes';
 const SHARED_DIRECTORY_NAME = '_shared';
@@ -84,6 +115,33 @@ function assertProposalContractInstallation(installationPaths) {
 
     assert.equal(pointerLine, PREFLIGHT_PROPOSAL_POINTER);
     assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
+}
+
+/**
+ * @param {string} agentFilePath
+ * @param {string} layoutName
+ * @param {string} homeDirectory
+ * @returns {string[]}
+ */
+function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, homeDirectory) {
+    const agentBody = readFileSync(agentFilePath, 'utf8');
+    const missingReferences = [];
+    for (const [installedReference, sourceReference] of CLEAN_CODER_POLICY_REFERENCES) {
+        const eachReference = layoutName === 'source'
+            ? sourceReference
+            : installedReference;
+        const eachTargetPath = sourceReference.replace('packages/claude-dev-env/', '');
+        if (!agentBody.includes(eachReference)) {
+            missingReferences.push(eachReference + ' is absent');
+        }
+        const resolvedPath = layoutName === 'source'
+            ? join(PACKAGE_DIRECTORY, eachTargetPath)
+            : join(homeDirectory, '.claude', eachTargetPath);
+        if (!existsSync(resolvedPath)) {
+            missingReferences.push(layoutName + ': ' + resolvedPath);
+        }
+    }
+    return missingReferences.map((reference) => layoutName + ': ' + reference);
 }
 
 test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
@@ -144,6 +202,18 @@ test('a full install writes skills and agents under .agents and points .claude a
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),
         );
+        const sourceAgentFile = join(
+            resolvePackageManagedDirectory(
+                PACKAGE_DIRECTORY,
+                MANAGED_AGENTS_DIRECTORY_NAME,
+            ),
+            SHIPPED_AGENT_FILE_NAME,
+        );
+        const brokenPolicyReferences = [
+            ...cleanCoderPolicyReferenceProblems(sourceAgentFile, 'source', homeDirectory),
+            ...cleanCoderPolicyReferenceProblems(canonicalAgentFile, 'installed', homeDirectory),
+        ];
+        assert.deepEqual(brokenPolicyReferences, [], 'Clean Coder has broken policy references');
         assert.equal(realpathSync(lookupAgentFile), realpathSync(canonicalAgentFile));
         assert.equal(
             lstatSync(skillsInstallDirectory).isSymbolicLink(),

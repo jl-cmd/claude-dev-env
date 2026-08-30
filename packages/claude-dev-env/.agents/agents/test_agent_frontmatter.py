@@ -803,6 +803,10 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
     assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None
 
 
+def test_clean_coder_policy_targets_exist_in_source_package() -> None:
+    _assert_source_link_contract("clean-coder.md", _clean_coder_body())
+
+
 def test_code_quality_agent_allows_only_read_and_search_tools() -> None:
     agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
     parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
