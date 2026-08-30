@@ -1126,13 +1126,13 @@ function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
 }
 
 /**
- * PreToolUse hook script paths the installer manages even though hooks.json
+ * Hook script paths the installer manages even though hooks.json
  * carries no standalone entry for them. Most were folded into the PreToolUse
- * dispatcher in Stage 1; md_to_html_blocker is a retired hook with no script on
- * disk. Each path stays in this set so a reinstall from an older settings shape
+ * dispatcher in Stage 1; retired hooks have no current registration.
+ * Each path stays in this set so a reinstall from an older settings shape
  * prunes its standalone entry — a folded hook would otherwise double-run
- * alongside the dispatcher, and the retired hook's entry would point at a
- * missing script.
+ * alongside the dispatcher, and a retired hook's entry would continue to run
+ * from the user's settings.json.
  */
 export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/write_existing_file_blocker.py',
@@ -1150,6 +1150,7 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
     'blocking/md_to_html_blocker.py',
+    'session/untracked_repo_detector.py',
 ]);
 
 /**

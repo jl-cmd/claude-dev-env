@@ -1194,12 +1194,13 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 14 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 15);
+test('FOLDED_HOOK_RELATIVE_PATHS contains folded hooks plus retired entries', () => {
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/md_to_html_blocker.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('session/untracked_repo_detector.py'));
 });
 
 
@@ -1236,6 +1237,7 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
     ];
     const retiredHooks = [
         'blocking/md_to_html_blocker.py',
+        'session/untracked_repo_detector.py',
     ];
     for (const hostedPath of dispatcherHostedHooks) {
         assert.ok(
@@ -1254,6 +1256,41 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         dispatcherHostedHooks.length + retiredHooks.length,
         'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks plus the retired hooks, no more, no fewer'
     );
+});
+
+
+test('mergeHooksIntoSettings removes the retired SessionStart detector and keeps user hooks', () => {
+    const retiredCommand = 'py -3 C:/Users/x/.claude/hooks/session/untracked_repo_detector.py';
+    const userCommand = 'py -3 C:/Users/x/custom/session_gate.py';
+    const settings = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [
+                    { type: 'command', command: retiredCommand },
+                    { type: 'command', command: userCommand },
+                ],
+            }],
+        },
+    };
+    const currentHooksConfig = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [{
+                    type: 'command',
+                    command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/plugin_data_dir_cleanup.py',
+                }],
+            }],
+        },
+    };
+
+    mergeHooksIntoSettings(settings, currentHooksConfig, 'C:/Users/x/.claude', 'py -3');
+
+    const commands = settings.hooks.SessionStart[0].hooks.map(hook => hook.command);
+    assert.equal(commands.includes(retiredCommand), false);
+    assert.equal(commands.includes(userCommand), true);
+    assert.equal(commands.some(command => command.includes('plugin_data_dir_cleanup.py')), true);
 });
 
 
@@ -1333,6 +1370,14 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
         .flatMap(group => group.hooks.map(hook => hook.command))
         .filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
     assert.equal(postDispatcherCommands.length, 1, 'shipped hooks.json must register the PostToolUse dispatcher exactly once');
+
+    const allSessionStartCommands = (shippedHooksConfig.hooks.SessionStart || [])
+        .flatMap(group => group.hooks.map(hook => hook.command));
+    assert.equal(
+        allSessionStartCommands.some(command => command.includes('untracked_repo_detector.py')),
+        false,
+        'shipped hooks.json must not register the retired untracked-repo detector',
+    );
 
     const writePathCommands = allPreToolUseGroups
         .filter(group => /Write|Edit|MultiEdit/.test(group.matcher || ''))
