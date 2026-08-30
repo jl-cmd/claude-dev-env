@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse gate: deny Luna spawns that do not use the fast service tier."""
+"""PreToolUse gate: deny Luna spawns that use an unsupported service tier."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.luna_fast_mode_gate_constants import (  # noqa: E402
     ALL_SPAWN_TOOL_NAMES,
     CALLING_HOOK_NAME,
+    CODEX_AGENT_TOOL_NAME,
     DENY_ADDITIONAL_CONTEXT,
     DENY_PREVIEW_TEMPLATE,
     DENY_REASON,
@@ -25,6 +26,7 @@ from hooks_constants.luna_fast_mode_gate_constants import (  # noqa: E402
     MAXIMUM_PREVIEW_FIELD_LENGTH,
     MODEL_FIELD_NAME,
     MODEL_SEGMENT_SPLIT_PATTERN,
+    PRIORITY_SERVICE_TIER,
     SERVICE_TIER_FIELD_NAME,
     TOOL_INPUT_FIELD_NAME,
     TOOL_NAME_FIELD_NAME,
@@ -48,6 +50,15 @@ def _model_names_the_luna_tier(model_identifier: str) -> bool:
     return LUNA_MODEL_ALIAS in all_segments
 
 
+def _is_service_tier_allowed(tool_name: object, service_tier: object) -> bool:
+    if service_tier == FAST_SERVICE_TIER:
+        return True
+    return (
+        tool_name == CODEX_AGENT_TOOL_NAME
+        and service_tier == PRIORITY_SERVICE_TIER
+    )
+
+
 def _denied_spawn_details(
     all_payload_by_field: Mapping[str, object],
 ) -> tuple[str, object] | None:
@@ -59,7 +70,8 @@ def _denied_spawn_details(
     Returns:
         The model and service tier for an invalid Luna spawn; None otherwise.
     """
-    if all_payload_by_field.get(TOOL_NAME_FIELD_NAME, "") not in ALL_SPAWN_TOOL_NAMES:
+    tool_name = all_payload_by_field.get(TOOL_NAME_FIELD_NAME, "")
+    if tool_name not in ALL_SPAWN_TOOL_NAMES:
         return None
     tool_input = all_payload_by_field.get(TOOL_INPUT_FIELD_NAME, {})
     if not isinstance(tool_input, dict):
@@ -70,7 +82,7 @@ def _denied_spawn_details(
     if not _model_names_the_luna_tier(model_identifier):
         return None
     service_tier = tool_input.get(SERVICE_TIER_FIELD_NAME)
-    if service_tier == FAST_SERVICE_TIER:
+    if _is_service_tier_allowed(tool_name, service_tier):
         return None
     return model_identifier, service_tier
 

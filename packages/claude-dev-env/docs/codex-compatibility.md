@@ -67,7 +67,7 @@ Limits:
 }
 ```
 
-The guard allows a Luna spawn only when `service_tier` is exactly `fast`. It covers headless `Task` calls and in-session `Agent` and `multi_agent_v1__spawn_agent` calls.
+The guard requires exact `fast` for Luna spawns through `Agent` and `Task`. Native Codex `multi_agent_v1__spawn_agent` accepts exact `fast` or `priority`. Other models and tools pass through.
 
 ## Roots and safety
 
