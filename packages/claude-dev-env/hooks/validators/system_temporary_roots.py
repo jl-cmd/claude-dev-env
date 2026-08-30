@@ -68,9 +68,9 @@ def enclosing_system_temporary_root(starting_file: Path) -> Path | None:
         %TEMP%/pytest-123/x.py -> %TEMP%
         C:/repo/pkg/x.py       -> None
 
-    When more than one listed root contains the file, the root with the most
-    path parts wins so a nested ``RUNNER_TEMP`` stops the walk before a broader
-    ``gettempdir()`` ancestor.
+    When more than one listed root contains the file, the first ancestor that
+    is already in the root set wins, so a nested ``RUNNER_TEMP`` stops the walk
+    before a broader ``gettempdir()`` ancestor.
 
     Args:
         starting_file: The file or directory whose ancestors are bounded.
@@ -83,16 +83,8 @@ def enclosing_system_temporary_root(starting_file: Path) -> Path | None:
         resolved_start = starting_file.resolve()
     except OSError:
         return None
-    all_matching_roots: list[Path] = []
-    for each_temporary_root in all_system_temporary_roots():
-        try:
-            is_under_root = resolved_start == each_temporary_root or (
-                resolved_start.is_relative_to(each_temporary_root)
-            )
-        except (OSError, ValueError):
-            continue
-        if is_under_root:
-            all_matching_roots.append(each_temporary_root)
-    if not all_matching_roots:
-        return None
-    return max(all_matching_roots, key=lambda each_root: len(each_root.parts))
+    all_root_set = set(all_system_temporary_roots())
+    for each_candidate_directory in (resolved_start, *resolved_start.parents):
+        if each_candidate_directory in all_root_set:
+            return each_candidate_directory
+    return None

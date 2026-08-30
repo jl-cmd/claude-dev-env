@@ -125,19 +125,12 @@ def find_module_resolution_root(starting_file: Path) -> Path | None:
     pyproject_filename = PYPROJECT_FILENAME
     enclosing_temporary_root = enclosing_system_temporary_root(starting_file)
     for each_candidate_directory in ancestor_directories(starting_file):
-        if enclosing_temporary_root is not None:
-            try:
-                candidate_is_inside_temp = each_candidate_directory.resolve().is_relative_to(
-                    enclosing_temporary_root
-                )
-            except OSError:
-                return None
-            if not candidate_is_inside_temp:
-                return None
         has_git_entry = (each_candidate_directory / git_entry_name).exists()
         has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
         if has_git_entry or has_pyproject:
             return each_candidate_directory
+        if each_candidate_directory == enclosing_temporary_root:
+            return None
     return None
 
 
@@ -151,7 +144,7 @@ def _first_module_resolution_root(all_py_files: list[str]) -> Path | None:
 
 
 @contextlib.contextmanager
-def mypy_working_directory(all_py_files: list[str]) -> Iterator[str]:
+def mypy_working_directory(resolution_root: Path | None) -> Iterator[str]:
     """Yield the working directory mypy resolves first-party imports from.
 
     ::
@@ -164,12 +157,12 @@ def mypy_working_directory(all_py_files: list[str]) -> Iterator[str]:
     no foreign top-level package leaks in.
 
     Args:
-        all_py_files: Absolute or relative paths of the Python files under check.
+        resolution_root: The first rooted target's project root, or ``None``
+            when every target is detached.
 
     Yields:
         A directory path string mypy should use as its working directory.
     """
-    resolution_root = _first_module_resolution_root(all_py_files)
     if resolution_root is not None:
         yield str(resolution_root)
         return
@@ -235,12 +228,13 @@ def _run_mypy_subprocess(
     detached_timeout_seconds = MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS
     detached_timeout_skip_message = MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE
     config_argument = _mypy_config_argument(all_py_files, config_source_path)
-    is_detached_target = _first_module_resolution_root(all_py_files) is None
+    resolution_root = _first_module_resolution_root(all_py_files)
+    is_detached_target = resolution_root is None
     follow_imports_arguments = (
         [follow_imports_flag, follow_imports_skip_value] if is_detached_target else []
     )
     timeout_seconds = detached_timeout_seconds if is_detached_target else None
-    with mypy_working_directory(all_py_files) as working_directory:
+    with mypy_working_directory(resolution_root) as working_directory:
         try:
             return subprocess.run(
                 [
