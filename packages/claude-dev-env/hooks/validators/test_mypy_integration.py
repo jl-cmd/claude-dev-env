@@ -1,10 +1,12 @@
 """Tests for mypy integration module."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from . import mypy_integration as mypy_integration_module
 from .mypy_integration import (
     MypyResult,
     check_mypy_available,
@@ -28,6 +30,34 @@ def _write_config_importer(script_path: Path) -> None:
         "indent_width: int = SERIALIZED_INDENT_WIDTH\n",
         encoding="utf-8",
     )
+
+
+def test_find_module_resolution_root_ignores_git_above_system_temp(
+    tmp_path: Path,
+) -> None:
+    """A temp staging file does not inherit ``.git`` from a parent of ``%TEMP%``.
+
+    ::
+
+        %TEMP%/pytest-.../detached/module.py
+        C:/Users/<you>/.git exists above %TEMP%
+        flag: walk returns the home repo -> mypy cwd=home, torch stubs, 30s timeout
+        ok:   walk stops at the temp root -> None
+    """
+    nested_file = tmp_path / "detached" / "module.py"
+    nested_file.parent.mkdir()
+    nested_file.write_text("sample_number: int = 1\n", encoding="utf-8")
+    assert find_module_resolution_root(nested_file) is None
+
+
+def test_find_module_resolution_root_still_sees_git_inside_temp(tmp_path: Path) -> None:
+    """A repo created inside the temp tree is still a project root."""
+    nested_repo = tmp_path / "inner_repo"
+    nested_file = nested_repo / "pkg" / "module.py"
+    nested_file.parent.mkdir(parents=True)
+    (nested_repo / ".git").mkdir()
+    nested_file.write_text("sample_number: int = 1\n", encoding="utf-8")
+    assert find_module_resolution_root(nested_file) == nested_repo
 
 
 def test_find_module_resolution_root_returns_git_marked_ancestor(tmp_path: Path) -> None:
@@ -163,6 +193,113 @@ def test_run_mypy_check_accepts_relative_path_under_nested_root(
     mypy_result = run_mypy_check([relative_target])
 
     assert mypy_result.passed, mypy_result.output
+
+
+def test_run_mypy_check_does_not_report_imported_sibling_on_detached_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A detached gate file does not inherit type errors from an imported sibling.
+
+    ::
+
+        detached/importer.py -> from sibling import broken_value
+        detached/sibling.py  -> broken_value: int = "not an integer"
+        flag: follow-imports=normal reports sibling.py and fails the gate file
+        ok:   follow-imports=skip grades importer.py only -> passed
+
+    The PreToolUse gate stages one file under a temp directory with no project
+    root. Following imports there loads site-packages (torch stubs) and sibling
+    modules, and the 30s hook budget expires.
+    """
+    if not check_mypy_available():
+        pytest.skip("mypy is not installed")
+
+    detached_directory = tmp_path / "detached_gate_dir"
+    detached_directory.mkdir()
+    (detached_directory / "sibling.py").write_text(
+        "broken_value: int = 'not an integer'\n",
+        encoding="utf-8",
+    )
+    importer_file = detached_directory / "importer.py"
+    importer_file.write_text(
+        "from sibling import broken_value\n\n"
+        "copied_value: int = broken_value\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    mypy_result = run_mypy_check([importer_file])
+
+    assert mypy_result.passed, mypy_result.output
+    assert "sibling.py" not in mypy_result.output
+
+
+def test_run_mypy_check_reports_imported_sibling_on_rooted_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rooted file still follows first-party imports and reports sibling errors.
+
+    ::
+
+        rooted_repo/.git + importer.py -> from sibling import broken_value
+        rooted_repo/sibling.py         -> broken_value: int = "not an integer"
+        ok:   follow-imports=normal reports sibling.py -> failed
+        flag: --follow-imports=skip on rooted files hides sibling.py -> passed
+
+    Skip applies only to detached staging copies. Applying it to a repo file
+    would drop first-party type errors the in-repo path must still see.
+    """
+    if not check_mypy_available():
+        pytest.skip("mypy is not installed")
+
+    rooted_repo = tmp_path / "rooted_repo"
+    rooted_repo.mkdir()
+    (rooted_repo / ".git").mkdir()
+    (rooted_repo / "sibling.py").write_text(
+        "broken_value: int = 'not an integer'\n",
+        encoding="utf-8",
+    )
+    importer_file = rooted_repo / "importer.py"
+    importer_file.write_text(
+        "from sibling import broken_value\n\n"
+        "copied_value: int = broken_value\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    mypy_result = run_mypy_check([importer_file])
+
+    assert not mypy_result.passed
+    assert "sibling.py" in mypy_result.output
+
+
+def test_run_mypy_check_skips_when_detached_mypy_times_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A detached mypy that exceeds its timeout does not fail the file.
+
+    ::
+
+        detached/module.py, subprocess.run raises TimeoutExpired
+        ok:   passed=True and the skip message is in the output
+        flag: TimeoutExpired propagates and the PreToolUse hook dies
+    """
+    detached_file = tmp_path / "detached" / "module.py"
+    detached_file.parent.mkdir()
+    detached_file.write_text("sample_number: int = 1\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        mypy_integration_module, "check_mypy_available", lambda: True
+    )
+
+    def raise_timeout(*_args: object, **_kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="mypy", timeout=1)
+
+    monkeypatch.setattr(mypy_integration_module.subprocess, "run", raise_timeout)
+    mypy_result = run_mypy_check([detached_file])
+
+    assert mypy_result.passed
+    assert "timed out on a detached file" in mypy_result.output
 
 
 def test_run_mypy_check_applies_config_resolved_from_config_source_path(

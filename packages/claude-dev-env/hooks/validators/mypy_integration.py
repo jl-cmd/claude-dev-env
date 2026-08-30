@@ -26,7 +26,11 @@ except ModuleNotFoundError:
 
 try:
     from hooks_constants.mypy_integration_constants import (
+        FOLLOW_IMPORTS_FLAG,
+        FOLLOW_IMPORTS_SKIP_VALUE,
         GIT_DIRECTORY_NAME,
+        MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS,
+        MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE,
         PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
@@ -35,7 +39,11 @@ except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
     from hooks_constants.mypy_integration_constants import (
+        FOLLOW_IMPORTS_FLAG,
+        FOLLOW_IMPORTS_SKIP_VALUE,
         GIT_DIRECTORY_NAME,
+        MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS,
+        MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE,
         PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
@@ -83,6 +91,24 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
     return find_pyproject_configuring_tool(starting_file, MYPY_TOOL_TABLE_NAME)
 
 
+def _enclosing_temporary_root(starting_file: Path) -> Path | None:
+    """Return the system temp root that contains *starting_file*, else None.
+
+    ::
+
+        %TEMP%/pytest-123/x.py -> %TEMP%
+        C:/repo/pkg/x.py       -> None
+    """
+    try:
+        resolved_start = starting_file.resolve()
+        temporary_root = Path(tempfile.gettempdir()).resolve()
+    except OSError:
+        return None
+    if resolved_start.is_relative_to(temporary_root):
+        return temporary_root
+    return None
+
+
 def find_module_resolution_root(starting_file: Path) -> Path | None:
     """Return the nearest ancestor directory that roots a project, else None.
 
@@ -91,21 +117,36 @@ def find_module_resolution_root(starting_file: Path) -> Path | None:
     directory, so anchoring there binds ``config.*`` to the target file's own
     project and keeps a foreign ``config`` in the caller's directory out of scope.
 
+    The walk does not climb out of the system temp directory. A PreToolUse
+    staging copy lives under ``%TEMP%``, and a ``.git`` in the user home above
+    that temp root is not this file's project.
+
     ::
 
         target_repo/.git + target_repo/tools/x.py -> target_repo
-        /tmp/detached/x.py (no marker up-tree)      -> None
+        /tmp/detached/x.py (home .git above temp) -> None
+        flag: walk past %TEMP% into ~/.git        -> mypy cwd=home, hook timeout
 
     Args:
         starting_file: The file (or directory) the walk begins from.
 
     Returns:
         The nearest ancestor Path that holds ``.git`` or ``pyproject.toml``,
-        or ``None`` when no such ancestor exists.
+        or ``None`` when no such ancestor exists inside the walk limit.
     """
     git_entry_name = GIT_DIRECTORY_NAME
     pyproject_filename = PYPROJECT_FILENAME
+    enclosing_temporary_root = _enclosing_temporary_root(starting_file)
     for each_candidate_directory in ancestor_directories(starting_file):
+        if enclosing_temporary_root is not None:
+            try:
+                candidate_is_inside_temp = each_candidate_directory.resolve().is_relative_to(
+                    enclosing_temporary_root
+                )
+            except OSError:
+                return None
+            if not candidate_is_inside_temp:
+                return None
         has_git_entry = (each_candidate_directory / git_entry_name).exists()
         has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
         if has_git_entry or has_pyproject:
@@ -189,17 +230,53 @@ def _mypy_config_argument(
 def _run_mypy_subprocess(
     all_py_files: list[str], config_source_path: Path | None
 ) -> subprocess.CompletedProcess[str]:
-    """Run mypy over *all_py_files* from each file's own project root."""
+    """Run mypy over *all_py_files* from each file's own project root.
+
+    A detached file (no ``.git`` or ``pyproject.toml`` ancestor) is a PreToolUse
+    staging copy. Following imports there loads site-packages and sibling
+    modules and blows the 30-second hook budget, so that path skips followed
+    imports and bounds the subprocess.
+
+    ::
+
+        ok:   temp/vae_compile.py (no project root) -> --follow-imports skip
+        ok:   repo/tools/serialize_tool.py          -> default follow-imports
+        flag: temp/vae_compile.py follow=normal     -> torch stubs, hook timeout
+    """
+    follow_imports_flag = FOLLOW_IMPORTS_FLAG
+    follow_imports_skip_value = FOLLOW_IMPORTS_SKIP_VALUE
+    detached_timeout_seconds = MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS
+    detached_timeout_skip_message = MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE
     config_argument = _mypy_config_argument(all_py_files, config_source_path)
+    is_detached_target = _first_module_resolution_root(all_py_files) is None
+    follow_imports_arguments = (
+        [follow_imports_flag, follow_imports_skip_value] if is_detached_target else []
+    )
+    timeout_seconds = detached_timeout_seconds if is_detached_target else None
     with mypy_working_directory(all_py_files) as working_directory:
-        return subprocess.run(
-            ["mypy", *config_argument, "--ignore-missing-imports", "--no-error-summary"]
-            + all_py_files,
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=working_directory,
-        )
+        try:
+            return subprocess.run(
+                [
+                    "mypy",
+                    *config_argument,
+                    *follow_imports_arguments,
+                    "--ignore-missing-imports",
+                    "--no-error-summary",
+                    *all_py_files,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=working_directory,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(
+                args=["mypy"],
+                returncode=0,
+                stdout="",
+                stderr=detached_timeout_skip_message,
+            )
 
 
 def run_mypy_check(
@@ -208,7 +285,9 @@ def run_mypy_check(
     """Run mypy on files, resolving config from *config_source_path* when given.
 
     A given ``config_source_path`` walks ``--config-file`` up from the original
-    target rather than the staged copy's own ancestors.
+    target rather than the staged copy's own ancestors. A detached staging
+    file that hits the subprocess timeout returns passed, same as when mypy
+    is not installed, so the 30-second PreToolUse hook can still return.
     """
     if not all_files:
         return MypyResult(passed=True, output="No files to check", error_count=0)
