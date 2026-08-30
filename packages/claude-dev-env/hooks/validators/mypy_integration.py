@@ -1,6 +1,7 @@
 """Mypy integration for static type checking."""
 
 import contextlib
+import logging
 import subprocess
 import sys
 import tempfile
@@ -12,17 +13,19 @@ _validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
 try:
-    from pyproject_config_discovery import (
+    from .pyproject_config_discovery import (
         ancestor_directories,
         find_pyproject_configuring_tool,
     )
-except ModuleNotFoundError:
+    from .system_temporary_roots import enclosing_system_temporary_root
+except ImportError:
     if _validators_directory not in sys.path:
         sys.path.insert(0, _validators_directory)
     from pyproject_config_discovery import (
         ancestor_directories,
         find_pyproject_configuring_tool,
     )
+    from system_temporary_roots import enclosing_system_temporary_root
 
 try:
     from hooks_constants.mypy_integration_constants import (
@@ -48,6 +51,8 @@ except ModuleNotFoundError:
         PYTHON_SOURCE_SUFFIX,
     )
     from hooks_constants.pyproject_config_discovery_constants import MYPY_TOOL_TABLE_NAME
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -91,24 +96,6 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
     return find_pyproject_configuring_tool(starting_file, MYPY_TOOL_TABLE_NAME)
 
 
-def _enclosing_temporary_root(starting_file: Path) -> Path | None:
-    """Return the system temp root that contains *starting_file*, else None.
-
-    ::
-
-        %TEMP%/pytest-123/x.py -> %TEMP%
-        C:/repo/pkg/x.py       -> None
-    """
-    try:
-        resolved_start = starting_file.resolve()
-        temporary_root = Path(tempfile.gettempdir()).resolve()
-    except OSError:
-        return None
-    if resolved_start.is_relative_to(temporary_root):
-        return temporary_root
-    return None
-
-
 def find_module_resolution_root(starting_file: Path) -> Path | None:
     """Return the nearest ancestor directory that roots a project, else None.
 
@@ -136,7 +123,7 @@ def find_module_resolution_root(starting_file: Path) -> Path | None:
     """
     git_entry_name = GIT_DIRECTORY_NAME
     pyproject_filename = PYPROJECT_FILENAME
-    enclosing_temporary_root = _enclosing_temporary_root(starting_file)
+    enclosing_temporary_root = enclosing_system_temporary_root(starting_file)
     for each_candidate_directory in ancestor_directories(starting_file):
         if enclosing_temporary_root is not None:
             try:
@@ -271,6 +258,7 @@ def _run_mypy_subprocess(
                 timeout=timeout_seconds,
             )
         except subprocess.TimeoutExpired:
+            logger.warning(detached_timeout_skip_message)
             return subprocess.CompletedProcess(
                 args=["mypy"],
                 returncode=0,

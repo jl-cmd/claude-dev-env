@@ -1,5 +1,6 @@
 """Tests for mypy integration module."""
 
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -58,6 +59,35 @@ def test_find_module_resolution_root_still_sees_git_inside_temp(tmp_path: Path) 
     (nested_repo / ".git").mkdir()
     nested_file.write_text("sample_number: int = 1\n", encoding="utf-8")
     assert find_module_resolution_root(nested_file) == nested_repo
+
+
+def test_find_module_resolution_root_stops_at_runner_temp_when_gettempdir_differs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A RUNNER_TEMP staging file does not inherit ``.git`` above that root.
+
+    ::
+
+        RUNNER_TEMP/detached/module.py, gettempdir -> sibling os_gettemp
+        tmp_path/.git sits above RUNNER_TEMP
+        flag: gettempdir-only walk returns tmp_path
+        ok:   walk stops at RUNNER_TEMP -> None
+    """
+    runner_temp_root = tmp_path / "runner_temp"
+    os_gettemp = tmp_path / "os_gettemp"
+    runner_temp_root.mkdir()
+    os_gettemp.mkdir()
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp_root))
+    monkeypatch.setattr(
+        "validators.system_temporary_roots.tempfile.gettempdir",
+        lambda: str(os_gettemp),
+    )
+    nested_file = runner_temp_root / "detached" / "module.py"
+    nested_file.parent.mkdir()
+    nested_file.write_text("sample_number: int = 1\n", encoding="utf-8")
+
+    assert find_module_resolution_root(nested_file) is None
 
 
 def test_find_module_resolution_root_returns_git_marked_ancestor(tmp_path: Path) -> None:
@@ -274,7 +304,7 @@ def test_run_mypy_check_reports_imported_sibling_on_rooted_file(
 
 
 def test_run_mypy_check_skips_when_detached_mypy_times_out(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A detached mypy that exceeds its timeout does not fail the file.
 
@@ -296,10 +326,12 @@ def test_run_mypy_check_skips_when_detached_mypy_times_out(
         raise subprocess.TimeoutExpired(cmd="mypy", timeout=1)
 
     monkeypatch.setattr(mypy_integration_module.subprocess, "run", raise_timeout)
-    mypy_result = run_mypy_check([detached_file])
+    with caplog.at_level(logging.WARNING):
+        mypy_result = run_mypy_check([detached_file])
 
     assert mypy_result.passed
     assert "timed out on a detached file" in mypy_result.output
+    assert "timed out on a detached file" in caplog.text
 
 
 def test_run_mypy_check_applies_config_resolved_from_config_source_path(
