@@ -120,10 +120,10 @@ function assertProposalContractInstallation(installationPaths) {
 /**
  * @param {string} agentFilePath
  * @param {string} layoutName
- * @param {string} homeDirectory
+ * @param {string} managedRoot
  * @returns {string[]}
  */
-function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, homeDirectory) {
+function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, managedRoot) {
     const agentBody = readFileSync(agentFilePath, 'utf8');
     const missingReferences = [];
     for (const [installedReference, sourceReference] of CLEAN_CODER_POLICY_REFERENCES) {
@@ -136,7 +136,7 @@ function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, homeDirect
         }
         const resolvedPath = layoutName === 'source'
             ? join(PACKAGE_DIRECTORY, eachTargetPath)
-            : join(homeDirectory, '.claude', eachTargetPath);
+            : join(managedRoot, eachTargetPath);
         if (!existsSync(resolvedPath)) {
             missingReferences.push(layoutName + ': ' + resolvedPath);
         }
@@ -210,8 +210,8 @@ test('a full install writes skills and agents under .agents and points .claude a
             SHIPPED_AGENT_FILE_NAME,
         );
         const brokenPolicyReferences = [
-            ...cleanCoderPolicyReferenceProblems(sourceAgentFile, 'source', homeDirectory),
-            ...cleanCoderPolicyReferenceProblems(canonicalAgentFile, 'installed', homeDirectory),
+            ...cleanCoderPolicyReferenceProblems(sourceAgentFile, 'source', claudeHome),
+            ...cleanCoderPolicyReferenceProblems(canonicalAgentFile, 'installed', claudeHome),
         ];
         assert.deepEqual(brokenPolicyReferences, [], 'Clean Coder has broken policy references');
         assert.equal(realpathSync(lookupAgentFile), realpathSync(canonicalAgentFile));
@@ -301,6 +301,21 @@ test('real installs place the Clean Coder in each active agents home', () => {
                 assert.match(installedAgentText, /<managed-root>\//);
                 assert.match(installedAgentText, /<agents-home>\//);
             }
+            const installedCleanCoderPath = join(
+                eachInstallCase.agentsHome,
+                MANAGED_AGENTS_DIRECTORY_NAME,
+                SHIPPED_AGENT_FILE_NAME,
+            );
+            const policyReferenceProblems = cleanCoderPolicyReferenceProblems(
+                installedCleanCoderPath,
+                'installed',
+                eachInstallCase.managedRoot,
+            );
+            assert.deepEqual(
+                policyReferenceProblems,
+                [],
+                `${eachInstallCase.name}: Clean Coder has broken policy references`,
+            );
             assert.equal(
                 isDirectoryPointerTo(
                     join(eachInstallCase.managedRoot, MANAGED_AGENTS_DIRECTORY_NAME),
