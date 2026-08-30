@@ -13,6 +13,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 | `run_all_validators.py` | Entry point — runs every check module and aggregates results |
 | `health_check.py` | Verifies that all validator dependencies (ruff, mypy) are reachable |
 | `pyproject_config_discovery.py` | Shared walk-up primitive that resolves a tool's pyproject.toml config from an original target path, matching the `[tool.<name>]` table the tool owns |
+| `system_temporary_roots.py` | Shared membership for OS temp roots (`gettempdir` plus `TEMP` / `TMP` / `TMPDIR` / `RUNNER_TEMP`); mypy walk stop and PreToolUse staging both call it |
 | `python_style_helpers.py` | Shared source-line splitting and function-discovery helpers imported by `python_style_checks.py` |
 
 ## Check modules
@@ -25,7 +26,7 @@ A library of check modules used by the validation hooks. Each module focuses on 
 | `file_structure_checks.py` | File-level structural rules (line count, module layout) |
 | `git_checks.py` | Git-state checks (untracked files, merge conflicts) |
 | `magic_value_checks.py` | Magic numbers and strings |
-| `mypy_integration.py` | Runs mypy and converts its output to `Violation` objects |
+| `mypy_integration.py` | Runs mypy and converts its output to `Violation` objects; stops project-root walks at the system temp directory; detached gate files skip followed imports and time out as a skip (passed) |
 | `pr_reference_checks.py` | PR references in commit messages and changelogs |
 | `python_antipattern_checks.py` | Python-specific anti-patterns (bare `except`, `Any`, etc.) |
 | `python_style_checks.py` | Python style rules (naming, imports, type hints) |

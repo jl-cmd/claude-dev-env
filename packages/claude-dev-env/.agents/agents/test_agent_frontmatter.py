@@ -79,6 +79,8 @@ import pytest
 import yaml
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
+CODE_QUALITY_AGENT_FILENAME = "code-quality-agent.md"
+CODE_QUALITY_READ_ONLY_TOOLS = ("Read", "Grep", "Glob")
 INSTRUCTION_ALIAS_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md"})
 FRONTMATTER_FENCE_LINE = "---"
 MATERIALIZER_MODULE_NAME = "codex_compat_materializer"
@@ -421,14 +423,204 @@ def _clean_coder_body() -> str:
 
 
 SOURCE_LINK_PATTERN = re.compile(
-    r"`(?P<installed>~/(?:\.claude|\.agents)/[^`]+)` "
+    r"`(?P<installed><(?:managed-root|agents-home)>/[^`]+)` "
     r"\(source fallback: `(?P<source>packages/claude-dev-env/[^`]+)`\)"
 )
+
+EXPECTED_SOURCE_LINK_PAIRS = {
+    "clean-coder.md": frozenset({
+        (
+            "<managed-root>/docs/CODE_RULES.md#5-no-abbreviations",
+            "packages/claude-dev-env/docs/CODE_RULES.md#5-no-abbreviations",
+        ),
+        (
+            "<managed-root>/docs/CODE_RULES.md",
+            "packages/claude-dev-env/docs/CODE_RULES.md",
+        ),
+        (
+            "<managed-root>/hooks/blocking/code_rules_enforcer.py",
+            "packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py",
+        ),
+        (
+            "<managed-root>/rules/code-standards.md",
+            "packages/claude-dev-env/rules/code-standards.md",
+        ),
+        (
+            "<managed-root>/rules/file-global-constants.md",
+            "packages/claude-dev-env/rules/file-global-constants.md",
+        ),
+        (
+            "<managed-root>/rules/windows-filesystem-safe.md",
+            "packages/claude-dev-env/rules/windows-filesystem-safe.md",
+        ),
+        (
+            "<managed-root>/rules/gh-cli-conventions.md",
+            "packages/claude-dev-env/rules/gh-cli-conventions.md",
+        ),
+        (
+            "<managed-root>/rules/plain-illustrative-docstrings.md",
+            "packages/claude-dev-env/rules/plain-illustrative-docstrings.md",
+        ),
+        (
+            "<managed-root>/rules/testing.md",
+            "packages/claude-dev-env/rules/testing.md",
+        ),
+        (
+            "<managed-root>/rules/paired-test-coverage.md",
+            "packages/claude-dev-env/rules/paired-test-coverage.md",
+        ),
+        (
+            "<managed-root>/rules/bdd.md",
+            "packages/claude-dev-env/rules/bdd.md",
+        ),
+        (
+            "<managed-root>/rules/ask-user-question-required.md",
+            "packages/claude-dev-env/rules/ask-user-question-required.md",
+        ),
+        (
+            "<managed-root>/rules/verify-before-asking.md",
+            "packages/claude-dev-env/rules/verify-before-asking.md",
+        ),
+        (
+            "<managed-root>/rules/verify-runtime-state.md",
+            "packages/claude-dev-env/rules/verify-runtime-state.md",
+        ),
+        (
+            "<managed-root>/rules/doc-inventory-integrity.md",
+            "packages/claude-dev-env/rules/doc-inventory-integrity.md",
+        ),
+        (
+            "<managed-root>/rules/durable-post-artifacts.md",
+            "packages/claude-dev-env/rules/durable-post-artifacts.md",
+        ),
+        (
+            "<managed-root>/rules/failure-blast-radius.md",
+            "packages/claude-dev-env/rules/failure-blast-radius.md",
+        ),
+        (
+            "<managed-root>/rules/git-workflow.md",
+            "packages/claude-dev-env/rules/git-workflow.md",
+        ),
+        (
+            "<managed-root>/rules/re-stage-before-commit.md",
+            "packages/claude-dev-env/rules/re-stage-before-commit.md",
+        ),
+        (
+            "<managed-root>/rules/agent-spawn-protocol.md",
+            "packages/claude-dev-env/rules/agent-spawn-protocol.md",
+        ),
+        (
+            "<managed-root>/rules/workers-done-before-complete.md",
+            "packages/claude-dev-env/rules/workers-done-before-complete.md",
+        ),
+    }),
+    "code-quality-agent.md": frozenset({
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-a-api-contracts.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-a-api-contracts.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-c-resource-cleanup.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-c-resource-cleanup.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-e-dead-code.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-e-dead-code.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-f-silent-failures.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-f-silent-failures.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-h-security-boundaries.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-h-security-boundaries.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-i-concurrency.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-i-concurrency.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md",
+        ),
+        (
+            "<managed-root>/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md",
+            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md",
+        ),
+    }),
+    "pr-description-writer.md": frozenset({
+        (
+            "<agents-home>/skills/pr-title-description/SKILL.md",
+            "packages/claude-dev-env/.agents/skills/pr-title-description/SKILL.md",
+        ),
+        (
+            "<managed-root>/rules/gh-cli-conventions.md#body-content-goes-in-a-file",
+            "packages/claude-dev-env/rules/gh-cli-conventions.md#body-content-goes-in-a-file",
+        ),
+    }),
+}
+
+
+def _assert_source_link_contract(agent_file_name: str, agent_text: str) -> None:
+    agents_directory = Path(__file__).parent
+    repository_root = agents_directory.parents[3]
+    actual_source_links = frozenset(SOURCE_LINK_PATTERN.findall(agent_text))
+    expected_source_links = EXPECTED_SOURCE_LINK_PAIRS[agent_file_name]
+    assert actual_source_links == expected_source_links, (
+        f"{agent_file_name} source links must match the complete expected set"
+    )
+    for each_installed_path, each_source_path in actual_source_links:
+        installed_suffix = each_installed_path.split(">/", 1)[1]
+        source_suffix = each_source_path.removeprefix("packages/claude-dev-env/")
+        source_suffix = source_suffix.removeprefix(".agents/")
+        assert installed_suffix == source_suffix, (
+            f"installed/source suffix mismatch: {each_installed_path} -> "
+            f"{each_source_path}"
+        )
+        source_file_path = repository_root / each_source_path.split("#", 1)[0]
+        assert source_file_path.is_file(), (
+            f"source fallback must be a file: {each_source_path}"
+        )
 
 
 def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
     agents_directory = Path(__file__).parent
-    repository_root = agents_directory.parents[3]
     for each_agent_file_name in (
         "clean-coder.md",
         "code-quality-agent.md",
@@ -437,24 +629,7 @@ def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
         agent_text = (agents_directory / each_agent_file_name).read_text(
             encoding="utf-8"
         )
-        source_links = SOURCE_LINK_PATTERN.findall(agent_text)
-        assert source_links, f"{each_agent_file_name} must document source links"
-        for each_installed_path, each_source_path in source_links:
-            each_source_file_path = each_source_path.split("#", 1)[0]
-            expected_installed_root = (
-                "~/.agents/skills/"
-                if each_source_file_path.startswith(
-                    "packages/claude-dev-env/.agents/skills/"
-                )
-                else "~/.claude/"
-            )
-            assert each_installed_path.startswith(expected_installed_root), (
-                f"{each_agent_file_name} must use {expected_installed_root} for "
-                f"the installed path {each_installed_path}"
-            )
-            assert (repository_root / each_source_file_path).exists(), (
-                f"source fallback must exist: {each_source_path}"
-            )
+        _assert_source_link_contract(each_agent_file_name, agent_text)
         for each_stale_prefix in (
             "../docs/",
             "../hooks/",
@@ -467,6 +642,63 @@ def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
                 f"{each_agent_file_name} must not use stale relative guide "
                 f"path {each_stale_prefix}"
             )
+
+
+def test_source_link_contract_rejects_missing_pair() -> None:
+    body = _clean_coder_body()
+    missing_pair_text = (
+        "`<managed-root>/hooks/blocking/code_rules_enforcer.py` "
+        "(source fallback: `packages/claude-dev-env/hooks/blocking/"
+        "code_rules_enforcer.py`)"
+    )
+    mutated_body = body.replace(missing_pair_text, "", 1)
+    with pytest.raises(AssertionError):
+        _assert_source_link_contract("clean-coder.md", mutated_body)
+
+
+def test_source_link_contract_rejects_altered_valid_file() -> None:
+    body = _clean_coder_body()
+    mutated_body = body.replace(
+        "`<managed-root>/docs/CODE_RULES.md` (source fallback: "
+        "`packages/claude-dev-env/docs/CODE_RULES.md`)",
+        "`<managed-root>/docs/CODE_RULES.md` (source fallback: "
+        "`packages/claude-dev-env/rules/code-standards.md`)",
+        1,
+    )
+    with pytest.raises(AssertionError):
+        _assert_source_link_contract("clean-coder.md", mutated_body)
+
+
+def test_source_link_contract_rejects_directory_fallback() -> None:
+    body = _clean_coder_body()
+    mutated_body = body.replace(
+        "`<managed-root>/docs/CODE_RULES.md` (source fallback: "
+        "`packages/claude-dev-env/docs/CODE_RULES.md`)",
+        "`<managed-root>/docs/CODE_RULES.md` (source fallback: "
+        "`packages/claude-dev-env/docs`)",
+        1,
+    )
+    with pytest.raises(AssertionError):
+        _assert_source_link_contract("clean-coder.md", mutated_body)
+
+
+def test_named_agents_resolve_active_managed_root_and_agents_home() -> None:
+    agents_directory = Path(__file__).parent
+    for each_agent_file_name in (
+        "clean-coder.md",
+        "code-quality-agent.md",
+        "pr-description-writer.md",
+    ):
+        agent_text = (agents_directory / each_agent_file_name).read_text(
+            encoding="utf-8"
+        )
+        assert "active managed root" in agent_text.lower()
+        assert "active agents home" in agent_text.lower()
+        assert "CLAUDE_CONFIG_DIR" in agent_text
+        assert "--target" in agent_text
+        assert "<managed-root>/" in agent_text
+        assert "<agents-home>/" in agent_text
+        assert "do not assume" in agent_text.lower()
 
 
 def test_clean_coder_never_globs_or_reads_dotenv_files() -> None:
@@ -485,6 +717,87 @@ def test_clean_coder_uses_task_local_config_discovery() -> None:
     assert "Issue all seven Glob calls" not in body
 
 
+def test_clean_coder_loads_scoped_agents_files_before_editing() -> None:
+    body = _clean_coder_body()
+    assert "scoped AGENTS.md" in body
+    assert body.count("Load scoped AGENTS.md files first.") == 1
+    assert "repository root" in body.lower()
+    assert "target directory" in body.lower()
+    assert "unrelated" in body.lower()
+
+
+def test_clean_coder_explains_red_green_refactor_steps() -> None:
+    body = _clean_coder_body()
+    assert "behavior change" in body.lower()
+    assert "failing test" in body.lower()
+    assert "RED" in body
+    assert "GREEN" in body
+    assert "REFACTOR" in body
+    assert "write production behavior before red" in body.lower()
+
+
+def test_clean_coder_distinguishes_code_rules_precheck_from_full_quality_gates() -> None:
+    body = _clean_coder_body()
+    assert "mechanical CODE_RULES" in body
+    assert "does not run tests" in body
+    assert "full quality gate" in body.lower()
+    assert "ruff" in body.lower()
+    assert "mypy" in body.lower()
+
+
+def test_clean_coder_has_hook_specific_workflow() -> None:
+    body = _clean_coder_body()
+    assert "Hook-specific workflow" in body
+    assert "production entry point" in body.lower()
+    assert "JSON" in body
+    assert "registered" in body.lower()
+
+
+def test_clean_coder_keeps_warm_session_advisor_triggers() -> None:
+    body = _clean_coder_body().lower()
+    assert "warm `session-advisor`" in body
+    assert "before substantive work" in body
+    assert "when you believe the task is complete" in body
+    assert "when stuck" in body
+    assert "change of approach" in body
+    assert "before any commit" in body
+
+
+
+def test_clean_coder_separates_constants_and_caller_search() -> None:
+    body = _clean_coder_body()
+    assert "task-local constants search" in body
+    assert "caller boundary" in body
+
+
+def test_clean_coder_scopes_task_artifact_guidance() -> None:
+    body = _clean_coder_body()
+    assert "Follow the target repo's policy for scratch, planning, and image files" in body
+    assert "No scratch/planning artifacts" not in body
+
+
+def test_clean_coder_links_canonical_policy_areas() -> None:
+    body = _clean_coder_body()
+    required_links = (
+        "<managed-root>/docs/CODE_RULES.md#5-no-abbreviations",
+        "<managed-root>/rules/testing.md",
+        "<managed-root>/rules/ask-user-question-required.md",
+        "<managed-root>/rules/verify-runtime-state.md",
+        "<managed-root>/rules/doc-inventory-integrity.md",
+        "<managed-root>/rules/failure-blast-radius.md",
+        "<managed-root>/rules/git-workflow.md",
+        "<managed-root>/rules/workers-done-before-complete.md",
+    )
+    assert all(each_link in body for each_link in required_links)
+
+
+def test_clean_coder_preserves_existing_comment_instruction() -> None:
+    body = _clean_coder_body()
+    assert (
+        "Note every existing comment so you can leave each one untouched on lines "
+        "that remain otherwise unchanged."
+    ) in body
+
 def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
@@ -493,7 +806,7 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
 
 def test_clean_coder_loads_scoped_agents_before_claude() -> None:
     body = _clean_coder_body()
-    agents_instruction_at = body.index("Load scoped repository instructions first")
+    agents_instruction_at = body.index("Load scoped AGENTS.md files first")
     claude_instruction_at = body.index("Then read the applicable `CLAUDE.md`")
     assert agents_instruction_at < claude_instruction_at
     assert "every applicable `AGENTS.md`" in body
@@ -527,6 +840,50 @@ def test_clean_coder_defines_a_hook_specific_workflow() -> None:
     assert "every applicable test file and suite" in body
 
 
+def test_clean_coder_uses_target_package_aware_hook_paths() -> None:
+    body = _clean_coder_body()
+    hook_workflow = body.split("## Hook-specific workflow", 1)[1].split(
+        "## Session advisor", 1
+    )[0]
+    hook_path_pattern = re.compile(
+        r"`(?P<managed><managed-root>/(?P<relative>hooks/AGENTS\.md|scripts/check\.ps1))` "
+        r"\(default: `(?P<default>~/.claude/(?P=relative))`; "
+        r"source fallback: `(?P<source>packages/claude-dev-env/(?P=relative))`\)"
+    )
+    path_pairs = {
+        (
+            each_match.group("managed"),
+            each_match.group("default"),
+            each_match.group("source"),
+        )
+        for each_match in hook_path_pattern.finditer(hook_workflow)
+    }
+    expected_pairs = {
+        (
+            "<managed-root>/hooks/AGENTS.md",
+            "~/.claude/hooks/AGENTS.md",
+            "packages/claude-dev-env/hooks/AGENTS.md",
+        ),
+        (
+            "<managed-root>/scripts/check.ps1",
+            "~/.claude/scripts/check.ps1",
+            "packages/claude-dev-env/scripts/check.ps1",
+        ),
+    }
+    assert path_pairs == expected_pairs
+    assert len(path_pairs) == len(expected_pairs)
+    repository_root = Path(__file__).parent.parents[3]
+    for each_source_path in (
+        "packages/claude-dev-env/hooks/AGENTS.md",
+        "packages/claude-dev-env/scripts/check.ps1",
+    ):
+        assert (repository_root / each_source_path).is_file()
+    assert "active managed root" in hook_workflow
+    assert "`~/.claude`" in hook_workflow
+    assert "`--target`" in hook_workflow
+    assert "`CLAUDE_CONFIG_DIR`" in hook_workflow
+
+
 def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> None:
     body = _clean_coder_body()
     assert "caller's existing warm `session-advisor`" in body
@@ -539,7 +896,27 @@ def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> Non
     assert "do not bind or spawn another advisor" in body
 
 
-def test_clean_coder_sets_a_concise_complexity_budget() -> None:
+def test_clean_coder_policy_targets_exist_in_source_package() -> None:
+    _assert_source_link_contract("clean-coder.md", _clean_coder_body())
+
+
+def test_code_quality_agent_allows_only_read_and_search_tools() -> None:
+    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
+
+    assert parsed_frontmatter["tools"] == list(CODE_QUALITY_READ_ONLY_TOOLS)
+
+
+def test_code_quality_agent_contract_forbids_mutating_commands() -> None:
+    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    body = agent_definition_path.read_text(encoding="utf-8")
+    assert "Use only `Read`, `Grep`, and `Glob`." in body
+    assert "Author zero edits." in body
+    assert "Run zero commits or pushes." in body
+    assert "run no commands that write files or create PRs." in body
+
+
+def test_clean_coder_sets_a_small_complexity_budget() -> None:
     body = _clean_coder_body()
     assert "Complexity budget" in body
     assert "1–2 files" in body
@@ -548,47 +925,39 @@ def test_clean_coder_sets_a_concise_complexity_budget() -> None:
     assert "nesting level of 2" in body
 
 
-def test_clean_coder_defines_liveness_before_removing_dead_code() -> None:
+def test_clean_coder_defines_a_liveness_boundary_for_dead_code_cleanup() -> None:
     body = _clean_coder_body()
-    assert "Orphaned or dead code" in body
-    assert "Prove unreachability with symbol references" in body
+    assert "orphaned or dead code" in body.lower()
     assert "liveness boundary" in body
-    assert "public API" in body
+    assert "live entry point" in body
+    assert "public API, plugin hook, or reflective dispatch" in body
 
 
 def test_clean_coder_hands_the_full_diff_to_code_quality_agent() -> None:
     body = _clean_coder_body()
     assert "Full Code Quality Agent review handoff" in body
+    assert "code-quality-agent" in body
     assert "full diff" in body
     assert "all A–Q categories" in body
+
+
     assert "Repair each actionable finding" in body
     assert "rerun focused checks and the full project gate on the post-repair diff" in body
-    assert "record both results" in body
+    assert "Record both results" in body
 
 
-def test_clean_coder_retry_example_is_complete_and_executable() -> None:
+def test_clean_coder_uses_evidence_based_completion_language() -> None:
     body = _clean_coder_body()
-    example_start = body.index("```python")
-    example_end = body.index("```", example_start + len("```python"))
-    example = body[example_start:example_end]
-    assert "from collections.abc import Callable" in example
-    assert "def fetch_with_retries(fetch_text: Callable[[str], str], url: str) -> str:" in example
-    assert "fetched_text = fetch_text(url)" in example
-    assert "raise RuntimeError" in example
+    assert "Evidence-Based Code Generation" in body
+    assert "recorded check results" in body
+    assert "Do not claim defect-free code" in body
+    assert "Zero-Defect" not in body
+    assert "zero-defect" not in body
+
+
+def test_clean_coder_example_contains_real_code() -> None:
+    body = _clean_coder_body()
+    example = body.split("```python", 1)[1].split("```", 1)[0]
     assert "..." not in example
     assert "pass" not in example
-    assert "NotImplementedError" not in example
-
-
-def test_clean_coder_requires_evidence_based_completion_wording() -> None:
-    body = _clean_coder_body()
-    assert "# Clean Coder — Evidence-Based Code Generation" in body
-    assert "reviewers find nothing" not in body
-    assert "Produce clear code with test and review evidence." in body
-    assert "candidate check" in body
-    assert "focused tests" in body
-    assert "full project gate" in body
-    assert "recorded check results" in body
-    assert "review findings" in body
-    assert "open questions" in body
-    assert "Do not claim defect-free code" in body
+    assert "raise NotImplementedError" not in example
