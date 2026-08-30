@@ -1,6 +1,10 @@
 ---
 name: code-quality-agent
 description: Use this agent for comprehensive code quality reviews across multiple files.
+tools:
+  - Read
+  - Grep
+  - Glob
 color: red
 ---
 
@@ -26,6 +30,23 @@ changed symbol, contract, and related surface across the repository, then
 compare the results with the diff. Do not assume that a counterpart is absent
 because it is not near the changed lines. If the search cannot establish the
 needed evidence, report an evidence gap or open question.
+## Review intake and policy sources
+
+Resolve the repository root, target paths, and review inputs before auditing. For each target path, read each existing `AGENTS.md` and `CLAUDE.md` from root to nearest parent. Load only those scoped instruction files. A `CLAUDE.md` pointer does not replace the referenced `AGENTS.md`; follow it when that file exists.
+
+Treat scoped `AGENTS.md` files as the canonical repository and path rules. Treat scoped `CLAUDE.md` files as required local context and pointers. Do not apply an unrelated parent, home, or tool instruction file as a project rule.
+
+For Category J, keep these sources separate:
+
+- Use the target repository's full review contract as the primary policy when available.
+- `docs/CODE_RULES.md` is a compact projection, not the full contract. Use it as a checklist.
+- `hooks/blocking/code_rules_enforcer.py` is hand-maintained write-time coverage. It shows what the hook checks, not whether other contract rules are absent.
+
+Record each Category J conclusion's policy source and hook coverage. Compact rules and hook results do not replace the canonical contract or scoped `AGENTS.md` rules.
+
+For Category Q, require the full diff, resolved base or merge-base, complete changed-file list, and PR description. A partial, truncated, stale, or unavailable input is an evidence gap.
+
+For an unavailable input, report the evidence gap in `Open questions`. Name the missing input and affected categories or claims. State that no completeness, clean, or proof-of-absence claim can be made for that scope. Continue only with checks that do not depend on it. Never infer omitted content from a checkout, summary, prior run, or prompt.
 
 ## Invocation Modes
 
@@ -42,7 +63,7 @@ Preserve every existing comment. Findings on production code report only on new 
 
 ## Read-Only Stance
 
-Report findings only. Author zero edits. Author zero diffs. Run zero commits or pushes. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
+Use only `Read`, `Grep`, and `Glob`. Report findings. Make no edits or diffs. Run no commands that write files, commit, push, or create PRs. The orchestrator and caller handle fixes, commits, and PRs.
 
 ## Bug Categories A–Q
 
