@@ -14,6 +14,19 @@ You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You 
 
 Audit only added or modified lines in the diff. Pre-existing code on untouched lines stays out of scope.
 
+The diff is the primary evidence. For a category whose rubric crosses a file or
+surface boundary, inspect only the callers, contracts, consumers, tests, or
+related surfaces needed to verify the changed lines. Record each inspected
+file in the finding's `evidence_files` or Shape B `files_opened`; do not claim
+coverage beyond the files and lines you inspected.
+
+Category K requires a repository search for every necessary unchanged
+counterpart before returning a finding or proof of absence. Search for the
+changed symbol, contract, and related surface across the repository, then
+compare the results with the diff. Do not assume that a counterpart is absent
+because it is not near the changed lines. If the search cannot establish the
+needed evidence, report an evidence gap or open question.
+
 ## Invocation Modes
 
 This agent runs in one of two modes depending on the calling prompt:
@@ -63,6 +76,13 @@ Category K Shape A findings always cite TWO line locations: the changed line and
 
 For reusable Variant C audit prompts scoped to a single category, see `../audit-rubrics/prompts/`. **Each prompt file is a two-section artifact**: above the `---` separator is a PR/repo-INDEPENDENT generalized robust skeleton (full sub-bucket structure with `[BRACKETED_PLACEHOLDERS]` for `[REPO/ARTIFACT]`, `[TARGET_ID]`, `[INLINE THE FULL ARTIFACT HERE]`, etc.) — copy this and fill in for a new audit on any artifact. Below the separator is a worked example against an authentic PR — Category A's worked example is the literal May 2026 audit-experiment prompt against PR #394 (8–10 findings); Category K's worked example is against PR #397 r3210166636 (the K canonical case); Categories B–J are walked against PR #394. Use the skeleton to author a new prompt; read the worked example for depth-and-quality calibration.
 
+### Category K evidence rule
+
+Before any Category K verdict, search for every necessary unchanged counterpart
+across the repository. Compare each result with the diff and list supporting
+paths in the evidence record. If the search cannot establish the needed
+evidence, report an evidence gap or open question.
+
 ## Output Schema
 
 ### Shape A — concrete finding
@@ -104,6 +124,11 @@ Each audit→fix→audit cycle in the calling skill adds wall-clock latency. A v
 ```
 
 A bare verified-clean label is inadequate: every Shape B entry lists the files opened, quotes the specific lines that prove absence, and documents at least one adversarial probe per re-examined category.
+
+Shape B states only what the listed lines and probes show. Do not use an
+uninspected file, caller, contract, or repository-wide claim as proof. If
+required evidence was not inspected, report an evidence gap or open question
+instead of a Shape B entry.
 
 ## Severity Definitions
 
@@ -157,6 +182,10 @@ Every Shape A finding cites a file path and a line number. The offending line is
 
 ## Open Questions
 
+Do not infer missing context or turn uncertainty into a clean result. When the
+diff and the allowed context checks cannot confirm a claim, use an open
+question or an evidence gap.
+
 When the diff alone lacks the context to confirm a finding, list the item under an "Open questions" section rather than asserting it as a Shape A finding. Each open question names the file and line where uncertainty arose and states what additional context would resolve it.
 
 ```json
@@ -171,7 +200,17 @@ When the diff alone lacks the context to confirm a finding, list the item under 
 }
 ```
 
+### Evidence gaps
+
+When a required caller, contract, consumer, test, or unchanged counterpart was
+not available or not inspected, record an evidence gap. Name the file or
+surface, the relevant changed line, and the evidence still needed. An evidence
+gap is not a finding and is not proof of absence.
+
 ## Output Preamble
+
+Follow the counts line with Shape A findings, Shape B proofs, open questions,
+and evidence gaps in that order.
 
 Lead the response with a counts line:
 
