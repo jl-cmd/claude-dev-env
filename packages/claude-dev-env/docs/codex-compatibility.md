@@ -50,6 +50,25 @@ Limits:
 
 - The installer skips Codex `hooks.json` for now. Wire it by hand.
 
+## Luna fast-mode guard
+
+`hooks/blocking/luna_fast_mode_gate.py` serves Claude and Codex. Codex reads its own `hooks.json`, so add this `PreToolUse` group to that file. Replace `<CODEX_HOOKS_ROOT>` with the directory that holds the shipped hook:
+
+```json
+{
+  "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "python <CODEX_HOOKS_ROOT>/blocking/luna_fast_mode_gate.py",
+      "timeout": 10
+    }
+  ]
+}
+```
+
+The guard allows a Luna spawn only when `service_tier` is exactly `fast`. It covers headless `Task` calls and in-session `Agent` and `multi_agent_v1__spawn_agent` calls.
+
 ## Roots and safety
 
 Both roots are caller-supplied. The tool never writes to `.agents` or `CODEX_HOME` automatically; pass those locations explicitly when desired. No personal paths or secrets are embedded in the package.
