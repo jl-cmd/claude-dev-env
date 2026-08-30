@@ -440,3 +440,28 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
     assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None
+
+
+def test_clean_coder_relative_policy_targets_exist_in_source_package() -> None:
+    body = _clean_coder_body()
+    relative_targets = (
+        "../docs/CODE_RULES.md",
+        "../hooks/blocking/code_rules_enforcer.py",
+        "../rules/code-standards.md",
+        "../rules/file-global-constants.md",
+        "../rules/windows-filesystem-safe.md",
+        "../rules/gh-cli-conventions.md",
+        "../rules/plain-illustrative-docstrings.md",
+    )
+    source_package_directory = Path(__file__).parents[2]
+
+    missing_targets = sorted(
+        each_target
+        for each_target in relative_targets
+        if each_target not in body
+        or not (source_package_directory / each_target[3:]).is_file()
+    )
+    assert not missing_targets, (
+        "Clean Coder references missing source-package targets: "
+        f"{missing_targets}"
+    )
