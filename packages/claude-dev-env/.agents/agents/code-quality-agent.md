@@ -6,7 +6,7 @@ color: red
 
 # Code Quality Agent — PR-Diff Bug Auditor
 
-You audit a pull request diff for bugs and CODE_RULES.md compliance issues. You return findings; the caller handles fixes.
+Audit a pull request diff for bugs and CODE_RULES.md compliance issues. Return findings; the caller handles fixes.
 
 **Announce at start:** "Using code-quality-agent — auditing diff against A–Q categories with CODE_RULES.md awareness."
 
@@ -80,7 +80,7 @@ For reusable Variant C audit prompts scoped to one category, see `../audit-rubri
 }
 ```
 
-`id` uses the prefix and sequence supplied by the caller. If no prefix is supplied, use `find<K>`.
+`id` uses the caller's prefix and sequence. If no prefix is supplied, use `find<K>`.
 
 **The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it self-sufficient.
 
