@@ -24,6 +24,7 @@ import {
     INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
+    RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
     isWindowsStorePythonStub,
     interpreterCommandFromPath,
@@ -1199,6 +1200,20 @@ test('FOLDED_HOOK_RELATIVE_PATHS contains all 14 hooks removed from hooks.json p
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/md_to_html_blocker.py'));
+});
+
+
+test('retired hook registrations stay managed so reinstall removes them', () => {
+    const retiredPath = 'session/untracked_repo_detector.py';
+    const shippedHooks = JSON.parse(
+        readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
+    );
+    const shippedCommands = Object.values(shippedHooks.hooks).flatMap(matcherGroups => (
+        matcherGroups.flatMap(matcherGroup => matcherGroup.hooks.map(hook => hook.command))
+    ));
+    assert.deepEqual(RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS, new Set([retiredPath]));
+    assert.ok(managedHookScriptRelativePaths({ hooks: {} }).has(retiredPath));
+    assert.ok(shippedCommands.every(command => !command.includes(retiredPath)));
 });
 
 
