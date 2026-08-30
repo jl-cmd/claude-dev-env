@@ -17,14 +17,14 @@ Before writing a single line — **task-local discovery only** (no project-wide 
 
 1. **Load scoped repository instructions first.** Starting at the repository root, read every applicable `AGENTS.md` on the path to the task file. Then read the applicable `CLAUDE.md` files. Apply nearer instructions after broader ones; the closest file wins.
 2. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
-3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and open only the config modules that package already uses for constants — typically `config/constants.py`, `config/timing.py`, `config/selectors.py`, or a sibling `*_constants` package. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
-4. **Reuse constants from that local table.** Exact value match → import the existing name. Semantic match → reuse it. No match → add the constant to the appropriate `config/` file for that package.
+3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and inspect the target package's existing constants layout — such as `config/` or a sibling `*_constants` package. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
+4. **Reuse constants from that local table.** Reuse first: exact value match → import the existing name. Semantic match → reuse it. Add a shared constant only when the value is shared policy or has multiple consumers. When no match exists, use the target package's existing constants layout; a one-use value follows `file-global-constants` rather than becoming a new shared constant.
 
 ## Generation mindset (9 laws)
 
 These shape how you think while writing. Mechanical rules live in the canonical refs below.
 
-1. **Naming is everything** — full words; `each_` loops; `is_`/`has_`/`should_`/`can_` booleans; `all_` collections; `X_by_Y` maps; ban vague names (`result`, `data`, …) and vague prefixes (`handle_`, `process_`, …).
+1. **Naming is everything** — follow the canonical naming guidance in `CODE_RULES.md §5`; choose full domain words and self-documenting names.
 2. **One function, one job** — short, single-purpose; split on “and” or mixed abstraction.
 3. **One abstraction level** — keep orchestration separate from I/O and formatting.
 4. **Guard clauses** — early returns; max nesting 2.
@@ -45,10 +45,28 @@ Installed paths are under `~/.claude/`; source fallbacks use the package tree un
 | Write-time gates | `~/.claude/hooks/blocking/code_rules_enforcer.py` (source fallback: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) |
 | Policy surface map | `~/.claude/rules/code-standards.md` (source fallback: `packages/claude-dev-env/rules/code-standards.md`) |
 | File-global constants | `~/.claude/rules/file-global-constants.md` (source fallback: `packages/claude-dev-env/rules/file-global-constants.md`) |
+| Naming guidance | §5: `~/.claude/docs/CODE_RULES.md` (source fallback: `packages/claude-dev-env/docs/CODE_RULES.md`) |
 | Windows rmtree / mkdir | `~/.claude/rules/windows-filesystem-safe.md` (source fallback: `packages/claude-dev-env/rules/windows-filesystem-safe.md`) |
 | `gh` body files | `~/.claude/rules/gh-cli-conventions.md` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md`) |
 | Plain illustrative docstrings | `~/.claude/rules/plain-illustrative-docstrings.md` (source fallback: `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`) |
 | TDD / right-size | Review contract Tests + Design; `CODE_RULES.md` §7–§8 |
+
+## Session policy map (canonical links)
+
+Load only the group that matches the task. Keep session policy details in these canonical refs.
+
+| Group | Canonical refs |
+|---|---|
+| Tests | `~/.claude/rules/testing.md` (source fallback: `packages/claude-dev-env/rules/testing.md`); `~/.claude/rules/anti-corollary-tests.md` (source fallback: `packages/claude-dev-env/rules/anti-corollary-tests.md`) |
+| Questions | `~/.claude/rules/ask-user-question-required.md` (source fallback: `packages/claude-dev-env/rules/ask-user-question-required.md`); `~/.claude/rules/verify-before-asking.md` (source fallback: `packages/claude-dev-env/rules/verify-before-asking.md`) |
+| Search and shell | `~/.claude/rules/filesystem-search.md` (source fallback: `packages/claude-dev-env/rules/filesystem-search.md`); `~/.claude/rules/shell-invocation.md` (source fallback: `packages/claude-dev-env/rules/shell-invocation.md`) |
+| Runtime checks | `~/.claude/rules/verify-runtime-state.md` (source fallback: `packages/claude-dev-env/rules/verify-runtime-state.md`) |
+| Documentation | `~/.claude/rules/doc-inventory-integrity.md` (source fallback: `packages/claude-dev-env/rules/doc-inventory-integrity.md`); `~/.claude/rules/docstring-prose-matches-implementation.md` (source fallback: `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md`) |
+| Batch failures | `~/.claude/rules/failure-blast-radius.md` (source fallback: `packages/claude-dev-env/rules/failure-blast-radius.md`) |
+| Git | `~/.claude/rules/git-workflow.md` (source fallback: `packages/claude-dev-env/rules/git-workflow.md`); `~/.claude/rules/re-stage-before-commit.md` (source fallback: `packages/claude-dev-env/rules/re-stage-before-commit.md`) |
+| Worker coordination | `~/.claude/rules/agent-spawn-protocol.md` (source fallback: `packages/claude-dev-env/rules/agent-spawn-protocol.md`); `~/.claude/rules/workers-done-before-complete.md` (source fallback: `packages/claude-dev-env/rules/workers-done-before-complete.md`) |
+
+Material implementation questions must return to the caller for `AskUserQuestion` handling; do not ask in plain text or guess.
 
 Type-ignore rule (AGENTS Types): a `# type: ignore` needs a second trailing `#` justification of at least five characters. Prefer a real type when available.
 
@@ -71,7 +89,7 @@ def fetch_with_retries(fetch_text: Callable[[str], str], url: str) -> str:
 
 - **No secrets in context.** Never open `.env` / `.env.*` / credential files. The sensitive-file protector also blocks editing them.
 - **No lock-file hand edits.** Regenerate with the package manager.
-- **No scratch/planning artifacts in the repo.** No `scratch_*.py`, `docs/plans/*.md`, or image assets committed for this agent’s work.
+- **No unasked scratch files.** Do not create temporary scratch files or working docs. Keep valid plan packets under `docs/plans/` as uncommitted working files when the task calls for them. Store required images in the durable artifacts release, not the repository tree.
 - **Pre-check before Write.** Run `python ~/.claude/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Wrong `--as` can hide violations.
 - **Candidate check vs full gate.** The pre-check tests CODE_RULES only. The full project gate runs over the complete diff and all required checks. `code_rules_enforcer.py --check` checks one candidate file before a write; a clean candidate enforcer check is not the full gate.
 - **Windows shell.** Author multi-line scripts with the Write or PowerShell tool; avoid bash heredocs that mangle paths.

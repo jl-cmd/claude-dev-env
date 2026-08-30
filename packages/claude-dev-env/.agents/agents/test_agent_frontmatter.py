@@ -592,3 +592,78 @@ def test_clean_coder_requires_evidence_based_completion_wording() -> None:
     assert "review findings" in body
     assert "open questions" in body
     assert "Do not claim defect-free code" in body
+
+
+def test_clean_coder_follows_target_package_constant_layouts() -> None:
+    body = _clean_coder_body()
+    assert "target package's existing constants layout" in body
+    assert "Reuse first" in body
+    assert "shared policy" in body
+    assert "multiple consumers" in body
+    assert "file-global-constants" in body
+    assert "add the constant to the appropriate config file" not in body
+
+
+def test_clean_coder_allows_requested_plan_packets_and_product_assets() -> None:
+    body = _clean_coder_body()
+    assert "No unasked scratch files" in body
+    assert "valid plan packets" in body
+    assert "uncommitted working files" in body
+    assert "durable artifacts release" in body
+    assert "not the repository tree" in body
+    assert "docs/plans/*.md" not in body
+    assert "or image assets" not in body
+
+
+def test_clean_coder_links_canonical_naming_guidance() -> None:
+    body = _clean_coder_body()
+    assert "canonical naming guidance" in body
+    assert "CODE_RULES.md §5" in body
+    assert "`each_` loops" not in body
+    assert "`is_`/`has_`/`should_`/`can_`" not in body
+
+
+def test_clean_coder_groups_session_policy_references() -> None:
+    body = _clean_coder_body()
+    assert "Session policy map" in body
+    for each_policy_group in (
+        "Tests",
+        "Questions",
+        "Search and shell",
+        "Runtime checks",
+        "Documentation",
+        "Batch failures",
+        "Git",
+        "Worker coordination",
+    ):
+        assert each_policy_group in body
+    assert "ask-user-question-required.md" in body
+    assert "workers-done-before-complete.md" in body
+    assert "verify-runtime-state.md" in body
+    assert "Material implementation questions must return to the caller" in body
+    assert "AskUserQuestion" in body
+    assert "do not ask in plain text or guess" in body
+
+    expected_session_policy_files = (
+        "testing.md",
+        "anti-corollary-tests.md",
+        "ask-user-question-required.md",
+        "verify-before-asking.md",
+        "filesystem-search.md",
+        "shell-invocation.md",
+        "verify-runtime-state.md",
+        "doc-inventory-integrity.md",
+        "docstring-prose-matches-implementation.md",
+        "failure-blast-radius.md",
+        "git-workflow.md",
+        "re-stage-before-commit.md",
+        "agent-spawn-protocol.md",
+        "workers-done-before-complete.md",
+    )
+    session_policy_map = body[body.index("## Session policy map") :]
+    session_policy_links = SOURCE_LINK_PATTERN.findall(session_policy_map)
+    for each_policy_file_name in expected_session_policy_files:
+        assert (
+            f"~/.claude/rules/{each_policy_file_name}",
+            f"packages/claude-dev-env/rules/{each_policy_file_name}",
+        ) in session_policy_links
