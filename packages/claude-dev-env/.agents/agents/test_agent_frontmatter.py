@@ -436,6 +436,51 @@ def test_clean_coder_uses_task_local_config_discovery() -> None:
     assert "Issue all seven Glob calls" not in body
 
 
+def test_clean_coder_loads_scoped_agents_files_before_editing() -> None:
+    body = _clean_coder_body()
+    assert "scoped AGENTS.md" in body
+    assert "repository root" in body.lower()
+    assert "target directory" in body.lower()
+    assert "unrelated" in body.lower()
+
+
+def test_clean_coder_requires_red_green_refactor_for_behavior_changes() -> None:
+    body = _clean_coder_body()
+    assert "behavior change" in body.lower()
+    assert "failing test" in body.lower()
+    assert "RED" in body
+    assert "GREEN" in body
+    assert "REFACTOR" in body
+    assert "write production behavior before red" in body.lower()
+
+
+def test_clean_coder_distinguishes_code_rules_precheck_from_full_quality_gates() -> None:
+    body = _clean_coder_body()
+    assert "mechanical CODE_RULES" in body
+    assert "does not run tests" in body
+    assert "full quality gate" in body.lower()
+    assert "ruff" in body.lower()
+    assert "mypy" in body.lower()
+
+
+def test_clean_coder_has_hook_specific_workflow() -> None:
+    body = _clean_coder_body()
+    assert "Hook-specific workflow" in body
+    assert "production entry point" in body.lower()
+    assert "JSON" in body
+    assert "registered" in body.lower()
+
+
+def test_clean_coder_keeps_warm_session_advisor_triggers() -> None:
+    body = _clean_coder_body().lower()
+    assert "warm `session-advisor`" in body
+    assert "before substantive work" in body
+    assert "when you believe the task is complete" in body
+    assert "when stuck" in body
+    assert "change of approach" in body
+    assert "before any commit" in body
+
+
 def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
