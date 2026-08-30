@@ -25,6 +25,7 @@ import {
     MANAGED_SKILLS_DIRECTORY_NAME,
 } from './install-constants.mjs';
 import { isDirectoryPointerTo } from './publish-directory-pointer.mjs';
+import { resolvePackageManagedDirectory } from './resolve-package-managed-directory.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
@@ -32,6 +33,15 @@ const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
 const SHIPPED_SKILL_NAME = 'privacy-hygiene';
 const ELI5_SKILL_NAME = 'eli5';
 const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
+const CLEAN_CODER_POLICY_REFERENCES = [
+    ['~/.claude/docs/CODE_RULES.md', '../../docs/CODE_RULES.md'],
+    ['~/.claude/hooks/blocking/code_rules_enforcer.py', '../../hooks/blocking/code_rules_enforcer.py'],
+    ['~/.claude/rules/code-standards.md', '../../rules/code-standards.md'],
+    ['~/.claude/rules/file-global-constants.md', '../../rules/file-global-constants.md'],
+    ['~/.claude/rules/windows-filesystem-safe.md', '../../rules/windows-filesystem-safe.md'],
+    ['~/.claude/rules/gh-cli-conventions.md', '../../rules/gh-cli-conventions.md'],
+    ['~/.claude/rules/plain-illustrative-docstrings.md', '../../rules/plain-illustrative-docstrings.md'],
+];
 const PERSONAL_SKILL_NAME = 'my-notes';
 const SHARED_DIRECTORY_NAME = '_shared';
 const PR_LOOP_DIRECTORY_NAME = 'pr-loop';
@@ -73,6 +83,32 @@ function assertProposalContractInstallation(installationPaths) {
 
     assert.equal(pointerLine, PREFLIGHT_PROPOSAL_POINTER);
     assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
+}
+
+/**
+ * @param {string} agentFilePath
+ * @param {string} layoutName
+ * @param {string} homeDirectory
+ * @returns {string[]}
+ */
+function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, homeDirectory) {
+    const agentBody = readFileSync(agentFilePath, 'utf8');
+    const missingReferences = [];
+    for (const [installedReference, sourceReference] of CLEAN_CODER_POLICY_REFERENCES) {
+        if (!agentBody.includes(installedReference)) {
+            missingReferences.push(installedReference + ' is absent');
+        }
+        if (!agentBody.includes(sourceReference)) {
+            missingReferences.push(sourceReference + ' is absent');
+        }
+        const resolvedPath = layoutName === 'source'
+            ? join(dirname(agentFilePath), sourceReference)
+            : join(homeDirectory, '.claude', installedReference.slice('~/.claude/'.length));
+        if (!existsSync(resolvedPath)) {
+            missingReferences.push(layoutName + ': ' + resolvedPath);
+        }
+    }
+    return missingReferences.map((reference) => layoutName + ': ' + reference);
 }
 
 test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
@@ -133,6 +169,18 @@ test('a full install writes skills and agents under .agents and points .claude a
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),
         );
+        const sourceAgentFile = join(
+            resolvePackageManagedDirectory(
+                PACKAGE_DIRECTORY,
+                MANAGED_AGENTS_DIRECTORY_NAME,
+            ),
+            SHIPPED_AGENT_FILE_NAME,
+        );
+        const brokenPolicyReferences = [
+            ...cleanCoderPolicyReferenceProblems(sourceAgentFile, 'source', homeDirectory),
+            ...cleanCoderPolicyReferenceProblems(canonicalAgentFile, 'installed', homeDirectory),
+        ];
+        assert.deepEqual(brokenPolicyReferences, [], 'Clean Coder has broken policy references');
         assert.equal(realpathSync(lookupAgentFile), realpathSync(canonicalAgentFile));
         assert.equal(
             lstatSync(skillsInstallDirectory).isSymbolicLink(),
