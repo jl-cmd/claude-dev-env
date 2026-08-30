@@ -33,14 +33,40 @@ const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
 const SHIPPED_SKILL_NAME = 'privacy-hygiene';
 const ELI5_SKILL_NAME = 'eli5';
 const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
+const SHIPPED_AGENT_FILE_NAMES = [
+    SHIPPED_AGENT_FILE_NAME,
+    'code-quality-agent.md',
+    'pr-description-writer.md',
+];
 const CLEAN_CODER_POLICY_REFERENCES = [
-    ['../docs/CODE_RULES.md', 'docs/CODE_RULES.md'],
-    ['../hooks/blocking/code_rules_enforcer.py', 'hooks/blocking/code_rules_enforcer.py'],
-    ['../rules/code-standards.md', 'rules/code-standards.md'],
-    ['../rules/file-global-constants.md', 'rules/file-global-constants.md'],
-    ['../rules/windows-filesystem-safe.md', 'rules/windows-filesystem-safe.md'],
-    ['../rules/gh-cli-conventions.md', 'rules/gh-cli-conventions.md'],
-    ['../rules/plain-illustrative-docstrings.md', 'rules/plain-illustrative-docstrings.md'],
+    [
+        '<managed-root>/docs/CODE_RULES.md',
+        'packages/claude-dev-env/docs/CODE_RULES.md',
+    ],
+    [
+        '<managed-root>/hooks/blocking/code_rules_enforcer.py',
+        'packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py',
+    ],
+    [
+        '<managed-root>/rules/code-standards.md',
+        'packages/claude-dev-env/rules/code-standards.md',
+    ],
+    [
+        '<managed-root>/rules/file-global-constants.md',
+        'packages/claude-dev-env/rules/file-global-constants.md',
+    ],
+    [
+        '<managed-root>/rules/windows-filesystem-safe.md',
+        'packages/claude-dev-env/rules/windows-filesystem-safe.md',
+    ],
+    [
+        '<managed-root>/rules/gh-cli-conventions.md',
+        'packages/claude-dev-env/rules/gh-cli-conventions.md',
+    ],
+    [
+        '<managed-root>/rules/plain-illustrative-docstrings.md',
+        'packages/claude-dev-env/rules/plain-illustrative-docstrings.md',
+    ],
 ];
 const PERSONAL_SKILL_NAME = 'my-notes';
 const SHARED_DIRECTORY_NAME = '_shared';
@@ -51,19 +77,25 @@ const PREFLIGHT_PROPOSAL_POINTER = '@~/.claude/_shared/pr-loop/preflight-proposa
 /**
  * @param {string} homeDirectory
  * @param {string[]} extraArguments
+ * @param {Record<string, string | undefined>} [environmentOverrides]
  * @returns {string}
  */
-function runInstaller(homeDirectory, extraArguments) {
+function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) {
+    const installerEnvironment = {
+        ...process.env,
+        HOME: homeDirectory,
+        USERPROFILE: homeDirectory,
+        GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+        CODEX_HOME: join(homeDirectory, '.codex'),
+        ...environmentOverrides,
+    };
+    for (const [eachName, eachValue] of Object.entries(environmentOverrides)) {
+        if (eachValue === undefined) delete installerEnvironment[eachName];
+    }
     return execFileSync('node', [INSTALLER_PATH, ...extraArguments], {
         cwd: PACKAGE_DIRECTORY,
         encoding: 'utf8',
-        env: {
-            ...process.env,
-            HOME: homeDirectory,
-            USERPROFILE: homeDirectory,
-            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
-            CODEX_HOME: join(homeDirectory, '.codex'),
-        },
+        env: installerEnvironment,
     });
 }
 
@@ -94,7 +126,11 @@ function assertProposalContractInstallation(installationPaths) {
 function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, homeDirectory) {
     const agentBody = readFileSync(agentFilePath, 'utf8');
     const missingReferences = [];
-    for (const [eachReference, eachTargetPath] of CLEAN_CODER_POLICY_REFERENCES) {
+    for (const [installedReference, sourceReference] of CLEAN_CODER_POLICY_REFERENCES) {
+        const eachReference = layoutName === 'source'
+            ? sourceReference
+            : installedReference;
+        const eachTargetPath = sourceReference.replace('packages/claude-dev-env/', '');
         if (!agentBody.includes(eachReference)) {
             missingReferences.push(eachReference + ' is absent');
         }
@@ -191,6 +227,101 @@ test('a full install writes skills and agents under .agents and points .claude a
         );
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('real installs place the Clean Coder in each active agents home', () => {
+    const runRoot = mkdtempSync(join(tmpdir(), 'cdev-active-roots-'));
+    const homeDirectory = join(runRoot, 'home');
+    const configRoot = join(runRoot, 'config-profile');
+    const explicitRoot = join(runRoot, 'explicit-target');
+    const inheritedProfilesRoot = join(runRoot, 'inherited-profiles');
+    const inheritedProfileMarker = join(inheritedProfilesRoot, 'untouched.txt');
+    mkdirSync(homeDirectory, { recursive: true });
+    mkdirSync(inheritedProfilesRoot, { recursive: true });
+    writeFileSync(inheritedProfileMarker, 'leave this profile root alone\n');
+    try {
+        const installCases = [
+            {
+                name: 'default',
+                arguments: ['--only', 'core'],
+                environment: { CLAUDE_CONFIG_DIR: undefined },
+                managedRoot: join(homeDirectory, '.claude'),
+                agentsHome: join(homeDirectory, '.agents'),
+            },
+            {
+                name: 'CLAUDE_CONFIG_DIR',
+                arguments: ['--only', 'core'],
+                environment: { CLAUDE_CONFIG_DIR: configRoot },
+                managedRoot: configRoot,
+                agentsHome: `${configRoot}.agents`,
+            },
+            {
+                name: 'named profile',
+                arguments: ['--profile', 'editor', '--only', 'core'],
+                environment: {
+                    CLAUDE_CONFIG_DIR: undefined,
+                    LLM_SETTINGS_PROFILES_ROOT: undefined,
+                },
+                managedRoot: join(homeDirectory, '.claude-profiles', 'editor'),
+                agentsHome: join(homeDirectory, '.claude-profiles', 'editor.agents'),
+            },
+            {
+                name: 'explicit target',
+                arguments: ['--target', explicitRoot, '--only', 'core'],
+                environment: { CLAUDE_CONFIG_DIR: configRoot },
+                managedRoot: explicitRoot,
+                agentsHome: `${explicitRoot}.agents`,
+            },
+        ];
+
+        for (const eachInstallCase of installCases) {
+            runInstaller(
+                homeDirectory,
+                eachInstallCase.arguments,
+                {
+                    LLM_SETTINGS_PROFILES_ROOT: inheritedProfilesRoot,
+                    ...eachInstallCase.environment,
+                },
+            );
+            for (const eachAgentFileName of SHIPPED_AGENT_FILE_NAMES) {
+                const installedAgentPath = join(
+                    eachInstallCase.agentsHome,
+                    MANAGED_AGENTS_DIRECTORY_NAME,
+                    eachAgentFileName,
+                );
+                assert.equal(
+                    existsSync(installedAgentPath),
+                    true,
+                    `${eachInstallCase.name}: agent is under the active agents home`,
+                );
+                const installedAgentText = readFileSync(installedAgentPath, 'utf8');
+                assert.match(installedAgentText, /active managed root/i);
+                assert.match(installedAgentText, /active agents home/i);
+                assert.match(installedAgentText, /<managed-root>\//);
+                assert.match(installedAgentText, /<agents-home>\//);
+            }
+            assert.equal(
+                isDirectoryPointerTo(
+                    join(eachInstallCase.managedRoot, MANAGED_AGENTS_DIRECTORY_NAME),
+                    join(eachInstallCase.agentsHome, MANAGED_AGENTS_DIRECTORY_NAME),
+                ),
+                true,
+                `${eachInstallCase.name}: lookup path points to the active agents home`,
+            );
+        }
+        assert.equal(
+            readFileSync(inheritedProfileMarker, 'utf8'),
+            'leave this profile root alone\n',
+            'an inherited profile root stays untouched',
+        );
+        assert.equal(
+            existsSync(join(inheritedProfilesRoot, 'editor')),
+            false,
+            'the named profile does not use the inherited profile root',
+        );
+    } finally {
+        rmSync(runRoot, { recursive: true, force: true });
     }
 });
 
