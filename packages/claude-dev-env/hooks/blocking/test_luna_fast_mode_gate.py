@@ -151,8 +151,6 @@ def test_hooks_json_registers_all_spawn_surfaces() -> None:
         f"/hooks/blocking/{CALLING_HOOK_NAME}"
     )
     assert (_HOOKS_TREE / "blocking" / CALLING_HOOK_NAME).is_file()
-
-
 def test_registered_command_runs_under_windows_cmd_for_allow_and_deny() -> None:
     hooks_configuration = json.loads(
         (_HOOKS_TREE / "hooks.json").read_text(encoding="utf-8")
