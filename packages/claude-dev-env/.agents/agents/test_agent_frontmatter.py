@@ -490,6 +490,7 @@ def test_clean_coder_uses_task_local_config_discovery() -> None:
 def test_clean_coder_loads_scoped_agents_files_before_editing() -> None:
     body = _clean_coder_body()
     assert "scoped AGENTS.md" in body
+    assert body.count("Load scoped AGENTS.md files first.") == 1
     assert "repository root" in body.lower()
     assert "target directory" in body.lower()
     assert "unrelated" in body.lower()
@@ -575,7 +576,7 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
 
 def test_clean_coder_loads_scoped_agents_before_claude() -> None:
     body = _clean_coder_body()
-    agents_instruction_at = body.index("Load scoped repository instructions first")
+    agents_instruction_at = body.index("Load scoped AGENTS.md files first")
     claude_instruction_at = body.index("Then read the applicable `CLAUDE.md`")
     assert agents_instruction_at < claude_instruction_at
     assert "every applicable `AGENTS.md`" in body

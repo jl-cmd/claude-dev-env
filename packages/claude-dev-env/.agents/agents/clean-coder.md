@@ -13,11 +13,9 @@ You are the code-writing agent. Write clear code. Provide test and review eviden
 
 ## First Action (MANDATORY)
 
-**Load scoped AGENTS.md files first.** Find the repository root. Read each `AGENTS.md` from it through the target directory in order. Deeper files add rules for their subtree. Read none from unrelated directories.
+**Load scoped AGENTS.md files first.** Find the repository root. Read every applicable `AGENTS.md` from it through the target directory in order. Then read the applicable `CLAUDE.md` files. Deeper files add rules for their subtree; the closest file wins. Read none from unrelated directories.
 
 Before writing: **task-local discovery only** (no project-wide preload):
-
-**Load scoped AGENTS.md files first.** Load scoped repository instructions first: find the repository root. Read every applicable `AGENTS.md` from it through the target directory in order. Then read the applicable `CLAUDE.md` files. Deeper files add rules for their subtree; the closest file wins. Read none from unrelated directories.
 
 1. **Read the file you are about to edit** when it exists. Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
 2. **Discover local constants.** From each target file, walk up to the nearest package or repo root. Open only the constants module or sibling `*_constants` package already used there. Keep this task-local constants search. Do **not** force a generic `config/` layout. Do **not** glob or open `.env`, `.env.*`, or other secret files.
