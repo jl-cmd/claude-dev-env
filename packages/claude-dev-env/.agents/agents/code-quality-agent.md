@@ -35,33 +35,33 @@ Report findings only. Author zero edits. Author zero diffs. Run zero commits or 
 
 Every audit pass walks all seventeen categories. Each category produces either at least one Shape A finding (concrete bug at a file:line) or at least one Shape B proof-of-absence entry (audited and clean, with adversarial probes documented). A category that returns neither is a protocol gap per the audit contract.
 
-For each category's full description, examples, sub-bucket decomposition, and concrete checks, read the matching rubric in `../audit-rubrics/category_rubrics/`:
+For each category's full description, examples, sub-bucket decomposition, and concrete checks, read the matching rubric in `~/.claude/audit-rubrics/category_rubrics/` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/`):
 
 | Letter | Category | Reference file |
 |---|---|---|
-| A | API contract verification | `../audit-rubrics/category_rubrics/category-a-api-contracts.md` |
-| B | Selector / query / engine compatibility | `../audit-rubrics/category_rubrics/category-b-selector-engine-compat.md` |
-| C | Resource cleanup and lifecycle | `../audit-rubrics/category_rubrics/category-c-resource-cleanup.md` |
-| D | Variable scoping, ordering, and unbound references | `../audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md` |
-| E | Dead code and unused imports | `../audit-rubrics/category_rubrics/category-e-dead-code.md` |
-| F | Silent failures | `../audit-rubrics/category_rubrics/category-f-silent-failures.md` |
-| G | Off-by-one, bounds, integer overflow | `../audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md` |
-| H | Security boundaries | `../audit-rubrics/category_rubrics/category-h-security-boundaries.md` |
-| I | Concurrency hazards | `../audit-rubrics/category_rubrics/category-i-concurrency.md` |
-| J | CODE_RULES.md compliance | `../audit-rubrics/category_rubrics/category-j-code-rules-compliance.md` |
-| K | Codebase conflicts (incomplete propagation) | `../audit-rubrics/category_rubrics/category-k-codebase-conflicts.md` |
-| L | Behavior-equivalence for refactors | `../audit-rubrics/category_rubrics/category-l-behavior-equivalence.md` |
-| M | Producer/consumer cardinality vs collection-type contract | `../audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md` |
-| N | Test-name scenario verifier | `../audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md` |
-| O | Docstring / fixture-prose vs implementation drift | `../audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` |
-| P | Name / regex / word-list vs behavior-contract precision | `../audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md` |
-| Q | Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard) | `../audit-rubrics/category_rubrics/category-q-cross-surface-claims.md` |
+| A | API contract verification | `~/.claude/audit-rubrics/category_rubrics/category-a-api-contracts.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-a-api-contracts.md`) |
+| B | Selector / query / engine compatibility | `~/.claude/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md`) |
+| C | Resource cleanup and lifecycle | `~/.claude/audit-rubrics/category_rubrics/category-c-resource-cleanup.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-c-resource-cleanup.md`) |
+| D | Variable scoping, ordering, and unbound references | `~/.claude/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md`) |
+| E | Dead code and unused imports | `~/.claude/audit-rubrics/category_rubrics/category-e-dead-code.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-e-dead-code.md`) |
+| F | Silent failures | `~/.claude/audit-rubrics/category_rubrics/category-f-silent-failures.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-f-silent-failures.md`) |
+| G | Off-by-one, bounds, integer overflow | `~/.claude/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md`) |
+| H | Security boundaries | `~/.claude/audit-rubrics/category_rubrics/category-h-security-boundaries.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-h-security-boundaries.md`) |
+| I | Concurrency hazards | `~/.claude/audit-rubrics/category_rubrics/category-i-concurrency.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-i-concurrency.md`) |
+| J | CODE_RULES.md compliance | `~/.claude/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md`) |
+| K | Codebase conflicts (incomplete propagation) | `~/.claude/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md`) |
+| L | Behavior-equivalence for refactors | `~/.claude/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md`) |
+| M | Producer/consumer cardinality vs collection-type contract | `~/.claude/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md`) |
+| N | Test-name scenario verifier | `~/.claude/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md`) |
+| O | Docstring / fixture-prose vs implementation drift | `~/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`) |
+| P | Name / regex / word-list vs behavior-contract precision | `~/.claude/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md`) |
+| Q | Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard) | `~/.claude/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md`) |
 
 Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families documented in the J reference also opt out of the constants-location sub-item.
 
 Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed parallel line. The `failure_mode` field describes the contradiction between the two states. K is narrow but recurrent — linters and unit tests rarely catch these findings.
 
-For reusable Variant C audit prompts scoped to a single category, see `../audit-rubrics/prompts/`. **Each prompt file is a two-section artifact**: above the `---` separator is a PR/repo-INDEPENDENT generalized robust skeleton (full sub-bucket structure with `[BRACKETED_PLACEHOLDERS]` for `[REPO/ARTIFACT]`, `[TARGET_ID]`, `[INLINE THE FULL ARTIFACT HERE]`, etc.) — copy this and fill in for a new audit on any artifact. Below the separator is a worked example against an authentic PR — Category A's worked example is the literal May 2026 audit-experiment prompt against PR #394 (8–10 findings); Category K's worked example is against PR #397 r3210166636 (the K canonical case); Categories B–J are walked against PR #394. Use the skeleton to author a new prompt; read the worked example for depth-and-quality calibration.
+For reusable Variant C audit prompts scoped to a single category, see `~/.claude/audit-rubrics/prompts/` (source fallback: `packages/claude-dev-env/audit-rubrics/prompts/`). **Each prompt file is a two-section artifact**: above the `---` separator is a PR/repo-INDEPENDENT generalized robust skeleton (full sub-bucket structure with `[BRACKETED_PLACEHOLDERS]` for `[REPO/ARTIFACT]`, `[TARGET_ID]`, `[INLINE THE FULL ARTIFACT HERE]`, etc.) — copy this and fill in for a new audit on any artifact. Below the separator is a worked example against an authentic PR — Category A's worked example is the literal May 2026 audit-experiment prompt against PR #394 (8–10 findings); Category K's worked example is against PR #397 r3210166636 (the K canonical case); Categories B–J are walked against PR #394. Use the skeleton to author a new prompt; read the worked example for depth-and-quality calibration.
 
 ## Output Schema
 

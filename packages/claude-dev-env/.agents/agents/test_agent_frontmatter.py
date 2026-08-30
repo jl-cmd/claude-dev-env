@@ -420,6 +420,55 @@ def _clean_coder_body() -> str:
     return (Path(__file__).parent / "clean-coder.md").read_text(encoding="utf-8")
 
 
+SOURCE_LINK_PATTERN = re.compile(
+    r"`(?P<installed>~/(?:\.claude|\.agents)/[^`]+)` "
+    r"\(source fallback: `(?P<source>packages/claude-dev-env/[^`]+)`\)"
+)
+
+
+def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
+    agents_directory = Path(__file__).parent
+    repository_root = agents_directory.parents[3]
+    for each_agent_file_name in (
+        "clean-coder.md",
+        "code-quality-agent.md",
+        "pr-description-writer.md",
+    ):
+        agent_text = (agents_directory / each_agent_file_name).read_text(
+            encoding="utf-8"
+        )
+        source_links = SOURCE_LINK_PATTERN.findall(agent_text)
+        assert source_links, f"{each_agent_file_name} must document source links"
+        for each_installed_path, each_source_path in source_links:
+            each_source_file_path = each_source_path.split("#", 1)[0]
+            expected_installed_root = (
+                "~/.agents/skills/"
+                if each_source_file_path.startswith(
+                    "packages/claude-dev-env/.agents/skills/"
+                )
+                else "~/.claude/"
+            )
+            assert each_installed_path.startswith(expected_installed_root), (
+                f"{each_agent_file_name} must use {expected_installed_root} for "
+                f"the installed path {each_installed_path}"
+            )
+            assert (repository_root / each_source_file_path).exists(), (
+                f"source fallback must exist: {each_source_path}"
+            )
+        for each_stale_prefix in (
+            "../docs/",
+            "../hooks/",
+            "../rules/",
+            "../audit-rubrics/",
+            "../skills/descriptions/",
+            "../skills/comments/",
+        ):
+            assert each_stale_prefix not in agent_text, (
+                f"{each_agent_file_name} must not use stale relative guide "
+                f"path {each_stale_prefix}"
+            )
+
+
 def test_clean_coder_never_globs_or_reads_dotenv_files() -> None:
     body = _clean_coder_body()
     assert "`**/.env`" not in body

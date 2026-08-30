@@ -395,7 +395,11 @@ _CATEGORY_Q_LABEL = (
     "(terminology, PR-description claims, message-vs-guard)"
 )
 _CATEGORY_Q_RUBRIC_REFERENCE = (
-    "../audit-rubrics/category_rubrics/category-q-cross-surface-claims.md"
+    "`~/.claude/audit-rubrics/category_rubrics/"
+    "category-q-cross-surface-claims.md`"
+    " (source fallback: "
+    "`packages/claude-dev-env/audit-rubrics/category_rubrics/"
+    "category-q-cross-surface-claims.md`)"
 )
 _A_THROUGH_Q_PATTERN = re.compile(r"A[\u2013-]Q")
 _SEVENTEEN_CATEGORIES_PATTERN = re.compile(r"seventeen categor", re.IGNORECASE)
