@@ -537,3 +537,58 @@ def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> Non
     assert "changing approach" in body
     assert "before completion" in body
     assert "do not bind or spawn another advisor" in body
+
+
+def test_clean_coder_sets_a_concise_complexity_budget() -> None:
+    body = _clean_coder_body()
+    assert "Complexity budget" in body
+    assert "1–2 files" in body
+    assert "~50–300 lines" in body
+    assert "about 40 executable lines" in body
+    assert "nesting level of 2" in body
+
+
+def test_clean_coder_defines_liveness_before_removing_dead_code() -> None:
+    body = _clean_coder_body()
+    assert "Orphaned or dead code" in body
+    assert "Prove unreachability with symbol references" in body
+    assert "liveness boundary" in body
+    assert "public API" in body
+
+
+def test_clean_coder_hands_the_full_diff_to_code_quality_agent() -> None:
+    body = _clean_coder_body()
+    assert "Full Code Quality Agent review handoff" in body
+    assert "full diff" in body
+    assert "all A–Q categories" in body
+    assert "Repair each actionable finding" in body
+    assert "rerun focused checks and the full project gate on the post-repair diff" in body
+    assert "record both results" in body
+
+
+def test_clean_coder_retry_example_is_complete_and_executable() -> None:
+    body = _clean_coder_body()
+    example_start = body.index("```python")
+    example_end = body.index("```", example_start + len("```python"))
+    example = body[example_start:example_end]
+    assert "from collections.abc import Callable" in example
+    assert "def fetch_with_retries(fetch_text: Callable[[str], str], url: str) -> str:" in example
+    assert "fetched_text = fetch_text(url)" in example
+    assert "raise RuntimeError" in example
+    assert "..." not in example
+    assert "pass" not in example
+    assert "NotImplementedError" not in example
+
+
+def test_clean_coder_requires_evidence_based_completion_wording() -> None:
+    body = _clean_coder_body()
+    assert "# Clean Coder — Evidence-Based Code Generation" in body
+    assert "reviewers find nothing" not in body
+    assert "Produce clear code with test and review evidence." in body
+    assert "candidate check" in body
+    assert "focused tests" in body
+    assert "full project gate" in body
+    assert "recorded check results" in body
+    assert "review findings" in body
+    assert "open questions" in body
+    assert "Do not claim defect-free code" in body
