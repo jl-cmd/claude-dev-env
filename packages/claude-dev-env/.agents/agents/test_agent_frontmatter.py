@@ -611,15 +611,46 @@ def test_clean_coder_defines_a_hook_specific_workflow() -> None:
 
 def test_clean_coder_uses_target_package_aware_hook_paths() -> None:
     body = _clean_coder_body()
-    required_references = (
-        "<managed-root>/hooks/AGENTS.md",
-        "packages/claude-dev-env/hooks/AGENTS.md",
-        "<managed-root>/scripts/check.ps1",
-        "packages/claude-dev-env/scripts/check.ps1",
+    hook_workflow = body.split("## Hook-specific workflow", 1)[1].split(
+        "## Session advisor", 1
+    )[0]
+    hook_path_pattern = re.compile(
+        r"`(?P<managed><managed-root>/(?P<relative>hooks/AGENTS\.md|scripts/check\.ps1))` "
+        r"\(default: `(?P<default>~/.claude/(?P=relative))`; "
+        r"source fallback: `(?P<source>packages/claude-dev-env/(?P=relative))`\)"
     )
-    assert all(each_reference in body for each_reference in required_references)
-    assert "read `hooks/AGENTS.md`" not in body
-    assert "Run `check.ps1`" not in body
+    path_pairs = {
+        (
+            each_match.group("managed"),
+            each_match.group("default"),
+            each_match.group("source"),
+        )
+        for each_match in hook_path_pattern.finditer(hook_workflow)
+    }
+    expected_pairs = {
+        (
+            "<managed-root>/hooks/AGENTS.md",
+            "~/.claude/hooks/AGENTS.md",
+            "packages/claude-dev-env/hooks/AGENTS.md",
+        ),
+        (
+            "<managed-root>/scripts/check.ps1",
+            "~/.claude/scripts/check.ps1",
+            "packages/claude-dev-env/scripts/check.ps1",
+        ),
+    }
+    assert path_pairs == expected_pairs
+    assert len(path_pairs) == len(expected_pairs)
+    repository_root = Path(__file__).parent.parents[3]
+    for each_source_path in (
+        "packages/claude-dev-env/hooks/AGENTS.md",
+        "packages/claude-dev-env/scripts/check.ps1",
+    ):
+        assert (repository_root / each_source_path).is_file()
+    assert "active managed root" in hook_workflow
+    assert "`~/.claude`" in hook_workflow
+    assert "`--target`" in hook_workflow
+    assert "`CLAUDE_CONFIG_DIR`" in hook_workflow
 
 
 def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> None:
