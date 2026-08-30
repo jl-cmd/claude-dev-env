@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import subprocess
 import sys
 from typing import Any
 from unittest import mock
@@ -150,3 +151,44 @@ def test_hooks_json_registers_all_spawn_surfaces() -> None:
         f"/hooks/blocking/{CALLING_HOOK_NAME}"
     )
     assert (_HOOKS_TREE / "blocking" / CALLING_HOOK_NAME).is_file()
+
+
+def test_registered_command_runs_under_windows_cmd_for_allow_and_deny() -> None:
+    hooks_configuration = json.loads(
+        (_HOOKS_TREE / "hooks.json").read_text(encoding="utf-8")
+    )
+    matching_group = next(
+        each_group
+        for each_group in hooks_configuration["hooks"]["PreToolUse"]
+        if CALLING_HOOK_NAME
+        in " ".join(each_hook["command"] for each_hook in each_group["hooks"])
+    )
+    registered_command = matching_group["hooks"][0]["command"]
+    assert registered_command.startswith("python ")
+    command_line = registered_command.replace(
+        "${CLAUDE_PLUGIN_ROOT}",
+        str(_HOOKS_TREE.parent).replace("\\", "/"),
+    )
+
+    for each_service_tier, expected_output in (
+        (FAST_SERVICE_TIER, ""),
+        ("flex", _DENY_DECISION),
+    ):
+        completed_process = subprocess.run(
+            command_line,
+            input=json.dumps(_spawn_payload(service_tier=each_service_tier)),
+            capture_output=True,
+            shell=True,
+            text=True,
+            check=False,
+        )
+        assert completed_process.returncode == 0, completed_process.stderr
+        if expected_output == "":
+            assert completed_process.stdout == ""
+        else:
+            assert (
+                json.loads(completed_process.stdout)["hookSpecificOutput"][
+                    "permissionDecision"
+                ]
+                == expected_output
+            )

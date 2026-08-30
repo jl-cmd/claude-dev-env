@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py",
             "timeout": 10
           }
         ]
