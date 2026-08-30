@@ -165,7 +165,11 @@ test('real installs place the Clean Coder in each active agents home', () => {
     const homeDirectory = join(runRoot, 'home');
     const configRoot = join(runRoot, 'config-profile');
     const explicitRoot = join(runRoot, 'explicit-target');
+    const inheritedProfilesRoot = join(runRoot, 'inherited-profiles');
+    const inheritedProfileMarker = join(inheritedProfilesRoot, 'untouched.txt');
     mkdirSync(homeDirectory, { recursive: true });
+    mkdirSync(inheritedProfilesRoot, { recursive: true });
+    writeFileSync(inheritedProfileMarker, 'leave this profile root alone\n');
     try {
         const installCases = [
             {
@@ -185,7 +189,10 @@ test('real installs place the Clean Coder in each active agents home', () => {
             {
                 name: 'named profile',
                 arguments: ['--profile', 'editor', '--only', 'core'],
-                environment: { CLAUDE_CONFIG_DIR: undefined },
+                environment: {
+                    CLAUDE_CONFIG_DIR: undefined,
+                    LLM_SETTINGS_PROFILES_ROOT: undefined,
+                },
                 managedRoot: join(homeDirectory, '.claude-profiles', 'editor'),
                 agentsHome: join(homeDirectory, '.claude-profiles', 'editor.agents'),
             },
@@ -202,7 +209,10 @@ test('real installs place the Clean Coder in each active agents home', () => {
             runInstaller(
                 homeDirectory,
                 eachInstallCase.arguments,
-                eachInstallCase.environment,
+                {
+                    LLM_SETTINGS_PROFILES_ROOT: inheritedProfilesRoot,
+                    ...eachInstallCase.environment,
+                },
             );
             for (const eachAgentFileName of SHIPPED_AGENT_FILE_NAMES) {
                 const installedAgentPath = join(
@@ -230,6 +240,16 @@ test('real installs place the Clean Coder in each active agents home', () => {
                 `${eachInstallCase.name}: lookup path points to the active agents home`,
             );
         }
+        assert.equal(
+            readFileSync(inheritedProfileMarker, 'utf8'),
+            'leave this profile root alone\n',
+            'an inherited profile root stays untouched',
+        );
+        assert.equal(
+            existsSync(join(inheritedProfilesRoot, 'editor')),
+            false,
+            'the named profile does not use the inherited profile root',
+        );
     } finally {
         rmSync(runRoot, { recursive: true, force: true });
     }
