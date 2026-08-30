@@ -386,6 +386,28 @@ def test_main_headless_flavor_emits_outcome_path_on_stdout(
     assert "add_comment_to_pending_review" not in captured.out
 
 
+def test_code_quality_agent_requires_scoped_intake_and_evidence_gaps() -> None:
+    agent_text = _CODE_QUALITY_AGENT_PATH.read_text(encoding="utf-8")
+
+    required_phrases = (
+        "read each existing `AGENTS.md` and `CLAUDE.md`",
+        "scoped `AGENTS.md` files as the canonical",
+        "`docs/CODE_RULES.md` is a compact projection",
+        "`hooks/blocking/code_rules_enforcer.py` is hand-maintained write-time coverage",
+        "full diff",
+        "resolved base or merge-base",
+        "complete changed-file list",
+        "PR description",
+        "evidence gap",
+        "Never infer omitted content",
+    )
+    for each_phrase in required_phrases:
+        assert each_phrase in agent_text
+
+    assert "## Review intake and policy sources" in agent_text
+    assert "Open questions" in agent_text
+
+
 _PACKAGE_ROOT = _PACKAGE_ROOT_FOR_RUBRICS
 _CODE_QUALITY_AGENT_PATH = _PACKAGE_ROOT / ".agents" / "agents" / "code-quality-agent.md"
 _AUDIT_CONTRACT_PATH = _PACKAGE_ROOT / "_shared" / "pr-loop" / "audit-contract.md"
@@ -395,7 +417,11 @@ _CATEGORY_Q_LABEL = (
     "(terminology, PR-description claims, message-vs-guard)"
 )
 _CATEGORY_Q_RUBRIC_REFERENCE = (
-    "../audit-rubrics/category_rubrics/category-q-cross-surface-claims.md"
+    "`<managed-root>/audit-rubrics/category_rubrics/"
+    "category-q-cross-surface-claims.md`"
+    " (source fallback: "
+    "`packages/claude-dev-env/audit-rubrics/category_rubrics/"
+    "category-q-cross-surface-claims.md`)"
 )
 _A_THROUGH_Q_PATTERN = re.compile(r"A[\u2013-]Q")
 _SEVENTEEN_CATEGORIES_PATTERN = re.compile(r"seventeen categor", re.IGNORECASE)
@@ -415,6 +441,26 @@ def test_code_quality_agent_default_scope_is_a_through_q() -> None:
     assert _CATEGORY_Q_LABEL in agent_text
     assert _CATEGORY_Q_RUBRIC_REFERENCE in agent_text
     assert "| Q |" in agent_text
+
+
+def test_code_quality_agent_contract_is_caller_neutral() -> None:
+    agent_text = _CODE_QUALITY_AGENT_PATH.read_text(encoding="utf-8")
+    stale_terms = (
+        "PR #394",
+        "PR #397",
+        "May 2026",
+        "r3210166636",
+        "/bugteam",
+        "/pr-converge",
+        "/autoconverge",
+        "opus",
+        "sonnet",
+        "model:",
+    )
+    for stale_term in stale_terms:
+        assert stale_term not in agent_text
+    assert "The caller provides the diff, audit scope, ID prefix, and output format." in agent_text
+    assert "Do not assume a model, caller name, or persistence path." in agent_text
 
 
 def test_audit_contract_category_schema_includes_q() -> None:

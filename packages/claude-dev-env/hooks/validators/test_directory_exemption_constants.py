@@ -147,7 +147,7 @@ def test_runner_temp_pytest_shaped_path_stages_flat_basename_when_gettempdir_dif
     os_gettemp.mkdir()
     monkeypatch.setenv("RUNNER_TEMP", str(runner_temp_root))
     monkeypatch.setattr(
-        "validators.run_all_validators.tempfile.gettempdir",
+        "validators.system_temporary_roots.tempfile.gettempdir",
         lambda: str(os_gettemp),
     )
     pytest_shaped_target = (
