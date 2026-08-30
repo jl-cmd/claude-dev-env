@@ -1415,7 +1415,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
                     /\$\{CLAUDE_PLUGIN_ROOT\}/g,
                     () => pluginRootForward,
                 );
-                command = command.replace(/^python3\b/, () => pythonCommand);
+                command = command.replace(/^python3?(?=\s)/, () => pythonCommand);
                 return { ...hook, command };
             });
             const existingIndex = settings.hooks[eventType].findIndex(
