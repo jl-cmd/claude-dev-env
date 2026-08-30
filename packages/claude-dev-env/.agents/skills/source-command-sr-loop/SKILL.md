@@ -13,6 +13,14 @@ Run the converging cleanup loop on the target the user names (a PR URL,
 a branch, or blank for the current branch's diff). Each phase invokes an
 existing skill and repeats it until a pass returns zero new findings.
 
+### Nit-only terminal
+
+When a pass finds only nits, apply them, run scoped checks, commit, and push.
+Treat that phase as clean. Do not run another simplify or review pass without
+the user's request. If later work creates an uncommitted out-of-scope diff,
+stop and report it. Do not inspect, repair, commit, or adopt that diff without
+new user instruction.
+
 ### Effort
 
 Set every model call to `max` effort. If that model has no `max` effort, use
@@ -34,7 +42,8 @@ stack's design, intent, and changes.
    code, not the full repo suite), commit once (commit body via
    `git commit -F <file>`, 10-minute timeout — the pre-commit gate runs its
    own tests), and push to the PR head branch. The PR stays draft.
-3. Repeat the invocation. Skips are sticky: carry every adjudicated skip
+3. Repeat the invocation only after substantive findings or a user request.
+   Skips are sticky: carry every adjudicated skip
    forward into the next pass as "already adjudicated — do not re-report: ..."
    context, or the loop never converges.
 4. Phase A converges when a full pass returns zero new findings. When the
@@ -51,8 +60,8 @@ stack's design, intent, and changes.
    when the headless run fails: invoke the `e-code-review` skill with
    `low --fix` — same review-and-fix contract, no invocation restriction.
 2. After any pass that changed files: test, commit, push as in Phase A.
-3. Repeat until a pass reports zero findings. Phase B usually converges in
-   one pass when Phase A ran first.
+3. Repeat until a pass reports zero findings. A nit-only pass ends this phase
+   after its fixes are pushed.
 
 ### Finish
 
