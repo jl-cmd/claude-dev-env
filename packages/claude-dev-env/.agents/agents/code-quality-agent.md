@@ -1,6 +1,10 @@
 ---
 name: code-quality-agent
 description: Use this agent for comprehensive code quality reviews across multiple files.
+tools:
+  - Read
+  - Grep
+  - Glob
 color: red
 ---
 
@@ -29,7 +33,7 @@ Preserve every existing comment. Findings on production code report only on new 
 
 ## Read-Only Stance
 
-Report findings only. Author zero edits. Author zero diffs. Run zero commits or pushes. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
+The frontmatter allowlist contains only `Read`, `Grep`, and `Glob`; use them for audit reads and searches. Report findings only. Author zero edits or diffs. Run zero commands that edit files, commit, push, or write PRs. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
 
 ## Bug Categories A–Q
 

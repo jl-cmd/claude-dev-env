@@ -79,6 +79,8 @@ import pytest
 import yaml
 
 ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
+CODE_QUALITY_AGENT_FILENAME = "code-quality-agent.md"
+CODE_QUALITY_READ_ONLY_TOOLS = ("Read", "Grep", "Glob")
 INSTRUCTION_ALIAS_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md"})
 FRONTMATTER_FENCE_LINE = "---"
 MATERIALIZER_MODULE_NAME = "codex_compat_materializer"
@@ -440,3 +442,16 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
     assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None
+
+
+def test_code_quality_agent_allows_only_read_and_search_tools() -> None:
+    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
+
+    assert parsed_frontmatter["tools"] == list(CODE_QUALITY_READ_ONLY_TOOLS)
+
+
+def test_code_quality_agent_contract_forbids_mutating_commands() -> None:
+    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    body = agent_definition_path.read_text(encoding="utf-8")
+    assert "Run zero commands that edit files, commit, push, or write PRs." in body
