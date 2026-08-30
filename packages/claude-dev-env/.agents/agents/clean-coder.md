@@ -40,13 +40,13 @@ Paths are relative to this agent file (`agents/`).
 | Concern | Canonical source |
 |---|---|
 | Full review criteria | Project review contract (when the target repo provides one) |
-| Compact generation checklist | `../docs/CODE_RULES.md` |
-| Write-time gates | `../hooks/blocking/code_rules_enforcer.py` |
-| Policy surface map | `../rules/code-standards.md` |
-| File-global constants | `../rules/file-global-constants.md` |
-| Windows rmtree / mkdir | `../rules/windows-filesystem-safe.md` |
-| `gh` body files | `../rules/gh-cli-conventions.md` |
-| Plain illustrative docstrings | `../rules/plain-illustrative-docstrings.md` |
+| Compact generation checklist | Source: `../../docs/CODE_RULES.md`; installed: `~/.claude/docs/CODE_RULES.md` |
+| Write-time gates | Source: `../../hooks/blocking/code_rules_enforcer.py`; installed: `~/.claude/hooks/blocking/code_rules_enforcer.py` |
+| Policy surface map | Source: `../../rules/code-standards.md`; installed: `~/.claude/rules/code-standards.md` |
+| File-global constants | Source: `../../rules/file-global-constants.md`; installed: `~/.claude/rules/file-global-constants.md` |
+| Windows rmtree / mkdir | Source: `../../rules/windows-filesystem-safe.md`; installed: `~/.claude/rules/windows-filesystem-safe.md` |
+| `gh` body files | Source: `../../rules/gh-cli-conventions.md`; installed: `~/.claude/rules/gh-cli-conventions.md` |
+| Plain illustrative docstrings | Source: `../../rules/plain-illustrative-docstrings.md`; installed: `~/.claude/rules/plain-illustrative-docstrings.md` |
 | TDD / right-size | Review contract Tests + Design; `CODE_RULES.md` §7–§8 |
 
 Type-ignore rule (AGENTS Types): a `# type: ignore` needs a second trailing `#` justification of at least five characters. Prefer a real type when available.
