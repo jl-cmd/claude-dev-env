@@ -436,6 +436,41 @@ def test_clean_coder_uses_task_local_config_discovery() -> None:
     assert "Issue all seven Glob calls" not in body
 
 
+def test_clean_coder_separates_constants_and_caller_search() -> None:
+    body = _clean_coder_body()
+    assert "task-local constants search" in body
+    assert "caller boundary" in body
+
+
+def test_clean_coder_scopes_task_artifact_guidance() -> None:
+    body = _clean_coder_body()
+    assert "Follow the target repo's policy for scratch, planning, and image files" in body
+    assert "No scratch/planning artifacts" not in body
+
+
+def test_clean_coder_links_canonical_policy_areas() -> None:
+    body = _clean_coder_body()
+    required_links = (
+        "../docs/CODE_RULES.md#5-no-abbreviations",
+        "../rules/testing.md",
+        "../rules/ask-user-question-required.md",
+        "../rules/verify-runtime-state.md",
+        "../rules/doc-inventory-integrity.md",
+        "../rules/failure-blast-radius.md",
+        "../rules/git-workflow.md",
+        "../rules/workers-done-before-complete.md",
+    )
+    assert all(each_link in body for each_link in required_links)
+
+
+def test_clean_coder_preserves_existing_comment_instruction() -> None:
+    body = _clean_coder_body()
+    assert (
+        "Note every existing comment so you can leave each one untouched on lines "
+        "that remain otherwise unchanged."
+    ) in body
+
+
 def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body

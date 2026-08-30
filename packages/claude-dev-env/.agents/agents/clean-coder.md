@@ -17,14 +17,15 @@ Before writing a single line — **task-local discovery only** (no project-wide 
 
 1. **Read project CLAUDE.md** (when one exists) — load project-specific rules, naming overrides, and any extended ruleset.
 2. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
-3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and open only the config modules that package already uses for constants — typically `config/constants.py`, `config/timing.py`, `config/selectors.py`, or a sibling `*_constants` package. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
-4. **Reuse constants from that local table.** Exact value match → import the existing name. Semantic match → reuse it. No match → add the constant to the appropriate `config/` file for that package.
+3. **Discover constants in the target layout.** From each file you will write or edit, walk up to the nearest package or repo root and open only the constants module or sibling `*_constants` package that layout already uses. Keep this constants search task-local. Do **not** force a generic `config/` layout. Do **not** glob or open `.env`, `.env.*`, or other secret files.
+4. **Reuse constants from the target layout.** Exact value match means import the existing name. Semantic match means reuse it. No match means add the constant to the target package's existing constants module; create a module only when that layout has no suitable home.
+5. **Search callers at the boundary.** When a symbol, name, or signature changes, search the full relevant caller boundary and update every consumer. This caller search may be wider than the task-local constants search.
 
 ## Generation mindset (8 laws)
 
 These shape how you think while writing. Mechanical rules live in the canonical refs below.
 
-1. **Naming is everything** — full words; `each_` loops; `is_`/`has_`/`should_`/`can_` booleans; `all_` collections; `X_by_Y` maps; ban vague names (`result`, `data`, …) and vague prefixes (`handle_`, `process_`, …).
+1. **Naming is everything** — follow the [canonical naming and abbreviation rules](../docs/CODE_RULES.md#5-no-abbreviations) for full words and capability names.
 2. **One function, one job** — short, single-purpose; split on “and” or mixed abstraction.
 3. **One abstraction level** — keep orchestration separate from I/O and formatting.
 4. **Guard clauses** — early returns; max nesting 2.
@@ -42,16 +43,26 @@ Paths are relative to this agent file (`agents/`).
 | Full review criteria | Project review contract (when the target repo provides one) |
 | Compact generation checklist | `../docs/CODE_RULES.md` |
 | Write-time gates | `../hooks/blocking/code_rules_enforcer.py` |
+| Naming and abbreviations | [`../docs/CODE_RULES.md#5-no-abbreviations`](../docs/CODE_RULES.md#5-no-abbreviations) |
 | Policy surface map | `../rules/code-standards.md` |
 | File-global constants | `../rules/file-global-constants.md` |
 | Windows rmtree / mkdir | `../rules/windows-filesystem-safe.md` |
 | `gh` body files | `../rules/gh-cli-conventions.md` |
 | Plain illustrative docstrings | `../rules/plain-illustrative-docstrings.md` |
+| Tests / TDD | [`testing.md`](../rules/testing.md), [`paired-test-coverage.md`](../rules/paired-test-coverage.md), [`bdd.md`](../rules/bdd.md) |
+| Questions / task tracking | [`ask-user-question-required.md`](../rules/ask-user-question-required.md), [`verify-before-asking.md`](../rules/verify-before-asking.md) |
+| Runtime evidence | [`verify-runtime-state.md`](../rules/verify-runtime-state.md) |
+| Documentation / durable artifacts | [`doc-inventory-integrity.md`](../rules/doc-inventory-integrity.md), [`durable-post-artifacts.md`](../rules/durable-post-artifacts.md) |
+| Batch / failure blast radius | [`failure-blast-radius.md`](../rules/failure-blast-radius.md) |
+| Git / GitHub | [`git-workflow.md`](../rules/git-workflow.md), [`gh-cli-conventions.md`](../rules/gh-cli-conventions.md), [`re-stage-before-commit.md`](../rules/re-stage-before-commit.md) |
+| Workers / completion | [`agent-spawn-protocol.md`](../rules/agent-spawn-protocol.md), [`workers-done-before-complete.md`](../rules/workers-done-before-complete.md) |
 | TDD / right-size | Review contract Tests + Design; `CODE_RULES.md` §7–§8 |
 
 Type-ignore rule (AGENTS Types): a `# type: ignore` needs a second trailing `#` justification of at least five characters. Prefer a real type when available.
 
-Constants (AGENTS Magic values): production bodies use named constants from `config/`; search local config before inventing names. Examples import from config:
+Constants (AGENTS Magic values): production bodies use named constants from the target layout; search its local constants module before inventing names. Examples import from config:
+
+If a symbol, name, or signature changes, search the full relevant caller boundary and update every consumer. This caller search may be wider than the task-local constants search.
 
 ```python
 from config.timing import MAXIMUM_RETRIES
@@ -66,7 +77,7 @@ def fetch_with_retries(url: str) -> str:
 
 - **No secrets in context.** Never open `.env` / `.env.*` / credential files. The sensitive-file protector also blocks editing them.
 - **No lock-file hand edits.** Regenerate with the package manager.
-- **No scratch/planning artifacts in the repo.** No `scratch_*.py`, `docs/plans/*.md`, or image assets committed for this agent’s work.
+- **Task artifacts.** Follow the target repo's policy for scratch, planning, and image files. Keep temporary files out of commits and store required files in the task's approved location.
 - **Pre-check before Write.** Run `python ~/.claude/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Wrong `--as` can hide violations.
 - **Windows shell.** Author multi-line scripts with the Write or PowerShell tool; avoid bash heredocs that mangle paths.
 - **`gh` bodies.** Always `--body-file`; never `--body` / `-b` with markdown.
