@@ -63,7 +63,7 @@ Preserve every existing comment. Findings on production code report only on new 
 
 ## Read-Only Stance
 
-Use only `Read`, `Grep`, and `Glob`. Report findings. Make no edits or diffs. Run no commands that write files, commit, push, or create PRs. The orchestrator and caller handle fixes, commits, and PRs.
+Use only `Read`, `Grep`, and `Glob`. Report findings. Author zero edits. Run zero commits or pushes. Make no other edits or diffs, and run no commands that write files or create PRs. The orchestrator and caller handle fixes, commits, and PRs.
 
 ## Bug Categories A–Q
 
