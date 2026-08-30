@@ -386,6 +386,28 @@ def test_main_headless_flavor_emits_outcome_path_on_stdout(
     assert "add_comment_to_pending_review" not in captured.out
 
 
+def test_code_quality_agent_requires_scoped_intake_and_evidence_gaps() -> None:
+    agent_text = _CODE_QUALITY_AGENT_PATH.read_text(encoding="utf-8")
+
+    required_phrases = (
+        "read each existing `AGENTS.md` and `CLAUDE.md`",
+        "scoped `AGENTS.md` files as the canonical",
+        "`docs/CODE_RULES.md` is a compact projection",
+        "`hooks/blocking/code_rules_enforcer.py` is hand-maintained write-time coverage",
+        "full diff",
+        "resolved base or merge-base",
+        "complete changed-file list",
+        "PR description",
+        "evidence gap",
+        "Never infer omitted content",
+    )
+    for each_phrase in required_phrases:
+        assert each_phrase in agent_text
+
+    assert "## Review intake and policy sources" in agent_text
+    assert "Open questions" in agent_text
+
+
 _PACKAGE_ROOT = _PACKAGE_ROOT_FOR_RUBRICS
 _CODE_QUALITY_AGENT_PATH = _PACKAGE_ROOT / ".agents" / "agents" / "code-quality-agent.md"
 _AUDIT_CONTRACT_PATH = _PACKAGE_ROOT / "_shared" / "pr-loop" / "audit-contract.md"
