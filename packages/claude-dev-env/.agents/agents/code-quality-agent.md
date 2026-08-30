@@ -33,7 +33,7 @@ Preserve every existing comment. Findings on production code report only on new 
 
 ## Read-Only Stance
 
-The frontmatter allowlist contains only `Read`, `Grep`, and `Glob`; use them for audit reads and searches. Report findings only. Author zero edits or diffs. Run zero commands that edit files, commit, push, or write PRs. The orchestrator (and the calling skill) handles fix application, commit creation, and PR posting based on your finding list.
+Use only `Read`, `Grep`, and `Glob`. Report findings. Make no edits or diffs. Run no commands that write files, commit, push, or create PRs. The orchestrator and caller handle fixes, commits, and PRs.
 
 ## Bug Categories A–Q
 

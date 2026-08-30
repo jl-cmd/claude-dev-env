@@ -454,4 +454,4 @@ def test_code_quality_agent_allows_only_read_and_search_tools() -> None:
 def test_code_quality_agent_contract_forbids_mutating_commands() -> None:
     agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
     body = agent_definition_path.read_text(encoding="utf-8")
-    assert "Run zero commands that edit files, commit, push, or write PRs." in body
+    assert "Run no commands that write files, commit, push, or create PRs." in body
