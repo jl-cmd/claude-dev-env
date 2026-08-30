@@ -440,3 +440,45 @@ def test_clean_coder_examples_import_constants_from_config() -> None:
     body = _clean_coder_body()
     assert "from config.timing import MAXIMUM_RETRIES" in body
     assert re.search(r"(?m)^MAXIMUM_RETRIES\s*=\s*\d+", body) is None
+
+
+def test_clean_coder_sets_a_small_complexity_budget() -> None:
+    body = _clean_coder_body()
+    assert "Complexity budget" in body
+    assert "1–2 files" in body
+    assert "~50–300 lines" in body
+    assert "about 40 executable lines" in body
+    assert "nesting level of 2" in body
+
+
+def test_clean_coder_defines_a_liveness_boundary_for_dead_code_cleanup() -> None:
+    body = _clean_coder_body()
+    assert "orphaned or dead code" in body.lower()
+    assert "liveness boundary" in body
+    assert "live entry point" in body
+    assert "public API, plugin hook, or reflective dispatch" in body
+
+
+def test_clean_coder_hands_the_full_diff_to_code_quality_agent() -> None:
+    body = _clean_coder_body()
+    assert "Full Code Quality Agent review handoff" in body
+    assert "code-quality-agent" in body
+    assert "full diff" in body
+    assert "all A–Q categories" in body
+
+
+def test_clean_coder_uses_evidence_based_completion_language() -> None:
+    body = _clean_coder_body()
+    assert "Evidence-Based Code Generation" in body
+    assert "recorded check results" in body
+    assert "Do not claim defect-free code" in body
+    assert "Zero-Defect" not in body
+    assert "zero-defect" not in body
+
+
+def test_clean_coder_example_contains_real_code() -> None:
+    body = _clean_coder_body()
+    example = body.split("```python", 1)[1].split("```", 1)[0]
+    assert "..." not in example
+    assert "pass" not in example
+    assert "raise NotImplementedError" not in example
