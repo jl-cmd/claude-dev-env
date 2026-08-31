@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.28.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.27.0...claude-dev-env-v2.28.0) (2026-08-31)
+
+
+### Features
+
+* add explicit HITL scope prompt ([799d08b](https://github.com/jl-cmd/claude-dev-env/commit/799d08b7578c64c6d024c972382262de7dff8cc8))
+* Add explicit HITL scope-reporting skill ([1da0e83](https://github.com/jl-cmd/claude-dev-env/commit/1da0e836da58d1366301a9d6ee4c033da243eeaa))
+
+
+### Bug Fixes
+
+* align HITL skill with agent discovery path ([2b9e762](https://github.com/jl-cmd/claude-dev-env/commit/2b9e762d10191d1f50d2ea0574793a56f978d523))
+* include HITL in shipped skill registry ([ea0ecbe](https://github.com/jl-cmd/claude-dev-env/commit/ea0ecbee184f690b84f759b0c02156a0b6526cb1))
+* prune retired Codex hook records ([7a684a4](https://github.com/jl-cmd/claude-dev-env/commit/7a684a4f41b3358efbd16125732d9b85047f5e12))
+* remove retired hooks from Codex hook files ([63de2f7](https://github.com/jl-cmd/claude-dev-env/commit/63de2f709961de2b8f33858b3b309a2a05bdf83e))
+
 ## [2.27.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.26.0...claude-dev-env-v2.27.0) (2026-08-30)
 
 
