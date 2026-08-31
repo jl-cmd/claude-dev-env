@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import tomllib
@@ -28,6 +28,23 @@ from codex_compat_materializer import (
     save_manifest,
     validate_target_path,
 )
+
+
+def _required_manifest_path(config: MaterializerConfig) -> Path:
+    assert config.manifest_path is not None
+    return config.manifest_path
+
+
+def _manifest_files(manifest_path: Path) -> dict[str, dict[str, object]]:
+    return cast(dict[str, dict[str, object]], load_manifest(manifest_path)["files"])
+
+
+def _hook_group(matcher: str, *all_hook_commands: str) -> dict[str, object]:
+    return {"matcher": matcher, "hooks": [{"type": "command", "command": each_command} for each_command in all_hook_commands]}
+
+
+def _hook_commands(manifest: dict[str, Any], event_name: str) -> list[str]:
+    return [each_hook["command"] for each_group in manifest["hooks"][event_name] for each_hook in each_group["hooks"]]
 
 
 def test_conversion_escapes_toml_content() -> None:
@@ -196,7 +213,7 @@ def test_case_folded_target_collisions_include_existing_and_manifest(tmp_path: P
 def test_manifest_target_collision_is_rejected(tmp_path: Path) -> None:
     config = MaterializerConfig(tmp_path / "source", tmp_path / "target", should_apply=True)
     planned = [PlannedFile("a.md", "Luna.toml", "managed", "hash")]
-    atomic_write(config.manifest_path, '{"files": {"luna.TOML": {}}, "version": 1}\n')
+    atomic_write(_required_manifest_path(config), '{"files": {"luna.TOML": {}}, "version": 1}\n')
     with pytest.raises(MaterializerError):
         publish_plan(config, planned)
 
@@ -206,12 +223,12 @@ def test_first_run_manifest_target_collision_is_rejected(tmp_path: Path) -> None
     target = tmp_path / "target"
     source.mkdir()
     config = MaterializerConfig(source, target, should_apply=True)
-    planned = [PlannedFile("a.md", config.manifest_path.name, "managed", "hash")]
+    planned = [PlannedFile("a.md", _required_manifest_path(config).name, "managed", "hash")]
 
     with pytest.raises(MaterializerError, match="compatibility manifest"):
         publish_plan(config, planned)
 
-    assert not config.manifest_path.exists()
+    assert not _required_manifest_path(config).exists()
     assert not config.target_root.exists()
 
 
@@ -238,11 +255,11 @@ def test_dry_run_is_non_mutating_and_writes_are_idempotent(tmp_path: Path) -> No
     planned, report = build_plan(apply_config)
     publish_plan(apply_config, planned, report)
     first = (target / "Luna.toml").read_text(encoding="utf-8")
-    first_manifest = apply_config.manifest_path.read_bytes()
+    first_manifest = _required_manifest_path(apply_config).read_bytes()
     planned, report = build_plan(apply_config)
     second_report = publish_plan(apply_config, planned, report)
     assert (target / "Luna.toml").read_text(encoding="utf-8") == first
-    assert apply_config.manifest_path.read_bytes() == first_manifest
+    assert _required_manifest_path(apply_config).read_bytes() == first_manifest
     assert second_report.written == 0
     assert second_report.deleted == 0
     assert second_report.errors == 0
@@ -292,13 +309,13 @@ def test_manifest_is_published_last_and_previous_manifest_survives_failure(tmp_p
     target = tmp_path / "target"
     source.mkdir()
     config = MaterializerConfig(source, target, should_apply=True)
-    manifest = config.manifest_path
+    manifest = _required_manifest_path(config)
     manifest.parent.mkdir()
     atomic_write(manifest, '{"files": {}, "version": 1}\n')
     planned = [PlannedFile("agent.md", "Luna.toml", "managed", "hash")]
     with pytest.raises(RuntimeError):
         publish_plan(config, planned, failure_injector=lambda _: (_ for _ in ()).throw(RuntimeError("stop")))
-    assert load_manifest(manifest)["files"] == {}
+    assert _manifest_files(manifest) == {}
     assert not (target / "Luna.toml").exists()
 
 
@@ -399,7 +416,7 @@ def test_report_contains_deterministic_category_details_and_error_count(
     assert (target / "Luna.toml").read_text(encoding="utf-8") == "new"
 
     (target / "Luna.toml").write_text("changed", encoding="utf-8")
-    atomic_write(config.manifest_path, json.dumps({"version": 1, "files": {
+    atomic_write(_required_manifest_path(config), json.dumps({"version": 1, "files": {
         "Luna.toml": {"hash": hash_content(managed_content)}
     }}))
     stale_report = publish_plan(pruning_config, [])
@@ -407,7 +424,7 @@ def test_report_contains_deterministic_category_details_and_error_count(
     assert stale_report.details["stale_managed"] == []
 
     (target / "Luna.toml").write_text(managed_content, encoding="utf-8")
-    atomic_write(config.manifest_path, json.dumps({"version": 1, "files": {
+    atomic_write(_required_manifest_path(config), json.dumps({"version": 1, "files": {
         "Luna.toml": {"hash": hash_content(managed_content)}
     }}))
     deleted_report = publish_plan(pruning_config, [])
@@ -423,7 +440,7 @@ def test_report_contains_deterministic_category_details_and_error_count(
     assert collision_report.details["conflicted"] == ["Nova.toml"]
 
     manifest = {"version": 1, "files": {"Missing.toml": {"hash": hash_content("missing")}}}
-    atomic_write(config.manifest_path, json.dumps(manifest))
+    atomic_write(_required_manifest_path(config), json.dumps(manifest))
     error_report = publish_plan(pruning_config, [])
     assert error_report.errors == 1
     assert error_report.error_details == ["missing managed path: Missing.toml"]
@@ -582,7 +599,7 @@ def test_reapply_rewrites_a_managed_file_whose_source_description_changed(
     assert 'description = "Light"' not in published_text
     assert refreshed_report.written == 1
     assert refreshed_report.conflicted == 0
-    assert load_manifest(config.manifest_path)["files"]["Luna.toml"]["hash"] == hash_content(
+    assert _manifest_files(_required_manifest_path(config))["Luna.toml"]["hash"] == hash_content(
         published_text
     )
 
@@ -624,7 +641,7 @@ def test_crash_orphan_matching_the_plan_is_adopted_into_the_manifest(tmp_path: P
     assert adoption_report.errors == 0
     assert adoption_report.details["adopted"] == ["Nova.toml"]
     assert (target / "Nova.toml").read_text(encoding="utf-8") == orphan_content
-    assert load_manifest(config.manifest_path)["files"]["Nova.toml"]["hash"] == hash_content(
+    assert _manifest_files(_required_manifest_path(config))["Nova.toml"]["hash"] == hash_content(
         orphan_content
     )
 
@@ -806,7 +823,7 @@ def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
 
     projected_path = target / "AGENTS.md"
     first_projection = projected_path.read_text(encoding="utf-8")
-    manifest_record = load_manifest(config.manifest_path)["files"]["AGENTS.md"]
+    manifest_record = _manifest_files(_required_manifest_path(config))["AGENTS.md"]
     assert manifest_record["ownership"] == "codex-compat"
     assert manifest_record["source"] == "rules/failure-blast-radius.md"
 
@@ -871,6 +888,7 @@ def _prepare_projection_fixture(
     existing_hooks = {
         "hooks": {
             "PreToolUse": [
+                {"matcher": "apply_patch"},
                 {
                     "matcher": "Write|Edit",
                     "hooks": [{"type": "command", "command": "python existing.py"}],
@@ -893,6 +911,28 @@ def _prepare_projection_fixture(
                         {"type": "command", "command": "python not_code_rules_enforcer.py"}
                     ],
                 },
+            ],
+            "SessionStart": [_hook_group(
+                "",
+                "python3 %CODEX_HOME%\\hooks\\session\\untracked_repo_detector.py",
+                "python3 $env:CODEX_HOME/hooks/session/untracked_repo_detector.py",
+                "python3 ${env:CODEX_HOME}/hooks/session/untracked_repo_detector.py",
+                "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/fix_worktree_hookspath.py",
+            )],
+            "UserPromptSubmit": [_hook_group(
+                "",
+                "python3 /home/example/custom/hooks/session/untracked_repo_detector.py",
+                "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py.bak",
+            )],
+            "ConfigChange": [
+                None,
+                {"matcher": "partial"},
+                {"matcher": "malformed", "hooks": "not a list"},
+                {"matcher": "malformed-hook", "hooks": [{"command": 7}]},
+                {"hooks": [{"command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py"}]},
+                _hook_group(
+                    "retired", "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py"
+                ),
             ],
             "Bash": [{"matcher": "", "hooks": []}],
         }
@@ -938,7 +978,8 @@ def _assert_projection_and_manifest(
     projected_instruction = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert "Three real attempts, then park." in projected_instruction
     manifest = json.loads((target / "hooks.json").read_text(encoding="utf-8"))
-    assert manifest["hooks"]["PreToolUse"][0] == existing_hooks["hooks"]["PreToolUse"][0]
+    assert manifest["hooks"]["PreToolUse"][0]["matcher"] == "apply_patch"
+    assert manifest["hooks"]["PreToolUse"][1] == existing_hooks["hooks"]["PreToolUse"][1]
     apply_patch_entries = [
         each_entry
         for each_entry in manifest["hooks"]["PreToolUse"]
@@ -953,7 +994,15 @@ def _assert_projection_and_manifest(
         f'python3 "{target / "hooks" / "blocking" / "code_rules_enforcer.py"}"'
     )
     assert managed_command in apply_patch_commands
-    manifest_record = load_manifest(target / ".codex-compat-manifest.json")["files"]
+    expected_commands_by_event = {
+        "SessionStart": ["python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/fix_worktree_hookspath.py"],
+        "UserPromptSubmit": ["python3 /home/example/custom/hooks/session/untracked_repo_detector.py", "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py.bak"],
+    }
+    for each_event_name, expected_commands in expected_commands_by_event.items():
+        assert _hook_commands(manifest, each_event_name) == expected_commands
+    assert manifest["hooks"]["ConfigChange"] == existing_hooks["hooks"]["ConfigChange"][:5]
+    assert manifest["hooks"]["Bash"] == existing_hooks["hooks"]["Bash"]
+    manifest_record = _manifest_files(target / ".codex-compat-manifest.json")
     assert manifest_record["AGENTS.md"]["ownership"] == "codex-compat"
     assert manifest_record["hooks.json"]["source"] == "hooks/hooks.json"
 
@@ -984,12 +1033,14 @@ def _assert_detached_enforcer_behavior(target: Path) -> None:
     assert allow_run.returncode == 0
     assert allow_run.stdout == ""
 
+    allow_tool_input = allow_payload["tool_input"]
+    assert isinstance(allow_tool_input, dict)
+    allow_command = allow_tool_input["command"]
+    assert isinstance(allow_command, str)
     deny_payload = {
         **allow_payload,
         "tool_input": {
-            "command": allow_payload["tool_input"]["command"].replace(
-                "AssetItemBlocked", "RuntimeError"
-            )
+            "command": allow_command.replace("AssetItemBlocked", "RuntimeError")
         },
     }
     deny_run = subprocess.run(

@@ -38,6 +38,20 @@ codex_enforcer_script_relative_path = "hooks/blocking/code_rules_enforcer.py"
 codex_enforcer_script_name = "code_rules_enforcer.py"
 codex_enforcer_path_suffix = path_separator + codex_enforcer_script_relative_path
 codex_hook_command_token_pattern = r'''(?:"[^"]*"|'[^']*'|\S+)'''
+codex_hook_records_field_name = "hooks"
+codex_hook_command_field_name = "command"
+codex_hook_matcher_field_name = "matcher"
+codex_retired_hook_relative_path = "session" + path_separator + "untracked_repo_detector.py"
+codex_retired_hook_commands = frozenset(
+    (each_prefix + codex_retired_hook_relative_path).casefold()
+    for each_prefix in (
+        "", "hooks/", "${CLAUDE_PLUGIN_ROOT}/hooks/", "$CODEX_HOME/hooks/",
+        "${CODEX_HOME}/hooks/", "%CODEX_HOME%/hooks/", "$env:CODEX_HOME/hooks/",
+        "${env:CODEX_HOME}/hooks/", "~/.codex/hooks/",
+        "$HOME/.codex/hooks/", "${HOME}/.codex/hooks/"
+    )
+)
+codex_default_home_hook_path_suffix = "/.codex/hooks/" + codex_retired_hook_relative_path
 codex_hook_merge_action = "merge"
 codex_hook_timeout_seconds = 60
 codex_hook_dependency_manifest = (
@@ -627,11 +641,11 @@ def _source_codex_enforcer_hook(
             if not _is_code_rules_enforcer_hook(each_hook):
                 continue
             resolved_hook = dict(each_hook)
-            resolved_hook["command"] = command
+            resolved_hook[codex_hook_command_field_name] = command
             return resolved_hook
     return {
         "type": "command",
-        "command": command,
+        codex_hook_command_field_name: command,
         "timeout": codex_hook_timeout_seconds,
     }
 
@@ -647,7 +661,7 @@ def _hook_records(raw_hooks: object) -> list[dict[str, object]]:
 
 def _is_code_rules_enforcer_hook(all_hook_record: dict[str, object]) -> bool:
     """Report whether a hook record names the focused code-rules enforcer."""
-    command = str(all_hook_record.get("command", ""))
+    command = str(all_hook_record.get(codex_hook_command_field_name, ""))
     normalized_command = command.replace("\\", path_separator)
     all_command_tokens = (
         each_token.strip("\"'")
@@ -658,6 +672,64 @@ def _is_code_rules_enforcer_hook(all_hook_record: dict[str, object]) -> bool:
         or each_token.endswith(codex_enforcer_path_suffix)
         for each_token in all_command_tokens
     )
+
+
+def _is_retired_codex_hook_command(command: object) -> bool:
+    """Report whether a command names a known retired hook path."""
+    if not isinstance(command, str):
+        return False
+    normalized_command = command.replace("\\", path_separator)
+    return any(
+        (
+            each_token.strip("\"'").casefold() in codex_retired_hook_commands
+            or each_token.strip("\"'").casefold().endswith(codex_default_home_hook_path_suffix)
+        )
+        for each_token in re.findall(codex_hook_command_token_pattern, normalized_command)
+    )
+
+
+def _prune_retired_codex_hooks(
+    all_target_manifest: dict[str, object],
+) -> dict[str, object]:
+    """Remove known retired hook groups from every valid event list."""
+    all_events = all_target_manifest.get(codex_hook_records_field_name)
+    if not isinstance(all_events, dict):
+        return dict(all_target_manifest)
+    event_groups_by_name: dict[str, object] = {}
+    for each_event_name, each_raw_groups in all_events.items():
+        if not isinstance(each_raw_groups, list):
+            event_groups_by_name[each_event_name] = each_raw_groups
+            continue
+        all_kept_groups: list[object] = []
+        for each_group in each_raw_groups:
+            if not isinstance(each_group, dict):
+                all_kept_groups.append(each_group)
+                continue
+            all_raw_hooks = each_group.get(codex_hook_records_field_name)
+            if not isinstance(all_raw_hooks, list):
+                all_kept_groups.append(each_group)
+                continue
+            if not isinstance(each_group.get(codex_hook_matcher_field_name), str):
+                all_kept_groups.append(each_group)
+                continue
+            copied_group = dict(each_group)
+            copied_group[codex_hook_records_field_name] = [
+                each_hook
+                for each_hook in all_raw_hooks
+                if not (
+                    isinstance(each_hook, dict)
+                    and _is_retired_codex_hook_command(
+                        each_hook.get(codex_hook_command_field_name)
+                    )
+                )
+            ]
+            if not all_raw_hooks or copied_group[codex_hook_records_field_name]:
+                all_kept_groups.append(copied_group)
+        if all_kept_groups:
+            event_groups_by_name[each_event_name] = all_kept_groups
+    pruned_manifest = dict(all_target_manifest)
+    pruned_manifest[codex_hook_records_field_name] = event_groups_by_name
+    return pruned_manifest
 
 
 def _codex_enforcer_hooks(all_manifest: object) -> tuple[dict[str, object], ...]:
@@ -674,7 +746,13 @@ def _codex_enforcer_hooks(all_manifest: object) -> tuple[dict[str, object], ...]
     for each_entry in all_pre_tool_use:
         if not isinstance(each_entry, dict) or each_entry.get("matcher") != codex_hook_matcher:
             continue
-        for each_hook in _hook_records(each_entry.get("hooks", [])):
+        try:
+            all_hook_records = _hook_records(
+                each_entry.get(codex_hook_records_field_name, [])
+            )
+        except MaterializerError:
+            continue
+        for each_hook in all_hook_records:
             if _is_code_rules_enforcer_hook(each_hook):
                 all_enforcer_hooks.append(each_hook)
     return tuple(all_enforcer_hooks)
@@ -699,43 +777,52 @@ def _merge_codex_hook_manifest(
     all_target_manifest: dict[str, object], all_focused_hook: dict[str, object]
 ) -> dict[str, object]:
     """Preserve target hook order while merging one deterministic enforcer entry."""
-    all_events = all_target_manifest.get("hooks", {})
+    all_events = all_target_manifest.get(codex_hook_records_field_name, {})
     if not isinstance(all_events, dict):
         raise MaterializerError("Codex hook manifest requires a hooks object")
     all_pre_tool_use = all_events.get(codex_hook_event_name, [])
     if not isinstance(all_pre_tool_use, list):
         raise MaterializerError("Codex hook manifest requires a PreToolUse list")
-    merged_pre_tool_use: list[dict[str, object]] = []
+    merged_pre_tool_use: list[object] = []
     merged_apply_patch_entry: dict[str, object] | None = None
     merged_hooks: list[dict[str, object]] = []
     for each_entry in all_pre_tool_use:
         if not isinstance(each_entry, dict):
-            raise MaterializerRunFatal("Codex hook manifest requires valid matcher entries")
+            merged_pre_tool_use.append(each_entry)
+            continue
         copied_entry = dict(each_entry)
         if copied_entry.get("matcher") != codex_hook_matcher:
             merged_pre_tool_use.append(copied_entry)
             continue
-        all_hook_records = _hook_records(copied_entry.get("hooks", []))
+        all_hook_records = copied_entry.get(codex_hook_records_field_name, [])
+        if not isinstance(all_hook_records, list) or not all(
+            isinstance(each_hook, dict) for each_hook in all_hook_records
+        ):
+            merged_pre_tool_use.append(copied_entry)
+            continue
         if merged_apply_patch_entry is None:
             merged_apply_patch_entry = copied_entry
             merged_hooks = [
                 each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
             ]
-            merged_apply_patch_entry["hooks"] = merged_hooks
+            merged_apply_patch_entry[codex_hook_records_field_name] = merged_hooks
             merged_pre_tool_use.append(merged_apply_patch_entry)
         else:
             merged_hooks.extend(
                 each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
             )
     if merged_apply_patch_entry is None:
-        merged_apply_patch_entry = {"matcher": codex_hook_matcher, "hooks": merged_hooks}
+        merged_apply_patch_entry = {
+            "matcher": codex_hook_matcher,
+            codex_hook_records_field_name: merged_hooks,
+        }
         merged_pre_tool_use.append(merged_apply_patch_entry)
     merged_hooks.append(all_focused_hook)
     merged_events = dict(all_events)
     merged_events[codex_hook_event_name] = merged_pre_tool_use
     merged_manifest = dict(all_target_manifest)
-    merged_manifest["hooks"] = merged_events
-    return merged_manifest
+    merged_manifest[codex_hook_records_field_name] = merged_events
+    return _prune_retired_codex_hooks(merged_manifest)
 
 
 def _build_codex_hook_projection(config: MaterializerConfig) -> PlannedFile | None:
