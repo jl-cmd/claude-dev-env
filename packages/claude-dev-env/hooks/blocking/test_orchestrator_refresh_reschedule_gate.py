@@ -16,7 +16,7 @@ HOOKS_DIRECTORY = BLOCKING_DIRECTORY.parent
 if str(HOOKS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(HOOKS_DIRECTORY))
 
-SKILL_SCRIPTS = HOOKS_DIRECTORY.parent / "skills" / "orchestrator" / "scripts"
+SKILL_SCRIPTS = HOOKS_DIRECTORY.parent / ".agents" / "skills" / "orchestrator" / "scripts"
 if str(SKILL_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SKILL_SCRIPTS))
 

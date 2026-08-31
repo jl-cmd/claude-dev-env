@@ -23,6 +23,16 @@
         ]
       },
       {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_rules_enforcer.py",
+            "timeout": 60
+          }
+        ]
+      },
+      {
         "matcher": "Bash|PowerShell",
         "hooks": [
           {
@@ -68,6 +78,16 @@
         ]
       },
       {
+        "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "ScheduleWakeup|CronCreate",
         "hooks": [
           {
@@ -83,6 +103,11 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/plain_language_blocker.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/ask_user_question_shape_blocker.py",
             "timeout": 10
           }
         ]
@@ -108,6 +133,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/style_reminder_prompt.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "",
@@ -120,11 +157,6 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_env_cleanup.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py",
             "timeout": 10
           },
           {

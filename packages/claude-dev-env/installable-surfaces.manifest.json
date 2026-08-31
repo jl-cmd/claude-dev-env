@@ -4,9 +4,8 @@
     "rules",
     "docs",
     "commands",
-    "agents",
+    ".agents",
     "output-styles",
-    "skills",
     "hooks",
     "system-prompts",
     "scripts",
@@ -14,7 +13,8 @@
     "audit-rubrics"
   ],
   "root_files": [
-    "CLAUDE.md",
+    "AGENTS.md",
+    ".claude/CLAUDE.md",
     "codex-capability-map.json",
     "installable-surfaces.manifest.json"
   ]

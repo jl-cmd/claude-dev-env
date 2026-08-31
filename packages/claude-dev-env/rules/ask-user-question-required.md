@@ -8,7 +8,7 @@ The `question_to_user_enforcer` Stop hook blocks a response whose final paragrap
 
 `AskUserQuestion` renders as one plain unformatted text block. Detail — plans, counts, tradeoffs, background — goes in chat text before the call. The block itself carries a lean question and short choices. When a choice needs formatting, an inline visualizer tool carries it.
 
-The `plain_language_blocker` PreToolUse hook denies an `AskUserQuestion` call whose `question` text or whose `description` under any of the `options` carries chat detail:
+The `ask_user_question_shape_blocker` PreToolUse hook denies an `AskUserQuestion` call whose `question` text or whose `description` under any of the `options` carries chat detail:
 
 | What the block carries | Cap |
 |---|---|

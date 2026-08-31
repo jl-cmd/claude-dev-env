@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from hooks_constants.plain_language_blocker_constants import (
+from hooks_constants.ask_user_question_shape_constants import (
     ALL_CHAT_DETAIL_MARKERS,
     ALL_LINE_ENDING_REPLACEMENTS,
     COUNTABLE_WORD_PATTERN,

@@ -31,23 +31,33 @@ def _run_main() -> str:
 class TestSessionDirective:
     def test_main_emits_additional_context(self) -> None:
         emitted = json.loads(_run_main())
-        assert "additionalContext" in emitted
+        hook_output = emitted["hookSpecificOutput"]
+        assert hook_output["hookEventName"] == "SessionStart"
+        assert "additionalContext" in hook_output
 
     def test_directive_carries_the_one_line_instruction(self) -> None:
         emitted = json.loads(_run_main())
-        assert TASK_LIST_MAINTENANCE_INSTRUCTION in emitted["additionalContext"]
+        assert TASK_LIST_MAINTENANCE_INSTRUCTION in emitted["hookSpecificOutput"]["additionalContext"]
 
     def test_directive_names_the_ten_minute_cadence(self) -> None:
         emitted = json.loads(_run_main())
-        assert "10-minute" in emitted["additionalContext"]
+        assert "10-minute" in emitted["hookSpecificOutput"]["additionalContext"]
 
     def test_directive_names_the_loop_command(self) -> None:
         emitted = json.loads(_run_main())
-        assert "/loop 10m" in emitted["additionalContext"]
+        assert "/loop 10m" in emitted["hookSpecificOutput"]["additionalContext"]
 
-    def test_directive_is_idempotent_about_an_existing_loop(self) -> None:
+    def test_directive_runs_the_instruction_immediately(self) -> None:
         emitted = json.loads(_run_main())
-        assert "not already running" in emitted["additionalContext"]
+        assert "Run that instruction once immediately when starting the loop, then" in emitted[
+            "hookSpecificOutput"
+        ]["additionalContext"]
+
+    def test_directive_reuses_an_existing_loop(self) -> None:
+        emitted = json.loads(_run_main())
+        assert "Reuse the active task-list maintenance loop when available." in emitted[
+            "hookSpecificOutput"
+        ]["additionalContext"]
 
     def test_build_session_directive_returns_the_shared_constant(self) -> None:
         assert starter.build_session_directive() == TASK_LIST_LOOP_DIRECTIVE

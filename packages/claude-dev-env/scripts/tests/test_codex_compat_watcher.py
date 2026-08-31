@@ -456,10 +456,10 @@ def test_debounced_reconciler_coalesces_and_suppresses_self_events() -> None:
     calls: list[str] = []
     reconciler = DebouncedReconciler(lambda: calls.append("run"), debounce_seconds=60.0)
 
-    reconciler.notify(WatchEvent("agents", is_self_event=True))
+    reconciler.notify(WatchEvent(".agents", is_self_event=True))
     assert reconciler.flush(should_force=True) is None
-    reconciler.notify(WatchEvent("agents"))
-    reconciler.notify(WatchEvent("skills"))
+    reconciler.notify(WatchEvent(".agents"))
+    reconciler.notify(WatchEvent("commands"))
     assert reconciler.flush(should_force=True) is None
     assert calls == ["run"]
 
@@ -468,7 +468,7 @@ def test_each_configured_root_triggers_reconciliation() -> None:
     calls: list[str] = []
     reconciler = DebouncedReconciler(lambda: calls.append("run") or "run")
 
-    for each_source_root in ("agents", "commands", "hooks", "rules", "skills"):
+    for each_source_root in (".agents", "commands", "hooks", "rules"):
         reconciler.notify(WatchEvent(each_source_root))
 
     assert reconciler.flush(should_force=True) == "run"
@@ -555,7 +555,7 @@ def test_out_of_scope_unsafe_events_are_ignored() -> None:
 def test_unsafe_event_details_are_sorted() -> None:
     reconciler = DebouncedReconciler(lambda: {"written": 1})
     reconciler.notify(WatchEvent("hooks", kind="unknown", path="z"))
-    reconciler.notify(WatchEvent("agents", kind="overflow", path="a"))
+    reconciler.notify(WatchEvent(".agents", kind="overflow", path="a"))
 
     assert reconciler.flush(should_force=True) == {
         "written": 1,

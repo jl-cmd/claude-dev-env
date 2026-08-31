@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
     mkdtempSync,
     rmSync,
@@ -24,9 +24,11 @@ import {
     INSTALL_GROUPS,
     FOLDED_HOOK_RELATIVE_PATHS,
     POST_FOLDED_HOOK_RELATIVE_PATHS,
+    RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
     pythonCandidatesForPlatform,
     isWindowsStorePythonStub,
     interpreterCommandFromPath,
+    commandArgumentFromPath,
     invokedAsEntryPoint,
     managedHookScriptRelativePaths,
     managedHookScriptRelativePathsFromSourceRoots,
@@ -42,6 +44,7 @@ import {
     pruneRetiredHookEntriesFromSettings,
     retainNewestRunBackupOnly,
 } from './install.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
     expandHomeDirectoryTokens,
     expandHomeDirectoryTokensInSettings,
@@ -175,6 +178,15 @@ test('CONTENT_DIRECTORIES includes _shared so installer copies _shared/pr-loop/ 
 });
 
 
+test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
+    assert.equal(
+        CONTENT_DIRECTORIES.includes('agents'),
+        false,
+        'agents copies into ~/.agents/agents; ~/.claude/agents is the lookup pointer',
+    );
+});
+
+
 test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('_shared'),
@@ -200,6 +212,20 @@ test('CORE_SKILLS ships issue-tracker so the core group installs the skill the S
         INSTALL_GROUPS.core.skills,
         CORE_SKILLS,
         'the core group skills array must read CORE_SKILLS so the two never drift',
+    );
+});
+
+
+test('CORE_SKILLS ships ELI5 as the leaf presentation skill', () => {
+    assert.ok(CORE_SKILLS.includes('eli5'), 'eli5 must be in CORE_SKILLS');
+    assert.equal(INSTALL_GROUPS.core.skills.includes('eli5'), true);
+});
+
+
+test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
+    assert.ok(
+        EVER_SHIPPED_SKILL_NAMES.has('imagegen'),
+        'imagegen must remain in the retirement registry after the package stops shipping it',
     );
 });
 
@@ -480,7 +506,9 @@ test('mergeHooksIntoSettings inserts dollar characters in plugin root and interp
     const rewrittenCommand = settings.hooks.SessionStart[0].hooks[0].command;
     assert.equal(
         rewrittenCommand,
-        'C:/Users/$&evil$1/Python/python.exe C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py',
+        process.platform === 'win32'
+            ? 'C:/Users/$&evil$1/Python/python.exe "C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py"'
+            : "C:/Users/$&evil$1/Python/python.exe 'C:/Users/$&evil$1/.claude/hooks/session/session_env_cleanup.py'",
     );
     assert.equal(rewrittenCommand.includes('${CLAUDE_PLUGIN_ROOT}'), false);
 });
@@ -502,6 +530,211 @@ test('mergeHooksIntoSettings substitutes a quoted absolute interpreter path for 
     assert.equal(
         settings.hooks.PostToolUse[0].hooks[0].command,
         '"C:/Program Files/Python313/python.exe" C:/Users/x/.claude/hooks/workflow/auto_formatter.py',
+    );
+});
+
+
+test('mergeHooksIntoSettings quotes standalone plugin-root hook paths and preserves existing quotes', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit|MultiEdit',
+                hooks: [
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py' },
+                    { type: 'command', command: 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py"' },
+                    { type: 'command', command: 'python3 -c "import sys; sys.path.insert(0, r\'${CLAUDE_PLUGIN_ROOT}/hooks\')"' },
+                    { type: 'command', command: 'python3 -c "import sys; sys.path.insert(0, r\"${CLAUDE_PLUGIN_ROOT}/hooks\")"' },
+                    { type: 'command', command: "python3 -c \"print('${CLAUDE_PLUGIN_ROOT}/hooks/foo.py')\"" },
+                ],
+            }],
+        },
+    };
+    const settings = {};
+
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Program Files/Claude/.claude', 'python3');
+
+    assert.deepEqual(
+        settings.hooks.PreToolUse[0].hooks.map(eachHook => eachHook.command),
+        [
+            process.platform === 'win32'
+                ? 'python3 "C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py"'
+                : "python3 'C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py'",
+            process.platform === 'win32'
+                ? 'python3 "C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py"'
+                : "python3 'C:/Program Files/Claude/.claude/hooks/blocking/pre_tool_use_dispatcher.py'",
+            "python3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovUHJvZ3JhbSBGaWxlcy9DbGF1ZGUvLmNsYXVkZS9ob29rcw==').decode(), '__claude_dev_env_managed_hooks__')[0])\"",
+            "python3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovUHJvZ3JhbSBGaWxlcy9DbGF1ZGUvLmNsYXVkZS9ob29rcw==').decode(), '__claude_dev_env_managed_hooks__')[0])\"",
+            "python3 -c \"print('C:/Program Files/Claude/.claude/hooks/foo.py')\"",
+        ],
+    );
+});
+
+
+test('mergeHooksIntoSettings embeds a decodable inline plugin-root path', () => {
+    const hooksConfig = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [{
+                    type: 'command',
+                    command: 'python3 -c "import sys; sys.path.insert(0, r\'${CLAUDE_PLUGIN_ROOT}/hooks\'); print(sys.path[0])"',
+                }],
+            }],
+        },
+    };
+    const settings = {};
+    const pluginRootDirectory = 'C:/Program Files/Claude/.claude';
+
+    mergeHooksIntoSettings(settings, hooksConfig, pluginRootDirectory, 'python3');
+
+    const rewrittenCommand = settings.hooks.SessionStart[0].hooks[0].command;
+    const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+    const inlineRun = spawnSync(rewrittenCommand.replace(/^python3\b/, pythonCommand), {
+        encoding: 'utf8',
+        shell: process.platform === 'win32' ? true : '/bin/sh',
+        timeout: 30000,
+    });
+    assert.equal(inlineRun.status, 0, inlineRun.stderr);
+    assert.equal(inlineRun.stdout.trim(), `${pluginRootDirectory}/hooks`);
+    assert.equal(rewrittenCommand.includes("r'${CLAUDE_PLUGIN_ROOT}/hooks'"), false);
+});
+
+
+test('commandArgumentFromPath returns raw shell-safe paths', () => {
+    assert.equal(
+        commandArgumentFromPath('/opt/claude/hooks/pre_tool_use_dispatcher.py', 'linux'),
+        '/opt/claude/hooks/pre_tool_use_dispatcher.py',
+    );
+    assert.equal(
+        commandArgumentFromPath('C:\\Python313\\python.exe', 'win32'),
+        'C:/Python313/python.exe',
+    );
+});
+
+
+test('commandArgumentFromPath quotes POSIX shell metacharacters', () => {
+    assert.equal(
+        commandArgumentFromPath("/opt/Claude's $hooks `pre_tool_use_dispatcher`.py", 'linux'),
+        "'/opt/Claude'\\''s $hooks `pre_tool_use_dispatcher`.py'",
+    );
+});
+
+
+test('commandArgumentFromPath quotes Windows percent and shell metacharacters', () => {
+    assert.equal(
+        commandArgumentFromPath('C:\\Program Files\\%PATH% & (x) ! ^.py', 'win32'),
+        '"C:/Program Files/"^%"PATH"^%" & (x) ! ^.py"',
+    );
+    assert.equal(
+        commandArgumentFromPath('C:\\safe\\%PATH%.py', 'win32'),
+        '"C:/safe/"^%"PATH"^%".py"',
+    );
+});
+
+
+test('commandArgumentFromPath launches a script from a metacharacter path', () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'cdev command & (path)!-'));
+    const isWindows = process.platform === 'win32';
+    const scriptPath = join(
+        temporaryDirectory,
+        isWindows ? 'launcher script %PATH% & (x) !.py' : "launcher script & (x) '$'.py",
+    );
+    try {
+        writeFileSync(scriptPath, 'print("launched")\n');
+        const pythonCommand = isWindows ? 'python' : 'python3';
+        const shellCommand = `${pythonCommand} ${commandArgumentFromPath(scriptPath, process.platform)}`;
+        const launcherRun = spawnSync(shellCommand, {
+            encoding: 'utf8',
+            shell: isWindows ? true : '/bin/sh',
+            timeout: 30000,
+        });
+        assert.equal(launcherRun.error, undefined);
+        assert.equal(launcherRun.signal, null);
+        assert.equal(launcherRun.status, 0, launcherRun.stderr);
+        assert.equal(launcherRun.stdout.trim(), 'launched');
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('commandArgumentFromPath launches a no-space percent path', () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'cdev-command-launch-'));
+    const isWindows = process.platform === 'win32';
+    const scriptName = isWindows ? 'launcher%PATH%.py' : 'launcher.py';
+    const scriptPath = join(temporaryDirectory, scriptName);
+    try {
+        writeFileSync(scriptPath, 'print("launched")\n');
+        const pythonCommand = isWindows ? 'python' : 'python3';
+        const shellCommand = `${pythonCommand} ${commandArgumentFromPath(scriptPath, process.platform)}`;
+        const launcherRun = spawnSync(shellCommand, {
+            encoding: 'utf8',
+            shell: isWindows ? true : '/bin/sh',
+            timeout: 30000,
+        });
+        assert.equal(launcherRun.error, undefined);
+        assert.equal(launcherRun.signal, null);
+        assert.equal(launcherRun.status, 0, launcherRun.stderr);
+        assert.equal(launcherRun.stdout.trim(), 'launched');
+    } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('mergeHooksIntoSettings matches full standalone arguments at boundaries', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write',
+                hooks: [
+                    { type: 'command', command: 'python3 prefix${CLAUDE_PLUGIN_ROOT}/hooks/a.py' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py.bak' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py; next' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py& next' },
+                    { type: 'command', command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/a.py| next' },
+                ],
+            }],
+        },
+    };
+    const settings = {};
+
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Program Files/Claude/.claude', 'python3');
+
+    const expectedQuotedHookPath = process.platform === 'win32'
+        ? '"C:/Program Files/Claude/.claude/hooks/a.py"'
+        : "'C:/Program Files/Claude/.claude/hooks/a.py'";
+    assert.deepEqual(
+        settings.hooks.PreToolUse[0].hooks.map(eachHook => eachHook.command),
+        [
+            'python3 prefixC:/Program Files/Claude/.claude/hooks/a.py',
+            'python3 C:/Program Files/Claude/.claude/hooks/a.py.bak',
+            `python3 ${expectedQuotedHookPath}`,
+            `python3 ${expectedQuotedHookPath}; next`,
+            `python3 ${expectedQuotedHookPath}& next`,
+            `python3 ${expectedQuotedHookPath}| next`,
+        ],
+    );
+});
+
+
+test('mergeHooksIntoSettings substitutes an absolute interpreter path for the python prefix', () => {
+    const hooksConfig = {
+        hooks: {
+            PreToolUse: [
+                {
+                    matcher: 'Agent',
+                    hooks: [{ type: 'command', command: 'python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py' }],
+                },
+            ],
+        },
+    };
+    const settings = {};
+    mergeHooksIntoSettings(settings, hooksConfig, 'C:/Users/x/.claude', 'C:/Python313/python.exe');
+    assert.equal(
+        settings.hooks.PreToolUse[0].hooks[0].command,
+        'C:/Python313/python.exe C:/Users/x/.claude/hooks/blocking/luna_fast_mode_gate.py',
     );
 });
 
@@ -663,6 +896,12 @@ test('commandReferencesManagedHook matches the rewritten inline validators-runne
     const rewrittenInlineCommand =
         "py -3 -c \"import sys; sys.path.insert(0, r'C:/Users/example/.claude/hooks'); from validators.run_all_validators import main; sys.exit(main())\"";
     assert.ok(commandReferencesManagedHook(rewrittenInlineCommand, managedPaths));
+    const base64InlineCommand =
+        "py -3 -c \"import sys; sys.path.insert(0, (__import__('base64').b64decode('QzovVXNlcnMvZXhhbXBsZS8uY2xhdWRlL2hvb2tz').decode(), '__claude_dev_env_managed_hooks__')[0]); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.ok(commandReferencesManagedHook(base64InlineCommand, managedPaths));
+    const unmarkedBase64InlineCommand =
+        "py -3 -c \"import sys; sys.path.insert(0, __import__('base64').b64decode('QzovVXNlcnMvZXhhbXBsZS8uY2xhdWRlL2hvb2tz').decode()); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(unmarkedBase64InlineCommand, managedPaths), false);
 });
 
 
@@ -671,6 +910,12 @@ test('commandReferencesManagedHook leaves an unmanaged inline -c command that im
     const userInlineCommand =
         "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from my_tools.runner import main; sys.exit(main())\"";
     assert.equal(commandReferencesManagedHook(userInlineCommand, managedPaths), false);
+    const similarlyNamedUserInlineCommand =
+        "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from mypkg.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(similarlyNamedUserInlineCommand, managedPaths), false);
+    const userPathWithManagedImport =
+        "python -c \"import sys; sys.path.insert(0, r'/home/me/tools'); from validators.run_all_validators import main; sys.exit(main())\"";
+    assert.equal(commandReferencesManagedHook(userPathWithManagedImport, managedPaths), false);
 });
 
 
@@ -962,7 +1207,6 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/claude_md_orphan_file_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/pytest_testpaths_orphan_blocker.py', timeout: 10 },
                     { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/open_questions_in_plans_blocker.py', timeout: 10 },
-                    { type: 'command', command: 'py -3 C:/Users/x/.claude/hooks/blocking/plain_language_blocker.py', timeout: 10 },
                 ],
             },
         ],
@@ -970,13 +1214,27 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('FOLDED_HOOK_RELATIVE_PATHS contains all 15 hooks removed from hooks.json plus the retired md_to_html_blocker', () => {
+test('FOLDED_HOOK_RELATIVE_PATHS contains folded hooks plus retired entries', () => {
     assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
-    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/plain_language_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/md_to_html_blocker.py'));
+    assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('session/untracked_repo_detector.py'));
+});
+
+
+test('retired hook registrations stay managed so reinstall removes them', () => {
+    const retiredPath = 'session/untracked_repo_detector.py';
+    const shippedHooks = JSON.parse(
+        readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
+    );
+    const shippedCommands = Object.values(shippedHooks.hooks).flatMap(matcherGroups => (
+        matcherGroups.flatMap(matcherGroup => matcherGroup.hooks.map(hook => hook.command))
+    ));
+    assert.deepEqual(RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS, new Set([retiredPath]));
+    assert.ok(managedHookScriptRelativePaths({ hooks: {} }).has(retiredPath));
+    assert.ok(shippedCommands.every(command => !command.includes(retiredPath)));
 });
 
 
@@ -996,10 +1254,10 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         'blocking/env_var_table_code_drift_blocker.py',
         'blocking/pytest_testpaths_orphan_blocker.py',
         'blocking/open_questions_in_plans_blocker.py',
-        'blocking/plain_language_blocker.py',
     ];
     const retiredHooks = [
         'blocking/md_to_html_blocker.py',
+        'session/untracked_repo_detector.py',
     ];
     for (const hostedPath of dispatcherHostedHooks) {
         assert.ok(
@@ -1018,6 +1276,41 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
         dispatcherHostedHooks.length + retiredHooks.length,
         'FOLDED_HOOK_RELATIVE_PATHS must hold exactly the dispatcher-hosted hooks plus the retired hooks, no more, no fewer'
     );
+});
+
+
+test('mergeHooksIntoSettings removes the retired SessionStart detector and keeps user hooks', () => {
+    const retiredCommand = 'py -3 C:/Users/x/.claude/hooks/session/untracked_repo_detector.py';
+    const userCommand = 'py -3 C:/Users/x/custom/session_gate.py';
+    const settings = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [
+                    { type: 'command', command: retiredCommand },
+                    { type: 'command', command: userCommand },
+                ],
+            }],
+        },
+    };
+    const currentHooksConfig = {
+        hooks: {
+            SessionStart: [{
+                matcher: '',
+                hooks: [{
+                    type: 'command',
+                    command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/plugin_data_dir_cleanup.py',
+                }],
+            }],
+        },
+    };
+
+    mergeHooksIntoSettings(settings, currentHooksConfig, 'C:/Users/x/.claude', 'py -3');
+
+    const commands = settings.hooks.SessionStart[0].hooks.map(hook => hook.command);
+    assert.equal(commands.includes(retiredCommand), false);
+    assert.equal(commands.includes(userCommand), true);
+    assert.equal(commands.some(command => command.includes('plugin_data_dir_cleanup.py')), true);
 });
 
 
@@ -1097,6 +1390,14 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
         .flatMap(group => group.hooks.map(hook => hook.command))
         .filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
     assert.equal(postDispatcherCommands.length, 1, 'shipped hooks.json must register the PostToolUse dispatcher exactly once');
+
+    const allSessionStartCommands = (shippedHooksConfig.hooks.SessionStart || [])
+        .flatMap(group => group.hooks.map(hook => hook.command));
+    assert.equal(
+        allSessionStartCommands.some(command => command.includes('untracked_repo_detector.py')),
+        false,
+        'shipped hooks.json must not register the retired untracked-repo detector',
+    );
 
     const writePathCommands = allPreToolUseGroups
         .filter(group => /Write|Edit|MultiEdit/.test(group.matcher || ''))
@@ -1272,23 +1573,57 @@ const README_BASENAME_PATTERN = /^readme\.md$/i;
 
 
 /**
- * Build a sandbox holding an installed skills root and a run backup root.
+ * Build a sandbox holding one installed managed root and a run backup root.
  *
- * @param {object} installedFiles Forward-slash relative paths under the skills root mapped to contents.
- * @returns {{root: string, skillsRoot: string, backupRoot: string}} The sandbox paths.
+ * @param {object} installedFiles Forward-slash relative paths under the installed root mapped to contents.
+ * @param {string} [managedRootName] The managed top-level directory the files sit under.
+ * @returns {{root: string, skillsRoot: string, installedRoot: string, backupRoot: string}} The sandbox paths.
  */
-function createStalePruneSandbox(installedFiles) {
+function createStalePruneSandbox(installedFiles, managedRootName = 'skills') {
     const root = mkdtempSync(join(tmpdir(), 'cdev-stale-prune-'));
-    const skillsRoot = join(root, 'skills');
+    const installedRoot = join(root, managedRootName);
     const backupRoot = join(root, 'pruned', 'run-timestamp');
-    mkdirSync(skillsRoot, { recursive: true });
+    mkdirSync(installedRoot, { recursive: true });
     for (const [relativePath, contents] of Object.entries(installedFiles)) {
-        const targetPath = join(skillsRoot, relativePath);
+        const targetPath = join(installedRoot, relativePath);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, contents);
     }
-    return { root, skillsRoot, backupRoot };
+    return { root, skillsRoot: installedRoot, installedRoot, backupRoot };
 }
+
+
+test('pruneStaleInstalledFiles leaves a retained unmanaged path the package stopped shipping in place', () => {
+    const sandbox = createStalePruneSandbox({
+        'profile-isolation-launchers/config/mcp-bundles.json': '{"schemaVersion":1}\n',
+        'sync-to-cursor.py': 'print("shipped")\n',
+    }, 'scripts');
+    try {
+        const shippedFilePath = join(sandbox.installedRoot, 'sync-to-cursor.py');
+        const retainedFilePath = join(
+            sandbox.installedRoot, 'profile-isolation-launchers', 'config', 'mcp-bundles.json',
+        );
+
+        const pruneOutcome = pruneStaleInstalledFiles(
+            [shippedFilePath, retainedFilePath],
+            [shippedFilePath],
+            sandbox.installedRoot,
+            sandbox.backupRoot,
+            { managedHomeDirectory: sandbox.root },
+        );
+
+        assert.equal(pruneOutcome.prunedCount, 0, 'a retained unmanaged path never counts as pruned');
+        assert.deepEqual(pruneOutcome.failedPaths, [], 'skipping a retained path reports no failed move');
+        assert.equal(
+            existsSync(retainedFilePath),
+            true,
+            'the launcher file a prior install recorded stays where the live launcher reads it',
+        );
+        assert.equal(existsSync(shippedFilePath), true, 'a file this run wrote stays in place');
+    } finally {
+        rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
 
 
 /**
@@ -1654,6 +1989,31 @@ test('collectFiles skips every named cache directory and loose bytecode file', (
         assert.deepEqual(collectedFiles, [sourceFilePath], 'only the shipped file survives the walk');
     } finally {
         rmSync(sourceRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('copyTree copies AGENTS.md with agent definitions', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-source-'));
+    const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-agents-destination-'));
+    try {
+        writeFileSync(join(sourceRoot, 'AGENTS.md'), '# Shared guidance\n');
+        const agentDefinitionPath = join(sourceRoot, 'clean-coder.md');
+        writeFileSync(
+            agentDefinitionPath,
+            '---\nname: clean-coder\ndescription: fixture agent\n---\n',
+        );
+
+        const copyStats = copyTree(sourceRoot, destinationRoot);
+        const copiedAgentsPath = join(destinationRoot, 'AGENTS.md');
+        const copiedAgentPath = join(destinationRoot, 'clean-coder.md');
+
+        assert.equal(existsSync(copiedAgentsPath), true, 'the canonical instructions install');
+        assert.equal(existsSync(copiedAgentPath), true, 'the real agent definition installs');
+        assert.deepEqual(copyStats.paths, [copiedAgentsPath, copiedAgentPath]);
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+        rmSync(destinationRoot, { recursive: true, force: true });
     }
 });
 

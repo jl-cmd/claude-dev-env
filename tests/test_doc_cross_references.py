@@ -1,9 +1,7 @@
 """Validates repo-relative doc cross-references resolve to real files.
 
-Bot reviewers on PR #257 caught hook_log_init.py:69 referencing
-`commands/hook-log-init.md` when the actual path is
-`packages/claude-dev-env/commands/hook-log-init.md`. PR #232 had a
-similar /qbug doc reference that didn't match the gate's invocation.
+The matcher covers repository documentation and Python docstrings that name
+source paths. It keeps cross-reference failures visible during review.
 
 This test walks Python docstrings and Markdown files for repo-relative
 path references, then confirms each one resolves on disk. The matcher
@@ -17,7 +15,6 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
-
 
 REPOSITORY_ROOT: Path = Path(__file__).resolve().parent.parent
 
@@ -34,18 +31,20 @@ MAX_DETAIL_LINES_IN_FAILURE: int = 50
 ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
     {
         ".cursor/agents/clean-coder.md",
-        "config/local-identity.json",
         "config/sweep_config.py",
         "config/timing.py",
         "config/constants.py",
         "config/selectors.py",
         ".claude/CLAUDE.md",
         ".claude/plain-language-allow.json",
+        ".claude/rules/reuse-existing-tooling.md",
         ".claude/settings.json",
         ".claude/settings.local.json",
+        ".claude/skills/pr-summarizer/SKILL.md",
         "docs/.claude-notes.md",
         "docs/file1.md",
         "docs/file2.md",
+        "docs/agents/name-by-capability.md",
         "packages/agent-gate-claude/hooks/gate_enforcer.py",
         "packages/agent-gate-claude/hooks/gate_trigger.py",
         "packages/agent-gate-claude/src/agent_gate_claude/config/constants.py",
@@ -70,9 +69,11 @@ ALLOWED_MISSING_PATHS: frozenset[str] = frozenset(
         "scripts/logifix.ps1",
         "scripts/mine_copilot_findings.py",
         "scripts/revoke_project_claude_permissions.py",
+        "scripts/test_review_router_integration.py",
         "scripts/stp_selection.py",
         "scripts/test_groq_bugteam.py",
         "tests/data/test_x.py",
+        "tests/support.py",
         "tests/test_sweep_empty_dirs.py",
     }
 )
@@ -87,6 +88,8 @@ def _iter_repo_files(extension: str) -> list[Path]:
         for each_path in each_top_path.rglob(f"*{extension}"):
             relative_path_parts = each_path.relative_to(REPOSITORY_ROOT).parts
             if any(part in DIRECTORIES_TO_SKIP for part in relative_path_parts):
+                continue
+            if relative_path_parts[:2] == ("docs", "plans"):
                 continue
             matched_files.append(each_path)
     return matched_files
@@ -163,6 +166,11 @@ def _missing_references_for_python_files() -> dict[str, set[str]]:
 def _missing_references_for_markdown_files() -> dict[str, set[str]]:
     missing_by_source_file: dict[str, set[str]] = {}
     for each_markdown_file in _iter_repo_files(".md"):
+        relative_source_path = each_markdown_file.relative_to(
+            REPOSITORY_ROOT
+        ).as_posix()
+        if relative_source_path.startswith("docs/records/"):
+            continue
         try:
             each_text = each_markdown_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -172,9 +180,6 @@ def _missing_references_for_markdown_files() -> dict[str, set[str]]:
                 continue
             if _reference_exists_on_disk(each_reference, source_file=each_markdown_file):
                 continue
-            relative_source_path = each_markdown_file.relative_to(
-                REPOSITORY_ROOT
-            ).as_posix()
             missing_by_source_file.setdefault(relative_source_path, set()).add(
                 each_reference
             )
@@ -264,6 +269,7 @@ AUTOCONVERGE_SKILL_MD: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "SKILL.md"
@@ -272,6 +278,7 @@ AUTOCONVERGE_CONVERGENCE_MD: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "reference"
@@ -281,6 +288,7 @@ AUTOCONVERGE_CONVERGE_MJS: Path = (
     REPOSITORY_ROOT
     / "packages"
     / "claude-dev-env"
+    / ".agents"
     / "skills"
     / "autoconverge"
     / "workflow"

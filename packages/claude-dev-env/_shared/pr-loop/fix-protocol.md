@@ -7,9 +7,9 @@
 3. **Capture pre-fix file contents** for every file this fix will touch. Used in step 8 for the post-fix self-audit diff.
 4. **TDD where applicable:** when the finding has behavior to test, write a failing test first; for pure doc, comment, or naming nits with no behavior, fix directly.
 5. **Apply each fix:**
-   - Preserve existing comments on lines left unchanged
-   - Add complete type hints on every signature touched
-   - Use positive framing in any new prose (no banned negatives)
+    - Preserve existing comments on lines left unchanged
+    - Add complete type hints on every signature touched
+    - Apply `~/.claude/rules/asd-ste100-language.md` to new user-facing prose
 6. **Validate each modified Python file:** `python -m py_compile <path>`. Halt on syntax error; fix and re-run.
 7. **Compute fix diff:** the diff between pre-fix and post-fix file contents for every modified file.
 8. **Post-fix self-audit:** follow [`audit-contract.md`](audit-contract.md) post-fix self-audit sequence. Internal iteration cap: 3. Three rounds with fresh findings → exit `stuck: post-fix audit not converging`. Only when `gate_findings` empty AND `post_fix_findings` empty → proceed to git add.
@@ -40,10 +40,11 @@
     - `status=could_not_address`: `Could not address this loop` / one-line reason text.
     - `status=hook_blocked`: `Hook blocked the fix commit` / one-line hook summary.
 
-    Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`, see [`skills/bugteam/reference/obstacles/fix-resolve-thread.md`](../../skills/bugteam/reference/obstacles/fix-resolve-thread.md)).
+    Transport: post the reply via [`gh-payloads.md`](gh-payloads.md), then call `pull_request_review_write(method="resolve_thread", threadId=<thread_node_id>, ...)` for the same thread before moving to the next finding (this is the PR review thread node ID — `PRRT_kwDOxxx` — distinct from the numeric comment ID; harvest it at audit time when calling `get_review_comments`; see the archived [`fix-resolve-thread` runbook](../../.agents/skills-archived/bugteam/reference/obstacles/fix-resolve-thread.md)).
 13. **Re-trigger reviewer** when the calling workflow specifies. Workflow-specific:
-    - `pr-converge`: post `bugbot run` issue comment after every push (Cursor Bugbot); when the multi-PR path also needs Copilot, call `requested_reviewers` for Copilot as well
-    - `bugteam`: skip — Claude itself is the reviewer; the next loop iteration audits
+    - **autoconverge** — terminal Bugbot, Copilot, and Codex gates re-run after each fix push per [`../../.agents/skills/autoconverge/reference/convergence.md`](../../.agents/skills/autoconverge/reference/convergence.md)
+    - **Archived pr-converge** — post `bugbot run` after every push; see archived skill reference
+    - **Archived bugteam** — skip external re-trigger; the next loop iteration audits
 
 ## Stuck detection
 

@@ -2,9 +2,9 @@
 """SessionStart hook — start a task-list maintenance loop for the session.
 
 At session start this hook emits an ``additionalContext`` directive asking Claude
-to keep the session's task list current on a 10-minute cadence, starting the
-``/loop`` skill when one is not already running. The hook writes nothing and runs
-no tools itself. Claude reads the directive and invokes the ``/loop`` skill.
+to keep the session's task list current on a 10-minute cadence. Claude reuses the
+active ``/loop`` skill when available and starts the skill for the session's first
+task-list maintenance loop.
 """
 
 from __future__ import annotations
@@ -29,7 +29,16 @@ def build_session_directive() -> str:
 
 def main() -> None:
     """Emit the task-list loop directive as SessionStart additionalContext."""
-    print(json.dumps({"additionalContext": build_session_directive()}))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": build_session_directive(),
+                }
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

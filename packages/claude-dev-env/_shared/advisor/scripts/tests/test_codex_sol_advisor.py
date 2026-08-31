@@ -31,9 +31,8 @@ def _load_sol_module() -> ModuleType:
 sol_advisor = _load_sol_module()
 SCRIPTS_ROOT = Path(__file__).parent.parent
 USAGE_PROBE_PATH = (
-    SCRIPTS_ROOT.parents[2]
-    / "skills"
-    / "codex-review"
+    SCRIPTS_ROOT.parents[1]
+    / "pr-loop"
     / "scripts"
     / "codex_usage_probe.py"
 )
@@ -97,8 +96,35 @@ def _two_step_process_runner(calls: list[list[str]], guidance: str) -> _ProcessR
 
 
 def test_sol_flag_accepts_documented_truthy_values() -> None:
-    assert sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "yes"})
-    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "0"})
+    assert sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL": "yes"})
+    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL": "0"})
+    assert not sol_advisor.is_sol_advisor_enabled({"ADVISOR_SOL_XHIGH": "1"})
+
+
+def test_resolve_advisor_effort_defaults_and_accepts_documented_levels() -> None:
+    assert sol_advisor.resolve_advisor_effort({}) == "low"
+    assert sol_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "MEDIUM"}) == "medium"
+    assert sol_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "nope"}) == "low"
+    assert sol_advisor.resolve_advisor_effort({"ADVISOR_SOL_EFFORT": "high"}) == "low"
+
+
+@pytest.mark.parametrize(
+    "reasoning_effort",
+    ["low", "medium", "high", "xhigh", "max"],
+)
+def test_codex_arguments_use_selected_sol_reasoning_effort(
+    reasoning_effort: str,
+) -> None:
+    command_arguments = sol_advisor.build_codex_arguments(
+        "codex",
+        reasoning_effort=reasoning_effort,
+    )
+    config_flag_index = command_arguments.index("--config")
+
+    assert (
+        command_arguments[config_flag_index + 1]
+        == f'model_reasoning_effort="{reasoning_effort}"'
+    )
 
 
 def test_resolve_usage_probe_path_uses_supplied_home_directory(tmp_path: Path) -> None:
@@ -107,8 +133,8 @@ def test_resolve_usage_probe_path_uses_supplied_home_directory(tmp_path: Path) -
     assert probe_path == (
         tmp_path
         / ".claude"
-        / "skills"
-        / "codex-review"
+        / "_shared"
+        / "pr-loop"
         / "scripts"
         / "codex_usage_probe.py"
     )
@@ -162,7 +188,7 @@ def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
         "--model",
         sol_advisor.ADVISOR_CODEX_MODEL_ID,
         "--config",
-        'model_reasoning_effort="xhigh"',
+        'model_reasoning_effort="low"',
         "--sandbox",
         "read-only",
         "--json",
@@ -326,6 +352,40 @@ def test_enable_sol_flag_opens_the_rung_without_an_environment_flag(
     assert payload["fallback_kind"] == sol_advisor.SOL_FALLBACK_KIND_DECLINED
 
 
+def test_effort_cli_flag_overrides_environment_effort(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured_settings: dict[str, str] = {}
+
+    def fake_advisor(**kwargs: object) -> object:
+        captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
+        return sol_advisor._reply_fallback(
+            "probe declined",
+            True,
+            fallback_kind=sol_advisor.SOL_FALLBACK_KIND_DECLINED,
+        )
+
+    monkeypatch.setattr(sol_advisor, "run_codex_sol_advisor", fake_advisor)
+    monkeypatch.setenv("ADVISOR_EFFORT", "high")
+    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
+
+    exit_code = sol_advisor.main(
+        [
+            "--bind",
+            "--cwd",
+            ".",
+            sol_advisor.SOL_ENABLE_FLAG,
+            sol_advisor.SOL_EFFORT_FLAG,
+            "medium",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert captured_settings["ADVISOR_EFFORT"] == "medium"
+    assert payload["fallback_kind"] == sol_advisor.SOL_FALLBACK_KIND_DECLINED
+
+
 def test_successful_probe_requires_finite_meter_above_configured_gate() -> None:
     def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         return _probe_process({"percent_left": 90})
@@ -474,8 +534,52 @@ def test_bind_runs_probe_then_codex_with_read_only_xhigh_settings() -> None:
     assert calls[1][1]["timeout"]
 
 
+def test_protocol_docs_name_shared_effort_and_fable_sol_ladder() -> None:
+    sol_rung_path = SCRIPTS_ROOT.parent / "reference" / "sol-rung.md"
+    protocol_path = SCRIPTS_ROOT.parent / "advisor-protocol.md"
+    third_party_bind_path = SCRIPTS_ROOT.parent / "reference" / "third-party-bind.md"
+    advisor_block_path = SCRIPTS_ROOT.parent / "reference" / "advisor-block.md"
+    sol_rung = sol_rung_path.read_text(encoding="utf-8")
+    protocol_text = protocol_path.read_text(encoding="utf-8")
+    third_party_bind_text = third_party_bind_path.read_text(encoding="utf-8")
+    advisor_block_text = advisor_block_path.read_text(encoding="utf-8")
+
+    assert 'model_reasoning_effort="low"' in sol_rung
+    assert "out of usage" in protocol_text
+    assert "ADVISOR_EFFORT" in protocol_text
+    assert "ADVISOR_EFFORT" in sol_rung
+    assert "ADVISOR_EFFORT" in third_party_bind_text
+    assert "ADVISOR_SOL=1" in protocol_text
+    assert "ADVISOR_SOL_EFFORT" not in protocol_text
+    assert "ADVISOR_SOL_EFFORT" not in sol_rung
+    assert "ADVISOR_SOL_XHIGH" not in protocol_text
+    assert "ADVISOR_SOL_XHIGH" not in sol_rung
+    assert "--effort xhigh" not in third_party_bind_text
+    assert "--effort medium" not in third_party_bind_text
+    assert "then Opus" not in protocol_text
+    assert "then Claude Opus" not in advisor_block_text
+    assert 'candidate_tiers = ["Fable", "Opus"]' not in protocol_text
+    assert 'candidate_tiers = ["Fable", "Sol", "Opus"]' not in protocol_text
+    team_advisor_text = (
+        SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "team-advisor" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    orchestrator_text = (
+        SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "orchestrator" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    refresh_text = (
+        SCRIPTS_ROOT.parents[2]
+        / ".agents"
+        / "skills"
+        / "orchestrator-refresh"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "then Opus" not in team_advisor_text
+    assert "then Opus" not in orchestrator_text
+    assert "then Opus xhigh" not in refresh_text
+
+
 def test_team_advisor_path_preserves_sol_routing_fields() -> None:
-    team_advisor_path = SCRIPTS_ROOT.parents[2] / "skills" / "team-advisor" / "SKILL.md"
+    team_advisor_path = SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "team-advisor" / "SKILL.md"
     sol_rung_path = SCRIPTS_ROOT.parent / "reference" / "sol-rung.md"
     assert "advisor-protocol.md" in team_advisor_path.read_text(encoding="utf-8")
     sol_rung = sol_rung_path.read_text(encoding="utf-8")

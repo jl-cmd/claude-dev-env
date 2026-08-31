@@ -25,6 +25,7 @@ if _hooks_dir not in sys.path:
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.orchestrator_refresh_reschedule_gate_constants import (  # noqa: E402
     ALL_HOME_SKILLS_RELATIVE_PARTS,
+    ALL_PACKAGE_AGENTS_SKILL_SCRIPTS_RELATIVE_PARTS,
     ALL_SCHEDULE_TOOL_NAMES,
     ALL_SKILL_SCRIPTS_RELATIVE_PARTS,
     CALLING_HOOK_NAME,
@@ -51,14 +52,17 @@ def _candidate_skill_script_directories() -> list[Path]:
     """
     all_candidates: list[Path] = []
     plugin_root = os.environ.get(PLUGIN_ROOT_ENV_VAR)
-    if plugin_root:
-        all_candidates.append(
-            Path(plugin_root).joinpath(*ALL_SKILL_SCRIPTS_RELATIVE_PARTS)
-        )
-    package_hooks_parent = Path(__file__).resolve().parents[2]
-    all_candidates.append(
-        package_hooks_parent.joinpath(*ALL_SKILL_SCRIPTS_RELATIVE_PARTS)
+    relative_skill_script_layouts = (
+        ALL_PACKAGE_AGENTS_SKILL_SCRIPTS_RELATIVE_PARTS,
+        ALL_SKILL_SCRIPTS_RELATIVE_PARTS,
     )
+    if plugin_root:
+        plugin_root_path = Path(plugin_root)
+        for each_relative_parts in relative_skill_script_layouts:
+            all_candidates.append(plugin_root_path.joinpath(*each_relative_parts))
+    package_hooks_parent = Path(__file__).resolve().parents[2]
+    for each_relative_parts in relative_skill_script_layouts:
+        all_candidates.append(package_hooks_parent.joinpath(*each_relative_parts))
     all_candidates.append(Path.home().joinpath(*ALL_HOME_SKILLS_RELATIVE_PARTS))
     return all_candidates
 

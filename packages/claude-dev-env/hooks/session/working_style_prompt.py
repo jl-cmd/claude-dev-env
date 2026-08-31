@@ -2,8 +2,10 @@
 """SessionStart hook — inject working-style guidance into the session.
 
 At session start this hook emits an ``additionalContext`` block carrying a fixed
-working-style prompt: keep a running ledger, write in plain English, narrate
-before the first tool call, lead with the outcome, and stay at the asked scope.
+working-style prompt: use ELI5 for the beginner presentation envelope, follow
+``~/.claude/rules/asd-ste100-language.md`` for sentence prose, keep a running
+ledger, narrate before the first tool call, lead with the outcome, and stay at
+the asked scope.
 The hook writes nothing and runs no tools itself.
 """
 
@@ -29,7 +31,16 @@ def build_session_directive() -> str:
 
 def main() -> None:
     """Emit the working-style prompt as SessionStart additionalContext."""
-    print(json.dumps({"additionalContext": build_session_directive()}))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": build_session_directive(),
+                }
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

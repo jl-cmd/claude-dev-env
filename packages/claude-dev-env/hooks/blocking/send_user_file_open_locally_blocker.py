@@ -3,8 +3,9 @@
 
 SendUserFile attaches a file to the session. While the user is at the terminal
 (status "normal" or unset) an attach does not let them see the file — it must
-open on screen in its native Windows app. The one attach allowed
-through is an away-from-desk phone push (status "proactive").
+open on screen in its native Windows app. The corrective message names the
+``Invoke-Item -LiteralPath`` form. The one attach allowed through is an
+away-from-desk phone push (status "proactive").
 """
 
 import json

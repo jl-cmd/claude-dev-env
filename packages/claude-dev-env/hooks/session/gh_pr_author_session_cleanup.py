@@ -34,6 +34,7 @@ if hooks_parent_directory not in sys.path:
     sys.path.insert(0, hooks_parent_directory)
 
 from _gh_pr_author_swap_utils import (  # noqa: E402
+    _build_restore_failure_message,
     _delete_state_file,
     _lstat_indicates_attacker_planted,
     _read_original_account,
@@ -142,8 +143,12 @@ def _restore_stale_state_file(state_file: Path) -> None:
         _delete_state_file(state_file)
     else:
         _write_line(
-            f"[gh-pr-author-cleanup] failed to restore active gh account to {original_account!r} from "
-            f"stale state file {state_file}; left in place for next session",
+            _build_restore_failure_message(
+                "gh-pr-author-cleanup",
+                original_account,
+                state_file,
+                "stale state file",
+            ),
             sys.stderr,
         )
 

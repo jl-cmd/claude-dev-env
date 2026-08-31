@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-fixture-model"}
+{"type":"turn.started"}
+{"type":"error","message":"{\"error\":{\"type\":\"invalid_request_error\",\"code\":null,\"message\":\"The 'o3' model is not supported when using Codex with a ChatGPT account.\",\"param\":null},\"status\":400}"}
+{"type":"item.completed","item":{"type":"agent_message","text":"Review was interrupted. Please try again."}}
+{"type":"turn.failed","error":{"message":"The 'o3' model is not supported when using Codex with a ChatGPT account. The 'o3' model requires a newer version of Codex."}}

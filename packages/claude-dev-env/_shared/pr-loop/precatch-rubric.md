@@ -17,11 +17,12 @@ sweep to have cleared them and reviews sweep-clean code.
 
 ## Lane 2 — Doc-vs-code parity
 
-Every doc claim in the diff matches the code it describes. Reuse the
-`pr-consistency-audit` skill's canonical-source cross-reference method
-(`~/.claude/skills/pr-consistency-audit/SKILL.md`, canonical source first) and the
-drift rubric at
-`~/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`.
+Every doc claim in the diff matches the code it describes. Reuse the cross-file
+consistency prompt at
+[`../../.agents/skills/_shared/pr-loop/prompts/pr-consistency-audit.xml`](../../.agents/skills/_shared/pr-loop/prompts/pr-consistency-audit.xml)
+(installed as `~/.claude/skills/_shared/pr-loop/prompts/pr-consistency-audit.xml`)
+and the drift rubric at
+[`../../audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`](../../audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md).
 
 - Every line citation resolves to the line it names.
 - Every referenced file or script path exists.

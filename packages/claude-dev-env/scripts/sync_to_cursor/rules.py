@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from sync_to_cursor.config import MAX_RULE_BODY_LINES
+from sync_to_cursor.config import (
+    ALL_SKIPPED_RULE_FILE_NAMES,
+    CLAUDE_RULES_DIRECTORY_NAME,
+    MARKDOWN_SUFFIX,
+    MAX_RULE_BODY_LINES,
+)
 
 
 def _parse_h2_sections(markdown: str) -> dict[str, str]:
@@ -412,6 +417,61 @@ def _path_scoped_mappings(rules_directory: Path, docs_directory: Path) -> tuple[
     )
 
 
+def _description_from_rule_file(rule_file: Path, fallback_key: str) -> str:
+    """Return the first markdown heading, or the rule key with spaces.
+
+    Args:
+        rule_file: Claude rule markdown to read.
+        fallback_key: Stem used when the file has no heading.
+
+    Returns:
+        A one-line Cursor `description` value.
+    """
+    for each_line in rule_file.read_text(encoding="utf-8").splitlines():
+        stripped = each_line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip()
+    return fallback_key.replace("-", " ")
+
+
+def _discovered_mappings(
+    rules_directory: Path, all_covered_source_names: set[str]
+) -> tuple[RuleMapping, ...]:
+    """Map remaining `*.md` rule files to `<stem>.mdc` Cursor rules.
+
+    Args:
+        rules_directory: Claude `rules/` directory.
+        all_covered_source_names: Rule filenames already claimed by curated mappings.
+
+    Returns:
+        One mapping per remaining markdown rule, sorted by filename.
+    """
+    if not rules_directory.is_dir():
+        return ()
+    all_discovered: list[RuleMapping] = []
+    for each_rule_file in sorted(rules_directory.glob("*.md")):
+        if each_rule_file.name in ALL_SKIPPED_RULE_FILE_NAMES:
+            continue
+        if each_rule_file.name in all_covered_source_names:
+            continue
+        key = each_rule_file.stem
+        paths_glob = _read_paths_glob(each_rule_file)
+        has_paths = paths_glob is not None
+        all_discovered.append(
+            RuleMapping(
+                key,
+                (each_rule_file,),
+                f"{key}.mdc",
+                not has_paths,
+                paths_glob,
+                _description_from_rule_file(each_rule_file, key),
+                "verbatim",
+                strip_leading_frontmatter=has_paths,
+            )
+        )
+    return tuple(all_discovered)
+
+
 def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
     """Resolve every rule into a concrete Cursor mapping against a Claude layout.
 
@@ -420,14 +480,25 @@ def build_mappings(claude: Path) -> tuple[RuleMapping, ...]:
 
     Returns:
         One RuleMapping per rule, each path-scoped rule carrying a glob derived
-        from its source rule's `paths:` frontmatter.
+        from its source rule's `paths:` frontmatter. Curated mappings come first,
+        then one generated mapping per remaining `rules/*.md` file.
     """
     rules_directory = claude / "rules"
     docs_directory = claude / "docs"
-    all_mappings = (
+    all_curated = (
         *_always_apply_mappings(rules_directory, docs_directory),
         *_path_scoped_mappings(rules_directory, docs_directory),
     )
-    mapping_by_key = {each_mapping.key: each_mapping for each_mapping in all_mappings}
+    mapping_by_key = {each_mapping.key: each_mapping for each_mapping in all_curated}
     assert set(mapping_by_key) == set(_merged_mapping_key_order)
-    return tuple(mapping_by_key[each_key] for each_key in _merged_mapping_key_order)
+    ordered_curated = tuple(mapping_by_key[each_key] for each_key in _merged_mapping_key_order)
+    all_covered_source_names = {
+        each_source.name
+        for each_mapping in ordered_curated
+        for each_source in each_mapping.sources
+        if each_source.suffix == MARKDOWN_SUFFIX
+        and each_source.parent.name == CLAUDE_RULES_DIRECTORY_NAME
+    }
+    return ordered_curated + _discovered_mappings(
+        rules_directory, all_covered_source_names
+    )

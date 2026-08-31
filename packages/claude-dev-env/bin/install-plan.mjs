@@ -285,7 +285,12 @@ export function describeInstallMutations(plan) {
     if (plan.shouldPurgeBeforeReinstall) {
         allMutations.push('purge_managed_installation');
     }
-    allMutations.push('ensure_managed_root', 'copy_content_trees', 'copy_skills');
+    allMutations.push(
+        'ensure_managed_root',
+        'publish_directory_pointers',
+        'copy_content_trees',
+        'copy_skills',
+    );
     if (plan.shouldInstallHooks) {
         allMutations.push(
             'copy_hook_files',

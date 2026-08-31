@@ -17,6 +17,8 @@ import claude_chain_runner as runner  # noqa: E402
 import claude_chain_usage as chain_usage  # noqa: E402
 from claude_chain_runner import (  # noqa: E402
     ChainEntry,
+    chain_subprocess_runner_lock,
+    override_chain_subprocess_runner,
     default_affinity_state_path,
     extract_resume_session_id,
     load_affinity_store,
@@ -78,6 +80,32 @@ from dev_env_scripts_constants.claude_chain_constants import (  # noqa: E402
 
 _LARGE_CAPTURE_BYTE_COUNT = 400_000
 _LARGE_CAPTURE_MARKER = "X"
+
+
+def test_chain_subprocess_runner_lock_is_shared() -> None:
+    first_lock = chain_subprocess_runner_lock()
+    second_lock = chain_subprocess_runner_lock()
+
+    assert first_lock is second_lock
+
+
+def test_override_chain_subprocess_runner_restores_previous_runner() -> None:
+    previous_runner = runner.chain_subprocess_runner
+
+    def replacement_runner(
+        all_invocation_tokens: list[str],
+        **all_keywords: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del all_invocation_tokens, all_keywords
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    with override_chain_subprocess_runner(replacement_runner) as active_runner:
+        assert active_runner is previous_runner
+        assert runner.chain_subprocess_runner is replacement_runner
+
+    assert runner.chain_subprocess_runner is previous_runner
+
+
 _STDIN_ECHO_PAYLOAD = "charter body for spool path"
 _UNDECODABLE_STDOUT_BYTES = b"ok \x90 end"
 _DECODED_UNDECODABLE_STDOUT = "ok \ufffd end"
