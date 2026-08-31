@@ -90,6 +90,23 @@ def test_allows_luna_with_exact_fast_service_tier() -> None:
         assert _run_main(payload) == ""
 
 
+def test_allows_luna_with_native_priority_service_tier() -> None:
+    payload = _spawn_payload(
+        tool_name=CODEX_AGENT_TOOL_NAME,
+        service_tier="priority",
+    )
+    assert _run_main(payload) == ""
+
+
+def test_blocks_luna_with_priority_for_agent_and_task_surfaces() -> None:
+    for each_tool_name in (AGENT_TOOL_NAME, TASK_TOOL_NAME):
+        payload = _spawn_payload(
+            tool_name=each_tool_name,
+            service_tier="priority",
+        )
+        assert _decision(payload) == _DENY_DECISION
+
+
 def test_blocks_missing_and_non_string_service_tier() -> None:
     assert _decision(_spawn_payload(include_service_tier=False)) == _DENY_DECISION
     assert _decision(_spawn_payload(service_tier=None)) == _DENY_DECISION

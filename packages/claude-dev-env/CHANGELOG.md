@@ -1,5 +1,91 @@
 # Changelog
 
+## [2.27.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.26.0...claude-dev-env-v2.27.0) (2026-08-30)
+
+
+### Features
+
+* **hooks:** require fast mode for Luna spawns ([bf8decc](https://github.com/jl-cmd/claude-dev-env/commit/bf8decc3d7813ff10ffba8e36f0313cae76f4433))
+* **hooks:** require fast mode for Luna spawns ([4d4c69b](https://github.com/jl-cmd/claude-dev-env/commit/4d4c69bc47b758d76b1b036b4eefaedf8ace75e5))
+* **skills:** add plain-language PR cleanup skill ([3325a48](https://github.com/jl-cmd/claude-dev-env/commit/3325a4877c97e84405c76d24e808be1b7cde00f6))
+* **skills:** balance plain-language cleanup and readability ([cb1fae8](https://github.com/jl-cmd/claude-dev-env/commit/cb1fae89eb5080538327723c84e16040257d919e))
+
+
+### Bug Fixes
+
+* add evidence-based quality controls ([789d7ba](https://github.com/jl-cmd/claude-dev-env/commit/789d7ba6337247d9e48353ec336a34456879b60d))
+* **agents:** align clean coder policy links and scope ([a5cc13b](https://github.com/jl-cmd/claude-dev-env/commit/a5cc13b11b0ebfd880372880e896e455cf245bf2))
+* **agents:** enforce read-only quality audits ([d062528](https://github.com/jl-cmd/claude-dev-env/commit/d06252838eded0ecd139f7d425a872a908ff50a2))
+* **agents:** guard audits against missing review context ([f812962](https://github.com/jl-cmd/claude-dev-env/commit/f812962abe9b6017ad6f35179e298fdb9dc77157))
+* **agents:** keep hook checks on managed package paths ([7c07641](https://github.com/jl-cmd/claude-dev-env/commit/7c076416877bf9cea54975e8100d211a74f6d1d8))
+* **agents:** keep scoped instruction unique ([a36e400](https://github.com/jl-cmd/claude-dev-env/commit/a36e40039cae77b19f86117e88dff169c1f341f4))
+* **agents:** prove target-aware hook references ([d82b2ea](https://github.com/jl-cmd/claude-dev-env/commit/d82b2ea618512f25b68e5a2fd338846df2249619))
+* **agents:** require scoped workflow checks before code changes ([003c7ad](https://github.com/jl-cmd/claude-dev-env/commit/003c7ad448b0e33af0e26ae7b9b3ca954d828383))
+* **agents:** state read-only audit boundary plainly ([ee6ca92](https://github.com/jl-cmd/claude-dev-env/commit/ee6ca92e46d57b006ef3f4514163a465b2fad50e))
+* **agents:** trim clean coder guidance ([e0d7c73](https://github.com/jl-cmd/claude-dev-env/commit/e0d7c731ee46e9dd321d974743bda66361e8da8d))
+* align clean-coder policy references ([e4eb99c](https://github.com/jl-cmd/claude-dev-env/commit/e4eb99c2205dbf504b5f87ebf3d32fd6dbf19a1c))
+* complete Clean Coder policy alignment ([ca92b7c](https://github.com/jl-cmd/claude-dev-env/commit/ca92b7c0a2b28ddba2c13ecb4d17e7a485929002))
+* complete clean-coder quality controls ([d489bd0](https://github.com/jl-cmd/claude-dev-env/commit/d489bd06729f428d1947c93e0a6143524a2b6ba1))
+* disable untracked repository startup hook ([e3f79d8](https://github.com/jl-cmd/claude-dev-env/commit/e3f79d824ee5e6f26b27cf03c7d22d609b3804f8))
+* enforce complete clean-coder workflow ([2ac14a7](https://github.com/jl-cmd/claude-dev-env/commit/2ac14a7a246883fe7b512a350568ad7db9fdba11))
+* **hooks:** allow native Codex priority for Luna spawns ([90e0350](https://github.com/jl-cmd/claude-dev-env/commit/90e03502787cca01393e03265868227471e6f524))
+* **hooks:** disable project path startup check ([a40f26b](https://github.com/jl-cmd/claude-dev-env/commit/a40f26b402c6972bd21b01d59cd8e5d1f96d816d))
+* **hooks:** disable untracked_repo_detector SessionStart hook ([fba2467](https://github.com/jl-cmd/claude-dev-env/commit/fba24671c291dac1eca31f3f79e12df41cb24501))
+* **hooks:** keep file-scoped mypy inside the PreToolUse timeout ([3b808ef](https://github.com/jl-cmd/claude-dev-env/commit/3b808efc60f575b373834d1bd7fa8f8dd81d7b04))
+* **hooks:** launch Luna gate with a Windows-safe command ([d79054a](https://github.com/jl-cmd/claude-dev-env/commit/d79054ad64bb214723a77f8e1720b858fda4bd4d))
+* **hooks:** launch Luna gate with a Windows-safe command ([60046e6](https://github.com/jl-cmd/claude-dev-env/commit/60046e604c7fcdf06b48cd187ac8a84fd6ba585a))
+* **hooks:** load temp-root helper without a dual config import ([e3d65a9](https://github.com/jl-cmd/claude-dev-env/commit/e3d65a9bf005b2666cdd3ffc0669e55d1a067485))
+* **hooks:** share system-temp root membership for mypy walks ([5278b27](https://github.com/jl-cmd/claude-dev-env/commit/5278b27edd59aa049c30b1bff4cd17073be3c322))
+* isolate named profile installer test ([e64c310](https://github.com/jl-cmd/claude-dev-env/commit/e64c3100cdf5c3d99d44791324abb9b2c98f4dd9))
+* make Clean Coder policy paths valid ([45b22c1](https://github.com/jl-cmd/claude-dev-env/commit/45b22c1deeeddbcd2e3a9a217c2c017113c5dbd2))
+* resolve active agent policy roots ([15b2788](https://github.com/jl-cmd/claude-dev-env/commit/15b2788275a58bcd435049b8168979c7f5e7bf05))
+* resolve agent policy source paths ([83eca03](https://github.com/jl-cmd/claude-dev-env/commit/83eca03a69f8250b0a86191f1cf64e3c17b6cbf6))
+* retire untracked-repo SessionStart hook ([60aebaa](https://github.com/jl-cmd/claude-dev-env/commit/60aebaa7a64f418796be67c5f4f9dbdd83ddc60d))
+* **skills:** align cleanup scope and package install ([68c50d3](https://github.com/jl-cmd/claude-dev-env/commit/68c50d302c0f6a5981f8306f690d4006cf0ee448))
+* **sr-loop:** stop after nit-only cleanup ([472e271](https://github.com/jl-cmd/claude-dev-env/commit/472e2713a439d5b024e1cc80b7701a5913014ca1))
+* **sr-loop:** stop after nit-only cleanup ([16b5628](https://github.com/jl-cmd/claude-dev-env/commit/16b562863b75282e230db15887a3bba70e0de53e))
+* update active rubric path assertion ([adaa888](https://github.com/jl-cmd/claude-dev-env/commit/adaa888daa4a44de40c4b84235cf9e93d064744b))
+* verify Clean Coder paths across active roots ([75c53f1](https://github.com/jl-cmd/claude-dev-env/commit/75c53f1c45ad5ccdfe3dc281f5a5b368837e0bd0))
+* when you save a Python file, type-check the scratch copy only ([ffad0ca](https://github.com/jl-cmd/claude-dev-env/commit/ffad0ca8408d77a21c6b31f2a18075328d8475f0))
+
+
+### Documentation
+
+* add Clean Coder quality controls ([9e3b520](https://github.com/jl-cmd/claude-dev-env/commit/9e3b5203e268aaa12e7bb3939ef2e9300c09f1bf))
+* **agent:** keep contract wording caller-neutral ([29c7f9c](https://github.com/jl-cmd/claude-dev-env/commit/29c7f9c482657de8d356fb55ad33e37ee77fb188))
+* **agent:** remove stale caller assumptions ([3a4cb8f](https://github.com/jl-cmd/claude-dev-env/commit/3a4cb8fa26f7e9adbae593a016aecc7e9b880289))
+* **agents:** add evidence-based quality controls ([aacf50e](https://github.com/jl-cmd/claude-dev-env/commit/aacf50e1656562ee0de98519af46d6eecec60ff0))
+* **agents:** preserve explicit read-only contract ([b317bfa](https://github.com/jl-cmd/claude-dev-env/commit/b317bfa62b0505713e5a12bb5ef0cf7c1bf5686b))
+* **agents:** require evidence for cross-surface audits ([fa24fb4](https://github.com/jl-cmd/claude-dev-env/commit/fa24fb4f56e0903bea652857a47ccf2919a62ffe))
+* **agents:** trim clean-coder guidance ([a11958f](https://github.com/jl-cmd/claude-dev-env/commit/a11958f6839cb31325f4bd409f5f05ffe9990701))
+* align Clean Coder guidance ([958f774](https://github.com/jl-cmd/claude-dev-env/commit/958f774e8e6b0f5e7feb6e845c9dfba097d3a2e9))
+* align Clean Coder policy and artifact rules ([1036ab1](https://github.com/jl-cmd/claude-dev-env/commit/1036ab143c6e66ed4bc1894c6a4c61294033b1b2))
+* limit Code Quality Agent tools ([e7b6441](https://github.com/jl-cmd/claude-dev-env/commit/e7b6441ed7ed13a0ead0cc2b7467b171b112d29a))
+* remove stale audit caller context ([0f80cb8](https://github.com/jl-cmd/claude-dev-env/commit/0f80cb8d1e6ef6da8886e9e2a204b3265a048e5b))
+* require audit evidence boundaries ([5c5d44f](https://github.com/jl-cmd/claude-dev-env/commit/5c5d44f3d285440e8ef8d90cb9d4eb7f308d6f8d))
+* require audit policy inputs ([0162214](https://github.com/jl-cmd/claude-dev-env/commit/01622149ff142e725eb237525b577672c13771e4))
+* require scoped Clean Coder checks ([93b6df7](https://github.com/jl-cmd/claude-dev-env/commit/93b6df7f9cb3a128e7c582cea4d858bb407cbf96))
+
+
+### Maintenance
+
+* **agents:** clarify evidence boundaries ([cce65e6](https://github.com/jl-cmd/claude-dev-env/commit/cce65e6da0d5b15480c330a8b6e141b8102d7e77))
+* **agents:** trim Clean Coder wording ([b8a35ce](https://github.com/jl-cmd/claude-dev-env/commit/b8a35cef9a2ac847db89def33dbcfe8dd37047b0))
+* **agents:** trim code-quality intake prose ([a17e422](https://github.com/jl-cmd/claude-dev-env/commit/a17e422be74405340b8274fe6d6de2a6a35d0b0b))
+
+
+### Refactoring
+
+* **hooks:** simplify temp-root walk and one mypy root lookup ([9c8f652](https://github.com/jl-cmd/claude-dev-env/commit/9c8f652a14f3a431dc21463d3f78c5c30368e876))
+
+
+### Tests
+
+* cover Clean Coder policy reference layouts ([652e889](https://github.com/jl-cmd/claude-dev-env/commit/652e8897400e0181a03e097b59c7eacca6ea4b4a))
+* cover Clean Coder policy reference layouts ([d38e1e0](https://github.com/jl-cmd/claude-dev-env/commit/d38e1e028459ca97cc9bd3cfe01d470613a3790a))
+* verify Clean Coder source references ([4805002](https://github.com/jl-cmd/claude-dev-env/commit/4805002e6232d96551d7ed365008b3aa7b3002bf))
+* verify Clean Coder source references ([6a15aed](https://github.com/jl-cmd/claude-dev-env/commit/6a15aede519dee2398f5bdc69e2be001d5d94f80))
+
 ## [2.26.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.25.0...claude-dev-env-v2.26.0) (2026-08-28)
 
 
