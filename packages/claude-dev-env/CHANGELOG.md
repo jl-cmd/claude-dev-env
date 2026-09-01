@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.28.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.28.0...claude-dev-env-v2.28.1) (2026-09-01)
+
+
+### Documentation
+
+* **code-rules:** land canonical CODE_RULES content the contract test reads ([b72be36](https://github.com/jl-cmd/claude-dev-env/commit/b72be36f9f8cbac19a2d7fdad18916f2a775fa57))
+
+
+### Refactoring
+
+* **hooks:** retire inert commit stub and off-by-default prose gates ([d5799dc](https://github.com/jl-cmd/claude-dev-env/commit/d5799dcf2e23b96417f61c6678c15919945ab1cc))
+* **hooks:** trim enforcer to general, non-duplicative checks ([9a0b52d](https://github.com/jl-cmd/claude-dev-env/commit/9a0b52dae72acb38757cf42046e80f97eeb707a7))
+* **rules:** archive BUGBOT contract into CODE_RULES and trim redundant rule docs ([ad3abbe](https://github.com/jl-cmd/claude-dev-env/commit/ad3abbe11019a7cc35d3d6ea20b09e23292ccb75))
+* trim redundant code rules, gates, and policy docs ([9f59682](https://github.com/jl-cmd/claude-dev-env/commit/9f5968263926039e55ce9a3f6e334e390ed01bcf))
+
 ## [2.28.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.27.0...claude-dev-env-v2.28.0) (2026-08-31)
 
 
