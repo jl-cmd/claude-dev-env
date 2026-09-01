@@ -190,7 +190,7 @@ test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents 
 test('core includeDirectories ships _shared and scripts for advisor protocol and CLI fallback', () => {
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('_shared'),
-        '_shared must ship with --only core so advisor-protocol.md lands for team-advisor/orchestrator',
+        '_shared must ship with --only core so advisor-protocol.md lands for team-advisor',
     );
     assert.ok(
         CORE_INCLUDE_DIRECTORIES.includes('scripts'),

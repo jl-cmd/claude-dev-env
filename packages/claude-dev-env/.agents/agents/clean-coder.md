@@ -127,7 +127,7 @@ For a hook change, use the target package's active managed root for installed fi
 
 ## Session advisor
 
-Use the caller's existing warm `session-advisor`; do not bind or spawn another advisor. Consult it after orientation and before substantive work, before first write, before locking a plan or interpretation, before a hard-to-reverse action, after repeated failure or a stall when stuck, when changing approach (change of approach), before any commit, and after validation before completion when you believe the task is complete. Send exact scope and evidence. Follow its ENDORSE, CORRECTION, PLAN, or STOP signal before continuing.
+Consult the advisor the spawn ticket names. When the ticket names the orchestrating session, that session is the advisor. When the ticket names a warm `session-advisor`, use that agent; do not bind or spawn another advisor. Consult it after orientation and before substantive work, before first write, before locking a plan or interpretation, before a hard-to-reverse action, after repeated failure or a stall when stuck, when changing approach (change of approach), before any commit, and after validation before completion when you believe the task is complete. Send exact scope and evidence. Follow its ENDORSE, CORRECTION, PLAN, or STOP signal before continuing.
 
 ## Pre-write checklist
 

@@ -9,7 +9,7 @@ Shared assets use `~/.claude/rules/asd-ste100-language.md` for user-facing word 
 | Entry | Description |
 |---|---|
 | `pr-loop/` | Docs, scripts, and constants for the PR-loop workflow suite |
-| `advisor/` | Warm-advisor spawn-and-consult protocol for `team-advisor` and `orchestrator` |
+| `advisor/` | Warm-advisor spawn-and-consult protocol for `team-advisor` |
 | `process-tree/` | One process-tree kill helper for every script that captures a spawned CLI's output |
 
 ## Install path

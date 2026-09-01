@@ -2,18 +2,18 @@
 name: orchestrator-refresh
 description: >-
   Re-assert orchestrator discipline on a one-shot delayed wake: ledger
-  reconcile, advisor routing, warm executor reuse, single-pending re-arm
-  via status_gate. Terminates when the gate says stop. Triggers:
-  '/orchestrator-refresh', orchestrator-refresh, refresh the orchestrator
-  loop, re-arm orchestrator.
+  reconcile, executor consult routing to this session, warm executor
+  reuse, single-pending re-arm via status_gate. Terminates when the
+  gate says stop. Triggers: '/orchestrator-refresh', orchestrator-refresh,
+  refresh the orchestrator loop, re-arm orchestrator.
 ---
 
 # Orchestrator Refresh
 
-Name the session identity first (see Host profiles in
-[`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)).
-Re-assert the discipline for that host only — do not invent an Agent-tool
-Claude `session-advisor` spawn on a Codex or third-party host.
+Name the session identity first (see
+[`../orchestrator/reference/host-detect.md`](../orchestrator/reference/host-detect.md)).
+Re-assert the discipline for that host only. Do not spawn
+`session-advisor`. Do not open `advisor-protocol.md`.
 
 ## 0. status_gate first (deterministic)
 
@@ -62,9 +62,7 @@ cancelled; either way the session keeps orchestrating in the same turn.
 Two stops end the whole firing, and both leave running executors alone:
 `begin-firing` exit 1 (step 0a) and the done branch (step 0b). Each means the
 run is finished, not active, or has no readable status file, so the refresh
-reports and adds nothing further. A fail-closed advisor bind (step 3) stops
-advisor consultation alone; the firing still reconciles the ledger, re-arms
-once, and reports the unreachable advisor.
+reports and adds nothing further.
 
 ## Discipline steps
 
@@ -85,25 +83,12 @@ once, and reports the unreachable advisor.
    - **Focused tickets.** One mechanical done-check per ticket; resume a
      warm agent with a thin next-slice ticket rather than a fresh cold
      spawn, and keep thick context in the assignment file.
-3. **Hard decisions go to the shared advisor.**
-   - **Claude host:** executors consult the warm `session-advisor` via
-     `SendMessage` (ENDORSE / CORRECTION / PLAN / STOP). This session
-     routes the same way; keep tool use to orchestration and light
-     verification reads. A drift re-spawn at the **Fable** tier carries
-     the exact token `FABLE-SPAWN-AUTHORIZED` in its fresh prompt, as
-     the protocol's warm-up rule states;
-     `hooks/blocking/fable_spawn_gate.py` denies a fable spawn whose
-     prompt lacks it.
-   - **Codex host:** advisor is a native in-session Sol subagent owned
-     by this session. Do **not** spawn Claude `session-advisor` via
-     Agent. Executors consult that Sol subagent in-session. If Sol does
-     not bind, fail closed.
-   - **Third-party host:** advisor is a Claude CLI bind owned
-     by this session (`claude_chain_runner.py`, Fable then Sol when Fable
-     is out of usage, both at `ADVISOR_EFFORT`). Do **not** spawn `session-advisor` via Agent. Executors
-     report blockers here; consult the CLI advisor and relay signals.
-     If the CLI bind is unreachable, fail closed — do not answer the
-     four signals as this third-party session.
+3. **This session is the advisor.** Executors consult here. Follow
+   [`../orchestrator/reference/consult-the-orchestrator.md`](../orchestrator/reference/consult-the-orchestrator.md).
+   Reply with ENDORSE / CORRECTION / PLAN / STOP. When this session
+   cannot settle a question, ask the human, then reply. Keep tool use
+   to orchestration and light verification reads. Do not spawn
+   `session-advisor`.
 4. **Resume before you spawn.** `SendMessage` an existing *executor* by
    name or `agentId` before a cold spawn. (Third-party: executor reuse
    only — advisor stays on the CLI chain.)
@@ -147,5 +132,5 @@ once, and reports the unreachable advisor.
 
 - `SKILL.md` — this skill (thin); gate implementation lives under
   `skills/orchestrator/scripts/`.
-- Advisor policy:
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+- Consult contract:
+  [`../orchestrator/reference/consult-the-orchestrator.md`](../orchestrator/reference/consult-the-orchestrator.md).

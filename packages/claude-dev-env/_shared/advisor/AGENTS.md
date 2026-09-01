@@ -1,6 +1,9 @@
 # _shared/advisor
 
-Warm-advisor bind-and-consult protocol shared by `team-advisor`, `orchestrator`, `orchestrator-refresh`, and every executor subagent `orchestrator` routes work to. Changes here affect all of these simultaneously — treat this as a breaking-change surface.
+Warm-advisor bind-and-consult protocol for `team-advisor` and for
+executors that skill names in its Advisor block. The `orchestrator`
+skill does not bind this advisor. Changes here affect `team-advisor`
+and the shared consult-format packet those executors still reuse.
 
 Host profile is resolved from session identity first (Claude, Codex, or neither). Claude walks Fable then Sol in-session (CLI chain as the Fable fallback). Codex walks Sol in-session. A third-party host binds Fable through the CLI Claude-chain (fail closed when Fable and Sol cannot serve) with a separate executor paste block.
 
@@ -19,4 +22,4 @@ Host profile is resolved from session identity first (Claude, Codex, or neither)
 
 ## Breaking-change rule
 
-A change to session identity, host detection, the model-floor rule, the charter template, any host's Advisor block, or lifecycle ownership in `advisor-protocol.md` requires updating every consuming skill (`team-advisor`, `orchestrator`, `orchestrator-refresh`) in the same commit.
+A change to session identity, host detection, the model-floor rule, the charter template, any host's Advisor block, or lifecycle ownership in `advisor-protocol.md` requires updating `team-advisor` in the same commit.
