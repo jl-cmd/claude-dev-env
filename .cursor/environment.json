@@ -1,0 +1,4 @@
+{
+  "name": "claude-dev-env",
+  "install": "bash .cursor/install.sh"
+}
