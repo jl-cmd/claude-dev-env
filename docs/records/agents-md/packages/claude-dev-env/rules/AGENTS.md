@@ -1,0 +1,56 @@
+---
+paths:
+  - "**/rules/**"
+---
+
+# rules
+
+Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule without `paths:` frontmatter loads at the start of every session; a rule with `paths:` frontmatter loads only when the session works with a file its globs match. The `InstructionsLoaded` log records that match as a `path_glob_match` event. The `asd-ste100-language.md` file owns general user-facing language. Each other `.md` file covers one named behavior contract; hook-enforced rules are also backed by a Python hook in `hooks/`.
+
+## Files
+
+| File | Rule |
+|---|---|
+| `asd-ste100-language.md` | Sole general user-facing language authority; concise conversational adaptation of ASD-STE100 Issue 9 |
+| `agent-spawn-protocol.md` | Check context sufficiency before a spawn and ask subagents for file-and-line answers; `/prompt-generator` is recommended for a complex or user-facing spawn |
+| `anti-corollary-tests.md` | Tests must carry information: no corollary matrices over canonical reductions, no suite that only matches a dead-implementation default, stated mutation in the audit lane |
+| `ask-user-question-required.md` | Every user-directed question goes through the `AskUserQuestion` tool — no plain-text questions |
+| `bdd.md` | BDD discovery-driven development workflow and Example Mapping reference |
+| `claims-as-quotes.md` | On agent reports, hand-offs, review verdicts, and PR or commit prose, a design-gating claim travels with its quoted lines and `path:line` reference; chat keeps research-mode compact citations; a claim without its quote is a lead to check |
+| `cleanup-temp-files.md` | Remove temporary files created during a task when the task is complete |
+| `code-standards.md` | Pointer to `CODE_RULES.md` as the single source of truth, including §8 (TDD) and §7 (right-sizing); BDD is the outer process and TDD the inner loop |
+| `confirm-implementation-forks.md` | Stop and ask when two or more workable implementation paths change the deliverable |
+| `destructive-commands.md` | Allowed removal forms and the ephemeral namespace the `destructive_command_blocker` auto-allows; keep destructive literals out of a Bash command string even as data |
+| `doc-inventory-integrity.md` | Three inventory shapes stay in step with the code: a per-directory `CLAUDE.md` file list, a package `README`/`SKILL.md` inventory, and an env-var summary table |
+| `docstring-prose-matches-implementation.md` | Prose enumerations in docstrings cover every behavior the body applies |
+| `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
+| `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
+| `failure-blast-radius.md` | Name what a raise stops — `RunFatal` for the whole run, `ItemBlocked` for one batch member — and keep the batch reaching a deliverable with parked members reported |
+| `falsify-before-green.md` | A check's green counts as evidence only after that same check ran red on a named break, with a passing control beside it |
+| `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
+| `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
+| `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
+| `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol |
+| `hedging-claims.md` | State the evidence or name the claim unverified; a hedge word stands in for evidence not gathered, prose discipline with no hook |
+| `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
+| `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the count against the scope its denominator names |
+| `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |
+| `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
+| `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
+| `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
+| `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
+| `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
+| `re-stage-before-commit.md` | Stage the files edited this session before `git commit`; the session edit stage gate denies a commit that leaves a tracked session edit unstaged, with `-a`, a pathspec, a preceding `git add`, and `# partial-commit` as escapes |
+| `research-mode.md` | Three anti-hallucination constraints: say "I don't know", verify with citations, quote for factual grounding |
+| `shell-invocation.md` | Windows shell commands run through `pwsh`; no `$(...)`, backtick, or process substitution in a Bash tool command |
+| `testing.md` | Test quality and infrastructure standards |
+| `vault-context.md` | Search Obsidian vault for prior sessions and decisions before substantive project work |
+| `verify-before-asking.md` | Answer questions by inspecting files or running tools before asking; recalled facts expire until re-checked this session |
+| `verify-runtime-state.md` | A "component is fine / not at fault" verdict rests on a live probe this session, never code reading or prior-session memory |
+| `windows-filesystem-safe.md` | Use safe `rmtree` patterns on Windows; `mkdirSync` with `recursive: true` on possibly-existing paths |
+| `workers-done-before-complete.md` | A task reaches `completed` only when every spawned worker has finished and its results are merged into run state |
+| `workflow-substitution-slots.md` | Per-iteration values in `.workflow.js` templates use angle-bracket slots |
+
+## Hook enforcement
+
+Rules marked with ⚡ in `~/.claude/docs/CODE_RULES.md` are backed by a blocking hook in `hooks/blocking/`. Rules without a hook are judgment-based and enforced via audit rubrics (`audit-rubrics/`).

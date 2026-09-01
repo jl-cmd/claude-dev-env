@@ -6,8 +6,9 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "packages" / "claude-dev-env"
+AGENTS_MD_ARCHIVE_ROOT = REPOSITORY_ROOT / "docs" / "records" / "agents-md"
 CANONICAL_RULE_PATH = PACKAGE_ROOT / "rules" / "asd-ste100-language.md"
-PACKAGE_HUB_PATH = PACKAGE_ROOT / "AGENTS.md"
+PACKAGE_HUB_PATH = AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md"
 ARCHIVE_PATH = (
     REPOSITORY_ROOT
     / "docs"
@@ -106,9 +107,15 @@ def test_archive_stays_outside_the_package_rules_directory() -> None:
         assert f"packages/claude-dev-env/rules/{each_retired_rule_name}" in archive_text
 
 
+def _runtime_projection_path(relative_path: str) -> Path:
+    if relative_path == "AGENTS.md" or relative_path.endswith("/AGENTS.md"):
+        return AGENTS_MD_ARCHIVE_ROOT / relative_path
+    return REPOSITORY_ROOT / relative_path
+
+
 def test_active_runtime_projections_use_the_canonical_language_rule() -> None:
     for each_relative_path in ACTIVE_RUNTIME_PROJECTION_PATHS:
-        projection_text = _read(REPOSITORY_ROOT / each_relative_path)
+        projection_text = _read(_runtime_projection_path(each_relative_path))
         lowered_text = projection_text.lower()
         assert "asd-ste100-language" in lowered_text, each_relative_path
         for each_retired_reference in RETIRED_LANGUAGE_REFERENCES:
