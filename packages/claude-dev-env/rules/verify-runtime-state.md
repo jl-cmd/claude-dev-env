@@ -33,8 +33,3 @@ Only after a live signal backs the claim do you state it.
 
 **Wrong:** "The config sets the timeout to 30 seconds, so the timeout is fine."
 **Right:** Print the loaded config at runtime and report the value the process actually holds.
-
-## Relationship to other rules
-
-- **`verify-before-asking`** answers questions with a tool before asking the user. This rule extends that to runtime verdicts: gather the live probe before you conclude, not just before you ask.
-- **`long-horizon-autonomy`** requires every progress claim to rest on a tool result from this session. A runtime verdict is a progress claim; this rule names the probes that back it.

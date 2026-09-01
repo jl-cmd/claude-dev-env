@@ -6,8 +6,10 @@
     (unset)                           ->  PROSE_STYLE_ENFORCEMENT_ENABLED False
 
 Structural AskUserQuestion lean-block validation stays always on. The flag
-arms only opinionated prose gates (heavy-word swaps, hedging, historical
-state phrasing, intent-only endings, hook prose-detector consistency).
+arms only two opinionated prose gates: `plain_language_blocker.py` (heavy-word
+swaps) and `hook_prose_detector_consistency.py`. Historical-state phrasing
+(`state_description_blocker.py`) runs unconditionally and does not read this
+flag.
 """
 
 from __future__ import annotations

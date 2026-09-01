@@ -39,7 +39,6 @@ class NarrowEditFixture:
 ALL_SCOPE_AWARE_RULE_NAMES = frozenset(
     {
         "check_blast_radius_declared",
-        "check_import_block_sorted",
         "check_magic_values",
         "check_duplicate_function_body_across_files",
         "check_same_file_inline_duplicate_body",

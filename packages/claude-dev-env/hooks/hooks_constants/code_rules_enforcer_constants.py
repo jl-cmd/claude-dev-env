@@ -32,6 +32,9 @@ ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\
 ALL_WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 
+CONSTANTS_MODULE_SUFFIX: str = "_constants.py"
+CONFIG_DIRECTORY_SEGMENT: str = "config"
+
 ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 

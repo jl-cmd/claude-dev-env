@@ -46,7 +46,6 @@ def _write_minimal_curated_rules(rules_directory: Path) -> None:
         encoding="utf-8",
     )
     (rules_directory / "research-mode.md").write_text("# RM\n", encoding="utf-8")
-    (rules_directory / "conservative-action.md").write_text("# CA\n", encoding="utf-8")
     (rules_directory / "explore-thoroughly.md").write_text("# ET\n", encoding="utf-8")
 
 

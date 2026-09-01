@@ -10,15 +10,14 @@ test functions, which exports nothing, so a single-file scan proves a constant
 no other line reads is dead. A ``conftest.py``, a shared helper module reached
 only through the ``tests/`` directory gate, and a dedicated constants or
 ``config/`` module all export their constants to importer modules, so the
-cross-module ``check_dead_module_constants`` governs their constants and the
-dead-constant check leaves them alone.
+audit lane governs their constants cross-module (see
+rules/file-global-constants.md) and this write-time check leaves them alone.
 """
 
 import ast
 from typing import TypeGuard
 
-from code_rules_dead_module_constant import _is_dedicated_constants_module
-from code_rules_shared import is_strict_test_file
+from code_rules_shared import _is_dedicated_constants_module, is_strict_test_file
 from hooks_constants.test_layout_constants import (
     CLASS_METHOD_FIRST_PARAMETER_NAME,
     DEAD_TEST_CONSTANT_GUIDANCE,
@@ -55,7 +54,7 @@ def _is_dead_constant_scan_target(file_path: str) -> bool:
     constant no other line reads is dead. A ``conftest.py``, a shared helper
     module reached only through the ``tests/`` directory gate, and a dedicated
     constants or ``config/`` module all export to importer modules, where the
-    cross-module ``check_dead_module_constants`` governs their constants.
+    cross-module audit lane governs their constants (see rules/file-global-constants.md).
 
     Args:
         file_path: The destination path of the write.
@@ -78,8 +77,8 @@ def _is_private_constant_name(name: str) -> bool:
         EXPECTED_TOTAL           ->  public constant, left alone
 
     Only a leading-underscore name qualifies. A public module constant exports
-    to importer modules, so the cross-module ``check_dead_module_constants``
-    governs it and this single-file scan leaves it alone.
+    to importer modules, so the cross-module audit lane governs it (see
+    rules/file-global-constants.md) and this single-file scan leaves it alone.
     """
     if not name.startswith(PRIVATE_NAME_PREFIX):
         return False
@@ -164,7 +163,8 @@ def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
     dead scaffolding an edit stranded. A public constant, a ``conftest.py``, a
     shared helper module under ``tests/``, and a dedicated constants or
     ``config/`` module all export to importer modules, so the cross-module
-    ``check_dead_module_constants`` judges those and this check skips them.
+    audit lane judges those (see rules/file-global-constants.md) and this
+    check skips them.
 
     Args:
         content: The post-edit file content under validation.

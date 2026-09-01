@@ -10,8 +10,10 @@ def _repository_root() -> Path:
 
 
 def _bugbot_text() -> str:
-    bugbot_path = _repository_root() / ".cursor" / "BUGBOT.md"
-    return bugbot_path.read_text(encoding="utf-8")
+    code_rules_path = (
+        _repository_root() / "packages" / "claude-dev-env" / "docs" / "CODE_RULES.md"
+    )
+    return code_rules_path.read_text(encoding="utf-8")
 
 
 def _workflow_registry_bullet(document_text: str) -> str:
@@ -53,7 +55,10 @@ def _assert_workflow_registry_describes_substring_match(workflow_bullet: str) ->
 
 
 def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
-    """code_rules_enforcer exempts migrations, workflow registries, and tests."""
+    """code_rules_enforcer exempts migrations, workflow registries, and tests.
+
+    Checked against CODE_RULES.md, the canonical rule contract .cursor/BUGBOT.md points at.
+    """
     text = _bugbot_text()
     assert "/migrations/" in text
     assert "_tab.py" in text
@@ -65,7 +70,7 @@ def test_bugbot_documents_upper_snake_exemptions_matching_hook() -> None:
 
 
 def test_bugbot_workflow_registry_phrasing_describes_substring_match() -> None:
-    """BUGBOT phrasing must describe substring matching (hook behavior), not basename-only matching."""
+    """CODE_RULES phrasing must describe substring matching (hook behavior), not basename-only matching."""
     workflow_bullet = _workflow_registry_bullet(_bugbot_text())
     _assert_workflow_registry_describes_substring_match(workflow_bullet)
 

@@ -31,17 +31,11 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_command_dispatch.py` | A `hooks/blocking/` command classifier matching a multi-word command regex without a start anchor or first-word tokenization |
 | `code_rules_comments.py` | No new inline comments; advisory on deletion of existing ones |
 | `code_rules_constants_config.py` | Constants must live in `config/`; file-global constant use-count |
-| `code_rules_dead_argparse_argument.py` | Argparse arguments with no references in the same file |
-| `code_rules_dead_config_field.py` | `*Config` / `*Selectors` dataclass fields with no live references |
-| `code_rules_dead_dataclass_field.py` | Dataclass fields with no consuming references |
-| `code_rules_dead_module_constant.py` | `UPPER_SNAKE` constants in `*_constants.py` modules with no importers |
-| `code_rules_dead_split_branch.py` | A conditional whose falsy branch is unreachable because the tested value comes from a separator `str.split()`, which never returns an empty list |
-| `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
+| `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; run-on-sentence and prose-wall narrative backstops; undefined-constant references |
 | `code_rules_duplicate_body.py` | A function body copied from a sibling module, or a helper body inlined as a block inside a larger function in the same file |
 | `code_rules_imports_logging.py` | Imports at top of file; logging format-arg style; printf tokens in `str.format`-logger messages |
 | `code_rules_js_conventions.py` | Boolean-prefix naming and banned identifiers for JavaScript/TypeScript declarations and `@param {boolean}` JSDoc, scoped to changed lines |
 | `code_rules_magic_values.py` | No magic numbers or strings in production code bodies |
-| `code_rules_mock_completeness.py` | Mock calls that skip required arguments |
 | `code_rules_naming_collection.py` | Collection names must use `all_*` prefix |
 | `code_rules_optional_params.py` | No optional parameters where a required one would do |
 | `code_rules_orphan_css_class.py` | CSS class attributes in Python markup with no matching `.<class>` selector |
@@ -51,7 +45,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_probe_chains.py` | Probe-chain detection logic |
 | `code_rules_probe_detection.py` | Probe pattern detection helpers |
 | `code_rules_probe_recording.py` | Probe recording utilities |
-| `code_rules_scope_binding.py` | Scope/binding analysis utilities |
 | `code_rules_shared.py` | Shared dataclasses and helpers used by multiple check modules |
 | `code_rules_string_magic.py` | Magic string detection with masking and f-string support; whitespace-only indentation literals in function bodies |
 | `code_rules_test_assertions.py` | Test assertion style rules |
@@ -60,7 +53,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_test_isolation.py` | Tests must not rely on home-dir or temp-dir side effects |
 | `code_rules_type_escape.py` | No `Any` imports, `cast()`, or `# type: ignore` outside boundary files |
 | `code_rules_typeddict_stub.py` | TypedDict pairs (`_encode_*`/`_decode_*`) must both exist in the same module |
-| `code_rules_unused_imports.py` | Unused module-level imports |
 
 ## Other standalone blockers
 
@@ -81,9 +73,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `gh_body_arg_blocker.py` | PreToolUse (Bash) | `gh` commands passing `--body`/`-b` directly (requires `--body-file` instead) |
 | `gh_pr_author_enforcer.py` | PreToolUse | Enforces PR author identity rules |
 | `gh_pr_author_restore.py` | PostToolUse | Restores PR author after a tool call |
-| `hedging_language_blocker.py` | Stop | Responses with hedging words (`likely`, `probably`, `appears to`); armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
 | `hook_prose_detector_consistency.py` | PreToolUse (Write/Edit) | Hook docstrings/messages that claim a trigger the detector cannot fire on; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
-| `intent_only_ending_blocker.py` | Stop | Responses that end on a plan or intent without doing the work; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
 | `open_questions_in_plans_blocker.py` | PreToolUse (Write/Edit) | Plan documents with unresolved open questions |
 | `nas_ssh_binary_enforcer.py` | PreToolUse (Bash) | A bare `ssh`/`scp`/`sftp` command word targeting the NAS (Git Bash's MSYS ssh stalls on an interactive password prompt), or the full `System32/OpenSSH` binary to that host without `-o BatchMode=yes` |
 | `package_inventory_stale_blocker.py` | PreToolUse (Write) | A new production code file created in a directory whose `README.md`/`CLAUDE.md` inventory (or a parent skill's `SKILL.md` Layout table mapping the `scripts/` subdirectory) names two or more sibling files but no entry for the new file |
@@ -92,7 +82,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `pii_prevention_blocker.py` | PreToolUse (Write/Edit/MultiEdit/Bash/PowerShell/MCP GitHub) | Entry hook — content that carries high-confidence personal data or secrets (real emails, home-dir paths, private IPs, credential material) on write, durable GitHub posts, or staged commit paths; resolves the staged-commit repository from the command it gates (via `pii_prevention_blocker_parts`), not the session working directory |
 | `pii_scanner.py` | library | Pure text scanners shared by `pii_prevention_blocker.py` |
 | `piped_pytest_blocker.py` | PreToolUse (Bash) | A pytest run whose output feeds a pipe, where the pipeline reports the exit code of the command on the right |
-| `precommit_code_rules_gate.py` | PreToolUse (Bash) | Staged changes that fail the CODE_RULES gate at commit time |
+| `precommit_code_rules_gate.py` | library | Resolves a directory's Git repository root; reused by `pii_prevention_blocker.py`, `pii_payload_scan.py`, and `session_edit_stage_gate.py` |
 | `pytest_testpaths_orphan_blocker.py` | PreToolUse (Write/Edit/MultiEdit) | New `test_*.py` files created under a directory absent from a package's explicit pytest `testpaths` allowlist |
 | `question_to_user_enforcer.py` | Stop | User-directed questions not routed through `AskUserQuestion` |
 | `send_user_file_open_locally_blocker.py` | PreToolUse (SendUserFile) | A desk-side file attach (`SendUserFile` with `status` not `proactive`); points to `Invoke-Item -LiteralPath` for the native Windows app |
@@ -101,7 +91,7 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `session_handoff_blocker.py` | Stop | Responses suggesting a new session mid-task |
 | `shell_substitution_blocker.py` | PreToolUse (Bash) | A command carrying `$(...)`, a live backtick, or `<(...)`/`>(...)` process substitution, which the allowlist matcher cannot descend into |
 | `stale_comment_reference_blocker.py` | PreToolUse (Edit) | An Edit that rewrites a Python code line while keeping the standalone comment directly above it, when that comment names an identifier the rewrite removes from the line |
-| `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation; armed only when `CLAUDE_PROSE_STYLE_ENFORCEMENT` is on (default off) |
+| `state_description_blocker.py` | PreToolUse (Write/Edit) | Historical/comparative language in documentation |
 | `subprocess_budget_completeness.py` | PreToolUse | Subprocess calls missing required budget arguments |
 | `tdd_enforcer.py` | PreToolUse (Write/Edit) | Production code written without a matching failing test |
 | `unscoped_search_blocker.py` | PreToolUse (Bash/PowerShell) | A `find` or recursive listing that walks from the filesystem root, a drive root, bare home, or a network share root |

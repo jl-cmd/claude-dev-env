@@ -71,14 +71,6 @@ def test_every_check_function_is_called_in_validate_content() -> None:
     )
 
 
-def test_dead_module_constant_check_stays_wired() -> None:
-    validate_content_source = _validate_content_source()
-    assert "check_dead_module_constants" in validate_content_source, (
-        "check_dead_module_constants must stay dispatched from validate_content so a "
-        "dead exported constant (the MEDIUM_TEXT class) is blocked at Write/Edit time."
-    )
-
-
 def test_known_undispatched_set_lists_only_existing_checks() -> None:
     all_check_names = set(_all_check_function_names())
     stale_names = KNOWN_UNDISPATCHED_CHECKS - all_check_names

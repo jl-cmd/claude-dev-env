@@ -47,7 +47,6 @@ VOID_ADVISORY_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
     {
         "check_duplicated_format_patterns",
         "check_flag_gated_scenario_test_naming",
-        "check_incomplete_mocks",
     }
 )
 

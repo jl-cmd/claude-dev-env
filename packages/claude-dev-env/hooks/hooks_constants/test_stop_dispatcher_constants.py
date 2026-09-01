@@ -12,9 +12,7 @@ if _HOOKS_DIR not in sys.path:
 from hooks_constants.stop_dispatcher_constants import ALL_STOP_HOSTED_HOOK_PATHS  # noqa: E402
 
 _EXPECTED_STOP_ORDER = (
-    "blocking/hedging_language_blocker.py",
     "blocking/question_to_user_enforcer.py",
-    "blocking/intent_only_ending_blocker.py",
     "blocking/session_handoff_blocker.py",
 )
 

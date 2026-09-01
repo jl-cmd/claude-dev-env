@@ -17,6 +17,8 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from hooks_constants.code_rules_enforcer_constants import (
+    CONFIG_DIRECTORY_SEGMENT,
+    CONSTANTS_MODULE_SUFFIX,
     FUNCTION_WITH_JSDOC_PATTERN,
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     RETURN_CALL_OPENING_PARENTHESIS_PATTERN,
@@ -91,3 +93,8 @@ def test_schema_property_key_pattern_matches_only_the_options_key() -> None:
     assert SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN.search("{ label: 'x', schema : X }") is not None
     assert SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN.search("{ agentType, phase }, HEAD_SCHEMA") is None
     assert SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN.search("{ myschema: X }") is None
+
+
+def test_constants_module_suffix_and_config_directory_segment_are_defined() -> None:
+    assert CONSTANTS_MODULE_SUFFIX == "_constants.py"
+    assert CONFIG_DIRECTORY_SEGMENT == "config"

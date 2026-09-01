@@ -249,8 +249,10 @@ git -C <repo-root> remote set-head origin -a
 ### 5.6 Hook-denial notes
 
 The commit and push gates still fire on cloud Bash git commands and gate the
-run: `session_edit_stage_gate`, `block_main_commit`,
-`precommit_code_rules_gate`, `test_preflight_check`. Follow them normally.
+run: `session_edit_stage_gate`, `block_main_commit`, `test_preflight_check`.
+Follow them normally. `precommit_code_rules_gate` is a library module with no
+hook entry point; the native `git-hooks/pre_commit.py` runs the real
+commit-time CODE_RULES enforcement.
 
 The `gh`-text hooks read risk from literal `gh ...` command text
 (`gh_body_arg_blocker`, `conventional_pr_title_gate`, `gh_pr_author_enforcer`,

@@ -116,11 +116,3 @@ Report as: N of M complete, K parked, and what you are working now.
 Close with: what broke, how each one ended, and which of them deserve a
 durable fix.
 ```
-
-## Sibling rules
-
-| Rule | Role |
-|---|---|
-| [`code-standards.md`](code-standards.md) | `CODE_RULES.md` §9.7 names the boundary that turns a recorded per-member failure into an explicit outcome |
-| [`confirm-implementation-forks.md`](confirm-implementation-forks.md) | A defect correction creates an implementation fork when it routes around parking; surface and decide that fork |
-| [`long-horizon-autonomy.md`](long-horizon-autonomy.md) | A parked member receives an explicit report entry and follow-up |

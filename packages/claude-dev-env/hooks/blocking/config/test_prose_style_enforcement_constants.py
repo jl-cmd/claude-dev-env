@@ -1,4 +1,8 @@
-"""Tests for the prose-style enforcement opt-in flag (default off)."""
+"""Tests for the prose-style enforcement opt-in flag.
+
+Gates ``plain_language_blocker.py`` and ``hook_prose_detector_consistency.py``;
+default off.
+"""
 
 from __future__ import annotations
 

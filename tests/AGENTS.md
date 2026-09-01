@@ -84,7 +84,7 @@ matching list under `.github/ci/` with an owner disposition for that node ID.
 
 | File | What it covers |
 |------|----------------|
-| `test_bugbot_rules_contract.py` | Contract tests for `.cursor/BUGBOT.md` review rules and the hook-enforced CODE_RULES exemptions. |
+| `test_bugbot_rules_contract.py` | Contract tests for `packages/claude-dev-env/docs/CODE_RULES.md` review rules (the contract `.cursor/BUGBOT.md` points at) and the hook-enforced CODE_RULES exemptions. |
 | `test_bugteam_code_rules_gate.py` | Exercises the `code_rules_gate.py` CLI in `_shared/pr-loop/scripts/` against a known example module, confirming the gate exits zero on help and non-zero on violations. |
 | `test_bugteam_permission_scripts.py` | Verifies the bugteam grant/revoke permission scripts exist, are runnable, and produce expected exit codes. |
 | `test_bugteam_preflight.py` | Checks the bugteam preflight script logic. |

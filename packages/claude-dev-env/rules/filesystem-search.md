@@ -43,7 +43,7 @@ When `es.exe` fails or returns nothing, fall back to `Glob` or `Grep` without pa
 
 ## Shell batching
 
-Issue one shell search at a time when the walk is large. Parallel full-tree searches contend for the shell and can lock the host. Harness `Grep` and `Glob` calls carry no such cost and run in parallel freely — see [`parallel-tools.md`](parallel-tools.md).
+Issue one shell search at a time when the walk is large. Parallel full-tree searches contend for the shell and can lock the host. Harness `Grep` and `Glob` calls carry no such cost and run in parallel freely.
 
 ## Enforcement
 

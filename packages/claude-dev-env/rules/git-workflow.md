@@ -55,12 +55,4 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 
 Repair only reported findings, then re-verify after every repair.
 
-## See also
-
-| Rule | Covers |
-|---|---|
-| [`gh-cli-conventions.md`](gh-cli-conventions.md) | `--body-file` for post bodies; `--paginate --slurp` for list reads |
-| [`re-stage-before-commit.md`](re-stage-before-commit.md) | Staging session edits so a commit does not drop them |
-| [`durable-post-artifacts.md`](durable-post-artifacts.md) | Keeping volatile scratch paths out of a post body |
-| [`destructive-commands.md`](destructive-commands.md) | Allowed removal forms; destructive literals in commit and post bodies |
-| [`code-standards.md`](code-standards.md) | The code standards a PR's diff is reviewed against |
+Every `gh` post in this workflow uses `--body-file` per `gh-cli-conventions.md` and keeps volatile scratch paths out per `durable-post-artifacts.md`; stage session edits per `re-stage-before-commit.md` before each commit.

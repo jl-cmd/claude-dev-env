@@ -53,13 +53,3 @@ def build_refund(order, requested_amount):
 ## Enforcement
 
 This rule binds as prose discipline: a reviewer applies it to the claims a report, a verdict, or a PR body makes about existing code. No hook backs it, because telling a design-deciding claim from background prose needs meaning a regex cannot read.
-
-## Sibling rules
-
-| Rule | Role |
-|---|---|
-| `research-mode.md` | Names what counts as a citation and grounds a factual claim in word-for-word quotes |
-| `hedging-claims.md` | Catches a hedge word standing in for evidence on a claim; this rule catches a claim missing its quote |
-| `verify-runtime-state.md` | A verdict about what runs rests on a live probe from this session |
-| `falsify-before-green.md` | A check's green counts once the check has been shown red |
-| `measurement-denominators.md` | Every count names what it scanned |
