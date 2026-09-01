@@ -1,9 +1,8 @@
 # _shared/advisor
 
 Warm-advisor bind-and-consult protocol for `team-advisor` and for
-executors that skill names in its Advisor block. The `orchestrator`
-skill does not bind this advisor. Changes here affect `team-advisor`
-and the shared consult-format packet those executors still reuse.
+executors that skill names in its Advisor block. Changes here affect
+`team-advisor` and those spawn prompts.
 
 Host profile is resolved from session identity first (Claude, Codex, or neither). Claude walks Fable then Sol in-session (CLI chain as the Fable fallback). Codex walks Sol in-session. A third-party host binds Fable through the CLI Claude-chain (fail closed when Fable and Sol cannot serve) with a separate executor paste block.
 
