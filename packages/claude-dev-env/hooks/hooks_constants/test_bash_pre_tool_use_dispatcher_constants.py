@@ -34,7 +34,6 @@ _EXPECTED_BASH_ORDER = (
     "blocking/pii_prevention_blocker.py",
     "blocking/conventional_pr_title_gate.py",
     "blocking/block_main_commit.py",
-    "blocking/precommit_code_rules_gate.py",
     "blocking/session_edit_stage_gate.py",
     "blocking/test_preflight_check.py",
     "blocking/windows_rmtree_blocker.py",

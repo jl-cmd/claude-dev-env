@@ -183,7 +183,6 @@ def test_agent_dispatcher_passes_commit_through_without_running_gate(
 
     assert completed_dispatcher.returncode == 0, completed_dispatcher.stderr
     assert completed_dispatcher.stdout.strip() == ""
-    assert "Git commit proceeds to configured Git hooks." in completed_dispatcher.stderr
     assert not gate_marker_path.exists()
 
 

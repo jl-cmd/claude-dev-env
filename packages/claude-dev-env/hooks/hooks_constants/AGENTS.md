@@ -32,7 +32,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `gh_pr_author_swap_constants.py` | Constants for the PR-author swap enforcement hooks |
 | `hardcoded_user_path_constants.py` | Patterns for detecting hardcoded home-directory paths |
 | `harness_scratchpad_constants.py` | Fixed path components (`claude` / `claude-` user-directory name and prefix, `scratchpad` leaf name), the PreToolUse session-id payload key, and the `CLAUDE_CODE_SESSION_ID` environment variable name that the code-rules and TDD gates use to recognize an existing harness session scratchpad directory |
-| `hedging_uncertainty_constants.py` | Sentence-boundary pattern, explicit uncertainty label patterns, hedge-term list separator, and positive corrective block text for OP-07C sentence-scoped hedging |
 | `hook_block_logger.py` | `log_hook_block()` — shared fail-safe logger every blocking hook calls to append a JSON record of each block decision to `~/.claude/logs/hook-blocks.log` |
 | `hook_prose_detector_consistency_constants.py` | Trigger patterns and corrective messages for the hook-prose consistency checker |
 | `hosted_hook_runner.py` | `run_hook_capturing_output()` — shared runner that runs one dispatcher-hosted hook in-process via runpy and returns its captured stdout and crash flag |
@@ -54,7 +53,7 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `pytest_invocation.py` | Pure parsed-segment classifier for pytest runs through interpreters, shims, wrappers, and shell string-exec forms; no pipeline deny decision |
 | `prose_matcher_precision_constants.py` | Sample floor, keep/narrow precision floors, matcher ids, label decisions, advisory log path, emit caps, and context fingerprint length for OP-07B prose-matcher advisory telemetry |
 | `pre_tool_use_stdin.py` | `read_hook_input_dictionary_from_stdin()` — shared stdin parser for PreToolUse hooks |
-| `precommit_code_rules_gate_constants.py` | Scope argument and exit-code constants for the precommit gate |
+| `precommit_code_rules_gate_constants.py` | Git-repository-root resolution command and timeout for the `precommit_code_rules_gate` library module |
 | project_paths_reader.py | Loads ~/.claude/project-paths.json and finds a home-bounded git root for registry checks |
 | `pyproject_config_discovery_constants.py` | Table names (``tool`` key, ``mypy``, ``ruff``) for resolving a validator's config from a pyproject.toml `[tool.<name>]` table |
 | `pytest_testpaths_orphan_blocker_constants.py` | Marker filename, section and key names, test-file pattern, search budget, and block-message text for the pytest unregistered-test-directory blocker |

@@ -31,7 +31,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
 | `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
 | `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol |
-| `hedging-claims.md` | State the evidence or name the claim unverified; the `hedging_language_blocker` Stop hook sends a hedged response back for a re-check |
+| `hedging-claims.md` | State the evidence or name the claim unverified; a hedge word stands in for evidence not gathered, prose discipline with no hook |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
 | `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the count against the scope its denominator names |
 | `nas-ssh-invocation.md` | Reach the NAS through the paramiko-backed `nas_ssh_key.py` runner, which signs in-process; every ssh-family client reads the key through file permissions, refuses it, and stalls an unattended run on a password prompt |

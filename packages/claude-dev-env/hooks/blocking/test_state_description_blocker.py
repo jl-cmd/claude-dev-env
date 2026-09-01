@@ -74,7 +74,7 @@ class _RunHook:
 _run_hook = _RunHook()
 
 
-def test_historical_phrase_scan_is_default_off(
+def test_historical_phrase_scan_runs_with_the_env_flag_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
@@ -87,8 +87,8 @@ def test_historical_phrase_scan_is_default_off(
         is_prose_style_enabled=False,
     )
     assert result.returncode == 0
-    assert result.stdout == ""
-    assert _evaluate_without_opt_in(
+    assert result.stdout.strip() != ""
+    deny_reason = _evaluate_without_opt_in(
         {
             "tool_name": "Write",
             "tool_input": {
@@ -96,7 +96,9 @@ def test_historical_phrase_scan_is_default_off(
                 "content": VIOLATION_INSTEAD_OF_COMMENT,
             },
         }
-    ) is None
+    )
+    assert deny_reason is not None
+    assert "instead of" in deny_reason
 
 
 def test_block_clean_python_comment_passes():

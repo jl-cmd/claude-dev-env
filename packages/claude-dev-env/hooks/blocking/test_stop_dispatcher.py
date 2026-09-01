@@ -90,7 +90,7 @@ def test_dispatch_re_emits_first_block_with_system_message_and_suppress(
         HostedHookRun(captured_stdout="", did_crash=False),
         HostedHookRun(
             captured_stdout=_block_json(
-                "hedging blocked",
+                "keep fields",
                 system_message="rewrite the ending",
                 suppress_output=True,
             ),
@@ -108,15 +108,15 @@ def test_dispatch_re_emits_first_block_with_system_message_and_suppress(
     monkeypatch.setattr(
         "stop_dispatcher.ALL_STOP_HOSTED_HOOK_PATHS",
         (
-            "blocking/hedging_language_blocker.py",
+            "blocking/first_stub_hook.py",
             "blocking/question_to_user_enforcer.py",
-            "blocking/intent_only_ending_blocker.py",
+            "blocking/second_stub_hook.py",
         ),
     )
     dispatch('{"session_id": "test"}')
     emitted_payload = json.loads(capsys.readouterr().out.strip())
     assert emitted_payload["decision"] == "block"
-    assert emitted_payload["reason"] == "hedging blocked"
+    assert emitted_payload["reason"] == "keep fields"
     assert emitted_payload["systemMessage"] == "rewrite the ending"
     assert emitted_payload["suppressOutput"] is True
 
@@ -132,7 +132,7 @@ def test_dispatch_writes_nothing_when_no_hook_blocks(
     )
     monkeypatch.setattr(
         "stop_dispatcher.ALL_STOP_HOSTED_HOOK_PATHS",
-        ("blocking/hedging_language_blocker.py",),
+        ("blocking/first_stub_hook.py",),
     )
     dispatch('{"session_id": "test"}')
     assert capsys.readouterr().out == ""
@@ -149,30 +149,6 @@ def test_dispatcher_exits_zero_on_empty_payload() -> None:
     )
     assert completed.returncode == 0
     assert completed.stdout.strip() == ""
-
-
-def test_dispatcher_blocks_hedging_message_matching_standalone() -> None:
-    """A hedging last_assistant_message blocks through the dispatcher."""
-    payload_text = json.dumps(
-        {
-            "stop_hook_active": False,
-            "last_assistant_message": "This is probably correct.",
-        }
-    )
-    environment_by_key = {**os.environ, "CLAUDE_PROSE_STYLE_ENFORCEMENT": "1"}
-    completed = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
-        check=False,
-        input=payload_text,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        env=environment_by_key,
-    )
-    assert completed.returncode == 0
-    parsed = json.loads(completed.stdout)
-    assert parsed["decision"] == "block"
-    assert "probably" in parsed["reason"].lower() or "hedging" in parsed["reason"].lower()
 
 
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:
