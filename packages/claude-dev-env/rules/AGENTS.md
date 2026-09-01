@@ -20,19 +20,17 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `cleanup-temp-files.md` | Remove temporary files created during a task when the task is complete |
 | `code-standards.md` | Pointer to `CODE_RULES.md` as the single source of truth, including §8 (TDD) and §7 (right-sizing); BDD is the outer process and TDD the inner loop |
 | `confirm-implementation-forks.md` | Stop and ask when two or more workable implementation paths change the deliverable |
-| `conservative-action.md` | Research and recommend when intent is ambiguous; act only on explicit request |
-| `context7.md` | Use Context7 MCP to fetch current library docs; always prefer live docs over built-in knowledge |
 | `destructive-commands.md` | Allowed removal forms and the ephemeral namespace the `destructive_command_blocker` auto-allows; keep destructive literals out of a Bash command string even as data |
 | `doc-inventory-integrity.md` | Three inventory shapes stay in step with the code: a per-directory `CLAUDE.md` file list, a package `README`/`SKILL.md` inventory, and an env-var summary table |
 | `docstring-prose-matches-implementation.md` | Prose enumerations in docstrings cover every behavior the body applies |
 | `durable-post-artifacts.md` | GitHub post bodies never reference volatile scratch paths; text embeds inline and binary artifacts upload to the `artifacts` release with the permanent URL linked |
 | `explore-thoroughly.md` | Read relevant files and map existing patterns before proposing a change |
+| `failure-blast-radius.md` | Name what a raise stops — `RunFatal` for the whole run, `ItemBlocked` for one batch member — and keep the batch reaching a deliverable with parked members reported |
 | `falsify-before-green.md` | A check's green counts as evidence only after that same check ran red on a named break, with a passing control beside it |
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
-| `few-words.md` | The style reminder. Syncs to Cursor as an always-on `.mdc` rule. |
 | `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
 | `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
-| `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol and a See-also block for its seven siblings |
+| `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol |
 | `hedging-claims.md` | State the evidence or name the claim unverified; the `hedging_language_blocker` Stop hook sends a hedged response back for a re-check |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
 | `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the count against the scope its denominator names |
@@ -40,7 +38,6 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `no-cross-skill-duplicate-helpers.md` | Within one skill a duplicated helper is blocked; across two skill folders a small self-contained copy is a sanctioned isolation tradeoff that draws a non-blocking advisory naming the source skill |
 | `orphan-css-class.md` | Every `class="..."` attribute in Python-generated markup has a matching selector in the `<style>` block |
 | `paired-test-coverage.md` | A public function omitted by a module's established paired test suite must get a behavioral test |
-| `parallel-tools.md` | Make all independent tool calls in a single response |
 | `plain-illustrative-docstrings.md` | Public docstring narrative reads plainly and shows behavior with a diagram block (a `::` example or a doctest), painting a concrete scene a general developer follows on first read; a run-on backstop hook, a prose-wall backstop hook, and Category O9 audit enforce it |
 | `prompt-workflow-context-controls.md` | Keep prompt-workflow instruction layers small and stable; load heavy skills on demand |
 | `re-stage-before-commit.md` | Stage the files edited this session before `git commit`; the session edit stage gate denies a commit that leaves a tracked session edit unstaged, with `-a`, a pathspec, a preceding `git add`, and `# partial-commit` as escapes |

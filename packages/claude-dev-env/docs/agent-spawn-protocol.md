@@ -35,5 +35,5 @@ An agent that receives a vague prompt wastes tokens exploring in circles, produc
 
 ## Relationship to other rules
 
-- `conservative-action.md` gates acting when intent is ambiguous. This protocol extends that: an ambiguous task goes to investigation or a user question first, never straight to a subagent.
+- Acting when intent is ambiguous goes to investigation or a user question first, never straight to a subagent; this protocol extends that guard to the spawn decision itself.
 - Project-specific rules or `~/.claude/CLAUDE.md` may decide whether to use subagents at all; this protocol governs how to craft the prompt once you delegate.

@@ -67,7 +67,6 @@ _merged_mapping_key_order = (
     "bdd",
     "test-quality",
     "research-mode",
-    "conservative-action",
     "explore-thoroughly",
 )
 
@@ -370,15 +369,6 @@ def _always_apply_mappings(rules_directory: Path, docs_directory: Path) -> tuple
             True,
             None,
             "Research mode: citations and I don't know",
-            "near_verbatim",
-        ),
-        RuleMapping(
-            "conservative-action",
-            (rules_directory / "conservative-action.md",),
-            "conservative-action.mdc",
-            True,
-            None,
-            "Prefer research over action when intent is unclear",
             "near_verbatim",
         ),
         RuleMapping(

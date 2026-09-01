@@ -61,7 +61,7 @@ CODE_RULES forbids `UPPER_SNAKE_CASE` constants and magic values outside designa
 
 ### AI review rules
 
-`.cursor/BUGBOT.md` contains the checked-in review criteria for Cursor BugBot and other agents. Keep its rules aligned with `code_rules_enforcer.py`, which blocks violations at Write/Edit time.
+`packages/claude-dev-env/docs/CODE_RULES.md` holds the canonical review criteria for Cursor BugBot, Copilot, Claude, and other agents. `.cursor/BUGBOT.md` is the checked-in pointer file Cursor BugBot reads; it points at `CODE_RULES.md`. Keep the rules aligned with `code_rules_enforcer.py`, which blocks violations at Write/Edit time.
 
 ### Skills, agents, commands
 

@@ -34,15 +34,6 @@ A number written into a docstring or a doc carries its denominator beside it. A 
 
 A sweep reports "read 3 files". The change under review touches 10 files. The arithmetic reads: the sweep covered 3 of 10, so its clean verdict covers 3 of 10. The gap is the finding — send the sweep back for the other 7, and hold the verdict until the two numbers meet.
 
-## Sibling rules
-
-| Rule | Role |
-|---|---|
-| `falsify-before-green.md` | A check's green counts once the check was shown red |
-| `anti-corollary-tests.md` | Each test carries information; no corollary matrices; no suite that only matches the dead default |
-| `docstring-prose-matches-implementation.md` | A docstring enumeration covers every behavior the body applies |
-| `measurement-denominators.md` | Every count names what it scanned; a rate needs two runs |
-
 ## Enforcement
 
 This rule binds as prose discipline: a reviewer applies it to the counts a PR's prose and docstrings state, and to the counts a report claims. No hook backs it, because weighing a figure's denominator against the scope it covers needs meaning a regex cannot read.

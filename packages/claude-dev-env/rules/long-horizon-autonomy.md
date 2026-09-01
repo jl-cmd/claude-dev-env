@@ -8,7 +8,7 @@ Source: [Anthropic - Prompting Claude Fable 5](https://platform.claude.com/docs/
 
 When you have enough to act, act. Do not re-derive facts already settled in the conversation, re-open a decision the user already made, or narrate options you will not pursue in user-facing text. When you weigh a choice, give a recommendation, not a full survey. This shapes user-facing messages, not your private reasoning.
 
-This is the autonomous-run partner to `conservative-action`: that rule covers the ambiguous case (research and recommend first); this one covers the clear case (once the evidence is in hand, act).
+This is the autonomous-run partner to the ambiguous case: research and recommend first when intent is unclear; this rule covers the clear case, where the evidence is already in hand.
 
 ## Do not end a turn on a promise
 

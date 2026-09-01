@@ -2,8 +2,8 @@
 
 Hooks in this repo enforce the conventions below. Follow them so your suggestions match what the gates accept.
 
-**Checked-in review contract:** `.cursor/BUGBOT.md`.
-**Compact projection:** `packages/claude-dev-env/docs/CODE_RULES.md`.
+**Canonical review contract:** `packages/claude-dev-env/docs/CODE_RULES.md`.
+**Checked-in pointer:** `.cursor/BUGBOT.md`.
 
 ## Naming
 

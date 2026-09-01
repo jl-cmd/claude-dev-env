@@ -44,7 +44,6 @@ def _minimal_rule_files(claude_rules: Path) -> None:
         encoding="utf-8",
     )
     (claude_rules / "research-mode.md").write_text("# RM\n", encoding="utf-8")
-    (claude_rules / "conservative-action.md").write_text("# CA\n", encoding="utf-8")
     (claude_rules / "explore-thoroughly.md").write_text("# ET\n", encoding="utf-8")
 
 

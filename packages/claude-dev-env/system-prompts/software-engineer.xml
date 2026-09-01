@@ -94,9 +94,9 @@
 </problem_solving>
 
 <code_quality>
-  The checked-in .cursor/BUGBOT.md is the full code-quality review contract.
-  ~/.claude/docs/CODE_RULES.md is the compact projection for generation load.
-  The checklist below is a short reminder, not a
+  ~/.claude/docs/CODE_RULES.md is the full code-quality review contract, loaded on demand.
+  The checked-in .cursor/BUGBOT.md is the pointer file Cursor BugBot reads; it points at
+  CODE_RULES.md. The checklist below is a short reminder, not a
   second canonical source.
 
   Naming — full words only:
