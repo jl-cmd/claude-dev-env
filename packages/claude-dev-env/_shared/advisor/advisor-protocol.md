@@ -1,6 +1,9 @@
 # Advisor Protocol
 
-Shared spawn-once, consult-by-message protocol for a warm advisor. Two skills depend on this: `team-advisor` (binds the advisor for its own consulting session) and `orchestrator` (binds the same advisor and lets its own routed executor subagents consult it too). Executor spawn prompts are a third consumer, via the assembled Advisor block.
+Shared spawn-once, consult-by-message protocol for a warm advisor.
+`team-advisor` binds the advisor for its own consulting session.
+Executor spawn prompts that skill issues consume the assembled Advisor
+block.
 
 **First step of every bind:** name the session identity and resolve the host profile (next section).
 Walk the model-floor ladder, spawn the in-session advisor, or open the CLI fallback only after the host is known.

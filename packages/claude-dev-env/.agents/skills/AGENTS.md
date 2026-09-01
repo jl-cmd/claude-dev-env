@@ -28,7 +28,7 @@ contracts, runtime scripts). Map: `skills/_shared/.claude/CLAUDE.md`. End-of-run
 ## Skill groups
 
 **Planning and implementation**
-- `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; hard decisions go to a shared advisor
+- `orchestrator` — turns the session into the orchestrator: it spawns executor subagents to do the code edits and test runs; those executors consult this session
 - `orchestrator-refresh` — re-asserts orchestrator discipline on a one-shot delayed wake
 - `team-advisor` — binds one advisor at the strongest reachable tier
 - `grok-spawn` — orchestrator playbook for fleets of headless grok CLI workers

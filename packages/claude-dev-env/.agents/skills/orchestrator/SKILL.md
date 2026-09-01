@@ -2,10 +2,11 @@
 name: orchestrator
 description: >-
   Orchestrator mode: plan and delegate while workflow-backed agents
-  execute; a shared session-advisor answers hard decisions with endorse,
-  correction, plan, or stop. Triggers: '/orchestrator', 'orchestrator
-  strategy', 'run with an orchestrator', 'executor-advisor mode',
-  'orchestrator enforcement', 'agent routing', 'orchestrate'.
+  execute; this session is the advisor those executors consult. Hard
+  questions this session cannot settle go to the human. Triggers:
+  '/orchestrator', 'orchestrator strategy', 'run with an orchestrator',
+  'executor-advisor mode', 'orchestrator enforcement', 'agent routing',
+  'orchestrate'.
 disable-model-invocation: true
 ---
 
@@ -26,7 +27,8 @@ Under this skill the session is the orchestrator. It spawns and resumes
 executor subagents — `clean-coder` and the like — and those executors do
 every bit of the execution: the code edits, the build runs, the test
 runs. The orchestrating session drives the plan, keeps the run artifacts
-and the ledger current, and routes hard decisions to the shared advisor.
+and the ledger current, and answers executor consults. Hard questions
+this session cannot settle go to the human.
 The moment it edits a file or runs a test itself, the pairing breaks —
 its own tool use stays orchestration, run-artifact writes, and light
 verification reads.
@@ -115,47 +117,33 @@ pending, or when the tool is `CronCreate`.
 
 1. **Invocation guard.** One `/orchestrator` per session. When a refresh
    one-shot is already queued (`should-reschedule` exits 1 with
-   `rearm_already_pending`), do not stack a second: reuse the live
-   advisor bind, skip step 4 and the re-arm half of step 5, and carry on
-   from step 5's dispatch — status is already active and a re-arm is
-   already latched, so a second registration would stack a duplicate
-   host schedule. (Re-asserting `set --status active` preserves
-   `rearm_pending` when already active, but still do not re-arm.)
-2. **Bind the shared advisor before any executor.** Follow
-   [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-   end to end: name the session identity, compute the floor from the
-   orchestrator consumer set — this session plus every tier in the
-   routing table (its Model floor section) — walk the ladder for that
-   host (Claude: Fable first, then Sol when Fable is out of usage;
-   Codex: Sol in-session; ThirdParty: headless Fable then Sol),
-   and fail closed when nothing binds. This session owns the advisor's
-   whole lifecycle (its Lifecycle ownership section); executors only ever
-   message the warm agent or report here, and an executor that finds the
-   advisor unreachable reports that upward — it never spawns a
-   replacement itself. A **Fable**-tier attempt carries the exact token
-   `FABLE-SPAWN-AUTHORIZED` in its spawn prompt, as the protocol's
-   warm-up rule states; `hooks/blocking/fable_spawn_gate.py` denies a
-   fable spawn whose prompt lacks it.
-3. **Write the run artifacts** (next section) before the first spawn.
-4. **Activate status_gate** when the first open ledger task exists:
+   `rearm_already_pending`), do not stack a second: skip the re-arm
+   half of step 4, and carry on from step 4's dispatch — status is
+   already active and a re-arm is already latched, so a second
+   registration would stack a duplicate host schedule. (Re-asserting
+   `set --status active` preserves `rearm_pending` when already
+   active, but still do not re-arm.)
+2. **Write the run artifacts** (next section) before the first spawn.
+3. **Activate status_gate** when the first open ledger task exists:
    `python scripts/status_gate.py set --status active`.
-5. **Dispatch the first task with its ticket** (Spawn ticket section),
+4. **Dispatch the first task with its ticket** (Spawn ticket section),
    **then register the discipline reminder** via the single-pending
    re-arm protocol (cancel matching → `should-reschedule` → one
    non-recurring delayed wake → `claim-rearm`; default delay about
    2700s). Spawn before you arm, so the run is already moving, and go
-   straight on to step 6 in the same turn — the armed wake is a later
+   straight on to step 5 in the same turn — the armed wake is a later
    reminder, not the next thing to wait for.
-6. **Orchestrate.** Hold the plan and the user conversation. Spawn each
+5. **Orchestrate.** Hold the plan and the user conversation. Spawn each
    remaining task with a ticket (Spawn ticket section), keep driving while
    executors work, and keep the ledger reconciled (Task ledger
    discipline).
-7. **Consult the advisor at hard decisions.** The trigger list, consult
-   format, and reply handling live in the protocol's "Consulting the
-   warm agent" section; both this session and every executor are
-   consumers. Replies open with one of ENDORSE, CORRECTION, PLAN, or
-   STOP — `agents/session-advisor.md` defines each signal.
-8. **Terminate when done.** When every ledger task is completed or
+6. **Answer executor consults.** Executors consult this session. The
+   trigger list, consult format, and reply handling live in
+   [`reference/consult-the-orchestrator.md`](reference/consult-the-orchestrator.md).
+   Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP. When
+   this session cannot settle a question, ask the human, then reply to
+   the executor.
+7. **Terminate when done.** When every ledger task is completed or
    cancelled and no executor is running: run
    `set --status done`, cancel matching host schedules, report
    completion, and stop. Do not re-arm.
@@ -165,8 +153,8 @@ pending, or when the tool is `CronCreate`.
 Write these before the first spawn, default home `docs/plans/<run-slug>/`
 in the repo the run works on (working files, not committed):
 
-- **Run charter** — the goal, the repo root, the advisor name and host
-  profile. One file every ticket points at.
+- **Run charter** — the goal, the repo root, this session's name as
+  advisor, and the host profile. One file every ticket points at.
 - **One assignment file per task** — scope, file list, constraints, the
   acceptance check, baseline command output. The thick context goes
   here. `/prompt-generator` authors the assignment once at plan time,
@@ -196,7 +184,7 @@ Touch only: <files or globs>
 Done when: <one mechanical check — a command, a test, a diff scope>
 Return: status, artifact paths, blockers — nothing else.
 
-<Advisor block assembled per _shared/advisor/reference/advisor-block.md — advisor name filled in>
+<Consult block assembled per reference/executor-consult-block.md — orchestrator name filled in>
 ```
 
 - **Size the task by its done-check.** The right task is the largest
@@ -219,11 +207,11 @@ Return: status, artifact paths, blockers — nothing else.
   slice of work and the done-check — it does not restate the assignment.
 - **Do not restate what the agent definition carries.** The routing
   table picks the definition, and `clean-coder` already holds the code
-  discipline. The ticket adds the task, the pointers, and the Advisor
+  discipline. The ticket adds the task, the pointers, and the consult
   block only.
-- **The Advisor block is pasted, assembled text.** Assemble it at bind
-  time from the parts in
-  [`_shared/advisor/reference/advisor-block.md`](../../_shared/advisor/reference/advisor-block.md)
+- **The consult block is pasted, assembled text.** Assemble it at ticket
+  write time from the parts in
+  [`reference/executor-consult-block.md`](reference/executor-consult-block.md)
   and paste the assembled text itself into the ticket.
 
 ## Workflow Agent Routing
@@ -263,9 +251,9 @@ Routing rules:
   only; a host where no resolver is available fails closed the same
   way — the coding spawn stops and the orchestrator reports it.
 - Host detection follows
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md)
-  (Host profiles section, `resolve_session_identity` then
-  `detect_host_profile`) — the sole detection system, with no second one.
+  [`reference/host-detect.md`](reference/host-detect.md)
+  (`resolve_session_identity` then `detect_host_profile`) — the sole
+  detection system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
 - Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).
@@ -290,7 +278,7 @@ Routing rules:
   context, or a genuine task switch needs a clean context.
 - **Reuse is a cost rule, not a correctness dependency.** The run
   artifacts keep every executor replaceable (Run state section).
-- **Name the agent to resume.** When a PLAN from the shared advisor fits
+- **Name the agent to resume.** When a PLAN from this session fits
   a warm agent, name which agent to resume and where.
 
 ## Task ledger discipline
@@ -325,8 +313,8 @@ no open work remains, run `set --status done` before any re-arm attempt.
   run-artifact writes, and light verification reads.
 - Every delegated task carries a ledger entry, an assignment artifact,
   and a workflow-backed spawn with a ticket, routed by the table.
-- One shared advisor per orchestrated session, owned by this session per
-  the protocol; executors never spawn, respawn, or shut it down.
+- This session is the advisor for every executor it spawns. The human
+  is this session's advisor.
 
 ## Gotchas
 
@@ -351,17 +339,20 @@ no open work remains, run `set --status done` before any re-arm attempt.
 | File | Purpose |
 |---|---|
 | `SKILL.md` | Orchestrator strategy; pointers to run-control scripts. |
+| `reference/consult-the-orchestrator.md` | When executors consult this session; four-signal replies. |
+| `reference/executor-consult-block.md` | Paste parts for every executor spawn ticket. |
+| `reference/host-detect.md` | Host profile for worker-model routing. |
 | `scripts/status_gate.py` | Status file, latch, and re-arm gate (exit codes). |
 | `scripts/status_gate_constants/config/constants.py` | Named constants for status_gate. |
 | `scripts/test_status_gate.py` | Gate tests. |
+| `test_orchestrator_skill_contract.py` | Skill-text contract: local consult files only. |
 
 ## Folder Map
 
 - `SKILL.md` — orchestration process and routing.
 - `scripts/` — deterministic status_gate.
-- Advisor policy:
-  [`_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md).
+- `reference/` — consult contract and ticket paste parts.
 
 ## File-backed run ledger
 
-When host task tools are absent, reconcile delegated work through `scripts/grok_run_ledger.py` under the run-state directory (stable task ids, one live owner, unique advisor sessions, dependency blocking, snapshot-drift reopening).
+When host task tools are absent, reconcile delegated work through `scripts/grok_run_ledger.py` under the run-state directory (stable task ids, one live owner, unique consult threads, dependency blocking, snapshot-drift reopening).

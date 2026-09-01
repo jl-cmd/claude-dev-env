@@ -902,7 +902,9 @@ def test_clean_coder_uses_target_package_aware_hook_paths() -> None:
 
 def test_clean_coder_uses_the_callers_warm_advisor_at_approved_triggers() -> None:
     body = _clean_coder_body()
-    assert "caller's existing warm `session-advisor`" in body
+    assert "Consult the advisor the spawn ticket names" in body
+    assert "orchestrating session" in body
+    assert "warm `session-advisor`" in body
     assert "before first write" in body
     assert "before locking a plan or interpretation" in body
     assert "before a hard-to-reverse action" in body
