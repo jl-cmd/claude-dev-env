@@ -22,10 +22,6 @@ Shared constant modules imported by hooks throughout the `hooks/` tree. Each fil
 | `command_dispatch_constants.py` | Command-word regex, command-key access pattern, tokenization pattern, and anchors for the unanchored command-dispatch meta-gate |
 | `conventional_pr_title_gate_constants.py` | Bash tool name, gh executable basenames and pr create/edit subcommand tokens, title/repo flag names, semantic-title-CI workflow markers, the Conventional Commits type list and title pattern, the semantic-pull-request action `types:` input pattern, and block-message text for the conventional-PR-title gate |
 | `cursor_cli_python_misfire_blocker_constants.py` | Detection patterns and deny message for Cursor launches that mistreat a Python code-rules-gate script |
-| `dead_argparse_argument_constants.py` | Patterns for detecting unused argparse arguments |
-| `dead_config_field_constants.py` | Patterns for detecting unused `*Config` / `*Selectors` dataclass fields |
-| `dead_dataclass_field_constants.py` | Patterns for detecting unused dataclass fields |
-| `dead_module_constant_constants.py` | Patterns for detecting unexported `UPPER_SNAKE` constants in `*_constants.py` modules |
 | `destructive_command_environment_constants.py` | Environment keys and shared truthy values used by destructive-command hooks |
 | `destructive_command_segment_constants.py` | The list of destructive shell command patterns the blocker matches |
 | `docstring_rule_gate_count_blocker_constants.py` | Target rule basename, spelled-out-number lookup, count-clause and `check_*` validator patterns, and block-message text for the docstring-rule gate-count staleness blocker |

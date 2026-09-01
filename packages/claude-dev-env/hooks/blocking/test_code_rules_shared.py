@@ -279,3 +279,15 @@ def test_is_ephemeral_path_reads_session_id_from_environment(
     throwaway_script = scratchpad_directory / "probe.py"
 
     assert _SHARED_MODULE.is_ephemeral_path(str(throwaway_script)) is True
+
+
+def test_is_dedicated_constants_module_true_for_constants_suffix() -> None:
+    assert _SHARED_MODULE._is_dedicated_constants_module("hooks_constants/foo_constants.py") is True
+
+
+def test_is_dedicated_constants_module_true_for_config_directory() -> None:
+    assert _SHARED_MODULE._is_dedicated_constants_module("app/config/timing.py") is True
+
+
+def test_is_dedicated_constants_module_false_for_ordinary_module() -> None:
+    assert _SHARED_MODULE._is_dedicated_constants_module("app/services/orders.py") is False

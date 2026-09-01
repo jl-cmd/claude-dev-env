@@ -31,17 +31,11 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_command_dispatch.py` | A `hooks/blocking/` command classifier matching a multi-word command regex without a start anchor or first-word tokenization |
 | `code_rules_comments.py` | No new inline comments; advisory on deletion of existing ones |
 | `code_rules_constants_config.py` | Constants must live in `config/`; file-global constant use-count |
-| `code_rules_dead_argparse_argument.py` | Argparse arguments with no references in the same file |
-| `code_rules_dead_config_field.py` | `*Config` / `*Selectors` dataclass fields with no live references |
-| `code_rules_dead_dataclass_field.py` | Dataclass fields with no consuming references |
-| `code_rules_dead_module_constant.py` | `UPPER_SNAKE` constants in `*_constants.py` modules with no importers |
-| `code_rules_dead_split_branch.py` | A conditional whose falsy branch is unreachable because the tested value comes from a separator `str.split()`, which never returns an empty list |
-| `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; fallback-branch coverage |
+| `code_rules_docstrings.py` | Google-style docstrings; `Args:` section matches signature; run-on-sentence and prose-wall narrative backstops; undefined-constant references |
 | `code_rules_duplicate_body.py` | A function body copied from a sibling module, or a helper body inlined as a block inside a larger function in the same file |
 | `code_rules_imports_logging.py` | Imports at top of file; logging format-arg style; printf tokens in `str.format`-logger messages |
 | `code_rules_js_conventions.py` | Boolean-prefix naming and banned identifiers for JavaScript/TypeScript declarations and `@param {boolean}` JSDoc, scoped to changed lines |
 | `code_rules_magic_values.py` | No magic numbers or strings in production code bodies |
-| `code_rules_mock_completeness.py` | Mock calls that skip required arguments |
 | `code_rules_naming_collection.py` | Collection names must use `all_*` prefix |
 | `code_rules_optional_params.py` | No optional parameters where a required one would do |
 | `code_rules_orphan_css_class.py` | CSS class attributes in Python markup with no matching `.<class>` selector |
@@ -51,7 +45,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_probe_chains.py` | Probe-chain detection logic |
 | `code_rules_probe_detection.py` | Probe pattern detection helpers |
 | `code_rules_probe_recording.py` | Probe recording utilities |
-| `code_rules_scope_binding.py` | Scope/binding analysis utilities |
 | `code_rules_shared.py` | Shared dataclasses and helpers used by multiple check modules |
 | `code_rules_string_magic.py` | Magic string detection with masking and f-string support; whitespace-only indentation literals in function bodies |
 | `code_rules_test_assertions.py` | Test assertion style rules |
@@ -60,7 +53,6 @@ The check modules it calls are the `code_rules_<concern>.py` files below.
 | `code_rules_test_isolation.py` | Tests must not rely on home-dir or temp-dir side effects |
 | `code_rules_type_escape.py` | No `Any` imports, `cast()`, or `# type: ignore` outside boundary files |
 | `code_rules_typeddict_stub.py` | TypedDict pairs (`_encode_*`/`_decode_*`) must both exist in the same module |
-| `code_rules_unused_imports.py` | Unused module-level imports |
 
 ## Other standalone blockers
 

@@ -19,6 +19,8 @@ from hooks_constants.code_rules_enforcer_constants import (
     ALL_WORKFLOW_REGISTRY_PATTERNS,
     CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME,
     CLAUDE_JOB_DIR_SCRATCH_SUBDIRECTORY,
+    CONFIG_DIRECTORY_SEGMENT,
+    CONSTANTS_MODULE_SUFFIX,
     EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME,
     LEADING_DRIVE_LETTER_PATTERN,
     STRICT_TEST_FILE_BASENAME_PATTERN,
@@ -445,6 +447,27 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
     if is_agent_home_tooling(file_path):
         return True
     return is_under_session_scratchpad(file_path, hook_payload or {})
+
+
+def _is_dedicated_constants_module(file_path: str) -> bool:
+    """Return whether a path is a dedicated constants module.
+
+    A dedicated constants module is one whose filename ends in
+    ``_constants.py`` or whose path includes a ``config`` directory segment.
+    These modules export named values to importers, so a same-file reference
+    count cannot prove one of their constants dead.
+
+    Args:
+        file_path: The destination path of the write.
+
+    Returns:
+        True for a constants-suffixed module or a module under ``config/``.
+    """
+    normalized_path = file_path.replace("\\", "/").lower()
+    if normalized_path.endswith(CONSTANTS_MODULE_SUFFIX):
+        return True
+    path_segments = normalized_path.split("/")
+    return CONFIG_DIRECTORY_SEGMENT in path_segments[:-1]
 
 
 def is_migration_file(file_path: str) -> bool:

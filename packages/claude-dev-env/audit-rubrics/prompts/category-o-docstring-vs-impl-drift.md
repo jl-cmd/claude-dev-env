@@ -48,7 +48,7 @@ ID prefix: `find`.
 - Adversarial probes: (a) walk each `return True` branch and ask whether the input that reached it satisfies the name's promise; (b) construct an input class outside the named promise that still returns True — that is an O3 finding; (c) check the name against neighboring helpers — is one of them the better home for the broader case.
 
 **O4. Step-ordering narrative**
-- Judgment: thick rubric O4 (includes branch-guarded dispatch; gated form `check_docstring_step_enumeration_dispatch_coverage`).
+- Judgment: thick rubric O4 (includes branch-guarded dispatch).
 - Adversarial probes: (a) read the body strictly top-to-bottom and label each call A/B/C against the docstring's named steps; (b) check for early returns that reorder visible steps; (c) check for `try/finally` blocks where the finally clause is itself one of the named steps and runs out of declared order.
 
 **O5. Named-sentinel / filename references**
@@ -64,7 +64,7 @@ ID prefix: `find`.
 - Adversarial probes: (a) for each module in the split, list its exported symbols and compare to the docstring's claimed responsibilities; (b) grep the responsibility's verb against the originating module — does the originating docstring still claim what left; (c) check for cross-module imports that reveal which file hosts each responsibility.
 
 **O8. Companion-doc ordering/content vs producer**
-- Judgment: thick rubric O8 (order/content claims vs producer; `check_docstring_no_consumer_claim` for the producer-only assertion slice).
+- Judgment: thick rubric O8 (order/content claims vs producer, including the producer-only assertion slice).
 - Adversarial probes: (a) for each changed producer, name the artifact it builds and grep the skill's `SKILL.md` and sibling `.md` files for any sentence naming that artifact; (b) walk the producer body's build step — does it sort, or does it merge stored names and append in file order — and compare against the doc's order word (`sorted`, `alphabetical`); (c) check whether the doc's content claim (`just the at-risk names`, `only the current set`) hides merged-in prior entries the producer carries over from the stored file.
 
 **O9. Python docstring plainness for a general developer**
