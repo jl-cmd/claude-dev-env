@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.29.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.28.1...claude-dev-env-v2.29.0) (2026-09-01)
+
+
+### Features
+
+* **orchestrator:** make this session the executor advisor ([bb0dbbd](https://github.com/jl-cmd/claude-dev-env/commit/bb0dbbdbaf7dc74834055eb45f2c4f6d667cc757))
+* **orchestrator:** make this session the executor advisor ([b937e0d](https://github.com/jl-cmd/claude-dev-env/commit/b937e0dbeeb8e5b84d4ad3574be4ae4c1b1849e3))
+
+
+### Bug Fixes
+
+* **advisor:** keep bind protocol silent on orchestrator ([8cb59f6](https://github.com/jl-cmd/claude-dev-env/commit/8cb59f6bad4a31388a74976260a480d920c2ccb7))
+* **orchestrator:** drop foreign advisor-protocol pointers ([9733db5](https://github.com/jl-cmd/claude-dev-env/commit/9733db554377188eb19e946f646fbc4007cd4aa4))
+
+
+### Documentation
+
+* **advisor:** name lead session, bound advisor, and workers ([1e18e6b](https://github.com/jl-cmd/claude-dev-env/commit/1e18e6b2a4599245e782f207b9236494d0b885d2))
+* **advisor:** show A/AA consult parties with a worker example ([ca882dd](https://github.com/jl-cmd/claude-dev-env/commit/ca882dd9aa65dfd0735b80b9c0ec3b6a0e3cfd4e))
+* **advisor:** spell out who /team-advisor reports to ([80b1944](https://github.com/jl-cmd/claude-dev-env/commit/80b1944336fedea26389a23cdb597cf26af8fb04))
+* archive every AGENTS.md and leave a bare stub ([e0468e4](https://github.com/jl-cmd/claude-dev-env/commit/e0468e46d4c19d4e3b4a8a0f876b437f7ca2b93b))
+* archive every AGENTS.md and leave a bare stub ([fecf440](https://github.com/jl-cmd/claude-dev-env/commit/fecf4401c89d66b09ed850e46f0d9664277c0c02))
+* store archived AGENTS.md as AGENTS.md.archive ([ce4bcd3](https://github.com/jl-cmd/claude-dev-env/commit/ce4bcd3b4cc0a89e2912e5d074772c57de17352d))
+
 ## [2.28.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.28.0...claude-dev-env-v2.28.1) (2026-09-01)
 
 
