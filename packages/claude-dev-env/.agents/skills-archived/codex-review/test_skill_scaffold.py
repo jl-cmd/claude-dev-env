@@ -9,9 +9,15 @@ from pathlib import Path
 
 SKILL_DIRECTORY = Path(__file__).resolve().parent
 SKILL_PATH = SKILL_DIRECTORY / "SKILL.md"
-PACKAGE_MAP_PATH = SKILL_DIRECTORY / "AGENTS.md"
-REFERENCE_DIRECTORY = SKILL_DIRECTORY / "reference"
 PACKAGE_ROOT = SKILL_DIRECTORY.parents[2]
+REPOSITORY_ROOT = PACKAGE_ROOT.parents[1]
+AGENTS_MD_ARCHIVE_ROOT = REPOSITORY_ROOT / "docs" / "records" / "agents-md"
+PACKAGE_MAP_PATH = (
+    AGENTS_MD_ARCHIVE_ROOT
+    / SKILL_DIRECTORY.relative_to(REPOSITORY_ROOT)
+    / "AGENTS.md.archive"
+)
+REFERENCE_DIRECTORY = SKILL_DIRECTORY / "reference"
 PYPROJECT_PATH = PACKAGE_ROOT / "pyproject.toml"
 EVER_SHIPPED_SKILLS_PATH = PACKAGE_ROOT / "bin" / "ever-shipped-skills.mjs"
 CONSTANTS_PACKAGE_NAME = "codex_review_scripts_constants"
@@ -131,7 +137,11 @@ def test_scripts_surface_names_capture_wrapper_and_constants() -> None:
     skill_text = _read_skill_text()
     package_map_text = PACKAGE_MAP_PATH.read_text(encoding="utf-8")
     constants_map_text = (
-        SKILL_DIRECTORY / "scripts" / "codex_review_scripts_constants" / "AGENTS.md"
+        AGENTS_MD_ARCHIVE_ROOT
+        / SKILL_DIRECTORY.relative_to(REPOSITORY_ROOT)
+        / "scripts"
+        / "codex_review_scripts_constants"
+        / "AGENTS.md.archive"
     ).read_text(encoding="utf-8")
     wrapper_path = SKILL_DIRECTORY / "scripts" / "run_codex_review.py"
 
