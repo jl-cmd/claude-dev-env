@@ -37,7 +37,7 @@ After a CORRECTION or PLAN, your next consult on that topic opens with what happ
 
 Address a CORRECTION before treating the plan or the work as done, whether it names a wrong step or a risk worth closing.
 
-`/team-advisor` is the skill that binds one warm advisor for the session that ran it. Call that session A and the advisor AA. A sends every consult. AA replies only to A. If A later spawns workers C and D, those workers do not consult AA, and AA does not reply to them. When the reply is STOP, or AA cannot be reached, A tells the human. A has no parent session to report to.
+`/team-advisor` is the skill that binds one warm advisor for the session that ran it. That lead session sends every consult. The bound advisor (`team-advisor-agent` on Claude) replies only to the lead session. If the lead session later spawns worker subagents, those workers do not consult the bound advisor, and the bound advisor does not reply to them. When the reply is STOP, or the bound advisor cannot be reached, the lead session tells the human. The lead session has no parent session to report to.
 
 When the advisor becomes unreachable, report that to the session that owns its lifecycle ([`lifecycle.md`](lifecycle.md)); that session alone decides whether to respawn (Claude Agent, Codex native Sol, or third-party CLI re-bind).
 A third-party host that cannot re-bind follows the fail-closed rule in [`third-party-bind.md`](third-party-bind.md).
