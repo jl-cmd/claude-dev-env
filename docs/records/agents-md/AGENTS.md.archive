@@ -72,3 +72,21 @@ These ship as plain files (`.agents/skills/<name>/SKILL.md` and helper scripts, 
 - **Conventional Commits + release-please.** `release-please-config.json` drives versioning and `CHANGELOG.md` for the `claude-dev-env` package from commit types (`feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `ci`, `style`, `test`, `build`, `revert`). `publish.yml` releases to npm. `pr-check.yml` validates that the PR title is a semantic commit.
 - **Two `CLAUDE.md` files ship to users.** `packages/claude-dev-env/.claude/CLAUDE.md` installs to `~/.claude/CLAUDE.md`. This root `CLAUDE.md` is for contributors and is not packaged.
 - **Markdown is current and clear.** The `state-description-blocker` hook checks historical or comparative phrasing in `.md` writes, and `ask_user_question_shape_blocker` checks AskUserQuestion structure. Apply `packages/claude-dev-env/rules/asd-ste100-language.md` for user-facing word choice and sentence style.
+
+## Cursor Cloud specific instructions
+
+A Cloud Agent boots from `.cursor/environment.json`, whose `install` runs `.cursor/install.sh`. That script installs the system packages (`python-is-python3`, `libpq5`, PowerShell), Node workspace dependencies, the Python test and lint tooling with the editable constants packages, and then runs `node packages/claude-dev-env/bin/install.mjs --update` to install the config from local source into `~/.claude` and `~/.agents`. The script is idempotent, so rerun it to repair the environment.
+
+The installer sets `core.hooksPath` globally, so the shipped `pre-commit` and `pre-push` gates run on every commit and push in this VM. A staged change that breaks CODE_RULES fails the commit. Run `git config --global --unset core.hooksPath` to detach those gates for a commit.
+
+Run the suites the way CI runs them. Two Python families disagree about the sandbox path: the ephemeral-path gates need a `--basetemp` outside `/tmp`, and the system-temp-root checks need that basetemp inside a directory that `all_system_temporary_roots()` counts (`RUNNER_TEMP` satisfies both). Build the CI `--deselect` set from `.github/ci/build-deselect-args.sh`; the deselected node IDs need credentials or Windows semantics that this VM lacks.
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+export RUNNER_TEMP="$HOME/ci-temp" && mkdir -p "$RUNNER_TEMP/basetemp"
+source .github/ci/build-deselect-args.sh
+python -m pytest packages/claude-dev-env --basetemp="$RUNNER_TEMP/basetemp" -n auto "${deselect_args[@]}"
+python -m pytest tests/ .github/ci --basetemp="$RUNNER_TEMP/basetemp" -n auto "${deselect_args[@]}"
+( cd packages/claude-dev-env && npm test )
+pwsh -File packages/claude-dev-env/scripts/check.ps1 -SkipTests
+```
