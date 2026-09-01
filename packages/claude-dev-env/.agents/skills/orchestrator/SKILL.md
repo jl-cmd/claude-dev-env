@@ -142,7 +142,7 @@ pending, or when the tool is `CronCreate`.
    [`reference/consult-the-orchestrator.md`](reference/consult-the-orchestrator.md).
    Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP. When
    this session cannot settle a question, ask the human, then reply to
-   the executor. Do not spawn `session-advisor`. Do not open `advisor-protocol.md`.
+   the executor.
 7. **Terminate when done.** When every ledger task is completed or
    cancelled and no executor is running: run
    `set --status done`, cancel matching host schedules, report
@@ -313,8 +313,8 @@ no open work remains, run `set --status done` before any re-arm attempt.
   run-artifact writes, and light verification reads.
 - Every delegated task carries a ledger entry, an assignment artifact,
   and a workflow-backed spawn with a ticket, routed by the table.
-- This session is the advisor for every executor it spawns. Executors
-  never spawn `session-advisor`. The human is this session's advisor.
+- This session is the advisor for every executor it spawns. The human
+  is this session's advisor.
 
 ## Gotchas
 
@@ -345,7 +345,7 @@ no open work remains, run `set --status done` before any re-arm attempt.
 | `scripts/status_gate.py` | Status file, latch, and re-arm gate (exit codes). |
 | `scripts/status_gate_constants/config/constants.py` | Named constants for status_gate. |
 | `scripts/test_status_gate.py` | Gate tests. |
-| `test_orchestrator_skill_contract.py` | Skill-text contract: no bind protocol, consult this session. |
+| `test_orchestrator_skill_contract.py` | Skill-text contract: local consult files only. |
 
 ## Folder Map
 

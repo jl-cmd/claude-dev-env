@@ -1,7 +1,7 @@
 # orchestrator
 
 Turns the session into the orchestrator. Executors consult this session.
-The human is the next hop. This skill does not bind `session-advisor`.
+The human is the next hop.
 
 ## Key files
 

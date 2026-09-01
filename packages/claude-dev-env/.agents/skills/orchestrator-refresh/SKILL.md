@@ -12,8 +12,7 @@ description: >-
 
 Name the session identity first (see
 [`../orchestrator/reference/host-detect.md`](../orchestrator/reference/host-detect.md)).
-Re-assert the discipline for that host only. Do not spawn
-`session-advisor`. Do not open `advisor-protocol.md`.
+Re-assert the discipline for that host only.
 
 ## 0. status_gate first (deterministic)
 
@@ -87,11 +86,9 @@ reports and adds nothing further.
    [`../orchestrator/reference/consult-the-orchestrator.md`](../orchestrator/reference/consult-the-orchestrator.md).
    Reply with ENDORSE / CORRECTION / PLAN / STOP. When this session
    cannot settle a question, ask the human, then reply. Keep tool use
-   to orchestration and light verification reads. Do not spawn
-   `session-advisor`.
+   to orchestration and light verification reads.
 4. **Resume before you spawn.** `SendMessage` an existing *executor* by
-   name or `agentId` before a cold spawn. (Third-party: executor reuse
-   only — advisor stays on the CLI chain.)
+   name or `agentId` before a cold spawn.
 5. **Fresh spawn only for a genuine task switch.** Never tell an agent
    to compact for a clean context.
 6. **Single-pending re-arm only.** Same protocol as the orchestrator

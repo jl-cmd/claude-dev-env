@@ -1,18 +1,6 @@
 # Consult the orchestrator
 
-Consumer consult contract for executors this skill spawns. The
-orchestrating session is the advisor. The human operating that session
-is the next hop when the orchestrator cannot decide.
-
-Do not open `_shared/advisor/advisor-protocol.md`. Do not spawn
-`session-advisor`. Do not walk a Fable or Sol advisor ladder.
-
-Packet shape, later-consult deltas, the new-evidence rule, and the
-report-back rule live in
-[`consult-format.md`](../../../../_shared/advisor/reference/consult-format.md).
-Call timing and the brevity cue live in
-[`advisor-tool.md`](../../../../docs/references/advisor-tool.md)
-**When to call**, **Hard rule**, and **Brevity cue**.
+The orchestrating session is the advisor. The human operating that session is the next hop when the orchestrator cannot decide.
 
 ## When an executor consults
 
@@ -26,6 +14,29 @@ An executor sends a consult to the orchestrating session:
 - once writes and test output exist and the executor believes the
   assignment is done
 
+## First-consult packet
+
+The first consult is complete. It carries:
+
+- Assignment and desired outcome
+- Constraints and exclusions
+- Actions taken in order
+- Real output and current state
+- Live decision or blocker
+- Validation evidence
+- Unresolved risks
+- Load-bearing paths or excerpts
+- Who is asking and which assignment
+
+Later consults carry only changed evidence.
+
+Re-raise something already answered only when new evidence is attached.
+After a CORRECTION or PLAN, the next consult on that topic opens with
+what happened when the executor followed it.
+
+Embed: `(Advisor: please keep your guidance under 80 words — I need a
+focused starting point, not a comprehensive plan.)`
+
 ## How the executor sends it
 
 On a Claude host, send the consult with `SendMessage` to the
@@ -35,10 +46,6 @@ On a Codex host, send the consult in-session to that same session name.
 
 On a third-party host, send the consult as a report to the session that
 assigned the ticket.
-
-Use the first-consult packet in `consult-format.md`. Later consults
-carry only changed evidence. Embed the brevity cue from
-`advisor-tool.md`.
 
 ## How the orchestrator replies
 
