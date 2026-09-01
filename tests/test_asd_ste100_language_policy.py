@@ -8,7 +8,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "packages" / "claude-dev-env"
 AGENTS_MD_ARCHIVE_ROOT = REPOSITORY_ROOT / "docs" / "records" / "agents-md"
 CANONICAL_RULE_PATH = PACKAGE_ROOT / "rules" / "asd-ste100-language.md"
-PACKAGE_HUB_PATH = AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md"
+PACKAGE_HUB_PATH = (
+    AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md.archive"
+)
 ARCHIVE_PATH = (
     REPOSITORY_ROOT
     / "docs"
@@ -109,7 +111,7 @@ def test_archive_stays_outside_the_package_rules_directory() -> None:
 
 def _runtime_projection_path(relative_path: str) -> Path:
     if relative_path == "AGENTS.md" or relative_path.endswith("/AGENTS.md"):
-        return AGENTS_MD_ARCHIVE_ROOT / relative_path
+        return AGENTS_MD_ARCHIVE_ROOT / f"{relative_path}.archive"
     return REPOSITORY_ROOT / relative_path
 
 

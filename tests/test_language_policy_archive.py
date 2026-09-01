@@ -8,8 +8,16 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "packages" / "claude-dev-env"
 AGENTS_MD_ARCHIVE_ROOT = REPOSITORY_ROOT / "docs" / "records" / "agents-md"
 CANONICAL_RULE_PATH = PACKAGE_ROOT / "rules" / "asd-ste100-language.md"
-PACKAGE_HUB_PATH = AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md"
-RULES_INDEX_PATH = AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "rules" / "AGENTS.md"
+PACKAGE_HUB_PATH = (
+    AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md.archive"
+)
+RULES_INDEX_PATH = (
+    AGENTS_MD_ARCHIVE_ROOT
+    / "packages"
+    / "claude-dev-env"
+    / "rules"
+    / "AGENTS.md.archive"
+)
 ARCHIVE_PATH = (
     REPOSITORY_ROOT
     / "docs"
