@@ -5,8 +5,7 @@ sibling modules from disk. These names identify each phase, name the checks
 the full gate alone runs, name the hook-infrastructure checks the edit lane
 still runs, and template the error for an unrecognized phase.
 
-Scope assigns the lane; check category does not. See ``docs/CODE_RULES.md``
-section 11.6.
+Scope assigns the lane. See ``docs/CODE_RULES.md`` section 11.6.
 """
 
 EDIT_LANE_PHASE: str = "edit_lane"

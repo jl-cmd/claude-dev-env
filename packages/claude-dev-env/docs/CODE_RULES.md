@@ -122,11 +122,9 @@ If you already have the data, don't fetch it again.
 
 ## 11.6 LANE ASSIGNMENT IS BY SCOPE
 
-A check runs on the full gate alone when it reads a file other than the target. Every other check runs on both lanes.
+Scope assigns the lane. A check that reads a file other than the target runs on the full gate. Every other check runs on both lanes.
 
-Check category — correctness, contract, style, docstring prose — does not assign a lane.
+Two surfaces report on the roster, and each reports a specific thing:
 
-Two measurement surfaces do not measure the roster, and neither settles a lane question:
-
-- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already has content, and `_contents_for_validation` returns `None` for a write over an existing file. Time an `Edit` payload against a real file.
-- `~/.claude/logs/hook-blocks.log` records fixtures from `test_code_rules_enforcer_*.py` and the timing harness's default target, not organic edits.
+- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
+- `~/.claude/logs/hook-blocks.log` records the denials raised by fixtures in `test_code_rules_enforcer_*.py` and by the timing harness's default target.
