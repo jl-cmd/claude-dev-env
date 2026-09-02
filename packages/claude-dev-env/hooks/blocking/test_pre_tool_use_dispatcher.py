@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -30,6 +31,7 @@ if str(_HOOKS_ROOT) not in sys.path:
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
+    ALL_IMMEDIATE_HARM_SCRIPT_PATHS,
     APPLY_PATCH_TOOL_NAME,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
@@ -219,24 +221,6 @@ def _edit_payload(file_path: str, old_string: str, new_string: str) -> str:
     )
 
 
-def _multi_edit_payload(file_path: str, edits: list[dict[str, str]]) -> str:
-    """Build a MultiEdit tool payload JSON string.
-
-    Args:
-        file_path: The target file path.
-        edits: List of edit dicts with old_string and new_string keys.
-
-    Returns:
-        JSON-encoded payload string.
-    """
-    return json.dumps(
-        {
-            "tool_name": MULTI_EDIT_TOOL_NAME,
-            "tool_input": {"file_path": file_path, "edits": edits},
-        }
-    )
-
-
 def _apply_patch_payload(working_directory: str, command: str) -> str:
     """Build an apply_patch tool payload JSON string.
 
@@ -303,9 +287,11 @@ def test_clean_write_allows_on_edit_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, EDIT_TOOL_NAME)
 
 
-def test_clean_write_allows_on_multi_edit_tool() -> None:
+def test_clean_write_allows_on_multi_edit_tool(
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
+) -> None:
     """Dispatcher allows a multi-edit that all hosted hooks allow on MultiEdit tool."""
-    payload_text = _multi_edit_payload(
+    payload_text = multi_edit_payload(
         _TEMP_FILE_PATH,
         [{"old_string": "old", "new_string": "new"}],
     )
@@ -321,7 +307,9 @@ def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
     assert "-> 9 hooks" not in dispatcher_source
 
 
-def test_multi_edit_runs_only_group_b_hooks() -> None:
+def test_multi_edit_payload_runs_only_group_b_hooks(
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
+) -> None:
     """Dispatcher invokes only the hooks registered for MultiEdit, and each allows a clean edit.
 
     A hook whose applicable set omits MultiEdit stays absent from the
@@ -344,7 +332,7 @@ def test_multi_edit_runs_only_group_b_hooks() -> None:
             f"Group-A hook {each_group_a_entry.script_relative_path!r} "
             "appears in the MultiEdit applicable set — it must not"
         )
-    clean_payload = _multi_edit_payload(
+    clean_payload = multi_edit_payload(
         _MARKDOWN_FILE_PATH,
         [{"old_string": "old line", "new_string": "New text."}],
     )
@@ -401,7 +389,9 @@ def test_write_existing_file_blocker_denies_on_write_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
 
-def test_write_existing_file_blocker_allows_multi_edit_to_an_existing_path() -> None:
+def test_write_existing_file_blocker_allows_multi_edit_to_an_existing_path(
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
+) -> None:
     """write_existing_file_blocker runs on MultiEdit but never denies it.
 
     MultiEdit carries no create-or-clobber path the hook needs to guard, so it
@@ -410,7 +400,7 @@ def test_write_existing_file_blocker_allows_multi_edit_to_an_existing_path() -> 
     markdown-only hooks stay silent.
     """
     existing_file_path = str(Path(__file__).resolve())
-    payload_text = _multi_edit_payload(
+    payload_text = multi_edit_payload(
         existing_file_path,
         [{"old_string": "old text", "new_string": "new text"}],
     )
@@ -744,36 +734,27 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     )
 
 
-def test_dispatcher_multi_edit_matches_edit_exactly() -> None:
-    """MultiEdit's applicable set equals Edit's, hook for hook.
+def test_dispatcher_multi_edit_reaches_the_sensitive_protector() -> None:
+    """A MultiEdit onto a sensitive path meets the same gate a Write does.
 
-    Every hook applicable to Edit judges content with no dependency on which
-    tool delivered it, so the two sets must match. A hook that legitimately
-    stays Edit-only names its reason where it is registered, not here.
+    test_edit_and_multi_edit_applicable_sets_are_equal in the constants suite
+    holds the Edit and MultiEdit rosters equal, so this pins the one hook whose
+    absence would let a secret through a MultiEdit.
     """
-    all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
     all_multi_edit_script_paths = {
         each_entry.script_relative_path for each_entry in all_multi_edit_entries
     }
     assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
         "sensitive_file_protector belongs in the MultiEdit applicable set"
     )
-    assert all_edit_script_paths == all_multi_edit_script_paths, (
-        "Edit-only (not MultiEdit): "
-        f"{sorted(all_edit_script_paths - all_multi_edit_script_paths)}; "
-        "MultiEdit-only (not Edit): "
-        f"{sorted(all_multi_edit_script_paths - all_edit_script_paths)}"
-    )
 
 
 def test_dispatcher_apply_patch_applies_immediate_harm_hooks() -> None:
-    """apply_patch applies to exactly 5 hosted hooks, including the sensitive protector.
+    """apply_patch applies to exactly the immediate-harm roster.
 
-    apply_patch reaches only the immediate-harm-plus-TDD-plus-tracking roster
-    named in the mutation-parity assignment, not the full Write/Edit/MultiEdit
-    lint surface — this pins that narrower set at its verified size.
+    apply_patch reaches only the immediate-harm-plus-TDD roster the constants
+    module names, not the full Write/Edit/MultiEdit lint surface.
     """
     all_apply_patch_entries = _applicable_entries_for_tool(APPLY_PATCH_TOOL_NAME)
     all_apply_patch_script_paths = {
@@ -782,8 +763,9 @@ def test_dispatcher_apply_patch_applies_immediate_harm_hooks() -> None:
     assert "blocking/sensitive_file_protector.py" in all_apply_patch_script_paths, (
         "sensitive_file_protector belongs in the apply_patch applicable set"
     )
-    assert len(all_apply_patch_entries) == 5, (
-        f"apply_patch tool must apply to exactly 5 hooks, got {len(all_apply_patch_entries)}"
+    assert all_apply_patch_script_paths == set(ALL_IMMEDIATE_HARM_SCRIPT_PATHS), (
+        "apply_patch must apply to exactly the immediate-harm roster, got: "
+        f"{sorted(all_apply_patch_script_paths)}"
     )
 
 
@@ -1068,21 +1050,11 @@ def _codex_add_patch(relative_file_path: str, file_body: str) -> str:
     )
 
 
-_SYNTHETIC_GITHUB_TOKEN = "ghp_" + ("C" * 36)
-
-
-def _init_bare_git_repo(repository_root: Path) -> None:
-    """Initialize an empty git repository at *repository_root*.
-
-    The PII scanner reads the apply_patch payload's ``cwd`` as a git
-    repository root, so a dispatcher-level apply_patch test needs a real
-    repository there rather than a bare temp directory.
-    """
-    repository_root.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init"], cwd=repository_root, check=True, capture_output=True)
-
-
-def test_dispatcher_denies_apply_patch_add_with_hardcoded_secret(tmp_path: Path) -> None:
+def test_dispatcher_denies_apply_patch_add_with_hardcoded_secret(
+    tmp_path: Path,
+    init_bare_git_repo: Callable[[Path], None],
+    synthetic_github_token: str,
+) -> None:
     """The dispatcher denies an apply_patch "add" that writes a hardcoded token.
 
     Proves Done-when scenario 1 (hardcoded secret/PII denied) reaches apply_patch
@@ -1090,8 +1062,8 @@ def test_dispatcher_denies_apply_patch_add_with_hardcoded_secret(tmp_path: Path)
     pii_prevention_blocker test.
     """
     repository_root = tmp_path / "repo"
-    _init_bare_git_repo(repository_root)
-    patch_command = _codex_add_patch("leaked.py", f"token is {_SYNTHETIC_GITHUB_TOKEN}\n")
+    init_bare_git_repo(repository_root)
+    patch_command = _codex_add_patch("leaked.py", f"token is {synthetic_github_token}\n")
     payload_text = _apply_patch_payload(str(repository_root), patch_command)
 
     dispatcher_result = _run_dispatcher(payload_text)

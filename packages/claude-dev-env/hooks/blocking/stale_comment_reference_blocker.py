@@ -11,6 +11,7 @@ directly above it, denying the edit when that line is a standalone ``#``
 comment naming an identifier ``old_string`` carries and ``new_string`` drops.
 """
 
+import functools
 import json
 import re
 import sys
@@ -43,13 +44,6 @@ except ImportError as import_error:
         "stale_comment_reference_blocker: cannot import its sibling modules; "
         "ensure the hooks directory is importable."
     ) from import_error
-
-
-def _apply_edit_step(content: str, old_string: str, new_string: str, is_replace_all: bool) -> str:
-    """Return *content* with one MultiEdit step applied, matching its replace_all flag."""
-    if is_replace_all:
-        return content.replace(old_string, new_string)
-    return content.replace(old_string, new_string, 1)
 
 
 def _edit_step_fields(each_edit: object) -> tuple[str, str, bool] | None:
@@ -90,8 +84,22 @@ def _evaluate_multi_edit(file_path: str, all_tool_input: dict[str, object]) -> s
         )
         if deny_reason is not None:
             return deny_reason
-        current_content = _apply_edit_step(current_content, old_string, new_string, is_replace_all)
+        current_content = current_content.replace(old_string, new_string, -1 if is_replace_all else 1)
     return None
+
+
+@functools.lru_cache
+def _bounded_identifier_pattern(identifier: str) -> re.Pattern[str]:
+    """Return the compiled whole-word pattern for one comment-named identifier.
+
+    Args:
+        identifier: The identifier the comment names.
+
+    Returns:
+        The compiled pattern matching identifier with no adjoining word
+        character on either side.
+    """
+    return re.compile("(?<![A-Za-z0-9_])" + re.escape(identifier) + "(?![A-Za-z0-9_])")
 
 
 def _first_orphaned_identifier(
@@ -116,9 +124,7 @@ def _first_orphaned_identifier(
     for each_identifier in COMMENT_IDENTIFIER_PATTERN.findall(words_in_comment):
         if each_identifier.lower() in ALL_COMMENT_STOPWORDS:
             continue
-        bounded_pattern = re.compile(
-            "(?<![A-Za-z0-9_])" + re.escape(each_identifier) + "(?![A-Za-z0-9_])"
-        )
+        bounded_pattern = _bounded_identifier_pattern(each_identifier)
         if bounded_pattern.search(original_block_text) and not bounded_pattern.search(
             revised_block_text
         ):
