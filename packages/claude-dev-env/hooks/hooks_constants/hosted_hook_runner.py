@@ -13,15 +13,25 @@ blocking the tool call.
     run = run_hook_capturing_output("/hooks/blocking/gate.py", '{"tool_name": "Bash"}')
     ok:   run.captured_stdout carries the gate's deny JSON, run.did_crash is False
     flag: run.did_crash is True when the gate raised, run.captured_stdout is ""
+
+``run_dispatcher_main`` holds the entry-point shell a hosted-hook dispatcher's
+own ``main`` needs: read one stdin payload, resolve its tool_name, and hand
+both to the dispatcher's own ``dispatch`` callback. Every dispatcher's
+``main`` reduces to one call into this shared shell, so the read-resolve-exit
+boilerplate lives in one place rather than once per dispatcher.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import runpy
 import sys
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass
+
+from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 
 
 @dataclass
@@ -71,3 +81,25 @@ def run_hook_capturing_output(hook_script_path: str, payload_text: str) -> Hoste
     finally:
         sys.stdin, sys.stdout, sys.argv = original_stdin, original_stdout, original_argv
     return HostedHookRun(captured_stdout=captured_output.getvalue(), did_crash=did_crash)
+
+
+def run_dispatcher_main(dispatch: Callable[[str, str], None]) -> None:
+    """Read one stdin payload and hand its JSON text and tool_name to dispatch.
+
+    Every hosted-hook dispatcher's own ``main`` reduces to this one call.
+    Exits 0 before ever calling dispatch when stdin is empty, malformed, or
+    names no tool_name string; always exits 0 afterward, since a dispatcher
+    signals its own outcome, if any, through what dispatch itself writes.
+
+    Args:
+        dispatch: The dispatcher's own ``dispatch(payload_text, tool_name)``.
+    """
+    payload_dictionary = read_hook_input_dictionary_from_stdin()
+    if payload_dictionary is None:
+        sys.exit(0)
+    payload_text = json.dumps(payload_dictionary)
+    tool_name = payload_dictionary.get("tool_name", "")
+    if not isinstance(tool_name, str) or not tool_name:
+        sys.exit(0)
+    dispatch(payload_text, tool_name)
+    sys.exit(0)
