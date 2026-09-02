@@ -26,6 +26,10 @@ assert _TRACKER_SPEC.loader is not None
 tracker_module = importlib.util.module_from_spec(_TRACKER_SPEC)
 _TRACKER_SPEC.loader.exec_module(tracker_module)
 
+_GATE_CONSTANTS = importlib.import_module(
+    "hooks_constants.pr_description_writer_gate_constants"
+)
+
 _SESSION_ID = "session-abc123"
 _OTHER_SUBAGENT_TYPE = "general-purpose"
 
@@ -65,7 +69,7 @@ def _run_tracker(payload: dict[str, object], temp_directory: Path) -> None:
     """
     with mock.patch("sys.stdin", io.StringIO(json.dumps(payload))):
         with mock.patch.object(
-            tracker_module.tempfile, "gettempdir", return_value=str(temp_directory)
+            _GATE_CONSTANTS.tempfile, "gettempdir", return_value=str(temp_directory)
         ):
             tracker_module.main()
 
@@ -120,7 +124,7 @@ def should_record_twice_without_error(tmp_path: Path) -> None:
 def should_ignore_a_malformed_payload(tmp_path: Path) -> None:
     """Unparseable stdin records nothing and raises nothing."""
     with mock.patch("sys.stdin", io.StringIO("this is not json")):
-        with mock.patch.object(tracker_module.tempfile, "gettempdir", return_value=str(tmp_path)):
+        with mock.patch.object(_GATE_CONSTANTS.tempfile, "gettempdir", return_value=str(tmp_path)):
             tracker_module.main()
     assert list(tmp_path.iterdir()) == []
 

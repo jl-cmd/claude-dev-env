@@ -23,7 +23,6 @@ touch each returns quietly.
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
@@ -33,17 +32,15 @@ if _hooks_dir not in sys.path:
 from hooks_constants.pr_description_writer_gate_constants import (  # noqa: E402
     ALL_AGENT_SPAWN_TOOL_NAMES,
     PR_DESCRIPTION_WRITER_SUBAGENT_TYPE,
-    SPAWN_MARKER_FILE_PREFIX,
-    SPAWN_MARKER_FILE_SUFFIX,
     SUBAGENT_TYPE_FIELD_NAME,
     TOOL_INPUT_FIELD_NAME,
     TOOL_NAME_FIELD_NAME,
 )
+from hooks_constants.pr_description_writer_gate_constants import (  # noqa: E402
+    spawn_marker_path as shared_spawn_marker_path,
+)
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
-)
-from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
-    SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
 )
 
 
@@ -70,12 +67,7 @@ def spawn_marker_path(session_id: str, temp_directory: Path | None = None) -> Pa
         Absolute path to this session's marker file, or None when the payload
         names no session this hook can key on.
     """
-    sanitized_session_id = SESSION_ID_UNSAFE_CHARACTERS_PATTERN.sub("", session_id)
-    if not sanitized_session_id:
-        return None
-    file_name = f"{SPAWN_MARKER_FILE_PREFIX}{sanitized_session_id}{SPAWN_MARKER_FILE_SUFFIX}"
-    resolved_temp_directory = temp_directory or Path(tempfile.gettempdir())
-    return resolved_temp_directory / file_name
+    return shared_spawn_marker_path(session_id, temp_directory)
 
 
 def _record_spawn(session_id: str) -> None:
