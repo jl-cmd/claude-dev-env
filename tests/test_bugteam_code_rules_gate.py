@@ -71,6 +71,24 @@ def copy_enforcer_into(repository_root: Path) -> None:
             each_enforcer_module.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+    copy_blocking_config_into(blocking_source, blocking_destination)
+
+
+def copy_blocking_config_into(blocking_source: Path, blocking_destination: Path) -> None:
+    """Copy hooks/blocking/config/ so a ``blocking.config`` import resolves.
+
+    codex_apply_patch.py imports its shared constant from
+    ``blocking.config.codex_apply_patch_constants``, so the fixture repo needs
+    that package on disk, not only the enforcer modules that import it.
+    """
+    config_source = blocking_source / "config"
+    config_destination = blocking_destination / "config"
+    config_destination.mkdir(parents=True, exist_ok=True)
+    for each_config_file in config_source.glob("*.py"):
+        (config_destination / each_config_file.name).write_text(
+            each_config_file.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
 
 
 def copy_hooks_config_into(repository_root: Path) -> None:

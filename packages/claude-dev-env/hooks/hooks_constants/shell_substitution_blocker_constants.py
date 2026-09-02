@@ -41,7 +41,10 @@ PERMISSION_DECISION_KEY = "permissionDecision"
 DENY_DECISION = "deny"
 PERMISSION_DECISION_REASON_KEY = "permissionDecisionReason"
 
-DOLLAR_PAREN_PATTERN = re.compile(r"\$\((?!\()")
+DOLLAR_PAREN_PATTERN = re.compile(r"\$\(")
+OPEN_PAREN_CHARACTER = "("
+CLOSE_PAREN_CHARACTER = ")"
+PAREN_DEPTH_AFTER_DOUBLE_OPEN = 2
 EVEN_BACKSLASH_BACKTICK_PATTERN = re.compile(r"(?<!\\)(?:\\\\)*`")
 PROCESS_SUBSTITUTION_PATTERN = re.compile(r"[<>]\(")
 SINGLE_QUOTED_RUN_PATTERN = re.compile(r"'[^']*'")
