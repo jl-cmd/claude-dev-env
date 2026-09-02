@@ -116,6 +116,28 @@ def test_ensure_real_repository_target_refuses_a_scratch_path_outside_the_reposi
         hook_timing_harness.ensure_real_repository_target(scratch_target, repository_root)
 
 
+def test_ensure_real_repository_target_refuses_a_path_under_runner_temp_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """GitHub Actions puts pytest basetemp under RUNNER_TEMP, not gettempdir().
+
+    ``gettempdir()`` stays ``/tmp`` on the hosted runner while pytest's own
+    ``tmp_path`` lives under ``RUNNER_TEMP`` (``/home/runner/work/_temp``), a
+    directory ``gettempdir()`` never reports. A refusal that judges
+    ephemerality against ``gettempdir()`` alone misses that target and reads
+    the runner's own scratch file as a real repository file.
+    """
+    fake_os_temporary_root = tmp_path / "os-temp"
+    fake_os_temporary_root.mkdir()
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(fake_os_temporary_root))
+    runner_temporary_root = tmp_path / "runner-temp"
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temporary_root))
+    ephemeral_target = runner_temporary_root / "scratch.py"
+
+    with pytest.raises(ValueError, match="ephemeral"):
+        hook_timing_harness.ensure_real_repository_target(ephemeral_target)
+
+
 def test_run_hosted_command_once_milliseconds_drives_the_real_tracker() -> None:
     """A live subprocess run against a real repository file measures a positive time.
 
