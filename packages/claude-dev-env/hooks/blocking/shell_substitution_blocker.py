@@ -76,7 +76,11 @@ from hooks_constants.shell_substitution_blocker_constants import (  # noqa: E402
     PERMISSION_DECISION_KEY,
     PERMISSION_DECISION_REASON_KEY,
     PROCESS_SUBSTITUTION_PATTERN,
+    BACKSLASH_CHARACTER,
     COMMAND_LINE_SEPARATOR,
+    DOUBLE_QUOTE_CHARACTER,
+    NO_TERMINATOR_INDEX,
+    SINGLE_QUOTE_CHARACTER,
     SINGLE_QUOTED_RUN_PATTERN,
     STRIPPED_RUN_REPLACEMENT,
     TOOL_INPUT_KEY,
@@ -122,8 +126,46 @@ def _opener_suppresses_expansion(opener_match: Match[str]) -> bool:
     return is_quoted or is_escaped
 
 
+def _sits_outside_quotes(command_line: str, character_index: int) -> bool:
+    """Return whether a position on a line sits outside every quoted run.
+
+    ::
+
+        cat <<'EOF'      index of << -> True   bash reads an opener
+        echo "<<'EOF'"   index of << -> False  bash reads a string
+
+    Counting unescaped quotes before the position tells the two apart: an even
+    count of each quote character means every run opened before it also closed.
+
+    Args:
+        command_line: One line of the command.
+        character_index: Position of the candidate opener on that line.
+
+    Returns:
+        True when bash reads this position as shell syntax.
+    """
+    single_quote_count = 0
+    double_quote_count = 0
+    is_escaped = False
+    for each_character in command_line[:character_index]:
+        if is_escaped:
+            is_escaped = False
+            continue
+        if each_character == BACKSLASH_CHARACTER:
+            is_escaped = True
+            continue
+        if each_character == SINGLE_QUOTE_CHARACTER:
+            single_quote_count += 1
+        elif each_character == DOUBLE_QUOTE_CHARACTER:
+            double_quote_count += 1
+    return single_quote_count % 2 == 0 and double_quote_count % 2 == 0
+
+
 def _first_literal_opener(command_line: str) -> Match[str] | None:
     """Return the line's first heredoc opener whose body bash leaves literal.
+
+    An opener spelled inside a quoted string is text bash passes on, so it
+    opens nothing and the lines below it stay in the scan.
 
     Args:
         command_line: One line of the command.
@@ -132,6 +174,8 @@ def _first_literal_opener(command_line: str) -> Match[str] | None:
         The matching opener, or None when the line opens no literal heredoc.
     """
     for each_opener in HEREDOC_OPENER_PATTERN.finditer(command_line):
+        if not _sits_outside_quotes(command_line, each_opener.start()):
+            continue
         if _opener_suppresses_expansion(each_opener):
             return each_opener
     return None
@@ -152,7 +196,8 @@ def _index_past_literal_body(
         opener_match: The opener whose terminator closes this body.
 
     Returns:
-        The terminator line's index, or the line count when none closes it.
+        The index of the terminator line, or NO_TERMINATOR_INDEX when the
+        command holds none.
     """
     pending_heredoc = PendingHeredoc(
         terminator=opener_match.group(HEREDOC_TERMINATOR_GROUP),
@@ -163,7 +208,7 @@ def _index_past_literal_body(
     for each_index in range(body_start_index, len(all_lines)):
         if closes_the_heredoc(all_lines[each_index], pending_heredoc):
             return each_index
-    return len(all_lines)
+    return NO_TERMINATOR_INDEX
 
 
 def _strip_quoted_heredoc_bodies(command: str) -> str:
@@ -178,6 +223,10 @@ def _strip_quoted_heredoc_bodies(command: str) -> str:
     A quoted or escaped delimiter makes the lines below it text the shell hands
     on, so a scan of those lines reports a substitution bash never runs. A bare
     delimiter keeps its body, and text outside any heredoc keeps its scan.
+
+    An opener with no terminator returns the command whole. Bash consumes the
+    rest of the input in that case, and dropping those lines would hide a live
+    substitution among them.
 
     Args:
         command: The raw Bash command string from the tool input.
@@ -195,7 +244,10 @@ def _strip_quoted_heredoc_bodies(command: str) -> str:
         opener_match = _first_literal_opener(current_line)
         if opener_match is None:
             continue
-        each_index = _index_past_literal_body(all_lines, each_index, opener_match)
+        terminator_index = _index_past_literal_body(all_lines, each_index, opener_match)
+        if terminator_index == NO_TERMINATOR_INDEX:
+            return command
+        each_index = terminator_index
     return COMMAND_LINE_SEPARATOR.join(all_kept_lines)
 
 
