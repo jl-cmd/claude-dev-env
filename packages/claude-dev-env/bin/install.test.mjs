@@ -1390,7 +1390,7 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
     assert.equal(
         countManagedRunAllValidatorsHooks(shippedHooksConfig),
         1,
-        'shipped hooks.json must retain the inline run_all_validators runner in Write|Edit',
+        'shipped hooks.json must retain the inline run_all_validators runner on the write path',
     );
 
     const allPostToolUseGroups = shippedHooksConfig.hooks.PostToolUse || [];
