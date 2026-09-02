@@ -36,6 +36,8 @@ from code_rules_enforcer_test_support import (  # noqa: E402
     run_write_entrypoint,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 PASS_THROUGH_ALIAS_SOURCE = (
     "def find_bare_path_segments(content: str) -> set[str]:\n"
     "    return {part for part in content.split() if part}\n"

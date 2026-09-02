@@ -23,6 +23,8 @@ from code_rules_enforcer import (  # noqa: E402
     validate_content_for_full_gate as validate_content,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 PRODUCTION_FILE_PATH = "packages/app/services.py"
 

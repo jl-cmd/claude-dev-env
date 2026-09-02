@@ -36,6 +36,8 @@ code_rules_enforcer = SimpleNamespace(
     validate_content=validate_content,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 def _oversized_function_source(name: str) -> str:
     body_line_count = code_rules_enforcer.FUNCTION_LENGTH_BLOCKING_THRESHOLD - 1
