@@ -221,6 +221,13 @@ class TestApplyPatchPayloadLane:
         assert DENY_DECISION_FRAGMENT not in completed.stdout
 
     def test_unparseable_apply_patch_command_allows(self, tmp_path: Path) -> None:
+        """A patch this lane cannot read is the enforcer's to deny, not this gate's.
+
+        ``code_rules_enforcer`` denies a payload whose patch markers it cannot
+        parse. Both hooks run on the same call and any denial wins, so this lane
+        allows rather than raising a second denial for one cause. Moving that
+        denial out of the enforcer leaves a malformed patch with no reader.
+        """
         completed = run_gate(
             {
                 "tool_name": "apply_patch",
