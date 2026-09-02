@@ -7,7 +7,10 @@ text. It also asserts the dispatcher reaches the same decision through its nativ
 path.
 
 The corpus pairs allowing payloads with denying payloads for each hook so the
-equivalence holds across both outcomes.
+equivalence holds across both outcomes. Each payload names an absolute file
+under this repository and carries the repository root as its ``cwd``, so the
+decision belongs to this checkout rather than to the directory pytest runs
+from.
 """
 
 from __future__ import annotations
@@ -43,7 +46,8 @@ import state_description_blocker  # noqa: E402, I001
 _STATE_DESCRIPTION_SCRIPT = str(_BLOCKING_DIR / "state_description_blocker.py")
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
-_MARKDOWN_PATH = "docs/native_equivalence_probe.md"
+_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[4])
+_MARKDOWN_PATH = str(Path(_REPOSITORY_ROOT) / "docs" / "native_equivalence_probe.md")
 _STATE_DESCRIPTION_ALLOW_CONTENT = "# Guide\n\nThe API uses port 8080.\n"
 _STATE_DESCRIPTION_DENY_CONTENT = "# Guide\n\nPreviously the system used port 8080.\n"
 
@@ -74,6 +78,7 @@ def _write_payload_dictionary(file_path: str, content: str) -> dict[str, object]
     return {
         "tool_name": WRITE_TOOL_NAME,
         "tool_input": {"file_path": file_path, "content": content},
+        "cwd": _REPOSITORY_ROOT,
     }
 
 def _edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, object]:
@@ -93,6 +98,7 @@ def _edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, objec
             "old_string": "old line",
             "new_string": new_string,
         },
+        "cwd": _REPOSITORY_ROOT,
     }
 
 def _multi_edit_payload_dictionary(file_path: str, new_string: str) -> dict[str, object]:
@@ -111,6 +117,7 @@ def _multi_edit_payload_dictionary(file_path: str, new_string: str) -> dict[str,
             "file_path": file_path,
             "edits": [{"old_string": "old line", "new_string": new_string}],
         },
+        "cwd": _REPOSITORY_ROOT,
     }
 
 

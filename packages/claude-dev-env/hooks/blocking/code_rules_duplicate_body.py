@@ -54,6 +54,7 @@ import ast
 import copy
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 _blocking_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
@@ -82,6 +83,21 @@ from hooks_constants.duplicate_function_body_constants import (  # noqa: E402
     SKILL_SCRIPTS_DIRECTORY_NAME,
     SKILLS_DIRECTORY_NAME,
 )
+
+
+_ModuleScopeFunction = ast.FunctionDef | ast.AsyncFunctionDef
+
+
+class _FunctionScanProfile(NamedTuple):
+    """The three readings of one module-scope function the inline scan compares.
+
+    Every reading is a property of that function alone, so each is taken once per
+    file and read by each pairing the scan weighs.
+    """
+
+    reachable_statement_count: int
+    all_sorted_body_dumps: list[str]
+    all_block_dumps: list[list[str]]
 
 
 def _body_statements_without_docstring(
@@ -384,6 +400,37 @@ def _normalized_statement_dump(statement: ast.stmt) -> str:
     return ast.dump(canonical_statement, annotate_fields=False)
 
 
+def _memoized_statement_dump(
+    statement: ast.stmt,
+    dump_by_statement: dict[ast.stmt, str],
+) -> str:
+    """Return the normalized dump of one statement, computing it at most once.
+
+    The inline scan reads the same statement's dump many times over: once for its
+    enclosing function's block window, once for that function's twin-test
+    multiset, and again for every helper the function is weighed against. Dumping
+    deep-copies the statement subtree before canonicalizing string constants, so
+    this memo serves the repeat reads.
+
+    An ``ast`` node defines no ``__eq__``, so the key is the node's identity and
+    the dict holds a strong reference to it: a key cannot be freed and a later
+    node cannot reuse its slot. The caller owns one memo per scanned file and
+    drops it when the scan returns, so no entry outlives its parse tree.
+
+    Args:
+        statement: The statement node to fingerprint.
+        dump_by_statement: The file's statement-to-dump memo, mutated in place.
+
+    Returns:
+        The value ``_normalized_statement_dump`` returns for this statement.
+    """
+    memoized_dump = dump_by_statement.get(statement)
+    if memoized_dump is None:
+        memoized_dump = _normalized_statement_dump(statement)
+        dump_by_statement[statement] = memoized_dump
+    return memoized_dump
+
+
 def _statement_blocks_in_function(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> list[list[ast.stmt]]:
@@ -441,76 +488,6 @@ def _total_reachable_statement_count(
     if has_leading_docstring:
         return total_statement_count - 1
     return total_statement_count
-
-
-def _normalized_body_dump_multiset(
-    function_node: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> list[str]:
-    """Return the function's docstring-stripped statement dumps, sorted.
-
-    Used to test whether two functions are structural twins — same statements in
-    any arrangement under string normalization. Sorting makes the comparison
-    order-independent, so two peer helpers that read different inputs but share
-    the same statement shapes compare equal and are left to the cross-file check.
-
-    Args:
-        function_node: The function whose body to fingerprint.
-
-    Returns:
-        The sorted per-statement normalized dumps of the docstring-stripped body.
-    """
-    body_statements = _body_statements_without_docstring(function_node)
-    return sorted(_normalized_statement_dump(each) for each in body_statements)
-
-
-def _function_inlines_window(
-    helper_node: ast.FunctionDef | ast.AsyncFunctionDef,
-    enclosing_node: ast.FunctionDef | ast.AsyncFunctionDef,
-    all_helper_window_dumps: list[str],
-) -> bool:
-    """Return whether a function inlines a helper window inside a larger body.
-
-    Slides a window the length of ``all_helper_window_dumps`` over each reachable
-    statement block in the enclosing function; a window whose per-statement dumps
-    match the helper's, in order, is the inlined copy. Two guards keep the report
-    to the genuine "helper inlined inside a larger function" shape:
-
-    - The enclosing function carries more total reachable statements than the
-      window, so a copy that fills a whole peer function is not reported here. The
-      count spans every nested block, so a window wrapped inside one top-level
-      compound — a ``try``/``finally`` cleanup, an ``except`` handler, or a single
-      ``if`` guard — still clears the guard and is scanned.
-    - The two functions are not structural twins — their docstring-stripped
-      statement multisets differ — so two peer helpers that share a statement
-      shape but read different inputs are left to the cross-file whole-function
-      check ``check_duplicate_function_body_across_files`` rather than reported as
-      an inline duplicate.
-
-    Args:
-        helper_node: The candidate helper whose window is sought.
-        enclosing_node: The candidate enclosing function to scan.
-        all_helper_window_dumps: The helper's substantive-block per-statement dumps.
-
-    Returns:
-        True when some block in the enclosing function contains the helper window
-        verbatim as a contiguous run inside a strictly larger, non-twin body.
-    """
-    window_length = len(all_helper_window_dumps)
-    if _total_reachable_statement_count(enclosing_node) <= window_length:
-        return False
-    if _normalized_body_dump_multiset(helper_node) == _normalized_body_dump_multiset(
-        enclosing_node
-    ):
-        return False
-    for each_block in _statement_blocks_in_function(enclosing_node):
-        if len(each_block) < window_length:
-            continue
-        block_dumps = [_normalized_statement_dump(each) for each in each_block]
-        for each_start_index in range(len(block_dumps) - window_length + 1):
-            window = block_dumps[each_start_index : each_start_index + window_length]
-            if window == all_helper_window_dumps:
-                return True
-    return False
 
 
 def _helper_match_window_dumps(
@@ -616,40 +593,235 @@ def check_same_file_inline_duplicate_body(
         for each_node in tree.body
         if isinstance(each_node, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
-    all_violations_in_walk_order: list[tuple[frozenset[int], str]] = []
-    for each_helper in all_top_level_functions:
-        helper_window_dumps = _helper_match_window_dumps(each_helper)
-        if helper_window_dumps is None:
-            continue
-        for each_enclosing in all_top_level_functions:
-            if each_enclosing is each_helper:
-                continue
-            if not _function_inlines_window(
-                each_helper, each_enclosing, helper_window_dumps
-            ):
-                continue
-            helper_span = _function_definition_span(each_helper)
-            enclosing_span = _function_definition_span(each_enclosing)
-            in_scope_lines = frozenset(helper_span) | frozenset(enclosing_span)
-            span_suffix = SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE.format(
-                helper_start=helper_span.start,
-                helper_length=len(helper_span),
-                enclosing_start=enclosing_span.start,
-                enclosing_length=len(enclosing_span),
-            )
-            message = (
-                f"Function {each_helper.name!r} duplicates an inline block in "
-                f"{each_enclosing.name!r} — {SAME_FILE_INLINE_DUPLICATE_GUIDANCE} "
-                f"{span_suffix}"
-            )
-            all_violations_in_walk_order.append((in_scope_lines, message))
-            break
-        if len(all_violations_in_walk_order) >= MAX_DUPLICATE_BODY_ISSUES:
-            break
     return _scope_violations_to_changed_lines(
-        all_violations_in_walk_order,
+        _inline_duplicate_violations(all_top_level_functions, MAX_DUPLICATE_BODY_ISSUES),
         all_changed_lines,
         defer_scope_to_caller,
+    )
+
+
+def _block_dumps_in_function(
+    function_node: _ModuleScopeFunction,
+    dump_by_statement: dict[ast.stmt, str],
+) -> list[list[str]]:
+    """Return the per-statement dumps of each reachable block in a function.
+
+    Args:
+        function_node: The module-scope function to read.
+        dump_by_statement: The file's statement-to-dump memo, mutated in place.
+
+    Returns:
+        One dump list per reachable block, in block-collection order.
+    """
+    return [
+        [
+            _memoized_statement_dump(each_statement, dump_by_statement)
+            for each_statement in each_block
+        ]
+        for each_block in _statement_blocks_in_function(function_node)
+    ]
+
+
+def _function_scan_profile(
+    function_node: _ModuleScopeFunction,
+    dump_by_statement: dict[ast.stmt, str],
+) -> _FunctionScanProfile:
+    """Take the three readings the inline scan needs from one function.
+
+    The sorted body dumps carry the docstring-stripped statement multiset that
+    tests whether two functions are structural twins. Sorting makes that
+    comparison order-independent, so two peer helpers that read different inputs
+    but share the same statement shapes compare equal and are left to the
+    cross-file check.
+
+    Args:
+        function_node: The module-scope function to read.
+        dump_by_statement: The file's statement-to-dump memo, mutated in place.
+
+    Returns:
+        The function's reachable statement count, sorted body dumps, and
+        per-block statement dumps.
+    """
+    return _FunctionScanProfile(
+        reachable_statement_count=_total_reachable_statement_count(function_node),
+        all_sorted_body_dumps=sorted(
+            _memoized_statement_dump(each_statement, dump_by_statement)
+            for each_statement in _body_statements_without_docstring(function_node)
+        ),
+        all_block_dumps=_block_dumps_in_function(function_node, dump_by_statement),
+    )
+
+
+def _block_dumps_contain_window(
+    all_block_dumps: list[str],
+    all_window_dumps: list[str],
+) -> bool:
+    """Return whether one block carries the window as a contiguous run.
+
+    A block shorter than the window holds no run and answers False.
+
+    Args:
+        all_block_dumps: One reachable block's per-statement dumps.
+        all_window_dumps: The helper's window dumps to seek.
+
+    Returns:
+        True when the window appears in the block as a contiguous run.
+    """
+    window_length = len(all_window_dumps)
+    last_start_index = len(all_block_dumps) - window_length
+    for each_start_index in range(last_start_index + 1):
+        window_end = each_start_index + window_length
+        if all_block_dumps[each_start_index:window_end] == all_window_dumps:
+            return True
+    return False
+
+
+def _profile_inlines_window(
+    helper_profile: _FunctionScanProfile,
+    enclosing_profile: _FunctionScanProfile,
+    all_helper_window_dumps: list[str],
+) -> bool:
+    """Return whether a function inlines a helper window inside a larger body.
+
+    A run inside one of the enclosing function's reachable blocks whose dumps
+    match the helper's, in order, is the inlined copy. Two guards hold the report
+    to a genuine inlining: the enclosing function carries more reachable
+    statements than the window, and the two functions are not structural twins,
+    so peer helpers sharing a statement shape are left to the cross-file check.
+
+    Args:
+        helper_profile: The candidate helper's readings, for the twin guard.
+        enclosing_profile: The candidate enclosing function's readings.
+        all_helper_window_dumps: The helper's substantive-block statement dumps.
+
+    Returns:
+        True when a block carries the window inside a larger, non-twin body.
+    """
+    if enclosing_profile.reachable_statement_count <= len(all_helper_window_dumps):
+        return False
+    if helper_profile.all_sorted_body_dumps == enclosing_profile.all_sorted_body_dumps:
+        return False
+    return any(
+        _block_dumps_contain_window(each_block_dumps, all_helper_window_dumps)
+        for each_block_dumps in enclosing_profile.all_block_dumps
+    )
+
+
+def _first_enclosing_inliner(
+    helper_node: _ModuleScopeFunction,
+    all_helper_window_dumps: list[str],
+    profile_by_function: dict[_ModuleScopeFunction, _FunctionScanProfile],
+) -> _ModuleScopeFunction | None:
+    """Return the first other module-scope function that inlines this window.
+
+    Args:
+        helper_node: The candidate helper whose window is sought.
+        all_helper_window_dumps: The helper's substantive-block statement dumps.
+        profile_by_function: Each function's readings, keyed in source order.
+
+    Returns:
+        The first function in source order that carries the window, or None.
+    """
+    helper_profile = profile_by_function[helper_node]
+    for each_enclosing, each_profile in profile_by_function.items():
+        if each_enclosing is helper_node:
+            continue
+        if _profile_inlines_window(
+            helper_profile, each_profile, all_helper_window_dumps
+        ):
+            return each_enclosing
+    return None
+
+
+def _inline_duplicate_violation(
+    helper_node: _ModuleScopeFunction,
+    enclosing_node: _ModuleScopeFunction,
+) -> tuple[frozenset[int], str]:
+    """Return the scoped lines and report text for one inlined-helper finding.
+
+    Args:
+        helper_node: The helper whose body appears inline elsewhere.
+        enclosing_node: The function carrying the inlined copy.
+
+    Returns:
+        The union of both function spans, and the message naming both.
+    """
+    helper_span = _function_definition_span(helper_node)
+    enclosing_span = _function_definition_span(enclosing_node)
+    span_suffix = SAME_FILE_INLINE_DUPLICATE_SPAN_SUFFIX_TEMPLATE.format(
+        helper_start=helper_span.start,
+        helper_length=len(helper_span),
+        enclosing_start=enclosing_span.start,
+        enclosing_length=len(enclosing_span),
+    )
+    message = (
+        f"Function {helper_node.name!r} duplicates an inline block in "
+        f"{enclosing_node.name!r} — {SAME_FILE_INLINE_DUPLICATE_GUIDANCE} "
+        f"{span_suffix}"
+    )
+    return (frozenset(helper_span) | frozenset(enclosing_span), message)
+
+
+def _violations_for_qualifying_helpers(
+    window_by_function: dict[_ModuleScopeFunction, list[str] | None],
+    profile_by_function: dict[_ModuleScopeFunction, _FunctionScanProfile],
+    maximum_issue_count: int,
+) -> list[tuple[frozenset[int], str]]:
+    """Walk the helpers in source order and report the first inliner of each.
+
+    Args:
+        window_by_function: Each function's helper match window, or None.
+        profile_by_function: Each function's readings, keyed in source order.
+        maximum_issue_count: The report ceiling the walk stops at.
+
+    Returns:
+        The in-scope lines and message of each report, in walk order.
+    """
+    all_violations_in_walk_order: list[tuple[frozenset[int], str]] = []
+    for each_helper, each_window_dumps in window_by_function.items():
+        if each_window_dumps is None:
+            continue
+        each_enclosing = _first_enclosing_inliner(
+            each_helper, each_window_dumps, profile_by_function
+        )
+        if each_enclosing is not None:
+            all_violations_in_walk_order.append(
+                _inline_duplicate_violation(each_helper, each_enclosing)
+            )
+        if len(all_violations_in_walk_order) >= maximum_issue_count:
+            break
+    return all_violations_in_walk_order
+
+
+def _inline_duplicate_violations(
+    all_top_level_functions: list[_ModuleScopeFunction],
+    maximum_issue_count: int,
+) -> list[tuple[frozenset[int], str]]:
+    """Report every module-scope helper whose body is inlined in another function.
+
+    The dump memo and the per-function readings live for this one call and are
+    dropped when it returns, so no reading outlives the parse tree it describes.
+
+    Args:
+        all_top_level_functions: The module-scope functions in source order.
+        maximum_issue_count: The report ceiling the walk stops at.
+
+    Returns:
+        The in-scope lines and message of each report, in walk order.
+    """
+    dump_by_statement: dict[ast.stmt, str] = {}
+    window_by_function = {
+        each_function: _helper_match_window_dumps(each_function)
+        for each_function in all_top_level_functions
+    }
+    if all(each_window is None for each_window in window_by_function.values()):
+        return []
+    profile_by_function = {
+        each_function: _function_scan_profile(each_function, dump_by_statement)
+        for each_function in all_top_level_functions
+    }
+    return _violations_for_qualifying_helpers(
+        window_by_function, profile_by_function, maximum_issue_count
     )
 
 
