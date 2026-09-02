@@ -209,3 +209,21 @@ def test_apply_patch_add_with_clean_content_is_allowed(tmp_path: Path) -> None:
         hook_payload={"cwd": str(repository_root)},
     )
     assert deny_reason is None
+
+
+def test_apply_patch_payload_accepts_the_tool_input_keyword(tmp_path: Path) -> None:
+    """evaluate_apply_patch_payload's first parameter is named all_tool_input."""
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, _ALLOW_SLUG)
+    deny_reason = evaluate_apply_patch_payload(
+        all_tool_input={
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: notes.md\n"
+                "+nothing sensitive here\n"
+                "*** End Patch"
+            )
+        },
+        hook_payload={"cwd": str(repository_root)},
+    )
+    assert deny_reason is None

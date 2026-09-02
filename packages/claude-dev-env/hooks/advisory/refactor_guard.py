@@ -11,18 +11,44 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-hooks_root_directory = str(Path(__file__).resolve().parent.parent)
-if hooks_root_directory not in sys.path:
-    sys.path.insert(0, hooks_root_directory)
+try:
+    hooks_root_directory = str(Path(__file__).resolve().parent.parent)
+    if hooks_root_directory not in sys.path:
+        sys.path.insert(0, hooks_root_directory)
 
-from hooks_constants.precommit_code_rules_gate_constants import GIT_COMMAND_TIMEOUT_SECONDS
-from hooks_constants.refactor_guard_constants import (
-    ALL_PYTHON_KEYWORDS,
-    CHANGED_SURFACE_MATCH_RATIO,
-    MAXIMUM_REFACTOR_LINE_DELTA,
-    REFACTOR_LINE_DELTA_DIVISOR,
-)
-from hooks_constants.session_edit_stage_gate_constants import GIT_EXECUTABLE_TOKEN
+    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.precommit_code_rules_gate_constants import GIT_COMMAND_TIMEOUT_SECONDS
+    from hooks_constants.refactor_guard_constants import (
+        ALL_PYTHON_KEYWORDS,
+        CHANGED_SURFACE_MATCH_RATIO,
+        MAXIMUM_REFACTOR_LINE_DELTA,
+        REFACTOR_LINE_DELTA_DIVISOR,
+    )
+    from hooks_constants.session_edit_stage_gate_constants import GIT_EXECUTABLE_TOKEN
+except ImportError as import_error:
+    raise ImportError(
+        "refactor_guard: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
+
+
+def _multi_edit_pairs(payload_by_key: dict[str, object]) -> tuple[str, list[tuple[str, str]]]:
+    """Return the (file_path, [(old_string, new_string), ...]) pairs a MultiEdit carries."""
+    raw_tool_input = payload_by_key.get("tool_input")
+    if not isinstance(raw_tool_input, dict):
+        return "", []
+    file_path_field = raw_tool_input.get("file_path")
+    if not isinstance(file_path_field, str):
+        return "", []
+    all_pairs: list[tuple[str, str]] = []
+    for each_edit in edits_for_tool("MultiEdit", raw_tool_input):
+        if not isinstance(each_edit, dict):
+            continue
+        old_string_field = each_edit.get("old_string")
+        new_string_field = each_edit.get("new_string")
+        if isinstance(old_string_field, str) and isinstance(new_string_field, str):
+            all_pairs.append((old_string_field, new_string_field))
+    return file_path_field, all_pairs
 
 REFACTOR_BYPASS_TOKEN_PATH = Path.home() / ".claude" / ".refactor-bypass-token"
 identifier_join_separator = ", "
@@ -290,20 +316,45 @@ def _read_edit_fields(payload_by_key: dict[str, object]) -> tuple[str, str, str,
     return tool_name, file_path_field, old_string_field, new_string_field
 
 
+def _multi_edit_refactor_advisory_description(
+    payload_by_key: dict[str, object],
+) -> tuple[str, str] | None:
+    """Return the (file_path, description) pair for the first eligible edit in a MultiEdit."""
+    file_path, all_pairs = _multi_edit_pairs(payload_by_key)
+    if not file_path:
+        return None
+    for old_string, new_string in all_pairs:
+        refactor_description = find_refactor_advisory_description(file_path, old_string, new_string)
+        if refactor_description is not None:
+            return file_path, refactor_description
+    return None
+
+
+def _emit_advisory(file_path: str, refactor_description: str) -> None:
+    advisory_payload = build_refactor_advisory_payload(refactor_description, file_path)
+    sys.stdout.write(json.dumps(advisory_payload))
+    sys.stdout.flush()
+
+
 def main() -> None:
     """Emit an Edit-stage advisory for eligible out-of-surface refactors."""
     payload_by_key = _read_hook_input()
     if payload_by_key is None:
         return
     tool_name, file_path, old_string, new_string = _read_edit_fields(payload_by_key)
-    if tool_name != "Edit" or is_bypass_approved():
+    if is_bypass_approved():
+        return
+    if tool_name == "MultiEdit":
+        multi_edit_result = _multi_edit_refactor_advisory_description(payload_by_key)
+        if multi_edit_result is not None:
+            _emit_advisory(*multi_edit_result)
+        return
+    if tool_name != "Edit":
         return
     refactor_description = find_refactor_advisory_description(file_path, old_string, new_string)
     if refactor_description is None:
         return
-    advisory_payload = build_refactor_advisory_payload(refactor_description, file_path)
-    sys.stdout.write(json.dumps(advisory_payload))
-    sys.stdout.flush()
+    _emit_advisory(file_path, refactor_description)
 
 
 if __name__ == "__main__":

@@ -24,3 +24,5 @@ ALL_EXEMPT_PATH_FRAGMENTS: tuple[str, ...] = (
 
 ALL_EXEMPT_TEST_FILE_PREFIXES: tuple[str, ...] = ("test_",)
 ALL_EXEMPT_TEST_FILE_SUFFIXES: tuple[str, ...] = ("_test.py",)
+
+MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR = "\n"

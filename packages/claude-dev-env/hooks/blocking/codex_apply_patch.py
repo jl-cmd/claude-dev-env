@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from blocking.config.codex_apply_patch_constants import CODEX_ADD_OPERATION
+
 _codex_patch_begin_marker = "*** Begin Patch"
 _codex_patch_end_marker = "*** End Patch"
 _codex_update_marker = "*** Update File:"
@@ -15,9 +17,7 @@ _codex_end_of_file_marker = "*** End of File"
 _codex_no_newline_marker = "\\ No newline at end of file"
 _codex_minimum_patch_line_count = 2
 _codex_update_operation = "update"
-_codex_add_operation = "add"
 _codex_delete_operation = "delete"
-CODEX_ADD_OPERATION = _codex_add_operation
 
 
 class CodexPatchError(ValueError):
@@ -80,7 +80,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
                 each_operation
                 for each_operation, each_marker in (
                     (_codex_update_operation, _codex_update_marker),
-                    (_codex_add_operation, _codex_add_marker),
+                    (CODEX_ADD_OPERATION, _codex_add_marker),
                     (_codex_delete_operation, _codex_delete_marker),
                 )
                 if marker_text.startswith(each_marker)
@@ -92,7 +92,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
                 all_sections.append(current_section)
             marker_by_operation = {
                 _codex_update_operation: _codex_update_marker,
-                _codex_add_operation: _codex_add_marker,
+                CODEX_ADD_OPERATION: _codex_add_marker,
                 _codex_delete_operation: _codex_delete_marker,
             }
             path_text = marker_text[len(marker_by_operation[operation]) :].strip()
@@ -191,11 +191,11 @@ def _codex_read_patch_file(
     try:
         prior_content = target_path.read_text(encoding="utf-8")
     except (FileNotFoundError, IsADirectoryError, OSError, UnicodeDecodeError, ValueError) as error:
-        if operation == _codex_add_operation and isinstance(error, FileNotFoundError):
+        if operation == CODEX_ADD_OPERATION and isinstance(error, FileNotFoundError):
             prior_content = ""
         else:
             raise CodexPatchError("patch target requires readable UTF-8 content") from error
-    if operation == _codex_add_operation:
+    if operation == CODEX_ADD_OPERATION:
         if target_path.exists():
             raise CodexPatchError("add target requires a new path")
         post_content = _codex_add_content(all_section_lines)

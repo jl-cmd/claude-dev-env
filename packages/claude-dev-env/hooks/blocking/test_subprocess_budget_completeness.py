@@ -586,3 +586,70 @@ def test_full_hook_denies_edit_that_adds_a_timeout_to_a_non_budget_helper(
     hook_output = json.loads(completed_hook.stdout)
     assert hook_output["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "45s" in hook_output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+_HARMLESS_COMMENT_EDIT = {
+    "old_string": "return git_check.returncode != 0\n",
+    "new_string": "return git_check.returncode != 0  # checked\n",
+}
+_UNCOUNTED_TIMEOUT_EDIT = {
+    "old_string": (
+        '    git_check = subprocess.run(["git", "ls-files", file_path],'
+        " timeout=GIT_CHECK_TIMEOUT_SECONDS)\n"
+    ),
+    "new_string": '    git_check = subprocess.run(["git", "ls-files", file_path], timeout=45)\n',
+}
+
+
+def _run_multi_edit_hook(edited_module_path: pathlib.Path, all_edits: list[dict[str, str]]):
+    hook_input = json.dumps(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {"file_path": str(edited_module_path), "edits": all_edits},
+        }
+    )
+    return subprocess.run(
+        [sys.executable, str(_HOOK_DIR / "subprocess_budget_completeness.py")],
+        input=hook_input,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+
+
+def test_resolved_content_reconstructs_the_full_file_for_a_multi_edit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The whole reconstructed file reflects every edit, not only the first."""
+    edited_module_path = tmp_path / "timing_module.py"
+    edited_module_path.write_text(_BUDGET_COUNTS_EVERY_TIMEOUT, encoding="utf-8")
+    reconstructed_content = resolved_content(
+        {
+            "file_path": str(edited_module_path),
+            "edits": [_HARMLESS_COMMENT_EDIT, _UNCOUNTED_TIMEOUT_EDIT],
+        }
+    )
+    assert "timeout=45" in reconstructed_content
+    assert "# checked" in reconstructed_content
+
+
+def test_full_hook_denies_multi_edit_that_adds_a_timeout_in_the_second_edit(
+    production_module_path: pathlib.Path,
+) -> None:
+    """A new timeout introduced by the second edit of a MultiEdit is caught."""
+    production_module_path.write_text(_BUDGET_COUNTS_EVERY_TIMEOUT, encoding="utf-8")
+    completed_hook = _run_multi_edit_hook(
+        production_module_path, [_HARMLESS_COMMENT_EDIT, _UNCOUNTED_TIMEOUT_EDIT]
+    )
+    assert completed_hook.returncode == 0
+    hook_output = json.loads(completed_hook.stdout)
+    assert hook_output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "45s" in hook_output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_full_hook_allows_a_clean_multi_edit(production_module_path: pathlib.Path) -> None:
+    production_module_path.write_text(_BUDGET_COUNTS_EVERY_TIMEOUT, encoding="utf-8")
+    completed_hook = _run_multi_edit_hook(production_module_path, [_HARMLESS_COMMENT_EDIT])
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout == ""

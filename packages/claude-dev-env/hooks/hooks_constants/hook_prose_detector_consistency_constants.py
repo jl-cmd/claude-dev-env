@@ -2,6 +2,8 @@
 
 WRITE_TOOL_NAME: str = "Write"
 EDIT_TOOL_NAME: str = "Edit"
+MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
+MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR: str = "\n"
 
 HOOK_MODULE_PATH_SEGMENT: str = "/hooks/"
 PYTHON_FILE_SUFFIX: str = ".py"

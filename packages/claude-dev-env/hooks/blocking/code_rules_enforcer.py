@@ -196,7 +196,7 @@ from hooks_constants.setup_project_paths_constants import (  # noqa: E402
 
 
 def _multiedit_post_edit_view(
-    file_path: str, tool_input: dict[str, object]
+    file_path: str, all_tool_input: dict[str, object]
 ) -> tuple[str, str] | None:
     """Return the prior and reconstructed post-edit content for a MultiEdit payload.
 
@@ -206,7 +206,7 @@ def _multiedit_post_edit_view(
 
     Args:
         file_path: The destination path the MultiEdit targets.
-        tool_input: The MultiEdit payload's input mapping.
+        all_tool_input: The MultiEdit payload's input mapping.
 
     Returns:
         A ``(prior_content, post_edit_content)`` pair, or None when the target
@@ -215,7 +215,9 @@ def _multiedit_post_edit_view(
     existing_content = _read_existing_file_content(file_path)
     if existing_content is None:
         return None
-    post_edit_content = apply_edits(existing_content, edits_for_tool("MultiEdit", tool_input))
+    post_edit_content = apply_edits(
+        existing_content, edits_for_tool("MultiEdit", all_tool_input)
+    )
     return existing_content, post_edit_content
 
 
@@ -1160,7 +1162,7 @@ def _contents_for_validation(
     old_string: str,
     written_content: str,
     file_path: str,
-    multiedit_tool_input: dict[str, object] | None = None,
+    all_multiedit_tool_input: dict[str, object] | None = None,
 ) -> tuple[str, str, str | None, str] | None:
     """Resolve the content views the verdict needs for the given tool payload.
 
@@ -1170,8 +1172,8 @@ def _contents_for_validation(
         old_string: The Edit payload's fragment to replace.
         written_content: The Write payload's whole file body.
         file_path: The destination path of the write or edit.
-        multiedit_tool_input: The MultiEdit payload's input mapping, carrying
-            its ``edits`` list; None for every other tool.
+        all_multiedit_tool_input: The MultiEdit payload's input mapping,
+            carrying its ``edits`` list; None for every other tool.
 
     Returns:
         A ``(content, old_content, full_file_content_after_edit,
@@ -1188,7 +1190,9 @@ def _contents_for_validation(
                 return None
         return new_string, old_string, full_file_content_after_edit, prior_content or ""
     if tool_name == "MultiEdit":
-        multiedit_view = _multiedit_post_edit_view(file_path, multiedit_tool_input or {})
+        multiedit_view = _multiedit_post_edit_view(
+            file_path, all_multiedit_tool_input or {}
+        )
         if multiedit_view is None:
             return None
         prior_content, post_edit_content = multiedit_view

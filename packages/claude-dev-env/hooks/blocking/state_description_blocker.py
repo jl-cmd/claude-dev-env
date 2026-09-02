@@ -36,6 +36,7 @@ try:
         CODE_FENCE_PATTERN,
         DOUBLE_QUOTED_SPAN_PATTERN,
         INLINE_CODE_PATTERN,
+        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         PYTHON_EXTENSION,
         TRIPLE_QUOTED_BLOCK_PATTERN,
     )
@@ -53,7 +54,7 @@ def _content_to_check(tool_name: str, tool_input: dict) -> str:
             for each_edit in edits_for_tool("MultiEdit", tool_input)
             if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
         ]
-        return "\n".join(all_new_strings)
+        return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
     content_key = "content" if tool_name == "Write" else "new_string"
     raw_content = tool_input.get(content_key, "")
     return raw_content if isinstance(raw_content, str) else ""

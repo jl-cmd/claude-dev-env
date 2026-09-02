@@ -742,17 +742,27 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     )
 
 
-def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit applies to exactly 13 hosted hooks, including the sensitive protector."""
+def test_dispatcher_multi_edit_matches_edit_exactly() -> None:
+    """MultiEdit's applicable set equals Edit's, hook for hook.
+
+    Every hook applicable to Edit judges content with no dependency on which
+    tool delivered it, so the two sets must match. A hook that legitimately
+    stays Edit-only names its reason where it is registered, not here.
+    """
+    all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
+    all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
     all_multi_edit_script_paths = {
         each_entry.script_relative_path for each_entry in all_multi_edit_entries
     }
     assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
         "sensitive_file_protector belongs in the MultiEdit applicable set"
     )
-    assert len(all_multi_edit_entries) == 13, (
-        f"MultiEdit tool must apply to exactly 13 hooks, got {len(all_multi_edit_entries)}"
+    assert all_edit_script_paths == all_multi_edit_script_paths, (
+        "Edit-only (not MultiEdit): "
+        f"{sorted(all_edit_script_paths - all_multi_edit_script_paths)}; "
+        "MultiEdit-only (not Edit): "
+        f"{sorted(all_multi_edit_script_paths - all_edit_script_paths)}"
     )
 
 

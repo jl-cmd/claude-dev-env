@@ -6,11 +6,23 @@ from pathlib import Path
 
 import pytest
 
+from blocking.config.codex_apply_patch_constants import (
+    CODEX_ADD_OPERATION as CONFIG_CODEX_ADD_OPERATION,
+)
 from codex_apply_patch import (
     CODEX_ADD_OPERATION,
     CodexPatchError,
     codex_patch_operation_targets,
 )
+
+
+def test_codex_add_operation_is_the_shared_config_constant() -> None:
+    """codex_apply_patch's public constant is the config value, not a private copy.
+
+    A second local definition would drift from config the way the sanctioned
+    rmtree trio drifted across packages; this pins the single source of truth.
+    """
+    assert CODEX_ADD_OPERATION is CONFIG_CODEX_ADD_OPERATION
 
 
 def _three_operation_patch() -> str:

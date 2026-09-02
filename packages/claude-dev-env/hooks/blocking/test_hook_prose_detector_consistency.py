@@ -193,6 +193,16 @@ def test_written_content_reads_edit_new_string() -> None:
     assert written_content("Edit", edit_input) == "edited body"
 
 
+def test_written_content_reads_every_multi_edit_new_string() -> None:
+    multi_edit_input = {
+        "edits": [
+            {"old_string": "a = 1", "new_string": "a = 11"},
+            {"old_string": "b = 2", "new_string": _OVERSTATED_MESSAGE_MODULE},
+        ]
+    }
+    assert _OVERSTATED_MESSAGE_MODULE in written_content("MultiEdit", multi_edit_input)
+
+
 def _run_main_with_io(
     input_text: str, *, is_prose_style_enabled: bool = True
 ) -> str:
@@ -246,6 +256,37 @@ def test_main_blocks_overstated_hook_module_edit() -> None:
     output_text = _run_main_with_io(json.dumps(hook_input))
     payload = json.loads(output_text)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_main_blocks_overstatement_introduced_by_second_multi_edit() -> None:
+    """An overstated claim in the second edit of a MultiEdit is caught, not only the first."""
+    hook_input = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "/repo/hooks/hooks_constants/some_blocker_constants.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": "a = 11"},
+                {"old_string": "b = 2", "new_string": _OVERSTATED_MESSAGE_MODULE},
+            ],
+        },
+    }
+    output_text = _run_main_with_io(json.dumps(hook_input))
+    payload = json.loads(output_text)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_main_passes_clean_multi_edit() -> None:
+    hook_input = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "/repo/hooks/hooks_constants/some_blocker_constants.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": "a = 11"},
+                {"old_string": "b = 2", "new_string": _FIXED_MESSAGE_MODULE},
+            ],
+        },
+    }
+    assert _run_main_with_io(json.dumps(hook_input)) == ""
 
 
 def test_main_passes_fixed_hook_module_write() -> None:

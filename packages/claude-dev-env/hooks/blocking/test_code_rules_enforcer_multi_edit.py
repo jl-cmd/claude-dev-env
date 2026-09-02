@@ -78,6 +78,22 @@ def test_violation_in_second_edit_is_denied(
     assert "print" in deny_reason
 
 
+def test_multi_edit_on_a_missing_target_is_allowed(tmp_path: Path) -> None:
+    """A MultiEdit naming a target file that does not exist on disk is not denied.
+
+    The reconstruction has no prior content to read, so it returns no
+    validatable view rather than crashing or denying a payload it cannot judge.
+    """
+    missing_target = _production_directory(tmp_path) / "not_on_disk.py"
+
+    stdout_text = _run_multi_edit(
+        str(missing_target),
+        [{"old_string": "return 1", "new_string": "return 11"}],
+    )
+
+    assert stdout_text.strip() == ""
+
+
 def test_clean_multi_edit_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
