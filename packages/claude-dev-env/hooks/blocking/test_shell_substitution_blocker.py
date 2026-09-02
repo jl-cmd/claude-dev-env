@@ -191,3 +191,63 @@ def test_denies_nested_command_substitution_without_arithmetic() -> None:
     }
     response = json.loads(_run_hook(payload).stdout)
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_allows_backtick_inside_single_quoted_heredoc_body() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "cat > notes.md <<'EOF'\n"
+                "reStructuredText markup: ``inert literal``\n"
+                "EOF"
+            )
+        },
+    }
+    assert _run_hook(payload).stdout == ""
+
+
+def test_denies_backtick_inside_bare_heredoc_body() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "cat > notes.md <<EOF\nnow: `date`\nEOF"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_command_substitution_inside_bare_heredoc_body() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": "cat > notes.md <<EOF\nhead: $(git rev-parse HEAD)\nEOF"
+        },
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_live_substitution_outside_a_quoted_heredoc() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "cat > notes.md <<'EOF'\n"
+                "inert ``literal``\n"
+                "EOF\n"
+                'echo "$(git rev-parse HEAD)"'
+            )
+        },
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_allows_backslash_escaped_heredoc_delimiter_body() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": "cat > notes.md <<\\EOF\ninert `text`\nEOF"
+        },
+    }
+    assert _run_hook(payload).stdout == ""

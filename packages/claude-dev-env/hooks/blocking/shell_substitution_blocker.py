@@ -23,6 +23,12 @@ ignored because bash performs no substitution inside them (for example
 are treated as literal only when the count of preceding backslashes is odd;
 an even count (including zero) means the backtick is a live substitution.
 
+A quoted heredoc body is stripped for the same reason. `<<'EOF'`, `<<"EOF"`
+and `<<\\EOF` each tell bash to expand nothing between the opener and the
+terminator, so a backtick there is text the file receives rather than a
+command the shell runs. A bare `<<EOF` expands its body and keeps its scan,
+and text outside any heredoc is scanned either way.
+
 Bash arithmetic expansion ``$((...))`` is explicitly NOT blocked: it does not
 spawn a subshell and does not defeat the allowlist matcher. Telling it apart
 from a disguised command substitution takes more than counting two open
@@ -42,10 +48,10 @@ the closer that brings depth to zero is a lone ``)``, bash has fallen back to
 running a parenthesized command inside the substitution, so it is blocked.
 This hook applies that walk, tracking paren depth from the opening ``$((``.
 
-False positives are still possible when the user is intentionally writing
-shell-script content (for example, authoring a .sh file via heredoc) and the
-substitution is literal payload rather than something to execute. In that
-case, author the file with the Write tool, not a Bash heredoc.
+A quoted heredoc body carries no scan. ``<<'EOF'``, ``<<"EOF"`` and
+``<<\\EOF`` each tell bash to expand nothing down to the terminator, so a
+backtick there is text the file receives. A bare ``<<EOF`` expands its body and
+keeps its scan, and so does every line outside a heredoc.
 """
 
 from __future__ import annotations
@@ -53,6 +59,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from re import Match
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
@@ -74,6 +81,7 @@ from hooks_constants.shell_substitution_blocker_constants import (  # noqa: E402
     PERMISSION_DECISION_KEY,
     PERMISSION_DECISION_REASON_KEY,
     PROCESS_SUBSTITUTION_PATTERN,
+    COMMAND_LINE_SEPARATOR,
     SINGLE_QUOTED_RUN_PATTERN,
     STRIPPED_RUN_REPLACEMENT,
     TOOL_INPUT_KEY,
@@ -81,8 +89,112 @@ from hooks_constants.shell_substitution_blocker_constants import (  # noqa: E402
 )
 
 
+from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
+    HEREDOC_ESCAPE_GROUP,
+    HEREDOC_OPENER_PATTERN,
+    HEREDOC_QUOTE_GROUP,
+    HEREDOC_STRIPPED_INDENT_CHARACTERS,
+    HEREDOC_TAB_STRIP_GROUP,
+    HEREDOC_TAB_STRIP_MARKER,
+    HEREDOC_TERMINATOR_GROUP,
+    HEREDOC_UNQUOTED_MARKER,
+)
+
+
 def _strip_single_quoted_runs(command: str) -> str:
     return SINGLE_QUOTED_RUN_PATTERN.sub(STRIPPED_RUN_REPLACEMENT, command)
+
+
+def _opener_suppresses_expansion(opener_match: Match[str]) -> bool:
+    """Return whether an opener's delimiter is quoted or backslash-escaped.
+
+    ::
+
+        <<'EOF'  -> True   quoted, the body is literal
+        <<EOF    -> False  bare, bash expands the body
+
+    Args:
+        opener_match: One HEREDOC_OPENER_PATTERN match from a command line.
+
+    Returns:
+        True when bash expands nothing down to this opener's terminator.
+    """
+    is_quoted = opener_match.group(HEREDOC_QUOTE_GROUP) != HEREDOC_UNQUOTED_MARKER
+    is_escaped = opener_match.group(HEREDOC_ESCAPE_GROUP) != HEREDOC_UNQUOTED_MARKER
+    return is_quoted or is_escaped
+
+
+def _first_literal_opener(command_line: str) -> Match[str] | None:
+    """Return the line's first heredoc opener whose body bash leaves literal.
+
+    Args:
+        command_line: One line of the command.
+
+    Returns:
+        The matching opener, or None when the line opens no literal heredoc.
+    """
+    for each_opener in HEREDOC_OPENER_PATTERN.finditer(command_line):
+        if _opener_suppresses_expansion(each_opener):
+            return each_opener
+    return None
+
+
+def _index_past_literal_body(
+    all_lines: list[str], body_start_index: int, opener_match: Match[str]
+) -> int:
+    """Return the index past a literal body, and the terminator line it ends on.
+
+    Args:
+        all_lines: Every line of the command.
+        body_start_index: Index of the body's first line.
+        opener_match: The opener whose terminator closes this body.
+
+    Returns:
+        A ``(index, terminator_line)`` pair, where the line is None when the
+        command holds no terminator.
+    """
+    terminator = opener_match.group(HEREDOC_TERMINATOR_GROUP)
+    strips_tabs = opener_match.group(HEREDOC_TAB_STRIP_GROUP) == HEREDOC_TAB_STRIP_MARKER
+    for each_index in range(body_start_index, len(all_lines)):
+        candidate_line = all_lines[each_index]
+        if strips_tabs:
+            candidate_line = candidate_line.lstrip(HEREDOC_STRIPPED_INDENT_CHARACTERS)
+        if candidate_line == terminator:
+            return each_index
+    return len(all_lines)
+
+
+def _strip_quoted_heredoc_bodies(command: str) -> str:
+    """Return the command holding its openers, terminators, and shell text.
+
+    ::
+
+        cat <<'EOF'        ->  cat <<'EOF'
+        inert text             EOF
+        EOF
+
+    A quoted or escaped delimiter makes the lines below it text the shell hands
+    on, so a scan of those lines reports a substitution bash never runs. A bare
+    delimiter keeps its body, and text outside any heredoc keeps its scan.
+
+    Args:
+        command: The raw Bash command string from the tool input.
+
+    Returns:
+        The command with each literal heredoc body dropped.
+    """
+    all_lines = command.split(COMMAND_LINE_SEPARATOR)
+    all_kept_lines: list[str] = []
+    each_index = 0
+    while each_index < len(all_lines):
+        current_line = all_lines[each_index]
+        all_kept_lines.append(current_line)
+        each_index += 1
+        opener_match = _first_literal_opener(current_line)
+        if opener_match is None:
+            continue
+        each_index = _index_past_literal_body(all_lines, each_index, opener_match)
+    return COMMAND_LINE_SEPARATOR.join(all_kept_lines)
 
 
 def _closes_as_arithmetic_expansion(command: str, scan_start_index: int) -> bool:
@@ -143,7 +255,7 @@ def has_shell_substitution(command: str) -> bool:
     Returns:
         True when a substitution the matcher cannot descend into is present.
     """
-    scannable_command = _strip_single_quoted_runs(command)
+    scannable_command = _strip_single_quoted_runs(_strip_quoted_heredoc_bodies(command))
     if _has_unsafe_dollar_paren_expansion(scannable_command):
         return True
     if EVEN_BACKSLASH_BACKTICK_PATTERN.search(scannable_command):
