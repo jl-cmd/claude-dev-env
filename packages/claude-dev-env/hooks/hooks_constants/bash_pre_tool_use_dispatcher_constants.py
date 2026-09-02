@@ -76,4 +76,7 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/test_preflight_check.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/windows_rmtree_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_pr_author_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
+    BashHostedHookEntry(
+        "blocking/pr_description_writer_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
+    ),
 )
