@@ -2,6 +2,9 @@
 
 Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
+A touch does not count: the gate remembers each candidate test's last-observed
+content hash, so a bare mtime refresh cannot reopen it. A first sighting needs
+content HEAD does not have yet, not only a fresh, real test.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """
@@ -30,6 +33,7 @@ try:
     from tdd_enforcer_parts import (
         candidate_paths,
         content_analysis,
+        content_hash_store,
         decisions,
         freshness,
         git_tracking,
@@ -74,8 +78,8 @@ candidate_test_paths_for = candidate_paths.candidate_test_paths_for
 _ancestor_tests_directories = candidate_paths._ancestor_tests_directories
 _parent_walk_limit = candidate_paths._parent_walk_limit
 _freshness_seconds = freshness._freshness_seconds
-has_fresh_test = freshness.has_fresh_test
 _read_candidate_text = freshness._read_candidate_text
+has_recorded_or_fresh_test = content_hash_store.has_recorded_or_fresh_test
 _is_constants_only_python_content = content_analysis._is_constants_only_python_content
 _is_post_edit_import_only = content_analysis._is_post_edit_import_only
 _is_post_edit_constants_only = content_analysis._is_post_edit_constants_only
@@ -150,7 +154,12 @@ def _decide_for_target(
     if _write_is_exempt(tool_name, tool_input, path, extension):
         return True, ""
     all_candidates = candidate_test_paths_for(path)
-    if has_fresh_test(all_candidates, _freshness_seconds()):
+    session_id = str(input_data.get("session_id") or "")
+    repository_root = str(input_data.get("cwd") or "")
+    is_recorded_or_fresh = has_recorded_or_fresh_test(
+        all_candidates, session_id, repository_root, _freshness_seconds()
+    )
+    if is_recorded_or_fresh:
         return True, ""
     return False, build_deny_reason(path, all_candidates)
 

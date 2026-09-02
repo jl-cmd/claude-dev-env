@@ -20,6 +20,18 @@ def test_build_deny_reason_points_exemption_guidance_at_entry_hook() -> None:
     assert "decisions.py" not in reason
 
 
+def test_build_deny_reason_names_content_not_only_modification_time() -> None:
+    reason = decisions.build_deny_reason(Path("pkg/orders.py"), [Path("pkg/test_orders.py")])
+    assert "content" in reason.lower()
+
+
+def test_build_deny_reason_covers_first_sight_and_stale_hash_and_names_the_fix() -> None:
+    reason = decisions.build_deny_reason(Path("pkg/orders.py"), [Path("pkg/test_orders.py")]).lower()
+    assert "fresh" in reason
+    assert "change" in reason
+    assert "touch" in reason
+
+
 def test_emit_allow_writes_allow_decision(capsys: pytest.CaptureFixture[str]) -> None:
     decisions.emit_allow()
     parsed = json.loads(capsys.readouterr().out)
