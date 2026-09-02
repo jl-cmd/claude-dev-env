@@ -68,3 +68,36 @@ def test_resolved_content_returns_empty_for_an_unreadable_edit_target(
         resolved_content({"file_path": str(missing_target), "old_string": "a", "new_string": "b"})
         == ""
     )
+
+
+def test_reconstructed_edit_content_replaces_every_occurrence_when_replace_all_is_set(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An Edit carrying replace_all rewrites every occurrence, as the tool does.
+
+    The MultiEdit branch has honored the flag since it moved onto apply_edits;
+    the Edit branch must agree, or one payload reconstructs two ways.
+    """
+    target_file = tmp_path / "module.py"
+    target_file.write_text("a = 1\na = 1\n", encoding="utf-8")
+    reconstructed = reconstructed_edit_content(
+        {
+            "file_path": str(target_file),
+            "old_string": "a = 1",
+            "new_string": "a = 2",
+            "replace_all": True,
+        }
+    )
+    assert reconstructed == "a = 2\na = 2\n"
+
+
+def test_reconstructed_edit_content_replaces_one_occurrence_without_replace_all(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Without the flag, only the first occurrence changes."""
+    target_file = tmp_path / "module.py"
+    target_file.write_text("a = 1\na = 1\n", encoding="utf-8")
+    reconstructed = reconstructed_edit_content(
+        {"file_path": str(target_file), "old_string": "a = 1", "new_string": "a = 2"}
+    )
+    assert reconstructed == "a = 2\na = 1\n"

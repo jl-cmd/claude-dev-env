@@ -177,6 +177,28 @@ def test_unreadable_prior_yields_no_prior_and_no_reconstruction() -> None:
     assert post_edit_content is None
 
 
+def test_prior_and_post_edit_content_honors_replace_all(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """An Edit carrying replace_all rewrites every occurrence in the post-edit view.
+
+    The MultiEdit lane reconstructs through apply_edits and has honored the flag
+    since it landed there. The Edit lane must agree, or the enforcer judges a
+    replace_all Edit against a file that never exists on disk.
+    """
+    production_directory = tmp_path_factory.mktemp("replace_all_pkg")
+    source_file = production_directory / "edited_module.py"
+    source_file.write_text("value = 1\nvalue = 1\n", encoding="utf-8")
+    prior_content, post_edit_content = code_rules_enforcer.prior_and_post_edit_content(
+        str(source_file),
+        old_string="value = 1",
+        new_string="value = 2",
+        is_replace_all=True,
+    )
+    assert prior_content == "value = 1\nvalue = 1\n"
+    assert post_edit_content == "value = 2\nvalue = 2\n"
+
+
 def test_edit_with_missing_old_string_runs_whole_file_against_on_disk_content(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
