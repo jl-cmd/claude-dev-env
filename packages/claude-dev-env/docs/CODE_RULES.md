@@ -119,3 +119,14 @@ If you already have the data, don't fetch it again.
 3. **Changed-line scope filters only the report.** `defer_scope_to_caller` and the changed-line set decide which found violations block. Scope filters findings after every check in the roster already ran; it adds or removes no check.
 
 `hooks/hooks_constants/validation_phase_constants.py` is the single source for all three axes: the phase names (`EDIT_LANE_PHASE`, `FULL_GATE_PHASE`), the full-gate-only roster (`ALL_FULL_GATE_ONLY_CHECK_NAMES`), and the hook-infrastructure edit-lane roster (`ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES`).
+
+## 11.6 LANE ASSIGNMENT IS BY SCOPE
+
+Scope assigns the lane. A check that reads a file other than the target runs on the full gate. Every other check runs on both lanes.
+
+Hook-infrastructure targets run three checks in the edit lane — `check_same_file_inline_duplicate_body`, `check_zero_payload_function_alias`, `check_unanchored_command_dispatch` — and the whole roster on the full gate. `ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES` holds that set.
+
+Two surfaces report on the roster, and each reports a specific thing:
+
+- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
+- `~/.claude/logs/hook-blocks.log` records the denials raised by fixtures in `test_code_rules_enforcer_*.py` and by the timing harness's default target.
