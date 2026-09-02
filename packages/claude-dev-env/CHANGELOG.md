@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.30.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.29.0...claude-dev-env-v2.30.0) (2026-09-02)
+
+
+### Features
+
+* **agents:** replace PR description writer voice ([98d4224](https://github.com/jl-cmd/claude-dev-env/commit/98d422403a79fe68ae5025ee285b572e2f2c5279))
+* **hooks:** add a repeatable hook-timing harness ([ffc2274](https://github.com/jl-cmd/claude-dev-env/commit/ffc22742cdbfd47f0fc0f7d05b2fffd66c410150))
+* **hooks:** add the validation-phase vocabulary ([f0c6518](https://github.com/jl-cmd/claude-dev-env/commit/f0c65182a2ba1f8c089b24e9f40eee1a10c75e53))
+* **hooks:** split code-rules validation into edit-lane and full-gate phases ([28ecd1a](https://github.com/jl-cmd/claude-dev-env/commit/28ecd1ad8cf09af538a01d3a62cd020fcb451c9b))
+
+
+### Bug Fixes
+
+* **hooks:** judge harness ephemerality against every system temporary root ([7061ccf](https://github.com/jl-cmd/claude-dev-env/commit/7061ccf900859f21cacc33acbeaac82f977bb096))
+* **hooks:** judge harness ephemerality relative to the repository root ([e7879ce](https://github.com/jl-cmd/claude-dev-env/commit/e7879ce1c1c8a643843a97b5596faadb99094c63))
+* Let saves use the quick code check while commits keep the full check ([53b4bc7](https://github.com/jl-cmd/claude-dev-env/commit/53b4bc7ffd4c35dee976cb78644580ee02858a50))
+
+
+### Documentation
+
+* **agent:** add human-checkable verification sample ([9667f75](https://github.com/jl-cmd/claude-dev-env/commit/9667f753997c20d1be15404abdfa0f666d73e4f3))
+* **agent:** add internal PR description voice reference ([d186831](https://github.com/jl-cmd/claude-dev-env/commit/d18683112b57e868e614300bf54b6098fa5fa1ca))
+* **agent:** index PR writer references ([35ab7a5](https://github.com/jl-cmd/claude-dev-env/commit/35ab7a5a7bdfb1084d1bc12439d00e72108a806c))
+* **agent:** link human verification sample ([89321b4](https://github.com/jl-cmd/claude-dev-env/commit/89321b40d414a2dbf470a1f97a68a9f60e43484d))
+* **agent:** make PR proof human-checkable ([aa9fe68](https://github.com/jl-cmd/claude-dev-env/commit/aa9fe684f90b43e2d310a57996f74e8213f70990))
+* **agent:** use repo-owned PR voice sample ([c591209](https://github.com/jl-cmd/claude-dev-env/commit/c591209c5ad855748acbc1bb285266266adf6b02))
+* **code-rules:** state the validation-phase precedence order ([f1132ad](https://github.com/jl-cmd/claude-dev-env/commit/f1132ada2ba84fac8d02c97760f249fe6b745436))
+
+
+### Refactoring
+
+* **hooks:** decompose validate_content into themed helpers ([95e22d5](https://github.com/jl-cmd/claude-dev-env/commit/95e22d5a6cd792498dc58892835753120f820e15))
+
+
+### Tests
+
+* **agents:** pin illustrative PR writer voice ([35ebfb8](https://github.com/jl-cmd/claude-dev-env/commit/35ebfb8a1c3e63816e4c304b544f3388157e8f2d))
+* **agents:** pin repo-owned PR description samples ([3172b45](https://github.com/jl-cmd/claude-dev-env/commit/3172b454d2752d9371db65ad2254c71d59fb086f))
+* **hooks:** correct dispatcher test prose about run_all_validators ([f5e5c61](https://github.com/jl-cmd/claude-dev-env/commit/f5e5c61ea64ec3d0489e60e9ba73402a2e1d730e))
+* **hooks:** pin Fable marker to Fable consumer ([a43fa9d](https://github.com/jl-cmd/claude-dev-env/commit/a43fa9dc5c61b3c57c28db86fb130e62393f7c0d))
+* **hooks:** pin the Fable marker only on skills that spawn at Fable tier ([deb28cb](https://github.com/jl-cmd/claude-dev-env/commit/deb28cb36ac3aa78c7f6fd5629df6ebec1739fb6))
+* **hooks:** pin the phase every edit-lane caller selects ([5e76601](https://github.com/jl-cmd/claude-dev-env/commit/5e766016c5c8a7f32ad473e5444ced1986b98d39))
+* **hooks:** pin validate_content's ordered output before decomposition ([3d38e05](https://github.com/jl-cmd/claude-dev-env/commit/3d38e05f51d17d1095a9cf5187356a1e6c18b419))
+
 ## [2.29.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.28.1...claude-dev-env-v2.29.0) (2026-09-01)
 
 
