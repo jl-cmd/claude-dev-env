@@ -734,16 +734,31 @@ def test_dispatcher_multi_edit_applies_only_group_b() -> None:
     )
 
 
-def test_proceed_after_run_all_validators_removal_allows() -> None:
-    """The PreToolUse dispatcher allows a Python edit that the removed gate would have processed.
+def _assert_roster_names_no_run_all_validators_entry() -> None:
+    """Assert no hosted-roster ``script_relative_path`` names run_all_validators."""
+    all_roster_script_paths = {
+        each_entry.script_relative_path for each_entry in ALL_HOSTED_HOOK_ENTRIES
+    }
+    assert not any(
+        "run_all_validators" in each_script_path
+        for each_script_path in all_roster_script_paths
+    ), (
+        "ALL_HOSTED_HOOK_ENTRIES must name no run_all_validators entry, got: "
+        f"{sorted(all_roster_script_paths)}"
+    )
 
-    The inline run_all_validators runner was a PostToolUse gate removed in Stage 4;
-    it was never a PreToolUse hook and never hosted by the PreToolUse dispatcher.
-    A Python Write payload that run_all_validators would have flagged (mypy errors, for
-    instance) still produces ALLOW from the PreToolUse dispatcher because the PreToolUse
-    dispatcher covers only its 23 hosted blocking hooks — none of which includes the
-    validators runner.
+
+def test_run_all_validators_is_not_hosted_by_pre_tool_use_dispatcher() -> None:
+    """The main PreToolUse dispatcher's hosted roster names no run_all_validators entry.
+
+    ``hooks.json`` registers the ``run_all_validators`` runner as its own
+    PreToolUse ``Write|Edit`` command, separate from the main dispatcher. A
+    Python Write payload that ``run_all_validators`` would flag (a type error,
+    for instance) still produces ALLOW from the main dispatcher, because its
+    roster carries no entry for that runner.
     """
+    _assert_roster_names_no_run_all_validators_entry()
+
     python_content_with_type_error = (
         "def add_one(value: int) -> int:\n"
         "    return value + 1\n\n\n"
@@ -754,8 +769,8 @@ def test_proceed_after_run_all_validators_removal_allows() -> None:
     is_deny, _reason = _parse_hook_decision(dispatcher_result)
     assert not is_deny, (
         "PreToolUse dispatcher must allow a Python Write with a type error — "
-        "mypy validation is PostToolUse-only; the removed run_all_validators gate "
-        "was never a PreToolUse hook"
+        "run_all_validators runs as its own separate PreToolUse command, not "
+        "through this dispatcher's roster"
     )
     assert dispatcher_result.returncode == 0, (
         f"Dispatcher must exit 0, got {dispatcher_result.returncode}"

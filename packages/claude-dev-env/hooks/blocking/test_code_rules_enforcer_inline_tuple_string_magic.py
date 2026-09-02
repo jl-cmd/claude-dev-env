@@ -23,7 +23,7 @@ assert hook_spec.loader is not None
 hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
 check_inline_tuple_string_magic = hook_module.check_inline_tuple_string_magic
-validate_content = hook_module.validate_content
+validate_content = hook_module.validate_content_for_full_gate
 
 PRODUCTION_FILE_PATH = "packages/app/services/loader.py"
 TEST_FILE_PATH = "packages/app/services/test_loader.py"
