@@ -46,3 +46,36 @@ def test_absent_but_tracked_false_when_file_present(tmp_path: Path) -> None:
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "init")
     assert git_tracking.is_absent_but_tracked(present) is False
+
+
+def test_has_uncommitted_change_from_head_true_for_untracked_file(tmp_path: Path) -> None:
+    _init_repository(tmp_path)
+    untracked = tmp_path / "test_orders.py"
+    untracked.write_text("def test_fulfill(): pass\n")
+    assert git_tracking.has_uncommitted_change_from_head(untracked) is True
+
+
+def test_has_uncommitted_change_from_head_true_for_tracked_modified_file(tmp_path: Path) -> None:
+    _init_repository(tmp_path)
+    tracked = tmp_path / "test_orders.py"
+    tracked.write_text("def test_fulfill(): pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    tracked.write_text("def test_fulfill(): assert True\n")
+    assert git_tracking.has_uncommitted_change_from_head(tracked) is True
+
+
+def test_has_uncommitted_change_from_head_false_for_tracked_clean_file(tmp_path: Path) -> None:
+    _init_repository(tmp_path)
+    tracked = tmp_path / "test_orders.py"
+    tracked.write_text("def test_fulfill(): pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    tracked.touch()
+    assert git_tracking.has_uncommitted_change_from_head(tracked) is False
+
+
+def test_has_uncommitted_change_from_head_true_outside_a_git_repository(tmp_path: Path) -> None:
+    stray = tmp_path / "test_orders.py"
+    stray.write_text("def test_fulfill(): pass\n")
+    assert git_tracking.has_uncommitted_change_from_head(stray) is True

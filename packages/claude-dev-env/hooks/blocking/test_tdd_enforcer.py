@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from tdd_enforcer_parts import content_hash_store
 
 pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
 
@@ -1249,3 +1250,103 @@ def test_should_deny_changing_a_future_import_on_a_constants_only_file(tmp_path:
     )
 
     assert _decision_from(completed) == "deny"
+
+
+def _make_write_payload_for_session(
+    file_path: Path, content: str, session_id: str, repository_root: Path
+) -> dict:
+    return {
+        "session_id": session_id,
+        "cwd": str(repository_root),
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(file_path), "content": content},
+    }
+
+
+def _seed_stale_recorded_hash(
+    candidate: Path, session_id: str, repository_root: Path, seconds_past_window: int
+) -> None:
+    """Plant a session record as if the gate had genuinely seen *candidate* long ago."""
+    state_file = content_hash_store._state_file_path(session_id, str(repository_root))
+    candidate_key = content_hash_store._state_key_for(candidate)
+    recorded_hash = content_hash_store._content_hash(candidate.read_text())
+    stale_changed_at = time.time() - FRESHNESS_SECONDS - seconds_past_window
+    state = {
+        candidate_key: {
+            content_hash_store.STORED_CONTENT_HASH_KEY: recorded_hash,
+            content_hash_store.STORED_CHANGED_AT_KEY: stale_changed_at,
+        }
+    }
+    content_hash_store._atomic_write_state(state_file, state)
+
+
+def test_should_deny_when_test_file_was_recorded_then_only_touched_after_window(
+    tmp_path: Path,
+) -> None:
+    """The exact loophole: a session-recorded test, later only touched, stays denied."""
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): pass\n")
+    session_id = "touch-loophole-session"
+    _seed_stale_recorded_hash(sibling_test, session_id, sandbox, seconds_past_window=60)
+
+    sibling_test.touch()
+
+    completed = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 1\n", session_id, sandbox
+        )
+    )
+
+    assert _decision_from(completed) == "deny"
+
+
+def test_should_allow_when_test_file_content_actually_changed_after_window(
+    tmp_path: Path,
+) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): pass\n")
+    session_id = "touch-loophole-real-edit-session"
+    _seed_stale_recorded_hash(sibling_test, session_id, sandbox, seconds_past_window=60)
+
+    sibling_test.write_text("def test_fulfill(): assert True\n")
+
+    completed = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 1\n", session_id, sandbox
+        )
+    )
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_allow_repeat_production_write_within_window_without_further_test_change(
+    tmp_path: Path,
+) -> None:
+    """GREEN/REFACTOR needs several production writes after one real test edit."""
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): pass\n")
+    session_id = "green-refactor-session"
+
+    first_write = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 1\n", session_id, sandbox
+        )
+    )
+    assert _decision_from(first_write) == "allow"
+
+    second_write = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 2\n", session_id, sandbox
+        )
+    )
+
+    assert _decision_from(second_write) == "allow"
