@@ -23,20 +23,15 @@ session never share a file.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
-import os
 import tempfile
 import time
-from collections.abc import Iterator
 from pathlib import Path
 
 from atomic_file_writer import write_text_atomically
+from hooks_constants.state_file_lock import hold_state_file_lock
 from hooks_constants.session_edit_stage_gate_constants import (
-    LOCK_ACQUIRE_RETRY_SECONDS,
-    LOCK_ACQUIRE_TIMEOUT_SECONDS,
-    SESSION_EDIT_LOCK_FILE_SUFFIX,
     SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
     STATE_FILE_ATOMIC_WRITE_SUFFIX,
     STATE_FILE_DEFAULT_SESSION_ID,
@@ -104,44 +99,6 @@ def _content_hash(candidate_text: str) -> str:
 
 def _recorded_entry(current_hash: str, current_time: float) -> dict[str, object]:
     return {STORED_CONTENT_HASH_KEY: current_hash, STORED_CHANGED_AT_KEY: current_time}
-
-
-def _acquire_state_file_lock(lock_file: Path) -> int | None:
-    """Grab an exclusive per-store lock, spinning until it frees or times out.
-
-    Mirrors session_file_edit_tracker's best-effort lock: a caller that
-    cannot acquire it within the timeout proceeds without it rather than
-    stalling the hook that triggered the read-modify-write.
-    """
-    lock_acquire_deadline = time.monotonic() + LOCK_ACQUIRE_TIMEOUT_SECONDS
-    while time.monotonic() < lock_acquire_deadline:
-        try:
-            return os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            time.sleep(LOCK_ACQUIRE_RETRY_SECONDS)
-    return None
-
-
-@contextlib.contextmanager
-def _hold_state_file_lock(state_file: Path) -> Iterator[None]:
-    """Hold a per-(session, repository root) lock across one read-modify-write.
-
-    Two writers share this exact file: the gate's own qualifying-first-sight
-    tracking, and a PostToolUse hook recording a failing test run. Both take
-    this lock across their round trip so neither writer's update is lost to
-    the other's concurrent read-modify-write. _atomic_write_state already
-    writes via tempfile-plus-replace, so the file itself is never torn; this
-    lock closes the separate lost-update race between two writers.
-    """
-    lock_file = state_file.with_name(state_file.name + SESSION_EDIT_LOCK_FILE_SUFFIX)
-    lock_file.parent.mkdir(parents=True, exist_ok=True)
-    lock_descriptor = _acquire_state_file_lock(lock_file)
-    try:
-        yield
-    finally:
-        if lock_descriptor is not None:
-            os.close(lock_descriptor)
-            lock_file.unlink(missing_ok=True)
 
 
 def _has_matching_recorded_failure(
@@ -268,7 +225,7 @@ def has_recorded_or_fresh_test(
         now differs, or has a recorded hash still in window.
     """
     state_file = _state_file_path(session_id, repository_root)
-    with _hold_state_file_lock(state_file):
+    with hold_state_file_lock(state_file):
         all_stored_hashes = _load_state(state_file)
         is_allowed, state_changed = _apply_candidate_decisions(
             all_candidates, all_stored_hashes, time.time(), freshness_seconds
@@ -329,7 +286,7 @@ def record_test_command_failure(
     """
     state_file = _state_file_path(session_id, repository_root)
     current_time = time.time()
-    with _hold_state_file_lock(state_file):
+    with hold_state_file_lock(state_file):
         all_stored_hashes = _load_state(state_file)
         all_recorded = [
             _record_one_test_file_failure(

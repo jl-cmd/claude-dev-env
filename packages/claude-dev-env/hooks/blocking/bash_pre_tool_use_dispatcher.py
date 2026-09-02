@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import _path_setup  # noqa: F401
 
@@ -36,8 +35,12 @@ from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
     REASON_JOIN_SEPARATOR,
     BashHostedHookEntry,
 )
-from hooks_constants.hosted_hook_runner import HostedHookRun, run_hook_capturing_output
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+from hooks_constants.hosted_hook_runner import (
+    run_dispatcher_main,
+    run_hook_capturing_output,
+    HostedHookRun,
+    resolved_hook_script_path,
+)
 
 _PERMISSION_DECISION_KEY = "permissionDecision"
 _PERMISSION_REASON_KEY = "permissionDecisionReason"
@@ -203,12 +206,6 @@ def aggregate_bash_hook_results(
     )
 
 
-def _resolve_hook_script_path(relative_path: str) -> str:
-    """Resolve a hooks/-relative path to an absolute script path."""
-    hooks_root = Path(__file__).resolve().parent.parent
-    return str(hooks_root / relative_path)
-
-
 def _emit_decision(decision: BashDispatcherDecision) -> None:
     """Write one PreToolUse permission payload to stdout when an outcome exists."""
     if not decision.decision:
@@ -251,7 +248,7 @@ def dispatch(payload_text: str, tool_name: str) -> None:
     applicable_entries = select_applicable_entries(tool_name)
     all_runs: list[HostedHookRun] = []
     for each_entry in applicable_entries:
-        script_path = _resolve_hook_script_path(each_entry.script_relative_path)
+        script_path = resolved_hook_script_path(each_entry.script_relative_path)
         hook_run = run_hook_capturing_output(script_path, payload_text)
         all_runs.append(hook_run)
         if _run_is_deny(hook_run):
@@ -264,17 +261,7 @@ def dispatch(payload_text: str, tool_name: str) -> None:
 
 def main() -> None:
     """Read stdin once and dispatch the Bash/PowerShell hosted-hook chain."""
-    payload_dictionary = read_hook_input_dictionary_from_stdin()
-    if payload_dictionary is None:
-        sys.exit(0)
-
-    payload_text = json.dumps(payload_dictionary)
-    tool_name = payload_dictionary.get("tool_name", "")
-    if not isinstance(tool_name, str) or not tool_name:
-        sys.exit(0)
-
-    dispatch(payload_text, tool_name)
-    sys.exit(0)
+    run_dispatcher_main(dispatch)
 
 
 if __name__ == "__main__":
