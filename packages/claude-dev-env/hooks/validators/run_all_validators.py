@@ -16,6 +16,7 @@ import tempfile
 import time
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -40,6 +41,7 @@ from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .project_roots import enclosing_project_root
 from .python_style_checks import fix_file
 from .ruff_integration import run_ruff_check
+from .config.validator_base_constants import SOURCE_CACHE_ENTRIES
 from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from hooks_constants.hook_block_logger import log_hook_block
@@ -1155,6 +1157,7 @@ def _line_identity(
     )
 
 
+@lru_cache(maxsize=SOURCE_CACHE_ENTRIES)
 def _scope_agnostic_message(identity_scope: str, violation_message: str) -> str:
     """Return the message with its own function's name and shape metrics masked.
 
@@ -1193,22 +1196,6 @@ def _scope_agnostic_message(identity_scope: str, violation_message: str) -> str:
     )
     return re.sub(
         STANDALONE_NUMBER_PATTERN, SHAPE_NUMBER_PLACEHOLDER, masked_message
-    )
-
-
-def _shape_key(violation_identity: ViolationIdentity) -> tuple[str, str]:
-    """Return an identity's ``(validator, scope-agnostic message)`` shape key.
-
-    Args:
-        violation_identity: One violation's full identity key.
-
-    Returns:
-        The key a violation keeps when only its enclosing function's name
-        changes, so a rename, a split, or a move still finds its baseline.
-    """
-    return (
-        violation_identity[0],
-        _scope_agnostic_message(violation_identity[1], violation_identity[2]),
     )
 
 
@@ -1280,9 +1267,12 @@ def _compatible_baseline_identity(
     for each_identity in all_available_identities:
         if each_identity[1] == line_identity[1]:
             return each_identity
-    line_shape_key = _shape_key(line_identity)
+    line_shape_message = _scope_agnostic_message(line_identity[1], line_identity[2])
     for each_identity in all_available_identities:
-        if _shape_key(each_identity) == line_shape_key:
+        if (
+            _scope_agnostic_message(each_identity[1], each_identity[2])
+            == line_shape_message
+        ):
             return each_identity
     return None
 
