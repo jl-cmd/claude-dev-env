@@ -52,6 +52,11 @@ def source_text(file_path: Path) -> str:
     The cache key carries the modification time and size, so an edited file
     is read again.
 
+    That key has one blind spot: a rewrite that leaves the size unchanged
+    inside a single modification-time tick is served from the cache. A hook
+    process handles one payload, so it cannot happen there; a long CLI pass
+    over many files is where a reader needs to know.
+
     Raises whatever ``read_text`` raises, so a caller's own error handling
     is unchanged.
 
