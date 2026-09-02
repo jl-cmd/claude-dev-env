@@ -45,7 +45,7 @@ def test_run_fast_save_validators_covers_every_non_mypy_non_ruff_check(
 
     all_outcomes = run_fast_save_validators([target_file])
 
-    assert {each_outcome.display_name for each_outcome in all_outcomes} == (
+    assert {each_outcome.name for each_outcome in all_outcomes} == (
         _ALL_EXPECTED_FAST_SAVE_VALIDATOR_NAMES
     )
 
@@ -56,8 +56,8 @@ def test_run_fast_save_validators_excludes_mypy_and_ruff(tmp_path: Path) -> None
 
     all_outcomes = run_fast_save_validators([target_file])
 
-    assert all(each_outcome.display_name != "Mypy" for each_outcome in all_outcomes)
-    assert all(each_outcome.display_name != "Ruff" for each_outcome in all_outcomes)
+    assert all(each_outcome.name != "Mypy" for each_outcome in all_outcomes)
+    assert all(each_outcome.name != "Ruff" for each_outcome in all_outcomes)
 
 
 def test_run_fast_save_validators_spawns_no_subprocess(
@@ -98,9 +98,9 @@ def test_magic_values_outcome_matches_direct_validate_file_call(
         all_outcomes = run_fast_save_validators([target_file])
 
     magic_values_outcome = next(
-        each for each in all_outcomes if each.display_name == "Magic Values"
+        each for each in all_outcomes if each.name == "Magic Values"
     )
-    assert magic_values_outcome.violation_report == "\n".join(expected_lines)
+    assert magic_values_outcome.output == "\n".join(expected_lines)
 
 
 def test_todo_outcome_matches_direct_validate_file_call(tmp_path: Path) -> None:
@@ -111,8 +111,8 @@ def test_todo_outcome_matches_direct_validate_file_call(tmp_path: Path) -> None:
 
     all_outcomes = run_fast_save_validators([target_file])
 
-    todo_outcome = next(each for each in all_outcomes if each.display_name == "TODO Tracking")
-    assert todo_outcome.violation_report == "\n".join(expected_lines)
+    todo_outcome = next(each for each in all_outcomes if each.name == "TODO Tracking")
+    assert todo_outcome.output == "\n".join(expected_lines)
 
 
 def test_abbreviations_outcome_reports_clean_for_a_clean_file(tmp_path: Path) -> None:
@@ -125,9 +125,9 @@ def test_abbreviations_outcome_reports_clean_for_a_clean_file(tmp_path: Path) ->
     all_outcomes = run_fast_save_validators([target_file])
 
     abbreviations_outcome = next(
-        each for each in all_outcomes if each.display_name == "Abbreviations"
+        each for each in all_outcomes if each.name == "Abbreviations"
     )
-    assert abbreviations_outcome.is_clean is True
+    assert abbreviations_outcome.passed is True
 
 
 def test_react_outcome_matches_direct_check_function_call(tmp_path: Path) -> None:
@@ -139,8 +139,8 @@ def test_react_outcome_matches_direct_check_function_call(tmp_path: Path) -> Non
 
     all_outcomes = run_fast_save_validators([target_file])
 
-    react_outcome = next(each for each in all_outcomes if each.display_name == "React")
-    assert react_outcome.violation_report == "\n".join(expected_lines)
+    react_outcome = next(each for each in all_outcomes if each.name == "React")
+    assert react_outcome.output == "\n".join(expected_lines)
 
 
 def test_test_safety_outcome_matches_direct_check_function_calls(
@@ -155,8 +155,8 @@ def test_test_safety_outcome_matches_direct_check_function_calls(
 
     all_outcomes = run_fast_save_validators([target_file])
 
-    test_safety_outcome = next(each for each in all_outcomes if each.display_name == "Test Safety")
-    assert test_safety_outcome.violation_report == "\n".join(expected_lines)
+    test_safety_outcome = next(each for each in all_outcomes if each.name == "Test Safety")
+    assert test_safety_outcome.output == "\n".join(expected_lines)
 
 
 def test_no_matching_files_reports_configured_message(tmp_path: Path) -> None:
@@ -166,7 +166,7 @@ def test_no_matching_files_reports_configured_message(tmp_path: Path) -> None:
     all_outcomes = run_fast_save_validators([target_file])
 
     abbreviations_outcome = next(
-        each for each in all_outcomes if each.display_name == "Abbreviations"
+        each for each in all_outcomes if each.name == "Abbreviations"
     )
-    assert abbreviations_outcome.is_clean is True
-    assert abbreviations_outcome.violation_report == "No Python files to check"
+    assert abbreviations_outcome.passed is True
+    assert abbreviations_outcome.output == "No Python files to check"
