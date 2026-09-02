@@ -24,6 +24,7 @@ consideration will trip this test.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import inspect
 import pathlib
@@ -45,10 +46,13 @@ _hook_spec.loader.exec_module(_hook_module)
 
 VOID_ADVISORY_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
     {
+        "check_constants_outside_config_advisory",
         "check_duplicated_format_patterns",
         "check_flag_gated_scenario_test_naming",
     }
 )
+
+PAYLOAD_COLLECTING_METHOD_NAMES: frozenset[str] = frozenset({"extend", "append"})
 
 DIFF_SCOPED_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
     {
@@ -65,7 +69,6 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_comment_changes",
         "check_constant_equality_tests",
         "check_constants_outside_config",
-        "check_constants_outside_config_advisory",
         "check_existence_check_tests",
         "check_file_global_constants_use_count",
         "check_imports_at_top",
@@ -171,6 +174,75 @@ def test_void_advisory_checks_are_registered_and_disjoint() -> None:
     assert overlap == set(), (
         f"Void-advisory checks must not also appear on the uncapped pending list: "
         f"{sorted(overlap)}"
+    )
+
+
+def _enforcer_syntax_tree() -> ast.Module:
+    enforcer_source = (_HOOK_DIRECTORY / "code_rules_enforcer.py").read_text(encoding="utf-8")
+    return ast.parse(enforcer_source)
+
+
+def _void_advisory_names_called_under(node: ast.AST) -> set[str]:
+    return {
+        each_node.func.id
+        for each_node in ast.walk(node)
+        if isinstance(each_node, ast.Call)
+        and isinstance(each_node.func, ast.Name)
+        and each_node.func.id in VOID_ADVISORY_CHECK_FUNCTION_NAMES
+    }
+
+
+def _payload_collecting_calls(syntax_tree: ast.Module) -> list[ast.Call]:
+    return [
+        each_node
+        for each_node in ast.walk(syntax_tree)
+        if isinstance(each_node, ast.Call)
+        and isinstance(each_node.func, ast.Attribute)
+        and each_node.func.attr in PAYLOAD_COLLECTING_METHOD_NAMES
+    ]
+
+
+def _void_advisory_names_fed_into_the_deny_payload(syntax_tree: ast.Module) -> set[str]:
+    """Return void-advisory names whose result is collected into the blocking payload.
+
+    The enforcer builds its deny payload by extending a list::
+
+        ok:   check_duplicated_format_patterns(content, file_path)
+        flag: all_issues.extend(check_duplicated_format_patterns(content, file_path))
+
+    The flagged form routes a stderr-only advisory into the payload that denies
+    the write, so the advisory stops being advisory.
+    """
+    fed_names: set[str] = set()
+    for each_call in _payload_collecting_calls(syntax_tree):
+        for each_argument in each_call.args:
+            fed_names |= _void_advisory_names_called_under(each_argument)
+    return fed_names
+
+
+def _bare_call_names(syntax_tree: ast.Module) -> set[str]:
+    return {
+        each_node.value.func.id
+        for each_node in ast.walk(syntax_tree)
+        if isinstance(each_node, ast.Expr)
+        and isinstance(each_node.value, ast.Call)
+        and isinstance(each_node.value.func, ast.Name)
+    }
+
+
+def test_void_advisory_checks_never_feed_the_deny_payload() -> None:
+    fed_names = _void_advisory_names_fed_into_the_deny_payload(_enforcer_syntax_tree())
+    assert fed_names == set(), (
+        f"Void-advisory checks must run for their stderr side effect alone, never collected "
+        f"into the blocking payload. Fed into extend/append: {sorted(fed_names)}"
+    )
+
+
+def test_void_advisory_checks_are_each_called_by_the_enforcer() -> None:
+    uncalled_names = VOID_ADVISORY_CHECK_FUNCTION_NAMES - _bare_call_names(_enforcer_syntax_tree())
+    assert uncalled_names == set(), (
+        f"Every void-advisory check must appear as a bare call in code_rules_enforcer.py so "
+        f"its findings reach stderr. Never called: {sorted(uncalled_names)}"
     )
 
 
