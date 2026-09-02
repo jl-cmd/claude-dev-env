@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""SessionStart hook — direct the session to track work with the task tool.
+"""SessionStart hook — direct the session to track work with its task tool.
 
 At session start this hook emits an ``additionalContext`` directive asking
-Claude to track the session's work with TaskCreate, TodoWrite, or the host
-equivalent: create tasks at the start of the session, then update them as
+the session to track its work with the task or todo tracking tool its host
+provides: create tasks at the start of the session, then update them as
 work proceeds.
 """
 

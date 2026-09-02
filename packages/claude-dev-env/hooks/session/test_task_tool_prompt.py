@@ -33,15 +33,15 @@ class TestSessionDirective:
         assert hook_output["hookEventName"] == "SessionStart"
         assert "additionalContext" in hook_output
 
-    def test_directive_names_the_task_tool(self) -> None:
+    def test_directive_names_the_tracking_tool(self) -> None:
         emitted = json.loads(_run_main())
-        assert "task tool" in emitted["hookSpecificOutput"]["additionalContext"]
+        assert "task or todo tracking tool" in emitted["hookSpecificOutput"]["additionalContext"]
 
-    def test_directive_names_task_create_and_todo_write(self) -> None:
+    def test_directive_names_no_vendor_or_host_product(self) -> None:
         emitted = json.loads(_run_main())
         additional_context = emitted["hookSpecificOutput"]["additionalContext"]
-        assert "TaskCreate" in additional_context
-        assert "TodoWrite" in additional_context
+        for each_forbidden_term in ("Claude", "Cursor", "Codex", "TaskCreate", "TodoWrite"):
+            assert each_forbidden_term not in additional_context
 
     def test_directive_says_create_tasks_at_session_start(self) -> None:
         emitted = json.loads(_run_main())
