@@ -6,19 +6,17 @@ import re
 
 from hooks_constants.hardcoded_user_path_constants import HARDCODED_USER_PATH_PATTERN
 
-BASH_TOOL_NAME: str = "Bash"
-POWERSHELL_TOOL_NAME: str = "PowerShell"
 # The dispatcher constants module is the single source for tool names.
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
+    ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     APPLY_PATCH_TOOL_NAME,
     EDIT_TOOL_NAME,
     MULTI_EDIT_TOOL_NAME,
     WRITE_TOOL_NAME,
 )
 
-ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
-    {WRITE_TOOL_NAME, EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME}
-)
+BASH_TOOL_NAME: str = "Bash"
+POWERSHELL_TOOL_NAME: str = "PowerShell"
 
 ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset(
     {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}

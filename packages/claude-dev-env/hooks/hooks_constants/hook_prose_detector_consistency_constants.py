@@ -7,6 +7,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
     WRITE_TOOL_NAME,
 )
 
+
 HOOK_MODULE_PATH_SEGMENT: str = "/hooks/"
 PYTHON_FILE_SUFFIX: str = ".py"
 CONSTANTS_MODULE_SUFFIX: str = "_constants.py"

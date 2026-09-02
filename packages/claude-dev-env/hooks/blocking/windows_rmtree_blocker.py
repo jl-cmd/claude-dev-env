@@ -45,17 +45,12 @@ def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
     return bool(rmtree_ignore_errors_pattern.search(payload_text))
 
 
-def _multi_edit_scanned_text(all_tool_input: dict) -> str:
-    """Return every MultiEdit new_string joined for a single scan pass."""
-    return joined_new_strings(all_tool_input)
-
-
 def extract_payload_text(tool_name: str, tool_input: dict) -> str:
     if tool_name == "MultiEdit":
         file_path = tool_input.get("file_path", "")
         if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):
             return ""
-        return _multi_edit_scanned_text(tool_input)
+        return joined_new_strings(tool_input)
     if tool_name in {"Write", "Edit"}:
         file_path = tool_input.get("file_path", "")
         if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):

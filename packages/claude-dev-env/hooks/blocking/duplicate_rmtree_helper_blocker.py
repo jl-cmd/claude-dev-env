@@ -51,11 +51,6 @@ except ImportError as import_error:
     ) from import_error
 
 
-def _multi_edit_scanned_text(all_tool_input: dict) -> str:
-    """Return every MultiEdit new_string joined for a single scan pass."""
-    return joined_new_strings(all_tool_input)
-
-
 def payload_defines_sanctioned_helper(payload_text: str) -> bool:
     """Return True when the text defines a sanctioned Windows-safe rmtree helper.
 
@@ -116,7 +111,7 @@ def extract_payload_text(tool_name: str, tool_input: dict) -> tuple[str, str]:
     if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):
         return file_path, ""
     if tool_name == "MultiEdit":
-        return file_path, _multi_edit_scanned_text(tool_input)
+        return file_path, joined_new_strings(tool_input)
     scanned_text = tool_input.get("content", "") or tool_input.get("new_string", "") or ""
     return file_path, scanned_text
 

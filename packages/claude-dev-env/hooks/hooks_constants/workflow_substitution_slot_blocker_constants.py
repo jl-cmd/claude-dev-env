@@ -7,6 +7,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
     WRITE_TOOL_NAME,
 )
 
+
 WORKFLOW_FILE_SUFFIX: str = ".workflow.js"
 
 CORRECTIVE_MESSAGE: str = (

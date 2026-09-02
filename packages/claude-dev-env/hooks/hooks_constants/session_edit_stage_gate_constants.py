@@ -26,6 +26,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
     WRITE_TOOL_NAME,
 )
 
+
 SESSION_EDIT_FILE_PREFIX: str = "claude-session-edits-"
 SESSION_EDIT_FILE_SUFFIX: str = ".json"
 ALL_EDITED_FILE_PATHS_KEY: str = "all_edited_file_paths"
