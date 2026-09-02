@@ -120,16 +120,13 @@ If you already have the data, don't fetch it again.
 
 `hooks/hooks_constants/validation_phase_constants.py` is the single source for all three axes: the phase names (`EDIT_LANE_PHASE`, `FULL_GATE_PHASE`), the full-gate-only roster (`ALL_FULL_GATE_ONLY_CHECK_NAMES`), and the hook-infrastructure edit-lane roster (`ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES`).
 
-## 11.6 WHY THE FULL-GATE CUT STOPS AT SIX CHECKS
+## 11.6 LANE ASSIGNMENT IS BY SCOPE
 
-The six full-gate-only checks are carved out for one reason: they read sibling files from disk. Check category is not a second reason. Style and Communication checks run on the edit lane, and four facts settle that.
+A check runs on the full gate alone when it reads a file other than the target. Every other check runs on both lanes.
 
-1. **Category does not track scope.** Classifying each check by what a violation risks — wrong runtime behavior or a weakened test (Correctness), a broken structural obligation such as type or docstring-signature agreement (Contract), a naming or formatting convention with no functional risk (Style), how clearly a docstring communicates (Communication) — gives Correctness 21, Contract 30, Style 27, Communication 2, for 80. Scope cuts across all four: exactly six checks read wider than one file and 74 do not, matching `ALL_FULL_GATE_ONLY_CHECK_NAMES`. A search for sibling-file reads (`glob`, `os.walk`, `iterdir`, `rglob`, `listdir`) across every `code_rules_*.py` module reaches only the four modules that already carry a full-gate-only check.
+Check category — correctness, contract, style, docstring prose — does not assign a lane.
 
-2. **The commit path runs every check already.** `git-hooks/pre_commit.py` invokes `_shared/pr-loop/scripts/code_rules_gate.py --immediate`, which calls `load_validate_content_for_full_gate()` — the 74 edit-lane checks plus the six full-gate-only ones. Moving a check from the edit lane to the full gate changes when it runs, not whether. The `hooks/validators/` family is the opposite case: no commit-path script imports it, so a check dropped from the save path there loses coverage outright.
+Two measurement surfaces do not measure the roster, and neither settles a lane question:
 
-3. **Cost concentrates in one check, not in a category.** The 27 Style checks account for 13 to 16 percent of the enforcer's time. One Contract check, `check_same_file_inline_duplicate_body`, accounts for about half on its own, and its cost grows with file size. Splitting by category moves the small share and leaves the large one.
-
-4. **Neither the timing harness nor the block log measures what it appears to.** `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already has on-disk content, and `_contents_for_validation` returns `None` for a write over an existing file, so validation is skipped and the harness reports a save where no check ran. Time a real `Edit` payload against a real file instead. `~/.claude/logs/hook-blocks.log` names the failing check in its `reason` text, but its entries come from fixtures inside `test_code_rules_enforcer_*.py` and from the timing harness's own default target, so it records the suite's fixture mix rather than what denies real edits.
-
-Reopen this cut only when `check_same_file_inline_duplicate_body` is cheap and the remaining edit-lane cost still warrants a split, or when a denial record exists that excludes test and benchmark runs.
+- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already has content, and `_contents_for_validation` returns `None` for a write over an existing file. Time an `Edit` payload against a real file.
+- `~/.claude/logs/hook-blocks.log` records fixtures from `test_code_rules_enforcer_*.py` and the timing harness's default target, not organic edits.

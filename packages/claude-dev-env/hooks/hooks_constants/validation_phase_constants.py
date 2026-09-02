@@ -5,9 +5,8 @@ sibling modules from disk. These names identify each phase, name the checks
 the full gate alone runs, name the hook-infrastructure checks the edit lane
 still runs, and template the error for an unrecognized phase.
 
-The cut is by scope, not by check category. ``docs/CODE_RULES.md`` section
-11.6 records why it stops at these six and does not extend to the style and
-docstring-prose checks.
+Scope assigns the lane; check category does not. See ``docs/CODE_RULES.md``
+section 11.6.
 """
 
 EDIT_LANE_PHASE: str = "edit_lane"
