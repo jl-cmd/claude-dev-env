@@ -2,9 +2,9 @@
 
 Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
-A touch does not count: the gate remembers each candidate test's last-observed
-content hash, so a bare mtime refresh cannot reopen it. A first sighting needs
-content HEAD does not have yet, not only a fresh, real test.
+The gate records each candidate test's content hash at every sighting and
+compares that hash on the next write. A first sighting requires content that
+differs from HEAD.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """
@@ -25,9 +25,7 @@ try:
         is_under_session_scratchpad,
     )
     from codex_apply_patch import (
-        CodexPatchError,
-        parse_codex_apply_patch,
-        payload_patch_command,
+        payload_patch_target_paths,
     )
     from hooks_constants.pre_tool_use_dispatcher_constants import APPLY_PATCH_TOOL_NAME
     from tdd_enforcer_parts import (
@@ -45,18 +43,6 @@ except ImportError as import_error:
         "tdd_enforcer: cannot import its tdd_enforcer_parts submodules; "
         "ensure the hooks directory is importable."
     ) from import_error
-
-
-def _apply_patch_target_file_paths(input_data: dict, tool_input: dict) -> tuple[str, ...]:
-    """Return each file path a Codex apply_patch command names."""
-    command, working_directory = payload_patch_command(input_data, tool_input)
-    if not command:
-        return ()
-    try:
-        all_patch_files = parse_codex_apply_patch(command, working_directory)
-    except CodexPatchError:
-        return ()
-    return tuple(each_patch_file.file_path for each_patch_file in all_patch_files)
 
 
 def _is_session_scratchpad_write(file_path: str, input_data: dict) -> bool:
@@ -170,7 +156,7 @@ def _decide_for_target(
 
 def _decide_apply_patch(input_data: dict, tool_input: dict) -> None:
     """Run the TDD gate over every file a Codex apply_patch payload touches."""
-    for each_file_path in _apply_patch_target_file_paths(input_data, tool_input):
+    for each_file_path in payload_patch_target_paths(input_data, tool_input):
         decision = _decide_for_target(
             APPLY_PATCH_TOOL_NAME, tool_input, each_file_path, input_data
         )
