@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 SCRIPT_PATH = Path(__file__).parent / "tdd_enforcer.py"
 
 
@@ -885,8 +887,9 @@ def _run_hook_with_payload_and_env(
 _BEHAVIOR_BEARING_CONTENT = "def fulfill_order(order: str) -> str:\n    return order\n"
 
 
-def test_should_exit_zero_for_ephemeral_scratch_python() -> None:
+def test_should_exit_zero_for_ephemeral_scratch_python(monkeypatch: pytest.MonkeyPatch) -> None:
     """B16: behavior-bearing scratch .py under root-anchored /tmp exits 0 with no deny."""
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
     ephemeral_path = "/tmp/scratch_work.py"
     payload = _make_write_payload(Path(ephemeral_path), _BEHAVIOR_BEARING_CONTENT)
     completed = _run_hook_with_payload(payload)
@@ -895,8 +898,9 @@ def test_should_exit_zero_for_ephemeral_scratch_python() -> None:
     )
 
 
-def test_should_exit_zero_for_ephemeral_scratch_typescript() -> None:
+def test_should_exit_zero_for_ephemeral_scratch_typescript(monkeypatch: pytest.MonkeyPatch) -> None:
     """B17: ephemeral .ts scratch file under root-anchored /tmp exits 0 with no deny."""
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
     ephemeral_path = "/tmp/scratch_work.ts"
     payload = {
         "tool_name": "Write",

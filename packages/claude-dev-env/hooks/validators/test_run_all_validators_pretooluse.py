@@ -26,6 +26,8 @@ from .run_all_validators import (
     run_validators_entrypoint_subprocess,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 CONFIG_DIR_TARGET_PATH = (
     "CDP Automations/os_update_workflow/config/submission_constants.py"
 )

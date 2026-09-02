@@ -20,6 +20,8 @@ if str(_HOOKS_PARENT) not in sys.path:
 import code_rules_enforcer
 import codex_apply_patch
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 def _run_codex_payload(
     payload: dict[str, object],

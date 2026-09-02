@@ -36,6 +36,8 @@ from code_rules_enforcer_test_support import (  # noqa: E402
     run_write_entrypoint,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 SHARED_HELPER_SOURCE = (
     "import re\n"
     "\n"

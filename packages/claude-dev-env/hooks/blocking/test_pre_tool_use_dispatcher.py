@@ -50,6 +50,8 @@ from pre_tool_use_dispatcher import (  # noqa: E402, I001
     unique_first_seen_strings,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
 _PROSE_STYLE_ENV_VAR = "CLAUDE_PROSE_STYLE_ENFORCEMENT"

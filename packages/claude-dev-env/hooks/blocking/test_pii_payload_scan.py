@@ -28,6 +28,8 @@ except ImportError:
         evaluate_write_edit_payload,
     )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 _ALLOW_SLUG = "AllowOwner/allow-repo"
 _OTHER_SLUG = "OtherOwner/other-repo"
 

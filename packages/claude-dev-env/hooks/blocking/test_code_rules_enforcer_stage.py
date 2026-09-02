@@ -33,6 +33,8 @@ from code_rules_gate_parts.tests._repo_test_helpers import (  # noqa: E402
     write_commit_and_stage_change,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 PRODUCTION_FILE_PATH = "packages/app/services.py"
 ENFORCER_SCRIPT_PATH = Path(__file__).with_name("code_rules_enforcer.py")
