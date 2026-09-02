@@ -792,8 +792,8 @@ def _path_parts_the_project_owns(destination_path: Path) -> tuple[str, ...]:
 
     ::
 
-        ok:   "~/tests/proj/src/worker.py" (proj is the root) -> ("src", "worker.py")
-        ok:   "~/.claude/hooks/gate.py" (no root)             -> (".claude", "hooks", "gate.py")
+        ok:   "/srv/tests/proj/src/worker.py" (proj is the root) -> ("src", "worker.py")
+        ok:   "/srv/anna/.claude/hooks/gate.py" (no root)  -> (".claude", "hooks", "gate.py")
         ok:   "config/x.py" (relative)                      -> ("config", "x.py")
 
     Directory names above the project root were chosen by whoever laid out the

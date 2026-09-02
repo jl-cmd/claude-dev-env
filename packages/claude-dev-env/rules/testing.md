@@ -26,3 +26,7 @@ Tests exercise real behavior, real data, and production code paths. A test that 
 ## The File-Level TDD Gate Reads Content
 
 `tdd_enforcer.py` records each candidate test's content hash at every sighting and compares that hash on the next write. A first sighting requires content that differs from HEAD.
+
+## The Gate Reads a Recorded Failing Run First
+
+`hooks/observability/test_failure_recorder.py` runs on every Bash call and records a single unchained pytest run that names a real test file path and reports a failing exit status. It stores the command, that exit status, and the path in the same content-hash store the gate reads. The gate consults that record before its freshness fallback, and honours it while the candidate's content still matches what failed. `content_hash_store.py`'s module docstring holds the full contract.

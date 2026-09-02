@@ -7,15 +7,22 @@ and the restoration of the interpreter's stdin, stdout, and argv.
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 from pathlib import Path
+
+import pytest
 
 _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
 if _HOOKS_DIR not in sys.path:
     sys.path.insert(0, _HOOKS_DIR)
 
-from hooks_constants.hosted_hook_runner import HostedHookRun, run_hook_capturing_output  # noqa: E402
+from hooks_constants.hosted_hook_runner import (  # noqa: E402
+    HostedHookRun,
+    run_dispatcher_main,
+    run_hook_capturing_output,
+)
 
 
 def _write_probe(tmp_path: Path, body: str) -> str:
@@ -99,3 +106,50 @@ def test_returns_a_hosted_hook_run_instance(tmp_path: Path) -> None:
     probe_path = _write_probe(tmp_path, "print('x')\n")
     hook_run = run_hook_capturing_output(probe_path, "{}")
     assert isinstance(hook_run, HostedHookRun)
+
+
+def test_run_dispatcher_main_calls_dispatch_with_payload_text_and_tool_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A well-formed payload reaches dispatch with its JSON text and tool_name."""
+    all_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {}}))
+    )
+
+    with pytest.raises(SystemExit) as raised_exit:
+        run_dispatcher_main(lambda payload_text, tool_name: all_calls.append((payload_text, tool_name)))
+
+    assert int(raised_exit.value.code or 0) == 0
+    assert len(all_calls) == 1
+    recorded_payload_text, recorded_tool_name = all_calls[0]
+    assert recorded_tool_name == "Bash"
+    assert json.loads(recorded_payload_text)["tool_name"] == "Bash"
+
+
+def test_run_dispatcher_main_skips_dispatch_for_malformed_stdin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unparseable stdin exits zero and never calls dispatch."""
+    all_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+
+    with pytest.raises(SystemExit) as raised_exit:
+        run_dispatcher_main(lambda payload_text, tool_name: all_calls.append((payload_text, tool_name)))
+
+    assert int(raised_exit.value.code or 0) == 0
+    assert all_calls == []
+
+
+def test_run_dispatcher_main_skips_dispatch_when_tool_name_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A payload with no tool_name exits zero and never calls dispatch."""
+    all_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"tool_input": {}})))
+
+    with pytest.raises(SystemExit) as raised_exit:
+        run_dispatcher_main(lambda payload_text, tool_name: all_calls.append((payload_text, tool_name)))
+
+    assert int(raised_exit.value.code or 0) == 0
+    assert all_calls == []
