@@ -151,6 +151,32 @@ def test_precheck_selects_the_full_gate() -> None:
     )
 
 
+def test_codex_patch_issues_selects_the_edit_lane() -> None:
+    """Pin the apply_patch mutation path to the edit-lane verdict."""
+    codex_patch_issues_source = inspect.getsource(code_rules_enforcer._codex_patch_issues)
+    assert "validate_content_for_edit_lane(" in codex_patch_issues_source, (
+        "the apply_patch branch must run the edit-lane verdict"
+    )
+
+
+def test_forecast_full_file_violations_selects_the_edit_lane() -> None:
+    """Pin the full-file forecast pass to the edit-lane verdict."""
+    forecast_source = inspect.getsource(code_rules_enforcer._forecast_full_file_violations)
+    assert "validate_content_for_edit_lane(" in forecast_source, (
+        "the full-file forecast pass must run the edit-lane verdict"
+    )
+
+
+def test_report_blocking_violations_selects_the_edit_lane() -> None:
+    """Pin the PreToolUse Write and Edit main path to the edit-lane verdict."""
+    report_blocking_violations_source = inspect.getsource(
+        code_rules_enforcer._report_blocking_violations
+    )
+    assert "validate_content_for_edit_lane(" in report_blocking_violations_source, (
+        "the PreToolUse Write and Edit main path must run the edit-lane verdict"
+    )
+
+
 def _write_scoped_service_file_with_a_committed_baseline(repository_root: Path) -> Path:
     repo_test_helpers.init_repository(repository_root)
     return repo_test_helpers.write_commit_and_stage_change(
