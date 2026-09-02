@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .validator_base import Violation
+from .validator_base import Violation, source_text, syntax_tree
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
@@ -90,8 +90,8 @@ def validate_file(file_path: Path) -> List[Violation]:
     filename = str(file_path)
 
     try:
-        source = file_path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        source = source_text(file_path)
+        tree = syntax_tree(source)
     except Exception as error:
         return [Violation(filename, 0, f"Error: {error}")]
 

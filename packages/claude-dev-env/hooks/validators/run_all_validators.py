@@ -26,11 +26,11 @@ from .config.directory_exemption_constants import (
 )
 from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
-from .mypy_integration import check_mypy_available, run_mypy_check
 from .system_temporary_roots import enclosing_system_temporary_root
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
-from .ruff_integration import check_ruff_available, run_ruff_check
+from .mypy_integration import check_mypy_available, run_mypy_check
+from .ruff_integration import run_ruff_check
 from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from hooks_constants.hook_block_logger import log_hook_block
@@ -407,15 +407,11 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
 def run_ruff_checks(
     files: List[Path], config_source_path: Optional[Path] = None
 ) -> ValidatorResult:
-    """Run ruff for fast Python linting."""
-    if not check_ruff_available():
-        return ValidatorResult(
-            name="Ruff",
-            checks="37",
-            passed=True,
-            output="Ruff not installed - skipping",
-        )
+    """Run ruff for fast Python linting.
 
+    run_ruff_check makes the same availability probe and returns the same
+    skip message, so probing here would spawn ruff --version twice.
+    """
     result = run_ruff_check(files, config_source_path)
 
     return ValidatorResult(
