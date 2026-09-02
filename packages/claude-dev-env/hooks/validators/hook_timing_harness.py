@@ -32,7 +32,6 @@ import math
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from types import ModuleType
@@ -58,6 +57,10 @@ def _load_module_from_path(module_name: str, module_path: Path) -> ModuleType:
 _harness_constants = _load_module_from_path(
     "hook_timing_harness_constants",
     Path(__file__).resolve().parent / "config" / "hook_timing_harness_constants.py",
+)
+_system_temporary_roots = _load_module_from_path(
+    "hook_timing_harness_system_temporary_roots",
+    Path(__file__).resolve().parent / "system_temporary_roots.py",
 )
 
 
@@ -125,15 +128,14 @@ def ensure_real_repository_target(
 ) -> Path:
     """Return *target_path* resolved, after refusing an ephemeral scratch path.
 
-    A target under the OS temp root trips ``is_ephemeral_path`` inside the
-    hooks themselves and returns before any validator runs, so a harness that
-    measured one would report a hollow number a few dozen milliseconds wide.
-    A target inside *repository_root* is always real, even when the checkout
-    itself sits under the OS temp root, so that sandbox layout never
-    misclassifies every real file inside it as scratch.
+    A target under a system temporary root (``tempfile.gettempdir()`` plus any
+    set ``TEMP`` / ``TMP`` / ``TMPDIR`` / ``RUNNER_TEMP``) trips
+    ``is_ephemeral_path`` inside the hooks and returns before any validator
+    runs. A target inside *repository_root* is always real, even when the
+    checkout itself sits under a system temporary root.
 
     Raises:
-        ValueError: When the resolved path sits under the OS temp root and
+        ValueError: When the path sits under a system temporary root and
             outside *repository_root*.
     """
     resolved_target = target_path.resolve()
@@ -141,12 +143,15 @@ def ensure_real_repository_target(
         resolved_target, repository_root.resolve()
     ):
         return resolved_target
-    temporary_root = Path(tempfile.gettempdir()).resolve()
-    if _is_under_directory(resolved_target, temporary_root):
-        raise ValueError(
-            f"refusing an ephemeral timing target under {temporary_root}: {resolved_target}"
-        )
-    return resolved_target
+    enclosing_temporary_root = _system_temporary_roots.enclosing_system_temporary_root(
+        resolved_target
+    )
+    if enclosing_temporary_root is None:
+        return resolved_target
+    raise ValueError(
+        f"refusing an ephemeral timing target under {enclosing_temporary_root}: "
+        f"{resolved_target}"
+    )
 
 
 def _write_tool_payload(target_path: Path) -> str:

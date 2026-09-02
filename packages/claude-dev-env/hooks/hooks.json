@@ -161,7 +161,7 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_list_loop_starter.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_tool_prompt.py",
             "timeout": 10
           },
           {

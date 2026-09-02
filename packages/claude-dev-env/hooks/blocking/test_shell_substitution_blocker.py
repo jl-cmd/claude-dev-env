@@ -122,3 +122,72 @@ def test_allows_arithmetic_expansion() -> None:
         "tool_input": {"command": "echo $((2+2))"},
     }
     assert _run_hook(payload).stdout == ""
+
+
+def test_allows_arithmetic_expansion_with_nested_parens() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $(( (1+2) * 3 ))"},
+    }
+    assert _run_hook(payload).stdout == ""
+
+
+def test_allows_arithmetic_expansion_whose_body_bash_itself_rejects() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $((echo hi))"},
+    }
+    assert _run_hook(payload).stdout == ""
+
+
+def test_allows_arithmetic_lookalike_inside_single_quotes() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo '$((cd /tmp) && pwd)'"},
+    }
+    assert _run_hook(payload).stdout == ""
+
+
+def test_denies_subshell_disguised_as_arithmetic_expansion() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $((cd /tmp) && pwd)"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_parenthesized_command_word_disguised_as_arithmetic() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $((1+2) )"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_command_substitution_nested_inside_arithmetic_expansion() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $(( $(id -u) + 1 ))"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_backtick_substitution_nested_inside_arithmetic_expansion() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $(( `id -u` + 1 ))"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_nested_command_substitution_without_arithmetic() -> None:
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo $(echo $(whoami))"},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"

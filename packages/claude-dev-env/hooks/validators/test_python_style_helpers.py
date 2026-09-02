@@ -6,10 +6,17 @@ from .python_style_helpers import (
     blank_line_for_source,
     function_start_line,
     gap_is_blank_only,
+    is_docstring_statement,
+    is_import_statement,
     iter_function_definitions,
     real_newline_lines,
     top_level_functions,
 )
+
+
+def _first_statement(source: str) -> ast.stmt:
+    """Return the first top-level statement of *source*."""
+    return ast.parse(source).body[0]
 
 TWO_FUNCTIONS = """def foo() -> None:
     pass
@@ -123,3 +130,31 @@ class TestBlankLineForSource:
     def test_crlf_source_returns_crlf(self) -> None:
         """CRLF source yields a CRLF blank line."""
         assert blank_line_for_source(CRLF_SOURCE) == "\r\n"
+
+
+class TestIsImportStatement:
+    """Tests pinning which statements the import-order scan treats as imports."""
+
+    def test_import_statement_is_recognized(self) -> None:
+        """A plain `import` statement is recognized."""
+        assert is_import_statement(_first_statement("import os\n")) is True
+
+    def test_from_import_statement_is_recognized(self) -> None:
+        """A `from ... import ...` statement is recognized."""
+        assert is_import_statement(_first_statement("from os import path\n")) is True
+
+    def test_assignment_is_not_an_import_statement(self) -> None:
+        """An assignment is not treated as an import."""
+        assert is_import_statement(_first_statement("X = 1\n")) is False
+
+
+class TestIsDocstringStatement:
+    """Tests pinning which statements the import-order scan treats as docstrings."""
+
+    def test_leading_string_literal_is_a_docstring(self) -> None:
+        """A bare string-literal expression statement is a docstring."""
+        assert is_docstring_statement(_first_statement('"""A module docstring."""\n')) is True
+
+    def test_assignment_is_not_a_docstring(self) -> None:
+        """An assignment is not a docstring, even with a string value."""
+        assert is_docstring_statement(_first_statement('X = "not a docstring"\n')) is False

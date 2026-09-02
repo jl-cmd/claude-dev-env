@@ -261,6 +261,20 @@ def test_emit_decision_re_emits_silent_deny_fields(
     assert emitted_payload["suppressOutput"] is True
 
 
+def test_dispatcher_denies_subshell_disguised_as_arithmetic_expansion() -> None:
+    """The dispatcher denies a `$((cd X) && Y)` subshell, not only the bare hook.
+
+    `echo $((cd /tmp) && pwd)` opens with a `$((` two-character lookahead
+    match, so a function-level test alone does not prove the block reaches
+    the live Bash tool path.
+    """
+    payload_text = _bash_payload("echo $((cd /tmp) && pwd)")
+    decision, _reason = _decision_from_stdout(
+        _run_process(_DISPATCHER_SCRIPT, payload_text).stdout
+    )
+    assert decision == "deny"
+
+
 def test_dispatch_emits_deny_immediately_and_skips_later_hooks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
