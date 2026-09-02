@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -841,23 +842,35 @@ def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
     assert drifted_projection != first_projection
 
 
-def test_codex_hook_manifest_keeps_dispatcher_order_and_adds_enforcer() -> None:
+def test_codex_hook_manifest_folds_apply_patch_into_the_dispatcher_matcher() -> None:
+    """apply_patch's code_rules_enforcer coverage comes from the dispatcher's own matcher.
+
+    hooks.json once ran a separate apply_patch -> code_rules_enforcer.py
+    PreToolUse command after the dispatcher entry. That coverage is now
+    folded into the dispatcher's own Write|Edit|MultiEdit|apply_patch
+    matcher, so no standalone apply_patch entry remains.
+    """
     hooks_path = Path(__file__).parents[2] / "hooks" / "hooks.json"
     hooks_configuration = json.loads(hooks_path.read_text(encoding="utf-8"))
     pre_tool_use_entries = hooks_configuration["hooks"]["PreToolUse"]
-    matcher_names = [each_entry.get("matcher") for each_entry in pre_tool_use_entries]
 
-    dispatcher_index = matcher_names.index("Write|Edit|MultiEdit")
-    enforcer_entries = [
+    dispatcher_entries = [
+        each_entry
+        for each_entry in pre_tool_use_entries
+        if any(
+            "/hooks/blocking/pre_tool_use_dispatcher.py" in each_hook.get("command", "")
+            for each_hook in each_entry.get("hooks", [])
+        )
+    ]
+    assert len(dispatcher_entries) == 1
+    assert dispatcher_entries[0]["matcher"] == "Write|Edit|MultiEdit|apply_patch"
+
+    standalone_apply_patch_entries = [
         each_entry
         for each_entry in pre_tool_use_entries
         if each_entry.get("matcher") == "apply_patch"
     ]
-    assert len(enforcer_entries) == 1
-    assert matcher_names.index("apply_patch") > dispatcher_index
-    assert enforcer_entries[0]["hooks"][0]["command"].endswith(
-        "/hooks/blocking/code_rules_enforcer.py"
-    )
+    assert standalone_apply_patch_entries == []
 
 
 def _prepare_projection_fixture(
@@ -1008,7 +1021,18 @@ def _assert_projection_and_manifest(
 
 
 def _assert_detached_enforcer_behavior(target: Path) -> None:
+    """Prove the detached, materialized enforcer allows a clean add and denies an unnamed raise.
+
+    Disables the ephemeral-path exemption for both runs: without it, a target
+    rooted under the OS temp directory (where this fixture lives) would skip
+    code_rules_enforcer's checks entirely and both assertions would pass
+    without the enforcer ever judging the payload.
+    """
     target_entrypoint = target / materializer.codex_enforcer_script_relative_path
+    subprocess_environment = {
+        **os.environ,
+        "CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1",
+    }
     allow_payload = {
         "tool_name": "apply_patch",
         "cwd": str(target),
@@ -1029,8 +1053,9 @@ def _assert_detached_enforcer_behavior(target: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=subprocess_environment,
     )
-    assert allow_run.returncode == 0
+    assert allow_run.returncode == 0, allow_run.stderr
     assert allow_run.stdout == ""
 
     allow_tool_input = allow_payload["tool_input"]
@@ -1050,8 +1075,9 @@ def _assert_detached_enforcer_behavior(target: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        env=subprocess_environment,
     )
-    assert deny_run.returncode == 0
+    assert deny_run.returncode == 0, deny_run.stderr
     assert json.loads(deny_run.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert target_entrypoint.is_file()
 

@@ -64,6 +64,8 @@ codex_hook_dependency_manifest = (
     "hooks/blocking/code_rules_comments.py",
     "hooks/blocking/code_rules_constants_config.py",
     "hooks/blocking/codex_apply_patch.py",
+    "hooks/blocking/config/__init__.py",
+    "hooks/blocking/config/codex_apply_patch_constants.py",
     "hooks/blocking/code_rules_docstrings.py",
     "hooks/blocking/code_rules_duplicate_body.py",
     "hooks/blocking/code_rules_enforcer.py",
@@ -101,6 +103,7 @@ codex_hook_dependency_manifest = (
     "hooks/hooks_constants/hook_block_logger.py",
     "hooks/hooks_constants/inline_tuple_string_magic_constants.py",
     "hooks/hooks_constants/js_conventions_constants.py",
+    "hooks/hooks_constants/multi_edit_reconstruction.py",
     "hooks/hooks_constants/orphan_css_class_constants.py",
     "hooks/hooks_constants/paired_test_coverage_constants.py",
     "hooks/hooks_constants/setup_project_paths_constants.py",
@@ -109,6 +112,7 @@ codex_hook_dependency_manifest = (
     "hooks/hooks_constants/sys_path_insert_constants.py",
     "hooks/hooks_constants/test_layout_constants.py",
     "hooks/hooks_constants/unused_module_import_constants.py",
+    "hooks/hooks_constants/validation_phase_constants.py",
 )
 full_prune_opt_in_flag = "--allow-prune-all"
 unreadable_source_root_message = (

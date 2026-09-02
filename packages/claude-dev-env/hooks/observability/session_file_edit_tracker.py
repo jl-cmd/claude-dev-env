@@ -27,32 +27,28 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-try:
-    _hooks_dir = str(Path(__file__).resolve().parent.parent)
-    if _hooks_dir not in sys.path:
-        sys.path.insert(0, _hooks_dir)
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
 
-    from blocking.codex_apply_patch import CodexPatchError, parse_codex_apply_patch
-    from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
-    from hooks_constants.session_edit_stage_gate_constants import (
-        ALL_EDITED_FILE_PATHS_KEY,
-        ALL_TRACKED_EDIT_TOOL_NAMES,
-        APPLY_PATCH_TOOL_NAME,
-        LOCK_ACQUIRE_RETRY_SECONDS,
-        LOCK_ACQUIRE_TIMEOUT_SECONDS,
-        SESSION_EDIT_FILE_PREFIX,
-        SESSION_EDIT_FILE_SUFFIX,
-        SESSION_EDIT_LOCK_FILE_SUFFIX,
-        SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
-        STATE_FILE_ATOMIC_WRITE_SUFFIX,
-        STATE_FILE_DEFAULT_SESSION_ID,
-        STATE_FILE_JSON_INDENT_SPACES,
-    )
-except ImportError as import_error:
-    raise ImportError(
-        "session_file_edit_tracker: cannot import its sibling modules; "
-        "ensure the hooks directory is importable."
-    ) from import_error
+from blocking.codex_apply_patch import CodexPatchError, parse_codex_apply_patch  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
+from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
+    ALL_EDITED_FILE_PATHS_KEY,
+    ALL_TRACKED_EDIT_TOOL_NAMES,
+    APPLY_PATCH_TOOL_NAME,
+    LOCK_ACQUIRE_RETRY_SECONDS,
+    LOCK_ACQUIRE_TIMEOUT_SECONDS,
+    SESSION_EDIT_FILE_PREFIX,
+    SESSION_EDIT_FILE_SUFFIX,
+    SESSION_EDIT_LOCK_FILE_SUFFIX,
+    SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
+    STATE_FILE_ATOMIC_WRITE_SUFFIX,
+    STATE_FILE_DEFAULT_SESSION_ID,
+    STATE_FILE_JSON_INDENT_SPACES,
+)
 
 
 def _resolved_path_or_none(file_path: str) -> str | None:
