@@ -97,8 +97,13 @@ def _resolve_deny(tool_name: str, payload: dict, tool_input: dict) -> tuple[str,
 
 def main() -> None:
     input_payload = read_hook_input_dictionary_from_stdin()
-    tool_name = input_payload.get("tool_name", "")
-    tool_input = input_payload.get("tool_input", {})
+    if input_payload is None:
+        sys.exit(0)
+
+    raw_tool_name = input_payload.get("tool_name", "")
+    raw_tool_input = input_payload.get("tool_input", {})
+    tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
+    tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
 
     resolved_deny = _resolve_deny(tool_name, input_payload, tool_input)
     if resolved_deny is None:

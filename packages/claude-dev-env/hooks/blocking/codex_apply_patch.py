@@ -4,7 +4,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
@@ -261,7 +261,7 @@ def _codex_working_directory(command: str, working_directory: str | None) -> Pat
     return resolved_working_directory
 
 
-@lru_cache(maxsize=None)
+@cache
 def codex_patch_operation_targets(
     command: str, working_directory: str | None = None
 ) -> tuple[tuple[str, str], ...]:
@@ -287,7 +287,7 @@ def codex_patch_operation_targets(
     )
 
 
-@lru_cache(maxsize=None)
+@cache
 def parse_codex_apply_patch(
     command: str, working_directory: str | None = None
 ) -> tuple[CodexPatchFile, ...]:
