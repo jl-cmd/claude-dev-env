@@ -13,28 +13,20 @@ _validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
 try:
-    from pyproject_config_discovery import (
-        ancestor_directories,
-        find_pyproject_configuring_tool,
-    )
-    from system_temporary_roots import enclosing_system_temporary_root
+    from project_roots import enclosing_project_root
+    from pyproject_config_discovery import find_pyproject_configuring_tool
 except ModuleNotFoundError:
     if _validators_directory not in sys.path:
         sys.path.insert(0, _validators_directory)
-    from pyproject_config_discovery import (
-        ancestor_directories,
-        find_pyproject_configuring_tool,
-    )
-    from system_temporary_roots import enclosing_system_temporary_root
+    from project_roots import enclosing_project_root
+    from pyproject_config_discovery import find_pyproject_configuring_tool
 
 try:
     from hooks_constants.mypy_integration_constants import (
         FOLLOW_IMPORTS_FLAG,
         FOLLOW_IMPORTS_SKIP_VALUE,
-        GIT_DIRECTORY_NAME,
         MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS,
         MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE,
-        PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
     from hooks_constants.pyproject_config_discovery_constants import MYPY_TOOL_TABLE_NAME
@@ -44,10 +36,8 @@ except ModuleNotFoundError:
     from hooks_constants.mypy_integration_constants import (
         FOLLOW_IMPORTS_FLAG,
         FOLLOW_IMPORTS_SKIP_VALUE,
-        GIT_DIRECTORY_NAME,
         MYPY_DETACHED_SUBPROCESS_TIMEOUT_SECONDS,
         MYPY_DETACHED_TIMEOUT_SKIP_MESSAGE,
-        PYPROJECT_FILENAME,
         PYTHON_SOURCE_SUFFIX,
     )
     from hooks_constants.pyproject_config_discovery_constants import MYPY_TOOL_TABLE_NAME
@@ -97,41 +87,19 @@ def find_pyproject_with_mypy_config(starting_file: Path) -> Path | None:
 
 
 def find_module_resolution_root(starting_file: Path) -> Path | None:
-    """Return the nearest ancestor directory that roots a project, else None.
+    """Return the project root mypy resolves this file's first-party imports against.
 
-    A project root is the first ancestor holding a ``.git`` entry or a
-    ``pyproject.toml``. Mypy resolves a first-party import against its working
-    directory, so anchoring there binds ``config.*`` to the target file's own
-    project and keeps a foreign ``config`` in the caller's directory out of scope.
-
-    The walk does not climb out of the system temp directory. A PreToolUse
-    staging copy lives under ``%TEMP%``, and a ``.git`` in the user home above
-    that temp root is not this file's project.
-
-    ::
-
-        target_repo/.git + target_repo/tools/x.py -> target_repo
-        /tmp/detached/x.py (home .git above temp) -> None
-        flag: walk past %TEMP% into ~/.git        -> mypy cwd=home, hook timeout
+    Mypy resolves a first-party import against its working directory, so
+    anchoring there binds ``config.*`` to the target file's own project and
+    keeps a foreign ``config`` in the caller's directory out of scope.
 
     Args:
         starting_file: The file (or directory) the walk begins from.
 
     Returns:
-        The nearest ancestor Path that holds ``.git`` or ``pyproject.toml``,
-        or ``None`` when no such ancestor exists inside the walk limit.
+        The project root, or None when the file sits inside none.
     """
-    git_entry_name = GIT_DIRECTORY_NAME
-    pyproject_filename = PYPROJECT_FILENAME
-    enclosing_temporary_root = enclosing_system_temporary_root(starting_file)
-    for each_candidate_directory in ancestor_directories(starting_file):
-        has_git_entry = (each_candidate_directory / git_entry_name).exists()
-        has_pyproject = (each_candidate_directory / pyproject_filename).is_file()
-        if has_git_entry or has_pyproject:
-            return each_candidate_directory
-        if each_candidate_directory == enclosing_temporary_root:
-            return None
-    return None
+    return enclosing_project_root(starting_file)
 
 
 def _first_module_resolution_root(all_py_files: list[str]) -> Path | None:

@@ -35,12 +35,9 @@ from .config.directory_exemption_constants import (
 )
 from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
-from .mypy_integration import (
-    check_mypy_available,
-    find_module_resolution_root,
-    run_mypy_check,
-)
+from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
+from .project_roots import enclosing_project_root
 from .python_style_checks import fix_file
 from .ruff_integration import run_ruff_check
 from .validator_base import ValidatorResult
@@ -793,8 +790,8 @@ def _path_parts_the_project_owns(destination_path: Path) -> tuple[str, ...]:
 
     ::
 
-        ok:   "/home/tests/proj/src/worker.py" (proj is the root) -> ("src", "worker.py")
-        ok:   "/home/dana/.claude/hooks/gate.py" (no root)  -> (".claude", "hooks", "gate.py")
+        ok:   "~/tests/proj/src/worker.py" (proj is the root) -> ("src", "worker.py")
+        ok:   "~/.claude/hooks/gate.py" (no root)             -> (".claude", "hooks", "gate.py")
         ok:   "config/x.py" (relative)                      -> ("config", "x.py")
 
     Directory names above the project root were chosen by whoever laid out the
@@ -819,13 +816,13 @@ def _path_parts_the_project_owns(destination_path: Path) -> tuple[str, ...]:
     if not destination_path.anchor:
         return all_path_parts
     all_path_parts = all_path_parts[1:]
-    project_root = find_module_resolution_root(destination_path)
+    project_root = enclosing_project_root(destination_path)
     if project_root is None:
         return all_path_parts
-    try:
-        return destination_path.resolve().relative_to(project_root).parts
-    except ValueError:
+    resolved_destination = destination_path.resolve()
+    if not resolved_destination.is_relative_to(project_root):
         return all_path_parts
+    return resolved_destination.relative_to(project_root).parts
 
 
 def _temporary_path_preserving_directory_signal(
