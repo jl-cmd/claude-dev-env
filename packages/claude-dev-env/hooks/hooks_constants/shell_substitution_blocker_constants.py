@@ -25,6 +25,7 @@ __all__ = [
     "PROCESS_SUBSTITUTION_PATTERN",
     "SINGLE_QUOTED_RUN_PATTERN",
     "STRIPPED_RUN_REPLACEMENT",
+    "COMMAND_LINE_SEPARATOR",
     "CORRECTIVE_MESSAGE",
 ]
 
@@ -49,6 +50,7 @@ EVEN_BACKSLASH_BACKTICK_PATTERN = re.compile(r"(?<!\\)(?:\\\\)*`")
 PROCESS_SUBSTITUTION_PATTERN = re.compile(r"[<>]\(")
 SINGLE_QUOTED_RUN_PATTERN = re.compile(r"'[^']*'")
 STRIPPED_RUN_REPLACEMENT = ""
+COMMAND_LINE_SEPARATOR = "\n"
 
 CORRECTIVE_MESSAGE = (
     "BLOCKED [shell-substitution]: command contains $(...), backtick, or "

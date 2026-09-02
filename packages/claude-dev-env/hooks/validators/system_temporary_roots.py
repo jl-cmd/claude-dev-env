@@ -22,7 +22,7 @@ _hooks_directory = str(Path(__file__).resolve().parent.parent)
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
-from validators.config.directory_exemption_constants import (  # noqa: E402
+from validators.config.system_temporary_roots_constants import (  # noqa: E402
     ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
 )
 
