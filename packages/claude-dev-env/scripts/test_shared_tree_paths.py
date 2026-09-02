@@ -141,3 +141,33 @@ def test_missing_module_returns_unresolved_candidate(tmp_path: Path) -> None:
     assert not (
         expected_scripts_directory / PROCESS_TREE_KILL_MODULE_FILENAME
     ).is_file()
+
+
+def test_generalized_resolver_serves_a_deeper_anchor(tmp_path: Path) -> None:
+    """A caller three levels under the root resolves its own sub-package.
+
+    This is the shape the pr-loop and codex-review scripts carry, which the
+    process-tree wrapper's own anchor of one level cannot reach.
+    """
+    installed_root = tmp_path / "root"
+    module_directory = installed_root / "_shared" / "pr-loop" / "scripts"
+    module_directory.mkdir(parents=True)
+    module_file = str(module_directory / "run_codex_review.py")
+    expected_scripts_directory = (
+        installed_root
+        / SHARED_PACKAGE_DIRECTORY_NAME
+        / PROCESS_TREE_DIRECTORY_NAME
+        / SCRIPTS_DIRECTORY_NAME
+    )
+    expected_scripts_directory.mkdir(parents=True)
+    (expected_scripts_directory / PROCESS_TREE_KILL_MODULE_FILENAME).write_text(
+        "", encoding="utf-8"
+    )
+    resolved_scripts_directory = shared_tree_paths.resolve_shared_scripts_directory(
+        module_file,
+        {},
+        PROCESS_TREE_DIRECTORY_NAME,
+        PROCESS_TREE_KILL_MODULE_FILENAME,
+        3,
+    )
+    assert resolved_scripts_directory == expected_scripts_directory
