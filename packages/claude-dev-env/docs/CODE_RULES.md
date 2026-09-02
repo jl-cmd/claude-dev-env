@@ -124,6 +124,8 @@ If you already have the data, don't fetch it again.
 
 Scope assigns the lane. A check that reads a file other than the target runs on the full gate. Every other check runs on both lanes.
 
+Hook-infrastructure targets run three checks in the edit lane — `check_same_file_inline_duplicate_body`, `check_zero_payload_function_alias`, `check_unanchored_command_dispatch` — and the whole roster on the full gate. `ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES` holds that set.
+
 Two surfaces report on the roster, and each reports a specific thing:
 
 - `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
