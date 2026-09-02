@@ -17,3 +17,14 @@ class Violation:
     def __str__(self) -> str:
         """Format as file:line: message."""
         return f"{self.file}:{self.line}: {self.message}"
+
+
+@dataclass(frozen=True)
+class ValidatorResult:
+    """Result from running a validator."""
+
+    name: str
+    checks: str
+    passed: bool
+    output: str
+    skipped: bool = False

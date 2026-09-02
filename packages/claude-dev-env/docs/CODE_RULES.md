@@ -126,7 +126,8 @@ Scope assigns the lane. A check that reads a file other than the target runs on 
 
 Hook-infrastructure targets run three checks in the edit lane — `check_same_file_inline_duplicate_body`, `check_zero_payload_function_alias`, `check_unanchored_command_dispatch` — and the whole roster on the full gate. `ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES` holds that set.
 
-Two surfaces report on the roster, and each reports a specific thing:
+Three surfaces report on the roster, and each reports a specific thing:
 
 - `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
 - `~/.claude/logs/hook-blocks.log` records the denials raised by fixtures in `test_code_rules_enforcer_*.py` and by the timing harness's default target.
+- `hooks/validators/run_all_validators.py` suppresses exemption-directory substring matching for a target under a system temporary root, so pytest's `test_<name>0` parents stay scaffolding. A pytest `--basetemp` outside those roots restores the matching, and the staged copy takes a test-file exemption. Run this suite under the default temporary root.
