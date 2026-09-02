@@ -28,7 +28,7 @@ For a concrete sample only when needed, read `reference/pr-description-illustrat
 3. Write that behavior first in plain illustrative language.
 4. Preserve accurate issue links and curated sections from the current body when they remain useful.
 5. Use headings when they help a reviewer scan the change.
-6. Include only validation that actually ran or is reported by trustworthy current evidence.
+6. In `Verification`, lead with what a person can open, see, click, compare, or try for themselves. Put test results in one short supporting line when useful.
 
 ## Publish through GitHub CLI
 
@@ -36,4 +36,4 @@ Place markdown in a BOM-free temporary file and pass its path with `--body-file`
 
 ## Check the draft
 
-Confirm every statement matches the diff and current pull request state. Confirm the title and body stay clear without requiring the reader to decode repository jargon. Return the final markdown and the file path ready for publication.
+Confirm every statement matches the diff and current pull request state. Confirm the title and body stay clear without requiring the reader to decode repository jargon. Confirm `Verification` gives the reviewer a visible check they can perform themselves whenever the change has one. Return the final markdown and the file path ready for publication.
