@@ -29,6 +29,11 @@ from .config.baseline_identity_constants import (
     STANDALONE_NUMBER_PATTERN,
     WORD_BOUNDARY_PATTERN,
 )
+from .config.codex_patch_payload_constants import (
+    CODEX_APPLY_PATCH_TOOL_NAME,
+    CODEX_PATCH_COMMAND_KEY,
+    PAYLOAD_WORKING_DIRECTORY_KEY,
+)
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
@@ -44,6 +49,12 @@ from .ruff_integration import run_ruff_check
 from .config.validator_base_constants import SOURCE_CACHE_ENTRIES
 from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
+from blocking.codex_apply_patch import (
+    CODEX_DELETE_OPERATION,
+    CodexPatchError,
+    CodexPatchFile,
+    parse_codex_apply_patch,
+)
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import (
     apply_edits,
@@ -1435,26 +1446,79 @@ def _emit_pre_existing_warning(all_preexisting_results: List[ValidatorResult]) -
     sys.stderr.flush()
 
 
-def _decide_pre_tool_use(file_path: str, proposed_content: str) -> None:
+def _decide_pre_tool_use(file_path: str, proposed_content: str) -> bool:
     """Deny only violations absent from the baseline; warn on the ones that persist.
 
     Args:
         file_path: The write's target path.
         proposed_content: The reconstructed post-edit content of that file.
+
+    Returns:
+        True when this target denies, so a caller holding several targets stops
+        at the first one and emits a single decision.
     """
     all_proposed_failed = _failed_results(
         validate_proposed_file(file_path, proposed_content)
     )
     if not all_proposed_failed:
-        return
+        return False
     baseline_identities = _baseline_violation_identities(file_path)
     all_new_results, all_preexisting_results = _scope_new_and_preexisting(
         all_proposed_failed, proposed_content, baseline_identities
     )
     if all_preexisting_results:
         _emit_pre_existing_warning(all_preexisting_results)
-    if all_new_results:
-        _emit_pre_tool_use_deny(_proposed_content_deny_reason(all_new_results))
+    if not all_new_results:
+        return False
+    _emit_pre_tool_use_deny(_proposed_content_deny_reason(all_new_results))
+    return True
+
+
+def _decide_codex_patch_file(
+    each_patch_file: CodexPatchFile, pre_tool_use_payload: dict
+) -> bool:
+    """Grade one path a Codex patch writes, skipping a deletion and an exemption.
+
+    Args:
+        each_patch_file: One parsed path with its projected post-edit content.
+        pre_tool_use_payload: The whole payload, read for its working directory.
+
+    Returns:
+        True when this path denies the patch.
+    """
+    if each_patch_file.operation == CODEX_DELETE_OPERATION:
+        return False
+    if is_ephemeral_path(each_patch_file.file_path, pre_tool_use_payload):
+        return False
+    return _decide_pre_tool_use(each_patch_file.file_path, each_patch_file.post_content)
+
+
+def _evaluate_codex_apply_patch(pre_tool_use_payload: dict, tool_input: dict) -> None:
+    """Grade every path a Codex apply_patch writes, stopping at the first denial.
+
+    ::
+
+        one patch adding two files, the second violating  -> deny, names file two
+        one patch deleting a file                         -> allow, nothing to grade
+
+    A patch carries several paths in one call, so each is graded on its own
+    projected post-edit content and the first denial is the decision.
+
+    Args:
+        pre_tool_use_payload: The whole PreToolUse payload.
+        tool_input: The payload's tool input mapping.
+    """
+    patch_command = tool_input.get(CODEX_PATCH_COMMAND_KEY, "")
+    if not isinstance(patch_command, str) or not patch_command:
+        return
+    working_directory = pre_tool_use_payload.get(PAYLOAD_WORKING_DIRECTORY_KEY, "")
+    try:
+        all_patch_files = parse_codex_apply_patch(patch_command, str(working_directory))
+    except CodexPatchError:
+        return
+    for each_patch_file in all_patch_files:
+        if _decide_codex_patch_file(each_patch_file, pre_tool_use_payload):
+            return
 
 
 def _evaluate_pre_tool_use_payload() -> None:
@@ -1477,6 +1541,9 @@ def _evaluate_pre_tool_use_payload() -> None:
     tool_name = pre_tool_use_payload.get("tool_name", "")
     tool_input = pre_tool_use_payload.get("tool_input", {})
     if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
+        return
+    if tool_name == CODEX_APPLY_PATCH_TOOL_NAME:
+        _evaluate_codex_apply_patch(pre_tool_use_payload, tool_input)
         return
     file_path = tool_input.get("file_path", "")
     if not isinstance(file_path, str) or not file_path:
