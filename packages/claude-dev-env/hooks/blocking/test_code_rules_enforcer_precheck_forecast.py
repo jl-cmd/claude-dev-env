@@ -26,6 +26,8 @@ from code_rules_enforcer_test_support import (  # noqa: E402
     run_serialized_payload_entrypoint,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 _ENFORCER_SCRIPT_PATH = Path(__file__).resolve().parent / "code_rules_enforcer.py"
 
 _VIOLATING_PRODUCTION_SOURCE = "def process_data(payload: str) -> None:\n    print(payload)\n"

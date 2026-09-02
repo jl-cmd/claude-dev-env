@@ -50,6 +50,8 @@ from pre_tool_use_dispatcher import (  # noqa: E402, I001
     unique_first_seen_strings,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
 _PROSE_STYLE_ENV_VAR = "CLAUDE_PROSE_STYLE_ENFORCEMENT"
@@ -1143,7 +1145,13 @@ def test_dispatcher_denies_apply_patch_add_onto_an_existing_path(tmp_path: Path)
 
 
 def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
-    """The dispatcher allows an apply_patch "add" that trips no hosted hook."""
+    """The dispatcher allows an apply_patch "add" that trips no hosted hook.
+
+    A fresh sibling test file sits beside the added production file so the
+    TDD enforcer's real test-evidence check passes on its own merits, rather
+    than by the ephemeral scratch-path exemption stepping aside.
+    """
+    (tmp_path / "test_services.py").write_text("def test_add_one(): pass\n", encoding="utf-8")
     patch_command = _codex_add_patch(
         "services.py",
         "def add_one(value: int) -> int:\n    return value + 1\n",
