@@ -165,47 +165,126 @@ def _validate_narrow_edit(narrow_edit_fixture: NarrowEditFixture) -> list[str]:
     )
 
 
-def _scope_aware_rule_names_from_source() -> frozenset[str]:
-    source_tree = ast.parse(inspect.getsource(validate_content))
-    all_rule_names: set[str] = set()
-    for each_call in ast.walk(source_tree):
-        if not isinstance(each_call, ast.Call):
+_SCOPE_CARRYING_ATTRIBUTE_NAMES = frozenset({"all_changed_lines", "defer_scope_to_caller"})
+
+
+def _assignment_target_names(target: ast.expr) -> list[str]:
+    """Return the plain names one assignment target binds, Name or Tuple-of-Name."""
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, ast.Tuple):
+        return [each.id for each in target.elts if isinstance(each, ast.Name)]
+    return []
+
+
+def _scope_aliases_for_pair(target_names: list[str], all_values: list[ast.expr]) -> dict[str, str]:
+    """Return the local-name-to-scope-attribute map one assignment pair contributes."""
+    aliases: dict[str, str] = {}
+    for each_name, each_value in zip(target_names, all_values):
+        if not isinstance(each_value, ast.Attribute):
             continue
-        if not isinstance(each_call.func, ast.Name):
+        if each_value.attr not in _SCOPE_CARRYING_ATTRIBUTE_NAMES:
+            continue
+        aliases[each_name] = each_value.attr
+    return aliases
+
+
+def _context_alias_map(function_node: ast.AST) -> dict[str, str]:
+    """Map each local name one function binds from ``context.<scope attribute>``.
+
+    A dispatch helper unpacks ``context.all_changed_lines`` and
+    ``context.defer_scope_to_caller`` into a short local name (``changed``,
+    ``defer``) before passing it on, so a call carrying that local name still
+    carries scope, even though the local name spells out none of it.
+    """
+    aliases: dict[str, str] = {}
+    for each_node in ast.walk(function_node):
+        if not isinstance(each_node, ast.Assign) or len(each_node.targets) != 1:
+            continue
+        target_names = _assignment_target_names(each_node.targets[0])
+        if not target_names:
+            continue
+        value = each_node.value
+        all_values = value.elts if isinstance(value, ast.Tuple) else [value]
+        aliases.update(_scope_aliases_for_pair(target_names, all_values))
+    return aliases
+
+
+def _scope_names_for_reference(reference: ast.AST, aliases: dict[str, str]) -> set[str]:
+    """Return the scope-carrying attribute name one AST reference resolves to, if any."""
+    if isinstance(reference, ast.Name) and reference.id in aliases:
+        return {aliases[reference.id]}
+    if isinstance(reference, ast.Attribute) and reference.attr in _SCOPE_CARRYING_ATTRIBUTE_NAMES:
+        return {reference.attr}
+    return set()
+
+
+def _referenced_scope_attribute_names(node: ast.AST, aliases: dict[str, str]) -> set[str]:
+    """Return every scope-carrying attribute name *node* references, direct or aliased."""
+    found: set[str] = set()
+    for each_reference in ast.walk(node):
+        found.update(_scope_names_for_reference(each_reference, aliases))
+    return found
+
+
+def _fragment_deferred_rule_name(call_node: ast.Call, aliases: dict[str, str]) -> str | None:
+    """Return the rule name one ``_fragment_or_deferred_check`` call selects, if scoped."""
+    argument_scope_names = {
+        each_scope_name
+        for each_argument in call_node.args[1:]
+        for each_scope_name in _referenced_scope_attribute_names(each_argument, aliases)
+    }
+    if "defer_scope_to_caller" not in argument_scope_names:
+        return None
+    if not call_node.args or not isinstance(call_node.args[0], ast.Name):
+        return None
+    return call_node.args[0].id
+
+
+def _check_call_rule_name(call_node: ast.Call, aliases: dict[str, str]) -> str | None:
+    """Return the rule name one direct ``check_*`` call selects, if it carries scope."""
+    func_name = call_node.func.id  # type: ignore[attr-defined]  # caller already narrowed func to ast.Name
+    if not func_name.startswith("check_"):
+        return None
+    all_call_arguments = (*call_node.args, *(each_keyword.value for each_keyword in call_node.keywords))
+    argument_scope_names = {
+        each_scope_name
+        for each_argument in all_call_arguments
+        for each_scope_name in _referenced_scope_attribute_names(each_argument, aliases)
+    }
+    return func_name if argument_scope_names else None
+
+
+def _rule_names_from_function(function_node: ast.FunctionDef) -> set[str]:
+    """Return the check_* names *function_node* calls with scope-carrying arguments."""
+    aliases = _context_alias_map(function_node)
+    rule_names: set[str] = set()
+    for each_call in ast.walk(function_node):
+        if not isinstance(each_call, ast.Call) or not isinstance(each_call.func, ast.Name):
             continue
         if each_call.func.id == "_fragment_or_deferred_check":
-            all_argument_names = {
-                each_name.id
-                for each_argument in each_call.args[1:]
-                for each_name in ast.walk(each_argument)
-                if isinstance(each_name, ast.Name)
-            }
-            if (
-                "defer_scope_to_caller" in all_argument_names
-                and each_call.args
-                and isinstance(each_call.args[0], ast.Name)
-            ):
-                all_rule_names.add(each_call.args[0].id)
-            continue
-        if not each_call.func.id.startswith("check_"):
-            continue
-        all_argument_names = {
-            each_name.id
-            for each_argument in each_call.args
-            for each_name in ast.walk(each_argument)
-            if isinstance(each_name, ast.Name)
-        }
-        all_argument_names.update(
-            each_name.id
-            for each_keyword in each_call.keywords
-            for each_name in ast.walk(each_keyword.value)
-            if isinstance(each_name, ast.Name)
-        )
-        if (
-            "all_changed_lines" in all_argument_names
-            or "defer_scope_to_caller" in all_argument_names
-        ):
-            all_rule_names.add(each_call.func.id)
+            rule_name = _fragment_deferred_rule_name(each_call, aliases)
+        else:
+            rule_name = _check_call_rule_name(each_call, aliases)
+        if rule_name is not None:
+            rule_names.add(rule_name)
+    return rule_names
+
+
+def _scope_aware_rule_names_from_source() -> frozenset[str]:
+    """Return every check_* name dispatched anywhere in the enforcer with scope.
+
+    Walks every function in the enforcer module rather than only
+    ``validate_content``, since the extension-issue helper functions hold the
+    actual dispatch calls today.
+    """
+    enforcer_module = inspect.getmodule(validate_content)
+    assert enforcer_module is not None
+    module_tree = ast.parse(inspect.getsource(enforcer_module))
+    all_rule_names: set[str] = set()
+    for each_function in ast.walk(module_tree):
+        if isinstance(each_function, ast.FunctionDef):
+            all_rule_names.update(_rule_names_from_function(each_function))
     return frozenset(all_rule_names)
 
 
