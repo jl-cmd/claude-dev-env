@@ -38,12 +38,11 @@ try:
         ALL_EXEMPT_TEST_FILE_PREFIXES,
         ALL_EXEMPT_TEST_FILE_SUFFIXES,
         HELPER_DEFINITION_PATTERN,
-        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         PYTHON_FILE_EXTENSION,
         TRIPLE_QUOTED_STRING_PATTERN,
     )
     from hooks_constants.hook_block_logger import log_hook_block
-    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 except ImportError as import_error:
     raise ImportError(
@@ -54,12 +53,7 @@ except ImportError as import_error:
 
 def _multi_edit_scanned_text(all_tool_input: dict) -> str:
     """Return every MultiEdit new_string joined for a single scan pass."""
-    all_new_strings = [
-        each_edit.get("new_string", "")
-        for each_edit in edits_for_tool("MultiEdit", all_tool_input)
-        if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
-    ]
-    return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
+    return joined_new_strings(all_tool_input)
 
 
 def payload_defines_sanctioned_helper(payload_text: str) -> bool:

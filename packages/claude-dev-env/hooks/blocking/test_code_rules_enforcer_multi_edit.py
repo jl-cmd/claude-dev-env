@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -36,24 +37,21 @@ def _production_directory(tmp_path: Path) -> Path:
     return production_directory
 
 
-def _multi_edit_payload(file_path: str, all_edits: list[dict[str, str]]) -> str:
-    return json.dumps(
-        {
-            "tool_name": "MultiEdit",
-            "tool_input": {"file_path": file_path, "edits": all_edits},
-        }
-    )
-
-
-def _run_multi_edit(file_path: str, all_edits: list[dict[str, str]]) -> str:
+def _run_multi_edit(
+    file_path: str,
+    all_edits: list[dict[str, str]],
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
+) -> str:
     stdout_text, _exit_code = run_serialized_payload_entrypoint(
-        main, _multi_edit_payload(file_path, all_edits)
+        main, multi_edit_payload(file_path, all_edits)
     )
     return stdout_text
 
 
 def test_violation_in_second_edit_is_denied(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
 ) -> None:
     """A library print() introduced only by the second edit is caught and denied."""
     monkeypatch.setenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", "1")
@@ -69,6 +67,7 @@ def test_violation_in_second_edit_is_denied(
                 "new_string": "    print(2)\n    return 2",
             },
         ],
+        multi_edit_payload,
     )
 
     assert stdout_text.strip(), "expected a deny payload, got no output"
@@ -78,7 +77,9 @@ def test_violation_in_second_edit_is_denied(
     assert "print" in deny_reason
 
 
-def test_multi_edit_on_a_missing_target_is_allowed(tmp_path: Path) -> None:
+def test_multi_edit_on_a_missing_target_is_allowed(
+    tmp_path: Path, multi_edit_payload: Callable[[str, list[dict[str, str]]], str]
+) -> None:
     """A MultiEdit naming a target file that does not exist on disk is not denied.
 
     The reconstruction has no prior content to read, so it returns no
@@ -89,13 +90,16 @@ def test_multi_edit_on_a_missing_target_is_allowed(tmp_path: Path) -> None:
     stdout_text = _run_multi_edit(
         str(missing_target),
         [{"old_string": "return 1", "new_string": "return 11"}],
+        multi_edit_payload,
     )
 
     assert stdout_text.strip() == ""
 
 
 def test_clean_multi_edit_is_allowed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    multi_edit_payload: Callable[[str, list[dict[str, str]]], str],
 ) -> None:
     """A MultiEdit whose reconstructed file carries no violation is allowed."""
     monkeypatch.setenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", "1")
@@ -108,6 +112,7 @@ def test_clean_multi_edit_is_allowed(
             {"old_string": "return 1", "new_string": "return 11"},
             {"old_string": "return 2", "new_string": "return 22"},
         ],
+        multi_edit_payload,
     )
 
     assert stdout_text.strip() == ""

@@ -1,8 +1,11 @@
 """Configuration constants for the workflow_substitution_slot_blocker PreToolUse hook."""
 
-WRITE_TOOL_NAME: str = "Write"
-EDIT_TOOL_NAME: str = "Edit"
-MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
+# The dispatcher constants module is the single source for tool names.
+from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
+    EDIT_TOOL_NAME,
+    MULTI_EDIT_TOOL_NAME,
+    WRITE_TOOL_NAME,
+)
 
 WORKFLOW_FILE_SUFFIX: str = ".workflow.js"
 

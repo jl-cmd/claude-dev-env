@@ -213,10 +213,9 @@ def _nonempty_stripped_lines(text: str) -> list[str]:
     return [each_line.strip() for each_line in text.splitlines() if each_line.strip()]
 
 
-def is_edit_within_changed_surface(file_path: str, old_string: str) -> bool:
+def _lines_within_changed_surface(old_string: str, all_added_lines: list[str]) -> bool:
     """Return whether at least half of the edited lines are current additions."""
     all_old_lines = _nonempty_stripped_lines(old_string)
-    all_added_lines = _get_added_line_occurrences(file_path)
     if not all_old_lines or not all_added_lines:
         return False
     all_old_line_counts = Counter(all_old_lines)
@@ -227,6 +226,12 @@ def is_edit_within_changed_surface(file_path: str, old_string: str) -> bool:
     )
     edited_occurrence_count = sum(all_old_line_counts.values())
     return matched_occurrence_count / edited_occurrence_count >= CHANGED_SURFACE_MATCH_RATIO
+
+
+def is_edit_within_changed_surface(file_path: str, old_string: str) -> bool:
+    """Return whether at least half of the edited lines are current additions."""
+    all_added_lines = _get_added_line_occurrences(file_path)
+    return _lines_within_changed_surface(old_string, all_added_lines)
 
 
 def _is_existing_edit_target(file_path: str) -> bool:
@@ -316,16 +321,43 @@ def _read_edit_fields(payload_by_key: dict[str, object]) -> tuple[str, str, str,
     return tool_name, file_path_field, old_string_field, new_string_field
 
 
+def _refactor_advisory_description_within_surface(
+    all_added_lines: list[str],
+    old_string: str,
+    new_string: str,
+) -> str | None:
+    """Return an advisory description for one edit, given the file's added lines."""
+    refactor_description = is_refactor_edit(old_string, new_string)
+    if refactor_description is None:
+        return None
+    if _lines_within_changed_surface(old_string, all_added_lines):
+        return None
+    return refactor_description
+
+
 def _multi_edit_refactor_advisory_description(
     payload_by_key: dict[str, object],
 ) -> tuple[str, str] | None:
     """Return the (file_path, description) pair for the first eligible edit in a MultiEdit."""
-    file_path, all_pairs = _multi_edit_pairs(payload_by_key)
+    raw_tool_input = payload_by_key.get("tool_input")
+    if not isinstance(raw_tool_input, dict):
+        return None
+    file_path_field = raw_tool_input.get("file_path")
+    file_path = file_path_field if isinstance(file_path_field, str) else ""
     if not file_path:
         return None
-    for each_old_string, each_new_string in all_pairs:
-        refactor_description = find_refactor_advisory_description(
-            file_path, each_old_string, each_new_string
+    if not _is_existing_edit_target(file_path):
+        return None
+    all_added_lines = _get_added_line_occurrences(file_path)
+    for each_edit in edits_for_tool("MultiEdit", raw_tool_input):
+        if not isinstance(each_edit, dict):
+            continue
+        old_string_field = each_edit.get("old_string")
+        new_string_field = each_edit.get("new_string")
+        if not isinstance(old_string_field, str) or not isinstance(new_string_field, str):
+            continue
+        refactor_description = _refactor_advisory_description_within_surface(
+            all_added_lines, old_string_field, new_string_field
         )
         if refactor_description is not None:
             return file_path, refactor_description
