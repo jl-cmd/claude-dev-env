@@ -37,6 +37,38 @@ def test_edits_for_tool_wraps_an_edit_payload_in_a_single_element_list() -> None
     assert edits_for_tool("Edit", edit_payload) == [edit_payload]
 
 
+def test_apply_edits_replaces_every_occurrence_when_replace_all_is_set() -> None:
+    """A replace_all edit rewrites every occurrence, the way MultiEdit does.
+
+    The gates that read this reconstruction judge the file the write would
+    leave on disk. When an edit carries replace_all, MultiEdit rewrites all
+    occurrences, so a reconstruction that rewrites only the first one hands
+    every gate a file that never existed.
+    """
+    all_edits = [{"old_string": "old", "new_string": "new", "replace_all": True}]
+    assert apply_edits("old old old", all_edits) == "new new new"
+
+
+def test_apply_edits_replaces_only_the_first_occurrence_without_replace_all() -> None:
+    """An edit with no replace_all flag rewrites one occurrence."""
+    all_edits = [{"old_string": "old", "new_string": "new"}]
+    assert apply_edits("old old old", all_edits) == "new old old"
+
+
+def test_apply_edits_treats_a_false_replace_all_as_a_single_replacement() -> None:
+    """An explicit replace_all of False rewrites one occurrence."""
+    all_edits = [{"old_string": "old", "new_string": "new", "replace_all": False}]
+    assert apply_edits("old old old", all_edits) == "new old old"
+
+
+def test_apply_edits_mixes_replace_all_and_single_edits_in_one_list() -> None:
+    """Each edit in a list honors its own flag, not the list's first one."""
+    all_edits = [
+        {"old_string": "a", "new_string": "A", "replace_all": True},
+        {"old_string": "b", "new_string": "B"},
+    ]
+    assert apply_edits("a b a b", all_edits) == "A B A b"
+
 def test_joined_new_strings_joins_every_new_string_on_a_newline() -> None:
     """Each edit's introduced text reaches the scanner as its own line."""
     tool_input = {

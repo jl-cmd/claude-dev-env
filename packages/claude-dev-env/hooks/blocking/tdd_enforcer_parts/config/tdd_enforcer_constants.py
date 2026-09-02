@@ -1,7 +1,8 @@
 """Constants for the TDD-enforcer hook and its decomposed parts modules.
 
 Centralizes the freshness window, the ancestor-walk limit, the git-tracking
-command tokens, the source-file extension sets, and the join separator.
+and git-diff command tokens, the source-file extension sets, the join
+separator, and the last-observed-hash store's filename shape and JSON keys.
 """
 
 from __future__ import annotations
@@ -9,9 +10,18 @@ from __future__ import annotations
 FRESHNESS_WINDOW_SECONDS: int = 600
 PARENT_WALK_LIMIT: int = 10
 GIT_LS_FILES_TIMEOUT_SECONDS: int = 10
+GIT_DIFF_TIMEOUT_SECONDS: int = 10
 GIT_EXECUTABLE_NAME: str = "git"
 GIT_LS_FILES_SUBCOMMAND: str = "ls-files"
+GIT_DIFF_SUBCOMMAND: str = "diff"
+GIT_DIFF_QUIET_FLAG: str = "--quiet"
+GIT_HEAD_REVISION: str = "HEAD"
 GIT_PATHSPEC_SEPARATOR: str = "--"
+HASH_STATE_FILE_PREFIX: str = "claude-tdd-test-hashes-"
+HASH_STATE_FILE_SUFFIX: str = ".json"
+REPOSITORY_ROOT_DIGEST_LENGTH: int = 16
+STORED_CONTENT_HASH_KEY: str = "hash"
+STORED_CHANGED_AT_KEY: str = "changed_at"
 PYTHON_SOURCE_EXTENSION: str = ".py"
 ENTRY_HOOK_FILE_NAME: str = "tdd_enforcer.py"
 NEWLINE_JOIN_SEPARATOR: str = "\n"
