@@ -8,6 +8,15 @@ here rather than inline in the modules.
 
 from __future__ import annotations
 
+# The installed tree's own shape is shared with every other reader of it.
+from dev_env_scripts_constants.shared_tree_constants import (  # noqa: F401
+    CLAUDE_CONFIG_DIR_ENV_VAR,
+    PROCESS_TREE_DIRECTORY_NAME,
+    PROCESS_TREE_KILL_MODULE_FILENAME,
+    SCRIPTS_DIRECTORY_NAME,
+    SHARED_PACKAGE_DIRECTORY_NAME,
+)
+
 GROK_BINARY_NAME: str = "grok"
 """Executable name resolved on PATH for the headless grok tier."""
 
@@ -56,19 +65,14 @@ DEFAULT_PING_TIMEOUT_SECONDS: int = 120
 CLAUDE_HOME_SUBDIRECTORY: str = ".claude"
 """Per-user directory under the home directory that holds Claude config."""
 
-CLAUDE_CONFIG_DIR_ENV_VAR: str = "CLAUDE_CONFIG_DIR"
 """Environment variable naming the managed Claude config root."""
 
-PROCESS_TREE_KILL_MODULE_FILENAME: str = "process_tree_kill.py"
 """Filename of the shared process-tree kill helper."""
 
-SHARED_PACKAGE_DIRECTORY_NAME: str = "_shared"
 """Directory name of the shared install tree under the managed root."""
 
-PROCESS_TREE_DIRECTORY_NAME: str = "process-tree"
 """Directory name of the process-tree helper package under ``_shared``."""
 
-SCRIPTS_DIRECTORY_NAME: str = "scripts"
 """Directory name holding Python helpers under a process-tree package."""
 
 MANIFEST_FILENAME: str = ".claude-dev-env-manifest.json"

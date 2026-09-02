@@ -648,14 +648,21 @@ def test_should_read_no_function_when_the_file_holds_no_qualifying_helper() -> N
     pins the verdict such a file gets.
     """
     all_module_functions = ast.parse(NO_INLINE_DUPLICATE_SOURCE).body
+    dump_by_statement: dict[ast.stmt, str] = {}
     all_windows = [
-        _duplicate_body_module._helper_match_window_dumps(each_function)
+        _duplicate_body_module._helper_match_window_dumps(
+            each_function, dump_by_statement
+        )
         for each_function in all_module_functions
         if isinstance(each_function, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
     assert all(each_window is None for each_window in all_windows), (
         "this source must hold no qualifying helper for the skip to be exercised, "
         f"got windows: {all_windows}"
+    )
+    assert dump_by_statement == {}, (
+        "a source with no qualifying helper must take no statement dumps, "
+        f"got {len(dump_by_statement)} memo entries"
     )
     issues = check_same_file_inline_duplicate_body(
         NO_INLINE_DUPLICATE_SOURCE, "module.py"
