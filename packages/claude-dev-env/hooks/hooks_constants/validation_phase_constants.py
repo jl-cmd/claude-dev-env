@@ -5,9 +5,9 @@ sibling modules from disk. These names identify each phase, name the checks
 the full gate alone runs, name the hook-infrastructure checks the edit lane
 still runs, and template the error for an unrecognized phase.
 
-A 2026-09 audit measured whether the Style and Communication checks belong on
-this same six-check cut; ``docs/CODE_RULES.md`` section 11.6 records the
-numbers and the keep decision.
+The cut is by scope, not by check category. ``docs/CODE_RULES.md`` section
+11.6 records why it stops at these six and does not extend to the style and
+docstring-prose checks.
 """
 
 EDIT_LANE_PHASE: str = "edit_lane"
