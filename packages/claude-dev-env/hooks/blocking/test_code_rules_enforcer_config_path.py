@@ -8,6 +8,7 @@ Covers:
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,14 @@ code_rules_enforcer = SimpleNamespace(
     check_constants_outside_config_advisory=check_constants_outside_config_advisory,
     is_config_file=is_config_file,
 )
+
+_enforcer_module_spec = importlib.util.spec_from_file_location(
+    "code_rules_enforcer_under_test", Path(_BLOCKING_DIRECTORY) / "code_rules_enforcer.py"
+)
+assert _enforcer_module_spec is not None
+assert _enforcer_module_spec.loader is not None
+code_rules_enforcer_module = importlib.util.module_from_spec(_enforcer_module_spec)
+_enforcer_module_spec.loader.exec_module(code_rules_enforcer_module)
 
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/src/example.py"
 
@@ -69,14 +78,26 @@ def test_should_produce_advisory_not_blocking_for_function_local_upper_snake() -
         "    for attempt in range(MAX_RETRIES):\n"
         "        pass\n"
     )
-    advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
-        source, PRODUCTION_FILE_PATH
-    )
     blocking_issues = code_rules_enforcer.check_constants_outside_config(
         source, PRODUCTION_FILE_PATH
     )
-    assert any("MAX_RETRIES" in issue for issue in advisory_issues)
     assert not any("MAX_RETRIES" in issue for issue in blocking_issues)
+
+
+def test_function_local_upper_snake_advisory_never_reaches_the_deny_payload() -> None:
+    source = (
+        "def fetch_data():\n"
+        "    MAX_RETRIES = 3\n"
+        "    for attempt in range(MAX_RETRIES):\n"
+        "        pass\n"
+    )
+    edit_lane_issues = code_rules_enforcer_module.validate_content_for_edit_lane(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert not any("MAX_RETRIES" in issue for issue in edit_lane_issues), (
+        f"Expected function-local MAX_RETRIES to stay out of the deny payload, "
+        f"got: {edit_lane_issues}"
+    )
 
 
 def test_should_produce_blocking_for_module_level_upper_snake_outside_config() -> None:
@@ -85,6 +106,17 @@ def test_should_produce_blocking_for_module_level_upper_snake_outside_config() -
         source, PRODUCTION_FILE_PATH
     )
     assert any("MAX_RETRIES" in issue for issue in blocking_issues)
+
+
+def test_module_level_upper_snake_still_reaches_the_deny_payload() -> None:
+    source = "MAXIMUM_RETRIES = 3\n\ndef fetch_data() -> int:\n    return MAXIMUM_RETRIES\n"
+    edit_lane_issues = code_rules_enforcer_module.validate_content_for_edit_lane(
+        source, PRODUCTION_FILE_PATH
+    )
+    assert any(
+        "MAXIMUM_RETRIES" in issue and "move to config/" in issue
+        for issue in edit_lane_issues
+    ), f"Expected module-level MAXIMUM_RETRIES to keep denying the write, got: {edit_lane_issues}"
 
 
 def test_should_produce_stable_ordering_sorted_by_line_number() -> None:

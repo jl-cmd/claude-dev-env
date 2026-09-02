@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
 if _BLOCKING_DIRECTORY not in sys.path:
@@ -103,7 +105,7 @@ def test_scan_function_body_constants_does_not_flag_module_level() -> None:
     assert advisory_issues == []
 
 
-def test_advisory_should_not_flag_class_attribute_after_method_def() -> None:
+def test_advisory_should_not_flag_class_attribute_after_method_def(capsys: pytest.CaptureFixture[str]) -> None:
     source_with_class_attribute_after_method = (
         "class ExampleModel:\n"
         "    def method_a(self) -> None:\n"
@@ -111,49 +113,54 @@ def test_advisory_should_not_flag_class_attribute_after_method_def() -> None:
         "\n"
         "    TABLE_NAME = \"example\"\n"
     )
-    advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
+    return_value = code_rules_enforcer.check_constants_outside_config_advisory(
         source_with_class_attribute_after_method,
         "example_module.py",
     )
-    assert advisory_issues == [], (
+    captured = capsys.readouterr()
+    assert return_value is None, "Advisory check must never return a blocking payload"
+    assert captured.err == "", (
         "Class-level TABLE_NAME attribute must not be flagged as function-local"
     )
 
 
-def test_advisory_should_still_flag_actual_method_body_constant() -> None:
+def test_advisory_should_still_flag_actual_method_body_constant(capsys: pytest.CaptureFixture[str]) -> None:
     source_with_method_body_constant = (
         "class ExampleModel:\n"
         "    def method_a(self) -> None:\n"
         "        MAXIMUM_RETRIES = 3\n"
         "        return None\n"
     )
-    advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
+    return_value = code_rules_enforcer.check_constants_outside_config_advisory(
         source_with_method_body_constant,
         "example_module.py",
     )
-    assert len(advisory_issues) == 1, (
-        "Method-body UPPER_SNAKE constant must still surface as advisory"
+    captured = capsys.readouterr()
+    assert return_value is None, "Advisory check must never return a blocking payload"
+    assert "MAXIMUM_RETRIES" in captured.err, (
+        f"Method-body UPPER_SNAKE constant must still surface as advisory, got: {captured.err!r}"
     )
-    assert "MAXIMUM_RETRIES" in advisory_issues[0]
 
 
-def test_advisory_should_flag_annotated_function_body_constant() -> None:
+def test_advisory_should_flag_annotated_function_body_constant(capsys: pytest.CaptureFixture[str]) -> None:
     source_with_annotated_function_body_constant = (
         "def example_function() -> None:\n"
         "    MAXIMUM_RETRIES: int = 3\n"
         "    return None\n"
     )
-    advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
+    return_value = code_rules_enforcer.check_constants_outside_config_advisory(
         source_with_annotated_function_body_constant,
         "example_module.py",
     )
-    assert len(advisory_issues) == 1, (
-        "Annotated function-body UPPER_SNAKE constant (PEP 526) must surface as advisory"
+    captured = capsys.readouterr()
+    assert return_value is None, "Advisory check must never return a blocking payload"
+    assert "MAXIMUM_RETRIES" in captured.err, (
+        f"Annotated function-body UPPER_SNAKE constant (PEP 526) must surface as advisory, "
+        f"got: {captured.err!r}"
     )
-    assert "MAXIMUM_RETRIES" in advisory_issues[0]
 
 
-def test_advisory_should_flag_outer_constants_after_nested_def() -> None:
+def test_advisory_should_flag_outer_constants_after_nested_def(capsys: pytest.CaptureFixture[str]) -> None:
     source_with_nested_def = (
         "def outer():\n"
         "    OUTER_CONST = 1\n"
@@ -161,11 +168,13 @@ def test_advisory_should_flag_outer_constants_after_nested_def() -> None:
         "        INNER_CONST = 2\n"
         "    ANOTHER_OUTER = 3\n"
     )
-    advisory_issues = code_rules_enforcer.check_constants_outside_config_advisory(
+    return_value = code_rules_enforcer.check_constants_outside_config_advisory(
         source_with_nested_def,
         "example_module.py",
     )
-    flagged_names = " ".join(advisory_issues)
+    captured = capsys.readouterr()
+    assert return_value is None, "Advisory check must never return a blocking payload"
+    flagged_names = captured.err
     assert "OUTER_CONST" in flagged_names, (
         "OUTER_CONST before nested def must be flagged"
     )

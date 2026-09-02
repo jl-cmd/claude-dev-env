@@ -353,7 +353,7 @@ def _python_magic_value_and_constant_issues(context: _ValidationContext) -> list
     )
     all_issues.extend(check_fstring_structural_literals(content, file_path))
     all_issues.extend(check_constants_outside_config(content, file_path))
-    all_issues.extend(check_constants_outside_config_advisory(content, file_path))
+    check_constants_outside_config_advisory(content, file_path)
     all_issues.extend(check_file_global_constants_use_count(content, file_path))
     return all_issues
 
