@@ -31,7 +31,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from blocking.codex_apply_patch import CodexPatchError, parse_codex_apply_patch  # noqa: E402
+from blocking.codex_apply_patch import payload_patch_target_paths  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -59,33 +59,13 @@ def _resolved_path_or_none(file_path: str) -> str | None:
         return None
 
 
-def _apply_patch_target_file_paths(hook_payload: dict, tool_input: dict) -> tuple[str, ...]:
-    """Return every file path a Codex apply_patch payload names."""
-    raw_command = tool_input.get("command", "")
-    command = raw_command if isinstance(raw_command, str) else ""
-    if not command:
-        return ()
-    raw_working_directory = hook_payload.get("cwd")
-    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
-    try:
-        all_patch_files = parse_codex_apply_patch(command, working_directory)
-    except CodexPatchError:
-        return ()
-    return tuple(each_patch_file.file_path for each_patch_file in all_patch_files)
-
-
 def _record_apply_patch_edits(hook_payload: dict, tool_input: dict) -> None:
     """Record the resolved path of every file a Codex apply_patch payload names."""
     session_id = str(hook_payload.get("session_id") or "")
-    for each_file_path in _apply_patch_target_file_paths(hook_payload, tool_input):
+    for each_file_path in payload_patch_target_paths(hook_payload, tool_input):
         resolved_file_path = _resolved_path_or_none(each_file_path)
         if resolved_file_path is not None:
             _record_edited_path(session_id, resolved_file_path)
-
-
-def _is_apply_patch_tool(tool_name: str) -> bool:
-    """Return whether *tool_name* names the Codex apply_patch tool."""
-    return tool_name == APPLY_PATCH_TOOL_NAME
 
 
 def _session_edit_file_path(session_id: str) -> Path:
@@ -248,7 +228,7 @@ def main() -> None:
     tool_input = hook_payload.get("tool_input", {})
     if not isinstance(tool_input, dict):
         return
-    if _is_apply_patch_tool(tool_name):
+    if tool_name == APPLY_PATCH_TOOL_NAME:
         _record_apply_patch_edits(hook_payload, tool_input)
         return
     file_path = tool_input.get("file_path", "")

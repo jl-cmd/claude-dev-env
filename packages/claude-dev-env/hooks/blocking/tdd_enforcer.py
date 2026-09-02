@@ -2,6 +2,9 @@
 
 Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
+The gate records each candidate test's content hash at every sighting and
+compares that hash on the next write. A first sighting requires content that
+differs from HEAD.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """
@@ -21,11 +24,14 @@ try:
         is_ephemeral_script_path,
         is_under_session_scratchpad,
     )
-    from codex_apply_patch import CodexPatchError, parse_codex_apply_patch
+    from codex_apply_patch import (
+        payload_patch_target_paths,
+    )
     from hooks_constants.pre_tool_use_dispatcher_constants import APPLY_PATCH_TOOL_NAME
     from tdd_enforcer_parts import (
         candidate_paths,
         content_analysis,
+        content_hash_store,
         decisions,
         freshness,
         git_tracking,
@@ -37,26 +43,6 @@ except ImportError as import_error:
         "tdd_enforcer: cannot import its tdd_enforcer_parts submodules; "
         "ensure the hooks directory is importable."
     ) from import_error
-
-
-def _is_apply_patch_tool(tool_name: str) -> bool:
-    """Return whether *tool_name* names the Codex apply_patch tool."""
-    return tool_name == APPLY_PATCH_TOOL_NAME
-
-
-def _apply_patch_target_file_paths(input_data: dict, tool_input: dict) -> tuple[str, ...]:
-    """Return each file path a Codex apply_patch command names."""
-    raw_command = tool_input.get("command", "")
-    command = raw_command if isinstance(raw_command, str) else ""
-    if not command:
-        return ()
-    raw_working_directory = input_data.get("cwd")
-    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
-    try:
-        all_patch_files = parse_codex_apply_patch(command, working_directory)
-    except CodexPatchError:
-        return ()
-    return tuple(each_patch_file.file_path for each_patch_file in all_patch_files)
 
 
 def _is_session_scratchpad_write(file_path: str, input_data: dict) -> bool:
@@ -78,8 +64,8 @@ candidate_test_paths_for = candidate_paths.candidate_test_paths_for
 _ancestor_tests_directories = candidate_paths._ancestor_tests_directories
 _parent_walk_limit = candidate_paths._parent_walk_limit
 _freshness_seconds = freshness._freshness_seconds
-has_fresh_test = freshness.has_fresh_test
 _read_candidate_text = freshness._read_candidate_text
+has_recorded_or_fresh_test = content_hash_store.has_recorded_or_fresh_test
 _is_constants_only_python_content = content_analysis._is_constants_only_python_content
 _is_post_edit_import_only = content_analysis._is_post_edit_import_only
 _is_post_edit_constants_only = content_analysis._is_post_edit_constants_only
@@ -154,14 +140,19 @@ def _decide_for_target(
     if _write_is_exempt(tool_name, tool_input, path, extension):
         return True, ""
     all_candidates = candidate_test_paths_for(path)
-    if has_fresh_test(all_candidates, _freshness_seconds()):
+    session_id = str(input_data.get("session_id") or "")
+    repository_root = str(input_data.get("cwd") or "")
+    is_recorded_or_fresh = has_recorded_or_fresh_test(
+        all_candidates, session_id, repository_root, _freshness_seconds()
+    )
+    if is_recorded_or_fresh:
         return True, ""
     return False, build_deny_reason(path, all_candidates)
 
 
 def _decide_apply_patch(input_data: dict, tool_input: dict) -> None:
     """Run the TDD gate over every file a Codex apply_patch payload touches."""
-    for each_file_path in _apply_patch_target_file_paths(input_data, tool_input):
+    for each_file_path in payload_patch_target_paths(input_data, tool_input):
         decision = _decide_for_target(
             APPLY_PATCH_TOOL_NAME, tool_input, each_file_path, input_data
         )
@@ -181,7 +172,7 @@ def main() -> None:
     except json.JSONDecodeError:
         sys.exit(0)
     tool_name, tool_input, file_path = _resolve_payload(input_data)
-    if _is_apply_patch_tool(tool_name):
+    if tool_name == APPLY_PATCH_TOOL_NAME:
         _decide_apply_patch(input_data, tool_input)
         sys.exit(0)
     decision = _decide_for_target(tool_name, tool_input, file_path, input_data)

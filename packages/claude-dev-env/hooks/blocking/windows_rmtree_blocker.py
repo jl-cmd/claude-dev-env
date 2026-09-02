@@ -23,10 +23,9 @@ try:
         sys.path.insert(0, _hooks_dir)
 
     from hooks_constants.hook_block_logger import log_hook_block
-    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
     from hooks_constants.windows_rmtree_blocker_constants import (
-        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         PYTHON_FILE_EXTENSION,
     )
 except ImportError as import_error:
@@ -46,22 +45,12 @@ def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
     return bool(rmtree_ignore_errors_pattern.search(payload_text))
 
 
-def _multi_edit_scanned_text(all_tool_input: dict) -> str:
-    """Return every MultiEdit new_string joined for a single scan pass."""
-    all_new_strings = [
-        each_edit.get("new_string", "")
-        for each_edit in edits_for_tool("MultiEdit", all_tool_input)
-        if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
-    ]
-    return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
-
-
 def extract_payload_text(tool_name: str, tool_input: dict) -> str:
     if tool_name == "MultiEdit":
         file_path = tool_input.get("file_path", "")
         if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):
             return ""
-        return _multi_edit_scanned_text(tool_input)
+        return joined_new_strings(tool_input)
     if tool_name in {"Write", "Edit"}:
         file_path = tool_input.get("file_path", "")
         if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):

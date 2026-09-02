@@ -13,10 +13,14 @@ count, and reported as p50 and p95 milliseconds.
     post_tool_use_dispatcher   p50=80.1ms    p95=1200.5ms
     session_file_edit_tracker  p50=31.0ms    p95=34.2ms
 
-A target under the OS temp root would return before any validator ran, so this
-harness refuses one. It always runs the whole command line ``hooks.json``
-registers, never a single hosted check module standing in for it, so neither
-shortcut can distort the numbers.
+This harness refuses a target under the OS temp root, and runs the whole
+command line ``hooks.json`` registers.
+
+The payload names the Write tool and carries the target's own current content.
+``code_rules_enforcer`` takes its early return for a write over an existing
+file, so the ``pre_tool_use_dispatcher`` figure covers interpreter start and
+hook dispatch. Time an Edit payload against a real file to measure the
+CODE_RULES checks themselves.
 
 The timed payload carries no ``session_id``, so ``session_file_edit_tracker``
 writes its edit record to the default-session file rather than to a

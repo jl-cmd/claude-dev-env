@@ -19,6 +19,8 @@ if str(ADVISORY_DIRECTORY) not in sys.path:
 import refactor_guard  # noqa: E402
 from refactor_guard_test_support import commit_file, stage_file  # noqa: E402
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 def _refactor_payload(file_path: Path) -> str:
     return json.dumps(
@@ -127,6 +129,7 @@ def test_direct_hook_stays_silent_for_write_payload(git_repository: Path) -> Non
 
 
 def test_dispatcher_preserves_edit_stage_guidance(git_repository: Path) -> None:
+    """A red step (staged, uncommitted test) plus a staged refactor still allows."""
     source_path = git_repository / "module.py"
     matching_test_path = git_repository / "test_module.py"
     commit_file(
@@ -134,7 +137,7 @@ def test_dispatcher_preserves_edit_stage_guidance(git_repository: Path) -> None:
         source_path,
         "def calculate_total(amount: int) -> int:\n    return amount\n",
     )
-    commit_file(
+    stage_file(
         git_repository,
         matching_test_path,
         "def calculate_total(amount: int) -> int:\n    return amount\n\n"

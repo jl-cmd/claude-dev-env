@@ -42,13 +42,28 @@ def _read_candidate_text(candidate_path: Path) -> str | None:
         return None
 
 
+def has_test_evidence_in(candidate_text: str) -> bool:
+    """Return whether the given text holds a real test function.
+
+    Takes the text rather than the path, so a caller that has already read the
+    file does not read it a second time.
+
+    Args:
+        candidate_text: The candidate test file's full text.
+
+    Returns:
+        True when the text matches any test-function pattern.
+    """
+    return any(
+        each_pattern.search(candidate_text) for each_pattern in _test_function_patterns()
+    )
+
+
 def _contains_test_evidence(candidate_path: Path) -> bool:
     test_file_content = _read_candidate_text(candidate_path)
     if test_file_content is None:
         return False
-    return any(
-        each_pattern.search(test_file_content) for each_pattern in _test_function_patterns()
-    )
+    return has_test_evidence_in(test_file_content)
 
 
 def _candidate_is_fresh_test(

@@ -4,13 +4,18 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from blocking.config.codex_apply_patch_constants import CODEX_ADD_OPERATION  # noqa: E402
+from blocking.config.codex_apply_patch_constants import (  # noqa: E402
+    CODEX_ADD_OPERATION,
+    CODEX_DELETE_OPERATION,
+    CODEX_UPDATE_OPERATION,
+)
 
 _codex_patch_begin_marker = "*** Begin Patch"
 _codex_patch_end_marker = "*** End Patch"
@@ -21,8 +26,6 @@ _codex_hunk_marker = "@@"
 _codex_end_of_file_marker = "*** End of File"
 _codex_no_newline_marker = "\\ No newline at end of file"
 _codex_minimum_patch_line_count = 2
-_codex_update_operation = "update"
-_codex_delete_operation = "delete"
 
 
 class CodexPatchError(ValueError):
@@ -76,6 +79,11 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
         raise CodexPatchError("patch requires a begin marker")
     if _codex_marker_text(all_lines[-1]) != _codex_patch_end_marker:
         raise CodexPatchError("patch requires an end marker")
+    all_marker_by_operation = {
+        CODEX_UPDATE_OPERATION: _codex_update_marker,
+        CODEX_ADD_OPERATION: _codex_add_marker,
+        CODEX_DELETE_OPERATION: _codex_delete_marker,
+    }
     all_sections: list[tuple[str, str, list[str]]] = []
     current_section: tuple[str, str, list[str]] | None = None
     for each_line in all_lines[1:-1]:
@@ -83,11 +91,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
         operation = next(
             (
                 each_operation
-                for each_operation, each_marker in (
-                    (_codex_update_operation, _codex_update_marker),
-                    (CODEX_ADD_OPERATION, _codex_add_marker),
-                    (_codex_delete_operation, _codex_delete_marker),
-                )
+                for each_operation, each_marker in all_marker_by_operation.items()
                 if marker_text.startswith(each_marker)
             ),
             None,
@@ -95,12 +99,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
         if operation is not None:
             if current_section is not None:
                 all_sections.append(current_section)
-            marker_by_operation = {
-                _codex_update_operation: _codex_update_marker,
-                CODEX_ADD_OPERATION: _codex_add_marker,
-                _codex_delete_operation: _codex_delete_marker,
-            }
-            path_text = marker_text[len(marker_by_operation[operation]) :].strip()
+            path_text = marker_text[len(all_marker_by_operation[operation]) :].strip()
             if not path_text:
                 raise CodexPatchError("patch operation requires a path")
             current_section = (operation, path_text, [])
@@ -204,7 +203,7 @@ def _codex_read_patch_file(
         if target_path.exists():
             raise CodexPatchError("add target requires a new path")
         post_content = _codex_add_content(all_section_lines)
-    elif operation == _codex_update_operation:
+    elif operation == CODEX_UPDATE_OPERATION:
         post_content = _codex_apply_update(prior_content, all_section_lines)
     else:
         if any(
@@ -214,6 +213,33 @@ def _codex_read_patch_file(
             raise CodexPatchError("delete section requires end-of-file content")
         post_content = ""
     return CodexPatchFile(str(target_path), prior_content, post_content, operation)
+
+
+def payload_patch_command(hook_payload: dict, tool_input: dict) -> tuple[str, str | None]:
+    """Pull the patch text and its working directory out of an apply_patch payload.
+
+    ::
+
+        hook_payload = {"cwd": "/repo"}
+        tool_input   = {"command": "*** Begin Patch ..."}
+        payload_patch_command(...)  ->  ("*** Begin Patch ...", "/repo")
+
+    A payload whose command or cwd is missing, or carries a non-string value,
+    yields an empty command and a None directory. An empty command tells the
+    caller there is no patch to parse.
+
+    Args:
+        hook_payload: The whole PreToolUse payload, carrying the cwd.
+        tool_input: The tool input mapping, carrying the command text.
+
+    Returns:
+        The command text and the working directory to resolve paths against.
+    """
+    raw_command = (tool_input or {}).get("command", "")
+    command = raw_command if isinstance(raw_command, str) else ""
+    raw_working_directory = (hook_payload or {}).get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
+    return command, working_directory
 
 
 def _codex_working_directory(command: str, working_directory: str | None) -> Path:
@@ -235,6 +261,7 @@ def _codex_working_directory(command: str, working_directory: str | None) -> Pat
     return resolved_working_directory
 
 
+@cache
 def codex_patch_operation_targets(
     command: str, working_directory: str | None = None
 ) -> tuple[tuple[str, str], ...]:
@@ -260,6 +287,48 @@ def codex_patch_operation_targets(
     )
 
 
+def _target_paths_for_command(command: str, working_directory: str | None) -> tuple[str, ...]:
+    """Return each resolved target path one patch command names.
+
+    An empty command, and a command this parser rejects, both yield an empty
+    tuple, so the caller reads one result shape either way.
+
+    Args:
+        command: The raw Codex apply_patch command text, or an empty string.
+        working_directory: The directory patch paths resolve against, or None.
+
+    Returns:
+        The ordered resolved target paths the patch names.
+    """
+    if not command:
+        return ()
+    try:
+        all_operation_targets = codex_patch_operation_targets(command, working_directory)
+    except CodexPatchError:
+        return ()
+    return tuple(each_path for _each_operation, each_path in all_operation_targets)
+
+
+def payload_patch_target_paths(hook_payload: dict, tool_input: dict) -> tuple[str, ...]:
+    """Return every resolved target path an apply_patch payload names.
+
+    The wrapper a hook wants when it needs target paths and nothing else. It
+    reads the command out of the payload, then resolves paths without reading
+    any target file's prior content.
+
+    Args:
+        hook_payload: The whole hook payload, carrying the cwd.
+        tool_input: The tool input mapping, carrying the command text.
+
+    Returns:
+        The ordered resolved target paths the patch names, empty when the
+        payload names no patch or the patch will not parse.
+    """
+    command, working_directory = payload_patch_command(hook_payload, tool_input)
+    return _target_paths_for_command(command, working_directory)
+
+
+@cache
 def parse_codex_apply_patch(
     command: str, working_directory: str | None = None
 ) -> tuple[CodexPatchFile, ...]:
