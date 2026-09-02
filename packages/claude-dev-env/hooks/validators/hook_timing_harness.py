@@ -17,6 +17,10 @@ A target under the OS temp root would return before any validator ran, so this
 harness refuses one. It always runs the whole command line ``hooks.json``
 registers, never a single hosted check module standing in for it, so neither
 shortcut can distort the numbers.
+
+The timed payload carries no ``session_id``, so ``session_file_edit_tracker``
+writes its edit record to the default-session file rather than to a
+caller-specific one.
 """
 
 from __future__ import annotations
@@ -111,25 +115,34 @@ def write_edit_hook_commands(hooks_json_path: Path) -> list[tuple[str, str]]:
     return all_commands
 
 
-def ensure_real_repository_target(target_path: Path) -> Path:
-    """Return *target_path* resolved, after refusing an OS-temp-rooted path.
+def _is_under_directory(candidate: Path, directory: Path) -> bool:
+    """Return whether *candidate* equals *directory* or sits under it."""
+    return candidate == directory or directory in candidate.parents
+
+
+def ensure_real_repository_target(
+    target_path: Path, repository_root: Path | None = None
+) -> Path:
+    """Return *target_path* resolved, after refusing an ephemeral scratch path.
 
     A target under the OS temp root trips ``is_ephemeral_path`` inside the
     hooks themselves and returns before any validator runs, so a harness that
     measured one would report a hollow number a few dozen milliseconds wide.
-
-    Args:
-        target_path: The candidate file the timed payload will name.
-
-    Returns:
-        The resolved, non-ephemeral target path.
+    A target inside *repository_root* is always real, even when the checkout
+    itself sits under the OS temp root, so that sandbox layout never
+    misclassifies every real file inside it as scratch.
 
     Raises:
-        ValueError: When the resolved path sits under the OS temp root.
+        ValueError: When the resolved path sits under the OS temp root and
+            outside *repository_root*.
     """
     resolved_target = target_path.resolve()
+    if repository_root is not None and _is_under_directory(
+        resolved_target, repository_root.resolve()
+    ):
+        return resolved_target
     temporary_root = Path(tempfile.gettempdir()).resolve()
-    if temporary_root in resolved_target.parents or resolved_target == temporary_root:
+    if _is_under_directory(resolved_target, temporary_root):
         raise ValueError(
             f"refusing an ephemeral timing target under {temporary_root}: {resolved_target}"
         )
@@ -212,19 +225,17 @@ def measure_hosted_command_wall_times(
     package_root: Path,
     target_path: Path,
     run_count: int,
+    *,
+    repository_root: Path | None = None,
 ) -> dict[str, list[float]]:
     """Time every Write/Edit hooks.json command over *run_count* runs each.
 
-    Args:
-        hooks_json_path: Path to the real ``hooks.json`` to read the roster from.
-        package_root: The real package root ``${CLAUDE_PLUGIN_ROOT}`` resolves to.
-        target_path: The real repository file every timed payload names.
-        run_count: How many times to run each hosted command.
-
-    Returns:
-        Millisecond wall-time samples, keyed by hook label, in roster order.
+    ``repository_root`` is the root ``ensure_real_repository_target`` judges
+    ephemerality against; it defaults to ``package_root``.
     """
-    real_target = ensure_real_repository_target(target_path)
+    real_target = ensure_real_repository_target(
+        target_path, repository_root if repository_root is not None else package_root
+    )
     payload_text = _write_tool_payload(real_target)
     all_wall_times_by_label: dict[str, list[float]] = {}
     for each_label, each_command_template in write_edit_hook_commands(hooks_json_path):
@@ -242,16 +253,12 @@ def _report_line(label: str, all_wall_times_milliseconds: list[float]) -> str:
     return f"{label:<26} p50={p50:.1f}ms  p95={p95:.1f}ms"
 
 
-def main(all_arguments: list[str], report_stream: TextIO = sys.stdout) -> int:
-    """Run the harness CLI and write one p50/p95 report line per hosted hook.
-
-    Args:
-        all_arguments: The argument vector following the script name.
-        report_stream: The stream each report line is written to.
-
-    Returns:
-        Always 0; a measurement failure raises rather than returning nonzero.
-    """
+def main(
+    all_arguments: list[str],
+    report_stream: TextIO = sys.stdout,
+    repository_root: Path | None = None,
+) -> int:
+    """Run the harness CLI; report_stream and repository_root are injectable seams."""
     package_root = Path(__file__).resolve().parents[
         _harness_constants.PARENT_LEVELS_TO_PACKAGE_ROOT
     ]
@@ -261,8 +268,10 @@ def main(all_arguments: list[str], report_stream: TextIO = sys.stdout) -> int:
     parser.add_argument("--runs", type=int, default=_harness_constants.DEFAULT_RUN_COUNT)
     parser.add_argument("--target", type=Path, default=default_target_path)
     arguments = parser.parse_args(all_arguments)
+    effective_repository_root = repository_root if repository_root is not None else package_root
     all_wall_times_by_label = measure_hosted_command_wall_times(
-        hooks_json_path, package_root, arguments.target, arguments.runs
+        hooks_json_path, package_root, arguments.target, arguments.runs,
+        repository_root=effective_repository_root,
     )
     for each_label, each_wall_times in all_wall_times_by_label.items():
         report_stream.write(_report_line(each_label, each_wall_times) + "\n")
