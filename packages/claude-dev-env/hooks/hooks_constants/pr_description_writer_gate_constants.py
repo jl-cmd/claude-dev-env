@@ -7,6 +7,13 @@ The tracker records one fact per session: the session spawned the
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
+from hooks_constants.session_edit_stage_gate_constants import (
+    SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
+)
+
 PR_DESCRIPTION_WRITER_SUBAGENT_TYPE: str = "pr-description-writer"
 
 ALL_AGENT_SPAWN_TOOL_NAMES: frozenset[str] = frozenset({"Agent", "Task"})
@@ -37,3 +44,30 @@ CORRECTIVE_MESSAGE: str = (
     "  2. Append the trailing comment `# pr-description-skip` to the command when "
     "you are writing the body yourself on purpose."
 )
+
+
+def spawn_marker_path(session_id: str, temp_directory: Path | None = None) -> Path | None:
+    """Return this session's marker file path, or None when it names no session.
+
+    The tracker writes this path and the gate reads it, so the file name lives
+    in one place. A session id that sanitizes to nothing yields no path, so
+    every marker on disk belongs to one real session and a marker a crashed
+    session leaves behind is inert.
+
+    Args:
+        session_id: Raw ``session_id`` from the hook payload.
+        temp_directory: The directory holding the marker. Defaults to the
+            system temp directory.
+
+    Returns:
+        Absolute path to this session's marker file, or None when the payload
+        names no session this hook can key on.
+    """
+    sanitized_session_id = SESSION_ID_UNSAFE_CHARACTERS_PATTERN.sub("", session_id)
+    if not sanitized_session_id:
+        return None
+    file_name = (
+        f"{SPAWN_MARKER_FILE_PREFIX}{sanitized_session_id}{SPAWN_MARKER_FILE_SUFFIX}"
+    )
+    resolved_temp_directory = temp_directory or Path(tempfile.gettempdir())
+    return resolved_temp_directory / file_name

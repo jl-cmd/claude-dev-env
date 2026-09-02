@@ -6,7 +6,7 @@ find a named budget helper that omits a reachable subprocess timeout.
 
 from __future__ import annotations
 
-from hooks_constants.multi_edit_reconstruction import apply_edits
+from hooks_constants.multi_edit_reconstruction import apply_edits, edits_for_tool
 
 __all__ = [
     "existing_file_content",
@@ -35,7 +35,7 @@ def reconstructed_edit_content(all_tool_input_fields: dict[str, object]) -> str:
     existing_content = existing_file_content(file_path)
     if existing_content is None or old_string not in existing_content:
         return ""
-    return existing_content.replace(old_string, new_string, 1)
+    return apply_edits(existing_content, edits_for_tool("Edit", all_tool_input_fields))
 
 
 def reconstructed_multi_edit_content(

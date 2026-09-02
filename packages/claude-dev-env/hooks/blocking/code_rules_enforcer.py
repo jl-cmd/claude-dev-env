@@ -708,14 +708,16 @@ def validate_content_for_full_gate(
 
 
 def prior_and_post_edit_content(
-    file_path: str, old_string: str, new_string: str,
+    file_path: str, old_string: str, new_string: str, is_replace_all: bool = False,
 ) -> tuple[str | None, str | None]:
     """Return the pre-edit and post-edit file content from a single disk read.
 
     Reads ``file_path`` once and derives both views from that single read so the
     prior and the reconstruction never diverge across two independent reads.
-    The post-edit view replaces the first occurrence of ``old_string`` with
-    ``new_string``, mirroring how the Edit tool itself applies a single
+    The post-edit view comes from apply_edits, the same reconstruction the
+    MultiEdit lane uses, so one payload never reconstructs two ways. It replaces
+    the first occurrence of ``old_string`` with ``new_string``, or every occurrence
+    when the Edit carries ``replace_all``, mirroring how the Edit tool applies a
     replacement.
 
     Returns ``(None, None)`` when the file cannot be read, ``old_string`` is
@@ -729,6 +731,7 @@ def prior_and_post_edit_content(
         file_path: The path of the file the Edit targets.
         old_string: The Edit's ``old_string`` fragment.
         new_string: The Edit's ``new_string`` fragment.
+        is_replace_all: Whether the Edit carries ``replace_all``.
 
     Returns:
         A ``(prior_content, post_edit_content)`` pair, or ``(None, None)`` when
@@ -741,7 +744,12 @@ def prior_and_post_edit_content(
         return None, None
     if old_string not in existing_content:
         return None, None
-    return existing_content, existing_content.replace(old_string, new_string, 1)
+    one_edit = {
+        "old_string": old_string,
+        "new_string": new_string,
+        "replace_all": is_replace_all,
+    }
+    return existing_content, apply_edits(existing_content, [one_edit])
 
 
 def _is_validated_target(file_path: str) -> bool:
@@ -1170,6 +1178,7 @@ def _contents_for_validation(
     if tool_name == "Edit":
         prior_content, full_file_content_after_edit = prior_and_post_edit_content(
             file_path, old_string, new_string,
+            is_replace_all=all_tool_input.get("replace_all") is True,
         )
         if full_file_content_after_edit is None:
             full_file_content_after_edit = existing_file_content(file_path)
