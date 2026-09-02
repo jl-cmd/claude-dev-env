@@ -1,8 +1,8 @@
-"""AST support for the import-order check's module-level statement scan.
+"""Recognizer for the repo's sys.path bootstrap-guard idiom.
 
 Split out of python_style_checks.py to keep that file under its line cap.
-Classifies each module-level statement as an import, a docstring, or part of
-the repo's sys.path bootstrap-guard idiom: `check_sys_path_insert_deduplication_guard`
+Tells the import-order check whether a run of module-level statements is that
+idiom rather than ordinary code: `check_sys_path_insert_deduplication_guard`
 (code_rules_paths_syspath.py) requires every `sys.path.insert` call to sit
 behind `if <path> not in sys.path:`, and the import-order check must not
 penalize a file for following that guard.
@@ -81,29 +81,3 @@ def is_sys_path_bootstrap_prelude(all_pending_statements: list[ast.stmt]) -> boo
         _is_sys_path_bootstrap_guard(each) or _is_plain_assignment_statement(each)
         for each in all_pending_statements
     )
-
-
-def is_import_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is an import or from-import."""
-    return isinstance(statement, (ast.Import, ast.ImportFrom))
-
-
-def is_docstring_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is a string-literal docstring."""
-    if not isinstance(statement, ast.Expr):
-        return False
-    literal = statement.value
-    return isinstance(literal, ast.Constant) and isinstance(literal.value, str)
-
-
-def resolve_seen_non_import(
-    has_seen_non_import: bool, all_pending_prelude_statements: list[ast.stmt]
-) -> bool:
-    """Return the "seen a non-import" flag updated for one import statement.
-
-    Once the flag is set it stays set; a pending run is resolved only the
-    first time an import needs the answer.
-    """
-    if has_seen_non_import or not all_pending_prelude_statements:
-        return has_seen_non_import
-    return not is_sys_path_bootstrap_prelude(all_pending_prelude_statements)
