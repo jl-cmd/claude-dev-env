@@ -26,16 +26,16 @@ MIGRATION_PATH_PATTERN = re.compile(r"[/\\]migrations[/\\]\d{4}_\w+\.py$")
 UNSAFE_OPERATIONS = ["RemoveField", "RenameField", "DeleteModel", "RenameModel"]
 
 
-def _resolve_content(tool_name: str, tool_input: dict) -> str:
+def _resolve_content(tool_name: str, all_tool_input: dict) -> str:
     """Return the text a Write, Edit, or MultiEdit payload introduces."""
     if tool_name == MULTI_EDIT_TOOL_NAME:
         all_new_strings = [
             each_edit.get("new_string", "")
-            for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, tool_input)
+            for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, all_tool_input)
             if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
         ]
         return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
-    return tool_input.get("content", "") or tool_input.get("new_string", "")
+    return all_tool_input.get("content", "") or all_tool_input.get("new_string", "")
 
 
 def main() -> None:

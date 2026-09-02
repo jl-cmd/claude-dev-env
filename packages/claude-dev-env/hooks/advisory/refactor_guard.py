@@ -323,8 +323,10 @@ def _multi_edit_refactor_advisory_description(
     file_path, all_pairs = _multi_edit_pairs(payload_by_key)
     if not file_path:
         return None
-    for old_string, new_string in all_pairs:
-        refactor_description = find_refactor_advisory_description(file_path, old_string, new_string)
+    for each_old_string, each_new_string in all_pairs:
+        refactor_description = find_refactor_advisory_description(
+            file_path, each_old_string, each_new_string
+        )
         if refactor_description is not None:
             return file_path, refactor_description
     return None

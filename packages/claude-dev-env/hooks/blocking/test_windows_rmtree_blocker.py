@@ -179,6 +179,17 @@ def test_extract_payload_reads_every_multi_edit_new_string() -> None:
     assert DANGEROUS_RMTREE_SNIPPET in extracted
 
 
+def test_extract_payload_reads_a_single_item_multi_edit() -> None:
+    extracted = extract_payload_text(
+        "MultiEdit",
+        {
+            "file_path": "foo.py",
+            "edits": [{"old_string": "a = 1", "new_string": DANGEROUS_RMTREE_SNIPPET}],
+        },
+    )
+    assert extracted == DANGEROUS_RMTREE_SNIPPET
+
+
 def _run_hook_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
     captured_stdout = io.StringIO()
     captured_stderr = io.StringIO()

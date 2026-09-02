@@ -175,6 +175,24 @@ def test_standalone_advisor_warns_for_unsafe_operation_in_second_multi_edit(
     assert "RemoveField" in _text_field(permission_fields, "additionalContext")
 
 
+def test_standalone_advisor_reads_a_write_payloads_content_field(tmp_path: Path) -> None:
+    """_resolve_content's non-MultiEdit branch reads a Write payload's "content" key."""
+    migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
+    payload: dict[str, object] = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(migration_path),
+            "content": 'operations = [migrations.RemoveField("name")]',
+        },
+    }
+
+    advisory_payload = _run_hook(_ADVISOR_SCRIPT, payload)
+    assert advisory_payload is not None
+    assert "RemoveField" in _text_field(
+        _permission_fields(advisory_payload), "additionalContext"
+    )
+
+
 def test_standalone_advisor_is_silent_for_a_clean_multi_edit(tmp_path: Path) -> None:
     migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
     payload = _build_multi_edit_payload(

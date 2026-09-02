@@ -55,6 +55,28 @@ def test_multi_edit_reports_the_first_eligible_rename(tmp_path: Path) -> None:
     assert "compute_total" in description
 
 
+def test_multi_edit_scans_past_two_ordinary_edits_to_the_third(tmp_path: Path) -> None:
+    """The loop over edit pairs reaches the third pair, not only the first two."""
+    target_path = str(tmp_path / "module.py")
+    payload = _multi_edit_payload(
+        target_path,
+        [
+            {"old_string": "return amount", "new_string": "return amount + 1"},
+            {"old_string": "return amount + 1", "new_string": "return amount + 2"},
+            {
+                "old_string": "def calculate_total(amount):\n    return amount + 2",
+                "new_string": "def compute_total(amount):\n    return amount + 2",
+            },
+        ],
+    )
+
+    result = refactor_guard._multi_edit_refactor_advisory_description(payload)
+
+    assert result is not None
+    _reported_path, description = result
+    assert "compute_total" in description
+
+
 def test_multi_edit_returns_none_when_no_edit_qualifies(tmp_path: Path) -> None:
     target_path = str(tmp_path / "module.py")
     payload = _multi_edit_payload(

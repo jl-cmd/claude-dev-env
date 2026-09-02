@@ -205,6 +205,21 @@ def test_extract_payload_text_returns_empty_for_unknown_tool() -> None:
     assert extracted == ("", "")
 
 
+def test_every_applicable_tool_name_reads_payload_text() -> None:
+    """extract_payload_text reads content for every name the shared constant lists."""
+    for each_applicable_tool_name in hook_module.ALL_APPLICABLE_TOOL_NAMES:
+        _file_path, scanned_text = extract_payload_text(
+            each_applicable_tool_name,
+            {
+                "file_path": "foo.py",
+                "content": "abc",
+                "new_string": "abc",
+                "edits": [{"old_string": "a", "new_string": "abc"}],
+            },
+        )
+        assert scanned_text, f"{each_applicable_tool_name} must read some scanned text"
+
+
 def test_extract_payload_text_reads_every_multi_edit_new_string() -> None:
     extracted = extract_payload_text(
         "MultiEdit",

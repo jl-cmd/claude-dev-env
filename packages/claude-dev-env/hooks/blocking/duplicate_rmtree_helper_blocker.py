@@ -33,6 +33,7 @@ try:
         sys.path.insert(0, _hooks_dir)
 
     from hooks_constants.duplicate_rmtree_helper_blocker_constants import (
+        ALL_APPLICABLE_TOOL_NAMES,
         ALL_EXEMPT_PATH_FRAGMENTS,
         ALL_EXEMPT_TEST_FILE_PREFIXES,
         ALL_EXEMPT_TEST_FILE_SUFFIXES,
@@ -51,11 +52,11 @@ except ImportError as import_error:
     ) from import_error
 
 
-def _multi_edit_scanned_text(tool_input: dict) -> str:
+def _multi_edit_scanned_text(all_tool_input: dict) -> str:
     """Return every MultiEdit new_string joined for a single scan pass."""
     all_new_strings = [
         each_edit.get("new_string", "")
-        for each_edit in edits_for_tool("MultiEdit", tool_input)
+        for each_edit in edits_for_tool("MultiEdit", all_tool_input)
         if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
     ]
     return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
@@ -115,7 +116,7 @@ def extract_payload_text(tool_name: str, tool_input: dict) -> tuple[str, str]:
         A pair of the target path and the text to scan. The text is empty for an
         unrelated tool or a non-Python target, so the caller exits without blocking.
     """
-    if tool_name not in {"Write", "Edit", "MultiEdit"}:
+    if tool_name not in ALL_APPLICABLE_TOOL_NAMES:
         return "", ""
     file_path = tool_input.get("file_path", "") or ""
     if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):

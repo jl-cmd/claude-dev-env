@@ -350,6 +350,19 @@ def test_multi_edit_new_strings_join_on_a_separator_not_concatenation() -> None:
     assert result.stdout == ""
 
 
+def test_multi_edit_with_a_single_edit_still_denies() -> None:
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [{"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT}],
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_system_message_and_suppress_output():
     result = _run_hook(
         "Write",

@@ -30,18 +30,18 @@ SIMPLE_PATTERN = re.compile(
 )
 
 
-def _resolve_content(tool_name: str, tool_input: dict) -> str:
+def _resolve_content(tool_name: str, all_tool_input: dict) -> str:
     """Return the text a Write, Edit, or MultiEdit payload introduces."""
     if tool_name == "MultiEdit":
         all_new_strings = [
             each_edit.get("new_string", "")
-            for each_edit in edits_for_tool("MultiEdit", tool_input)
+            for each_edit in edits_for_tool("MultiEdit", all_tool_input)
             if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
         ]
         return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
-    content = tool_input.get("content", "")
+    content = all_tool_input.get("content", "")
     if not content:
-        content = tool_input.get("new_string", "")
+        content = all_tool_input.get("new_string", "")
     return content
 
 

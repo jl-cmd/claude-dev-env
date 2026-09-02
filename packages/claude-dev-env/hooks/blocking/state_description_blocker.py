@@ -46,17 +46,17 @@ except ImportError as import_error:
     ) from import_error
 
 
-def _content_to_check(tool_name: str, tool_input: dict) -> str:
+def _content_to_check(tool_name: str, all_tool_input: dict) -> str:
     """Return the text a Write, Edit, or MultiEdit payload introduces."""
     if tool_name == "MultiEdit":
         all_new_strings = [
             each_edit.get("new_string", "")
-            for each_edit in edits_for_tool("MultiEdit", tool_input)
+            for each_edit in edits_for_tool("MultiEdit", all_tool_input)
             if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
         ]
         return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
     content_key = "content" if tool_name == "Write" else "new_string"
-    raw_content = tool_input.get(content_key, "")
+    raw_content = all_tool_input.get(content_key, "")
     return raw_content if isinstance(raw_content, str) else ""
 
 

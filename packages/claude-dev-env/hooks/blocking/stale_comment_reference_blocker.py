@@ -63,12 +63,12 @@ def _edit_step_fields(each_edit: object) -> tuple[str, str, bool] | None:
     return old_string, new_string, each_edit.get("replace_all") is True
 
 
-def _evaluate_multi_edit(file_path: str, tool_input: dict[str, object]) -> str | None:
+def _evaluate_multi_edit(file_path: str, all_tool_input: dict[str, object]) -> str | None:
     """Judge each MultiEdit step against the content the prior steps already left.
 
     Args:
         file_path: The destination path the MultiEdit targets.
-        tool_input: The MultiEdit payload's input mapping.
+        all_tool_input: The MultiEdit payload's input mapping.
 
     Returns:
         The deny-reason text for the first step whose kept comment orphans an
@@ -78,7 +78,7 @@ def _evaluate_multi_edit(file_path: str, tool_input: dict[str, object]) -> str |
         current_content = Path(file_path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, tool_input):
+    for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, all_tool_input):
         edit_fields = _edit_step_fields(each_edit)
         if edit_fields is None:
             continue

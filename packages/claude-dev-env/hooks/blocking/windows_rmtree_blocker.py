@@ -46,11 +46,11 @@ def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
     return bool(rmtree_ignore_errors_pattern.search(payload_text))
 
 
-def _multi_edit_scanned_text(tool_input: dict) -> str:
+def _multi_edit_scanned_text(all_tool_input: dict) -> str:
     """Return every MultiEdit new_string joined for a single scan pass."""
     all_new_strings = [
         each_edit.get("new_string", "")
-        for each_edit in edits_for_tool("MultiEdit", tool_input)
+        for each_edit in edits_for_tool("MultiEdit", all_tool_input)
         if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
     ]
     return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
