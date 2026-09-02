@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .validator_base import Violation
+from .validator_base import Violation, source_text
 
 
 TODO_PATTERN = re.compile(r"#\s*(TODO|FIXME)\b(?!.*#\d+)", re.IGNORECASE)
@@ -34,7 +34,7 @@ def check_untracked_todos(source: str, filename: str) -> List[Violation]:
 def validate_file(file_path: Path) -> List[Violation]:
     filename = str(file_path)
     try:
-        source = file_path.read_text(encoding="utf-8")
+        source = source_text(file_path)
     except Exception as error:
         return [Violation(filename, 0, f"Error reading file: {error}")]
 

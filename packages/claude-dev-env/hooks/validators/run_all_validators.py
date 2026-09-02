@@ -38,12 +38,14 @@ from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
     is_pytest_scratch_directory_segment,
 )
-from .fast_save_validators import FastSaveCheckOutcome, run_fast_save_validators
+from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
+from .project_roots import enclosing_project_root
 from .python_style_checks import fix_file
-from .ruff_integration import check_ruff_available, run_ruff_check
+from .ruff_integration import run_ruff_check
+from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from blocking.codex_apply_patch import (
     CODEX_DELETE_OPERATION,
@@ -60,35 +62,6 @@ from hooks_constants.multi_edit_reconstruction import (
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
-
-
-def _gate_entry_for_fast_save_check(
-    check_outcome: FastSaveCheckOutcome,
-) -> "ValidatorResult":
-    """Wrap one in-process check's finding into the gate's shared reporting type."""
-    return ValidatorResult(
-        name=check_outcome.display_name,
-        checks=check_outcome.checks,
-        passed=check_outcome.is_clean,
-        output=check_outcome.violation_report,
-    )
-
-
-def _run_fast_save_checks(files: List[Path]) -> List["ValidatorResult"]:
-    """Run the save-path roster in-process and wrap each finding for the gate.
-
-    Args:
-        files: The files under validation -- one reconstructed file in gate mode.
-
-    Returns:
-        One ValidatorResult per in-process save-path check. Ruff and Mypy are
-        not part of this roster; the caller adds Ruff separately and never
-        adds Mypy on the save path.
-    """
-    return [
-        _gate_entry_for_fast_save_check(each_outcome)
-        for each_outcome in run_fast_save_validators(files)
-    ]
 
 
 def _windows_non_unc_working_directory_string(
@@ -279,17 +252,6 @@ def build_json_output(
     }
 
 
-@dataclass(frozen=True)
-class ValidatorResult:
-    """Result from running a validator."""
-
-    name: str
-    checks: str
-    passed: bool
-    output: str
-    skipped: bool = False
-
-
 def run_with_fallback(
     validator_func: Callable[[], ValidatorResult],
     fallback_name: str,
@@ -465,15 +427,11 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
 def run_ruff_checks(
     files: List[Path], config_source_path: Optional[Path] = None
 ) -> ValidatorResult:
-    """Run ruff for fast Python linting."""
-    if not check_ruff_available():
-        return ValidatorResult(
-            name="Ruff",
-            checks="37",
-            passed=True,
-            output="Ruff not installed - skipping",
-        )
+    """Run ruff for fast Python linting.
 
+    run_ruff_check makes the same availability probe and returns the same
+    skip message, so probing here would spawn ruff --version twice.
+    """
     result = run_ruff_check(files, config_source_path)
 
     return ValidatorResult(
@@ -838,6 +796,46 @@ def _directory_segment_signals_exemption(segment_lower: str) -> bool:
     )
 
 
+def _path_parts_the_project_owns(destination_path: Path) -> tuple[str, ...]:
+    """Return the destination's path parts from its own project root downward.
+
+    ::
+
+        ok:   "~/tests/proj/src/worker.py" (proj is the root) -> ("src", "worker.py")
+        ok:   "~/.claude/hooks/gate.py" (no root)             -> (".claude", "hooks", "gate.py")
+        ok:   "config/x.py" (relative)                      -> ("config", "x.py")
+
+    Directory names above the project root were chosen by whoever laid out the
+    disk, not by the project, so a home directory named ``tests`` or a checkout
+    parked under ``config`` must lend the staged path no exemption signal.
+    Dropping those segments is strictly narrowing: it can remove a signal, never
+    invent one.
+
+    A relative destination is already project-relative and is returned whole,
+    which keeps the result independent of the process working directory. A
+    destination with no project root above it -- an install target such as
+    ``~/.claude/hooks/`` -- keeps every segment, because those segments are the
+    only exemption signal such a target carries.
+
+    Args:
+        destination_path: Real destination path the write or edit targets.
+
+    Returns:
+        The path parts staging walks for exemption signals, root anchor removed.
+    """
+    all_path_parts = destination_path.parts
+    if not destination_path.anchor:
+        return all_path_parts
+    all_path_parts = all_path_parts[1:]
+    project_root = enclosing_project_root(destination_path)
+    if project_root is None:
+        return all_path_parts
+    resolved_destination = destination_path.resolve()
+    if not resolved_destination.is_relative_to(project_root):
+        return all_path_parts
+    return resolved_destination.relative_to(project_root).parts
+
+
 def _temporary_path_preserving_directory_signal(
     temporary_directory: Path, file_path: str
 ) -> Path:
@@ -850,7 +848,9 @@ def _temporary_path_preserving_directory_signal(
     restores that signal. A directory pytest generated for its own scratch tree
     is recognized by name and skipped, so a ``tmp_path`` parent containing
     ``test_`` never trips a test-file exemption. The staged path reads the same
-    wherever ``--basetemp`` places that scratch tree.
+    wherever ``--basetemp`` places that scratch tree. The walk starts at the
+    destination's own project root, so a directory above the project lends it
+    no signal.
 
     Args:
         temporary_directory: Root of the ephemeral staging tree.
@@ -861,9 +861,7 @@ def _temporary_path_preserving_directory_signal(
         (when present) and the real basename.
     """
     destination_path = Path(file_path)
-    path_parts = destination_path.parts
-    if destination_path.anchor:
-        path_parts = path_parts[1:]
+    path_parts = _path_parts_the_project_owns(destination_path)
     if not path_parts:
         path_parts = (destination_path.name,)
 
@@ -924,7 +922,7 @@ def validate_proposed_file(
             else Path(file_path)
         )
         return [
-            *_run_fast_save_checks([temporary_file]),
+            *run_fast_save_validators([temporary_file]),
             run_ruff_checks([temporary_file], resolved_config_source_path),
         ]
 

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .validator_base import Violation
+from .validator_base import Violation, source_text, syntax_tree
 
 
 SECRET_PATTERNS: frozenset[str] = frozenset({
@@ -95,12 +95,12 @@ def validate_file(file_path: Path) -> List[Violation]:
     filename = str(file_path)
 
     try:
-        source = file_path.read_text(encoding="utf-8")
+        source = source_text(file_path)
     except Exception as error:
         return [Violation(filename, 0, f"Error reading file: {error}")]
 
     try:
-        tree = ast.parse(source)
+        tree = syntax_tree(source)
     except SyntaxError as error:
         return [Violation(filename, error.lineno or 0, f"Syntax error: {error.msg}")]
 

@@ -25,24 +25,14 @@ Import ``run_headless_worker`` for the outcome object::
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-_shared_process_tree_scripts_directory = (
-    Path(__file__).resolve().parents[1] / "_shared" / "process-tree" / "scripts"
-)
-if str(_shared_process_tree_scripts_directory) not in sys.path:
-    sys.path.insert(0, str(_shared_process_tree_scripts_directory))
-
-from process_tree_kill import (  # noqa: E402
-    should_start_new_session,
-    terminate_process_tree,
-)
-
-from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
+from dev_env_scripts_constants.grok_worker_constants import (
     AGENT_FLAG,
     ALL_AUTH_FAILURE_SIGNATURES,
     ALL_USAGE_LIMIT_SIGNATURES,
@@ -80,6 +70,19 @@ from dev_env_scripts_constants.grok_worker_constants import (  # noqa: E402
     UTF8_DECODE_ERRORS,
     UTF8_ENCODING,
     WORKER_SPEC_TIMEOUT_KEY,
+)
+from shared_tree_paths import resolve_shared_process_tree_scripts_directory
+
+_shared_process_tree_scripts_directory = resolve_shared_process_tree_scripts_directory(
+    __file__,
+    all_environment=os.environ,
+)
+if str(_shared_process_tree_scripts_directory) not in sys.path:
+    sys.path.insert(0, str(_shared_process_tree_scripts_directory))
+
+from process_tree_kill import (  # noqa: E402
+    should_start_new_session,
+    terminate_process_tree,
 )
 
 runner_popen = subprocess.Popen

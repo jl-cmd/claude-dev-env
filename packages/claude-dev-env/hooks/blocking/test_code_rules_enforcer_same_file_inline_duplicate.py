@@ -16,6 +16,7 @@ in-process AST scan the production enforcer runs.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import pathlib
 import sys
@@ -33,6 +34,20 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_same_file_inline_duplicate_body = _hook_module.check_same_file_inline_duplicate_body
+
+_duplicate_body_spec = importlib.util.spec_from_file_location(
+    "code_rules_duplicate_body",
+    _HOOK_DIRECTORY / "code_rules_duplicate_body.py",
+)
+assert _duplicate_body_spec is not None
+assert _duplicate_body_spec.loader is not None
+_duplicate_body_module = importlib.util.module_from_spec(_duplicate_body_spec)
+_duplicate_body_spec.loader.exec_module(_duplicate_body_module)
+
+MEMO_CORPUS_MODULE_GLOB = "code_rules_*.py"
+TEST_MODULE_NAME_PREFIX = "test_"
+MINIMUM_MEMO_CORPUS_MODULE_COUNT = 20
+EXTRA_DUPLICATE_PAIRS_BEYOND_THE_CEILING = 5
 
 
 PR_470_SHAPE_SOURCE = (
@@ -463,4 +478,240 @@ def test_should_carry_both_helper_and_enclosing_spans_for_the_commit_gate_scoper
         "duplicate message must carry BOTH the helper and the enclosing spans — "
         "the union the PreToolUse path scopes on — not the helper span alone, "
         f"got: {matching_issues[0]}"
+    )
+
+
+NO_INLINE_DUPLICATE_SOURCE = (
+    "async def _wait_for_content_image_to_render(automation: object) -> None:\n"
+    "    assert automation.detector is not None\n"
+    "    await automation.detector.wait_for_element(selector)\n"
+    "    logger.info('rendered')\n"
+    "\n"
+    "\n"
+    "async def _do_other_work(automation: object) -> None:\n"
+    "    await automation.cdp.reload()\n"
+    "    logger.info('reloaded')\n"
+    "    return None\n"
+)
+
+
+def _memo_corpus_module_paths() -> list[pathlib.Path]:
+    """Return the production code-rules modules used as a statement corpus.
+
+    Returns:
+        Every non-test ``code_rules_*.py`` module in the blocking hook directory,
+        in sorted order, which supplies thousands of real statements of every
+        shape the scan meets in practice.
+    """
+    return sorted(
+        each_path
+        for each_path in _HOOK_DIRECTORY.glob(MEMO_CORPUS_MODULE_GLOB)
+        if not each_path.name.startswith(TEST_MODULE_NAME_PREFIX)
+    )
+
+
+def _all_statements_in_module(module_path: pathlib.Path) -> list[ast.stmt]:
+    """Return every statement node parsed from a repository module.
+
+    The returned list holds the nodes, so they stay alive across both memo passes
+    and the second pass reads the very objects the first pass recorded.
+
+    Args:
+        module_path: The repository module to parse.
+
+    Returns:
+        Every statement node in the module, in walk order.
+    """
+    parsed_module = ast.parse(module_path.read_text(encoding="utf-8"))
+    return [
+        each_node
+        for each_node in ast.walk(parsed_module)
+        if isinstance(each_node, ast.stmt)
+    ]
+
+
+def _memo_disagreements(
+    all_statements: list[ast.stmt],
+    dump_by_statement: dict[ast.stmt, str],
+    module_name: str,
+) -> list[str]:
+    """Return a location for every statement the memo dumps differently.
+
+    Args:
+        all_statements: The statement nodes to compare.
+        dump_by_statement: The memo under test, mutated in place.
+        module_name: The module name to name in a disagreement location.
+
+    Returns:
+        A ``module:line`` location per statement whose memoized dump differs from
+        the uncached dump, and an empty list when the memo is transparent.
+    """
+    return [
+        f"{module_name}:{each_statement.lineno}"
+        for each_statement in all_statements
+        if _duplicate_body_module._memoized_statement_dump(
+            each_statement, dump_by_statement
+        )
+        != _duplicate_body_module._normalized_statement_dump(each_statement)
+    ]
+
+
+def _cold_and_warm_memo_disagreements(
+    all_module_paths: list[pathlib.Path],
+) -> tuple[list[str], list[str]]:
+    """Compare memoized against uncached dumps twice over the same statements.
+
+    The first pass over a module fills the memo and the second reads it warm, so
+    both the computed value and the served value are held against the uncached
+    dump.
+
+    Args:
+        all_module_paths: The corpus modules to parse and compare.
+
+    Returns:
+        The cold-pass disagreement locations and the warm-pass disagreement
+        locations.
+    """
+    dump_by_statement: dict[ast.stmt, str] = {}
+    all_cold_disagreements: list[str] = []
+    all_warm_disagreements: list[str] = []
+    for each_path in all_module_paths:
+        all_statements = _all_statements_in_module(each_path)
+        all_cold_disagreements += _memo_disagreements(
+            all_statements, dump_by_statement, each_path.name
+        )
+        all_warm_disagreements += _memo_disagreements(
+            all_statements, dump_by_statement, each_path.name
+        )
+    assert dump_by_statement, "the memo recorded nothing, so nothing was proven"
+    return all_cold_disagreements, all_warm_disagreements
+
+
+def test_should_memoize_every_repository_statement_dump_transparently() -> None:
+    """The memo must be invisible: every dump it serves equals the uncached dump.
+
+    The inline scan's speed rests on serving each statement's dump from a memo,
+    which makes the memo the one place a behavior change could hide. Real
+    repository modules supply the statements, so the proof covers every statement
+    shape the scan meets in this repository.
+    """
+    all_module_paths = _memo_corpus_module_paths()
+    assert len(all_module_paths) >= MINIMUM_MEMO_CORPUS_MODULE_COUNT, (
+        "the transparency proof needs a real corpus, but the glob found "
+        f"only {len(all_module_paths)} modules"
+    )
+    all_cold, all_warm = _cold_and_warm_memo_disagreements(all_module_paths)
+    assert all_cold == [], (
+        "a cold memo must compute the same dump the uncached helper computes, "
+        f"but these statements disagreed: {all_cold[:10]}"
+    )
+    assert all_warm == [], (
+        "a warm memo must serve the same dump the uncached helper computes, "
+        f"but these statements disagreed: {all_warm[:10]}"
+    )
+
+
+def test_should_report_the_same_verdict_when_an_earlier_scan_used_the_same_path() -> None:
+    """No memo may outlive one scan, so an earlier scan cannot color a later one.
+
+    A dump memo that persisted between calls — keyed on a path, or on a node slot
+    a later parse could reuse — would let one file's statements answer for
+    another's. Two different sources are scanned under one path, then the first is
+    scanned again, so a verdict that shifted on the repeat would expose the leak.
+    """
+    first_duplicate_issues = check_same_file_inline_duplicate_body(
+        PR_470_SHAPE_SOURCE, "account_switcher.py"
+    )
+    clean_issues = check_same_file_inline_duplicate_body(
+        NO_INLINE_DUPLICATE_SOURCE, "account_switcher.py"
+    )
+    repeat_duplicate_issues = check_same_file_inline_duplicate_body(
+        PR_470_SHAPE_SOURCE, "account_switcher.py"
+    )
+    assert first_duplicate_issues, "the duplicate source must flag on its own"
+    assert clean_issues == [], (
+        "the clean source must not inherit a verdict from the duplicate source "
+        f"scanned before it under the same path, got: {clean_issues}"
+    )
+    assert repeat_duplicate_issues == first_duplicate_issues, (
+        "the duplicate source must produce the same verdict on a repeat scan, "
+        f"got {repeat_duplicate_issues} after {first_duplicate_issues}"
+    )
+
+
+def test_should_read_no_function_when_the_file_holds_no_qualifying_helper() -> None:
+    """A file with no candidate helper is answered without reading any function.
+
+    Most files carry no function that clears the helper-window filter, so the scan
+    leaves them after that filter and takes no per-function readings. The memo
+    stays empty in that case, which both proves the readings were skipped and
+    pins the verdict such a file gets.
+    """
+    all_module_functions = ast.parse(NO_INLINE_DUPLICATE_SOURCE).body
+    dump_by_statement: dict[ast.stmt, str] = {}
+    all_windows = [
+        _duplicate_body_module._helper_match_window_dumps(
+            each_function, dump_by_statement
+        )
+        for each_function in all_module_functions
+        if isinstance(each_function, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    assert all(each_window is None for each_window in all_windows), (
+        "this source must hold no qualifying helper for the skip to be exercised, "
+        f"got windows: {all_windows}"
+    )
+    assert dump_by_statement == {}, (
+        "a source with no qualifying helper must take no statement dumps, "
+        f"got {len(dump_by_statement)} memo entries"
+    )
+    issues = check_same_file_inline_duplicate_body(
+        NO_INLINE_DUPLICATE_SOURCE, "module.py"
+    )
+    assert issues == [], f"a file with no qualifying helper must not flag, got: {issues}"
+
+
+def _duplicated_helper_pair_source(pair_index: int) -> str:
+    """Return one helper and one strictly larger function that inlines its body.
+
+    Each pair carries its own variable name, so a helper matches only the
+    enclosing function of its own pair and every pair contributes one report.
+
+    Args:
+        pair_index: The number distinguishing this pair from the others.
+
+    Returns:
+        Source text holding the helper and its enclosing function.
+    """
+    duplicated_block = (
+        "    try:\n"
+        f"        record_{pair_index} = records.load({pair_index})\n"
+        "    except KeyError:\n"
+        "        logger.warning('record missing')\n"
+        f"        record_{pair_index} = None\n"
+        f"    return record_{pair_index}\n"
+    )
+    return (
+        f"def load_record_{pair_index}(records):\n{duplicated_block}\n\n"
+        f"def refresh_record_{pair_index}(records):\n"
+        f"    records.begin({pair_index})\n{duplicated_block}\n\n"
+    )
+
+
+def test_should_cap_the_reported_issue_count_at_the_module_ceiling() -> None:
+    """A file full of inline duplicates reports the ceiling, not one per pair.
+
+    The blocking payload a single write can carry is bounded, so a file holding
+    more duplicated helpers than the ceiling still reports exactly the ceiling.
+    The source is built with more pairs than the ceiling allows, so a lost bound
+    would show up as a longer report.
+    """
+    ceiling = _duplicate_body_module.MAX_DUPLICATE_BODY_ISSUES
+    pair_count = ceiling + EXTRA_DUPLICATE_PAIRS_BEYOND_THE_CEILING
+    source = "".join(
+        _duplicated_helper_pair_source(each_index) for each_index in range(pair_count)
+    )
+    issues = check_same_file_inline_duplicate_body(source, "module.py")
+    assert len(issues) == ceiling, (
+        f"{pair_count} duplicated pairs must report the {ceiling}-issue ceiling, "
+        f"got {len(issues)} issues"
     )

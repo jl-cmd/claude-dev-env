@@ -21,6 +21,7 @@ from hooks_constants.python_style_checks_constants import (  # noqa: E402
     EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
     MINIMUM_ARGUMENT_COUNT,
 )
+from validators.validator_base import source_text, syntax_tree  # noqa: E402
 from validators.python_style_helpers import (  # noqa: E402
     FunctionNode,
     blank_line_for_source,
@@ -331,12 +332,12 @@ def validate_file(file_path: Path) -> list[Violation]:
     violations: list[Violation] = []
     filename = str(file_path)
     try:
-        source = file_path.read_text(encoding="utf-8")
+        source = source_text(file_path)
     except Exception as error:
         violations.append(Violation(filename, 0, f"Error reading file: {error}"))
         return violations
     try:
-        tree = ast.parse(source)
+        tree = syntax_tree(source)
     except SyntaxError as error:
         violations.append(
             Violation(filename, error.lineno or 0, f"Syntax error: {error.msg}")
