@@ -18,4 +18,4 @@ When a script file's literal body needs `$(...)`, author it with the Write tool,
 
 ## Enforcement
 
-`shell_substitution_blocker.py` (PreToolUse on Bash, hosted by `bash_pre_tool_use_dispatcher`) denies a command carrying a live substitution and returns the split-into-two-calls rewrite. Single-quoted runs are stripped before the scan, and a backtick preceded by an odd number of backslashes is escaped, so an inert mention passes.
+`shell_substitution_blocker.py` (PreToolUse on Bash, hosted by `bash_pre_tool_use_dispatcher`) denies a command carrying a live substitution and returns the split-into-two-calls rewrite. Single-quoted runs are stripped before the scan, and a backtick preceded by an odd number of backslashes is escaped, so an inert mention passes. A quoted heredoc body is dropped for the same reason: the opener forms that quote or escape the delimiter tell bash to expand nothing down to the terminator, so a backtick there is text the file receives. A bare delimiter expands its body and keeps its scan.

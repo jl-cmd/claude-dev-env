@@ -47,11 +47,6 @@ another ``)`` (an ``))`` pair), the expansion is arithmetic and passes. When
 the closer that brings depth to zero is a lone ``)``, bash has fallen back to
 running a parenthesized command inside the substitution, so it is blocked.
 This hook applies that walk, tracking paren depth from the opening ``$((``.
-
-A quoted heredoc body carries no scan. ``<<'EOF'``, ``<<"EOF"`` and
-``<<\\EOF`` each tell bash to expand nothing down to the terminator, so a
-backtick there is text the file receives. A bare ``<<EOF`` expands its body and
-keeps its scan, and so does every line outside a heredoc.
 """
 
 from __future__ import annotations
@@ -93,11 +88,14 @@ from hooks_constants.piped_pytest_blocker_constants import (  # noqa: E402
     HEREDOC_ESCAPE_GROUP,
     HEREDOC_OPENER_PATTERN,
     HEREDOC_QUOTE_GROUP,
-    HEREDOC_STRIPPED_INDENT_CHARACTERS,
     HEREDOC_TAB_STRIP_GROUP,
     HEREDOC_TAB_STRIP_MARKER,
     HEREDOC_TERMINATOR_GROUP,
     HEREDOC_UNQUOTED_MARKER,
+)
+from hooks_constants.shell_command_pipeline import (  # noqa: E402
+    PendingHeredoc,
+    closes_the_heredoc,
 )
 
 
@@ -142,7 +140,11 @@ def _first_literal_opener(command_line: str) -> Match[str] | None:
 def _index_past_literal_body(
     all_lines: list[str], body_start_index: int, opener_match: Match[str]
 ) -> int:
-    """Return the index past a literal body, and the terminator line it ends on.
+    """Return the index of the line that closes a literal heredoc body.
+
+    The terminator match, including the ``<<-`` tab-strip rule, comes from
+    ``closes_the_heredoc`` so this hook and the shared pipeline agree on what
+    ends a body.
 
     Args:
         all_lines: Every line of the command.
@@ -150,16 +152,16 @@ def _index_past_literal_body(
         opener_match: The opener whose terminator closes this body.
 
     Returns:
-        A ``(index, terminator_line)`` pair, where the line is None when the
-        command holds no terminator.
+        The terminator line's index, or the line count when none closes it.
     """
-    terminator = opener_match.group(HEREDOC_TERMINATOR_GROUP)
-    strips_tabs = opener_match.group(HEREDOC_TAB_STRIP_GROUP) == HEREDOC_TAB_STRIP_MARKER
+    pending_heredoc = PendingHeredoc(
+        terminator=opener_match.group(HEREDOC_TERMINATOR_GROUP),
+        allows_leading_tabs=(
+            opener_match.group(HEREDOC_TAB_STRIP_GROUP) == HEREDOC_TAB_STRIP_MARKER
+        ),
+    )
     for each_index in range(body_start_index, len(all_lines)):
-        candidate_line = all_lines[each_index]
-        if strips_tabs:
-            candidate_line = candidate_line.lstrip(HEREDOC_STRIPPED_INDENT_CHARACTERS)
-        if candidate_line == terminator:
+        if closes_the_heredoc(all_lines[each_index], pending_heredoc):
             return each_index
     return len(all_lines)
 
@@ -244,8 +246,9 @@ def has_shell_substitution(command: str) -> bool:
         echo '$(not-executed)'         ok:   single-quoted, inert
         echo $((2 + 2))                ok:   arithmetic expansion
 
-    Single-quoted runs are stripped first because bash substitutes nothing
-    inside them. A backtick preceded by an odd backslash count is escaped.
+    Literal heredoc bodies are dropped first, then single-quoted runs are
+    stripped, because bash substitutes nothing inside either. A backtick
+    preceded by an odd backslash count is escaped.
     A `$((` pair is walked to its terminator (module docstring) to tell
     real arithmetic from a disguised subshell.
 
