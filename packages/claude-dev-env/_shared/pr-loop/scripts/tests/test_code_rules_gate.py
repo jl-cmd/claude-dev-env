@@ -735,7 +735,7 @@ def test_run_gate_flags_copied_sibling_when_cwd_is_outside_repo_root(
     copied_file = package_directory / "copied_helper.py"
     existing_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
     copied_file.write_text(_DUPLICATE_HELPER_SOURCE, encoding="utf-8")
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
 
     monkeypatch.chdir(temporary_git_repository.parent)
     blocking_by_file, _advisory_by_file, _skipped = (
@@ -813,7 +813,7 @@ def test_duplicate_body_span_range_covers_the_definition_through_last_body_line(
     assert span == range(definition_line, last_body_line + 1)
 
 
-def test_split_violations_blocks_duplicate_body_when_span_intersects_added_lines(
+def test_split_violations_by_scope_blocks_duplicate_body_when_span_intersects_added_lines(
     tmp_path: Path,
 ) -> None:
     """A duplicate-body issue whose copied-function span overlaps the diff's added
@@ -829,7 +829,7 @@ def test_split_violations_blocks_duplicate_body_when_span_intersects_added_lines
     assert advisory == []
 
 
-def test_split_violations_advises_duplicate_body_when_span_misses_added_lines(
+def test_split_violations_by_scope_advises_duplicate_body_when_span_misses_added_lines(
     tmp_path: Path,
 ) -> None:
     """A duplicate-body issue for an untouched pre-existing copy — whose span does
@@ -1002,7 +1002,7 @@ def test_collect_partitioned_violations_advises_pre_existing_sibling_duplicate(
         _DUPLICATE_HELPER_SOURCE + "unrelated_constant = 1\n", encoding="utf-8"
     )
     unrelated_added_line = _DUPLICATE_HELPER_SOURCE.count("\n") + 1
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
 
     resolved_copied = copied_file.resolve()
     blocking_by_file, advisory_by_file, _skipped = (
@@ -1055,7 +1055,7 @@ def test_collect_partitioned_violations_blocks_sibling_duplicate_in_added_region
     definition_line = 3
     last_body_line = 15
     all_copied_function_lines = set(range(definition_line, last_body_line + 1))
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
 
     resolved_copied = copied_file.resolve()
     blocking_by_file, _advisory_by_file, _skipped = (
@@ -1549,10 +1549,10 @@ def test_main_blocks_when_function_body_grows_past_threshold_with_def_line_untou
     assert exit_code == 1
 
 
-def test_split_violations_blocks_function_length_when_span_intersects_added_lines() -> None:
+def test_split_violations_by_scope_blocks_function_length_when_span_intersects_added_lines() -> None:
     """A function-length issue whose declared span overlaps the diff's added
     lines is blocking — the body grew, which is exactly Finding B's intent."""
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
     long_function = _build_function_module(
         "oversized", body_line_count=70, leading_lines=3
     )
@@ -1571,12 +1571,12 @@ def test_split_violations_blocks_function_length_when_span_intersects_added_line
     assert advisory == []
 
 
-def test_split_violations_advises_function_length_when_span_misses_added_lines() -> None:
+def test_split_violations_by_scope_advises_function_length_when_span_misses_added_lines() -> None:
     """A function-length issue for an untouched pre-existing function — whose
     declared span does not overlap any added line — is advisory, not blocking.
     This prevents the over-block regression where every pre-existing >=60-line
     function in a touched file was forced into the blocking payload."""
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
     long_function = _build_function_module(
         "oversized", body_line_count=70, leading_lines=3
     )
@@ -1595,7 +1595,7 @@ def test_split_violations_advises_function_length_when_span_misses_added_lines()
 
 
 def _isolation_issues_for_home_probe_test() -> list[str]:
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
     header = "from pathlib import Path\n"
     test_body = (
         "def test_reads_home() -> None:\n"
@@ -1606,7 +1606,7 @@ def _isolation_issues_for_home_probe_test() -> list[str]:
     return [each_issue for each_issue in issues if "probes" in each_issue]
 
 
-def test_split_violations_blocks_isolation_when_function_span_intersects_added_lines() -> None:
+def test_split_violations_by_scope_blocks_isolation_when_function_span_intersects_added_lines() -> None:
     """An isolation issue whose enclosing test-function span overlaps the diff's
     added lines is blocking — a signature-line change that un-isolates an
     unchanged-body probe must block, matching the enforcer's terminal path."""
@@ -1621,7 +1621,7 @@ def test_split_violations_blocks_isolation_when_function_span_intersects_added_l
     assert advisory == []
 
 
-def test_split_violations_advises_isolation_when_function_span_misses_added_lines() -> None:
+def test_split_violations_by_scope_advises_isolation_when_function_span_misses_added_lines() -> None:
     """An isolation issue for an untouched pre-existing probe — whose enclosing
     test-function span does not overlap any added line — is advisory, not
     blocking, mirroring the function-length scope contract."""
@@ -1814,7 +1814,7 @@ def test_check_wrapper_plumb_through_stays_under_function_length_threshold() -> 
 
 
 def _banned_noun_parameter_issues() -> list[str]:
-    validate_content = gate_module.load_validate_content()
+    validate_content = gate_module.load_validate_content_for_full_gate()
     source = (
         "def aggregate(canned_results: int) -> int:\n"
         "    doubled = canned_results * 2\n"
@@ -1824,7 +1824,7 @@ def _banned_noun_parameter_issues() -> list[str]:
     return [each_issue for each_issue in issues if "banned noun" in each_issue]
 
 
-def test_split_violations_blocks_banned_noun_when_binding_line_is_added() -> None:
+def test_split_violations_by_scope_blocks_banned_noun_when_binding_line_is_added() -> None:
     """A banned-noun binding is blocking when its own binding line is among the
     added lines. The gate reconstructs the one-line binding span through the
     same shared extractor registry it uses for function-length and isolation,
@@ -1840,7 +1840,7 @@ def test_split_violations_blocks_banned_noun_when_binding_line_is_added() -> Non
     assert advisory == []
 
 
-def test_split_violations_advises_banned_noun_when_binding_line_untouched() -> None:
+def test_split_violations_by_scope_advises_banned_noun_when_binding_line_untouched() -> None:
     """A banned-noun binding whose own line is not among the added lines is
     advisory — editing an unrelated body line does not pull a pre-existing
     binding into scope, mirroring the companion exact-match identifier check."""

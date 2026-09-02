@@ -1,6 +1,6 @@
 # CODE_RULES gate
 
-Pre-audit validator run before each AUDIT (and pre-commit when applicable). Wraps `validate_content` from `~/.claude/hooks/blocking/code_rules_enforcer.py`.
+Pre-audit validator run before each AUDIT (and pre-commit when applicable). Wraps `validate_content_for_full_gate` from `~/.claude/hooks/blocking/code_rules_enforcer.py`.
 
 ## Script location
 

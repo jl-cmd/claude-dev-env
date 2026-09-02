@@ -22,7 +22,7 @@ from code_rules_annotations_length import (  # noqa: E402
 from code_rules_enforcer import (  # noqa: E402
     main,
     prior_and_post_edit_content,
-    validate_content,
+    validate_content_for_full_gate as validate_content,
 )
 from code_rules_enforcer_test_support import (  # noqa: E402
     run_serialized_payload_entrypoint,

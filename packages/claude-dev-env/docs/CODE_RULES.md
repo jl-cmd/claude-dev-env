@@ -109,3 +109,13 @@ If you already have the data, don't fetch it again.
 ## 11. ENFORCEMENT SURFACES
 
 ⚡ **Hooks** block pattern-matchable violations at Write/Edit time. 🤖 **Prompt context** carries judgment principles (SRP, Right-Sized Engineering, research-first action on ambiguous intent, BDD discovery, docstring-prose-matches-implementation). 👥 **Audit rubrics** (`/check`, `packages/claude-dev-env/audit-rubrics/` categories A–Q) cover cross-file architectural concerns. Rules with documented-but-pending hook coverage live in `~/.claude/rules/*.md`; each names its own promotion path. The docstring-prose standard (free-form enumerations match the body) lives in `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md`, enforced via Category O6 audit. The diagram-first docstring standard (a summary line, then a `::` example or doctest, then a couple of short prose lines) lives in `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`, enforced by the `check_docstring_runon_sentence` and `check_docstring_prose_wall_without_illustration` backstop hooks and Category O9 audit.
+
+## 11.5 VALIDATION-PHASE PRECEDENCE
+
+`code_rules_enforcer.py` decides what a run checks and reports along three independent axes. Each axis filters a narrower scope than the one before it; none widens what the axis before it already decided.
+
+1. **Phase selects the roster.** `EDIT_LANE_PHASE` or `FULL_GATE_PHASE` decides which checks exist in the lane at all. `validate_content_for_phase` takes `phase` keyword-only with no default, so every caller names its lane explicitly.
+2. **Target classification filters within a lane.** The hook-infrastructure patterns and the ephemeral-path check decide whether a target is validated, and with which subset. Classification narrows a lane; it never adds a check the phase already excluded.
+3. **Changed-line scope filters only the report.** `defer_scope_to_caller` and the changed-line set decide which found violations block. Scope filters findings after every check in the roster already ran; it adds or removes no check.
+
+`hooks/hooks_constants/validation_phase_constants.py` is the single source for all three axes: the phase names (`EDIT_LANE_PHASE`, `FULL_GATE_PHASE`), the full-gate-only roster (`ALL_FULL_GATE_ONLY_CHECK_NAMES`), and the hook-infrastructure edit-lane roster (`ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES`).

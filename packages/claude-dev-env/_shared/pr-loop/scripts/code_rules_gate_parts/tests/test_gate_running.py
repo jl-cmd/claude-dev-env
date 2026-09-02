@@ -130,7 +130,7 @@ def test_gate_caller_scans_staged_content_with_commit_stage_scope(
 
     resolved_file_path = file_path.resolve()
     exit_code = gate_running.run_gate(
-        validate_content=enforcer_loading.load_validate_content(),
+        validate_content=enforcer_loading.load_validate_content_for_full_gate(),
         all_file_paths=[resolved_file_path],
         repository_root=repository_root,
         all_added_lines_by_path={resolved_file_path: {2, 3}},

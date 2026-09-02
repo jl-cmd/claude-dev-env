@@ -149,7 +149,7 @@ def test_should_flag_thin_wrapper_with_module_docstring() -> None:
     )
 
 
-def test_validate_content_uses_empty_full_file_content_over_pre_edit_fragment() -> None:
+def test_validate_content_for_full_gate_uses_empty_full_file_content_over_pre_edit_fragment() -> None:
     """An empty-string `full_file_content` must be honored, not silently replaced with `content`.
 
     Regression for loop1-8: the `or` short-circuit at line 3775 collapsed
@@ -159,7 +159,7 @@ def test_validate_content_uses_empty_full_file_content_over_pre_edit_fragment() 
     not a thin wrapper, but a pre-edit fragment with imports + __all__ is.
     """
     pre_edit_fragment = "from real_module import do_thing\n__all__ = ['do_thing']\n"
-    issues = code_rules_enforcer.validate_content(
+    issues = code_rules_enforcer.validate_content_for_full_gate(
         pre_edit_fragment,
         PRODUCTION_FILE_PATH,
         full_file_content="",

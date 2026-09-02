@@ -6,6 +6,13 @@ Extracted from code_rules_enforcer.py to satisfy the constants-location rule.
 import re
 import tokenize
 
+from hooks_constants.validation_phase_constants import (  # noqa: F401  re-exported for code_rules_enforcer.py
+    ALL_VALIDATION_PHASES,
+    EDIT_LANE_PHASE,
+    FULL_GATE_PHASE,
+    UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
+)
+
 ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
     tokenize.TokenError,
     IndentationError,
