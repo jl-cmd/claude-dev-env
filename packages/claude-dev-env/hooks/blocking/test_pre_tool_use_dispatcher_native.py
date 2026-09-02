@@ -46,8 +46,13 @@ import state_description_blocker  # noqa: E402, I001
 _STATE_DESCRIPTION_SCRIPT = str(_BLOCKING_DIR / "state_description_blocker.py")
 _DISPATCHER_SCRIPT = str(_BLOCKING_DIR / "pre_tool_use_dispatcher.py")
 
-_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[4])
-_MARKDOWN_PATH = str(Path(_REPOSITORY_ROOT) / "docs" / "native_equivalence_probe.md")
+from code_rules_enforcer_test_support import (  # noqa: E402
+    repository_file_path,
+    repository_root,
+)
+
+_REPOSITORY_ROOT = str(repository_root())
+_MARKDOWN_PATH = repository_file_path("docs/native_equivalence_probe.md")
 _STATE_DESCRIPTION_ALLOW_CONTENT = "# Guide\n\nThe API uses port 8080.\n"
 _STATE_DESCRIPTION_DENY_CONTENT = "# Guide\n\nPreviously the system used port 8080.\n"
 
