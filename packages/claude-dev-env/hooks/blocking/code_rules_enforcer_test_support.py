@@ -14,6 +14,45 @@ from pathlib import Path
 _ENFORCER_SCRIPT_PATH = Path(__file__).with_name("code_rules_enforcer.py")
 
 
+def repository_root() -> Path:
+    """Return the root of the checkout these tests run inside.
+
+    ::
+
+        <checkout>/packages/claude-dev-env/hooks/blocking/test_x.py -> <checkout>
+
+    Found by walking up for a ``.git`` entry rather than by counting
+    directories, so moving a test file does not silently anchor it somewhere
+    else. Falls back to the four-levels-up ancestor when no marker is found,
+    which is where the checkout root sits for this directory.
+
+    Returns:
+        The checkout root directory.
+    """
+    all_ancestors = Path(__file__).resolve().parents
+    for each_ancestor in all_ancestors:
+        if (each_ancestor / ".git").exists():
+            return each_ancestor
+    return all_ancestors[3]
+
+
+def repository_file_path(relative_path: str) -> str:
+    """Return the absolute path of a repository-relative file in this checkout.
+
+    A hook resolves a bare relative path against the process working
+    directory, so a payload carrying one answers to wherever pytest was
+    invoked from. An absolute path under the checkout root keeps the
+    decision stable however the suite is launched.
+
+    Args:
+        relative_path: The target file's path relative to the checkout root.
+
+    Returns:
+        That file's absolute path inside this checkout.
+    """
+    return str(repository_root() / relative_path)
+
+
 def build_write_payload(file_path: str, content: str) -> str:
     """Build the JSON payload sent by a Write tool call."""
     return json.dumps(
