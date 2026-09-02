@@ -32,24 +32,6 @@ except ImportError as import_error:
     ) from import_error
 
 
-def _multi_edit_pairs(payload_by_key: dict[str, object]) -> tuple[str, list[tuple[str, str]]]:
-    """Return the (file_path, [(old_string, new_string), ...]) pairs a MultiEdit carries."""
-    raw_tool_input = payload_by_key.get("tool_input")
-    if not isinstance(raw_tool_input, dict):
-        return "", []
-    file_path_field = raw_tool_input.get("file_path")
-    if not isinstance(file_path_field, str):
-        return "", []
-    all_pairs: list[tuple[str, str]] = []
-    for each_edit in edits_for_tool("MultiEdit", raw_tool_input):
-        if not isinstance(each_edit, dict):
-            continue
-        old_string_field = each_edit.get("old_string")
-        new_string_field = each_edit.get("new_string")
-        if isinstance(old_string_field, str) and isinstance(new_string_field, str):
-            all_pairs.append((old_string_field, new_string_field))
-    return file_path_field, all_pairs
-
 REFACTOR_BYPASS_TOKEN_PATH = Path.home() / ".claude" / ".refactor-bypass-token"
 identifier_join_separator = ", "
 

@@ -16,7 +16,6 @@ concern focused. The separate ``tdd_enforcer.py`` hook accepts any
 ``code_rules_*`` module family, so the suffix files satisfy its gate.
 """
 import json
-import os
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -294,9 +293,8 @@ def _report_codex_patch_payload(
             deny_stream,
         )
         return
-    working_directory = all_pretooluse_payload.get("cwd")
-    if not isinstance(working_directory, str):
-        working_directory = os.getcwd()
+    raw_working_directory = all_pretooluse_payload.get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
     try:
         all_patch_files = parse_codex_apply_patch(patch_command, working_directory)
     except CodexPatchError as error:
