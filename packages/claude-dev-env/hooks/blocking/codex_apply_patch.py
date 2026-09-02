@@ -2,10 +2,15 @@
 
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from blocking.config.codex_apply_patch_constants import CODEX_ADD_OPERATION
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from blocking.config.codex_apply_patch_constants import CODEX_ADD_OPERATION  # noqa: E402
 
 _codex_patch_begin_marker = "*** Begin Patch"
 _codex_patch_end_marker = "*** End Patch"

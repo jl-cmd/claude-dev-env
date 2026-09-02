@@ -1145,13 +1145,18 @@ def test_dispatcher_denies_apply_patch_add_onto_an_existing_path(tmp_path: Path)
 
 
 def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
-    """The dispatcher allows an apply_patch "add" that trips no hosted hook.
+    """The dispatcher allows an apply_patch "add" whose paired test already exists.
 
-    A fresh sibling test file sits beside the added production file so the
-    TDD enforcer's real test-evidence check passes on its own merits, rather
-    than by the ephemeral scratch-path exemption stepping aside.
+    tdd_enforcer now reaches apply_patch the same way it reaches Write: an
+    untested production file is exactly the immediate-harm case the apply_patch
+    boundary rule names, so "clean" here means test-first was honored before
+    the tool call, not that TDD is skipped for this tool. The paired test file
+    is written to disk first, matching how test_dispatcher_surfaces_migration_
+    warning_for_edit proves a fresh Edit passes tdd_enforcer.
     """
-    (tmp_path / "test_services.py").write_text("def test_add_one(): pass\n", encoding="utf-8")
+    (tmp_path / "test_services.py").write_text(
+        "def test_add_one():\n    assert True\n", encoding="utf-8"
+    )
     patch_command = _codex_add_patch(
         "services.py",
         "def add_one(value: int) -> int:\n    return value + 1\n",
@@ -1161,7 +1166,8 @@ def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
     dispatcher_result = _run_dispatcher(payload_text)
     is_deny, reason_text = _parse_hook_decision(dispatcher_result)
     assert not is_deny, (
-        f"dispatcher must allow a clean apply_patch add, got deny reason {reason_text!r}"
+        f"dispatcher must allow an apply_patch add with a fresh paired test, "
+        f"got deny reason {reason_text!r}"
     )
 
 
