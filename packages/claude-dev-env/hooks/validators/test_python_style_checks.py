@@ -197,6 +197,15 @@ class TestImportsAtTop:
         assert len(violations) == 1
         assert "inside function" in violations[0].message.lower()
 
+    def test_sys_path_bootstrap_guard_does_not_fail(self) -> None:
+        """The mandated sys.path dedup-guard idiom should not fail (see test_python_style_import_bootstrap.py)."""
+        tree = ast.parse(
+            "import sys\n_hooks_dir = str(__file__)\n"
+            "if _hooks_dir not in sys.path:\n    sys.path.insert(0, _hooks_dir)\n"
+            "from hooks_constants.something import NAME  # noqa: E402\n"
+        )
+        assert check_imports_at_top(tree, "test.py") == []
+
 
 class TestNoEmptyLineAfterDecorators:
     """Test decorator spacing validation."""

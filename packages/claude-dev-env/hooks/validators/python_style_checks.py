@@ -38,6 +38,11 @@ try:
         real_newline_lines,
         top_level_functions,
     )
+    from validators.python_style_import_bootstrap import (
+        is_docstring_statement,
+        is_import_statement,
+        resolve_seen_non_import,
+    )
 except ModuleNotFoundError:
     if _hooks_directory not in sys.path:
         sys.path.insert(0, _hooks_directory)
@@ -49,6 +54,11 @@ except ModuleNotFoundError:
         iter_function_definitions,
         real_newline_lines,
         top_level_functions,
+    )
+    from validators.python_style_import_bootstrap import (
+        is_docstring_statement,
+        is_import_statement,
+        resolve_seen_non_import,
     )
 
 logger = logging.getLogger(__name__)
@@ -83,37 +93,27 @@ def check_imports_at_top(tree: ast.AST, filename: str) -> list[Violation]:
     return violations
 
 
-def _is_import_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is an import or from-import."""
-    return isinstance(statement, (ast.Import, ast.ImportFrom))
-
-
-def _is_docstring_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is a string-literal docstring."""
-    if not isinstance(statement, ast.Expr):
-        return False
-    literal = statement.value
-    return isinstance(literal, ast.Constant) and isinstance(literal.value, str)
-
-
 def _check_module_level_import_order(tree: ast.AST, filename: str) -> list[Violation]:
-    """Flag module-level imports that appear after other statements."""
+    """Flag module-level imports after other statements, exempting a sys.path bootstrap run."""
     if not isinstance(tree, ast.Module):
         return []
     violations: list[Violation] = []
     has_seen_non_import = False
+    pending_prelude_statements: list[ast.stmt] = []
     for each_statement in tree.body:
-        is_import = _is_import_statement(each_statement)
-        if is_import and has_seen_non_import:
-            violations.append(
-                Violation(
-                    filename,
-                    each_statement.lineno,
-                    "Import statement must be at top of file",
-                )
+        if is_import_statement(each_statement):
+            has_seen_non_import = resolve_seen_non_import(
+                has_seen_non_import, pending_prelude_statements
             )
-        if not is_import and not _is_docstring_statement(each_statement):
-            has_seen_non_import = True
+            pending_prelude_statements = []
+            violations.extend(
+                [Violation(filename, each_statement.lineno, "Import statement must be at top of file")]
+                if has_seen_non_import
+                else []
+            )
+            continue
+        if not is_docstring_statement(each_statement):
+            pending_prelude_statements.append(each_statement)
     return violations
 
 

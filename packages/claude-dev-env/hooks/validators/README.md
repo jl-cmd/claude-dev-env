@@ -2,7 +2,7 @@
 
 AST-based Python style checks for code quality enforcement.
 
-The checks live in `python_style_checks.py`; the shared source-line splitting and function-discovery helpers they build on live in `python_style_helpers.py`. `hook_timing_harness.py` measures real wall-clock time for the Write/Edit hooks `hooks.json` registers, reporting p50 and p95 over a configurable run count.
+The checks live in `python_style_checks.py`; the shared source-line splitting and function-discovery helpers they build on live in `python_style_helpers.py`. `python_style_import_bootstrap.py` recognizes the repo's sys.path bootstrap-guard idiom so the imports-at-top check does not penalize a file for following it. `hook_timing_harness.py` measures real wall-clock time for the Write/Edit hooks `hooks.json` registers, reporting p50 and p95 over a configurable run count.
 
 ## Checks Implemented
 
