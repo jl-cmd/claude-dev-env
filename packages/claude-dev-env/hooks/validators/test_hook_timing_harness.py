@@ -106,8 +106,16 @@ def test_ensure_real_repository_target_accepts_a_repo_file_under_the_os_temp_roo
 
 
 def test_ensure_real_repository_target_refuses_a_scratch_path_outside_the_repository_root(
-    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """The refusal is under test, so this pins the temp root it is judged against.
+
+    ``--basetemp`` places ``tmp_path`` wherever the caller asks, so a run that
+    points it outside the OS temp root leaves the scratch target real and this
+    assertion measures the caller's flags. Naming the root here keeps the
+    subject of the test inside the test.
+    """
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     repository_root = tmp_path / "repo"
     repository_root.mkdir()
     scratch_target = tmp_path / "scratch.py"
@@ -194,6 +202,7 @@ def test_measure_hosted_command_wall_times_honors_a_repository_root_override(
     gap the wrapper-plumb-through check caught.
     """
     monkeypatch.setattr(hook_timing_harness, "write_edit_hook_commands", lambda path: [])
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     repository_root = tmp_path / "repo"
     real_file = repository_root / "hooks" / "blocking" / "code_rules_shared.py"
     real_file.parent.mkdir(parents=True)

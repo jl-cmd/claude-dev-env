@@ -1374,3 +1374,23 @@ def test_should_deny_apply_patch_that_adds_test_and_production_file_in_one_trans
     completed = _run_hook_with_payload(_make_apply_patch_payload(sandbox, patch_command))
 
     assert _decision_from(completed) == "deny"
+
+
+def test_should_deny_production_file_inside_repository_root_under_tmp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repo-root fix: a production file inside a repository under /tmp still needs a test."""
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    repository_root = "/tmp/pr-alpha"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": f"{repository_root}/hooks/blocking/orders.py",
+            "content": _BEHAVIOR_BEARING_CONTENT,
+        },
+        "cwd": repository_root,
+    }
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) == "deny", (
+        f"TDD enforcer must gate a repository file under /tmp, got: {completed.stdout!r}"
+    )
