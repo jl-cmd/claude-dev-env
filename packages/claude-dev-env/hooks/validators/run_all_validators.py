@@ -24,13 +24,14 @@ from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
 )
-from .fast_save_validators import FastSaveCheckOutcome, run_fast_save_validators
+from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
 from .system_temporary_roots import enclosing_system_temporary_root
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
 from .ruff_integration import check_ruff_available, run_ruff_check
+from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import (
@@ -41,35 +42,6 @@ from hooks_constants.multi_edit_reconstruction import (
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
-
-
-def _gate_entry_for_fast_save_check(
-    check_outcome: FastSaveCheckOutcome,
-) -> "ValidatorResult":
-    """Wrap one in-process check's finding into the gate's shared reporting type."""
-    return ValidatorResult(
-        name=check_outcome.display_name,
-        checks=check_outcome.checks,
-        passed=check_outcome.is_clean,
-        output=check_outcome.violation_report,
-    )
-
-
-def _run_fast_save_checks(files: List[Path]) -> List["ValidatorResult"]:
-    """Run the save-path roster in-process and wrap each finding for the gate.
-
-    Args:
-        files: The files under validation -- one reconstructed file in gate mode.
-
-    Returns:
-        One ValidatorResult per in-process save-path check. Ruff and Mypy are
-        not part of this roster; the caller adds Ruff separately and never
-        adds Mypy on the save path.
-    """
-    return [
-        _gate_entry_for_fast_save_check(each_outcome)
-        for each_outcome in run_fast_save_validators(files)
-    ]
 
 
 def _windows_non_unc_working_directory_string(
@@ -258,17 +230,6 @@ def build_json_output(
         ],
         "timing": metrics.validator_times if include_timing else None,
     }
-
-
-@dataclass(frozen=True)
-class ValidatorResult:
-    """Result from running a validator."""
-
-    name: str
-    checks: str
-    passed: bool
-    output: str
-    skipped: bool = False
 
 
 def run_with_fallback(
@@ -943,7 +904,7 @@ def validate_proposed_file(
             else Path(file_path)
         )
         return [
-            *_run_fast_save_checks([temporary_file]),
+            *run_fast_save_validators([temporary_file]),
             run_ruff_checks([temporary_file], resolved_config_source_path),
         ]
 
