@@ -27,6 +27,8 @@ from hooks_constants.code_rules_enforcer_constants import (
     RETURN_CALL_OPENING_PARENTHESIS_PATTERN,
     SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN,
     UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
+    apply_edits,
+    edits_for_tool,
 )
 
 

@@ -30,6 +30,7 @@ if str(_HOOKS_ROOT) not in sys.path:
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
+    APPLY_PATCH_TOOL_NAME,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
     DENY_DECISION,
@@ -234,6 +235,25 @@ def _multi_edit_payload(file_path: str, edits: list[dict[str, str]]) -> str:
     )
 
 
+def _apply_patch_payload(working_directory: str, command: str) -> str:
+    """Build an apply_patch tool payload JSON string.
+
+    Args:
+        working_directory: The Codex patch's working directory (top-level cwd).
+        command: The Codex-format patch text naming each file operation.
+
+    Returns:
+        JSON-encoded payload string.
+    """
+    return json.dumps(
+        {
+            "tool_name": APPLY_PATCH_TOOL_NAME,
+            "cwd": working_directory,
+            "tool_input": {"command": command},
+        }
+    )
+
+
 def _assert_dispatcher_matches_individual_hooks(
     payload_text: str,
     tool_name: str,
@@ -300,12 +320,13 @@ def test_dispatcher_docstring_points_at_roster_not_hardcoded_counts() -> None:
 
 
 def test_multi_edit_runs_only_group_b_hooks() -> None:
-    """Dispatcher invokes only Group-B hooks on MultiEdit, not Group-A hooks.
+    """Dispatcher invokes only the hooks registered for MultiEdit, and each allows a clean edit.
 
-    The write_existing_file_blocker (Group A only) must not run on MultiEdit,
-    so a MultiEdit to any path that would trip a Group-A hook must still allow.
-    This test proves Group A is absent from MultiEdit and the remaining Group-B
-    hooks stay in the applicable set.
+    A hook whose applicable set omits MultiEdit stays absent from the
+    dispatcher's MultiEdit roster, so a MultiEdit to any path such a hook would
+    otherwise guard still allows. This test derives the excluded set from the
+    live roster rather than a hardcoded name list, so it holds as hooks move
+    between applicable sets.
     """
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
     all_write_only_entries = [
@@ -378,12 +399,13 @@ def test_write_existing_file_blocker_denies_on_write_tool() -> None:
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
 
 
-def test_write_existing_file_blocker_does_not_run_on_multi_edit() -> None:
-    """Group-A write_existing_file_blocker does not run on MultiEdit.
+def test_write_existing_file_blocker_allows_multi_edit_to_an_existing_path() -> None:
+    """write_existing_file_blocker runs on MultiEdit but never denies it.
 
-    The dispatcher must allow a MultiEdit to an existing file path even though
-    write_existing_file_blocker would deny the same path on a Write.
-    Uses a non-markdown file so markdown-only hooks stay silent.
+    MultiEdit carries no create-or-clobber path the hook needs to guard, so it
+    always allows a MultiEdit to an existing file path, even though the same
+    hook would deny that path on a Write. Uses a non-markdown file so
+    markdown-only hooks stay silent.
     """
     existing_file_path = str(Path(__file__).resolve())
     payload_text = _multi_edit_payload(
@@ -720,17 +742,46 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     )
 
 
-def test_dispatcher_multi_edit_applies_only_group_b() -> None:
-    """MultiEdit applies to 9 hosted Group-B hooks, including the sensitive protector."""
+def test_dispatcher_multi_edit_matches_edit_exactly() -> None:
+    """MultiEdit's applicable set equals Edit's, hook for hook.
+
+    Every hook applicable to Edit judges content with no dependency on which
+    tool delivered it, so the two sets must match. A hook that legitimately
+    stays Edit-only names its reason where it is registered, not here.
+    """
+    all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
     all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
+    all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
     all_multi_edit_script_paths = {
         each_entry.script_relative_path for each_entry in all_multi_edit_entries
     }
     assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
         "sensitive_file_protector belongs in the MultiEdit applicable set"
     )
-    assert len(all_multi_edit_entries) == 9, (
-        f"MultiEdit tool must apply to exactly 9 Group-B hooks, got {len(all_multi_edit_entries)}"
+    assert all_edit_script_paths == all_multi_edit_script_paths, (
+        "Edit-only (not MultiEdit): "
+        f"{sorted(all_edit_script_paths - all_multi_edit_script_paths)}; "
+        "MultiEdit-only (not Edit): "
+        f"{sorted(all_multi_edit_script_paths - all_edit_script_paths)}"
+    )
+
+
+def test_dispatcher_apply_patch_applies_immediate_harm_hooks() -> None:
+    """apply_patch applies to exactly 5 hosted hooks, including the sensitive protector.
+
+    apply_patch reaches only the immediate-harm-plus-TDD-plus-tracking roster
+    named in the mutation-parity assignment, not the full Write/Edit/MultiEdit
+    lint surface — this pins that narrower set at its verified size.
+    """
+    all_apply_patch_entries = _applicable_entries_for_tool(APPLY_PATCH_TOOL_NAME)
+    all_apply_patch_script_paths = {
+        each_entry.script_relative_path for each_entry in all_apply_patch_entries
+    }
+    assert "blocking/sensitive_file_protector.py" in all_apply_patch_script_paths, (
+        "sensitive_file_protector belongs in the apply_patch applicable set"
+    )
+    assert len(all_apply_patch_entries) == 5, (
+        f"apply_patch tool must apply to exactly 5 hooks, got {len(all_apply_patch_entries)}"
     )
 
 
@@ -951,6 +1002,171 @@ def test_folded_write_edit_hooks_have_no_standalone_hooks_json_entry() -> None:
             f"{each_script_path} is hosted by the dispatcher, so its standalone "
             f"hooks.json entry must be gone. Found: {matching_commands!r}"
         )
+
+
+def _standalone_apply_patch_code_rules_commands(all_pre_tool_use_groups: list[dict]) -> list[str]:
+    """Return every standalone apply_patch command naming code_rules_enforcer.py."""
+    return [
+        each_hook["command"]
+        for each_group in all_pre_tool_use_groups
+        if each_group["matcher"] == APPLY_PATCH_TOOL_NAME
+        for each_hook in each_group["hooks"]
+        if "code_rules_enforcer.py" in each_hook["command"]
+    ]
+
+
+def _dispatcher_matchers(all_pre_tool_use_groups: list[dict]) -> list[str]:
+    """Return every PreToolUse matcher whose command runs the dispatcher script."""
+    return [
+        each_group["matcher"]
+        for each_group in all_pre_tool_use_groups
+        if "pre_tool_use_dispatcher.py" in each_group["hooks"][0]["command"]
+    ]
+
+
+def test_apply_patch_has_no_standalone_code_rules_enforcer_hooks_json_entry() -> None:
+    """apply_patch's code_rules_enforcer coverage comes only from the dispatcher.
+
+    hooks.json once registered a standalone apply_patch to code_rules_enforcer.py
+    PreToolUse command. That entry is now folded into the dispatcher's own
+    Write|Edit|MultiEdit|apply_patch matcher, so no separate command may still
+    spawn code_rules_enforcer.py for apply_patch on its own.
+    """
+    hooks_json_text = (_HOOKS_ROOT / "hooks.json").read_text(encoding="utf-8")
+    all_pre_tool_use_groups = json.loads(hooks_json_text)["hooks"]["PreToolUse"]
+
+    standalone_commands = _standalone_apply_patch_code_rules_commands(all_pre_tool_use_groups)
+    assert not standalone_commands, (
+        "apply_patch must have no standalone code_rules_enforcer.py hooks.json "
+        f"entry — coverage comes from the dispatcher. Found: {standalone_commands!r}"
+    )
+
+    dispatcher_matchers = _dispatcher_matchers(all_pre_tool_use_groups)
+    assert APPLY_PATCH_TOOL_NAME in "".join(dispatcher_matchers), (
+        f"the dispatcher's own matcher must still name apply_patch, got: {dispatcher_matchers!r}"
+    )
+
+
+def _codex_add_patch(relative_file_path: str, file_body: str) -> str:
+    """Build a Codex apply_patch "add" command text for one new file.
+
+    Args:
+        relative_file_path: Path (relative to the patch's cwd) to create.
+        file_body: The full contents the new file should hold.
+
+    Returns:
+        The Codex-format patch command text.
+    """
+    added_lines = "\n".join(f"+{each_line}" for each_line in file_body.splitlines())
+    return (
+        "*** Begin Patch\n"
+        f"*** Add File: {relative_file_path}\n"
+        f"{added_lines}\n"
+        "*** End Patch"
+    )
+
+
+_SYNTHETIC_GITHUB_TOKEN = "ghp_" + ("C" * 36)
+
+
+def _init_bare_git_repo(repository_root: Path) -> None:
+    """Initialize an empty git repository at *repository_root*.
+
+    The PII scanner reads the apply_patch payload's ``cwd`` as a git
+    repository root, so a dispatcher-level apply_patch test needs a real
+    repository there rather than a bare temp directory.
+    """
+    repository_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=repository_root, check=True, capture_output=True)
+
+
+def test_dispatcher_denies_apply_patch_add_with_hardcoded_secret(tmp_path: Path) -> None:
+    """The dispatcher denies an apply_patch "add" that writes a hardcoded token.
+
+    Proves Done-when scenario 1 (hardcoded secret/PII denied) reaches apply_patch
+    through the real dispatcher subprocess, not only the standalone
+    pii_prevention_blocker test.
+    """
+    repository_root = tmp_path / "repo"
+    _init_bare_git_repo(repository_root)
+    patch_command = _codex_add_patch("leaked.py", f"token is {_SYNTHETIC_GITHUB_TOKEN}\n")
+    payload_text = _apply_patch_payload(str(repository_root), patch_command)
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
+    assert is_deny, (
+        "dispatcher must deny an apply_patch add carrying a hardcoded secret, "
+        f"got stdout {dispatcher_result.stdout.strip()!r}"
+    )
+    assert reason_text, "a deny must carry a non-empty reason"
+
+
+def test_dispatcher_denies_apply_patch_targeting_a_sensitive_path(tmp_path: Path) -> None:
+    """The dispatcher denies an apply_patch "add" that targets a sensitive file.
+
+    Proves Done-when scenario 2 (sensitive path denied) reaches apply_patch
+    through the real dispatcher subprocess.
+    """
+    patch_command = _codex_add_patch(".env", "SECRET_KEY=irrelevant\n")
+    payload_text = _apply_patch_payload(str(tmp_path), patch_command)
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
+    assert is_deny, (
+        "dispatcher must deny an apply_patch add targeting a sensitive path, "
+        f"got stdout {dispatcher_result.stdout.strip()!r}"
+    )
+    assert reason_text, "a deny must carry a non-empty reason"
+
+
+def test_dispatcher_denies_apply_patch_add_onto_an_existing_path(tmp_path: Path) -> None:
+    """The dispatcher denies an apply_patch "add" that targets a path already on disk.
+
+    Proves Done-when scenario 3 (overwrite-without-reading denied) reaches
+    apply_patch: a Codex "add" operation onto an existing path is caught by
+    code_rules_enforcer's codex-patch reading, blocking/codex_apply_patch.py's
+    _codex_read_patch_file, which raises CodexPatchError for an add already on
+    disk, reported through the dispatcher's aggregate.
+    """
+    existing_target = tmp_path / "already_here.py"
+    existing_target.write_text("value = 1\n", encoding="utf-8")
+    patch_command = _codex_add_patch("already_here.py", "value = 2\n")
+    payload_text = _apply_patch_payload(str(tmp_path), patch_command)
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
+    assert is_deny, (
+        "dispatcher must deny an apply_patch add onto an already-existing path, "
+        f"got stdout {dispatcher_result.stdout.strip()!r}"
+    )
+    assert reason_text, "a deny must carry a non-empty reason"
+
+
+def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
+    """The dispatcher allows an apply_patch "add" whose paired test already exists.
+
+    tdd_enforcer now reaches apply_patch the same way it reaches Write: an
+    untested production file is exactly the immediate-harm case the apply_patch
+    boundary rule names, so "clean" here means test-first was honored before
+    the tool call, not that TDD is skipped for this tool. The paired test file
+    is written to disk first, matching how test_dispatcher_surfaces_migration_
+    warning_for_edit proves a fresh Edit passes tdd_enforcer.
+    """
+    (tmp_path / "test_services.py").write_text(
+        "def test_add_one():\n    assert True\n", encoding="utf-8"
+    )
+    patch_command = _codex_add_patch(
+        "services.py",
+        "def add_one(value: int) -> int:\n    return value + 1\n",
+    )
+    payload_text = _apply_patch_payload(str(tmp_path), patch_command)
+
+    dispatcher_result = _run_dispatcher(payload_text)
+    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
+    assert not is_deny, (
+        f"dispatcher must allow an apply_patch add with a fresh paired test, "
+        f"got deny reason {reason_text!r}"
+    )
 
 
 def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:

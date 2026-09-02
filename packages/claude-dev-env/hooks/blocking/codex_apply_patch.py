@@ -2,8 +2,15 @@
 
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from blocking.config.codex_apply_patch_constants import CODEX_ADD_OPERATION  # noqa: E402
 
 _codex_patch_begin_marker = "*** Begin Patch"
 _codex_patch_end_marker = "*** End Patch"
@@ -15,7 +22,6 @@ _codex_end_of_file_marker = "*** End of File"
 _codex_no_newline_marker = "\\ No newline at end of file"
 _codex_minimum_patch_line_count = 2
 _codex_update_operation = "update"
-_codex_add_operation = "add"
 _codex_delete_operation = "delete"
 
 
@@ -79,7 +85,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
                 each_operation
                 for each_operation, each_marker in (
                     (_codex_update_operation, _codex_update_marker),
-                    (_codex_add_operation, _codex_add_marker),
+                    (CODEX_ADD_OPERATION, _codex_add_marker),
                     (_codex_delete_operation, _codex_delete_marker),
                 )
                 if marker_text.startswith(each_marker)
@@ -91,7 +97,7 @@ def _codex_patch_sections(command: str) -> list[tuple[str, str, list[str]]]:
                 all_sections.append(current_section)
             marker_by_operation = {
                 _codex_update_operation: _codex_update_marker,
-                _codex_add_operation: _codex_add_marker,
+                CODEX_ADD_OPERATION: _codex_add_marker,
                 _codex_delete_operation: _codex_delete_marker,
             }
             path_text = marker_text[len(marker_by_operation[operation]) :].strip()
@@ -190,11 +196,11 @@ def _codex_read_patch_file(
     try:
         prior_content = target_path.read_text(encoding="utf-8")
     except (FileNotFoundError, IsADirectoryError, OSError, UnicodeDecodeError, ValueError) as error:
-        if operation == _codex_add_operation and isinstance(error, FileNotFoundError):
+        if operation == CODEX_ADD_OPERATION and isinstance(error, FileNotFoundError):
             prior_content = ""
         else:
             raise CodexPatchError("patch target requires readable UTF-8 content") from error
-    if operation == _codex_add_operation:
+    if operation == CODEX_ADD_OPERATION:
         if target_path.exists():
             raise CodexPatchError("add target requires a new path")
         post_content = _codex_add_content(all_section_lines)
@@ -210,15 +216,55 @@ def _codex_read_patch_file(
     return CodexPatchFile(str(target_path), prior_content, post_content, operation)
 
 
-def parse_codex_apply_patch(
-    command: str, working_directory: str | None = None
-) -> tuple[CodexPatchFile, ...]:
-    """Return pre-edit and post-edit views for every Codex patch path."""
+def _codex_working_directory(command: str, working_directory: str | None) -> Path:
+    """Validate the patch command text and working directory, then resolve it.
+
+    Args:
+        command: The raw Codex apply_patch command text.
+        working_directory: The directory patch paths resolve against, or None
+            to use the current working directory.
+
+    Returns:
+        The resolved, existing working directory.
+    """
     if not isinstance(command, str) or not command.strip():
         raise CodexPatchError("patch command requires text")
     resolved_working_directory = Path(working_directory or os.getcwd()).expanduser().resolve()
     if not resolved_working_directory.is_dir():
         raise CodexPatchError("patch working directory requires an existing directory")
+    return resolved_working_directory
+
+
+def codex_patch_operation_targets(
+    command: str, working_directory: str | None = None
+) -> tuple[tuple[str, str], ...]:
+    """Return each (operation, resolved path) pair a Codex patch command names.
+
+    Resolves every section's target path the same way ``parse_codex_apply_patch``
+    does, without reading any file's prior content, so a caller that only needs
+    each target path (a sensitive-path check, an already-exists check) is not
+    tripped up by a prior file it never needs to read.
+
+    Args:
+        command: The raw Codex apply_patch command text.
+        working_directory: The directory patch paths resolve against, or None
+            to use the current working directory.
+
+    Returns:
+        The ordered ``(operation, resolved_path)`` pairs the patch names.
+    """
+    resolved_working_directory = _codex_working_directory(command, working_directory)
+    return tuple(
+        (each_operation, _codex_resolve_patch_path(each_relative_path, resolved_working_directory))
+        for each_operation, each_relative_path, _each_section_lines in _codex_patch_sections(command)
+    )
+
+
+def parse_codex_apply_patch(
+    command: str, working_directory: str | None = None
+) -> tuple[CodexPatchFile, ...]:
+    """Return pre-edit and post-edit views for every Codex patch path."""
+    resolved_working_directory = _codex_working_directory(command, working_directory)
     all_patch_files: list[CodexPatchFile] = []
     seen_paths: set[str] = set()
     for each_operation, each_relative_path, each_section_lines in _codex_patch_sections(command):

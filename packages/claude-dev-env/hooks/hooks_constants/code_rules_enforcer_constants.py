@@ -6,6 +6,10 @@ Extracted from code_rules_enforcer.py to satisfy the constants-location rule.
 import re
 import tokenize
 
+from hooks_constants.multi_edit_reconstruction import (  # noqa: F401  re-exported for code_rules_enforcer.py
+    apply_edits,
+    edits_for_tool,
+)
 from hooks_constants.validation_phase_constants import (  # noqa: F401  re-exported for code_rules_enforcer.py
     ALL_VALIDATION_PHASES,
     EDIT_LANE_PHASE,

@@ -169,3 +169,71 @@ def test_bypass_token_is_consumed_once(tmp_path: Path, monkeypatch: pytest.Monke
     assert refactor_guard.is_bypass_approved()
     assert not bypass_token_path.exists()
     assert not refactor_guard.is_bypass_approved()
+
+
+def _multi_edit_payload(file_path: Path, all_edits: list[dict[str, str]]) -> str:
+    return json.dumps(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {"file_path": str(file_path), "edits": all_edits},
+        }
+    )
+
+
+def _commit_and_stage_the_renamed_module(git_repository: Path, source_path: Path) -> None:
+    """Commit the base module, then stage an unrelated numeric change to it."""
+    commit_file(
+        git_repository,
+        source_path,
+        "def calculate_total(amount: int) -> int:\n    return amount\n",
+    )
+    stage_file(
+        git_repository,
+        source_path,
+        "def calculate_total(amount: int) -> int:\n    return amount + 1\n",
+    )
+
+
+def test_direct_hook_flags_refactor_in_second_multi_edit(git_repository: Path) -> None:
+    """A rename buried in the second edit of a MultiEdit is caught, not only the first.
+
+    The first edit is an ordinary numeric change; only the second edit renames
+    calculate_total to compute_total outside the currently staged diff.
+    """
+    source_path = git_repository / "module.py"
+    _commit_and_stage_the_renamed_module(git_repository, source_path)
+    payload_text = _multi_edit_payload(
+        source_path,
+        [
+            {"old_string": "return amount", "new_string": "return amount + 1"},
+            {
+                "old_string": "def calculate_total(amount: int) -> int:\n    return amount",
+                "new_string": "def compute_total(amount: int) -> int:\n    return amount",
+            },
+        ],
+    )
+
+    completed_hook = _run_hook(HOOK_SCRIPT_PATH, git_repository, payload_text)
+    advisory_payload = json.loads(completed_hook.stdout)
+    hook_specific_output = advisory_payload["hookSpecificOutput"]
+
+    assert hook_specific_output["permissionDecision"] == "allow"
+    assert "Edit-stage" in advisory_payload["systemMessage"]
+
+
+def test_direct_hook_stays_silent_for_ordinary_multi_edit(git_repository: Path) -> None:
+    source_path = git_repository / "module.py"
+    commit_file(
+        git_repository,
+        source_path,
+        "def calculate_total(amount: int) -> int:\n    return amount\n",
+    )
+    payload_text = _multi_edit_payload(
+        source_path,
+        [{"old_string": "return amount", "new_string": "return amount + 1"}],
+    )
+
+    completed_hook = _run_hook(HOOK_SCRIPT_PATH, git_repository, payload_text)
+
+    assert completed_hook.returncode == 0
+    assert completed_hook.stdout == ""

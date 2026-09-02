@@ -172,3 +172,35 @@ def test_should_exit_zero_on_malformed_stdin(
 ) -> None:
     _run_main_with_stdin("not valid json {{{")
     assert not any(redirected_temp_directory.iterdir())
+
+
+def test_should_record_every_apply_patch_target_file(
+    redirected_temp_directory: pathlib.Path,
+) -> None:
+    working_directory = redirected_temp_directory / "repo"
+    working_directory.mkdir()
+    (working_directory / "updated.py").write_text("before\n", encoding="utf-8")
+    patch_command = (
+        "*** Begin Patch\n"
+        "*** Update File: updated.py\n"
+        "@@\n"
+        "-before\n"
+        "+after\n"
+        "*** Add File: added.py\n"
+        "+new\n"
+        "*** End Patch"
+    )
+    payload = json.dumps(
+        {
+            "session_id": _SESSION_ID,
+            "tool_name": "apply_patch",
+            "cwd": str(working_directory),
+            "tool_input": {"command": patch_command},
+        }
+    )
+
+    _run_main_with_stdin(payload)
+
+    recorded = _read_recorded_paths(redirected_temp_directory, _SESSION_ID)
+    assert str((working_directory / "updated.py").resolve()) in recorded
+    assert str((working_directory / "added.py").resolve()) in recorded

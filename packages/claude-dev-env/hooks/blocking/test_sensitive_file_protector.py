@@ -98,8 +98,8 @@ def _registered_dispatcher_details(
         f"found {len(dispatcher_registrations)}"
     )
     each_registration, each_hook, command_parts = dispatcher_registrations[0]
-    assert each_registration["matcher"] == "Write|Edit|MultiEdit", (
-        "dispatcher registration must cover exactly Write, Edit, and MultiEdit; "
+    assert each_registration["matcher"] == "Write|Edit|MultiEdit|apply_patch", (
+        "dispatcher registration must cover Write, Edit, MultiEdit, and apply_patch; "
         f"got matcher {each_registration['matcher']!r}"
     )
     assert command_parts[0] == "python3"
@@ -254,6 +254,46 @@ def test_multi_edit_to_a_secrets_file_is_denied(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_apply_patch_add_targeting_a_secrets_file_is_denied(tmp_path: Path) -> None:
+    payload = json.dumps(
+        {
+            "tool_name": "apply_patch",
+            "cwd": str(tmp_path),
+            "tool_input": {
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Add File: .env\n"
+                    "+API_TOKEN=your-token-here\n"
+                    "*** End Patch"
+                )
+            },
+        }
+    )
+    completed = _run_hook_with_stdin(payload)
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) == DENY_DECISION
+
+
+def test_apply_patch_add_targeting_an_ordinary_file_is_allowed(tmp_path: Path) -> None:
+    payload = json.dumps(
+        {
+            "tool_name": "apply_patch",
+            "cwd": str(tmp_path),
+            "tool_input": {
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Add File: main.py\n"
+                    "+x = 1\n"
+                    "*** End Patch"
+                )
+            },
+        }
+    )
+    completed = _run_hook_with_stdin(payload)
+    assert completed.returncode == 0, completed.stderr
+    assert _permission_decision(completed) is None
 
 
 def test_hooks_json_registers_exact_dispatcher_matcher_and_timeout() -> None:

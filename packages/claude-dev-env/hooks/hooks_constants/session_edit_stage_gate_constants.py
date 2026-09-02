@@ -27,7 +27,8 @@ SESSION_ID_UNSAFE_CHARACTERS_PATTERN: re.Pattern[str] = re.compile(r"[^A-Za-z0-9
 SESSION_START_SOURCE_PAYLOAD_KEY: str = "source"
 SESSION_START_SOURCE_FRESH_STARTUP: str = "startup"
 
-ALL_TRACKED_EDIT_TOOL_NAMES: tuple[str, ...] = ("Write", "Edit", "MultiEdit")
+ALL_TRACKED_EDIT_TOOL_NAMES: tuple[str, ...] = ("Write", "Edit", "MultiEdit", "apply_patch")
+APPLY_PATCH_TOOL_NAME: str = "apply_patch"
 
 STATE_FILE_ATOMIC_WRITE_SUFFIX: str = ".tmp"
 STATE_FILE_JSON_INDENT_SPACES: int = 2

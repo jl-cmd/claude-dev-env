@@ -205,6 +205,74 @@ def test_extract_payload_text_returns_empty_for_unknown_tool() -> None:
     assert extracted == ("", "")
 
 
+def test_every_applicable_tool_name_reads_payload_text() -> None:
+    """extract_payload_text reads content for every name the shared constant lists."""
+    for each_applicable_tool_name in hook_module.ALL_APPLICABLE_TOOL_NAMES:
+        _file_path, scanned_text = extract_payload_text(
+            each_applicable_tool_name,
+            {
+                "file_path": "foo.py",
+                "content": "abc",
+                "new_string": "abc",
+                "edits": [{"old_string": "a", "new_string": "abc"}],
+            },
+        )
+        assert scanned_text, f"{each_applicable_tool_name} must read some scanned text"
+
+
+def test_extract_payload_text_reads_every_multi_edit_new_string() -> None:
+    extracted = extract_payload_text(
+        "MultiEdit",
+        {
+            "file_path": "foo.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": "a = 11"},
+                {"old_string": "b = 2", "new_string": "def force_rmtree(target_path):\n    pass"},
+            ],
+        },
+    )
+    assert extracted[0] == "foo.py"
+    assert "force_rmtree" in extracted[1]
+
+
+def test_main_blocks_trio_copy_introduced_by_second_multi_edit() -> None:
+    """A helper definition in the second edit of a MultiEdit is caught, not only the first."""
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": "shared_utils/samsung_utils/cert_failure_processor/parser.py",
+                "edits": [
+                    {"old_string": "a = 1", "new_string": "a = 11"},
+                    {"old_string": "b = 2", "new_string": COPIED_TRIO},
+                ],
+            },
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    decision_block = response_payload["hookSpecificOutput"]
+    assert decision_block["permissionDecision"] == "deny"
+    assert "duplicate-rmtree-helper" in decision_block["permissionDecisionReason"]
+
+
+def test_main_allows_clean_multi_edit() -> None:
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": "shared_utils/samsung_utils/cert_failure_processor/parser.py",
+                "edits": [
+                    {"old_string": "a = 1", "new_string": "a = 11"},
+                    {"old_string": "b = 2", "new_string": "b = 22"},
+                ],
+            },
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
+
+
 def _run_hook_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
     captured_stdout = io.StringIO()
     captured_stderr = io.StringIO()

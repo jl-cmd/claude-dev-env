@@ -2,6 +2,8 @@
 
 from re import IGNORECASE, Pattern, compile
 
+MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR = "\n"
+
 ALL_COMMENT_TRANSITION_PATTERNS: list[Pattern[str]] = [
     compile(r"\binstead of\b", IGNORECASE),
     compile(r"\bpreviously\b", IGNORECASE),

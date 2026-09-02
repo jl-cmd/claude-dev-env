@@ -7,8 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 
 _ADVISORY_DIRECTORY = Path(__file__).resolve().parent
 _HOOKS_DIRECTORY = _ADVISORY_DIRECTORY.parent
@@ -59,6 +57,7 @@ def _build_control_payload(tool_name: str, file_path: Path, content: str) -> dic
 
 
 def _prepare_fresh_test_pair(migration_path: Path) -> None:
+    """Write a migration module and its paired test file."""
     migration_path.parent.mkdir(parents=True)
     migration_path.write_text("operations = []\n", encoding="utf-8")
     test_path = migration_path.with_name(f"test_{migration_path.stem}.py")
@@ -104,12 +103,12 @@ def test_dispatcher_surfaces_migration_warning_for_edit(tmp_path: Path) -> None:
     assert "MIGRATION SAFETY" in _text_field(dispatched_payload, "systemMessage")
 
 
-@pytest.mark.parametrize("tool_name", ("Write", "MultiEdit"))
-def test_dispatcher_keeps_migration_advisor_edit_only(tmp_path: Path, tool_name: str) -> None:
+def test_dispatcher_keeps_migration_advisor_write_excluded(tmp_path: Path) -> None:
+    """Write stays out of the migration advisor's roster; only Edit and MultiEdit reach it."""
     migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
     _prepare_fresh_test_pair(migration_path)
     payload = _build_control_payload(
-        tool_name,
+        "Write",
         migration_path,
         'operations = [migrations.RemoveField("name")]',
     )
@@ -118,3 +117,88 @@ def test_dispatcher_keeps_migration_advisor_edit_only(tmp_path: Path, tool_name:
     serialized_payload = json.dumps(dispatched_payload or {})
 
     assert "MIGRATION SAFETY" not in serialized_payload
+
+
+def test_dispatcher_extends_migration_advisor_to_multi_edit(tmp_path: Path) -> None:
+    """A MultiEdit reaches the migration advisor the same way an Edit does."""
+    migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
+    _prepare_fresh_test_pair(migration_path)
+    payload = _build_control_payload(
+        "MultiEdit",
+        migration_path,
+        'operations = [migrations.RemoveField("name")]',
+    )
+
+    dispatched_payload = _run_hook(_DISPATCHER_SCRIPT, payload)
+    assert dispatched_payload is not None
+    serialized_payload = json.dumps(dispatched_payload)
+
+    assert "MIGRATION SAFETY" in serialized_payload
+
+
+def _build_multi_edit_payload(
+    file_path: Path, all_edits: list[dict[str, str]]
+) -> dict[str, object]:
+    return {
+        "tool_name": "MultiEdit",
+        "tool_input": {"file_path": str(file_path), "edits": all_edits},
+    }
+
+
+def test_standalone_advisor_warns_for_unsafe_operation_in_second_multi_edit(
+    tmp_path: Path,
+) -> None:
+    """An unsafe operation in the second edit of a MultiEdit is caught, not only the first.
+
+    migration_safety_advisor has no tool_name gate today: it reads
+    tool_input.get("new_string"), a key a MultiEdit payload never carries at
+    the top level. Widening its roster entry alone would silently do
+    nothing on a real MultiEdit call.
+    """
+    migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
+    payload = _build_multi_edit_payload(
+        migration_path,
+        [
+            {"old_string": "operations = []", "new_string": "operations = [migrations.AddField()]"},
+            {
+                "old_string": "migrations.AddField()",
+                "new_string": 'migrations.AddField(), migrations.RemoveField("name")',
+            },
+        ],
+    )
+
+    advisory_payload = _run_hook(_ADVISOR_SCRIPT, payload)
+    assert advisory_payload is not None
+    permission_fields = _permission_fields(advisory_payload)
+
+    assert permission_fields["permissionDecision"] == "allow"
+    assert "RemoveField" in _text_field(permission_fields, "additionalContext")
+
+
+def test_standalone_advisor_reads_a_write_payloads_content_field(tmp_path: Path) -> None:
+    """_resolve_content's non-MultiEdit branch reads a Write payload's "content" key."""
+    migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
+    payload: dict[str, object] = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(migration_path),
+            "content": 'operations = [migrations.RemoveField("name")]',
+        },
+    }
+
+    advisory_payload = _run_hook(_ADVISOR_SCRIPT, payload)
+    assert advisory_payload is not None
+    assert "RemoveField" in _text_field(
+        _permission_fields(advisory_payload), "additionalContext"
+    )
+
+
+def test_standalone_advisor_is_silent_for_a_clean_multi_edit(tmp_path: Path) -> None:
+    migration_path = tmp_path / "billing" / "migrations" / "0002_remove_name.py"
+    payload = _build_multi_edit_payload(
+        migration_path,
+        [{"old_string": "operations = []", "new_string": "operations = [migrations.AddField()]"}],
+    )
+
+    advisory_payload = _run_hook(_ADVISOR_SCRIPT, payload)
+    assert advisory_payload is None

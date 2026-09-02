@@ -41,6 +41,64 @@ def test_simple_pattern_blocks_with_deny_payload(tmp_path: Path) -> None:
     assert hook_specific_output["permissionDecision"] == "deny"
 
 
+def test_write_payload_reads_the_content_field(tmp_path: Path) -> None:
+    """_resolve_content's non-MultiEdit branch reads a Write payload's "content" key."""
+    settings_path = tmp_path / ".claude" / "settings.json"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(settings_path),
+            "content": "python3 ~/.claude/hooks/blocking/my-hook.py",
+        },
+    }
+
+    hook_run = _run_hook(payload)
+
+    assert hook_run.returncode == 0
+    deny_payload = json.loads(hook_run.stdout)
+    assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_second_multi_edit_new_string_is_caught(tmp_path: Path) -> None:
+    """A simple-pattern hook command in the second edit of a MultiEdit is denied."""
+    settings_path = tmp_path / ".claude" / "settings.json"
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": str(settings_path),
+            "edits": [
+                {"old_string": "a", "new_string": "b"},
+                {"old_string": "c", "new_string": "python3 ~/.claude/hooks/blocking/my-hook.py"},
+            ],
+        },
+    }
+
+    hook_run = _run_hook(payload)
+
+    assert hook_run.returncode == 0
+    deny_payload = json.loads(hook_run.stdout)
+    assert deny_payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_clean_multi_edit_passes(tmp_path: Path) -> None:
+    settings_path = tmp_path / ".claude" / "settings.json"
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": str(settings_path),
+            "edits": [
+                {"old_string": "a", "new_string": "b"},
+                {"old_string": "c", "new_string": "node -e \"require('run-hook-wrapper')\""},
+            ],
+        },
+    }
+
+    hook_run = _run_hook(payload)
+
+    assert hook_run.returncode == 0
+    assert hook_run.stdout.strip() == ""
+
+
 def test_block_logs_pre_tool_use_event(tmp_path: Path) -> None:
     fake_home = tmp_path / "home"
     fake_home.mkdir()

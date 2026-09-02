@@ -62,7 +62,7 @@ const RETIRED_HOOK_RELATIVE_SEGMENTS = ['blocking', 'retired_gate.py'];
 const USER_HOOK_COMMAND = 'python3 my_own_gate.py --user-authored';
 const RETIRED_HOOK_EVENT_TYPE = 'PreToolUse';
 const DROPPED_HOOK_EVENT_TYPE = 'PreCompact';
-const RETIRED_HOOK_MATCHER = 'Write|Edit|MultiEdit';
+const DISPATCHER_HOOK_COMMAND_SEGMENT = 'pre_tool_use_dispatcher.py';
 const UNMANAGED_SIBLING_DIRECTORY = 'my-notes';
 const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
@@ -909,7 +909,9 @@ function seedRetiredManagedHook(sandbox) {
     const lookalikeHookCommand = `python3 "${retiredHookPath.replace(/\\/g, '/')}.bak"`;
     const settings = readSettings(sandbox.claudeDirectory);
     const liveGroup = settings.hooks[RETIRED_HOOK_EVENT_TYPE]
-        .find(group => group.matcher === RETIRED_HOOK_MATCHER);
+        .find(group => group.hooks.some(
+            hook => hook.command.includes(DISPATCHER_HOOK_COMMAND_SEGMENT),
+        ));
     liveGroup.hooks.push({ type: 'command', command: retiredHookCommand });
     liveGroup.hooks.push({ type: 'command', command: USER_HOOK_COMMAND });
     liveGroup.hooks.push({ type: 'command', command: lookalikeHookCommand });

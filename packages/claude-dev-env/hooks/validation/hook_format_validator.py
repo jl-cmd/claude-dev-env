@@ -9,15 +9,40 @@ import re
 import sys
 from pathlib import Path
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
+try:
+    _hooks_dir = str(Path(__file__).resolve().parent.parent)
+    if _hooks_dir not in sys.path:
+        sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.hook_format_validator_constants import (
+        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
+    )
+    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+except ImportError as import_error:
+    raise ImportError(
+        "hook_format_validator: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
 
 SIMPLE_PATTERN = re.compile(
     r'python3?\s+~/\.claude/hooks/'
 )
+
+
+def _resolve_content(tool_name: str, all_tool_input: dict) -> str:
+    """Return the text a Write, Edit, or MultiEdit payload introduces."""
+    if tool_name == "MultiEdit":
+        all_new_strings = [
+            each_edit.get("new_string", "")
+            for each_edit in edits_for_tool("MultiEdit", all_tool_input)
+            if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
+        ]
+        return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
+    content = all_tool_input.get("content", "")
+    if not content:
+        content = all_tool_input.get("new_string", "")
+    return content
 
 
 def main() -> None:
@@ -36,10 +61,7 @@ def main() -> None:
         sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")
-    content = tool_input.get("content", "")
-    if not content:
-        new_string = tool_input.get("new_string", "")
-        content = new_string
+    content = _resolve_content(tool_name, tool_input)
 
     if tool_name == "Write" and content:
         try:

@@ -40,6 +40,7 @@ try:
     )
     from pii_payload_scan import (
         build_deny_reason,
+        evaluate_apply_patch_payload,
         evaluate_post_body_texts,
         evaluate_write_edit_payload,
     )
@@ -66,6 +67,7 @@ try:
         ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX,
         ALL_STAGED_FILES_COMMAND,
         ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+        APPLY_PATCH_TOOL_NAME,
         BODY_FILE_ENCODING,
         GIT_COMMAND_TIMEOUT_SECONDS,
         HOOK_SCRIPT_BASENAME,
@@ -90,8 +92,14 @@ except ImportError as import_error:
     ) from import_error
 
 
+def is_apply_patch_tool(tool_name: str) -> bool:
+    """Return whether *tool_name* names the Codex apply_patch tool."""
+    return tool_name == APPLY_PATCH_TOOL_NAME
+
+
 __all__ = [
     "evaluate",
+    "evaluate_apply_patch_payload",
     "evaluate_bash_command",
     "evaluate_post_body_texts",
     "evaluate_staged_commit",
@@ -332,6 +340,8 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         return evaluate_write_edit_payload(
             tool_name, all_tool_input, hook_payload=payload_by_key
         )
+    if is_apply_patch_tool(tool_name):
+        return evaluate_apply_patch_payload(all_tool_input, hook_payload=payload_by_key)
     if tool_name in ALL_SHELL_TOOL_NAMES:
         return _evaluate_shell_tool(all_tool_input, payload_by_key)
     if tool_name.startswith(MCP_GITHUB_TOOL_PREFIX):
