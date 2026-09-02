@@ -34,6 +34,9 @@ CONFIG_DIR_TARGET_PATH = (
 )
 PARENT_TRAVERSAL_TARGET_PATH = "../../escape_target.py"
 RELATIVE_CONFIG_TARGET_PATH = "config/x.py"
+PROJECT_ROOTED_PYTEST_SCRATCH_TARGET_PATH = (
+    "/srv/projects/demo/test_edit_introducing_new_viol0/legacy_module.py"
+)
 
 CLEAN_PYTHON_SOURCE = (
     "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
@@ -228,6 +231,38 @@ class TestTemporaryPathPreservingDirectorySignal:
             staging_root, str(pytest_shaped_target)
         )
         assert staged_path == staging_root / "legacy_module.py"
+
+    def test_pytest_scratch_segment_stages_flat_outside_every_temporary_root(
+        self, tmp_path: Path
+    ) -> None:
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, PROJECT_ROOTED_PYTEST_SCRATCH_TARGET_PATH
+        )
+        assert staged_path == staging_root / "legacy_module.py"
+
+    def test_test_helpers_directory_keeps_its_exemption_under_a_temporary_root(
+        self, tmp_path: Path
+    ) -> None:
+        helpers_target = tmp_path / "pkg" / "test_helpers" / "worker.py"
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(helpers_target)
+        )
+        assert staged_path == staging_root / "test_helpers" / "worker.py"
+
+    def test_scripts_directory_keeps_its_exemption_under_a_temporary_root(
+        self, tmp_path: Path
+    ) -> None:
+        scripts_target = tmp_path / "pkg" / "scripts" / "run_job.py"
+        staging_root = tmp_path / "staging_root"
+        staging_root.mkdir()
+        staged_path = _temporary_path_preserving_directory_signal(
+            staging_root, str(scripts_target)
+        )
+        assert staged_path == staging_root / "scripts" / "run_job.py"
 
     def test_relative_config_path_preserves_config_under_system_temp_cwd(
         self, monkeypatch: pytest.MonkeyPatch
