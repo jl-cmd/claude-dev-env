@@ -251,10 +251,50 @@ def _extract_fstring_literal_parts(
     return "".join(display_segments), "".join(shape_segments)
 
 
-def is_ephemeral_script_path(file_path: str) -> bool:
+def _normalized_absolute_comparison_path(raw_path: str) -> str:
+    """Return raw_path as an absolute, lowercase, forward-slash path for root comparison.
+
+    Strips a leading Windows drive letter after normalizing, so a POSIX root
+    check and a Windows root check compare on the same shape.
+
+    Args:
+        raw_path: The path to normalize.
+
+    Returns:
+        The absolute, lowercase, forward-slash path with any leading drive
+        letter removed.
+    """
+    return LEADING_DRIVE_LETTER_PATTERN.sub("", os.path.abspath(raw_path).replace("\\", "/").lower())
+
+
+def _is_at_or_under_root(normalized_candidate: str, normalized_root: str) -> bool:
+    """Return whether normalized_candidate sits at or under normalized_root.
+
+    Requires a path-segment boundary (an exact match or a ``/`` before the
+    remainder), so ``/tmp/repo-sibling`` never counts as under ``/tmp/repo``.
+
+    Args:
+        normalized_candidate: A path already run through
+            ``_normalized_absolute_comparison_path``.
+        normalized_root: A root path already run through
+            ``_normalized_absolute_comparison_path``.
+
+    Returns:
+        True when normalized_candidate equals normalized_root or names a
+        descendant of it.
+    """
+    return normalized_candidate == normalized_root or normalized_candidate.startswith(normalized_root + "/")
+
+
+def is_ephemeral_script_path(file_path: str, repository_root: str = "") -> bool:
     """Return True when the path is rooted at a throwaway scratch directory.
 
     Checks these sources in order:
+    - ``repository_root`` — when given, a path inside it is never ephemeral,
+      whatever directory the repository itself is checked out under. This
+      keeps a repository placed under ``/tmp`` fully gated: the exemption
+      below is for scratch outside every repository, not for the repository's
+      own files.
     - ``$CLAUDE_JOB_DIR/tmp`` — only when ``CLAUDE_JOB_DIR`` is set.
     - Root-anchored ``/tmp`` and ``/temp`` (drive-letter tolerant).
 
@@ -262,20 +302,28 @@ def is_ephemeral_script_path(file_path: str) -> bool:
     its sandbox fixtures there, so matching it would exempt the suite's own
     targets. Returns False when ``CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT``
     is truthy, when ``file_path`` is empty, and when no root matches. Path
-    classification is string-only; the file need not exist.
+    classification is string-only; neither path need exist.
 
     Args:
         file_path: The candidate path to classify.
+        repository_root: The session's working directory — typically the
+            PreToolUse payload's ``cwd`` — or empty when no such directory is
+            known. A path outside this directory is unaffected by it.
 
     Returns:
-        True when the path is rooted at a recognized ephemeral scratch directory.
+        True when the path is rooted at a recognized ephemeral scratch
+        directory and does not sit inside ``repository_root``.
     """
     if not file_path:
         return False
     disable_value = os.environ.get(EPHEMERAL_EXEMPT_DISABLE_ENVIRONMENT_VARIABLE_NAME, "").strip().lower()
     if disable_value in ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES:
         return False
-    normalized = LEADING_DRIVE_LETTER_PATTERN.sub("", os.path.abspath(file_path).replace("\\", "/").lower())
+    normalized = _normalized_absolute_comparison_path(file_path)
+    if repository_root and _is_at_or_under_root(
+        normalized, _normalized_absolute_comparison_path(repository_root)
+    ):
+        return False
     all_temp_roots: list[str] = []
     job_dir = os.environ.get(CLAUDE_JOB_DIR_ENVIRONMENT_VARIABLE_NAME)
     if job_dir:
@@ -286,7 +334,7 @@ def is_ephemeral_script_path(file_path: str) -> bool:
     for each_root in ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES:
         all_temp_roots.append(each_root)
     for each_temp_root in all_temp_roots:
-        if normalized == each_temp_root or normalized.startswith(each_temp_root + "/"):
+        if _is_at_or_under_root(normalized, each_temp_root):
             return True
     return False
 
@@ -426,23 +474,25 @@ def is_ephemeral_path(file_path: str, hook_payload: dict | None = None) -> bool:
     Combines the path families a repo gate skips: the root-anchored ephemeral
     scratch directories (``/tmp`` and ``$CLAUDE_JOB_DIR/tmp``), the harness
     session scratchpad, and a coding agent's own home-directory tooling such as
-    ``~/.grok/runs/``. The session scratchpad match reads the session id from the
-    payload when one is supplied, and from the harness environment variable
-    otherwise, so a caller that holds no payload still gets the match. The
-    run_all_validators PreToolUse gate calls this predicate to skip an exempt
-    target before it validates. The code-rules and TDD gates call the underlying
-    predicates ``is_ephemeral_script_path``, ``is_agent_home_tooling``, and
+    ``~/.grok/runs/``. A path inside the payload's own working directory
+    (``cwd``) is never treated as scratch, so a repository checked out under
+    ``/tmp`` still receives full enforcement. The scratchpad match reads the
+    session id from the payload when supplied, else the harness environment
+    variable. The code-rules and TDD gates call the underlying predicates
+    ``is_ephemeral_script_path``, ``is_agent_home_tooling``, and
     ``is_under_session_scratchpad`` directly.
 
     Args:
         file_path: The candidate path to classify.
-        hook_payload: The PreToolUse payload carrying the session id, or None to
-            read the session id from the environment alone.
+        hook_payload: The PreToolUse payload carrying the session id and the
+            working directory (``cwd``), or None to read the session id from
+            the environment alone.
 
     Returns:
         True when the path is scratch, agent tooling, or the session scratchpad.
     """
-    if is_ephemeral_script_path(file_path):
+    repository_root = str((hook_payload or {}).get("cwd") or "")
+    if is_ephemeral_script_path(file_path, repository_root):
         return True
     if is_agent_home_tooling(file_path):
         return True

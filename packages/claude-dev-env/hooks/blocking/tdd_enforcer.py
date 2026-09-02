@@ -80,8 +80,12 @@ def _resolve_payload(input_data: dict) -> tuple[str, dict, str]:
     return input_data.get("tool_name", ""), tool_input, tool_input.get("file_path", "")
 
 
-def _is_silently_skipped(file_path: str, extension: str, path: Path) -> bool:
-    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(file_path):
+def _is_silently_skipped(
+    file_path: str, extension: str, path: Path, repository_root: str = ""
+) -> bool:
+    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(
+        file_path, repository_root
+    ):
         return True
     if _is_agent_home_tooling_write(file_path):
         return True
@@ -135,13 +139,13 @@ def _decide_for_target(
         return None
     path = Path(file_path)
     extension = path.suffix.lower()
-    if _is_silently_skipped(file_path, extension, path):
+    repository_root = str(input_data.get("cwd") or "")
+    if _is_silently_skipped(file_path, extension, path, repository_root):
         return None
     if _write_is_exempt(tool_name, tool_input, path, extension):
         return True, ""
     all_candidates = candidate_test_paths_for(path)
     session_id = str(input_data.get("session_id") or "")
-    repository_root = str(input_data.get("cwd") or "")
     is_recorded_or_fresh = has_recorded_or_fresh_test(
         all_candidates, session_id, repository_root, _freshness_seconds()
     )
