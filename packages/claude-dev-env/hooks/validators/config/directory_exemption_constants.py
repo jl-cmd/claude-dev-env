@@ -7,7 +7,9 @@ siblings). Exact names come from the authoritative path-exemption pattern sets
 and CLI markers, unioned with the config-directory allowlist. Substring
 patterns come from the separator-free members of those same pattern sets so a
 directory such as ``pkg/test_helpers/`` stages with the same test exemption as
-the real path.
+the real path. Directories pytest generates for its own scratch tree are
+recognized by name and contribute no signal, whatever ``--basetemp`` they sit
+under.
 """
 
 from __future__ import annotations
@@ -26,6 +28,15 @@ from ..exempt_paths import (
 
 POSIX_DIRECTORY_SEPARATOR = "/"
 WINDOWS_DIRECTORY_SEPARATOR = "\\"
+
+PYTEST_TEMPORARY_ROOT_NAME_PREFIX = "pytest-"
+DECIMAL_DIGIT_CHARACTERS = "0123456789"
+LOWERCASE_ASCII_LETTER_CHARACTERS = "abcdefghijklmnopqrstuvwxyz"
+UNDERSCORE_CHARACTER = "_"
+PYTEST_SANITIZED_TEST_NAME_LENGTH_LIMIT = 30
+ALL_PYTEST_SANITIZED_TEST_NAME_CHARACTERS: frozenset[str] = frozenset(
+    LOWERCASE_ASCII_LETTER_CHARACTERS + DECIMAL_DIGIT_CHARACTERS + UNDERSCORE_CHARACTER
+)
 
 ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES: frozenset[str] = frozenset(
     {
@@ -66,6 +77,38 @@ def is_filename_like_path_segment(path_segment: str) -> bool:
     if path_segment.startswith("."):
         return False
     return "." in path_segment
+
+
+def is_pytest_scratch_directory_segment(segment_lower: str) -> bool:
+    """Return True when *segment_lower* is a directory pytest itself created.
+
+    ::
+
+        is_pytest_scratch_directory_segment("test_drops_leading_anchor0")  # True
+        is_pytest_scratch_directory_segment("pytest-of-root")  # True
+        is_pytest_scratch_directory_segment("test_helpers")  # False
+
+    ``TempPathFactory`` names its roots ``pytest-of-<user>`` and ``pytest-<n>``, and
+    each per-test directory as a length-capped test-name stem with a number appended.
+    Those generated names carry ``test_`` without naming a real project directory.
+
+    Args:
+        segment_lower: One lowercased directory component of a target path.
+
+    Returns:
+        True when pytest generated the segment rather than the project.
+    """
+    if segment_lower.startswith(PYTEST_TEMPORARY_ROOT_NAME_PREFIX):
+        return True
+    sanitized_test_name = segment_lower.rstrip(DECIMAL_DIGIT_CHARACTERS)
+    if not sanitized_test_name or sanitized_test_name == segment_lower:
+        return False
+    if len(sanitized_test_name) > PYTEST_SANITIZED_TEST_NAME_LENGTH_LIMIT:
+        return False
+    return all(
+        each_character in ALL_PYTEST_SANITIZED_TEST_NAME_CHARACTERS
+        for each_character in sanitized_test_name
+    )
 
 
 def all_directory_segments_in_path_pattern(path_pattern: str) -> list[str]:
