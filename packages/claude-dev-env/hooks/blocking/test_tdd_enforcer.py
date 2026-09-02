@@ -1376,6 +1376,50 @@ def test_should_deny_apply_patch_that_adds_test_and_production_file_in_one_trans
     assert _decision_from(completed) == "deny"
 
 
+def test_should_stay_exempt_for_scratch_outside_repository_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repo-root fix: a genuine scratch file outside the repository stays exempt."""
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    repository_root = "/tmp/pr-alpha"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/tmp/scratch/one_off.py",
+            "content": _BEHAVIOR_BEARING_CONTENT,
+        },
+        "cwd": repository_root,
+    }
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) != "deny", (
+        f"TDD enforcer must not deny scratch outside the repository, got: {completed.stdout!r}"
+    )
+
+
+def test_should_stay_exempt_for_unrelated_worktree_sibling_under_tmp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repo-root fix: a sibling sharing the root's name prefix is not inside it.
+
+    Containment is judged by path segment, so /tmp/pr-alpha-sibling is outside
+    /tmp/pr-alpha however much of the name the two share.
+    """
+    monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    repository_root = "/tmp/pr-alpha"
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "/tmp/pr-alpha-sibling/hooks/orders.py",
+            "content": _BEHAVIOR_BEARING_CONTENT,
+        },
+        "cwd": repository_root,
+    }
+    completed = _run_hook_with_payload(payload)
+    assert _decision_from(completed) != "deny", (
+        f"TDD enforcer must not deny an unrelated sibling worktree, got: {completed.stdout!r}"
+    )
+
+
 def test_should_deny_production_file_inside_repository_root_under_tmp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
