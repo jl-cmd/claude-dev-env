@@ -207,6 +207,27 @@ def test_allows_backtick_inside_single_quoted_heredoc_body() -> None:
     assert _run_hook(payload).stdout == ""
 
 
+def test_allows_backtick_inside_tab_stripped_quoted_heredoc_body() -> None:
+    """A ``<<-`` opener closes on a tab-indented terminator, and stays inert.
+
+    The tab-strip rule decides which line ends the body. Getting it wrong
+    swallows the rest of the command or ends the body early, so the branch is
+    pinned here as well as in the shared pipeline that owns the rule.
+    """
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "cat > notes.md <<-'EOF'\n"
+                "reStructuredText markup: ``inert literal``\n"
+                "\tEOF\n"
+                "echo done"
+            )
+        },
+    }
+    assert _run_hook(payload).stdout == ""
+
+
 def test_denies_backtick_inside_bare_heredoc_body() -> None:
     payload = {
         "tool_name": "Bash",
