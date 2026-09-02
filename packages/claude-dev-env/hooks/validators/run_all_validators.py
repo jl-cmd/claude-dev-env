@@ -9,6 +9,7 @@ import argparse
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,13 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from ._path_setup import hooks_directory_on_path  # noqa: F401
+from .config.baseline_identity_constants import (
+    QUALIFIED_SCOPE_NAME_SEPARATOR,
+    SCOPE_NAME_PLACEHOLDER,
+    SHAPE_NUMBER_PLACEHOLDER,
+    STANDALONE_NUMBER_PATTERN,
+    WORD_BOUNDARY_PATTERN,
+)
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
@@ -1187,6 +1195,63 @@ def _line_identity(
     )
 
 
+def _scope_agnostic_message(identity_scope: str, violation_message: str) -> str:
+    """Return the message with its own function's name and shape metrics masked.
+
+    ::
+
+        "over_long_fn", "Function 'over_long_fn' is 37 lines (max 30)"
+            -> "Function '<name>' is <number> lines (max <number>)"
+        "compute_total", "Magic number 199 - use named constant"
+            -> "Magic number 199 - use named constant"
+
+    A message that names its enclosing function reports that function's shape,
+    so the numbers in it belong to the same shape and are masked alongside the
+    name. A message that never names the function keeps its numbers, so a magic
+    value and a ruff rule code still tell two violations apart.
+
+    Args:
+        identity_scope: The enclosing function's qualified name, or the empty
+            string for a module-scope violation.
+        violation_message: The message text of one violation line.
+
+    Returns:
+        The message with the enclosing function's name replaced by a fixed
+        placeholder, and its metric numbers replaced too when that name was
+        present; the unchanged message otherwise.
+    """
+    short_scope_name = identity_scope.rpartition(QUALIFIED_SCOPE_NAME_SEPARATOR)[2]
+    if not short_scope_name:
+        return violation_message
+    scope_name_pattern = (
+        WORD_BOUNDARY_PATTERN + re.escape(short_scope_name) + WORD_BOUNDARY_PATTERN
+    )
+    if not re.search(scope_name_pattern, violation_message):
+        return violation_message
+    masked_message = re.sub(
+        scope_name_pattern, SCOPE_NAME_PLACEHOLDER, violation_message
+    )
+    return re.sub(
+        STANDALONE_NUMBER_PATTERN, SHAPE_NUMBER_PLACEHOLDER, masked_message
+    )
+
+
+def _shape_key(violation_identity: ViolationIdentity) -> tuple[str, str]:
+    """Return an identity's ``(validator, scope-agnostic message)`` shape key.
+
+    Args:
+        violation_identity: One violation's full identity key.
+
+    Returns:
+        The key a violation keeps when only its enclosing function's name
+        changes, so a rename, a split, or a move still finds its baseline.
+    """
+    return (
+        violation_identity[0],
+        _scope_agnostic_message(violation_identity[1], violation_identity[2]),
+    )
+
+
 def _violation_identities(
     failed_results: List[ValidatorResult], content: str
 ) -> Counter[ViolationIdentity]:
@@ -1195,7 +1260,8 @@ def _violation_identities(
     Keying on the enclosing function rather than the raw line number keeps a
     key stable when an edit shifts that function, and counting rather than set
     membership keeps a second violation of the same validator in the same
-    function visible as new.
+    function visible as new. A rename moves that key rather than shifting it,
+    which is why matching falls back to the shape key.
 
     Args:
         failed_results: The validator results that fired.
@@ -1228,22 +1294,37 @@ def _baseline_violation_identities(file_path: str) -> Counter[ViolationIdentity]
     return _violation_identities(baseline_failed, baseline_content)
 
 
-def _identity_key_counts(
-    baseline_identities: Counter[ViolationIdentity],
-) -> Counter[tuple[str, str]]:
-    """Sum baseline counts down to ``(validator, enclosing function)`` keys.
+def _compatible_baseline_identity(
+    line_identity: ViolationIdentity, remaining_exact: Counter[ViolationIdentity]
+) -> Optional[ViolationIdentity]:
+    """Return an unconsumed baseline identity *line_identity* may be charged to.
+
+    A same-validator baseline entry in the same enclosing function absorbs a
+    message that drifted with the edit. A same-validator entry of the same
+    shape absorbs a message whose enclosing function was renamed, split, or
+    moved. The same-function entry is preferred, so a drifted message inside an
+    untouched function never spends a renamed function's allowance.
 
     Args:
-        baseline_identities: The baseline identity multiset.
+        line_identity: The proposed line's identity key.
+        remaining_exact: The unconsumed baseline identity budget.
 
     Returns:
-        The per-key line counts with messages ignored, so a violation whose
-        message drifted with the edit still finds its baseline budget.
+        The baseline identity to charge, or None when the budget is spent.
     """
-    key_counts: Counter[tuple[str, str]] = Counter()
-    for each_identity, each_count in baseline_identities.items():
-        key_counts[each_identity[:2]] += each_count
-    return key_counts
+    all_available_identities = [
+        each_identity
+        for each_identity, each_count in remaining_exact.items()
+        if each_count > 0 and each_identity[0] == line_identity[0]
+    ]
+    for each_identity in all_available_identities:
+        if each_identity[1] == line_identity[1]:
+            return each_identity
+    line_shape_key = _shape_key(line_identity)
+    for each_identity in all_available_identities:
+        if _shape_key(each_identity) == line_shape_key:
+            return each_identity
+    return None
 
 
 def _result_with_output(
@@ -1262,7 +1343,6 @@ def _result_with_output(
 def _consume_exact_matches(
     all_line_identities: List[ViolationIdentity],
     remaining_exact: Counter[ViolationIdentity],
-    remaining_by_key: Counter[tuple[str, str]],
 ) -> set[int]:
     """Mark the lines whose full identity matches an unconsumed baseline entry.
 
@@ -1270,7 +1350,6 @@ def _consume_exact_matches(
         all_line_identities: One identity per located line, in output order.
         remaining_exact: The unconsumed baseline identity budget, decremented
             in place per match.
-        remaining_by_key: The unconsumed per-key budget, decremented in step.
 
     Returns:
         The indexes of the exactly-matched lines.
@@ -1280,7 +1359,6 @@ def _consume_exact_matches(
         if remaining_exact[each_identity] <= 0:
             continue
         remaining_exact[each_identity] -= 1
-        remaining_by_key[each_identity[:2]] -= 1
         all_matched_line_indexes.add(each_line_index)
     return all_matched_line_indexes
 
@@ -1289,42 +1367,45 @@ def _line_is_preexisting(
     line_index: int,
     all_line_identities: List[ViolationIdentity],
     all_matched_line_indexes: set[int],
-    remaining_by_key: Counter[tuple[str, str]],
+    remaining_exact: Counter[ViolationIdentity],
 ) -> bool:
     """Return whether one located line matches the baseline budget.
 
-    An exact identity match is pre-existing. A leftover line whose
-    ``(validator, enclosing function)`` key still has baseline budget is
-    pre-existing with a drifted message. A line beyond its key's budget is new.
+    An exact identity match is pre-existing. A leftover line a compatible
+    unconsumed baseline entry can be charged to is pre-existing with a drifted
+    message or a renamed enclosing function. Charging spends that one entry, so
+    a line beyond the baseline's count for its validator is new.
 
     Args:
         line_index: The line's position in the located-line order.
         all_line_identities: One identity per located line.
         all_matched_line_indexes: The exactly-matched line indexes.
-        remaining_by_key: The unconsumed per-key budget, decremented in place.
+        remaining_exact: The unconsumed baseline identity budget, decremented
+            in place per charge.
 
     Returns:
         True when the line is pre-existing, False when it is new.
     """
     if line_index in all_matched_line_indexes:
         return True
-    each_key = all_line_identities[line_index][:2]
-    if remaining_by_key[each_key] > 0:
-        remaining_by_key[each_key] -= 1
-        return True
-    return False
+    compatible_identity = _compatible_baseline_identity(
+        all_line_identities[line_index], remaining_exact
+    )
+    if compatible_identity is None:
+        return False
+    remaining_exact[compatible_identity] -= 1
+    return True
 
 
 def _partition_output_lines(
     each_result: ValidatorResult,
     name_by_line: dict[int, str],
     remaining_exact: Counter[ViolationIdentity],
-    remaining_by_key: Counter[tuple[str, str]],
 ) -> tuple[List[str], List[str]]:
     """Split one result's located lines into a (new, pre-existing) line pair.
 
-    The exact and per-key baseline budgets are consumed in place, exact
-    matches first, so a later result never double-spends an earlier match.
+    The single baseline budget is consumed in place, exact matches first, so a
+    later result never double-spends an earlier match.
     """
     located_lines = _located_violation_lines(each_result)
     all_line_identities = [
@@ -1332,13 +1413,13 @@ def _partition_output_lines(
         for each_line in located_lines
     ]
     all_matched_line_indexes = _consume_exact_matches(
-        all_line_identities, remaining_exact, remaining_by_key
+        all_line_identities, remaining_exact
     )
     all_new_lines: List[str] = []
     all_preexisting_lines: List[str] = []
     for each_line_index, each_line in enumerate(located_lines):
         is_preexisting = _line_is_preexisting(
-            each_line_index, all_line_identities, all_matched_line_indexes, remaining_by_key
+            each_line_index, all_line_identities, all_matched_line_indexes, remaining_exact
         )
         (all_preexisting_lines if is_preexisting else all_new_lines).append(each_line)
     return all_new_lines, all_preexisting_lines
@@ -1382,13 +1463,12 @@ def _scope_new_and_preexisting(
     """
     name_by_line = _enclosing_function_name_by_line(proposed_content)
     remaining_exact = Counter(baseline_identities)
-    remaining_by_key = _identity_key_counts(baseline_identities)
     all_new_results: List[ValidatorResult] = []
     all_preexisting_results: List[ValidatorResult] = []
     for each_result in all_proposed_failed_results:
         new_results, preexisting_results = _grouped_result_lines(
             each_result,
-            _partition_output_lines(each_result, name_by_line, remaining_exact, remaining_by_key),
+            _partition_output_lines(each_result, name_by_line, remaining_exact),
         )
         all_new_results.extend(new_results)
         all_preexisting_results.extend(preexisting_results)
@@ -1434,10 +1514,12 @@ def _evaluate_pre_tool_use_payload() -> None:
     payload, so an ephemeral scratch or session scratchpad target passes without
     validation before any baseline-scoped decision runs. For a non-exempt target,
     each located violation is keyed by validator name, enclosing function, and
-    message, then counted against the on-disk baseline. A violation beyond the
-    baseline's budget for its key denies the write; one the baseline already
-    carries passes with a stderr advisory. Writes nothing for a clean file, an
-    exempt target, or an unparseable payload.
+    message, then charged against the on-disk baseline. A violation the
+    baseline cannot pay for denies the write, whether by an exact key, by the
+    same enclosing function, or by the same message shape under a renamed
+    function; one the baseline already carries passes with a stderr advisory.
+    Writes nothing for a clean file, an exempt target, or an unparseable
+    payload.
     """
     pre_tool_use_payload = json.load(sys.stdin)
     if not isinstance(pre_tool_use_payload, dict):

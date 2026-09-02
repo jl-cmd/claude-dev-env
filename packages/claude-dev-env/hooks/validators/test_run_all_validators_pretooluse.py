@@ -19,6 +19,7 @@ from .run_all_validators import (
     ValidatorResult,
     _escapes_temporary_root,
     _hooks_subprocess_working_directory_and_environment,
+    _scope_agnostic_message,
     _scope_new_and_preexisting,
     _temporary_path_preserving_directory_signal,
     _violation_line_number,
@@ -430,6 +431,100 @@ class TestBaselineScopedGate:
         assert '"permissionDecision": "deny"' in completed.stdout
         assert "Magic Values" in completed.stdout
 
+    def test_renaming_a_function_keeps_its_violation_grandfathered(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(
+            _over_long_function_source("over_long_function"), encoding="utf-8"
+        )
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "def over_long_function(",
+                    "new_string": "def accumulate_running_total(",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' not in completed.stdout
+        assert "Code Quality" in completed.stderr
+
+    def test_renaming_a_function_denies_a_second_violation_of_the_same_shape(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(
+            _over_long_function_source("over_long_function"), encoding="utf-8"
+        )
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "def over_long_function(",
+                    "new_string": (
+                        _over_long_function_source("second_over_long_function")
+                        + "\n\n"
+                        + "def accumulate_running_total("
+                    ),
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "Code Quality" in completed.stdout
+
+    def test_renaming_a_function_denies_a_new_violation_of_another_validator(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(
+            _over_long_function_source("over_long_function"), encoding="utf-8"
+        )
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": "def over_long_function(",
+                    "new_string": "import os\n\n\ndef accumulate_running_total(",
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' in completed.stdout
+        assert "F401" in completed.stdout
+
+    def test_moving_a_violation_to_another_function_keeps_it_grandfathered(
+        self, tmp_path: Path
+    ) -> None:
+        target_file = tmp_path / "legacy_module.py"
+        target_file.write_text(RUFF_DIRTY_FUNCTION_SOURCE, encoding="utf-8")
+        completed = run_gate(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": str(target_file),
+                    "old_string": RUFF_DIRTY_FUNCTION_SOURCE,
+                    "new_string": (
+                        "def compute_total() -> int:\n"
+                        "    return 1\n"
+                        "\n"
+                        "\n"
+                        "def compute_subtotal() -> int:\n"
+                        "    unused_intermediate = 1\n"
+                        "    return 1\n"
+                    ),
+                },
+            }
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert '"permissionDecision": "deny"' not in completed.stdout
+        assert "F841" in completed.stderr
+
     def test_new_module_scope_ruff_violation_with_dirty_function_denies(
         self, tmp_path: Path
     ) -> None:
@@ -449,6 +544,37 @@ class TestBaselineScopedGate:
         assert '"permissionDecision": "deny"' in completed.stdout
         assert "F401" in completed.stdout
         assert "F841" not in completed.stdout
+
+
+class TestScopeAgnosticMessage:
+    def test_masks_the_enclosing_function_name_and_its_metrics(self) -> None:
+        masked_message = _scope_agnostic_message(
+            "over_long_function", "Function 'over_long_function' is 37 lines (max 30)"
+        )
+
+        assert masked_message == "Function '<name>' is <number> lines (max <number>)"
+
+    def test_keeps_the_numbers_of_a_message_that_never_names_its_function(self) -> None:
+        magic_value_message = "Magic number 199 - use named constant"
+
+        masked_message = _scope_agnostic_message("compute_total", magic_value_message)
+
+        assert masked_message == magic_value_message
+
+    def test_keeps_a_module_scope_message_unchanged(self) -> None:
+        ruff_message = "F401 `os` imported but unused"
+
+        masked_message = _scope_agnostic_message("", ruff_message)
+
+        assert masked_message == ruff_message
+
+    def test_masks_only_the_innermost_name_of_a_qualified_scope(self) -> None:
+        masked_message = _scope_agnostic_message(
+            "Ledger.record_entry",
+            "Parameter 'entry' in 'record_entry' missing type annotation",
+        )
+
+        assert masked_message == "Parameter 'entry' in '<name>' missing type annotation"
 
 
 class TestScopeNewAndPreexisting:
