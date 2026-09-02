@@ -91,7 +91,9 @@ bare, quoted, or backslash-escaped (``<<\\EOF`` quotes the delimiter the way
 ``<<'EOF'`` does). ``<<<`` is a here-string rather than a heredoc, so the
 pattern refuses to read one as an opener and leave the lines below it unread.
 The opener also reports its own ``-``, because ``<<`` closes on a line spelling
-the delimiter exactly while ``<<-`` closes on one carrying leading tabs.
+the delimiter exactly while ``<<-`` closes on one carrying leading tabs. It
+reports the quote and the backslash separately from the delimiter word, because
+either one tells a caller that bash expands nothing inside the body below.
 
 The string-executing shell basenames and command flags start from the shared
 ``unscoped_search_blocker_constants.py`` sets and add the Windows command shell
@@ -167,8 +169,10 @@ __all__ = [
     "HEREDOC_OPENER_PATTERN",
     "HEREDOC_TAB_STRIP_GROUP",
     "HEREDOC_QUOTE_GROUP",
+    "HEREDOC_ESCAPE_GROUP",
     "HEREDOC_TERMINATOR_GROUP",
     "HEREDOC_TAB_STRIP_MARKER",
+    "HEREDOC_UNQUOTED_MARKER",
     "HEREDOC_STRIPPED_INDENT_CHARACTERS",
     "NO_FOLLOWING_OPERATOR",
     "ALL_QUOTE_CHARACTERS",
@@ -340,13 +344,16 @@ CLOSED_GROUP_DEPTH = 0
 _HEREDOC_DELIMITER_CHARACTER_CLASS = r"[^\s'\"<>|&;()`$\\]"
 HEREDOC_TAB_STRIP_GROUP = "heredoc_tab_strip"
 HEREDOC_QUOTE_GROUP = "heredoc_quote"
+HEREDOC_ESCAPE_GROUP = "heredoc_escape"
 HEREDOC_TERMINATOR_GROUP = "heredoc_terminator"
 HEREDOC_OPENER_PATTERN = re.compile(
-    rf"(?<!<)<<(?!<)(?P<{HEREDOC_TAB_STRIP_GROUP}>-?)\s*(?P<{HEREDOC_QUOTE_GROUP}>['\"]?)\\?"
+    rf"(?<!<)<<(?!<)(?P<{HEREDOC_TAB_STRIP_GROUP}>-?)\s*(?P<{HEREDOC_QUOTE_GROUP}>['\"]?)"
+    rf"(?P<{HEREDOC_ESCAPE_GROUP}>\\?)"
     rf"(?P<{HEREDOC_TERMINATOR_GROUP}>{_HEREDOC_DELIMITER_CHARACTER_CLASS}+)"
     rf"(?P={HEREDOC_QUOTE_GROUP})"
 )
 HEREDOC_TAB_STRIP_MARKER = "-"
+HEREDOC_UNQUOTED_MARKER = ""
 HEREDOC_STRIPPED_INDENT_CHARACTERS = "\t"
 NO_FOLLOWING_OPERATOR = ""
 ALL_QUOTE_CHARACTERS = "\"'"
