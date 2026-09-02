@@ -1,8 +1,9 @@
 """Shared source-line and function-discovery helpers for the style checks.
 
 These pure helpers underlie the style checks and the blank-line fixers:
-splitting source into ast-aligned lines, locating function definitions, and
-matching the source newline convention.
+splitting source into ast-aligned lines, locating function definitions,
+classifying a module-level statement, and matching the source newline
+convention.
 """
 
 import ast
@@ -93,3 +94,16 @@ def real_newline_lines(source: str) -> list[str]:
     if line_start < total_length:
         lines.append(source[line_start:])
     return lines
+
+
+def is_import_statement(statement: ast.stmt) -> bool:
+    """Return True when the statement is an import or from-import."""
+    return isinstance(statement, (ast.Import, ast.ImportFrom))
+
+
+def is_docstring_statement(statement: ast.stmt) -> bool:
+    """Return True when the statement is a string-literal docstring."""
+    if not isinstance(statement, ast.Expr):
+        return False
+    literal = statement.value
+    return isinstance(literal, ast.Constant) and isinstance(literal.value, str)
