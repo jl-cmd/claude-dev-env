@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -168,8 +169,18 @@ def test_should_return_true_for_root_anchored_tmp_and_temp(
     raw_path: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B4: classifier returns True for root-anchored /tmp and /temp paths."""
+    """B4: classifier returns True for root-anchored /tmp and /temp paths.
+
+    A Windows drive-letter literal is absolute only on Windows. On POSIX,
+    os.path.abspath() joins a non-absolute path with the process cwd, so a
+    drive-letter case's pass or fail state depends on whatever directory the
+    runner happens to sit in. Skip it on a host that does not treat the
+    literal as absolute, so the assertion checks its own precondition rather
+    than the runner's ambient cwd.
+    """
     monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    if not os.path.isabs(raw_path):
+        pytest.skip(f"{raw_path!r} is not absolute on this host")
     assert is_ephemeral_script_path(raw_path) is True
 
 
