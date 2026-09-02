@@ -7,16 +7,9 @@ Validates React-specific code standards:
 
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class Violation:
-    """Represents a validation violation."""
-    file: str
-    line: int
-    message: str
+from .validator_base import Violation
 
 
 CLASS_COMPONENT_PATTERN = re.compile(
@@ -81,7 +74,7 @@ def main() -> int:
     violations = check_no_class_components(file_paths)
 
     for violation in violations:
-        print(f"{violation.file}:{violation.line}: {violation.message}")
+        print(violation)
 
     return 1 if violations else 0
 

@@ -45,6 +45,7 @@ from .test_safety_checks import (
 from .todo_checks import validate_file as validate_todo_file
 from .type_safety_checks import validate_file as validate_type_safety_file
 from .useless_test_checks import validate_file as validate_useless_test_file
+from .validator_base import ValidatorResult
 
 FilePredicate = Callable[[Path], bool]
 FileViolationLineCollector = Callable[[Path], "list[str]"]
@@ -74,21 +75,6 @@ def _violation_lines_from(raw_validate_file: _RawFileValidator) -> FileViolation
         return [str(each_violation) for each_violation in raw_validate_file(file_path)]
 
     return _collect
-
-
-@dataclass(frozen=True)
-class FastSaveCheckOutcome:
-    """One save-path check's finding.
-
-    The caller wraps this into its own reporting type. This module never
-    imports that type back, so no circular import exists between the two
-    modules.
-    """
-
-    display_name: str
-    checks: str
-    is_clean: bool
-    violation_report: str
 
 
 def _is_python_file(file_path: Path) -> bool:
@@ -122,15 +108,10 @@ def _collect_test_safety_violation_lines(file_path: Path) -> "list[str]":
 
 
 def _collect_react_violation_lines(file_path: Path) -> "list[str]":
-    """Adapt react_checks's whole-batch ``check_no_class_components`` to one file.
-
-    react_checks.Violation carries no ``__str__`` override, so this formats
-    each violation the same way react_checks's own ``main`` prints one.
-    """
-    all_violations = check_no_class_components([str(file_path)])
+    """Adapt react_checks's whole-batch ``check_no_class_components`` to one file."""
     return [
-        f"{each_violation.file}:{each_violation.line}: {each_violation.message}"
-        for each_violation in all_violations
+        str(each_violation)
+        for each_violation in check_no_class_components([str(file_path)])
     ]
 
 
@@ -145,11 +126,12 @@ class _FastSaveValidatorSpecification:
     no_matching_files_message: str
 
 
-def _python_naming_and_syntax_specifications() -> (
-    "list[_FastSaveValidatorSpecification]"
+def _all_fast_save_validator_specifications() -> (
+    "tuple[_FastSaveValidatorSpecification, ...]"
 ):
-    """Return the save-path checks for Python naming, style, and constants."""
-    return [
+    """Return the save-path roster: every non-Mypy, non-Ruff file-scoped check."""
+    return (
+        # Python naming, style, and constants.
         _FastSaveValidatorSpecification(
             "Python Style",
             "1,2,3,4",
@@ -171,14 +153,7 @@ def _python_naming_and_syntax_specifications() -> (
             _violation_lines_from(validate_magic_literal_file),
             NO_PYTHON_FILES_MESSAGE,
         ),
-    ]
-
-
-def _python_quality_and_tracking_specifications() -> (
-    "list[_FastSaveValidatorSpecification]"
-):
-    """Return the save-path checks for Python code quality and TODO tracking."""
-    return [
+        # Python code quality and TODO tracking.
         _FastSaveValidatorSpecification(
             "TODO Tracking",
             "36",
@@ -200,14 +175,7 @@ def _python_quality_and_tracking_specifications() -> (
             _violation_lines_from(validate_code_quality_file),
             NO_PYTHON_FILES_MESSAGE,
         ),
-    ]
-
-
-def _python_safety_and_typing_specifications() -> (
-    "list[_FastSaveValidatorSpecification]"
-):
-    """Return the save-path checks for Python anti-patterns and typing."""
-    return [
+        # Python anti-patterns and typing.
         _FastSaveValidatorSpecification(
             "Python Anti-patterns",
             "33,34,35",
@@ -222,12 +190,7 @@ def _python_safety_and_typing_specifications() -> (
             _violation_lines_from(validate_type_safety_file),
             NO_PYTHON_FILES_MESSAGE,
         ),
-    ]
-
-
-def _test_scoped_fast_save_specifications() -> "list[_FastSaveValidatorSpecification]":
-    """Return the save-path checks scoped to a ``test_*.py``-shaped file."""
-    return [
+        # Scoped to a test_*.py-shaped file.
         _FastSaveValidatorSpecification(
             "Test Safety",
             "11,21",
@@ -242,14 +205,7 @@ def _test_scoped_fast_save_specifications() -> "list[_FastSaveValidatorSpecifica
             _violation_lines_from(validate_useless_test_file),
             NO_TEST_FILES_MESSAGE,
         ),
-    ]
-
-
-def _cross_language_fast_save_specifications() -> (
-    "list[_FastSaveValidatorSpecification]"
-):
-    """Return the save-path checks that read a non-Python or multi-language file."""
-    return [
+        # Non-Python or multi-language files.
         _FastSaveValidatorSpecification(
             "React",
             "17",
@@ -264,39 +220,26 @@ def _cross_language_fast_save_specifications() -> (
             _violation_lines_from(validate_pr_reference_file),
             NO_CODE_REFERENCE_FILES_MESSAGE,
         ),
-    ]
-
-
-def _all_fast_save_validator_specifications() -> (
-    "list[_FastSaveValidatorSpecification]"
-):
-    """Return the save-path roster: every non-Mypy, non-Ruff file-scoped check."""
-    return [
-        *_python_naming_and_syntax_specifications(),
-        *_python_quality_and_tracking_specifications(),
-        *_python_safety_and_typing_specifications(),
-        *_test_scoped_fast_save_specifications(),
-        *_cross_language_fast_save_specifications(),
-    ]
+    )
 
 
 def _fast_save_outcome(
     specification: _FastSaveValidatorSpecification,
     is_clean: bool,
     violation_report: str,
-) -> FastSaveCheckOutcome:
-    """Build one outcome from a specification's display name and check numbers."""
-    return FastSaveCheckOutcome(
-        display_name=specification.display_name,
+) -> ValidatorResult:
+    """Build one result from a specification's display name and check numbers."""
+    return ValidatorResult(
+        name=specification.display_name,
         checks=specification.checks,
-        is_clean=is_clean,
-        violation_report=violation_report,
+        passed=is_clean,
+        output=violation_report,
     )
 
 
 def _run_specification(
     specification: _FastSaveValidatorSpecification, files: "list[Path]"
-) -> FastSaveCheckOutcome:
+) -> ValidatorResult:
     """Run one validator's violation collector in-process over its matching files."""
     matching_files = [
         each_file for each_file in files if specification.applies_to_file(each_file)
@@ -316,14 +259,14 @@ def _run_specification(
     return _fast_save_outcome(specification, False, violation_report)
 
 
-def run_fast_save_validators(files: "list[Path]") -> "list[FastSaveCheckOutcome]":
+def run_fast_save_validators(files: "list[Path]") -> "list[ValidatorResult]":
     """Run every save-path validator in-process, skipping Mypy and Ruff.
 
     Args:
         files: The files under validation -- one reconstructed file in gate mode.
 
     Returns:
-        One outcome per in-process validator, in roster order. The caller adds
+        One result per in-process validator, in roster order. The caller adds
         Ruff and never adds Mypy.
     """
     return [

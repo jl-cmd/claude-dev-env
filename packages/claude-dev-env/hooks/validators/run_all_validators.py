@@ -33,7 +33,7 @@ from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
     is_pytest_scratch_directory_segment,
 )
-from .fast_save_validators import FastSaveCheckOutcome, run_fast_save_validators
+from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import (
     check_mypy_available,
@@ -42,7 +42,8 @@ from .mypy_integration import (
 )
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
-from .ruff_integration import check_ruff_available, run_ruff_check
+from .ruff_integration import run_ruff_check
+from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import (
@@ -53,35 +54,6 @@ from hooks_constants.multi_edit_reconstruction import (
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
-
-
-def _gate_entry_for_fast_save_check(
-    check_outcome: FastSaveCheckOutcome,
-) -> "ValidatorResult":
-    """Wrap one in-process check's finding into the gate's shared reporting type."""
-    return ValidatorResult(
-        name=check_outcome.display_name,
-        checks=check_outcome.checks,
-        passed=check_outcome.is_clean,
-        output=check_outcome.violation_report,
-    )
-
-
-def _run_fast_save_checks(files: List[Path]) -> List["ValidatorResult"]:
-    """Run the save-path roster in-process and wrap each finding for the gate.
-
-    Args:
-        files: The files under validation -- one reconstructed file in gate mode.
-
-    Returns:
-        One ValidatorResult per in-process save-path check. Ruff and Mypy are
-        not part of this roster; the caller adds Ruff separately and never
-        adds Mypy on the save path.
-    """
-    return [
-        _gate_entry_for_fast_save_check(each_outcome)
-        for each_outcome in run_fast_save_validators(files)
-    ]
 
 
 def _windows_non_unc_working_directory_string(
@@ -272,17 +244,6 @@ def build_json_output(
     }
 
 
-@dataclass(frozen=True)
-class ValidatorResult:
-    """Result from running a validator."""
-
-    name: str
-    checks: str
-    passed: bool
-    output: str
-    skipped: bool = False
-
-
 def run_with_fallback(
     validator_func: Callable[[], ValidatorResult],
     fallback_name: str,
@@ -458,15 +419,11 @@ def run_comment_checks(files: List[Path]) -> ValidatorResult:
 def run_ruff_checks(
     files: List[Path], config_source_path: Optional[Path] = None
 ) -> ValidatorResult:
-    """Run ruff for fast Python linting."""
-    if not check_ruff_available():
-        return ValidatorResult(
-            name="Ruff",
-            checks="37",
-            passed=True,
-            output="Ruff not installed - skipping",
-        )
+    """Run ruff for fast Python linting.
 
+    run_ruff_check makes the same availability probe and returns the same
+    skip message, so probing here would spawn ruff --version twice.
+    """
     result = run_ruff_check(files, config_source_path)
 
     return ValidatorResult(
@@ -957,7 +914,7 @@ def validate_proposed_file(
             else Path(file_path)
         )
         return [
-            *_run_fast_save_checks([temporary_file]),
+            *run_fast_save_validators([temporary_file]),
             run_ruff_checks([temporary_file], resolved_config_source_path),
         ]
 
