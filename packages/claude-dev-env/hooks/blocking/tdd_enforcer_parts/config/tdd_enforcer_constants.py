@@ -3,6 +3,9 @@
 Centralizes the freshness window, the ancestor-walk limit, the git-tracking
 and git-diff command tokens, the source-file extension sets, the join
 separator, and the last-observed-hash store's filename shape and JSON keys.
+The store's JSON keys also cover a recorded failing-test-run entry: the test
+file's content hash at failure time, the failure timestamp, the failing
+command, and its exit status.
 """
 
 from __future__ import annotations
@@ -22,6 +25,10 @@ HASH_STATE_FILE_SUFFIX: str = ".json"
 REPOSITORY_ROOT_DIGEST_LENGTH: int = 16
 STORED_CONTENT_HASH_KEY: str = "hash"
 STORED_CHANGED_AT_KEY: str = "changed_at"
+STORED_FAILURE_HASH_KEY: str = "failed_hash"
+STORED_FAILED_AT_KEY: str = "failed_at"
+STORED_FAILURE_COMMAND_KEY: str = "failed_command"
+STORED_FAILURE_EXIT_STATUS_KEY: str = "failed_exit_status"
 PYTHON_SOURCE_EXTENSION: str = ".py"
 ENTRY_HOOK_FILE_NAME: str = "tdd_enforcer.py"
 NEWLINE_JOIN_SEPARATOR: str = "\n"
