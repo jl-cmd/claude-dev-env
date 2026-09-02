@@ -25,7 +25,7 @@ Triggers: `/e-simplify` on the current diff (or a PR/branch/path passed as an ar
 
 ## The process
 
-`/simplify → 4 cleanup agents in parallel → apply the fixes`
+`/simplify → up to 4 cleanup agents in parallel → apply the fixes`
 
 You are improving the quality of the changed code, not hunting for bugs. Review
 it for reuse, simplification, efficiency, and altitude issues, then fix what you
@@ -40,13 +40,25 @@ include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
 review that target instead. Treat this diff as the review scope.
 
-### Phase 1 — Review (4 cleanup agents in parallel)
+**Diff-size cap.** Run `git diff --shortstat` on the same range Phase 0 used
+to get the diff, and add its insertions and deletions for the changed-line
+count. Default ceiling: 400 changed lines for one run — a tunable default the
+user may adjust. Above the ceiling, narrow the target first — a subdirectory,
+a package, or one file path — and review that narrowed target. Do not launch
+Phase 1 over a diff above the ceiling.
 
-Launch **4 independent review agents** via the Agent tool, all in a
-single message so they run concurrently. Pass each agent the diff and one of
-the four angles below. Each returns its findings with `file`, `line`, a
-one-line `summary`, and the concrete cost (what is duplicated, wasted, or
-harder to maintain).
+### Phase 1 — Review (up to 4 cleanup agents in parallel)
+
+**Lens cap.** Four lenses is the ceiling, not the floor. Default split — also
+tunable — by the `git diff --shortstat` changed-line count from Phase 0:
+under 100 changed lines, run 2 lenses (reuse and simplification); at 100
+changed lines or above, and under the diff-size cap, run all 4 lenses.
+
+Launch the review agents for the lenses in scope for this run — 2 or 4 by the
+cap above — via the Agent tool, all in a single message so they run
+concurrently. Pass each agent the diff and one of the angles below. Each
+returns its findings with `file`, `line`, a one-line `summary`, and the
+concrete cost (what is duplicated, wasted, or harder to maintain).
 
 #### Reuse
 
@@ -79,7 +91,7 @@ special cases.
 
 ### Phase 2 — Apply the fixes
 
-Wait for all four agents to complete, dedup findings that point at the same
+Wait for every launched agent to complete, dedup findings that point at the same
 line or mechanism, and fix each remaining one directly. Skip any finding whose
 fix would change intended behavior, require changes well outside the reviewed
 diff, or that you judge to be a false positive — note the skip rather than
