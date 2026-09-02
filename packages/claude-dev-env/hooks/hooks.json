@@ -266,6 +266,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/gh_pr_author_restore.py",
             "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/test_failure_recorder.py",
+            "timeout": 15
           }
         ]
       }

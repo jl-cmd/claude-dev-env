@@ -1,4 +1,9 @@
-"""Tests for tdd-enforcer hook (blocking behavior)."""
+"""Tests for tdd-enforcer hook (blocking behavior).
+
+Includes the recorded-test-failure evidence path: a genuinely recorded
+failure unlocks a production write, and never unlocks it for a test file
+the failing command did not name.
+"""
 
 import importlib.util
 import io
@@ -1350,6 +1355,67 @@ def test_should_allow_repeat_production_write_within_window_without_further_test
     )
 
     assert _decision_from(second_write) == "allow"
+
+
+def _seed_recorded_test_failure(
+    test_file: Path, session_id: str, repository_root: Path, command: str, exit_status: int
+) -> None:
+    """Plant a failure record as if a PostToolUse hook had genuinely seen it fail."""
+    content_hash_store.record_test_command_failure(
+        [test_file], command, exit_status, session_id, str(repository_root)
+    )
+
+
+def test_should_allow_production_write_when_recorded_test_failure_matches_content(
+    tmp_path: Path,
+) -> None:
+    """RED evidence outranks a stale mtime: a genuinely recorded failure unlocks GREEN."""
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): assert fulfill() == 1\n")
+    stale_timestamp = time.time() - STALE_MTIME_OFFSET_SECONDS
+    os.utime(sibling_test, (stale_timestamp, stale_timestamp))
+    session_id = "recorded-failure-session"
+    _seed_recorded_test_failure(
+        sibling_test, session_id, sandbox, "pytest test_orders.py", 1
+    )
+
+    completed = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 1\n", session_id, sandbox
+        )
+    )
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_deny_production_write_when_recorded_failure_names_a_different_file(
+    tmp_path: Path,
+) -> None:
+    """Anti-bypass: a failure recorded for one test file must not unlock a sibling's gate."""
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): assert fulfill() == 1\n")
+    stale_timestamp = time.time() - STALE_MTIME_OFFSET_SECONDS
+    os.utime(sibling_test, (stale_timestamp, stale_timestamp))
+    unrelated_test = sandbox / "test_unrelated.py"
+    unrelated_test.write_text("def test_other(): pass\n")
+    session_id = "recorded-failure-unrelated-session"
+    _seed_recorded_test_failure(
+        unrelated_test, session_id, sandbox, "pytest test_unrelated.py", 1
+    )
+
+    completed = _run_hook_with_payload(
+        _make_write_payload_for_session(
+            production_file, "def fulfill(): return 1\n", session_id, sandbox
+        )
+    )
+
+    assert _decision_from(completed) == "deny"
 
 
 def test_should_deny_apply_patch_that_adds_test_and_production_file_in_one_transaction(
