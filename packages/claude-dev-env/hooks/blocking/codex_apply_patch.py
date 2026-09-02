@@ -287,6 +287,47 @@ def codex_patch_operation_targets(
     )
 
 
+def _target_paths_for_command(command: str, working_directory: str | None) -> tuple[str, ...]:
+    """Return each resolved target path one patch command names.
+
+    An empty command, and a command this parser rejects, both yield an empty
+    tuple, so the caller reads one result shape either way.
+
+    Args:
+        command: The raw Codex apply_patch command text, or an empty string.
+        working_directory: The directory patch paths resolve against, or None.
+
+    Returns:
+        The ordered resolved target paths the patch names.
+    """
+    if not command:
+        return ()
+    try:
+        all_operation_targets = codex_patch_operation_targets(command, working_directory)
+    except CodexPatchError:
+        return ()
+    return tuple(each_path for _each_operation, each_path in all_operation_targets)
+
+
+def payload_patch_target_paths(hook_payload: dict, tool_input: dict) -> tuple[str, ...]:
+    """Return every resolved target path an apply_patch payload names.
+
+    The wrapper a hook wants when it needs target paths and nothing else. It
+    reads the command out of the payload, then resolves paths without reading
+    any target file's prior content.
+
+    Args:
+        hook_payload: The whole hook payload, carrying the cwd.
+        tool_input: The tool input mapping, carrying the command text.
+
+    Returns:
+        The ordered resolved target paths the patch names, empty when the
+        payload names no patch or the patch will not parse.
+    """
+    command, working_directory = payload_patch_command(hook_payload, tool_input)
+    return _target_paths_for_command(command, working_directory)
+
+
 @cache
 def parse_codex_apply_patch(
     command: str, working_directory: str | None = None
