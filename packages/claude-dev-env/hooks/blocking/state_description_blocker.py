@@ -22,7 +22,7 @@ try:
 
     from blocking.code_rules_shared import is_ephemeral_path
     from hooks_constants.hook_block_logger import log_hook_block
-    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
     from hooks_constants.state_description_blocker_constants import (
         ALL_BLOCK_COMMENT_EXTENSIONS,
@@ -36,7 +36,6 @@ try:
         CODE_FENCE_PATTERN,
         DOUBLE_QUOTED_SPAN_PATTERN,
         INLINE_CODE_PATTERN,
-        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         PYTHON_EXTENSION,
         TRIPLE_QUOTED_BLOCK_PATTERN,
     )
@@ -49,12 +48,7 @@ except ImportError as import_error:
 def _content_to_check(tool_name: str, all_tool_input: dict) -> str:
     """Return the text a Write, Edit, or MultiEdit payload introduces."""
     if tool_name == "MultiEdit":
-        all_new_strings = [
-            each_edit.get("new_string", "")
-            for each_edit in edits_for_tool("MultiEdit", all_tool_input)
-            if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
-        ]
-        return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
+        return joined_new_strings(all_tool_input)
     content_key = "content" if tool_name == "Write" else "new_string"
     raw_content = all_tool_input.get(content_key, "")
     return raw_content if isinstance(raw_content, str) else ""

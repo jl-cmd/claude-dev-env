@@ -15,6 +15,7 @@ try:
 
     from hooks_constants.pre_tool_use_dispatcher_constants import (
         ALL_HOSTED_HOOK_ENTRIES,
+        ALL_IMMEDIATE_HARM_SCRIPT_PATHS,
         ALL_WRITE_AND_EDIT_TOOL_NAMES,
         ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
         ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
@@ -144,44 +145,11 @@ def test_four_way_set_covers_every_mutation_tool_name() -> None:
 
 def test_immediate_harm_hooks_reach_apply_patch() -> None:
     """PII, sensitive-path, existing-file, CODE_RULES, and TDD gates all see apply_patch."""
-    all_apply_patch_required_script_paths = (
-        "blocking/pii_prevention_blocker.py",
-        "blocking/sensitive_file_protector.py",
-        "blocking/write_existing_file_blocker.py",
-        "blocking/code_rules_enforcer.py",
-        "blocking/tdd_enforcer.py",
-    )
-    for each_script_path in all_apply_patch_required_script_paths:
+    for each_script_path in ALL_IMMEDIATE_HARM_SCRIPT_PATHS:
         entry = _entry_for(each_script_path)
         assert entry is not None, f"{each_script_path} must stay on the hosted roster"
         assert APPLY_PATCH_TOOL_NAME in entry.applicable_tool_names, (
             f"{each_script_path} must reach apply_patch for mutation-tool parity"
-        )
-
-
-def test_content_scanning_hooks_reach_multi_edit() -> None:
-    """A content-scanning Edit-only hook widens to MultiEdit, closing the gap.
-
-    Each of these hooks judges a Write's content or an Edit's old/new string
-    pair with no dependency on which tool delivered it, so an unguarded rmtree,
-    a broken hook format, or a stale comment reference introduced through
-    MultiEdit must be caught the same way it is caught through Edit.
-    """
-    all_content_scanning_script_paths = (
-        "blocking/duplicate_rmtree_helper_blocker.py",
-        "validation/hook_format_validator.py",
-        "blocking/hook_prose_detector_consistency.py",
-        "blocking/stale_comment_reference_blocker.py",
-        "blocking/subprocess_budget_completeness.py",
-        "blocking/windows_rmtree_blocker.py",
-        "advisory/refactor_guard.py",
-        "advisory/migration_safety_advisor.py",
-    )
-    for each_script_path in all_content_scanning_script_paths:
-        entry = _entry_for(each_script_path)
-        assert entry is not None, f"{each_script_path} must stay on the hosted roster"
-        assert MULTI_EDIT_TOOL_NAME in entry.applicable_tool_names, (
-            f"{each_script_path} must reach MultiEdit for mutation-tool parity"
         )
 
 

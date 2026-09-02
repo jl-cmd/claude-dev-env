@@ -25,6 +25,7 @@ __all__ = [
     "ALL_WRITE_AND_EDIT_TOOL_NAMES",
     "ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES",
     "ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES",
+    "ALL_IMMEDIATE_HARM_SCRIPT_PATHS",
     "STATE_DESCRIPTION_BLOCKER_MODULE_NAME",
     "SYSTEM_MESSAGE_JOIN_SEPARATOR",
     "HostedHookEntry",
@@ -52,6 +53,16 @@ ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
 )
 ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES: frozenset[str] = frozenset(
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {APPLY_PATCH_TOOL_NAME}
+)
+
+# apply_patch reaches this narrower roster: the gates whose miss causes immediate
+# harm, plus the TDD gate and the edit tracker. It stays off the full lint surface.
+ALL_IMMEDIATE_HARM_SCRIPT_PATHS: tuple[str, ...] = (
+    "blocking/pii_prevention_blocker.py",
+    "blocking/sensitive_file_protector.py",
+    "blocking/write_existing_file_blocker.py",
+    "blocking/code_rules_enforcer.py",
+    "blocking/tdd_enforcer.py",
 )
 
 
