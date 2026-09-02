@@ -398,3 +398,25 @@ class TestHooksSubprocessWorkingDirectory:
             )
         assert working_directory_string == tempfile.gettempdir()
         assert not working_directory_string.startswith("\\\\")
+
+
+class TestDocstringExamplePaths:
+    def test_module_source_carries_no_home_directory_example_paths(self) -> None:
+        """Example paths avoid /home so the privacy gate reads no personal data.
+
+        The gate allowlists a fixed set of placeholder home usernames, so an
+        invented name outside that set reads as somebody's real home directory
+        and denies the commit. Rooting an example somewhere other than /home
+        keeps the illustration and leaves nothing for the gate to flag.
+        """
+        module_source = (Path(__file__).parent / "run_all_validators.py").read_text(
+            encoding="utf-8"
+        )
+
+        all_home_example_lines = [
+            each_line
+            for each_line in module_source.splitlines()
+            if '"/home/' in each_line
+        ]
+
+        assert all_home_example_lines == []
