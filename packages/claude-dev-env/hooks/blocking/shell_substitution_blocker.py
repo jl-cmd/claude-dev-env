@@ -54,53 +54,31 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    from hooks_constants.shell_substitution_blocker_constants import (
-        BASH_TOOL_NAME,
-        CLOSE_PAREN_CHARACTER,
-        COMMAND_KEY,
-        CORRECTIVE_MESSAGE,
-        DENY_DECISION,
-        DOLLAR_PAREN_PATTERN,
-        EVEN_BACKSLASH_BACKTICK_PATTERN,
-        HOOK_EVENT_NAME,
-        HOOK_EVENT_NAME_KEY,
-        HOOK_SPECIFIC_OUTPUT_KEY,
-        OPEN_PAREN_CHARACTER,
-        PAREN_DEPTH_AFTER_DOUBLE_OPEN,
-        PERMISSION_DECISION_KEY,
-        PERMISSION_DECISION_REASON_KEY,
-        PROCESS_SUBSTITUTION_PATTERN,
-        SINGLE_QUOTED_RUN_PATTERN,
-        STRIPPED_RUN_REPLACEMENT,
-        TOOL_INPUT_KEY,
-        TOOL_NAME_KEY,
-    )
-except ModuleNotFoundError:
-    _hooks_dir = str(Path(__file__).resolve().parent.parent)
-    if _hooks_dir not in sys.path:
-        sys.path.insert(0, _hooks_dir)
-    from hooks_constants.shell_substitution_blocker_constants import (
-        BASH_TOOL_NAME,
-        CLOSE_PAREN_CHARACTER,
-        COMMAND_KEY,
-        CORRECTIVE_MESSAGE,
-        DENY_DECISION,
-        DOLLAR_PAREN_PATTERN,
-        EVEN_BACKSLASH_BACKTICK_PATTERN,
-        HOOK_EVENT_NAME,
-        HOOK_EVENT_NAME_KEY,
-        HOOK_SPECIFIC_OUTPUT_KEY,
-        OPEN_PAREN_CHARACTER,
-        PAREN_DEPTH_AFTER_DOUBLE_OPEN,
-        PERMISSION_DECISION_KEY,
-        PERMISSION_DECISION_REASON_KEY,
-        PROCESS_SUBSTITUTION_PATTERN,
-        SINGLE_QUOTED_RUN_PATTERN,
-        STRIPPED_RUN_REPLACEMENT,
-        TOOL_INPUT_KEY,
-        TOOL_NAME_KEY,
-    )
+_hooks_dir = str(Path(__file__).resolve().parent.parent)
+if _hooks_dir not in sys.path:
+    sys.path.insert(0, _hooks_dir)
+
+from hooks_constants.shell_substitution_blocker_constants import (  # noqa: E402
+    BASH_TOOL_NAME,
+    CLOSE_PAREN_CHARACTER,
+    COMMAND_KEY,
+    CORRECTIVE_MESSAGE,
+    DENY_DECISION,
+    DOLLAR_PAREN_PATTERN,
+    EVEN_BACKSLASH_BACKTICK_PATTERN,
+    HOOK_EVENT_NAME,
+    HOOK_EVENT_NAME_KEY,
+    HOOK_SPECIFIC_OUTPUT_KEY,
+    OPEN_PAREN_CHARACTER,
+    PAREN_DEPTH_AFTER_DOUBLE_OPEN,
+    PERMISSION_DECISION_KEY,
+    PERMISSION_DECISION_REASON_KEY,
+    PROCESS_SUBSTITUTION_PATTERN,
+    SINGLE_QUOTED_RUN_PATTERN,
+    STRIPPED_RUN_REPLACEMENT,
+    TOOL_INPUT_KEY,
+    TOOL_NAME_KEY,
+)
 
 
 def _strip_single_quoted_runs(command: str) -> str:

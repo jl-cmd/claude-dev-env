@@ -14,48 +14,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
 
-try:
-    from hooks_constants.python_style_checks_constants import (
-        EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
-        MINIMUM_ARGUMENT_COUNT,
-    )
-except ModuleNotFoundError:
-    if _hooks_directory not in sys.path:
-        sys.path.insert(0, _hooks_directory)
-    from hooks_constants.python_style_checks_constants import (
-        EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
-        MINIMUM_ARGUMENT_COUNT,
-    )
-
-try:
-    from validators.python_style_helpers import (
-        FunctionNode,
-        blank_line_for_source,
-        function_start_line,
-        gap_is_blank_only,
-        is_docstring_statement,
-        is_import_statement,
-        iter_function_definitions,
-        real_newline_lines,
-        top_level_functions,
-    )
-    from validators.python_style_import_bootstrap import is_sys_path_bootstrap_prelude
-except ModuleNotFoundError:
-    if _hooks_directory not in sys.path:
-        sys.path.insert(0, _hooks_directory)
-    from validators.python_style_helpers import (
-        FunctionNode,
-        blank_line_for_source,
-        function_start_line,
-        gap_is_blank_only,
-        is_docstring_statement,
-        is_import_statement,
-        iter_function_definitions,
-        real_newline_lines,
-        top_level_functions,
-    )
-    from validators.python_style_import_bootstrap import is_sys_path_bootstrap_prelude
+from hooks_constants.python_style_checks_constants import (  # noqa: E402
+    EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
+    MINIMUM_ARGUMENT_COUNT,
+)
+from validators.python_style_helpers import (  # noqa: E402
+    FunctionNode,
+    blank_line_for_source,
+    function_start_line,
+    gap_is_blank_only,
+    is_docstring_statement,
+    is_import_statement,
+    iter_function_definitions,
+    real_newline_lines,
+    top_level_functions,
+)
+from validators.python_style_import_bootstrap import (  # noqa: E402
+    is_sys_path_bootstrap_prelude,
+)
 
 logger = logging.getLogger(__name__)
 
