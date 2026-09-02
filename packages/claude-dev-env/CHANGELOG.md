@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.30.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.30.0...claude-dev-env-v2.30.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* Close two holes in the command gate ([1a26405](https://github.com/jl-cmd/claude-dev-env/commit/1a2640571d34614b3e7e5ba51110f3b870bd611a))
+
+
+### Refactoring
+
+* **hooks,skills:** trim the task-loop hook and cap review-run scope ([3fd325f](https://github.com/jl-cmd/claude-dev-env/commit/3fd325fc07a43f13fa481c7f8c0ac02d02576f92))
+* **hooks,skills:** trim the task-loop hook and cap review-run scope ([db843b6](https://github.com/jl-cmd/claude-dev-env/commit/db843b6c818aa6a07f14e7a71040946727631000))
+* **hooks:** keep the task-tracking directive host-neutral ([f34f99c](https://github.com/jl-cmd/claude-dev-env/commit/f34f99c910a439ae5814e3c686e929c9c81dea88))
+* reuse the effective-content helper and assert the phase rosters against the routers ([60e0518](https://github.com/jl-cmd/claude-dev-env/commit/60e0518e27b90b65a1fb4fbcc59dca145ba31501))
+* reuse the effective-content helper and assert the phase rosters against the routers ([3d5a7be](https://github.com/jl-cmd/claude-dev-env/commit/3d5a7bee5251dbb8a3227e93fe8312b292301d41))
+
 ## [2.30.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.29.0...claude-dev-env-v2.30.0) (2026-09-02)
 
 
