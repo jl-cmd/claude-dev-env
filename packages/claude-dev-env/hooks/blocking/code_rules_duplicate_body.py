@@ -492,6 +492,7 @@ def _total_reachable_statement_count(
 
 def _helper_match_window_dumps(
     function_node: ast.FunctionDef | ast.AsyncFunctionDef,
+    dump_by_statement: dict[ast.stmt, str],
 ) -> list[str] | None:
     """Return the helper's substantive block as per-statement dumps, or None.
 
@@ -541,7 +542,10 @@ def _helper_match_window_dumps(
     )
     if not has_substantial_compound:
         return None
-    return [_normalized_statement_dump(each) for each in match_window]
+    return [
+        _memoized_statement_dump(each_statement, dump_by_statement)
+        for each_statement in match_window
+    ]
 
 
 def check_same_file_inline_duplicate_body(
@@ -763,14 +767,14 @@ def _inline_duplicate_violation(
 
 
 def _violations_for_qualifying_helpers(
-    window_by_function: dict[_ModuleScopeFunction, list[str] | None],
+    window_by_function: dict[_ModuleScopeFunction, list[str]],
     profile_by_function: dict[_ModuleScopeFunction, _FunctionScanProfile],
     maximum_issue_count: int,
 ) -> list[tuple[frozenset[int], str]]:
     """Walk the helpers in source order and report the first inliner of each.
 
     Args:
-        window_by_function: Each function's helper match window, or None.
+        window_by_function: Each qualifying function's helper match window.
         profile_by_function: Each function's readings, keyed in source order.
         maximum_issue_count: The report ceiling the walk stops at.
 
@@ -779,8 +783,6 @@ def _violations_for_qualifying_helpers(
     """
     all_violations_in_walk_order: list[tuple[frozenset[int], str]] = []
     for each_helper, each_window_dumps in window_by_function.items():
-        if each_window_dumps is None:
-            continue
         each_enclosing = _first_enclosing_inliner(
             each_helper, each_window_dumps, profile_by_function
         )
@@ -811,10 +813,14 @@ def _inline_duplicate_violations(
     """
     dump_by_statement: dict[ast.stmt, str] = {}
     window_by_function = {
-        each_function: _helper_match_window_dumps(each_function)
+        each_function: each_window
         for each_function in all_top_level_functions
+        if (
+            each_window := _helper_match_window_dumps(each_function, dump_by_statement)
+        )
+        is not None
     }
-    if all(each_window is None for each_window in window_by_function.values()):
+    if not window_by_function:
         return []
     profile_by_function = {
         each_function: _function_scan_profile(each_function, dump_by_statement)
