@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import importlib
 import importlib.util
@@ -10,6 +11,7 @@ import re
 import shutil
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import DEFAULT, MagicMock, patch
@@ -279,3 +281,52 @@ def test_gate_running_selects_the_full_gate(tmp_path: Path) -> None:
     assert scoped_violations is not None
     blocking_violations, _advisory_violations = scoped_violations
     assert any("9999" in each_issue for each_issue in blocking_violations)
+
+
+ALL_CHECK_FUNCTION_NAME_PREFIXES = ("check_", "advise_")
+
+
+def _check_names_called_in(enforcer_function_name: str) -> set[str]:
+    """Return the check-function names called directly inside a phase router.
+
+    Parses the router's own source and collects every direct call to a
+    module-level name beginning with a check prefix, so a roster constant can
+    assert against the calls production really makes rather than against a
+    second hand-written literal.
+
+    Args:
+        enforcer_function_name: The attribute name of the router on the
+            enforcer module, such as ``_python_full_gate_only_issues``.
+
+    Returns:
+        The set of check-function names the router calls directly.
+    """
+    router_source = textwrap.dedent(
+        inspect.getsource(getattr(code_rules_enforcer, enforcer_function_name))
+    )
+    return {
+        each_node.func.id
+        for each_node in ast.walk(ast.parse(router_source))
+        if isinstance(each_node, ast.Call)
+        and isinstance(each_node.func, ast.Name)
+        and each_node.func.id.startswith(ALL_CHECK_FUNCTION_NAME_PREFIXES)
+    }
+
+
+def test_full_gate_only_roster_matches_the_checks_the_router_calls() -> None:
+    """The roster constant tracks the calls in _python_full_gate_only_issues."""
+    assert (
+        _check_names_called_in("_python_full_gate_only_issues")
+        == validation_phase_constants.ALL_FULL_GATE_ONLY_CHECK_NAMES
+    ), "ALL_FULL_GATE_ONLY_CHECK_NAMES must name exactly the router's own calls"
+
+
+def test_hook_infrastructure_edit_lane_roster_matches_the_checks_the_router_calls() -> None:
+    """The roster constant tracks the always-run calls in the hook-infrastructure router."""
+    all_always_run_check_names = _check_names_called_in(
+        "_hook_infrastructure_blocking_issues"
+    ) - validation_phase_constants.ALL_FULL_GATE_ONLY_CHECK_NAMES
+    assert (
+        all_always_run_check_names
+        == validation_phase_constants.ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES
+    ), "ALL_HOOK_INFRASTRUCTURE_EDIT_LANE_CHECK_NAMES must name exactly the router's own calls"

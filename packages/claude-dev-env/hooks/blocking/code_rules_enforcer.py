@@ -799,11 +799,8 @@ def _hook_infrastructure_blocking_issues(
     Returns:
         The in-scope violations for the target at the given phase.
     """
-    effective_content = content if full_file_content is None else full_file_content
-    all_changed_lines = (
-        changed_line_numbers(prior_full_file_content, full_file_content)
-        if full_file_content is not None
-        else None
+    effective_content, all_changed_lines = _effective_content_and_changed_lines(
+        content, full_file_content, prior_full_file_content
     )
     all_issues: list[str] = []
     if phase == FULL_GATE_PHASE:
