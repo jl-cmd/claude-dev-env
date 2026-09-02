@@ -17,6 +17,7 @@ _codex_minimum_patch_line_count = 2
 _codex_update_operation = "update"
 _codex_add_operation = "add"
 _codex_delete_operation = "delete"
+CODEX_ADD_OPERATION = _codex_add_operation
 
 
 class CodexPatchError(ValueError):
@@ -210,15 +211,55 @@ def _codex_read_patch_file(
     return CodexPatchFile(str(target_path), prior_content, post_content, operation)
 
 
-def parse_codex_apply_patch(
-    command: str, working_directory: str | None = None
-) -> tuple[CodexPatchFile, ...]:
-    """Return pre-edit and post-edit views for every Codex patch path."""
+def _codex_working_directory(command: str, working_directory: str | None) -> Path:
+    """Validate the patch command text and working directory, then resolve it.
+
+    Args:
+        command: The raw Codex apply_patch command text.
+        working_directory: The directory patch paths resolve against, or None
+            to use the current working directory.
+
+    Returns:
+        The resolved, existing working directory.
+    """
     if not isinstance(command, str) or not command.strip():
         raise CodexPatchError("patch command requires text")
     resolved_working_directory = Path(working_directory or os.getcwd()).expanduser().resolve()
     if not resolved_working_directory.is_dir():
         raise CodexPatchError("patch working directory requires an existing directory")
+    return resolved_working_directory
+
+
+def codex_patch_operation_targets(
+    command: str, working_directory: str | None = None
+) -> tuple[tuple[str, str], ...]:
+    """Return each (operation, resolved path) pair a Codex patch command names.
+
+    Resolves every section's target path the same way ``parse_codex_apply_patch``
+    does, without reading any file's prior content, so a caller that only needs
+    each target path (a sensitive-path check, an already-exists check) is not
+    tripped up by a prior file it never needs to read.
+
+    Args:
+        command: The raw Codex apply_patch command text.
+        working_directory: The directory patch paths resolve against, or None
+            to use the current working directory.
+
+    Returns:
+        The ordered ``(operation, resolved_path)`` pairs the patch names.
+    """
+    resolved_working_directory = _codex_working_directory(command, working_directory)
+    return tuple(
+        (each_operation, _codex_resolve_patch_path(each_relative_path, resolved_working_directory))
+        for each_operation, each_relative_path, _each_section_lines in _codex_patch_sections(command)
+    )
+
+
+def parse_codex_apply_patch(
+    command: str, working_directory: str | None = None
+) -> tuple[CodexPatchFile, ...]:
+    """Return pre-edit and post-edit views for every Codex patch path."""
+    resolved_working_directory = _codex_working_directory(command, working_directory)
     all_patch_files: list[CodexPatchFile] = []
     seen_paths: set[str] = set()
     for each_operation, each_relative_path, each_section_lines in _codex_patch_sections(command):

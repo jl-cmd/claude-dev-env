@@ -234,16 +234,21 @@ def test_state_description_native_edit_deny_matches_script_reason() -> None:
     assert native_reason is not None
     assert native_reason == script_reason
 
-def test_state_description_native_non_target_tool_allows_match_script() -> None:
-    """state_description_blocker native allows MultiEdit, matching the script."""
+def test_state_description_native_multi_edit_deny_matches_script() -> None:
+    """state_description_blocker native denies MultiEdit, matching the script.
+
+    MultiEdit is a target tool for this hook: a historical phrase in any edit's
+    new_string denies the same way it would for Write or Edit.
+    """
     payload_dictionary = _multi_edit_payload_dictionary(
         _MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT
     )
     native_reason = _evaluate_with_prose_style_opt_in(state_description_blocker.evaluate, payload_dictionary)
     script_stdout = _run_script_subprocess(_STATE_DESCRIPTION_SCRIPT, payload_dictionary)
     script_reason = _deny_reason_from_script_stdout(script_stdout)
-    assert native_reason is None
-    assert script_reason is None
+    assert native_reason is not None
+    assert native_reason == script_reason
+
 
 def test_dispatcher_native_path_denies_state_description() -> None:
     """The dispatcher's native path denies a state_description_blocker violation."""

@@ -34,9 +34,11 @@ import sys
 
 import _path_setup  # noqa: F401
 
+from codex_apply_patch import CodexPatchError, codex_patch_operation_targets
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.pre_tool_use_dispatcher_constants import (
-    ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+    ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
+    APPLY_PATCH_TOOL_NAME,
 )
 from hooks_constants.sensitive_file_protector_constants import (
     ALL_SENSITIVE_PATTERNS,
@@ -108,7 +110,7 @@ def deny_write(file_path: str, matched_pattern: str) -> None:
     """Record the block in the hook-blocks log and emit the deny decision.
 
     Args:
-        file_path: The path the Write, Edit, or MultiEdit targets.
+        file_path: The path the Write, Edit, MultiEdit, or apply_patch targets.
         matched_pattern: The sensitive pattern the basename matched.
     """
     deny_reason = DENY_REASON_TEMPLATE.format(
@@ -124,6 +126,30 @@ def deny_write(file_path: str, matched_pattern: str) -> None:
     sys.stdout.write(json.dumps(build_deny_response(deny_reason)))
 
 
+def _apply_patch_target_paths(hook_input: dict, tool_input: dict) -> tuple[str, ...]:
+    """Return every resolved target path a Codex apply_patch payload names."""
+    raw_command = tool_input.get("command", "")
+    command = raw_command if isinstance(raw_command, str) else ""
+    if not command:
+        return ()
+    raw_working_directory = hook_input.get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
+    try:
+        all_operation_targets = codex_patch_operation_targets(command, working_directory)
+    except CodexPatchError:
+        return ()
+    return tuple(each_path for _each_operation, each_path in all_operation_targets)
+
+
+def _deny_apply_patch_sensitive_target(hook_input: dict, tool_input: dict) -> None:
+    """Deny the first apply_patch target path whose basename names a sensitive file."""
+    for each_target_path in _apply_patch_target_paths(hook_input, tool_input):
+        matched_pattern = is_sensitive_file(each_target_path)
+        if matched_pattern is not None:
+            deny_write(each_target_path, matched_pattern)
+            return
+
+
 def main() -> None:
     """Deny the write when the stdin payload targets a sensitive filename."""
     try:
@@ -134,7 +160,11 @@ def main() -> None:
     tool_name = hook_input.get("tool_name", "")
     tool_input = hook_input.get("tool_input", {})
 
-    if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
+    if tool_name not in ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES:
+        sys.exit(0)
+
+    if tool_name == APPLY_PATCH_TOOL_NAME:
+        _deny_apply_patch_sensitive_target(hook_input, tool_input)
         sys.exit(0)
 
     file_path = tool_input.get("file_path", "")

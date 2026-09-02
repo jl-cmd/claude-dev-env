@@ -19,6 +19,7 @@ try:
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
     from code_rules_shared import is_ephemeral_path
+    from codex_apply_patch import CodexPatchError, parse_codex_apply_patch
     from pii_prevention_blocker_parts.repository_exemption import (
         repository_allowlisted_values,
     )
@@ -46,6 +47,57 @@ except ImportError as import_error:
         "pii_payload_scan: cannot import its sibling modules; "
         "ensure the blocking and hooks directories are importable."
     ) from import_error
+
+
+def _apply_patch_post_contents(
+    tool_input: dict[str, object], working_directory: str | None
+) -> list[tuple[str, str]]:
+    """Return (file_path, post_content) pairs for a Codex apply_patch payload."""
+    raw_command = tool_input.get("command", "")
+    command = raw_command if isinstance(raw_command, str) else ""
+    if not command:
+        return []
+    try:
+        all_patch_files = parse_codex_apply_patch(command, working_directory)
+    except CodexPatchError:
+        return []
+    return [
+        (each_patch_file.file_path, each_patch_file.post_content)
+        for each_patch_file in all_patch_files
+        if each_patch_file.post_content
+    ]
+
+
+def evaluate_apply_patch_payload(
+    tool_input: dict[str, object],
+    all_allowlisted_values: frozenset[str] = frozenset(),
+    hook_payload: dict | None = None,
+) -> str | None:
+    """Return a deny reason when a Codex apply_patch payload's post content carries PII.
+
+    Args:
+        tool_input: The apply_patch payload's ``command`` and other input fields.
+        all_allowlisted_values: Extra exact values allowed past the scan, unioned
+            with each target repository's own allowlist.
+        hook_payload: The PreToolUse payload carrying ``cwd`` and the session id.
+
+    Returns:
+        Deny reason text for the first target carrying non-allowlisted PII, or
+        None when every target is clean or out of scope.
+    """
+    raw_working_directory = (hook_payload or {}).get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
+    for file_path, post_content in _apply_patch_post_contents(tool_input, working_directory):
+        if is_path_exempt_from_pii_scan(file_path):
+            continue
+        if _target_is_ephemeral_outside_repository(file_path, hook_payload):
+            continue
+        deny_reason = _write_deny_reason_for_texts(
+            [post_content], file_path, all_allowlisted_values
+        )
+        if deny_reason is not None:
+            return deny_reason
+    return None
 
 
 def _target_is_ephemeral_outside_repository(

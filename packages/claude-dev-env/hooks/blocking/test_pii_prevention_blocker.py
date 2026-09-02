@@ -362,7 +362,9 @@ def test_dispatcher_roster_hosts_pii_blocker() -> None:
         if each_entry.script_relative_path == "blocking/pii_prevention_blocker.py"
     ]
     assert len(matching_write_entries) == 1
-    assert matching_write_entries[0].applicable_tool_names == ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES
+    assert matching_write_entries[0].applicable_tool_names == (
+        ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {"apply_patch"}
+    )
     assert matching_write_entries[0].is_blocking is True
     matching_bash_entries = [
         each_entry
@@ -1202,3 +1204,70 @@ def test_post_body_still_scans_when_repository_is_exempt(
     )
     assert deny_reason is not None
     assert "email" in deny_reason
+
+
+def _init_bare_repo(repository_root: Path) -> None:
+    repository_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=repository_root, check=True, capture_output=True)
+
+
+def test_apply_patch_add_with_real_email_is_denied(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_bare_repo(repository_root)
+    deny_reason = evaluate(
+        {
+            "tool_name": "apply_patch",
+            "cwd": str(repository_root),
+            "tool_input": {
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Add File: notes.md\n"
+                    f"+Reach me at {SYNTHETIC_REAL_EMAIL}\n"
+                    "*** End Patch"
+                )
+            },
+        }
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_apply_patch_add_with_clean_content_is_allowed(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_bare_repo(repository_root)
+    deny_reason = evaluate(
+        {
+            "tool_name": "apply_patch",
+            "cwd": str(repository_root),
+            "tool_input": {
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Add File: notes.md\n"
+                    "+Reach me at user@example.com\n"
+                    "*** End Patch"
+                )
+            },
+        }
+    )
+    assert deny_reason is None
+
+
+def test_subprocess_hook_denies_apply_patch_add_with_token(tmp_path: Path) -> None:
+    """The standalone hook process denies an apply_patch payload carrying a token."""
+    repository_root = tmp_path / "repo"
+    _init_bare_repo(repository_root)
+    payload = {
+        "tool_name": "apply_patch",
+        "cwd": str(repository_root),
+        "tool_input": {
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: notes.md\n"
+                f"+token is {SYNTHETIC_GITHUB_TOKEN}\n"
+                "*** End Patch"
+            )
+        },
+    }
+    returncode, stdout = _run_hook(payload)
+    assert returncode == 0
+    assert json.loads(stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"

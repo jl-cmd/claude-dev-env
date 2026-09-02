@@ -49,6 +49,14 @@ def _make_write_payload(file_path: Path, content: str = "") -> dict:
     }
 
 
+def _make_apply_patch_payload(working_directory: Path, patch_command: str) -> dict:
+    return {
+        "tool_name": "apply_patch",
+        "cwd": str(working_directory),
+        "tool_input": {"command": patch_command},
+    }
+
+
 def _decision_from(completed: subprocess.CompletedProcess[str]) -> str | None:
     if not completed.stdout:
         return None
@@ -72,6 +80,49 @@ def test_should_allow_when_sibling_test_file_exists_and_recent(tmp_path: Path) -
     sibling_test.write_text("def test_fulfill(): pass\n")
 
     completed = _run_hook_with_payload(_make_write_payload(production_file))
+
+    assert _decision_from(completed) == "allow"
+
+
+def test_should_deny_apply_patch_add_with_no_fresh_test(tmp_path: Path) -> None:
+    sandbox = _sandbox(tmp_path)
+    patch_command = (
+        "*** Begin Patch\n"
+        "*** Add File: orders.py\n"
+        "+def fulfill(): pass\n"
+        "*** End Patch"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_apply_patch_payload(sandbox, patch_command),
+        extra_env={"CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1"},
+    )
+
+    assert _decision_from(completed) == "deny"
+    parsed = json.loads(completed.stdout)
+    reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "test_orders.py" in reason
+
+
+def test_should_allow_apply_patch_update_with_fresh_sibling_test(tmp_path: Path) -> None:
+    sandbox = _sandbox(tmp_path)
+    production_file = sandbox / "orders.py"
+    production_file.write_text("def fulfill(): pass\n")
+    sibling_test = sandbox / "test_orders.py"
+    sibling_test.write_text("def test_fulfill(): pass\n")
+    patch_command = (
+        "*** Begin Patch\n"
+        "*** Update File: orders.py\n"
+        "@@\n"
+        "-def fulfill(): pass\n"
+        "+def fulfill(): return True\n"
+        "*** End Patch"
+    )
+
+    completed = _run_hook_with_payload(
+        _make_apply_patch_payload(sandbox, patch_command),
+        extra_env={"CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1"},
+    )
 
     assert _decision_from(completed) == "allow"
 

@@ -186,11 +186,37 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     PRECHECK_USAGE_MESSAGE,
     UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
     VIOLATION_SEPARATOR,
+    apply_edits,
+    edits_for_tool,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
+
+
+def _multiedit_post_edit_view(
+    file_path: str, tool_input: dict[str, object]
+) -> tuple[str, str] | None:
+    """Return the prior and reconstructed post-edit content for a MultiEdit payload.
+
+    Reads ``file_path`` once and applies every edit in the payload's ``edits``
+    list in order, so a violation introduced by any edit — not only the
+    first — is judged against the file's real prior and post-edit state.
+
+    Args:
+        file_path: The destination path the MultiEdit targets.
+        tool_input: The MultiEdit payload's input mapping.
+
+    Returns:
+        A ``(prior_content, post_edit_content)`` pair, or None when the target
+        file cannot be read.
+    """
+    existing_content = _read_existing_file_content(file_path)
+    if existing_content is None:
+        return None
+    post_edit_content = apply_edits(existing_content, edits_for_tool("MultiEdit", tool_input))
+    return existing_content, post_edit_content
 
 
 class _ValidationContext(NamedTuple):
@@ -1134,6 +1160,7 @@ def _contents_for_validation(
     old_string: str,
     written_content: str,
     file_path: str,
+    multiedit_tool_input: dict[str, object] | None = None,
 ) -> tuple[str, str, str | None, str] | None:
     """Resolve the content views the verdict needs for the given tool payload.
 
@@ -1143,6 +1170,8 @@ def _contents_for_validation(
         old_string: The Edit payload's fragment to replace.
         written_content: The Write payload's whole file body.
         file_path: The destination path of the write or edit.
+        multiedit_tool_input: The MultiEdit payload's input mapping, carrying
+            its ``edits`` list; None for every other tool.
 
     Returns:
         A ``(content, old_content, full_file_content_after_edit,
@@ -1158,6 +1187,12 @@ def _contents_for_validation(
             if full_file_content_after_edit is None:
                 return None
         return new_string, old_string, full_file_content_after_edit, prior_content or ""
+    if tool_name == "MultiEdit":
+        multiedit_view = _multiedit_post_edit_view(file_path, multiedit_tool_input or {})
+        if multiedit_view is None:
+            return None
+        prior_content, post_edit_content = multiedit_view
+        return post_edit_content, prior_content, post_edit_content, prior_content
     content = written_content or new_string
     old_content = _read_existing_file_content(file_path) or ""
     if old_content:
@@ -1195,7 +1230,7 @@ def _deny_reason_for_issues(
     )
     has_reconstructed_prior = bool(prior_full_file_content)
     if (
-        tool_name == "Edit"
+        tool_name in ("Edit", "MultiEdit")
         and full_file_content_after_edit is not None
         and has_reconstructed_prior
     ):
@@ -1357,6 +1392,7 @@ def main(all_arguments: list[str]) -> None:
         tool_input.get("old_string", ""),
         tool_input.get("content", ""),
         file_path,
+        tool_input,
     )
     if validation_contents is None:
         sys.exit(0)

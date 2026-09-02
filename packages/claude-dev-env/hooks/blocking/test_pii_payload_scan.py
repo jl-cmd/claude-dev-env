@@ -13,12 +13,20 @@ _HOOK_DIR = Path(__file__).parent
 _HOOKS_DIR = _HOOK_DIR.parent
 
 try:
-    from pii_payload_scan import evaluate_post_body_texts, evaluate_write_edit_payload
+    from pii_payload_scan import (
+        evaluate_apply_patch_payload,
+        evaluate_post_body_texts,
+        evaluate_write_edit_payload,
+    )
 except ImportError:
     for each_bootstrap_directory in (str(_HOOK_DIR), str(_HOOKS_DIR)):
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
-    from pii_payload_scan import evaluate_post_body_texts, evaluate_write_edit_payload
+    from pii_payload_scan import (
+        evaluate_apply_patch_payload,
+        evaluate_post_body_texts,
+        evaluate_write_edit_payload,
+    )
 
 _ALLOW_SLUG = "AllowOwner/allow-repo"
 _OTHER_SLUG = "OtherOwner/other-repo"
@@ -166,3 +174,38 @@ def test_allowlisted_value_under_missing_nested_parent_is_allowed(
     nested_target = repository_root / "new_dir" / "deeper" / "notes.md"
     assert not nested_target.parent.exists()
     assert _write_deny_reason(nested_target, allowed_value) is None
+
+
+def test_apply_patch_add_with_pii_is_denied(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, _ALLOW_SLUG)
+    deny_reason = evaluate_apply_patch_payload(
+        {
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: notes.md\n"
+                f"+Reach me at {_assembled_fixture_email()}\n"
+                "*** End Patch"
+            )
+        },
+        hook_payload={"cwd": str(repository_root)},
+    )
+    assert deny_reason is not None
+    assert "email" in deny_reason
+
+
+def test_apply_patch_add_with_clean_content_is_allowed(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, _ALLOW_SLUG)
+    deny_reason = evaluate_apply_patch_payload(
+        {
+            "command": (
+                "*** Begin Patch\n"
+                "*** Add File: notes.md\n"
+                "+nothing sensitive here\n"
+                "*** End Patch"
+            )
+        },
+        hook_payload={"cwd": str(repository_root)},
+    )
+    assert deny_reason is None

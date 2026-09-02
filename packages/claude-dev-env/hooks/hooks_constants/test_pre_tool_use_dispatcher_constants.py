@@ -4,25 +4,35 @@ import importlib
 import pathlib
 import sys
 
-_HOOKS_ROOT = pathlib.Path(__file__).resolve().parent.parent
-if str(_HOOKS_ROOT) not in sys.path:
-    sys.path.insert(0, str(_HOOKS_ROOT))
+try:
+    _HOOKS_ROOT = pathlib.Path(__file__).resolve().parent.parent
+    if str(_HOOKS_ROOT) not in sys.path:
+        sys.path.insert(0, str(_HOOKS_ROOT))
 
-_BLOCKING_DIR = _HOOKS_ROOT / "blocking"
-if str(_BLOCKING_DIR) not in sys.path:
-    sys.path.insert(0, str(_BLOCKING_DIR))
+    _BLOCKING_DIR = _HOOKS_ROOT / "blocking"
+    if str(_BLOCKING_DIR) not in sys.path:
+        sys.path.insert(0, str(_BLOCKING_DIR))
 
-from hooks_constants.pre_tool_use_dispatcher_constants import (
-    ALL_HOSTED_HOOK_ENTRIES,
-    ALL_WRITE_AND_EDIT_TOOL_NAMES,
-    BLOCKING_CRASH_DENY_REASON,
-    EDIT_TOOL_NAME,
-    WRITE_TOOL_NAME,
-)
-from pre_tool_use_dispatcher import (
-    HostedHookResult,
-    aggregate_hosted_hook_results,
-)
+    from hooks_constants.pre_tool_use_dispatcher_constants import (
+        ALL_HOSTED_HOOK_ENTRIES,
+        ALL_WRITE_AND_EDIT_TOOL_NAMES,
+        ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
+        ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
+        APPLY_PATCH_TOOL_NAME,
+        BLOCKING_CRASH_DENY_REASON,
+        EDIT_TOOL_NAME,
+        MULTI_EDIT_TOOL_NAME,
+        WRITE_TOOL_NAME,
+    )
+    from pre_tool_use_dispatcher import (
+        HostedHookResult,
+        aggregate_hosted_hook_results,
+    )
+except ImportError as import_error:
+    raise ImportError(
+        "test_pre_tool_use_dispatcher_constants: cannot import its sibling modules; "
+        "ensure the hooks and blocking directories are importable."
+    ) from import_error
 
 
 def _entry_for(script_relative_path: str):
@@ -61,7 +71,6 @@ def test_duplicate_rmtree_helper_blocker_runs_via_runpy() -> None:
     entry = _entry_for("blocking/duplicate_rmtree_helper_blocker.py")
     assert entry is not None
     assert entry.native_module_name is None
-
 
 
 def test_windows_rmtree_blocker_still_registered() -> None:
@@ -124,4 +133,42 @@ def test_every_native_module_exposes_a_callable_evaluate() -> None:
         assert callable(evaluate_function), (
             f"{each_entry.native_module_name} must expose a callable named evaluate, "
             "matching the native_module_name docstring contract"
+        )
+
+
+def test_four_way_set_covers_every_mutation_tool_name() -> None:
+    assert ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES == (
+        ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {APPLY_PATCH_TOOL_NAME}
+    )
+
+
+def test_immediate_harm_hooks_reach_apply_patch() -> None:
+    """PII, sensitive-path, existing-file, CODE_RULES, and TDD gates all see apply_patch."""
+    all_apply_patch_required_script_paths = (
+        "blocking/pii_prevention_blocker.py",
+        "blocking/sensitive_file_protector.py",
+        "blocking/write_existing_file_blocker.py",
+        "blocking/code_rules_enforcer.py",
+        "blocking/tdd_enforcer.py",
+    )
+    for each_script_path in all_apply_patch_required_script_paths:
+        entry = _entry_for(each_script_path)
+        assert entry is not None, f"{each_script_path} must stay on the hosted roster"
+        assert APPLY_PATCH_TOOL_NAME in entry.applicable_tool_names, (
+            f"{each_script_path} must reach apply_patch for mutation-tool parity"
+        )
+
+
+def test_multi_edit_widened_hooks_reach_multi_edit() -> None:
+    all_multi_edit_widened_script_paths = (
+        "blocking/write_existing_file_blocker.py",
+        "blocking/code_rules_enforcer.py",
+        "blocking/tdd_enforcer.py",
+        "blocking/state_description_blocker.py",
+    )
+    for each_script_path in all_multi_edit_widened_script_paths:
+        entry = _entry_for(each_script_path)
+        assert entry is not None, f"{each_script_path} must stay on the hosted roster"
+        assert MULTI_EDIT_TOOL_NAME in entry.applicable_tool_names, (
+            f"{each_script_path} must reach MultiEdit for mutation-tool parity"
         )

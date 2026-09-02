@@ -11,6 +11,7 @@ POWERSHELL_TOOL_NAME: str = "PowerShell"
 WRITE_TOOL_NAME: str = "Write"
 EDIT_TOOL_NAME: str = "Edit"
 MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
+APPLY_PATCH_TOOL_NAME: str = "apply_patch"
 
 ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES: frozenset[str] = frozenset(
     {WRITE_TOOL_NAME, EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME}

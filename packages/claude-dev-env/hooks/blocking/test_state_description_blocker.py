@@ -295,6 +295,39 @@ def test_clean_edit_passes():
     assert result.stdout == ""
 
 
+def test_detects_multi_edit_second_new_string() -> None:
+    """A violation in the second edit of a MultiEdit is denied, not only the first."""
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
+                {"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "previously" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_clean_multi_edit_passes() -> None:
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
+                {"old_string": "b = 2", "new_string": CLEAN_COMMENT},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
 def test_system_message_and_suppress_output():
     result = _run_hook(
         "Write",

@@ -21,6 +21,8 @@ try:
         is_ephemeral_script_path,
         is_under_session_scratchpad,
     )
+    from codex_apply_patch import CodexPatchError, parse_codex_apply_patch
+    from hooks_constants.pre_tool_use_dispatcher_constants import APPLY_PATCH_TOOL_NAME
     from tdd_enforcer_parts import (
         candidate_paths,
         content_analysis,
@@ -35,6 +37,26 @@ except ImportError as import_error:
         "tdd_enforcer: cannot import its tdd_enforcer_parts submodules; "
         "ensure the hooks directory is importable."
     ) from import_error
+
+
+def _is_apply_patch_tool(tool_name: str) -> bool:
+    """Return whether *tool_name* names the Codex apply_patch tool."""
+    return tool_name == APPLY_PATCH_TOOL_NAME
+
+
+def _apply_patch_target_file_paths(input_data: dict, tool_input: dict) -> tuple[str, ...]:
+    """Return each file path a Codex apply_patch command names."""
+    raw_command = tool_input.get("command", "")
+    command = raw_command if isinstance(raw_command, str) else ""
+    if not command:
+        return ()
+    raw_working_directory = input_data.get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
+    try:
+        all_patch_files = parse_codex_apply_patch(command, working_directory)
+    except CodexPatchError:
+        return ()
+    return tuple(each_patch_file.file_path for each_patch_file in all_patch_files)
 
 
 def _is_session_scratchpad_write(file_path: str, input_data: dict) -> bool:
@@ -117,29 +139,59 @@ def _write_is_exempt(
     return _edit_is_constants_or_import_only(tool_name, tool_input, path, extension)
 
 
+def _decide_for_target(
+    tool_name: str, tool_input: dict, file_path: str, input_data: dict
+) -> tuple[bool, str] | None:
+    """Return (is_allowed, deny_reason) for one target file, or None to skip silently."""
+    if not file_path:
+        return None
+    if _is_session_scratchpad_write(file_path, input_data):
+        return None
+    path = Path(file_path)
+    extension = path.suffix.lower()
+    if _is_silently_skipped(file_path, extension, path):
+        return None
+    if _write_is_exempt(tool_name, tool_input, path, extension):
+        return True, ""
+    all_candidates = candidate_test_paths_for(path)
+    if has_fresh_test(all_candidates, _freshness_seconds()):
+        return True, ""
+    return False, build_deny_reason(path, all_candidates)
+
+
+def _decide_apply_patch(input_data: dict, tool_input: dict) -> None:
+    """Run the TDD gate over every file a Codex apply_patch payload touches."""
+    for each_file_path in _apply_patch_target_file_paths(input_data, tool_input):
+        decision = _decide_for_target(
+            APPLY_PATCH_TOOL_NAME, tool_input, each_file_path, input_data
+        )
+        if decision is None:
+            continue
+        is_allowed, deny_reason = decision
+        if not is_allowed:
+            emit_deny(deny_reason)
+            return
+    emit_allow()
+
+
 def main() -> None:
-    """Run the TDD gate over one PreToolUse Write, Edit, or MultiEdit payload."""
+    """Run the TDD gate over one PreToolUse Write, Edit, MultiEdit, or apply_patch payload."""
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
         sys.exit(0)
     tool_name, tool_input, file_path = _resolve_payload(input_data)
-    if not file_path:
+    if _is_apply_patch_tool(tool_name):
+        _decide_apply_patch(input_data, tool_input)
         sys.exit(0)
-    if _is_session_scratchpad_write(file_path, input_data):
+    decision = _decide_for_target(tool_name, tool_input, file_path, input_data)
+    if decision is None:
         sys.exit(0)
-    path = Path(file_path)
-    extension = path.suffix.lower()
-    if _is_silently_skipped(file_path, extension, path):
-        sys.exit(0)
-    if _write_is_exempt(tool_name, tool_input, path, extension):
+    is_allowed, deny_reason = decision
+    if is_allowed:
         emit_allow()
         sys.exit(0)
-    all_candidates = candidate_test_paths_for(path)
-    if has_fresh_test(all_candidates, _freshness_seconds()):
-        emit_allow()
-        sys.exit(0)
-    emit_deny(build_deny_reason(path, all_candidates))
+    emit_deny(deny_reason)
     sys.exit(0)
 
 
