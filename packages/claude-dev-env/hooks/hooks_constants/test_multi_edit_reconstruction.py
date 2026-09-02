@@ -69,6 +69,7 @@ def test_apply_edits_mixes_replace_all_and_single_edits_in_one_list() -> None:
     ]
     assert apply_edits("a b a b", all_edits) == "A B A b"
 
+
 def test_joined_new_strings_joins_every_new_string_on_a_newline() -> None:
     """Each edit's introduced text reaches the scanner as its own line."""
     tool_input = {

@@ -23,6 +23,6 @@ Incomplete mocks make it impossible to distinguish "broken code" from "missing d
 
 Tests exercise real behavior, real data, and production code paths. A test that asserts on a stand-in for the production path proves the stand-in works.
 
-## The File-Level TDD Gate Reads Content, Not the Clock
+## The File-Level TDD Gate Reads Content
 
-`tdd_enforcer.py` remembers each candidate test's last-observed content hash, so a touch does not count. A first sighting needs content HEAD does not have yet, not only a fresh, real test.
+`tdd_enforcer.py` records each candidate test's content hash at every sighting and compares that hash on the next write. A first sighting requires content that differs from HEAD.

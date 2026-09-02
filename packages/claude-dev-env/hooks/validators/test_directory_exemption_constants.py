@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from hooks_constants.code_rules_enforcer_constants import ALL_CLI_FILE_PATH_MARKERS
 from hooks_constants.code_rules_path_utils_constants import ALL_CONFIG_DIRECTORY_NAMES
 from validators.config.directory_exemption_constants import (
@@ -19,6 +17,7 @@ from validators.config.directory_exemption_constants import (
     all_directory_segments_in_path_pattern,
     directory_segment_names_from_path_patterns,
     is_filename_like_path_segment,
+    is_pytest_scratch_directory_segment,
     substring_patterns_from_path_patterns,
 )
 from validators.exempt_paths import (
@@ -36,6 +35,9 @@ ALL_SYNTHETIC_DIRECTORY_PATTERNS = frozenset(
     {"/foo/", "\\bar\\", "/baz.py", "plain", "/.hidden/qux/"}
 )
 ALL_EXPECTED_SYNTHETIC_SEGMENTS = frozenset({"foo", "bar", ".hidden", "qux"})
+OVER_LONG_STEM_DIRECTORY_NAME = "test_helpers_for_a_very_long_domain_name0"
+PROJECT_ROOTED_BASETEMP_PATH = "/srv/projects/scratch-basetemp"
+PYTEST_SCRATCH_DIRECTORY_NAME = "test_edit_introducing_new_viol0"
 
 
 def test_is_filename_like_path_segment_detects_extensions() -> None:
@@ -43,6 +45,21 @@ def test_is_filename_like_path_segment_detects_extensions() -> None:
     assert is_filename_like_path_segment("cli.py") is True
     assert is_filename_like_path_segment("tests") is False
     assert is_filename_like_path_segment(".claude") is False
+
+
+def test_is_pytest_scratch_directory_segment_detects_numbered_test_directories() -> None:
+    assert is_pytest_scratch_directory_segment("test_drops_leading_anchor0") is True
+    assert is_pytest_scratch_directory_segment("test_edit_introducing_new_viol0") is True
+    assert is_pytest_scratch_directory_segment("pytest-of-root") is True
+    assert is_pytest_scratch_directory_segment("pytest-9") is True
+
+
+def test_is_pytest_scratch_directory_segment_keeps_real_project_directories() -> None:
+    assert is_pytest_scratch_directory_segment("test_helpers") is False
+    assert is_pytest_scratch_directory_segment("tests") is False
+    assert is_pytest_scratch_directory_segment("scripts") is False
+    assert is_pytest_scratch_directory_segment("conftest") is False
+    assert is_pytest_scratch_directory_segment(OVER_LONG_STEM_DIRECTORY_NAME) is False
 
 
 def test_all_directory_segments_in_path_pattern_keeps_directory_tokens_only() -> None:
@@ -136,32 +153,21 @@ def test_absolute_system_temp_pytest_shaped_path_stages_flat_basename(
     assert staged_path == staging_root / "legacy_module.py"
 
 
-def test_runner_temp_pytest_shaped_path_stages_flat_basename_when_gettempdir_differs(
+def test_pytest_shaped_path_stages_flat_basename_under_every_basetemp_placement(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """GHA basetemp lives under RUNNER_TEMP while gettempdir is often /tmp."""
-    runner_temp_root = tmp_path / "runner_temp"
-    os_gettemp = tmp_path / "os_gettemp"
-    runner_temp_root.mkdir()
-    os_gettemp.mkdir()
-    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp_root))
-    monkeypatch.setattr(
-        "validators.system_temporary_roots.tempfile.gettempdir",
-        lambda: str(os_gettemp),
-    )
-    pytest_shaped_target = (
-        runner_temp_root
-        / "pytest-basetemp-pkg"
-        / "test_edit_introducing_new_viol0"
-        / "legacy_module.py"
-    )
+    """A ``--basetemp`` outside every temp root must not change the staged path."""
     staging_root = tmp_path / "staging_root"
     staging_root.mkdir()
-    staged_path = _temporary_path_preserving_directory_signal(
-        staging_root, str(pytest_shaped_target)
-    )
-    assert staged_path == staging_root / "legacy_module.py"
+    all_basetemp_roots = (tmp_path, Path(PROJECT_ROOTED_BASETEMP_PATH))
+    all_staged_paths = {
+        _temporary_path_preserving_directory_signal(
+            staging_root,
+            str(each_root / PYTEST_SCRATCH_DIRECTORY_NAME / "legacy_module.py"),
+        )
+        for each_root in all_basetemp_roots
+    }
+    assert all_staged_paths == {staging_root / "legacy_module.py"}
 
 
 def test_substring_patterns_from_path_patterns_skips_directory_tokens() -> None:

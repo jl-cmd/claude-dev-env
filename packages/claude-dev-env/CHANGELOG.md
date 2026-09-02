@@ -1,5 +1,77 @@
 # Changelog
 
+## [2.31.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.30.1...claude-dev-env-v2.31.0) (2026-09-02)
+
+
+### Features
+
+* **hooks:** make PRs wait for the body writer ([d2a9351](https://github.com/jl-cmd/claude-dev-env/commit/d2a9351e973e2b9f8e4c8f09e34b5a192173f52c))
+* **hooks:** require a PR description writer before PR creation ([1c14f08](https://github.com/jl-cmd/claude-dev-env/commit/1c14f0891cc37c58e2bf14cec5bd7d079912f229))
+* Remember your test so a touch cannot fake it ([33cc4df](https://github.com/jl-cmd/claude-dev-env/commit/33cc4dfcc72a7dd0b1ece99068dee1313a1f9910))
+
+
+### Bug Fixes
+
+* Check every edit tool the same way ([164c052](https://github.com/jl-cmd/claude-dev-env/commit/164c052e1b9738b24d67343e096039503f52773a))
+* **hooks:** close CI red on apply_patch mutation-parity across four causes ([f640a27](https://github.com/jl-cmd/claude-dev-env/commit/f640a2735e0ab8114aa9aaa506424b7005c3b1ca))
+* **hooks:** close the remaining MultiEdit gap and repair review findings ([d30ac88](https://github.com/jl-cmd/claude-dev-env/commit/d30ac88e37e7f49027f9e938726e4b3932a72d9b))
+* **hooks:** close the ruff and mypy findings the quality gate raised ([ab2c111](https://github.com/jl-cmd/claude-dev-env/commit/ab2c111cad876dd360a72ab4f7486eaac4fa986a))
+* **hooks:** correct abbreviation_checks' frozenset annotation ([243a709](https://github.com/jl-cmd/claude-dev-env/commit/243a709d1cb4b1f8cdff1b862782b2a0b087490f))
+* **hooks:** honor replace_all when reconstructing a MultiEdit ([d4f55b2](https://github.com/jl-cmd/claude-dev-env/commit/d4f55b2c8e79ed564ab8d666e9963a856e01bac6))
+* **hooks:** honor replace_all when reconstructing a MultiEdit ([5cdc78f](https://github.com/jl-cmd/claude-dev-env/commit/5cdc78f84514d4d1e0904ca8c4c20e0a282f0f11))
+* **hooks:** repair push-gate findings and proactively close the same shape ([f9fa163](https://github.com/jl-cmd/claude-dev-env/commit/f9fa1633810b3f6c873b8033174b495363f77a3c))
+* **hooks:** route the ephemeral-exempt-off fixture per file, not suite-wide ([72cc83d](https://github.com/jl-cmd/claude-dev-env/commit/72cc83d33d08c97fed1a657f290e3207a1ae847c))
+* **hooks:** stop check_constants_outside_config_advisory from blocking writes ([669ee4d](https://github.com/jl-cmd/claude-dev-env/commit/669ee4d8c42686e8953b5648d369b36eaa60236b))
+* Let hooks import the way this repo tells them to ([eec4131](https://github.com/jl-cmd/claude-dev-env/commit/eec41319a741464d9579ec04aec90ed8e0937b14))
+* Make the advisory check actually advisory ([b68b2b8](https://github.com/jl-cmd/claude-dev-env/commit/b68b2b830b177db9e35a9d1d7ec6ed6fd2bb1d28))
+
+
+### Documentation
+
+* **code-rules:** record the keep decision for the Style/Communication save-path audit ([98fc34e](https://github.com/jl-cmd/claude-dev-env/commit/98fc34e073f244891410261de7388d08615de8ac))
+* **code-rules:** state the full-gate cut as current behavior, not as an audit ([9811a22](https://github.com/jl-cmd/claude-dev-env/commit/9811a22cb6b73edcda9becc88ab8e9eae84257e6))
+* **code-rules:** state the hook-infrastructure lane in section 11.6 ([968ae60](https://github.com/jl-cmd/claude-dev-env/commit/968ae60951e3b977b0182a549f0a05a5cd4e1bf1))
+* **code-rules:** state the lane rule, drop the reasoning behind it ([26e68d0](https://github.com/jl-cmd/claude-dev-env/commit/26e68d08fa5282bcd220973093888a78c8712ec5))
+* **code-rules:** write section 11.6 as what each thing does ([0495cb7](https://github.com/jl-cmd/claude-dev-env/commit/0495cb781f24e0efb2c820ecacbacadefbe86ac8))
+* **hooks:** state the TDD gate's content rule as what the gate does ([5df5931](https://github.com/jl-cmd/claude-dev-env/commit/5df59310012e798542944647bb313e8f3293f707))
+* Say what the timing harness measures ([63fc3d9](https://github.com/jl-cmd/claude-dev-env/commit/63fc3d9bae545b01e12caa9e58391afc75d62a91))
+* State the lane assignment rule in CODE_RULES ([945b0ea](https://github.com/jl-cmd/claude-dev-env/commit/945b0ea8a39afcc5336d5719778b76d8f440056e))
+* State the TDD gate's content rule as what the gate does ([c46128a](https://github.com/jl-cmd/claude-dev-env/commit/c46128a58fc582f33d710b8db7533c9f593a6202))
+* **validators:** say what the timing harness measures ([ef90a60](https://github.com/jl-cmd/claude-dev-env/commit/ef90a6092937b43f346525a84032532d80861d2b))
+
+
+### Refactoring
+
+* **hooks:** collapse duplication across the apply_patch and MultiEdit gates ([9b5bf42](https://github.com/jl-cmd/claude-dev-env/commit/9b5bf42fa11fee5a625e51afb424f9f0b974b362))
+* **hooks:** collapse duplication across the apply_patch and MultiEdit gates ([5589cbf](https://github.com/jl-cmd/claude-dev-env/commit/5589cbfea0a44f14b64abefe5209d4f848357e3c))
+* **hooks:** collapse the three apply_patch target-path wrappers into one ([cb2acf0](https://github.com/jl-cmd/claude-dev-env/commit/cb2acf0814cad891e3cb6b3bdb0a568bac048b64))
+* **hooks:** collapse the three apply_patch target-path wrappers into one ([ad7f7b8](https://github.com/jl-cmd/claude-dev-env/commit/ad7f7b8082b66de8425373766373f6024ba29a3a))
+* **hooks:** drop a dead helper and a redundant cwd fallback ([63973e0](https://github.com/jl-cmd/claude-dev-env/commit/63973e0a8f75f48b046c33441be3139e3aad9cdd))
+* **hooks:** finish the tool-name single source and drop two delegators ([394c7a2](https://github.com/jl-cmd/claude-dev-env/commit/394c7a261b532679d4f4712dbe3ba525a2b5047c))
+* **hooks:** parse the enforcer source once in the cap-meta tests ([811cdcf](https://github.com/jl-cmd/claude-dev-env/commit/811cdcfbb87b6c48752d026c093b048653db7580))
+* **hooks:** probe root-anchored /tmp in the ephemeral-exempt fixture ([da20a84](https://github.com/jl-cmd/claude-dev-env/commit/da20a84170b6b297c931532932d3a4f5fee9b20d))
+* **hooks:** probe root-anchored /tmp in the ephemeral-exempt fixture ([0ae6173](https://github.com/jl-cmd/claude-dev-env/commit/0ae6173001002bfe16b5dcca92b87a5148a5f5d0))
+* **hooks:** put the hash store on the shared file plumbing ([2ab8e63](https://github.com/jl-cmd/claude-dev-env/commit/2ab8e638f881cddc8d8f420c7bea0b6ebcaa3f93))
+* **hooks:** put the hash store on the shared file plumbing ([9e92234](https://github.com/jl-cmd/claude-dev-env/commit/9e922342ec65e5a784184955f573b4e53e9ac758))
+* **hooks:** read the enforcer file once and share the parsed tree ([dfa872b](https://github.com/jl-cmd/claude-dev-env/commit/dfa872b8c63cc75d096c5907bbd7c6297de79894))
+* **hooks:** simplify the advisory-check tests and generalize the guard ([25ad136](https://github.com/jl-cmd/claude-dev-env/commit/25ad136c7ce76d347578c22b31dd633490d0551d))
+* **hooks:** simplify the advisory-check tests and generalize the guard ([68b883f](https://github.com/jl-cmd/claude-dev-env/commit/68b883ff885034511ee2f593cad2e1a778f00701))
+* Put the import-order helpers where a reader would look for them ([f1096e4](https://github.com/jl-cmd/claude-dev-env/commit/f1096e44eec8eb4f02027945401fefa53978400c))
+* Put the import-order helpers where a reader would look for them ([ff72d41](https://github.com/jl-cmd/claude-dev-env/commit/ff72d4120f456126df5a1023d3e6e1b8ea26faa4))
+* Undo the import contortions the old check forced ([de9a439](https://github.com/jl-cmd/claude-dev-env/commit/de9a4393c3aa8797ab315fa24e87bf859dcfd760))
+
+
+### Performance
+
+* **hooks:** run the save-path validator roster in-process, drop Mypy ([4f6f52e](https://github.com/jl-cmd/claude-dev-env/commit/4f6f52e586c37f79d99990881e7e7c09972747e4))
+* Make saving fast again ([0a7709c](https://github.com/jl-cmd/claude-dev-env/commit/0a7709c2d1ad9fdb35a5a47b4dbc4d3dfd5f5371))
+
+
+### Tests
+
+* **hooks:** name the fresh-process gate-loading test for what it covers ([4edc7ce](https://github.com/jl-cmd/claude-dev-env/commit/4edc7cee43644bea060ffb53c9ded899292d6343))
+* Stop tests hiding in the scratch folder ([26b3d42](https://github.com/jl-cmd/claude-dev-env/commit/26b3d4213bd6fe3d83fb11573d7509056418130b))
+
 ## [2.30.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.30.0...claude-dev-env-v2.30.1) (2026-09-02)
 
 

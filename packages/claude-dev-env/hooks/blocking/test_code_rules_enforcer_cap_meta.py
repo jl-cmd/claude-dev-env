@@ -25,6 +25,7 @@ consideration will trip this test.
 from __future__ import annotations
 
 import ast
+import functools
 import importlib.util
 import inspect
 import pathlib
@@ -32,12 +33,13 @@ import sys
 
 
 _HOOK_DIRECTORY = pathlib.Path(__file__).parent
+_ENFORCER_SOURCE_PATH = _HOOK_DIRECTORY / "code_rules_enforcer.py"
 if str(_HOOK_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIRECTORY))
 
 _hook_spec = importlib.util.spec_from_file_location(
     "code_rules_enforcer",
-    _HOOK_DIRECTORY / "code_rules_enforcer.py",
+    _ENFORCER_SOURCE_PATH,
 )
 assert _hook_spec is not None
 assert _hook_spec.loader is not None
@@ -177,9 +179,14 @@ def test_void_advisory_checks_are_registered_and_disjoint() -> None:
     )
 
 
+@functools.lru_cache(maxsize=1)
 def _enforcer_syntax_tree() -> ast.Module:
-    enforcer_source = (_HOOK_DIRECTORY / "code_rules_enforcer.py").read_text(encoding="utf-8")
-    return ast.parse(enforcer_source)
+    """Parse code_rules_enforcer.py once and hand the same tree to every caller.
+
+    The source does not change while the suite runs, so re-reading and
+    re-parsing it for each test buys nothing.
+    """
+    return ast.parse(_ENFORCER_SOURCE_PATH.read_text(encoding="utf-8"))
 
 
 def _void_advisory_names_called_under(node: ast.AST) -> set[str]:

@@ -26,7 +26,6 @@ from __future__ import annotations
 import json
 import shlex
 import sys
-import tempfile
 from pathlib import Path
 
 _blocking_dir = str(Path(__file__).resolve().parent)
@@ -41,6 +40,9 @@ from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E4
     ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
+from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
+    read_hook_input_dictionary_from_stdin,
+)
 from hooks_constants.pr_description_writer_gate_constants import (  # noqa: E402
     ALL_GH_EXECUTABLE_BASENAMES,
     COMMAND_FIELD_NAME,
@@ -49,15 +51,14 @@ from hooks_constants.pr_description_writer_gate_constants import (  # noqa: E402
     GH_PR_CREATE_MINIMUM_TOKEN_COUNT,
     PR_SUBCOMMAND_TOKEN,
     SPAWN_BYPASS_MARKER,
-    SPAWN_MARKER_FILE_PREFIX,
-    SPAWN_MARKER_FILE_SUFFIX,
     TOOL_INPUT_FIELD_NAME,
     TOOL_NAME_FIELD_NAME,
+    spawn_marker_path,
 )
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_COMMAND_SEPARATOR_TOKENS,
-    SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
 )
+from sensitive_file_protector import build_deny_response  # noqa: E402
 
 
 def _all_command_tokens(shell_command: str) -> list[str] | None:
@@ -149,7 +150,9 @@ def _all_pull_request_creation_segment_indexes(all_segments: list[list[str]]) ->
 
 
 def _only_final_create_carries_bypass(
-    all_tokens: list[str], all_creation_segment_indexes: list[int]
+    all_tokens: list[str],
+    all_segments: list[list[str]],
+    all_creation_segment_indexes: list[int],
 ) -> bool:
     """Report whether one final gh pr create carries the final bypass comment.
 
@@ -159,6 +162,7 @@ def _only_final_create_carries_bypass(
 
     Args:
         all_tokens: The tokens of the whole command.
+        all_segments: The command's token segments, already split by the caller.
         all_creation_segment_indexes: Indexes of segments that create pull requests.
 
     Returns:
@@ -166,7 +170,7 @@ def _only_final_create_carries_bypass(
     """
     if not _carries_trailing_bypass_marker(all_tokens):
         return False
-    final_segment_index = len(_all_command_segments(all_tokens)) - 1
+    final_segment_index = len(all_segments) - 1
     return all_creation_segment_indexes == [final_segment_index]
 
 
@@ -182,11 +186,8 @@ def _spawn_is_recorded(session_id: str) -> bool:
     Returns:
         True when this session's marker file is present.
     """
-    sanitized_session_id = SESSION_ID_UNSAFE_CHARACTERS_PATTERN.sub("", session_id)
-    if not sanitized_session_id:
-        return False
-    file_name = f"{SPAWN_MARKER_FILE_PREFIX}{sanitized_session_id}{SPAWN_MARKER_FILE_SUFFIX}"
-    return (Path(tempfile.gettempdir()) / file_name).exists()
+    marker_file = spawn_marker_path(session_id)
+    return marker_file is not None and marker_file.exists()
 
 
 def _shell_command_or_none(all_hook_payload: dict[str, object]) -> str | None:
@@ -211,19 +212,12 @@ def _shell_command_or_none(all_hook_payload: dict[str, object]) -> str | None:
 
 def _emit_denial() -> None:
     """Write the PreToolUse deny payload to stdout and log the block."""
-    deny_payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": CORRECTIVE_MESSAGE,
-        }
-    }
     log_hook_block(
         calling_hook_name="pr_description_writer_gate.py",
         hook_event="PreToolUse",
         block_reason=CORRECTIVE_MESSAGE,
     )
-    sys.stdout.write(json.dumps(deny_payload) + "\n")
+    sys.stdout.write(json.dumps(build_deny_response(CORRECTIVE_MESSAGE)) + "\n")
     sys.stdout.flush()
 
 
@@ -235,11 +229,8 @@ def main() -> None:
     tokenize, a command opening no pull request, a trailing bypass marker, and
     a recorded spawn each pass through untouched.
     """
-    try:
-        hook_payload = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        sys.exit(0)
-    if not isinstance(hook_payload, dict):
+    hook_payload = read_hook_input_dictionary_from_stdin()
+    if hook_payload is None:
         sys.exit(0)
     shell_command = _shell_command_or_none(hook_payload)
     if shell_command is None:
@@ -251,7 +242,9 @@ def main() -> None:
     all_creation_segment_indexes = _all_pull_request_creation_segment_indexes(all_segments)
     if not all_creation_segment_indexes:
         sys.exit(0)
-    if _only_final_create_carries_bypass(all_tokens, all_creation_segment_indexes):
+    if _only_final_create_carries_bypass(
+        all_tokens, all_segments, all_creation_segment_indexes
+    ):
         sys.exit(0)
     if _spawn_is_recorded(str(hook_payload.get("session_id") or "")):
         sys.exit(0)

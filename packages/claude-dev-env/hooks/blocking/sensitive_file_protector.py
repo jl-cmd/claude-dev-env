@@ -34,11 +34,7 @@ import sys
 
 import _path_setup  # noqa: F401
 
-from codex_apply_patch import (
-    CodexPatchError,
-    codex_patch_operation_targets,
-    payload_patch_command,
-)
+from codex_apply_patch import payload_patch_target_paths
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
@@ -130,21 +126,9 @@ def deny_write(file_path: str, matched_pattern: str) -> None:
     sys.stdout.write(json.dumps(build_deny_response(deny_reason)))
 
 
-def _apply_patch_target_paths(hook_input: dict, tool_input: dict) -> tuple[str, ...]:
-    """Return every resolved target path a Codex apply_patch payload names."""
-    command, working_directory = payload_patch_command(hook_input, tool_input)
-    if not command:
-        return ()
-    try:
-        all_operation_targets = codex_patch_operation_targets(command, working_directory)
-    except CodexPatchError:
-        return ()
-    return tuple(each_path for _each_operation, each_path in all_operation_targets)
-
-
 def _deny_apply_patch_sensitive_target(hook_input: dict, tool_input: dict) -> None:
     """Deny the first apply_patch target path whose basename names a sensitive file."""
-    for each_target_path in _apply_patch_target_paths(hook_input, tool_input):
+    for each_target_path in payload_patch_target_paths(hook_input, tool_input):
         matched_pattern = is_sensitive_file(each_target_path)
         if matched_pattern is not None:
             deny_write(each_target_path, matched_pattern)
