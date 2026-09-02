@@ -1,4 +1,11 @@
-"""Tests for state_description_blocker hook."""
+"""Tests for state_description_blocker hook.
+
+Every payload here names an absolute file under this repository and carries
+the repository root as its ``cwd``, so each decision belongs to this
+checkout rather than to the directory pytest runs from. The one exception is
+the ephemeral-path test, which keeps its scratch target outside the
+repository root on purpose.
+"""
 
 import json
 import os
@@ -26,6 +33,28 @@ HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "state_description_blocker.py"
 )
 
+_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[4])
+
+
+def _repository_file_path(relative_path: str) -> str:
+    """Return the absolute path of a repository-relative file in this checkout.
+
+    The hook resolves a bare relative path against the process working
+    directory, so a payload carrying one answers to the directory pytest was
+    invoked from. An absolute path under the repository root, paired with a
+    payload ``cwd`` naming that root, keeps the decision stable for a
+    checkout under a temporary root as well.
+
+    Args:
+        relative_path: The path of the target file relative to the repository
+            root.
+
+    Returns:
+        The absolute path of that file inside this repository.
+    """
+    return str(Path(_REPOSITORY_ROOT) / relative_path)
+
+
 CLEAN_PYTHON = "x = 1  # Uses a default timeout"
 CLEAN_MD = "# Config\n\nThe API uses port 8080."
 CLEAN_COMMENT = "# Configured with a 30-second timeout"
@@ -46,7 +75,11 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
 
 
 class _RunHook:
-    """Helper to test the hook via subprocess."""
+    """Run the hook as a subprocess on a payload anchored in this repository.
+
+    The payload names the repository root as the session working directory,
+    so the hook treats each target inside it as a real production file.
+    """
 
     def __call__(
         self,
@@ -55,7 +88,9 @@ class _RunHook:
         *,
         is_prose_style_enabled: bool = True,
     ) -> subprocess.CompletedProcess:
-        payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
+        payload = json.dumps(
+            {"tool_name": tool_name, "tool_input": tool_input, "cwd": _REPOSITORY_ROOT}
+        )
         environment_by_key = os.environ.copy()
         if is_prose_style_enabled:
             environment_by_key["CLAUDE_PROSE_STYLE_ENFORCEMENT"] = "1"
@@ -81,7 +116,7 @@ def test_historical_phrase_scan_runs_with_the_env_flag_unset(
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": VIOLATION_INSTEAD_OF_COMMENT,
         },
         is_prose_style_enabled=False,
@@ -92,9 +127,10 @@ def test_historical_phrase_scan_runs_with_the_env_flag_unset(
         {
             "tool_name": "Write",
             "tool_input": {
-                "file_path": "src/main.py",
+                "file_path": _repository_file_path("src/main.py"),
                 "content": VIOLATION_INSTEAD_OF_COMMENT,
             },
+            "cwd": _REPOSITORY_ROOT,
         }
     )
     assert deny_reason is not None
@@ -105,7 +141,7 @@ def test_block_clean_python_comment_passes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": CLEAN_PYTHON,
         },
     )
@@ -117,7 +153,7 @@ def test_block_clean_markdown_passes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "docs/README.md",
+            "file_path": _repository_file_path("docs/README.md"),
             "content": CLEAN_MD,
         },
     )
@@ -129,7 +165,7 @@ def test_block_clean_comment_passes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": CLEAN_COMMENT,
         },
     )
@@ -141,7 +177,7 @@ def test_block_irrelevant_file_passes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "data.txt",
+            "file_path": _repository_file_path("data.txt"),
             "content": VIOLATION_INSTEAD_OF_COMMENT,
         },
     )
@@ -153,7 +189,7 @@ def test_block_empty_content_passes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": "",
         },
     )
@@ -177,7 +213,7 @@ def test_detects_instead_of_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": VIOLATION_INSTEAD_OF_COMMENT,
         },
     )
@@ -191,7 +227,7 @@ def test_detects_previously_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": VIOLATION_PREVIOUSLY_COMMENT,
         },
     )
@@ -205,7 +241,7 @@ def test_detects_now_uses_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/client.py",
+            "file_path": _repository_file_path("src/client.py"),
             "content": VIOLATION_NOW_USES_COMMENT,
         },
     )
@@ -219,7 +255,7 @@ def test_detects_instead_of_in_markdown():
     result = _run_hook(
         "Write",
         {
-            "file_path": "docs/api.md",
+            "file_path": _repository_file_path("docs/api.md"),
             "content": VIOLATION_MD_INSTEAD,
         },
     )
@@ -232,7 +268,7 @@ def test_detects_previously_in_markdown():
     result = _run_hook(
         "Write",
         {
-            "file_path": "docs/config.md",
+            "file_path": _repository_file_path("docs/config.md"),
             "content": VIOLATION_MD_PREVIOUSLY,
         },
     )
@@ -245,7 +281,7 @@ def test_detects_now_uses_in_markdown():
     result = _run_hook(
         "Write",
         {
-            "file_path": "docs/auth.md",
+            "file_path": _repository_file_path("docs/auth.md"),
             "content": VIOLATION_MD_NOW_USES,
         },
     )
@@ -271,7 +307,7 @@ def test_detects_edit_new_string():
     result = _run_hook(
         "Edit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "old_string": "old_comment",
             "new_string": VIOLATION_PREVIOUSLY_COMMENT,
         },
@@ -286,7 +322,7 @@ def test_clean_edit_passes():
     result = _run_hook(
         "Edit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "old_string": "x = 1",
             "new_string": CLEAN_PYTHON,
         },
@@ -300,7 +336,7 @@ def test_detects_multi_edit_second_new_string() -> None:
     result = _run_hook(
         "MultiEdit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "edits": [
                 {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
                 {"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT},
@@ -317,7 +353,7 @@ def test_clean_multi_edit_passes() -> None:
     result = _run_hook(
         "MultiEdit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "edits": [
                 {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
                 {"old_string": "b = 2", "new_string": CLEAN_COMMENT},
@@ -339,7 +375,7 @@ def test_multi_edit_new_strings_join_on_a_separator_not_concatenation() -> None:
     result = _run_hook(
         "MultiEdit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "edits": [
                 {"old_string": "a = 1", "new_string": "# describes the previous"},
                 {"old_string": "b = 2", "new_string": "ly implemented step."},
@@ -354,7 +390,7 @@ def test_multi_edit_with_a_single_edit_still_denies() -> None:
     result = _run_hook(
         "MultiEdit",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "edits": [{"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT}],
         },
     )
@@ -367,7 +403,7 @@ def test_system_message_and_suppress_output():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": VIOLATION_INSTEAD_OF_COMMENT,
         },
     )
@@ -382,7 +418,7 @@ def test_detects_no_longer_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": "# No longer supports legacy mode",
         },
     )
@@ -396,7 +432,7 @@ def test_detects_used_to_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": "# Used to be hardcoded",
         },
     )
@@ -410,7 +446,7 @@ def test_detects_switched_to_in_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": "# Switched to async processing",
         },
     )
@@ -428,7 +464,7 @@ def test_detects_comment_with_close_block_token():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.py",
+            "file_path": _repository_file_path("src/config.py"),
             "content": VIOLATION_COMMENT_WITH_CLOSE_BLOCK,
         },
     )
@@ -445,7 +481,7 @@ def test_detects_inline_trailing_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": "max_retries = 3  # No longer needed since async retry handles it",
         },
     )
@@ -461,7 +497,7 @@ def test_ignores_c_preprocessor_directive():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/config.h",
+            "file_path": _repository_file_path("src/config.h"),
             "content": '#error "This code previously used replaced API"',
         },
     )
@@ -477,7 +513,7 @@ def test_ignores_hash_in_javascript_inline():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.js",
+            "file_path": _repository_file_path("src/main.js"),
             "content": 'const selector = "#originally-dark"  // Use dark as default',
         },
     )
@@ -493,7 +529,7 @@ def test_ignores_double_slash_in_js_url():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/fetch.ts",
+            "file_path": _repository_file_path("src/fetch.ts"),
             "content": 'fetch("https://api.example.com/replaces")',
         },
     )
@@ -509,7 +545,7 @@ def test_block_comment_continuation_with_nested_glob():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/cache.ts",
+            "file_path": _repository_file_path("src/cache.ts"),
             "content": content,
         },
     )
@@ -526,7 +562,7 @@ def test_detects_inline_after_url_on_same_line():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/fetch.ts",
+            "file_path": _repository_file_path("src/fetch.ts"),
             "content": 'const url = "https://api.com"; // no longer used',
         },
     )
@@ -543,7 +579,7 @@ def test_ignores_code_before_block_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/cache.ts",
+            "file_path": _repository_file_path("src/cache.ts"),
             "content": "cache.replaces(old); /* Use fresh cache */",
         },
     )
@@ -559,7 +595,7 @@ def test_ignores_url_with_double_slash_in_python():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": 'url = "https://api.example.com/replaces/v1"',
         },
     )
@@ -574,7 +610,7 @@ def test_ignores_instead_of_in_code_string_with_inline_comment():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": "msg = 'instead of'  # Use the default timeout",
         },
     )
@@ -590,7 +626,7 @@ def test_ignores_glob_pattern_with_star_in_python():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": content,
         },
     )
@@ -606,7 +642,7 @@ def test_ignores_comment_with_glob_pattern():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": content,
         },
     )
@@ -621,7 +657,7 @@ def test_single_line_block_comment_closes():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/cache.ts",
+            "file_path": _repository_file_path("src/cache.ts"),
             "content": content,
         },
     )
@@ -639,7 +675,7 @@ def test_block_comment_with_url_closes_correctly():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/cache.ts",
+            "file_path": _repository_file_path("src/cache.ts"),
             "content": content,
         },
     )
@@ -656,7 +692,7 @@ def test_same_line_block_comment_with_trailing_inline():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/fetch.ts",
+            "file_path": _repository_file_path("src/fetch.ts"),
             "content": content,
         },
     )
@@ -674,7 +710,7 @@ def test_multi_line_block_comment_close_with_trailing_inline():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/cache.ts",
+            "file_path": _repository_file_path("src/cache.ts"),
             "content": content,
         },
     )
@@ -691,7 +727,7 @@ def test_detects_earliest_inline_marker_in_php():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/index.php",
+            "file_path": _repository_file_path("src/index.php"),
             "content": 'echo $x; // previously used #tag',
         },
     )
@@ -705,7 +741,7 @@ def test_additional_context_contains_examples():
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/main.py",
+            "file_path": _repository_file_path("src/main.py"),
             "content": VIOLATION_INSTEAD_OF_COMMENT,
         },
     )
@@ -750,7 +786,13 @@ def test_handles_non_dict_tool_input():
 def test_handles_non_string_tool_name():
     """A tool_name that is not a string should exit cleanly — the hook must
     guard against tool_name not being a string."""
-    payload = json.dumps({"tool_name": 123, "tool_input": {"file_path": "src/main.py"}})
+    payload = json.dumps(
+        {
+            "tool_name": 123,
+            "tool_input": {"file_path": _repository_file_path("src/main.py")},
+            "cwd": _REPOSITORY_ROOT,
+        }
+    )
     result = subprocess.run(
         [sys.executable, HOOK_SCRIPT_PATH],
         input=payload,
@@ -774,7 +816,7 @@ def test_detects_used_to_in_python_module_docstring() -> None:
     result = _run_hook(
         "Write",
         {
-            "file_path": "tests/test_exports.py",
+            "file_path": _repository_file_path("tests/test_exports.py"),
             "content": written_source,
         },
     )
@@ -795,7 +837,7 @@ def test_detects_previously_in_python_function_docstring() -> None:
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/configuration.py",
+            "file_path": _repository_file_path("src/configuration.py"),
             "content": written_source,
         },
     )
@@ -812,7 +854,7 @@ def test_ignores_transitional_phrase_in_regular_python_string() -> None:
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/messages.py",
+            "file_path": _repository_file_path("src/messages.py"),
             "content": 'PADDING_NOTE = "used to pad with a flat sleep"\n',
         },
     )
@@ -831,7 +873,7 @@ def test_ignores_quoted_mention_inside_python_docstring() -> None:
     result = _run_hook(
         "Write",
         {
-            "file_path": "src/scanner.py",
+            "file_path": _repository_file_path("src/scanner.py"),
             "content": written_source,
         },
     )
@@ -847,7 +889,7 @@ def test_detects_docstring_at_start_of_unparseable_edit_fragment() -> None:
     result = _run_hook(
         "Edit",
         {
-            "file_path": "src/exports.py",
+            "file_path": _repository_file_path("src/exports.py"),
             "old_string": "placeholder",
             "new_string": fragment,
         },
@@ -869,7 +911,7 @@ def test_detects_docstring_after_def_header_in_unparseable_fragment() -> None:
     result = _run_hook(
         "Edit",
         {
-            "file_path": "src/reporting.py",
+            "file_path": _repository_file_path("src/reporting.py"),
             "old_string": "placeholder",
             "new_string": fragment,
         },
@@ -888,7 +930,7 @@ def test_ignores_assigned_triple_quoted_string_in_unparseable_fragment() -> None
     result = _run_hook(
         "Edit",
         {
-            "file_path": "src/fixtures.py",
+            "file_path": _repository_file_path("src/fixtures.py"),
             "old_string": "placeholder",
             "new_string": fragment,
         },
@@ -907,7 +949,11 @@ def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
     """
     deny_payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "src/main.py", "content": VIOLATION_INSTEAD_OF_COMMENT},
+        "tool_input": {
+            "file_path": _repository_file_path("src/main.py"),
+            "content": VIOLATION_INSTEAD_OF_COMMENT,
+        },
+        "cwd": _REPOSITORY_ROOT,
     }
     native_hook = NativeHook(evaluate=evaluate, build_deny_payload=build_deny_payload)
 
