@@ -32,6 +32,7 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+from atomic_file_writer import write_text_atomically
 from hooks_constants.session_edit_stage_gate_constants import (
     LOCK_ACQUIRE_RETRY_SECONDS,
     LOCK_ACQUIRE_TIMEOUT_SECONDS,
@@ -41,6 +42,8 @@ from hooks_constants.session_edit_stage_gate_constants import (
     STATE_FILE_DEFAULT_SESSION_ID,
     STATE_FILE_JSON_INDENT_SPACES,
 )
+from hooks_constants.setup_project_paths_constants import UTF8_ENCODING
+from json_file_reader import read_json_object
 from tdd_enforcer_parts import freshness, git_tracking
 from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     HASH_STATE_FILE_PREFIX,
@@ -53,10 +56,6 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     STORED_FAILURE_EXIT_STATUS_KEY,
     STORED_FAILURE_HASH_KEY,
 )
-
-
-def _state_directory() -> Path:
-    return Path(tempfile.gettempdir())
 
 
 def _sanitized_session_id(session_id: str) -> str:
@@ -74,7 +73,7 @@ def _state_file_path(session_id: str, repository_root: str) -> Path:
         f"{HASH_STATE_FILE_PREFIX}{_sanitized_session_id(session_id)}-"
         f"{_repository_root_digest(repository_root)}{HASH_STATE_FILE_SUFFIX}"
     )
-    return _state_directory() / file_name
+    return Path(tempfile.gettempdir()) / file_name
 
 
 def _state_key_for(candidate_path: Path) -> str:
@@ -85,41 +84,26 @@ def _state_key_for(candidate_path: Path) -> str:
 
 
 def _load_state(state_file: Path) -> dict[str, object]:
-    try:
-        raw_contents = state_file.read_text(encoding="utf-8")
-    except (FileNotFoundError, OSError):
-        return {}
-    try:
-        parsed_payload = json.loads(raw_contents)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(parsed_payload, dict):
-        return {}
-    return parsed_payload
+    return read_json_object(state_file, encoding=UTF8_ENCODING) or {}
 
 
 def _atomic_write_state(state_file: Path, all_stored_hashes: dict[str, object]) -> None:
-    parent_directory = state_file.parent
-    parent_directory.mkdir(parents=True, exist_ok=True)
-    encoded_text = json.dumps(all_stored_hashes, indent=STATE_FILE_JSON_INDENT_SPACES)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=str(parent_directory),
-        delete=False,
-        suffix=STATE_FILE_ATOMIC_WRITE_SUFFIX,
-    ) as temporary_handle:
-        temporary_handle.write(encoded_text)
-        temporary_path = Path(temporary_handle.name)
-    try:
-        os.replace(str(temporary_path), str(state_file))
-    except OSError:
-        temporary_path.unlink(missing_ok=True)
-        raise
+    write_text_atomically(
+        state_file,
+        json.dumps(all_stored_hashes, indent=STATE_FILE_JSON_INDENT_SPACES),
+        encoding=UTF8_ENCODING,
+        temporary_prefix=HASH_STATE_FILE_PREFIX,
+        temporary_suffix=STATE_FILE_ATOMIC_WRITE_SUFFIX,
+        should_reap_orphans=False,
+    )
 
 
 def _content_hash(candidate_text: str) -> str:
-    return hashlib.sha256(candidate_text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(candidate_text.encode(UTF8_ENCODING)).hexdigest()
+
+
+def _recorded_entry(current_hash: str, current_time: float) -> dict[str, object]:
+    return {STORED_CONTENT_HASH_KEY: current_hash, STORED_CHANGED_AT_KEY: current_time}
 
 
 def _acquire_state_file_lock(lock_file: Path) -> int | None:
@@ -181,21 +165,28 @@ def _has_matching_recorded_failure(
 
 
 def _is_qualifying_first_sight(
-    candidate_path: Path, current_time: float, freshness_seconds: int
+    candidate_path: Path, candidate_text: str, current_time: float, freshness_seconds: int
 ) -> bool:
-    if not freshness._candidate_is_fresh_test(
-        candidate_path, current_time, freshness_seconds
-    ):
+    candidate_mtime = freshness._safe_mtime(candidate_path)
+    if candidate_mtime is None or current_time - candidate_mtime > freshness_seconds:
+        return False
+    if not freshness.has_test_evidence_in(candidate_text):
         return False
     return git_tracking.has_uncommitted_change_from_head(candidate_path)
 
 
 def _first_sight_decision(
-    candidate_path: Path, current_time: float, freshness_seconds: int, current_hash: str
+    candidate_path: Path,
+    candidate_text: str,
+    current_time: float,
+    freshness_seconds: int,
+    current_hash: str,
 ) -> tuple[bool, dict[str, object] | None]:
-    if not _is_qualifying_first_sight(candidate_path, current_time, freshness_seconds):
+    if not _is_qualifying_first_sight(
+        candidate_path, candidate_text, current_time, freshness_seconds
+    ):
         return False, None
-    return True, {STORED_CONTENT_HASH_KEY: current_hash, STORED_CHANGED_AT_KEY: current_time}
+    return True, _recorded_entry(current_hash, current_time)
 
 
 def _content_hash_decision(
@@ -205,7 +196,7 @@ def _content_hash_decision(
     freshness_seconds: int,
 ) -> tuple[bool, dict[str, object] | None]:
     if current_hash != all_stored_entry_fields.get(STORED_CONTENT_HASH_KEY):
-        return True, {STORED_CONTENT_HASH_KEY: current_hash, STORED_CHANGED_AT_KEY: current_time}
+        return True, _recorded_entry(current_hash, current_time)
     stored_changed_at = all_stored_entry_fields.get(STORED_CHANGED_AT_KEY)
     if not isinstance(stored_changed_at, (int, float)):
         return False, None
@@ -228,7 +219,7 @@ def _evaluate_candidate(
         return True, None
     if not isinstance(stored_entry, dict) or STORED_CONTENT_HASH_KEY not in stored_entry:
         return _first_sight_decision(
-            candidate_path, current_time, freshness_seconds, current_hash
+            candidate_path, candidate_text, current_time, freshness_seconds, current_hash
         )
     return _content_hash_decision(stored_entry, current_hash, current_time, freshness_seconds)
 

@@ -31,6 +31,10 @@ _ASSERT_FALSE_SOURCE = (
     "    assert False, observed_total\n"
 )
 PRINT_PRODUCTION_CONTENT = 'def run() -> None:\n    print("x")\n'
+CLEAN_PROBE_SOURCE = (
+    "def add_two_numbers(first_number: int, second_number: int) -> int:\n"
+    "    return first_number + second_number\n"
+)
 ALL_PYTHON_TEST_EXEMPT_PATHS = [
     "pkg/test_helpers/worker.py",
     "pkg/conftest.py",
@@ -64,6 +68,48 @@ def test_validate_proposed_file_threads_ruff_config_from_original_path() -> None
         each_result.output for each_result in all_results if each_result.name == "Ruff"
     )
     assert "B011" in ruff_output
+
+
+def test_validate_proposed_file_never_probes_mypy_availability() -> None:
+    """The save-path gate drops Mypy entirely; it must not even probe for it.
+
+    Mypy runs 500-1800ms cold, the largest single item on the save path by a
+    wide margin (see hooks/validators/hook_timing_harness.py). CLI/full mode
+    keeps probing it; only the save-path gate skips the probe.
+    """
+    with patch("validators.run_all_validators.check_mypy_available") as mock_check_mypy:
+        validate_proposed_file(
+            str(_VALIDATORS_DIRECTORY / "probe_target.py"), CLEAN_PROBE_SOURCE
+        )
+
+    mock_check_mypy.assert_not_called()
+
+
+def test_validate_proposed_file_never_spawns_a_validator_subprocess() -> None:
+    """The save-path gate must not spawn a ``python -m validators.<module>`` per check.
+
+    Twelve validator subprocesses cost roughly 600ms in interpreter startup
+    and import alone (see hook_timing_harness.py), for checks that measure in
+    single digits once running. CLI/full mode keeps spawning one process per
+    validator; only the save-path gate runs them in-process instead.
+    """
+    with patch("validators.run_all_validators.invoke_validator_module") as mock_invoke:
+        validate_proposed_file(
+            str(_VALIDATORS_DIRECTORY / "probe_target.py"), CLEAN_PROBE_SOURCE
+        )
+
+    mock_invoke.assert_not_called()
+
+
+def test_validate_proposed_file_still_finds_a_fast_path_violation() -> None:
+    """Dropping mypy and the per-validator subprocess must not blind the gate."""
+    all_results = validate_proposed_file(
+        str(_VALIDATORS_DIRECTORY / "probe_target.py"), PRINT_PRODUCTION_CONTENT
+    )
+
+    failed_names = {each_result.name for each_result in all_results if not each_result.passed}
+    assert failed_names, "expected at least one failing fast-path check"
+    assert "Mypy" not in failed_names
 
 
 def _validators_deny_print(file_path: str) -> bool:
@@ -352,3 +398,25 @@ class TestHooksSubprocessWorkingDirectory:
             )
         assert working_directory_string == tempfile.gettempdir()
         assert not working_directory_string.startswith("\\\\")
+
+
+class TestDocstringExamplePaths:
+    def test_module_source_carries_no_home_directory_example_paths(self) -> None:
+        """Example paths avoid /home so the privacy gate reads no personal data.
+
+        The gate allowlists a fixed set of placeholder home usernames, so an
+        invented name outside that set reads as somebody's real home directory
+        and denies the commit. Rooting an example somewhere other than /home
+        keeps the illustration and leaves nothing for the gate to flag.
+        """
+        module_source = (Path(__file__).parent / "run_all_validators.py").read_text(
+            encoding="utf-8"
+        )
+
+        all_home_example_lines = [
+            each_line
+            for each_line in module_source.splitlines()
+            if '"/home/' in each_line
+        ]
+
+        assert all_home_example_lines == []

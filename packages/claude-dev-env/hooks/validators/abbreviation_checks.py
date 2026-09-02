@@ -11,12 +11,10 @@ Detects:
 import ast
 import sys
 from pathlib import Path
-from typing import List, Set
+from typing import List
 
-from .validator_base import Violation
-
-
-ALLOWED_SINGLE_LETTERS: Set[str] = frozenset({"i", "j", "k", "_"})
+from .config.abbreviation_checks_constants import ALL_ALLOWED_SINGLE_LETTERS
+from .validator_base import Violation, source_text, syntax_tree
 
 
 def check_single_letter_variables(tree: ast.AST, filename: str) -> List[Violation]:
@@ -24,7 +22,7 @@ def check_single_letter_variables(tree: ast.AST, filename: str) -> List[Violatio
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            if len(node.id) == 1 and node.id not in ALLOWED_SINGLE_LETTERS:
+            if len(node.id) == 1 and node.id not in ALL_ALLOWED_SINGLE_LETTERS:
                 violations.append(
                     Violation(
                         filename,
@@ -41,13 +39,13 @@ def validate_file(file_path: Path) -> List[Violation]:
     filename = str(file_path)
 
     try:
-        source = file_path.read_text(encoding="utf-8")
+        source = source_text(file_path)
     except Exception as error:
         violations.append(Violation(filename, 0, f"Error reading file: {error}"))
         return violations
 
     try:
-        tree = ast.parse(source)
+        tree = syntax_tree(source)
     except SyntaxError as error:
         violations.append(
             Violation(filename, error.lineno or 0, f"Syntax error: {error.msg}")

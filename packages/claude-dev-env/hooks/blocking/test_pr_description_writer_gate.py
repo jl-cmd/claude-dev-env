@@ -68,7 +68,7 @@ def _printed_output_for(command: str, temp_directory: Path, tool_name: str = "Ba
     with (
         mock.patch("sys.stdin", io.StringIO(payload_text)),
         mock.patch("sys.stdout", captured_stdout),
-        mock.patch.object(gate_module.tempfile, "gettempdir", return_value=str(temp_directory)),
+        mock.patch.object(_GATE_CONSTANTS.tempfile, "gettempdir", return_value=str(temp_directory)),
         pytest.raises(SystemExit),
     ):
         gate_module.main()
@@ -100,7 +100,8 @@ def _record_spawn(temp_directory: Path, session_id: str = _SESSION_ID) -> None:
         temp_directory: The directory standing in for the system temp root.
     """
     marker_name = (
-        f"{gate_module.SPAWN_MARKER_FILE_PREFIX}{session_id}{gate_module.SPAWN_MARKER_FILE_SUFFIX}"
+        f"{_GATE_CONSTANTS.SPAWN_MARKER_FILE_PREFIX}{session_id}"
+        f"{_GATE_CONSTANTS.SPAWN_MARKER_FILE_SUFFIX}"
     )
     (temp_directory / marker_name).touch()
 
@@ -195,7 +196,7 @@ def should_deny_when_the_payload_names_no_session(tmp_path: Path) -> None:
     with (
         mock.patch("sys.stdin", io.StringIO(json.dumps(payload))),
         mock.patch("sys.stdout", captured_stdout),
-        mock.patch.object(gate_module.tempfile, "gettempdir", return_value=str(tmp_path)),
+        mock.patch.object(_GATE_CONSTANTS.tempfile, "gettempdir", return_value=str(tmp_path)),
         pytest.raises(SystemExit),
     ):
         gate_module.main()
@@ -214,3 +215,20 @@ def should_name_both_ways_forward_in_the_denial(tmp_path: Path) -> None:
     denial_reason = json.loads(printed_text)["hookSpecificOutput"]["permissionDecisionReason"]
     assert _PR_DESCRIPTION_WRITER_SUBAGENT_TYPE in denial_reason
     assert gate_module.SPAWN_BYPASS_MARKER in denial_reason
+
+
+def should_read_the_marker_path_the_shared_builder_produces(tmp_path: Path) -> None:
+    """The gate reads exactly the file the shared path builder names.
+
+    The tracker writes through `spawn_marker_path` and the gate reads through it,
+    so neither side owns a private copy of the marker file name.
+    """
+    marker_file = _GATE_CONSTANTS.spawn_marker_path(_SESSION_ID, temp_directory=tmp_path)
+    assert marker_file is not None
+    marker_file.touch()
+    assert _decision_for(_PLAIN_CREATE_COMMAND, tmp_path) == ""
+
+
+def should_deny_when_the_session_id_names_no_marker(tmp_path: Path) -> None:
+    """A session id that sanitizes to nothing yields no path, so the gate denies."""
+    assert _GATE_CONSTANTS.spawn_marker_path("", temp_directory=tmp_path) is None
