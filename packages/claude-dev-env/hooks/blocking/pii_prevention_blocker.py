@@ -92,11 +92,6 @@ except ImportError as import_error:
     ) from import_error
 
 
-def is_apply_patch_tool(tool_name: str) -> bool:
-    """Return whether *tool_name* names the Codex apply_patch tool."""
-    return tool_name == APPLY_PATCH_TOOL_NAME
-
-
 __all__ = [
     "evaluate",
     "evaluate_apply_patch_payload",
@@ -340,7 +335,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         return evaluate_write_edit_payload(
             tool_name, all_tool_input, hook_payload=payload_by_key
         )
-    if is_apply_patch_tool(tool_name):
+    if tool_name == APPLY_PATCH_TOOL_NAME:
         return evaluate_apply_patch_payload(all_tool_input, hook_payload=payload_by_key)
     if tool_name in ALL_SHELL_TOOL_NAMES:
         return _evaluate_shell_tool(all_tool_input, payload_by_key)

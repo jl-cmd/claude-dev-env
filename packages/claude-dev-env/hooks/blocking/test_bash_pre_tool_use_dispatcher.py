@@ -222,6 +222,7 @@ def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
         "blocking/cursor_cli_python_misfire_blocker.py",
         "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
+        "blocking/pr_description_writer_gate.py",
     ]
 
 
