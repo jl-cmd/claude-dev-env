@@ -31,11 +31,7 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from blocking.codex_apply_patch import (  # noqa: E402
-    CodexPatchError,
-    parse_codex_apply_patch,
-    payload_patch_command,
-)
+from blocking.codex_apply_patch import payload_patch_target_paths  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
@@ -63,22 +59,10 @@ def _resolved_path_or_none(file_path: str) -> str | None:
         return None
 
 
-def _apply_patch_target_file_paths(hook_payload: dict, tool_input: dict) -> tuple[str, ...]:
-    """Return every file path a Codex apply_patch payload names."""
-    command, working_directory = payload_patch_command(hook_payload, tool_input)
-    if not command:
-        return ()
-    try:
-        all_patch_files = parse_codex_apply_patch(command, working_directory)
-    except CodexPatchError:
-        return ()
-    return tuple(each_patch_file.file_path for each_patch_file in all_patch_files)
-
-
 def _record_apply_patch_edits(hook_payload: dict, tool_input: dict) -> None:
     """Record the resolved path of every file a Codex apply_patch payload names."""
     session_id = str(hook_payload.get("session_id") or "")
-    for each_file_path in _apply_patch_target_file_paths(hook_payload, tool_input):
+    for each_file_path in payload_patch_target_paths(hook_payload, tool_input):
         resolved_file_path = _resolved_path_or_none(each_file_path)
         if resolved_file_path is not None:
             _record_edited_path(session_id, resolved_file_path)
