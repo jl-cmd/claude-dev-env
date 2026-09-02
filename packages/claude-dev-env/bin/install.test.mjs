@@ -925,9 +925,17 @@ function isPreToolUseDispatcherCommand(command) {
     return /(?:^|[/\\])pre_tool_use_dispatcher\.py(?![A-Za-z0-9_])/.test(command);
 }
 
+function matcherCoversWriteAndEdit(matcher) {
+    const allToolNames = String(matcher || '').split('|');
+    return allToolNames.includes('Write') && allToolNames.includes('Edit');
+}
+
 function countManagedRunAllValidatorsHooks(settings) {
-    const writeEditGroups = (settings.hooks.PreToolUse || []).filter(
-        group => group.matcher === 'Write|Edit'
+    // The runner is registered inline on the write path. Which mutation tools
+    // that path lists is the gate's business, so this counts any matcher
+    // carrying Write and Edit rather than one exact tool list.
+    const writeEditGroups = (settings.hooks.PreToolUse || []).filter(group =>
+        matcherCoversWriteAndEdit(group.matcher)
     );
     let runAllValidatorsCount = 0;
     for (const group of writeEditGroups) {
