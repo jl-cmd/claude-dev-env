@@ -18,7 +18,7 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_boolean_naming = _hook_module.check_boolean_naming
-validate_content = _hook_module.validate_content
+validate_content = _hook_module.validate_content_for_full_gate
 
 
 PRODUCTION_FILE_PATH = "src/app/feature.py"

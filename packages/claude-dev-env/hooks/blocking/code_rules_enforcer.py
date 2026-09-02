@@ -4,7 +4,7 @@
 This entry module reads a PreToolUse JSON payload on stdin, reconstructs the
 post-edit content, and runs every applicable check. The individual checks live
 in focused ``code_rules_<concern>.py`` sibling modules; this module imports the
-ones ``validate_content`` calls and orchestrates them.
+ones ``validate_content_for_phase`` calls and orchestrates them.
 
 Advisory only (non-blocking):
 - File line count: stderr warning at 400 lines (soft) and 1000 lines (hard)
@@ -21,7 +21,7 @@ import sys
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from typing import TextIO
+from typing import NamedTuple, TextIO
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -178,15 +178,43 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CODE_EXTENSIONS,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
+    ALL_VALIDATION_PHASES,
     DENY_REASON_ISSUE_PREVIEW_COUNT,
+    EDIT_LANE_PHASE,
+    FULL_GATE_PHASE,
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
+    UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
     VIOLATION_SEPARATOR,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
+
+
+class _ValidationContext(NamedTuple):
+    """Bundle the parameters every extension-issue check function reads."""
+
+    content: str
+    old_content: str
+    effective_content: str
+    file_path: str
+    all_changed_lines: set[int] | None
+    defer_scope_to_caller: bool
+    sibling_directory: Path | None
+    phase: str
+
+
+def _validated_phase(phase: str) -> str:
+    """Return *phase* unchanged, after rejecting a phase outside ALL_VALIDATION_PHASES."""
+    if phase not in ALL_VALIDATION_PHASES:
+        raise ValueError(
+            UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE.format(
+                phase=phase, all_phases=sorted(ALL_VALIDATION_PHASES)
+            )
+        )
+    return phase
 
 
 def _codex_patch_issues(each_patch_file: CodexPatchFile) -> list[str]:
@@ -199,9 +227,10 @@ def _codex_patch_issues(each_patch_file: CodexPatchFile) -> list[str]:
             each_patch_file.file_path,
             each_patch_file.post_content,
             each_patch_file.prior_content,
+            phase=EDIT_LANE_PHASE,
         )
     elif _is_validated_target(each_patch_file.file_path):
-        all_issues = validate_content(
+        all_issues = validate_content_for_edit_lane(
             each_patch_file.post_content,
             each_patch_file.file_path,
             each_patch_file.prior_content,
@@ -259,7 +288,353 @@ def _report_codex_patch_payload(
         )
 
 
-def validate_content(
+def _python_comment_and_logging_issues(context: _ValidationContext) -> list[str]:
+    """Return the comment-diff and logging-hygiene checks for a Python file."""
+    content, old_content, file_path = (
+        context.content,
+        context.old_content,
+        context.file_path,
+    )
+    all_issues: list[str] = []
+    if not is_test_file(file_path):
+        all_issues.extend(check_comment_changes(old_content, content, file_path))
+    all_issues.extend(check_imports_at_top(content))
+    all_issues.extend(check_logging_fstrings(content))
+    all_issues.extend(check_logging_printf_tokens(content, file_path))
+    all_issues.extend(check_logging_adjacent_string_literals(content, file_path))
+    all_issues.extend(check_windows_api_none(content))
+    all_issues.extend(check_naive_datetime_construction(content, file_path))
+    return all_issues
+
+
+def _python_magic_value_and_constant_issues(context: _ValidationContext) -> list[str]:
+    """Return the magic-value and constants-location checks for a Python file."""
+    old_content, content, file_path = (
+        context.old_content,
+        context.content,
+        context.file_path,
+    )
+    defer = context.defer_scope_to_caller
+    all_issues = _fragment_or_deferred_check(
+        check_magic_values, old_content, content, file_path, defer
+    )
+    all_issues.extend(
+        _fragment_or_deferred_check(
+            check_blast_radius_declared, old_content, content, file_path, defer
+        )
+    )
+    all_issues.extend(check_fstring_structural_literals(content, file_path))
+    all_issues.extend(check_constants_outside_config(content, file_path))
+    all_issues.extend(check_constants_outside_config_advisory(content, file_path))
+    all_issues.extend(check_file_global_constants_use_count(content, file_path))
+    return all_issues
+
+
+def _python_duplicate_body_and_banned_issues(context: _ValidationContext) -> list[str]:
+    """Return the same-file duplicate-body and banned-name checks for Python."""
+    effective_content, file_path = context.effective_content, context.file_path
+    changed, defer = context.all_changed_lines, context.defer_scope_to_caller
+    all_issues = check_same_file_inline_duplicate_body(
+        effective_content, file_path, changed, defer
+    )
+    all_issues.extend(check_type_escape_hatches(effective_content, file_path))
+    all_issues.extend(
+        check_banned_identifiers(effective_content, file_path, changed, defer)
+    )
+    all_issues.extend(
+        check_banned_noun_word_boundary(effective_content, file_path, changed, defer)
+    )
+    all_issues.extend(check_banned_prefixes(effective_content, file_path))
+    return all_issues
+
+
+def _python_structure_and_stub_issues(context: _ValidationContext) -> list[str]:
+    """Return the stub, wrapper, and structural checks for a Python file."""
+    effective_content, file_path = context.effective_content, context.file_path
+    all_issues = check_stub_implementations(effective_content, file_path)
+    all_issues.extend(check_typed_dict_encode_decode(effective_content, file_path))
+    all_issues.extend(check_test_branching_in_production(effective_content, file_path))
+    all_issues.extend(check_dead_test_module_constant(effective_content, file_path))
+    all_issues.extend(check_unused_test_helper_parameter(effective_content, file_path))
+    all_issues.extend(check_bare_except(effective_content, file_path))
+    all_issues.extend(check_thin_wrapper_files(effective_content, file_path))
+    all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
+    all_issues.extend(check_boundary_types(effective_content, file_path))
+    return all_issues
+
+
+def _python_docstring_format_issues(context: _ValidationContext) -> list[str]:
+    """Return the docstring-format-vs-signature checks for a Python file."""
+    effective_content, file_path = context.effective_content, context.file_path
+    all_issues = check_docstring_format(effective_content, file_path)
+    all_issues.extend(
+        check_docstring_args_match_signature(effective_content, file_path)
+    )
+    all_issues.extend(
+        check_docstring_documents_unreferenced_parameter(effective_content, file_path)
+    )
+    all_issues.extend(
+        check_class_docstring_names_public_methods(effective_content, file_path)
+    )
+    return all_issues
+
+
+def _python_docstring_narrative_issues(context: _ValidationContext) -> list[str]:
+    """Return the docstring narrative-prose checks for a Python file."""
+    effective_content, file_path = context.effective_content, context.file_path
+    changed, defer = context.all_changed_lines, context.defer_scope_to_caller
+    all_issues = check_docstring_runon_sentence(
+        effective_content, file_path, changed, defer
+    )
+    all_issues.extend(
+        check_docstring_prose_wall_without_illustration(
+            effective_content, file_path, changed, defer
+        )
+    )
+    all_issues.extend(
+        check_module_docstring_names_public_checks(effective_content, file_path)
+    )
+    all_issues.extend(
+        check_module_docstring_scope_omits_data_schema_constants(
+            effective_content, file_path
+        )
+    )
+    all_issues.extend(
+        check_docstring_names_undefined_constant(effective_content, file_path)
+    )
+    return all_issues
+
+
+def _python_boolean_and_test_assertion_issues(context: _ValidationContext) -> list[str]:
+    """Return the boolean-naming and test-assertion-quality checks for Python."""
+    content, effective_content, file_path = (
+        context.content,
+        context.effective_content,
+        context.file_path,
+    )
+    changed, defer = context.all_changed_lines, context.defer_scope_to_caller
+    all_issues = check_boolean_naming(effective_content, file_path, changed, defer)
+    all_issues.extend(
+        check_ignored_must_check_return(effective_content, file_path, changed, defer)
+    )
+    all_issues.extend(check_skip_decorators_in_tests(content, file_path))
+    all_issues.extend(
+        check_tests_use_isolated_filesystem_paths(
+            effective_content, file_path, changed, defer
+        )
+    )
+    all_issues.extend(check_existence_check_tests(content, file_path))
+    all_issues.extend(check_constant_equality_tests(content, file_path))
+    all_issues.extend(check_vacuous_cleanup_assertion_tests(content, file_path))
+    all_issues.extend(check_stale_test_name_target(content, file_path))
+    check_flag_gated_scenario_test_naming(content, file_path)
+    return all_issues
+
+
+def _python_naming_and_annotation_issues(context: _ValidationContext) -> list[str]:
+    """Return the naming-convention and annotation checks for a Python file."""
+    content, file_path = context.content, context.file_path
+    all_issues = check_unused_optional_parameters(content, file_path)
+    all_issues.extend(check_collection_prefix(content, file_path))
+    all_issues.extend(check_stuttering_collection_prefix(content, file_path))
+    all_issues.extend(check_hardcoded_user_paths(content, file_path))
+    all_issues.extend(check_sys_path_insert_deduplication_guard(content, file_path))
+    all_issues.extend(check_library_print(content, file_path))
+    all_issues.extend(check_parameter_annotations(content, file_path))
+    all_issues.extend(check_known_pytest_fixture_annotations(content, file_path))
+    all_issues.extend(check_unused_known_pytest_fixture_parameters(content, file_path))
+    all_issues.extend(
+        check_return_annotations(
+            context.effective_content,
+            file_path,
+            context.all_changed_lines,
+            context.defer_scope_to_caller,
+        )
+    )
+    return all_issues
+
+
+def _python_function_length_and_naming_issues(context: _ValidationContext) -> list[str]:
+    """Return the function-length and loop/name-contradiction checks for Python."""
+    content, file_path = context.content, context.file_path
+    all_issues = check_function_length(
+        context.effective_content,
+        file_path,
+        context.all_changed_lines,
+        context.defer_scope_to_caller,
+    )
+    all_issues.extend(check_loop_variable_naming(content, file_path))
+    all_issues.extend(check_referenced_underscore_loop_variable(content, file_path))
+    all_issues.extend(check_polarity_name_contradiction(content, file_path))
+    return all_issues
+
+
+def _python_string_magic_issues(context: _ValidationContext) -> list[str]:
+    """Return the inline-literal and string-magic checks for a Python file."""
+    content, old_content, file_path = (
+        context.content,
+        context.old_content,
+        context.file_path,
+    )
+    defer = context.defer_scope_to_caller
+    all_issues = [*check_inline_literal_collections(content, file_path)]
+    all_issues.extend(check_inline_tuple_string_magic(content, file_path))
+    all_issues.extend(
+        _fragment_or_deferred_check(
+            check_join_separator_string_magic, old_content, content, file_path, defer
+        )
+    )
+    all_issues.extend(
+        _fragment_or_deferred_check(
+            check_string_literal_magic, old_content, content, file_path, defer
+        )
+    )
+    all_issues.extend(check_whitespace_indentation_magic(content, file_path))
+    check_duplicated_format_patterns(content, file_path)
+    return all_issues
+
+
+def _python_full_gate_only_issues(context: _ValidationContext) -> list[str]:
+    """Return the six cross-file checks that read sibling modules, full-gate only."""
+    if context.phase != FULL_GATE_PHASE:
+        return []
+    content, effective_content, file_path = (
+        context.content,
+        context.effective_content,
+        context.file_path,
+    )
+    changed, defer = context.all_changed_lines, context.defer_scope_to_caller
+    all_issues = check_config_duplicate_path_anchor(content, file_path)
+    all_issues.extend(
+        check_duplicate_function_body_across_files(
+            effective_content, file_path, changed, defer, context.sibling_directory
+        )
+    )
+    all_issues.extend(
+        check_public_function_missing_paired_test(
+            effective_content, file_path, changed, defer
+        )
+    )
+    all_issues.extend(
+        check_test_file_omits_module_public_function(effective_content, file_path)
+    )
+    all_issues.extend(check_orphan_css_classes(effective_content, file_path))
+    advise_cross_skill_duplicate_helper(effective_content, file_path)
+    return all_issues
+
+
+def _python_extension_issues(context: _ValidationContext) -> list[str]:
+    """Return every issue a Python-extension target can raise."""
+    all_issues = _python_comment_and_logging_issues(context)
+    all_issues.extend(_python_magic_value_and_constant_issues(context))
+    all_issues.extend(_python_duplicate_body_and_banned_issues(context))
+    all_issues.extend(_python_structure_and_stub_issues(context))
+    all_issues.extend(_python_docstring_format_issues(context))
+    all_issues.extend(_python_docstring_narrative_issues(context))
+    all_issues.extend(_python_boolean_and_test_assertion_issues(context))
+    all_issues.extend(_python_naming_and_annotation_issues(context))
+    all_issues.extend(_python_function_length_and_naming_issues(context))
+    all_issues.extend(_python_string_magic_issues(context))
+    all_issues.extend(_python_full_gate_only_issues(context))
+    return all_issues
+
+
+def _javascript_comment_and_naming_issues(context: _ValidationContext) -> list[str]:
+    """Return the comment-diff, e2e-naming, and boolean-naming checks for JavaScript."""
+    content, old_content, file_path = (
+        context.content,
+        context.old_content,
+        context.file_path,
+    )
+    all_issues: list[str] = []
+    if not is_test_file(file_path):
+        all_issues.extend(check_comment_changes(old_content, content, file_path))
+    all_issues.extend(check_e2e_test_naming(content, file_path))
+    all_issues.extend(
+        check_js_boolean_naming(
+            context.effective_content,
+            file_path,
+            context.all_changed_lines,
+            context.defer_scope_to_caller,
+        )
+    )
+    return all_issues
+
+
+def _javascript_structure_issues(context: _ValidationContext) -> list[str]:
+    """Return the banned-identifier and object-shape checks for JavaScript."""
+    content, effective_content, file_path = (
+        context.content,
+        context.effective_content,
+        context.file_path,
+    )
+    changed, defer = context.all_changed_lines, context.defer_scope_to_caller
+    all_issues = check_js_banned_identifiers(
+        effective_content, file_path, changed, defer
+    )
+    all_issues.extend(check_js_resume_task_enumeration_coverage(content, file_path))
+    all_issues.extend(check_js_returns_object_schemaless_branch(content, file_path))
+    all_issues.extend(check_js_sibling_return_object_key_drift(content, file_path))
+    all_issues.extend(
+        check_js_bare_flag_return_directive(
+            effective_content, file_path, changed, defer
+        )
+    )
+    return all_issues
+
+
+def _javascript_extension_issues(context: _ValidationContext) -> list[str]:
+    """Return every issue a JavaScript-extension target can raise."""
+    all_issues = _javascript_comment_and_naming_issues(context)
+    all_issues.extend(_javascript_structure_issues(context))
+    return all_issues
+
+
+def _effective_content_and_changed_lines(
+    content: str, full_file_content: str | None, prior_full_file_content: str
+) -> tuple[str, set[int] | None]:
+    """Return the effective content and changed-line set an Edit reconstructs."""
+    effective_content = content if full_file_content is None else full_file_content
+    all_changed_lines = (
+        changed_line_numbers(prior_full_file_content, full_file_content)
+        if full_file_content is not None
+        else None
+    )
+    return effective_content, all_changed_lines
+
+
+def validate_content_for_phase(
+    content: str,
+    file_path: str,
+    old_content: str = "",
+    full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+    defer_scope_to_caller: bool = False,
+    sibling_directory: Path | None = None,
+    *,
+    phase: str,
+) -> list[str]:
+    """Run all applicable validators on content for one named validation phase."""
+    validated_phase = _validated_phase(phase)
+    extension = get_file_extension(file_path)
+    effective_content, all_changed_lines = _effective_content_and_changed_lines(
+        content, full_file_content, prior_full_file_content
+    )
+    context = _ValidationContext(
+        content, old_content, effective_content, file_path, all_changed_lines,
+        defer_scope_to_caller, sibling_directory, validated_phase,
+    )
+    all_issues: list[str] = []
+    if extension in ALL_PYTHON_EXTENSIONS:
+        all_issues = _python_extension_issues(context)
+    elif extension in ALL_JAVASCRIPT_EXTENSIONS:
+        all_issues = _javascript_extension_issues(context)
+    if extension in ALL_CODE_EXTENSIONS:
+        advise_file_line_count(content, file_path)
+    return all_issues
+
+
+def validate_content_for_edit_lane(
     content: str,
     file_path: str,
     old_content: str = "",
@@ -268,303 +643,39 @@ def validate_content(
     defer_scope_to_caller: bool = False,
     sibling_directory: Path | None = None,
 ) -> list[str]:
-    """Run all applicable validators on content.
-
-    Args:
-        content: The new content being written. For Edit, this is the
-            ``new_string`` fragment; for Write, the entire new file body.
-        file_path: Path to the file.
-        old_content: Previous content (old_string for Edit, existing file for Write).
-            Used to detect comment additions/removals instead of flagging all comments.
-        full_file_content: For Edit operations, the reconstructed post-edit
-            content of the entire file (existing file with ``old_string`` replaced
-            by ``new_string``). Whole-file checks such as the unused-import
-            scanner use this to evaluate references across the file rather than
-            just within the inserted fragment.
-        prior_full_file_content: For Edit operations, the entire file content as
-            it existed before the edit applied. Whole-file span checks
-            (function length, test isolation) diff this against
-            ``full_file_content`` to recover the lines the edit touched, then
-            block only on violations whose source span intersects those lines —
-            mirroring the gate's span-intersection scoping. Defaults to the
-            empty string for Write and for gate invocations, which leaves those
-            checks scanning the whole file with no diff scoping.
-        defer_scope_to_caller: The explicit signal that a downstream scoper will
-            run, used to disambiguate the two callers that supply no changed-line
-            set. The commit/push gate passes True: it owns
-            ``split_violations_by_scope`` and classifies blocking vs advisory by
-            added line, so the function-length, test-isolation, and banned-noun
-            checks return their violations unscoped for the gate to classify.
-            PreToolUse new-file or full-file writes leave this False: this
-            enforcer is terminal, so it marks every violation in scope.
-        sibling_directory: The absolute directory the cross-file duplicate-body
-            check scans for sibling modules. The commit/push gate passes the
-            resolved file's parent so the on-disk sibling scan stays anchored to
-            the repository regardless of the gate process's working directory.
-            None (the PreToolUse default) derives the directory from
-            ``file_path``'s parent, which is already absolute on that path.
-    """
-    extension = get_file_extension(file_path)
-    all_issues = []
-    effective_content = content if full_file_content is None else full_file_content
-    all_changed_lines = (
-        changed_line_numbers(prior_full_file_content, full_file_content)
-        if full_file_content is not None
-        else None
+    """Run the edit-lane phase, skipping the six checks that read sibling files."""
+    return validate_content_for_phase(
+        content,
+        file_path,
+        old_content,
+        full_file_content,
+        prior_full_file_content,
+        defer_scope_to_caller,
+        sibling_directory,
+        phase=EDIT_LANE_PHASE,
     )
 
-    if extension in ALL_PYTHON_EXTENSIONS:
-        if not is_test_file(file_path):
-            all_issues.extend(check_comment_changes(old_content, content, file_path))
-        all_issues.extend(check_imports_at_top(content))
-        all_issues.extend(check_logging_fstrings(content))
-        all_issues.extend(check_logging_printf_tokens(content, file_path))
-        all_issues.extend(check_logging_adjacent_string_literals(content, file_path))
-        all_issues.extend(check_windows_api_none(content))
-        all_issues.extend(check_naive_datetime_construction(content, file_path))
-        all_issues.extend(
-            _fragment_or_deferred_check(
-                check_magic_values,
-                old_content,
-                content,
-                file_path,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            _fragment_or_deferred_check(
-                check_blast_radius_declared,
-                old_content,
-                content,
-                file_path,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_fstring_structural_literals(content, file_path))
-        all_issues.extend(check_constants_outside_config(content, file_path))
-        all_issues.extend(check_config_duplicate_path_anchor(content, file_path))
-        all_issues.extend(check_constants_outside_config_advisory(content, file_path))
-        all_issues.extend(check_file_global_constants_use_count(content, file_path))
-        all_issues.extend(
-            check_duplicate_function_body_across_files(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-                sibling_directory,
-            )
-        )
-        all_issues.extend(
-            check_same_file_inline_duplicate_body(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_type_escape_hatches(effective_content, file_path))
-        all_issues.extend(
-            check_banned_identifiers(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_banned_noun_word_boundary(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_banned_prefixes(effective_content, file_path))
-        all_issues.extend(check_stub_implementations(effective_content, file_path))
-        all_issues.extend(check_typed_dict_encode_decode(effective_content, file_path))
-        all_issues.extend(check_test_branching_in_production(effective_content, file_path))
-        all_issues.extend(check_dead_test_module_constant(effective_content, file_path))
-        all_issues.extend(check_unused_test_helper_parameter(effective_content, file_path))
-        all_issues.extend(check_bare_except(effective_content, file_path))
-        all_issues.extend(check_thin_wrapper_files(effective_content, file_path))
-        all_issues.extend(check_zero_payload_function_alias(effective_content, file_path))
-        all_issues.extend(check_boundary_types(effective_content, file_path))
-        all_issues.extend(check_docstring_format(effective_content, file_path))
-        all_issues.extend(check_docstring_args_match_signature(effective_content, file_path))
-        all_issues.extend(
-            check_docstring_documents_unreferenced_parameter(effective_content, file_path)
-        )
-        all_issues.extend(
-            check_class_docstring_names_public_methods(effective_content, file_path)
-        )
-        all_issues.extend(
-            check_docstring_runon_sentence(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_docstring_prose_wall_without_illustration(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_module_docstring_names_public_checks(effective_content, file_path)
-        )
-        all_issues.extend(
-            check_module_docstring_scope_omits_data_schema_constants(
-                effective_content, file_path
-            )
-        )
-        all_issues.extend(
-            check_docstring_names_undefined_constant(effective_content, file_path)
-        )
-        all_issues.extend(
-            check_boolean_naming(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_ignored_must_check_return(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_skip_decorators_in_tests(content, file_path))
-        all_issues.extend(
-            check_tests_use_isolated_filesystem_paths(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_existence_check_tests(content, file_path))
-        all_issues.extend(check_constant_equality_tests(content, file_path))
-        all_issues.extend(check_vacuous_cleanup_assertion_tests(content, file_path))
-        all_issues.extend(check_stale_test_name_target(content, file_path))
-        check_flag_gated_scenario_test_naming(content, file_path)
-        all_issues.extend(check_unused_optional_parameters(content, file_path))
-        all_issues.extend(check_collection_prefix(content, file_path))
-        all_issues.extend(check_stuttering_collection_prefix(content, file_path))
-        all_issues.extend(check_hardcoded_user_paths(content, file_path))
-        all_issues.extend(check_sys_path_insert_deduplication_guard(content, file_path))
-        all_issues.extend(check_library_print(content, file_path))
-        all_issues.extend(check_parameter_annotations(content, file_path))
-        all_issues.extend(check_known_pytest_fixture_annotations(content, file_path))
-        all_issues.extend(
-            check_unused_known_pytest_fixture_parameters(content, file_path)
-        )
-        all_issues.extend(
-            check_return_annotations(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_function_length(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_public_function_missing_paired_test(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_test_file_omits_module_public_function(
-                effective_content,
-                file_path,
-            )
-        )
-        all_issues.extend(check_loop_variable_naming(content, file_path))
-        all_issues.extend(check_referenced_underscore_loop_variable(content, file_path))
-        all_issues.extend(check_polarity_name_contradiction(content, file_path))
-        all_issues.extend(check_inline_literal_collections(content, file_path))
-        all_issues.extend(check_inline_tuple_string_magic(content, file_path))
-        all_issues.extend(
-            _fragment_or_deferred_check(
-                check_join_separator_string_magic,
-                old_content,
-                content,
-                file_path,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            _fragment_or_deferred_check(
-                check_string_literal_magic,
-                old_content,
-                content,
-                file_path,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(check_whitespace_indentation_magic(content, file_path))
-        all_issues.extend(check_orphan_css_classes(effective_content, file_path))
-        check_duplicated_format_patterns(content, file_path)
-        advise_cross_skill_duplicate_helper(effective_content, file_path)
 
-    elif extension in ALL_JAVASCRIPT_EXTENSIONS:
-        if not is_test_file(file_path):
-            all_issues.extend(check_comment_changes(old_content, content, file_path))
-        all_issues.extend(check_e2e_test_naming(content, file_path))
-        all_issues.extend(
-            check_js_boolean_naming(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_js_banned_identifiers(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-        all_issues.extend(
-            check_js_resume_task_enumeration_coverage(content, file_path)
-        )
-        all_issues.extend(
-            check_js_returns_object_schemaless_branch(content, file_path)
-        )
-        all_issues.extend(
-            check_js_sibling_return_object_key_drift(content, file_path)
-        )
-        all_issues.extend(
-            check_js_bare_flag_return_directive(
-                effective_content,
-                file_path,
-                all_changed_lines,
-                defer_scope_to_caller,
-            )
-        )
-
-    if extension in ALL_CODE_EXTENSIONS:
-        advise_file_line_count(content, file_path)
-
-    return all_issues
+def validate_content_for_full_gate(
+    content: str,
+    file_path: str,
+    old_content: str = "",
+    full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+    defer_scope_to_caller: bool = False,
+    sibling_directory: Path | None = None,
+) -> list[str]:
+    """Run the full-gate phase, including the six checks that read sibling files."""
+    return validate_content_for_phase(
+        content,
+        file_path,
+        old_content,
+        full_file_content,
+        prior_full_file_content,
+        defer_scope_to_caller,
+        sibling_directory,
+        phase=FULL_GATE_PHASE,
+    )
 
 
 def _read_existing_file_content(file_path: str) -> str | None:
@@ -660,17 +771,20 @@ def _hook_infrastructure_blocking_issues(
     file_path: str,
     full_file_content: str | None = None,
     prior_full_file_content: str = "",
+    *,
+    phase: str,
 ) -> list[str]:
-    """Run the checks that still guard a hook Python target.
+    """Run the checks that still guard a hook Python target for one phase.
 
     The whole code-rules verdict stays off hook-infrastructure files, so this
-    runs the checks that must still guard them: the cross-file duplicate-body
-    check and the same-file inline-duplicate-body check, each span-scoped to the
-    lines an edit touched exactly as ``validate_content`` scopes it for production
-    code; the zero-payload alias check, whose docstring names hook modules as
-    its motivating case, run over the whole post-edit file; and the
-    unanchored command-dispatch check, which guards a ``hooks/blocking``
-    command classifier against matching a multi-word command as a substring.
+    runs the checks that must still guard them in every phase: the same-file
+    inline-duplicate-body check and the unanchored command-dispatch check,
+    each span-scoped to the lines an edit touched exactly as
+    ``validate_content_for_phase`` scopes it for production code; and the
+    zero-payload alias check, whose docstring names hook modules as its
+    motivating case, run over the whole post-edit file. The cross-file
+    duplicate-body check joins that roster only when ``phase`` is
+    ``FULL_GATE_PHASE``.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -679,10 +793,11 @@ def _hook_infrastructure_blocking_issues(
             None for a whole-file Write.
         prior_full_file_content: The file content before the edit applied, used to
             recover the changed lines on an Edit.
+        phase: ``EDIT_LANE_PHASE`` or ``FULL_GATE_PHASE``; selects whether the
+            cross-file duplicate-body check runs.
 
     Returns:
-        The in-scope duplicate-body violations and the zero-payload alias
-        violations for the target.
+        The in-scope violations for the target at the given phase.
     """
     effective_content = content if full_file_content is None else full_file_content
     all_changed_lines = (
@@ -690,11 +805,15 @@ def _hook_infrastructure_blocking_issues(
         if full_file_content is not None
         else None
     )
-    all_issues = check_duplicate_function_body_across_files(
-        effective_content,
-        file_path,
-        all_changed_lines,
-    )
+    all_issues: list[str] = []
+    if phase == FULL_GATE_PHASE:
+        all_issues.extend(
+            check_duplicate_function_body_across_files(
+                effective_content,
+                file_path,
+                all_changed_lines,
+            )
+        )
     all_issues.extend(
         check_same_file_inline_duplicate_body(
             effective_content,
@@ -885,7 +1004,7 @@ def _forecast_full_file_violations(
     Returns:
         The full-file violations not already in ``all_blocking_issues``.
     """
-    all_full_file_issues = validate_content(
+    all_full_file_issues = validate_content_for_edit_lane(
         full_file_content_after_edit, file_path, prior_full_file_content
     )
     return _issues_absent_from_prior_bodies(all_full_file_issues, all_blocking_issues)
@@ -939,10 +1058,10 @@ def _run_precheck(
     candidate_content = candidate_content.lstrip(UTF8_BYTE_ORDER_MARK)
     if runs_full_verdict:
         old_content = _read_existing_file_content(target_path) or ""
-        all_issues = validate_content(candidate_content, target_path, old_content)
+        all_issues = validate_content_for_full_gate(candidate_content, target_path, old_content)
     else:
         all_issues = _hook_infrastructure_blocking_issues(
-            candidate_content, target_path
+            candidate_content, target_path, phase=FULL_GATE_PHASE
         )
     for each_issue in all_issues:
         violation_stream.write(f"{each_issue}\n")
@@ -1140,7 +1259,7 @@ def _report_blocking_violations(
         prior_full_file_content: The on-disk content before the edit.
         deny_stream: The stream the JSON deny payload is written to.
     """
-    all_blocking_issues = validate_content(
+    all_blocking_issues = validate_content_for_edit_lane(
         content,
         file_path,
         old_content,
@@ -1170,9 +1289,9 @@ def _report_hook_blocking_issues(
 ) -> None:
     """Write a deny payload when a hook target trips a check that still guards it.
 
-    The full code-rules verdict stays off hook-infrastructure files; this runs the
-    two checks that must still guard them — the cross-file duplicate-body check and
-    the zero-payload alias check — and emits the deny payload when either fires.
+    The full code-rules verdict stays off hook-infrastructure files; this runs
+    the edit-lane hook-infrastructure checks and emits the deny payload when
+    one fires.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -1187,6 +1306,7 @@ def _report_hook_blocking_issues(
         file_path,
         full_file_content_after_edit,
         prior_full_file_content,
+        phase=EDIT_LANE_PHASE,
     )
     if not all_blocking_issues:
         return

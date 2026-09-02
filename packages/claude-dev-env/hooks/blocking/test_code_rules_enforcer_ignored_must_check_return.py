@@ -25,7 +25,7 @@ from code_rules_boolean_mustcheck import (  # noqa: E402
     check_ignored_must_check_return as _check_ignored_must_check_return,
 )
 from code_rules_enforcer import (  # noqa: E402
-    validate_content as _validate_content,
+    validate_content_for_full_gate as _validate_content,
 )
 
 code_rules_enforcer = SimpleNamespace(

@@ -25,7 +25,7 @@ if _PR_LOOP_SCRIPTS_DIRECTORY not in sys.path:
 from code_rules_enforcer import (  # noqa: E402
     _fragment_or_deferred_check,
     main,
-    validate_content,
+    validate_content_for_full_gate as validate_content,
 )
 from code_rules_gate_parts import gate_running  # noqa: E402
 from code_rules_gate_parts.tests._repo_test_helpers import (  # noqa: E402

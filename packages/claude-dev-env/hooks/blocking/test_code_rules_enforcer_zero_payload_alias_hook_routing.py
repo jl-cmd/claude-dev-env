@@ -3,7 +3,7 @@
 A pass-through alias inside a hook module is the motivating case for the
 zero-payload-alias check, so the deny must fire on the same PreToolUse path a
 live Write into ``packages/claude-dev-env/hooks/blocking`` would take — not only
-through ``validate_content``, which hook files never reach at PreToolUse. These
+through ``validate_content_for_edit_lane``, which hook files never reach at PreToolUse. These
 tests drive the real ``main()`` stdin entry point and the pre-check CLI with a
 hook-infrastructure target.
 
@@ -66,7 +66,7 @@ def test_write_of_pass_through_alias_into_hook_directory_denies(
     The target lives under a hook-infrastructure path the full code-rules suite
     exempts, so this proves the zero-payload-alias check still fires on the exact
     directory its docstring names as the motivating case — at the PreToolUse Write
-    point, not only through ``validate_content``."""
+    point, not only through ``validate_content_for_edit_lane``."""
     new_file = hook_blocking_dir / "new_blocker.py"
     captured_stdout, _exit_code = run_write_entrypoint(
         main,
