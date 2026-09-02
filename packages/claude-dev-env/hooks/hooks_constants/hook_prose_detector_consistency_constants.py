@@ -1,9 +1,12 @@
 """Configuration constants for the hook_prose_detector_consistency PreToolUse hook."""
 
-WRITE_TOOL_NAME: str = "Write"
-EDIT_TOOL_NAME: str = "Edit"
-MULTI_EDIT_TOOL_NAME: str = "MultiEdit"
-MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR: str = "\n"
+# The dispatcher constants module is the single source for tool names.
+from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
+    EDIT_TOOL_NAME,
+    MULTI_EDIT_TOOL_NAME,
+    WRITE_TOOL_NAME,
+)
+
 
 HOOK_MODULE_PATH_SEGMENT: str = "/hooks/"
 PYTHON_FILE_SUFFIX: str = ".py"

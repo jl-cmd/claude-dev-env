@@ -38,12 +38,14 @@ _EXPECTED_BASH_ORDER = (
     "blocking/test_preflight_check.py",
     "blocking/windows_rmtree_blocker.py",
     "blocking/gh_pr_author_enforcer.py",
+    "blocking/pr_description_writer_gate.py",
 )
 
 _POWERSHELL_APPLICABLE = (
     "blocking/cursor_cli_python_misfire_blocker.py",
     "blocking/unscoped_search_blocker.py",
     "blocking/pii_prevention_blocker.py",
+    "blocking/pr_description_writer_gate.py",
 )
 
 

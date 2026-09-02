@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -37,7 +38,6 @@ from pii_prevention_blocker import (  # noqa: E402
 
 HOOK_PATH = _HOOK_DIR / "pii_prevention_blocker.py"
 
-SYNTHETIC_GITHUB_TOKEN = "ghp_" + ("C" * 36)
 SYNTHETIC_REAL_EMAIL = "owner.fixture@acme-corp.example.io"
 SYNTHETIC_HOME_PATH = r"C:\Users\fixture_commit_user\secret.txt"
 SYNTHETIC_PRIVATE_IP = "10.44.12.9"
@@ -173,14 +173,12 @@ def test_gh_body_file_reads_relative_path_from_working_directory(
     assert "email" in deny_reason
 
 
-def test_gh_post_body_with_secret_is_denied() -> None:
-    command = (
-        f'gh pr comment 12 --body "auth material {SYNTHETIC_GITHUB_TOKEN}"'
-    )
+def test_gh_post_body_with_secret_is_denied(synthetic_github_token: str) -> None:
+    command = f'gh pr comment 12 --body "auth material {synthetic_github_token}"'
     deny_reason = evaluate_bash_command(command, working_directory=None)
     assert deny_reason is not None
     assert "secret" in deny_reason
-    assert SYNTHETIC_GITHUB_TOKEN not in deny_reason
+    assert synthetic_github_token not in deny_reason
 
 
 def test_gh_post_clean_body_is_allowed() -> None:
@@ -201,12 +199,12 @@ def test_mcp_github_body_with_private_ip_is_denied() -> None:
     assert "private-ip" in deny_reason
 
 
-def test_subprocess_hook_denies_write_with_token() -> None:
+def test_subprocess_hook_denies_write_with_token(synthetic_github_token: str) -> None:
     payload = {
         "tool_name": "Write",
         "tool_input": {
             "file_path": "src/config.env.example.md",
-            "content": f"TOKEN={SYNTHETIC_GITHUB_TOKEN}\n",
+            "content": f"TOKEN={synthetic_github_token}\n",
         },
     }
     exit_code, stdout_text = _run_hook(payload)
@@ -217,7 +215,7 @@ def test_subprocess_hook_denies_write_with_token() -> None:
     reason = payload_out["hookSpecificOutput"]["permissionDecisionReason"]
     assert decision == "deny"
     assert "secret" in reason
-    assert SYNTHETIC_GITHUB_TOKEN not in reason
+    assert synthetic_github_token not in reason
 
 
 def test_subprocess_hook_allows_clean_write() -> None:
@@ -1206,14 +1204,11 @@ def test_post_body_still_scans_when_repository_is_exempt(
     assert "email" in deny_reason
 
 
-def _init_bare_repo(repository_root: Path) -> None:
-    repository_root.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init"], cwd=repository_root, check=True, capture_output=True)
-
-
-def test_apply_patch_add_with_real_email_is_denied(tmp_path: Path) -> None:
+def test_apply_patch_add_with_real_email_is_denied(
+    tmp_path: Path, init_bare_git_repo: Callable[[Path], None]
+) -> None:
     repository_root = tmp_path / "repo"
-    _init_bare_repo(repository_root)
+    init_bare_git_repo(repository_root)
     deny_reason = evaluate(
         {
             "tool_name": "apply_patch",
@@ -1232,9 +1227,11 @@ def test_apply_patch_add_with_real_email_is_denied(tmp_path: Path) -> None:
     assert "email" in deny_reason
 
 
-def test_apply_patch_add_with_clean_content_is_allowed(tmp_path: Path) -> None:
+def test_apply_patch_add_with_clean_content_is_allowed(
+    tmp_path: Path, init_bare_git_repo: Callable[[Path], None]
+) -> None:
     repository_root = tmp_path / "repo"
-    _init_bare_repo(repository_root)
+    init_bare_git_repo(repository_root)
     deny_reason = evaluate(
         {
             "tool_name": "apply_patch",
@@ -1252,10 +1249,14 @@ def test_apply_patch_add_with_clean_content_is_allowed(tmp_path: Path) -> None:
     assert deny_reason is None
 
 
-def test_subprocess_hook_denies_apply_patch_add_with_token(tmp_path: Path) -> None:
+def test_subprocess_hook_denies_apply_patch_add_with_token(
+    tmp_path: Path,
+    init_bare_git_repo: Callable[[Path], None],
+    synthetic_github_token: str,
+) -> None:
     """The standalone hook process denies an apply_patch payload carrying a token."""
     repository_root = tmp_path / "repo"
-    _init_bare_repo(repository_root)
+    init_bare_git_repo(repository_root)
     payload = {
         "tool_name": "apply_patch",
         "cwd": str(repository_root),
@@ -1263,7 +1264,7 @@ def test_subprocess_hook_denies_apply_patch_add_with_token(tmp_path: Path) -> No
             "command": (
                 "*** Begin Patch\n"
                 "*** Add File: notes.md\n"
-                f"+token is {SYNTHETIC_GITHUB_TOKEN}\n"
+                f"+token is {synthetic_github_token}\n"
                 "*** End Patch"
             )
         },

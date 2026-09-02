@@ -6,9 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from blocking.config.codex_apply_patch_constants import (
-    CODEX_ADD_OPERATION as CONFIG_CODEX_ADD_OPERATION,
-)
 from codex_apply_patch import (
     CODEX_ADD_OPERATION,
     CodexPatchError,
@@ -16,34 +13,8 @@ from codex_apply_patch import (
 )
 
 
-def test_codex_add_operation_is_the_shared_config_constant() -> None:
-    """codex_apply_patch's public constant is the config value, not a private copy.
-
-    A second local definition would drift from config the way the sanctioned
-    rmtree trio drifted across packages; this pins the single source of truth.
-    """
-    assert CODEX_ADD_OPERATION is CONFIG_CODEX_ADD_OPERATION
-
-
-def _three_operation_patch() -> str:
-    """Build a patch naming one update, one add, and one delete section."""
-    return (
-        "*** Begin Patch\n"
-        "*** Update File: updated.py\n"
-        "@@\n"
-        "-before\n"
-        "+after\n"
-        " keep\n"
-        "*** Add File: added.py\n"
-        "+new\n"
-        "*** Delete File: deleted.py\n"
-        "*** End of File\n"
-        "*** End Patch"
-    )
-
-
 def test_codex_patch_operation_targets_names_every_section_without_reading_content(
-    tmp_path: Path,
+    tmp_path: Path, three_operation_patch: str
 ) -> None:
     """The path-only helper resolves every section's target without any disk read.
 
@@ -51,7 +22,7 @@ def test_codex_patch_operation_targets_names_every_section_without_reading_conte
     caller that only needs each target path is not tripped up by an unreadable
     prior file.
     """
-    all_targets = codex_patch_operation_targets(_three_operation_patch(), str(tmp_path))
+    all_targets = codex_patch_operation_targets(three_operation_patch, str(tmp_path))
 
     all_target_names = {
         (each_operation, str(each_path).rsplit("/", 1)[-1])

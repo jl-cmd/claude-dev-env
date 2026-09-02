@@ -150,25 +150,8 @@ def test_codex_payload_blocks_malformed_patch(
     assert "payload requires accepted patch markers" in deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
 
 
-def _three_operation_patch() -> str:
-    """Build a patch naming one update, one add, and one delete section."""
-    return (
-        "*** Begin Patch\n"
-        "*** Update File: updated.py\n"
-        "@@\n"
-        "-before\n"
-        "+after\n"
-        " keep\n"
-        "*** Add File: added.py\n"
-        "+new\n"
-        "*** Delete File: deleted.py\n"
-        "*** End of File\n"
-        "*** End Patch"
-    )
-
-
 def test_codex_patch_operation_targets_names_every_section_without_reading_content(
-    tmp_path: Path,
+    tmp_path: Path, three_operation_patch: str
 ) -> None:
     """The path-only helper resolves every section's target without any disk read.
 
@@ -177,7 +160,7 @@ def test_codex_patch_operation_targets_names_every_section_without_reading_conte
     prior file.
     """
     all_targets = codex_apply_patch.codex_patch_operation_targets(
-        _three_operation_patch(), str(tmp_path)
+        three_operation_patch, str(tmp_path)
     )
 
     all_target_names = {

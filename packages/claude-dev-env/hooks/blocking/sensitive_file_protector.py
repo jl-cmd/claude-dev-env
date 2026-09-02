@@ -34,7 +34,11 @@ import sys
 
 import _path_setup  # noqa: F401
 
-from codex_apply_patch import CodexPatchError, codex_patch_operation_targets
+from codex_apply_patch import (
+    CodexPatchError,
+    codex_patch_operation_targets,
+    payload_patch_command,
+)
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.pre_tool_use_dispatcher_constants import (
     ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
@@ -128,12 +132,9 @@ def deny_write(file_path: str, matched_pattern: str) -> None:
 
 def _apply_patch_target_paths(hook_input: dict, tool_input: dict) -> tuple[str, ...]:
     """Return every resolved target path a Codex apply_patch payload names."""
-    raw_command = tool_input.get("command", "")
-    command = raw_command if isinstance(raw_command, str) else ""
+    command, working_directory = payload_patch_command(hook_input, tool_input)
     if not command:
         return ()
-    raw_working_directory = hook_input.get("cwd")
-    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
     try:
         all_operation_targets = codex_patch_operation_targets(command, working_directory)
     except CodexPatchError:
