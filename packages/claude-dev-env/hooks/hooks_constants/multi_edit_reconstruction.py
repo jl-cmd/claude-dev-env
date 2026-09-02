@@ -24,9 +24,19 @@ def apply_edits(existing_content: str, all_edits: list[dict]) -> str:
             ``edits`` list, each a mapping with an ``old_string`` and a
             ``new_string``.
 
+    An edit carrying ``replace_all`` rewrites every occurrence, matching what
+    MultiEdit itself does; every other edit rewrites the first one::
+
+        {"old_string": "old", "new_string": "new", "replace_all": True}
+            "old old old"  ->  "new new new"
+        {"old_string": "old", "new_string": "new"}
+            "old old old"  ->  "new old old"
+
+    Each edit reads its own flag, so one replace_all edit in a list leaves the
+    edits beside it alone.
+
     Returns:
-        The content after replacing the first occurrence of each edit's
-        ``old_string`` with its ``new_string``, in list order.
+        The content after applying each edit in list order.
     """
     edited_content = existing_content
     for each_edit in all_edits:
@@ -35,7 +45,10 @@ def apply_edits(existing_content: str, all_edits: list[dict]) -> str:
         old_string = each_edit.get("old_string", "")
         new_string = each_edit.get("new_string", "")
         if isinstance(old_string, str) and isinstance(new_string, str) and old_string:
-            edited_content = edited_content.replace(old_string, new_string, 1)
+            is_replace_all = bool(each_edit.get("replace_all"))
+            edited_content = edited_content.replace(
+                old_string, new_string, -1 if is_replace_all else 1
+            )
     return edited_content
 
 
