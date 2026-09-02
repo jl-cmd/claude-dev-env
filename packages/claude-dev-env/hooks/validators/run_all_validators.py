@@ -31,11 +31,11 @@ from .config.baseline_identity_constants import (
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
+    is_pytest_scratch_directory_segment,
 )
 from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
-from .system_temporary_roots import enclosing_system_temporary_root
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
 from .ruff_integration import check_ruff_available, run_ruff_check
@@ -755,64 +755,32 @@ def _escapes_temporary_root(path_part: str) -> bool:
     return part_as_path.is_absolute() or bool(part_as_path.anchor)
 
 
-def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
-    """Return True when *file_path* is absolute and resolves under an OS temp root.
-
-    ::
-
-        ok:   "<windows-temp-root>/pytest-of-x/test_foo0/a.py"  -> True
-        ok:   "/home/runner/work/_temp/pytest-basetemp/.../a.py" when RUNNER_TEMP
-        flag: "packages/demo/test_helpers/worker.py"         -> False (relative)
-        flag: "C:/repo/pkg/test_helpers/worker.py"           -> False (project)
-
-    Absolute paths under system temporary directories often carry pytest
-    ``tmp_path`` segments named ``test_*``. Those segments must not be treated
-    as project exemption signals, or a production file staged from a pytest
-    path would inherit a false test-file exemption.
-
-    Args:
-        file_path: Destination path the write or edit targets.
-
-    Returns:
-        True when *file_path* is absolute and lives under ``tempfile.gettempdir()``
-        or a known temporary-root environment variable (``TEMP``, ``TMP``,
-        ``TMPDIR``, ``RUNNER_TEMP``).
-    """
-    destination_path = Path(file_path)
-    if not destination_path.is_absolute():
-        return False
-    return enclosing_system_temporary_root(destination_path) is not None
-
-
-def _directory_segment_signals_exemption(
-    segment_lower: str, *, is_substring_match_enabled: bool
-) -> bool:
+def _directory_segment_signals_exemption(segment_lower: str) -> bool:
     """Return True when a directory segment carries a path-exemption signal.
 
     ::
 
-        ok:   "test_helpers" (substring on)  -> True  (contains the ``test_`` fragment)
-        ok:   "scripts"                      -> True  (exact CLI-marker segment name)
-        flag: "latest"                       -> False (neither exact name nor a fragment)
-        flag: "test_edit_foo0" (substring off) -> False (pytest-shaped; exact-only mode)
+        ok:   "test_helpers"   -> True  (contains the ``test_`` fragment)
+        ok:   "scripts"        -> True  (exact CLI-marker segment name)
+        flag: "latest"         -> False (neither exact name nor a fragment)
+        flag: "test_edit_foo0" -> False (pytest generated it, not the project)
 
     A segment is kept during staging when its name exactly matches an exemption
-    directory name. When *is_substring_match_enabled* is True, a separator-free
-    substring pattern that ``is_test_file`` matches anywhere in a path also
-    counts — that is what preserves ``pkg/test_helpers/``. Substring matching is
-    disabled for absolute paths under the system temporary directory so pytest
-    ``tmp_path`` parents named ``test_*`` do not falsely trip test exemptions.
+    directory name, or when a separator-free substring pattern that
+    ``is_test_file`` matches anywhere in a path appears inside it — that is what
+    preserves ``pkg/test_helpers/``. A directory pytest generated for its own
+    scratch tree is excluded from the substring pass, so a ``test_*`` scratch
+    parent never lends a staged production file a false test exemption.
 
     Args:
         segment_lower: One lowercased directory component of the target path.
-        is_substring_match_enabled: When False, only exact exemption names count.
 
     Returns:
         True when staging must keep this segment to reproduce the exemption.
     """
     if segment_lower in ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES:
         return True
-    if not is_substring_match_enabled:
+    if is_pytest_scratch_directory_segment(segment_lower):
         return False
     return any(
         each_pattern in segment_lower
@@ -829,11 +797,10 @@ def _temporary_path_preserving_directory_signal(
     path fragments (``test_`` inside ``test_helpers``) match substrings of the
     real file path. Staging under a flat temp basename drops those segments.
     Mirroring the first exemption-signaling directory through the basename
-    restores that signal. Substring fragment matching is skipped for absolute
-    paths under the system temporary directory so pytest ``tmp_path`` parents
-    that contain ``test_`` do not falsely trip test-file exemptions; exact
-    exemption directory names (``config``, ``scripts``, ``tests``, ...) still
-    anchor staging on those absolute temp paths.
+    restores that signal. A directory pytest generated for its own scratch tree
+    is recognized by name and skipped, so a ``tmp_path`` parent containing
+    ``test_`` never trips a test-file exemption. The staged path reads the same
+    wherever ``--basetemp`` places that scratch tree.
 
     Args:
         temporary_directory: Root of the ephemeral staging tree.
@@ -850,15 +817,10 @@ def _temporary_path_preserving_directory_signal(
     if not path_parts:
         path_parts = (destination_path.name,)
 
-    is_substring_match_enabled = not _is_absolute_path_under_system_temporary_directory(
-        file_path
-    )
     start_index = len(path_parts) - 1
     for each_index, each_part in enumerate(path_parts[:-1]):
         part_lower = each_part.lower()
-        if not _directory_segment_signals_exemption(
-            part_lower, is_substring_match_enabled=is_substring_match_enabled
-        ):
+        if not _directory_segment_signals_exemption(part_lower):
             continue
         start_index = each_index
         break
