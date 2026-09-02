@@ -74,3 +74,23 @@ class TestSingleLetterVariables:
         tree = ast.parse(ALLOWED_LOOP_COUNTERS)
         violations = check_single_letter_variables(tree, "test.py")
         assert violations == []
+
+    def test_underscore_allowed_alongside_disallowed_single_letter(self) -> None:
+        """``_`` and the loop counters share one allow-list; every other letter fails.
+
+        config/abbreviation_checks_constants.py pins the allow-list's exact
+        membership; this test pins that check_single_letter_variables reads
+        that same list correctly for a mixed allowed/disallowed source.
+        """
+        source = '''
+def process(matrix):
+    for i in range(10):
+        for j in range(10):
+            for k in range(10):
+                _ = matrix[i][j][k]
+                q = matrix[i][j][k]
+'''
+        tree = ast.parse(source)
+        violations = check_single_letter_variables(tree, "test.py")
+        assert len(violations) == 1
+        assert "q" in violations[0].message
