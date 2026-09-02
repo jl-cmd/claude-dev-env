@@ -1,5 +1,57 @@
 # Changelog
 
+## [2.31.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.31.0...claude-dev-env-v2.31.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* a repository checked out under /tmp is never treated as scratch ([8eb7c2e](https://github.com/jl-cmd/claude-dev-env/commit/8eb7c2e8341897a44290df111859d638c2802c73))
+* Anchor state-description test payloads to the repository root ([adc26b3](https://github.com/jl-cmd/claude-dev-env/commit/adc26b398ee232f91f45559fd7d96166cf137ef7))
+* Anchor the staging walk at the target's project root ([ee87e17](https://github.com/jl-cmd/claude-dev-env/commit/ee87e17f5d73759c5b091f8f1a3be8d04faf1e95))
+* Gate a repository checked out under /tmp ([268e173](https://github.com/jl-cmd/claude-dev-env/commit/268e17341c5b82154f8c9faf43b55d3916b927bc))
+* **grok:** resolve shared process-tree scripts across a junction ([20fb7cf](https://github.com/jl-cmd/claude-dev-env/commit/20fb7cff96adaaf4fc8ebc81ec2aa21e94a078e3))
+* **grok:** resolve shared process-tree scripts across a junction ([39705ec](https://github.com/jl-cmd/claude-dev-env/commit/39705ec38285c11bf9ae276904f5d9219d817a8d))
+* **hooks:** keep grandfathered violations matched across a function rename ([3963a50](https://github.com/jl-cmd/claude-dev-env/commit/3963a5017e6ec4f69059a2e48893ed72c0aa09a4))
+* **hooks:** keep grandfathered violations matched across a function rename ([4e56690](https://github.com/jl-cmd/claude-dev-env/commit/4e5669015a161b21e012433bb59fdcbeaed6143a))
+* Judge exemption directories by segment, not by temp root ([c9167c1](https://github.com/jl-cmd/claude-dev-env/commit/c9167c137af63a6f84ba7e171afdfc47899d2109))
+* **tests:** anchor state-description payloads to the repository root ([1a77a9b](https://github.com/jl-cmd/claude-dev-env/commit/1a77a9b984001dca1eca2b9b12c65e97892f317c))
+* **validators:** anchor the staging walk at the target's project root ([808360b](https://github.com/jl-cmd/claude-dev-env/commit/808360b97dccbeee3d5bfa9268103e78bb6bd578))
+* **validators:** read pytest scaffolding by name, not by temp root ([de35512](https://github.com/jl-cmd/claude-dev-env/commit/de3551222b1b067b4d098e6d8fcaceed6a11203c))
+* **validators:** read pytest scaffolding by name, not by temp root ([06c39cc](https://github.com/jl-cmd/claude-dev-env/commit/06c39cc73fabe1422f76a4251121b065c2cb4b3d))
+
+
+### Documentation
+
+* **code-rules:** record the basetemp reporting surface in section 11.6 ([1e05c27](https://github.com/jl-cmd/claude-dev-env/commit/1e05c27a9e839bbf8d915139c95b5d529e45c249))
+* **code-rules:** record the basetemp reporting surface in section 11.6 ([8f2cbf8](https://github.com/jl-cmd/claude-dev-env/commit/8f2cbf8413b7f18aeae762a91dfe11b8e3dddc91))
+* **validators:** name the cache key's blind spot in source_text ([b324d18](https://github.com/jl-cmd/claude-dev-env/commit/b324d187fb3449bf07c246b4c8a4338629c3b7a0))
+
+
+### Refactoring
+
+* **hooks:** put the pr-description gate on the shared hook plumbing ([12d8095](https://github.com/jl-cmd/claude-dev-env/commit/12d80958213b51667a20f6c881a5dc01b88dce56))
+* **hooks:** put the pr-description gate on the shared hook plumbing ([d3ec234](https://github.com/jl-cmd/claude-dev-env/commit/d3ec2348c9cd139da24d0fbc7564740c19615931))
+* **hooks:** reconstruct single Edits through the shared applier ([77c074d](https://github.com/jl-cmd/claude-dev-env/commit/77c074d1741e3cafab334fbe607ab1969dc60ba9))
+* **hooks:** reconstruct single Edits through the shared applier ([f95e766](https://github.com/jl-cmd/claude-dev-env/commit/f95e76634091bd8a6326cbf77508b72f7c3c60ea))
+* **validators:** one result type and one roster on the save path ([f1a373e](https://github.com/jl-cmd/claude-dev-env/commit/f1a373e3c43cab0fb4826341508bfc7b79d08bd5))
+* **validators:** one result type and one roster table on the save path ([109c790](https://github.com/jl-cmd/claude-dev-env/commit/109c790c9a2b09c7cb44363b7fe13cfa7d0bbda7))
+
+
+### Performance
+
+* Cut the check that cost half of every save ([213515f](https://github.com/jl-cmd/claude-dev-env/commit/213515f795bffdb01162c50a75c705e01bf4951f))
+* **hooks:** memoize statement dumps in the same-file inline duplicate scan ([9cbee4d](https://github.com/jl-cmd/claude-dev-env/commit/9cbee4d8cc516648ce57ffda834701b98d6fbcf5))
+* **validators:** read and parse the saved file once, not ten times ([22089ce](https://github.com/jl-cmd/claude-dev-env/commit/22089ce8009a352974e5f7179c81bd956be1ded7))
+* **validators:** read and parse the saved file once, not ten times ([2615117](https://github.com/jl-cmd/claude-dev-env/commit/26151175b5b93890bc39b5c0e68fb90e8cab85e8))
+
+
+### Tests
+
+* **hooks:** fold the repository-root cases into the TDD suite ([0ea3c93](https://github.com/jl-cmd/claude-dev-env/commit/0ea3c9332fe5f682be1c99c74f6629c199aeccd8))
+* **hooks:** fold the repository-root cases into the TDD suite ([f27dd47](https://github.com/jl-cmd/claude-dev-env/commit/f27dd472b3080c929b177703ff8e5b3230bb71ae))
+* Pin the temp root the harness refusal is judged against ([9b98976](https://github.com/jl-cmd/claude-dev-env/commit/9b98976753c532cd42e77b8ada8fd73d4102e07c))
+* **validators:** pin the temp root the harness refusal is judged against ([be7f37d](https://github.com/jl-cmd/claude-dev-env/commit/be7f37dad3f3215aa4b53faf083682554c4bba00))
+
 ## [2.31.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.30.1...claude-dev-env-v2.31.0) (2026-09-02)
 
 
