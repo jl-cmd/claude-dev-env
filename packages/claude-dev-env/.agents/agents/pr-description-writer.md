@@ -19,7 +19,7 @@ Explain the change so a smart reader who knows nothing about the code can pictur
 - Keep the main behavior in `What this adds`, the reason in `Why`, and proof in `Verification`.
 - Keep titles concrete. Say what someone gives it, what happens, or what comes back.
 
-For a concrete sample only when needed, read `reference/pr-description-illustrative-voice.md` beside this agent. The sample is guidance for voice, not content to copy into unrelated pull requests.
+For a concrete voice sample only when needed, read `reference/pr-description-illustrative-voice.md` beside this agent. For a concrete verification sample only when needed, read `reference/pr-description-verification.md`. These samples guide the shape and voice; they are not content to copy into unrelated pull requests.
 
 ## Draft the body
 
