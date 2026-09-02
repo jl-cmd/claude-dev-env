@@ -26,14 +26,14 @@ from validators.python_style_helpers import (  # noqa: E402
     blank_line_for_source,
     function_start_line,
     gap_is_blank_only,
+    is_docstring_statement,
+    is_import_statement,
     iter_function_definitions,
     real_newline_lines,
     top_level_functions,
 )
 from validators.python_style_import_bootstrap import (  # noqa: E402
-    is_docstring_statement,
-    is_import_statement,
-    resolve_seen_non_import,
+    is_sys_path_bootstrap_prelude,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,19 +76,18 @@ def _check_module_level_import_order(tree: ast.AST, filename: str) -> list[Viola
     has_seen_non_import = False
     pending_prelude_statements: list[ast.stmt] = []
     for each_statement in tree.body:
-        if is_import_statement(each_statement):
-            has_seen_non_import = resolve_seen_non_import(
-                has_seen_non_import, pending_prelude_statements
-            )
-            pending_prelude_statements = []
-            violations.extend(
-                [Violation(filename, each_statement.lineno, "Import statement must be at top of file")]
-                if has_seen_non_import
-                else []
-            )
+        if not is_import_statement(each_statement):
+            if not is_docstring_statement(each_statement):
+                pending_prelude_statements.append(each_statement)
             continue
-        if not is_docstring_statement(each_statement):
-            pending_prelude_statements.append(each_statement)
+        if pending_prelude_statements and not is_sys_path_bootstrap_prelude(
+            pending_prelude_statements
+        ):
+            has_seen_non_import = True
+        pending_prelude_statements = []
+        if has_seen_non_import:
+            message = "Import statement must be at top of file"
+            violations.append(Violation(filename, each_statement.lineno, message))
     return violations
 
 
