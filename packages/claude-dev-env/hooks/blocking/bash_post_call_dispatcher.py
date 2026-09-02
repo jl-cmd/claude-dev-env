@@ -27,7 +27,6 @@ imports load once into this process rather than once per hook.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import _path_setup  # noqa: F401
 
@@ -35,7 +34,11 @@ from hooks_constants.bash_post_call_dispatcher_constants import (
     ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES,
 )
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BashHostedHookEntry
-from hooks_constants.hosted_hook_runner import run_dispatcher_main, run_hook_capturing_output
+from hooks_constants.hosted_hook_runner import (
+    run_hook_capturing_output,
+    resolved_hook_script_path,
+    run_dispatcher_main,
+)
 
 
 def select_applicable_entries(tool_name: str) -> list[BashHostedHookEntry]:
@@ -47,12 +50,6 @@ def select_applicable_entries(tool_name: str) -> list[BashHostedHookEntry]:
     ]
 
 
-def _resolve_hook_script_path(relative_path: str) -> str:
-    """Resolve a hooks/-relative path to an absolute script path."""
-    hooks_root = Path(__file__).resolve().parent.parent
-    return str(hooks_root / relative_path)
-
-
 def dispatch(payload_text: str, tool_name: str) -> None:
     """Run every hosted hook applicable to tool_name, in registration order.
 
@@ -60,7 +57,7 @@ def dispatch(payload_text: str, tool_name: str) -> None:
     one hook failing never stops a later one in the same roster.
     """
     for each_entry in select_applicable_entries(tool_name):
-        script_path = _resolve_hook_script_path(each_entry.script_relative_path)
+        script_path = resolved_hook_script_path(each_entry.script_relative_path)
         run_hook_capturing_output(script_path, payload_text)
 
 

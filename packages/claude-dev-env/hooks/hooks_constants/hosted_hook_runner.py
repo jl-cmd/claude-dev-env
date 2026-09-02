@@ -27,6 +27,7 @@ import io
 import json
 import runpy
 import sys
+from pathlib import Path
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -81,6 +82,26 @@ def run_hook_capturing_output(hook_script_path: str, payload_text: str) -> Hoste
     finally:
         sys.stdin, sys.stdout, sys.argv = original_stdin, original_stdout, original_argv
     return HostedHookRun(captured_stdout=captured_output.getvalue(), did_crash=did_crash)
+
+
+def resolved_hook_script_path(relative_path: str) -> str:
+    """Resolve a hooks/-relative path to the absolute script path to run.
+
+    ::
+
+        "observability/test_failure_recorder.py" -> <hooks>/observability/...
+
+    The root comes from this module's own location, so every dispatcher
+    resolves against the same directory however deep it sits.
+
+    Args:
+        relative_path: A path relative to the hooks directory.
+
+    Returns:
+        The absolute path of that script.
+    """
+    hooks_root = Path(__file__).resolve().parent.parent
+    return str(hooks_root / relative_path)
 
 
 def run_dispatcher_main(dispatch: Callable[[str, str], None]) -> None:

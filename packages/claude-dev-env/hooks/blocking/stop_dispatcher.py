@@ -12,22 +12,19 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import _path_setup  # noqa: F401
 
-from hooks_constants.hosted_hook_runner import HostedHookRun, run_hook_capturing_output
+from hooks_constants.hosted_hook_runner import (
+    run_hook_capturing_output,
+    HostedHookRun,
+    resolved_hook_script_path,
+)
 from hooks_constants.stop_dispatcher_constants import (
     ALL_STOP_HOSTED_HOOK_PATHS,
     BLOCK_DECISION,
     DECISION_KEY,
 )
-
-
-def _resolve_hook_script_path(relative_path: str) -> str:
-    """Resolve a hooks/-relative path to an absolute script path."""
-    hooks_root = Path(__file__).resolve().parent.parent
-    return str(hooks_root / relative_path)
 
 
 def _is_block_decision(stdout_text: str) -> bool:
@@ -58,7 +55,7 @@ def dispatch(payload_text: str) -> None:
     """Run every Stop hosted hook and emit the first block decision if any."""
     all_runs: list[HostedHookRun] = []
     for each_relative_path in ALL_STOP_HOSTED_HOOK_PATHS:
-        script_path = _resolve_hook_script_path(each_relative_path)
+        script_path = resolved_hook_script_path(each_relative_path)
         hook_run = run_hook_capturing_output(script_path, payload_text)
         all_runs.append(hook_run)
     block_stdout = select_first_block_stdout(all_runs)

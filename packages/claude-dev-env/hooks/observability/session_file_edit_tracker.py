@@ -18,13 +18,10 @@ never interrupts the edit that triggered it.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import sys
 import tempfile
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
 _hooks_dir = str(Path(__file__).resolve().parent.parent)
@@ -35,15 +32,13 @@ from blocking.codex_apply_patch import payload_patch_target_paths  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
+from hooks_constants.state_file_lock import hold_state_file_lock  # noqa: E402
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
     ALL_TRACKED_EDIT_TOOL_NAMES,
     APPLY_PATCH_TOOL_NAME,
-    LOCK_ACQUIRE_RETRY_SECONDS,
-    LOCK_ACQUIRE_TIMEOUT_SECONDS,
     SESSION_EDIT_FILE_PREFIX,
     SESSION_EDIT_FILE_SUFFIX,
-    SESSION_EDIT_LOCK_FILE_SUFFIX,
     SESSION_ID_UNSAFE_CHARACTERS_PATTERN,
     STATE_FILE_ATOMIC_WRITE_SUFFIX,
     STATE_FILE_DEFAULT_SESSION_ID,
@@ -140,54 +135,6 @@ def _atomic_write_edit_file(edit_file: Path, all_edited_file_paths: list[str]) -
         raise
 
 
-def _acquire_edit_file_lock(lock_file: Path) -> int | None:
-    """Grab an exclusive per-session lock, spinning until it frees or times out.
-
-    Args:
-        lock_file: Path to this session's lock file.
-
-    Returns:
-        An open file descriptor for the held lock, or None when the lock stayed
-        held past the acquire timeout so the caller proceeds without it rather
-        than stalling the edit that triggered the hook.
-    """
-    lock_acquire_deadline = time.monotonic() + LOCK_ACQUIRE_TIMEOUT_SECONDS
-    while True:
-        try:
-            return os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            if time.monotonic() >= lock_acquire_deadline:
-                return None
-            time.sleep(LOCK_ACQUIRE_RETRY_SECONDS)
-
-
-@contextlib.contextmanager
-def _hold_edit_file_lock(edit_file: Path) -> Iterator[None]:
-    """Hold the per-session lock across one read-modify-write of the tracker.
-
-    Two PostToolUse invocations run concurrently when Claude issues parallel
-    Write or Edit calls in one turn. Serializing the read-then-write on a shared
-    lock file keeps each invocation's appended path from overwriting another's.
-    The lock is best-effort: when it cannot be acquired within the timeout, the
-    write proceeds without it rather than stalling the edit.
-
-    Args:
-        edit_file: This session's tracker file path.
-
-    Yields:
-        Control to the caller while the lock is held.
-    """
-    lock_file = edit_file.with_name(edit_file.name + SESSION_EDIT_LOCK_FILE_SUFFIX)
-    lock_file.parent.mkdir(parents=True, exist_ok=True)
-    lock_descriptor = _acquire_edit_file_lock(lock_file)
-    try:
-        yield
-    finally:
-        if lock_descriptor is not None:
-            os.close(lock_descriptor)
-            lock_file.unlink(missing_ok=True)
-
-
 def _record_edited_path(session_id: str, resolved_file_path: str) -> None:
     """Append one edited path to this session's tracker file when it is new.
 
@@ -200,7 +147,7 @@ def _record_edited_path(session_id: str, resolved_file_path: str) -> None:
         resolved_file_path: The resolved absolute path of the edited file.
     """
     edit_file = _session_edit_file_path(session_id)
-    with _hold_edit_file_lock(edit_file):
+    with hold_state_file_lock(edit_file):
         recorded_paths = _read_recorded_paths(edit_file)
         if resolved_file_path in recorded_paths:
             return

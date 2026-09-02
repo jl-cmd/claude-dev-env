@@ -207,6 +207,27 @@ def test_allows_backtick_inside_single_quoted_heredoc_body() -> None:
     assert _run_hook(payload).stdout == ""
 
 
+def test_allows_backtick_inside_tab_stripped_quoted_heredoc_body() -> None:
+    """A ``<<-`` opener closes on a tab-indented terminator, and stays inert.
+
+    The tab-strip rule decides which line ends the body. Getting it wrong
+    swallows the rest of the command or ends the body early, so the branch is
+    pinned here as well as in the shared pipeline that owns the rule.
+    """
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "cat > notes.md <<-'EOF'\n"
+                "reStructuredText markup: ``inert literal``\n"
+                "\tEOF\n"
+                "echo done"
+            )
+        },
+    }
+    assert _run_hook(payload).stdout == ""
+
+
 def test_denies_backtick_inside_bare_heredoc_body() -> None:
     payload = {
         "tool_name": "Bash",
@@ -251,3 +272,27 @@ def test_allows_backslash_escaped_heredoc_delimiter_body() -> None:
         },
     }
     assert _run_hook(payload).stdout == ""
+
+
+def test_denies_a_substitution_below_an_opener_inside_a_quoted_string() -> None:
+    """An opener spelled inside a quoted string opens no heredoc.
+
+    Bash runs the second line here. Reading the first line as an opener and
+    dropping everything below it hides a live substitution from the scan.
+    """
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": 'echo "<<\'EOF\'"\necho $(whoami)'},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denies_that_bypass_even_when_a_terminator_line_follows() -> None:
+    """A terminator line below the substitution does not make the strip safe."""
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": 'echo "<<\'EOF\'"\necho $(whoami)\nEOF'},
+    }
+    response = json.loads(_run_hook(payload).stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
