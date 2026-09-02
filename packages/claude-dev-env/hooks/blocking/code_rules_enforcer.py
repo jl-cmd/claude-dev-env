@@ -16,7 +16,6 @@ concern focused. The separate ``tdd_enforcer.py`` hook accepts any
 ``code_rules_*`` module family, so the suffix files satisfy its gate.
 """
 import json
-import os
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -193,6 +192,9 @@ from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
+from hooks_constants.subprocess_budget_completeness_content import (  # noqa: E402
+    existing_file_content,
+)
 
 
 def _multiedit_post_edit_view(
@@ -212,7 +214,7 @@ def _multiedit_post_edit_view(
         A ``(prior_content, post_edit_content)`` pair, or None when the target
         file cannot be read.
     """
-    existing_content = _read_existing_file_content(file_path)
+    existing_content = existing_file_content(file_path)
     if existing_content is None:
         return None
     post_edit_content = apply_edits(
@@ -291,9 +293,8 @@ def _report_codex_patch_payload(
             deny_stream,
         )
         return
-    working_directory = all_pretooluse_payload.get("cwd")
-    if not isinstance(working_directory, str):
-        working_directory = os.getcwd()
+    raw_working_directory = all_pretooluse_payload.get("cwd")
+    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
     try:
         all_patch_files = parse_codex_apply_patch(patch_command, working_directory)
     except CodexPatchError as error:
@@ -353,7 +354,7 @@ def _python_magic_value_and_constant_issues(context: _ValidationContext) -> list
     )
     all_issues.extend(check_fstring_structural_literals(content, file_path))
     all_issues.extend(check_constants_outside_config(content, file_path))
-    all_issues.extend(check_constants_outside_config_advisory(content, file_path))
+    check_constants_outside_config_advisory(content, file_path)
     all_issues.extend(check_file_global_constants_use_count(content, file_path))
     return all_issues
 
@@ -706,15 +707,6 @@ def validate_content_for_full_gate(
     )
 
 
-def _read_existing_file_content(file_path: str) -> str | None:
-    """Return the on-disk content of *file_path*, or None when it cannot be read."""
-    try:
-        with open(file_path, "r", encoding="utf-8") as existing_file:
-            return existing_file.read()
-    except (FileNotFoundError, OSError, UnicodeDecodeError):
-        return None
-
-
 def prior_and_post_edit_content(
     file_path: str, old_string: str, new_string: str,
 ) -> tuple[str | None, str | None]:
@@ -744,7 +736,7 @@ def prior_and_post_edit_content(
     """
     if not old_string:
         return None, None
-    existing_content = _read_existing_file_content(file_path)
+    existing_content = existing_file_content(file_path)
     if existing_content is None:
         return None, None
     if old_string not in existing_content:
@@ -1076,13 +1068,13 @@ def _run_precheck(
     runs_hook_duplicate_body = _is_hook_infrastructure_python_target(target_path)
     if not runs_full_verdict and not runs_hook_duplicate_body:
         return 0
-    candidate_content = _read_existing_file_content(candidate_path)
+    candidate_content = existing_file_content(candidate_path)
     if candidate_content is None:
         error_stream.write(f"error: cannot read candidate file: {candidate_path}\n")
         return 1
     candidate_content = candidate_content.lstrip(UTF8_BYTE_ORDER_MARK)
     if runs_full_verdict:
-        old_content = _read_existing_file_content(target_path) or ""
+        old_content = existing_file_content(target_path) or ""
         all_issues = validate_content_for_full_gate(candidate_content, target_path, old_content)
     else:
         all_issues = _hook_infrastructure_blocking_issues(
@@ -1155,47 +1147,43 @@ def _run_precheck_command(
 
 def _contents_for_validation(
     tool_name: str,
-    new_string: str,
-    old_string: str,
-    written_content: str,
+    all_tool_input: dict[str, object],
     file_path: str,
-    all_multiedit_tool_input: dict[str, object] | None = None,
 ) -> tuple[str, str, str | None, str] | None:
     """Resolve the content views the verdict needs for the given tool payload.
 
     Args:
         tool_name: The tool named in the PreToolUse payload.
-        new_string: The Edit payload's replacement fragment.
-        old_string: The Edit payload's fragment to replace.
-        written_content: The Write payload's whole file body.
+        all_tool_input: The PreToolUse payload's tool_input mapping, carrying
+            ``new_string``/``old_string`` for Edit, ``content`` for Write, and
+            the ``edits`` list for MultiEdit.
         file_path: The destination path of the write or edit.
-        all_multiedit_tool_input: The MultiEdit payload's input mapping,
-            carrying its ``edits`` list; None for every other tool.
 
     Returns:
         A ``(content, old_content, full_file_content_after_edit,
         prior_full_file_content)`` tuple, or None when no validatable view
         exists — an unreadable edit target, or a write over an existing file.
     """
+    new_string = str(all_tool_input.get("new_string", "") or "")
+    old_string = str(all_tool_input.get("old_string", "") or "")
+    written_content = str(all_tool_input.get("content", "") or "")
     if tool_name == "Edit":
         prior_content, full_file_content_after_edit = prior_and_post_edit_content(
             file_path, old_string, new_string,
         )
         if full_file_content_after_edit is None:
-            full_file_content_after_edit = _read_existing_file_content(file_path)
+            full_file_content_after_edit = existing_file_content(file_path)
             if full_file_content_after_edit is None:
                 return None
         return new_string, old_string, full_file_content_after_edit, prior_content or ""
     if tool_name == "MultiEdit":
-        multiedit_view = _multiedit_post_edit_view(
-            file_path, all_multiedit_tool_input or {}
-        )
+        multiedit_view = _multiedit_post_edit_view(file_path, all_tool_input or {})
         if multiedit_view is None:
             return None
         prior_content, post_edit_content = multiedit_view
         return post_edit_content, prior_content, post_edit_content, prior_content
     content = written_content or new_string
-    old_content = _read_existing_file_content(file_path) or ""
+    old_content = existing_file_content(file_path) or ""
     if old_content:
         return None
     return content, old_content, None, ""
@@ -1215,7 +1203,7 @@ def _deny_reason_for_issues(
         tool_name: The tool named in the PreToolUse payload.
         file_path: The destination path used for forecast classification.
         full_file_content_after_edit: The whole post-edit file content when the
-            edit reconstructs one, used to run the full-file forecast.
+            edit reconstructs one, for the full-file forecast.
         prior_full_file_content: The whole file content before the edit applied.
             Empty when the edit's old_string is absent and no reliable prior
             exists; the forecast is skipped in that case so a comment diff
@@ -1289,7 +1277,8 @@ def _report_blocking_violations(
         content: The fragment or whole-file body under validation.
         tool_name: The tool named in the PreToolUse payload.
         file_path: The destination path of the write or edit.
-        old_content: The fragment the edit replaces, or empty for a write.
+        old_content: The fragment named by the edit's old_string, or empty for
+            a write.
         full_file_content_after_edit: The reconstructed post-edit file body,
             or None when the payload is not an Edit.
         prior_full_file_content: The on-disk content before the edit.
@@ -1389,11 +1378,8 @@ def main(all_arguments: list[str]) -> None:
 
     validation_contents = _contents_for_validation(
         tool_name,
-        tool_input.get("new_string", ""),
-        tool_input.get("old_string", ""),
-        tool_input.get("content", ""),
-        file_path,
         tool_input,
+        file_path,
     )
     if validation_contents is None:
         sys.exit(0)

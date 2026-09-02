@@ -12,10 +12,9 @@ try:
         sys.path.insert(0, _hooks_dir)
 
     from hooks_constants.migration_safety_advisor_constants import (
-        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         MULTI_EDIT_TOOL_NAME,
     )
-    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
 except ImportError as import_error:
     raise ImportError(
         "migration_safety_advisor: cannot import its sibling modules; "
@@ -29,12 +28,7 @@ UNSAFE_OPERATIONS = ["RemoveField", "RenameField", "DeleteModel", "RenameModel"]
 def _resolve_content(tool_name: str, all_tool_input: dict) -> str:
     """Return the text a Write, Edit, or MultiEdit payload introduces."""
     if tool_name == MULTI_EDIT_TOOL_NAME:
-        all_new_strings = [
-            each_edit.get("new_string", "")
-            for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, all_tool_input)
-            if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
-        ]
-        return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
+        return joined_new_strings(all_tool_input)
     return all_tool_input.get("content", "") or all_tool_input.get("new_string", "")
 
 

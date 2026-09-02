@@ -21,7 +21,11 @@ try:
         is_ephemeral_script_path,
         is_under_session_scratchpad,
     )
-    from codex_apply_patch import CodexPatchError, parse_codex_apply_patch
+    from codex_apply_patch import (
+        CodexPatchError,
+        parse_codex_apply_patch,
+        payload_patch_command,
+    )
     from hooks_constants.pre_tool_use_dispatcher_constants import APPLY_PATCH_TOOL_NAME
     from tdd_enforcer_parts import (
         candidate_paths,
@@ -40,19 +44,11 @@ except ImportError as import_error:
     ) from import_error
 
 
-def _is_apply_patch_tool(tool_name: str) -> bool:
-    """Return whether *tool_name* names the Codex apply_patch tool."""
-    return tool_name == APPLY_PATCH_TOOL_NAME
-
-
 def _apply_patch_target_file_paths(input_data: dict, tool_input: dict) -> tuple[str, ...]:
     """Return each file path a Codex apply_patch command names."""
-    raw_command = tool_input.get("command", "")
-    command = raw_command if isinstance(raw_command, str) else ""
+    command, working_directory = payload_patch_command(input_data, tool_input)
     if not command:
         return ()
-    raw_working_directory = input_data.get("cwd")
-    working_directory = raw_working_directory if isinstance(raw_working_directory, str) else None
     try:
         all_patch_files = parse_codex_apply_patch(command, working_directory)
     except CodexPatchError:
@@ -187,7 +183,7 @@ def main() -> None:
     except json.JSONDecodeError:
         sys.exit(0)
     tool_name, tool_input, file_path = _resolve_payload(input_data)
-    if _is_apply_patch_tool(tool_name):
+    if tool_name == APPLY_PATCH_TOOL_NAME:
         _decide_apply_patch(input_data, tool_input)
         sys.exit(0)
     decision = _decide_for_target(tool_name, tool_input, file_path, input_data)
