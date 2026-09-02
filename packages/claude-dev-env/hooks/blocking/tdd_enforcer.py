@@ -2,6 +2,9 @@
 
 Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
+A touch does not count: the gate remembers each candidate test's last-observed
+content hash, so a bare mtime refresh cannot reopen it. A first sighting needs
+content HEAD does not have yet, not only a fresh, real test.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """

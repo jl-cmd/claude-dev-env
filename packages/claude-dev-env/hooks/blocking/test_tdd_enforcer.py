@@ -1350,3 +1350,27 @@ def test_should_allow_repeat_production_write_within_window_without_further_test
     )
 
     assert _decision_from(second_write) == "allow"
+
+
+def test_should_deny_apply_patch_that_adds_test_and_production_file_in_one_transaction(
+    tmp_path: Path,
+) -> None:
+    """One patch adding both files denies: the test is not yet on disk when read.
+
+    ``apply_patch`` is a PreToolUse hook; it sees the patch text before the
+    patch runs, so a same-transaction test file is not readable yet even
+    though it names a real, matching test.
+    """
+    sandbox = _sandbox(tmp_path)
+    patch_command = (
+        "*** Begin Patch\n"
+        "*** Add File: orders.py\n"
+        "+def fulfill(): pass\n"
+        "*** Add File: test_orders.py\n"
+        "+def test_fulfill(): pass\n"
+        "*** End Patch"
+    )
+
+    completed = _run_hook_with_payload(_make_apply_patch_payload(sandbox, patch_command))
+
+    assert _decision_from(completed) == "deny"

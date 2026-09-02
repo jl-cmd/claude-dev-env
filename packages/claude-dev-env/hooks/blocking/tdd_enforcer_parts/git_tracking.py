@@ -23,6 +23,7 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     GIT_DIFF_SUBCOMMAND,
     GIT_DIFF_TIMEOUT_SECONDS,
     GIT_EXECUTABLE_NAME,
+    GIT_HEAD_REVISION,
     GIT_LS_FILES_SUBCOMMAND,
     GIT_LS_FILES_TIMEOUT_SECONDS,
     GIT_PATHSPEC_SEPARATOR,
@@ -33,11 +34,12 @@ def _git_ls_files_command(file_name: str) -> list[str]:
     return [GIT_EXECUTABLE_NAME, GIT_LS_FILES_SUBCOMMAND, GIT_PATHSPEC_SEPARATOR, file_name]
 
 
-def _git_diff_quiet_command(file_name: str) -> list[str]:
+def _git_diff_quiet_against_head_command(file_name: str) -> list[str]:
     return [
         GIT_EXECUTABLE_NAME,
         GIT_DIFF_SUBCOMMAND,
         GIT_DIFF_QUIET_FLAG,
+        GIT_HEAD_REVISION,
         GIT_PATHSPEC_SEPARATOR,
         file_name,
     ]
@@ -62,9 +64,17 @@ def _git_tracks_path(path: Path) -> bool:
 
 
 def _working_tree_differs_from_head(path: Path) -> bool:
+    """Compare the working tree to HEAD, not to the index.
+
+    A plain ``git diff`` (no revision argument) compares the working tree to
+    the index, so a file that was just ``git add``-ed reads as unchanged even
+    when it holds content HEAD never had. Naming ``HEAD`` folds the index and
+    the working tree into one comparison against the last commit, catching a
+    staged-but-uncommitted new file and a staged edit alike.
+    """
     try:
         completed = subprocess.run(
-            _git_diff_quiet_command(path.name),
+            _git_diff_quiet_against_head_command(path.name),
             cwd=str(path.parent),
             capture_output=True,
             text=True,

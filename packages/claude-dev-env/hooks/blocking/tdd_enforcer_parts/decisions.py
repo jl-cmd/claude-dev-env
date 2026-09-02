@@ -47,10 +47,12 @@ def build_deny_reason(production_path: Path, all_candidates: list[Path]) -> str:
     hook_source_path = _entry_hook_path()
     return (
         f"[TDD] Blocking write to production file: {production_path}\n"
-        f"No matching test file exists, or its content matches what this session "
-        f"already recorded and was not newly observed within the last "
-        f"{FRESHNESS_WINDOW_SECONDS} seconds. A touch that leaves the content "
-        f"unchanged does not count.\n"
+        f"No matching test file exists. Or none of them is fresh, carries real test "
+        f"evidence, and holds content HEAD does not have yet. Or a previously "
+        f"recorded test's content has not changed within the last "
+        f"{FRESHNESS_WINDOW_SECONDS} seconds. Write a new test or change an "
+        f"existing one; touching a file without changing its content does not "
+        f"satisfy this gate.\n"
         f"Expected one of:\n{candidate_lines}\n"
         f"Write a failing test first (RED), then the minimum code to pass it (GREEN).\n\n"
         f"If this file legitimately does not need a test (for example, a module containing only "
