@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse dispatcher that hosts Write, Edit, and MultiEdit blocking hooks.
+"""PreToolUse dispatcher that hosts Write, Edit, MultiEdit, and apply_patch blocking hooks.
 
 Reads the tool payload from stdin once, selects the hosted hooks applicable to
 the payload's tool name, runs each hook in-process via runpy in the fixed order

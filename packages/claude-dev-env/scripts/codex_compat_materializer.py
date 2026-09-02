@@ -109,6 +109,7 @@ codex_hook_dependency_manifest = (
     "hooks/hooks_constants/setup_project_paths_constants.py",
     "hooks/hooks_constants/stuttering_check_config.py",
     "hooks/hooks_constants/stuttering_import_binding_constants.py",
+    "hooks/hooks_constants/subprocess_budget_completeness_content.py",
     "hooks/hooks_constants/sys_path_insert_constants.py",
     "hooks/hooks_constants/test_layout_constants.py",
     "hooks/hooks_constants/unused_module_import_constants.py",

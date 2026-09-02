@@ -49,7 +49,6 @@ try:
         CORRECTIVE_MESSAGE,
         EDIT_TOOL_NAME,
         HOOK_MODULE_PATH_SEGMENT,
-        MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR,
         MULTI_EDIT_TOOL_NAME,
         OVERSTATED_OUTPUT_KEY_PHRASE_PATTERN,
         PATH_SEPARATOR_CLASS_PATTERN,
@@ -57,7 +56,7 @@ try:
         TEST_MODULE_PREFIX,
         WRITE_TOOL_NAME,
     )
-    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
 except ImportError as import_error:
     raise ImportError(
         "hook_prose_detector_consistency: cannot import its sibling modules; "
@@ -73,12 +72,7 @@ def written_content(tool_name: str, all_tool_input: dict[str, object]) -> str:
         new_string = all_tool_input.get("new_string", "")
         return new_string if isinstance(new_string, str) else ""
     if tool_name == MULTI_EDIT_TOOL_NAME:
-        all_new_strings = [
-            each_edit.get("new_string", "")
-            for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, all_tool_input)
-            if isinstance(each_edit, dict) and isinstance(each_edit.get("new_string"), str)
-        ]
-        return MULTI_EDIT_NEW_STRING_JOIN_SEPARATOR.join(all_new_strings)
+        return joined_new_strings(all_tool_input)
     return ""
 
 
