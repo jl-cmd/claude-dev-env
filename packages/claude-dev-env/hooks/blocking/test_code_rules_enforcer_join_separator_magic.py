@@ -77,7 +77,7 @@ def test_should_grandfather_unchanged_join_separator_in_wide_edit() -> None:
         "    # keep the join separator the same\n"
         "    return ', '.join(str(each_path) for each_path in all_paths)\n"
     )
-    issues = code_rules_enforcer.validate_content(
+    issues = code_rules_enforcer.validate_content_for_full_gate(
         proposed_fragment,
         PRODUCTION_FILE_PATH,
         prior_fragment,
@@ -97,7 +97,7 @@ def test_should_block_new_join_separator_in_wide_edit() -> None:
         "def render(all_paths: list) -> str:\n"
         "    return ', '.join(all_paths)\n"
     )
-    issues = code_rules_enforcer.validate_content(
+    issues = code_rules_enforcer.validate_content_for_full_gate(
         proposed_fragment,
         PRODUCTION_FILE_PATH,
         prior_fragment,

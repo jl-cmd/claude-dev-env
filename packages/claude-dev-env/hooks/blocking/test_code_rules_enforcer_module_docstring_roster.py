@@ -31,7 +31,7 @@ def check_module_docstring_names_public_checks(content: str, file_path: str) -> 
 
 
 def validate_content(content: str, file_path: str, old_content: str) -> list[str]:
-    return code_rules_enforcer.validate_content(content, file_path, old_content)
+    return code_rules_enforcer.validate_content_for_full_gate(content, file_path, old_content)
 
 
 HOOK_INFRASTRUCTURE_PATH = "/home/user/.claude/hooks/blocking/code_rules_test_assertions.py"

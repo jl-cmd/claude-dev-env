@@ -20,7 +20,7 @@ if _HOOKS_DIRECTORY not in sys.path:
 
 from code_rules_enforcer import (  # noqa: E402
     main,
-    validate_content,
+    validate_content_for_full_gate as validate_content,
 )
 
 

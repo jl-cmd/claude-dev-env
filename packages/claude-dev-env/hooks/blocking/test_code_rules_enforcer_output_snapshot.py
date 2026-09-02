@@ -1,10 +1,12 @@
-"""Golden-output snapshot for validate_content, guarding the pure decomposition.
+"""Golden-output snapshot for the phase-split validators, guarding both phases.
 
-Records ``validate_content``'s ordered issue list for three representative
+Records the full-gate phase's ordered issue list for three representative
 fixtures — a Python cross-file duplicate-body hit, a JavaScript boolean-naming
 hit, and a Python-built-HTML orphan-CSS-class hit — so a decomposition that
 reorders or drops a dispatch line shows up as a changed list, not a
-still-green suite.
+still-green suite. Each fixture also records the edit-lane phase's list, which
+matches the full-gate list except for the cross-file finding the edit lane
+skips.
 """
 
 from __future__ import annotations
@@ -49,6 +51,9 @@ EXPECTED_PYTHON_CROSS_FILE_ISSUES = [
     " helper (for example in hooks_constants/) and import it from both modules instead of"
     " copying it (Reuse before create / DRY) (duplicate body span at line 1, spanning 4 lines)",
 ]
+EXPECTED_PYTHON_CROSS_FILE_EDIT_LANE_ISSUES = [
+    "Line 3: Magic value 2 - extract to named constant",
+]
 EXPECTED_JS_ISSUES = [
     "Line 1: Boolean active - prefix with is/has/should/can/was/did",
 ]
@@ -59,48 +64,58 @@ EXPECTED_CSS_ISSUES = [
     " - add a matching '.<class>' selector to the <style> block, or drop the unused class"
     " attribute (CODE_RULES self-documenting markup)",
 ]
+EXPECTED_CSS_EDIT_LANE_ISSUES = [
+    "Line 3: Constant STATUS_MARKUP - move to config/",
+    "Line 4: Constant STYLE_BLOCK - move to config/",
+]
 
 
 def test_python_cross_file_duplicate_snapshot_is_unchanged(tmp_path: Path) -> None:
-    """validate_content's ordered output for a cross-file duplicate stays fixed.
+    """Both phases' ordered output for a cross-file duplicate stays fixed.
 
-    ::
-
-        sibling_dir/shipping_helper.py         -> the real on-disk sibling module
-        "/repo/.../shipping_target.py"         -> the classification-only file_path
-        -> validate_content reports the exact ordered issues recorded here
-
-    ``file_path`` names a path that is never opened — it only drives
-    extension and test/config classification — while ``sibling_directory``
-    points at the real ``tmp_path`` sibling scan. A pytest ``tmp_path``
-    segment starts with the test's own name, which starts with ``test_``, so
-    using it as ``file_path`` would misclassify this production fixture as a
-    test file and silently skip every production-only check.
+    ``file_path`` is a fixed classification-only path, never opened, so the
+    real ``tmp_path`` sibling scan (which embeds this test's own name, a
+    ``test_`` match) never misclassifies the fixture as a test file.
     """
     sibling_dir = tmp_path / "sibling_dir"
     sibling_dir.mkdir()
     (sibling_dir / "shipping_helper.py").write_text(_DUPLICATE_FUNCTION_SOURCE, encoding="utf-8")
     classification_only_file_path = "/repo/packages/demo/shipping/shipping_target.py"
 
-    issues = code_rules_enforcer.validate_content(
+    full_gate_issues = code_rules_enforcer.validate_content_for_full_gate(
+        _DUPLICATE_FUNCTION_SOURCE,
+        classification_only_file_path,
+        "",
+        sibling_directory=sibling_dir,
+    )
+    edit_lane_issues = code_rules_enforcer.validate_content_for_edit_lane(
         _DUPLICATE_FUNCTION_SOURCE,
         classification_only_file_path,
         "",
         sibling_directory=sibling_dir,
     )
 
-    assert issues == EXPECTED_PYTHON_CROSS_FILE_ISSUES
+    assert full_gate_issues == EXPECTED_PYTHON_CROSS_FILE_ISSUES
+    assert edit_lane_issues == EXPECTED_PYTHON_CROSS_FILE_EDIT_LANE_ISSUES
 
 
 def test_javascript_boolean_naming_snapshot_is_unchanged() -> None:
-    issues = code_rules_enforcer.validate_content(
+    full_gate_issues = code_rules_enforcer.validate_content_for_full_gate(
         _JS_BOOLEAN_SOURCE, "packages/app/frontend/status.js", ""
     )
-    assert issues == EXPECTED_JS_ISSUES
+    edit_lane_issues = code_rules_enforcer.validate_content_for_edit_lane(
+        _JS_BOOLEAN_SOURCE, "packages/app/frontend/status.js", ""
+    )
+    assert full_gate_issues == EXPECTED_JS_ISSUES
+    assert edit_lane_issues == EXPECTED_JS_ISSUES
 
 
 def test_python_orphan_css_class_snapshot_is_unchanged() -> None:
-    issues = code_rules_enforcer.validate_content(
+    full_gate_issues = code_rules_enforcer.validate_content_for_full_gate(
         _CSS_ORPHAN_CLASS_SOURCE, "packages/app/widgets/status_widget.py", ""
     )
-    assert issues == EXPECTED_CSS_ISSUES
+    edit_lane_issues = code_rules_enforcer.validate_content_for_edit_lane(
+        _CSS_ORPHAN_CLASS_SOURCE, "packages/app/widgets/status_widget.py", ""
+    )
+    assert full_gate_issues == EXPECTED_CSS_ISSUES
+    assert edit_lane_issues == EXPECTED_CSS_EDIT_LANE_ISSUES

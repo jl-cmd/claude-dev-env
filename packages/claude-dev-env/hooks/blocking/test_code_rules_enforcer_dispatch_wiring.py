@@ -1,39 +1,41 @@
-"""Meta-test asserting every check_* function is reachable from validate_content.
+"""Meta-test asserting every check_* function is reachable from the full gate.
 
 The per-check test modules each prove one ``check_*`` function flags the right
 violation, but none proves the enforcer actually calls that function. A refactor
-that drops a dispatch line from ``validate_content`` or from one of its
-extension-issue helper functions leaves every per-check test green while the
-check stops firing at Write/Edit time — the precise failure mode that would let
-a dead module-level constant (the ``MEDIUM_TEXT`` class) or an orphan CSS class
-slip past the gate again.
+that drops a dispatch line from ``validate_content_for_full_gate`` or from one
+of its extension-issue helper functions leaves every per-check test green
+while the check stops firing at Write/Edit time — the precise failure mode
+that would let a dead module-level constant (the ``MEDIUM_TEXT`` class) or an
+orphan CSS class slip past the gate again.
 
 ::
 
-    validate_content -> _python_extension_issues -> _python_magic_value_and_constant_issues
-                                                          |
-                                                          v
-                                              references check_magic_values
+    validate_content_for_full_gate -> _python_extension_issues -> _python_magic_value_and_constant_issues
+                                                                        |
+                                                                        v
+                                                            references check_magic_values
     -> check_magic_values counts as reachable
 
     check_unanchored_command_dispatch: called only from
-    _hook_infrastructure_blocking_issues, which validate_content's call graph
+    _hook_infrastructure_blocking_issues, which the full gate's call graph
     never reaches -> stays in KNOWN_UNDISPATCHED_CHECKS
 
-This module walks the enforcer's real call graph from ``validate_content``,
-following every direct function call into the functions the enforcer module
-defines, and collects every ``check_*``/``advise_*`` name each reached function
-body references — a direct call or a bare reference passed on as a callback
-(the ``_fragment_or_deferred_check(check_magic_values, ...)`` shape). A name
-that surfaces only in an import statement or a docstring is not a reference
-inside a reached function body, so it does not count; this is what keeps the
-check from going vacuous the way a whole-module substring scan would.
+This module walks the enforcer's real call graph from
+``validate_content_for_full_gate``, following every direct function call into
+the functions the enforcer module defines, and collects every
+``check_*``/``advise_*`` name each reached function body references — a direct
+call or a bare reference passed on as a callback (the
+``_fragment_or_deferred_check(check_magic_values, ...)`` shape). A name that
+surfaces only in an import statement or a docstring is not a reference inside
+a reached function body, so it does not count; this is what keeps the check
+from going vacuous the way a whole-module substring scan would.
 
 A check that is intentionally not wired must be listed in
 ``KNOWN_UNDISPATCHED_CHECKS`` with a reason in this docstring.
 ``check_unanchored_command_dispatch`` is listed there: it guards a
-``hooks/blocking`` command classifier, and the whole ``validate_content``
-verdict stays off hook-infrastructure files, so the enforcer dispatches it from
+``hooks/blocking`` command classifier, and the whole
+``validate_content_for_full_gate`` verdict stays off hook-infrastructure
+files, so the enforcer dispatches it from
 ``_hook_infrastructure_blocking_issues`` instead. The companion
 ``test_code_rules_enforcer_cap_meta.py`` guards the payload-cap convention;
 this module guards the wiring.
@@ -64,7 +66,7 @@ KNOWN_UNDISPATCHED_CHECKS: frozenset[str] = frozenset(
     {"check_unanchored_command_dispatch"}
 )
 
-DISPATCH_ENTRY_POINT_NAME = "validate_content"
+DISPATCH_ENTRY_POINT_NAME = "validate_content_for_full_gate"
 
 
 def _all_check_function_names() -> list[str]:
@@ -148,7 +150,7 @@ def _reachable_referenced_names(
     return referenced_names
 
 
-def test_every_check_function_is_reachable_from_validate_content() -> None:
+def test_every_check_function_is_reachable_from_the_full_gate() -> None:
     module_tree = ast.parse(inspect.getsource(_hook_module))
     function_defs_by_name = _module_level_function_defs(module_tree)
     reachable_names = _reachable_referenced_names(DISPATCH_ENTRY_POINT_NAME, function_defs_by_name)
@@ -156,11 +158,11 @@ def test_every_check_function_is_reachable_from_validate_content() -> None:
     undispatched_check_names = all_check_names - reachable_names
     unexpected_undispatched = undispatched_check_names - KNOWN_UNDISPATCHED_CHECKS
     assert unexpected_undispatched == set(), (
-        f"check_* functions are imported but never reachable from validate_content's "
-        f"call graph: {sorted(unexpected_undispatched)}. Wire each into validate_content "
-        f"or one of its extension-issue helpers so the check fires at Write/Edit time, "
-        f"or list it in KNOWN_UNDISPATCHED_CHECKS with a reason in the test header "
-        f"docstring."
+        f"check_* functions are imported but never reachable from "
+        f"validate_content_for_full_gate's call graph: {sorted(unexpected_undispatched)}. "
+        f"Wire each into validate_content_for_phase or one of its extension-issue "
+        f"helpers so the check fires at Write/Edit time, or list it in "
+        f"KNOWN_UNDISPATCHED_CHECKS with a reason in the test header docstring."
     )
 
 

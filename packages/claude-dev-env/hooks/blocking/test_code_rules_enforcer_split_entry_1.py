@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
 if _BLOCKING_DIRECTORY not in sys.path:
@@ -17,7 +19,7 @@ from code_rules_annotations_length import (  # noqa: E402
     FUNCTION_LENGTH_BLOCKING_THRESHOLD,
 )
 from code_rules_enforcer import (  # noqa: E402
-    validate_content,
+    validate_content_for_full_gate as validate_content,
 )
 
 code_rules_enforcer = SimpleNamespace(
@@ -38,7 +40,7 @@ def _oversized_function_source(name: str) -> str:
 
 
 def test_should_emit_advisory_for_duplicated_format_patterns_via_validate_content(
-    capsys: object,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     repeated_pattern_source = (
         "def get_user(user_id: str) -> str:\n"

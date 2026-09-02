@@ -4,7 +4,7 @@
 This entry module reads a PreToolUse JSON payload on stdin, reconstructs the
 post-edit content, and runs every applicable check. The individual checks live
 in focused ``code_rules_<concern>.py`` sibling modules; this module imports the
-ones ``validate_content`` calls and orchestrates them.
+ones ``validate_content_for_phase`` calls and orchestrates them.
 
 Advisory only (non-blocking):
 - File line count: stderr warning at 400 lines (soft) and 1000 lines (hard)
@@ -22,18 +22,6 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple, TextIO
-
-class _ValidationContext(NamedTuple):
-    """Bundle the parameters every extension-issue check function reads."""
-
-    content: str
-    old_content: str
-    effective_content: str
-    file_path: str
-    all_changed_lines: set[int] | None
-    defer_scope_to_caller: bool
-    sibling_directory: Path | None
-
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -190,15 +178,43 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_CODE_EXTENSIONS,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
+    ALL_VALIDATION_PHASES,
     DENY_REASON_ISSUE_PREVIEW_COUNT,
+    EDIT_LANE_PHASE,
+    FULL_GATE_PHASE,
     PRECHECK_USAGE_EXIT_CODE,
     PRECHECK_USAGE_MESSAGE,
+    UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
     VIOLATION_SEPARATOR,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     UTF8_BYTE_ORDER_MARK,
 )
+
+
+class _ValidationContext(NamedTuple):
+    """Bundle the parameters every extension-issue check function reads."""
+
+    content: str
+    old_content: str
+    effective_content: str
+    file_path: str
+    all_changed_lines: set[int] | None
+    defer_scope_to_caller: bool
+    sibling_directory: Path | None
+    phase: str
+
+
+def _validated_phase(phase: str) -> str:
+    """Return *phase* unchanged, after rejecting a phase outside ALL_VALIDATION_PHASES."""
+    if phase not in ALL_VALIDATION_PHASES:
+        raise ValueError(
+            UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE.format(
+                phase=phase, all_phases=sorted(ALL_VALIDATION_PHASES)
+            )
+        )
+    return phase
 
 
 def _codex_patch_issues(each_patch_file: CodexPatchFile) -> list[str]:
@@ -211,9 +227,10 @@ def _codex_patch_issues(each_patch_file: CodexPatchFile) -> list[str]:
             each_patch_file.file_path,
             each_patch_file.post_content,
             each_patch_file.prior_content,
+            phase=EDIT_LANE_PHASE,
         )
     elif _is_validated_target(each_patch_file.file_path):
-        all_issues = validate_content(
+        all_issues = validate_content_for_edit_lane(
             each_patch_file.post_content,
             each_patch_file.file_path,
             each_patch_file.prior_content,
@@ -478,7 +495,9 @@ def _python_string_magic_issues(context: _ValidationContext) -> list[str]:
 
 
 def _python_full_gate_only_issues(context: _ValidationContext) -> list[str]:
-    """Return the six cross-file checks that read sibling modules from disk."""
+    """Return the six cross-file checks that read sibling modules, full-gate only."""
+    if context.phase != FULL_GATE_PHASE:
+        return []
     content, effective_content, file_path = (
         context.content,
         context.effective_content,
@@ -571,7 +590,20 @@ def _javascript_extension_issues(context: _ValidationContext) -> list[str]:
     return all_issues
 
 
-def validate_content(
+def _effective_content_and_changed_lines(
+    content: str, full_file_content: str | None, prior_full_file_content: str
+) -> tuple[str, set[int] | None]:
+    """Return the effective content and changed-line set an Edit reconstructs."""
+    effective_content = content if full_file_content is None else full_file_content
+    all_changed_lines = (
+        changed_line_numbers(prior_full_file_content, full_file_content)
+        if full_file_content is not None
+        else None
+    )
+    return effective_content, all_changed_lines
+
+
+def validate_content_for_phase(
     content: str,
     file_path: str,
     old_content: str = "",
@@ -579,30 +611,18 @@ def validate_content(
     prior_full_file_content: str = "",
     defer_scope_to_caller: bool = False,
     sibling_directory: Path | None = None,
+    *,
+    phase: str,
 ) -> list[str]:
-    """Run all applicable validators on content.
-
-    Dispatches by file extension to ``_python_extension_issues`` or
-    ``_javascript_extension_issues``, which hold the actual check rosters, so
-    every parameter here threads straight through unchanged in a
-    ``_ValidationContext``. See those two functions' Args sections for what
-    each field governs.
-    """
+    """Run all applicable validators on content for one named validation phase."""
+    validated_phase = _validated_phase(phase)
     extension = get_file_extension(file_path)
-    effective_content = content if full_file_content is None else full_file_content
-    all_changed_lines = (
-        changed_line_numbers(prior_full_file_content, full_file_content)
-        if full_file_content is not None
-        else None
+    effective_content, all_changed_lines = _effective_content_and_changed_lines(
+        content, full_file_content, prior_full_file_content
     )
     context = _ValidationContext(
-        content=content,
-        old_content=old_content,
-        effective_content=effective_content,
-        file_path=file_path,
-        all_changed_lines=all_changed_lines,
-        defer_scope_to_caller=defer_scope_to_caller,
-        sibling_directory=sibling_directory,
+        content, old_content, effective_content, file_path, all_changed_lines,
+        defer_scope_to_caller, sibling_directory, validated_phase,
     )
     all_issues: list[str] = []
     if extension in ALL_PYTHON_EXTENSIONS:
@@ -612,6 +632,50 @@ def validate_content(
     if extension in ALL_CODE_EXTENSIONS:
         advise_file_line_count(content, file_path)
     return all_issues
+
+
+def validate_content_for_edit_lane(
+    content: str,
+    file_path: str,
+    old_content: str = "",
+    full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+    defer_scope_to_caller: bool = False,
+    sibling_directory: Path | None = None,
+) -> list[str]:
+    """Run the edit-lane phase, skipping the six checks that read sibling files."""
+    return validate_content_for_phase(
+        content,
+        file_path,
+        old_content,
+        full_file_content,
+        prior_full_file_content,
+        defer_scope_to_caller,
+        sibling_directory,
+        phase=EDIT_LANE_PHASE,
+    )
+
+
+def validate_content_for_full_gate(
+    content: str,
+    file_path: str,
+    old_content: str = "",
+    full_file_content: str | None = None,
+    prior_full_file_content: str = "",
+    defer_scope_to_caller: bool = False,
+    sibling_directory: Path | None = None,
+) -> list[str]:
+    """Run the full-gate phase, including the six checks that read sibling files."""
+    return validate_content_for_phase(
+        content,
+        file_path,
+        old_content,
+        full_file_content,
+        prior_full_file_content,
+        defer_scope_to_caller,
+        sibling_directory,
+        phase=FULL_GATE_PHASE,
+    )
 
 
 def _read_existing_file_content(file_path: str) -> str | None:
@@ -707,17 +771,20 @@ def _hook_infrastructure_blocking_issues(
     file_path: str,
     full_file_content: str | None = None,
     prior_full_file_content: str = "",
+    *,
+    phase: str,
 ) -> list[str]:
-    """Run the checks that still guard a hook Python target.
+    """Run the checks that still guard a hook Python target for one phase.
 
     The whole code-rules verdict stays off hook-infrastructure files, so this
-    runs the checks that must still guard them: the cross-file duplicate-body
-    check and the same-file inline-duplicate-body check, each span-scoped to the
-    lines an edit touched exactly as ``validate_content`` scopes it for production
-    code; the zero-payload alias check, whose docstring names hook modules as
-    its motivating case, run over the whole post-edit file; and the
-    unanchored command-dispatch check, which guards a ``hooks/blocking``
-    command classifier against matching a multi-word command as a substring.
+    runs the checks that must still guard them in every phase: the same-file
+    inline-duplicate-body check and the unanchored command-dispatch check,
+    each span-scoped to the lines an edit touched exactly as
+    ``validate_content_for_phase`` scopes it for production code; and the
+    zero-payload alias check, whose docstring names hook modules as its
+    motivating case, run over the whole post-edit file. The cross-file
+    duplicate-body check joins that roster only when ``phase`` is
+    ``FULL_GATE_PHASE``.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -726,10 +793,11 @@ def _hook_infrastructure_blocking_issues(
             None for a whole-file Write.
         prior_full_file_content: The file content before the edit applied, used to
             recover the changed lines on an Edit.
+        phase: ``EDIT_LANE_PHASE`` or ``FULL_GATE_PHASE``; selects whether the
+            cross-file duplicate-body check runs.
 
     Returns:
-        The in-scope duplicate-body violations and the zero-payload alias
-        violations for the target.
+        The in-scope violations for the target at the given phase.
     """
     effective_content = content if full_file_content is None else full_file_content
     all_changed_lines = (
@@ -737,11 +805,15 @@ def _hook_infrastructure_blocking_issues(
         if full_file_content is not None
         else None
     )
-    all_issues = check_duplicate_function_body_across_files(
-        effective_content,
-        file_path,
-        all_changed_lines,
-    )
+    all_issues: list[str] = []
+    if phase == FULL_GATE_PHASE:
+        all_issues.extend(
+            check_duplicate_function_body_across_files(
+                effective_content,
+                file_path,
+                all_changed_lines,
+            )
+        )
     all_issues.extend(
         check_same_file_inline_duplicate_body(
             effective_content,
@@ -932,7 +1004,7 @@ def _forecast_full_file_violations(
     Returns:
         The full-file violations not already in ``all_blocking_issues``.
     """
-    all_full_file_issues = validate_content(
+    all_full_file_issues = validate_content_for_edit_lane(
         full_file_content_after_edit, file_path, prior_full_file_content
     )
     return _issues_absent_from_prior_bodies(all_full_file_issues, all_blocking_issues)
@@ -986,10 +1058,10 @@ def _run_precheck(
     candidate_content = candidate_content.lstrip(UTF8_BYTE_ORDER_MARK)
     if runs_full_verdict:
         old_content = _read_existing_file_content(target_path) or ""
-        all_issues = validate_content(candidate_content, target_path, old_content)
+        all_issues = validate_content_for_full_gate(candidate_content, target_path, old_content)
     else:
         all_issues = _hook_infrastructure_blocking_issues(
-            candidate_content, target_path
+            candidate_content, target_path, phase=FULL_GATE_PHASE
         )
     for each_issue in all_issues:
         violation_stream.write(f"{each_issue}\n")
@@ -1187,7 +1259,7 @@ def _report_blocking_violations(
         prior_full_file_content: The on-disk content before the edit.
         deny_stream: The stream the JSON deny payload is written to.
     """
-    all_blocking_issues = validate_content(
+    all_blocking_issues = validate_content_for_edit_lane(
         content,
         file_path,
         old_content,
@@ -1217,9 +1289,9 @@ def _report_hook_blocking_issues(
 ) -> None:
     """Write a deny payload when a hook target trips a check that still guards it.
 
-    The full code-rules verdict stays off hook-infrastructure files; this runs the
-    two checks that must still guard them — the cross-file duplicate-body check and
-    the zero-payload alias check — and emits the deny payload when either fires.
+    The full code-rules verdict stays off hook-infrastructure files; this runs
+    the edit-lane hook-infrastructure checks and emits the deny payload when
+    one fires.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -1234,6 +1306,7 @@ def _report_hook_blocking_issues(
         file_path,
         full_file_content_after_edit,
         prior_full_file_content,
+        phase=EDIT_LANE_PHASE,
     )
     if not all_blocking_issues:
         return

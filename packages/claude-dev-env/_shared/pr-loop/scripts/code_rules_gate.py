@@ -63,7 +63,7 @@ except ImportError as import_error:
 subprocess = git_file_sets.subprocess
 
 resolve_claude_dev_env_root = enforcer_loading.resolve_claude_dev_env_root
-load_validate_content = enforcer_loading.load_validate_content
+load_validate_content_for_full_gate = enforcer_loading.load_validate_content_for_full_gate
 ValidateContentCallable = enforcer_loading.ValidateContentCallable
 
 resolve_merge_base = git_file_sets.resolve_merge_base
@@ -357,7 +357,7 @@ def main(all_arguments: list[str]) -> int:
     repository_root = (
         arguments.repo_root.resolve() if arguments.repo_root is not None else Path.cwd().resolve()
     )
-    validate_content = load_validate_content()
+    validate_content = load_validate_content_for_full_gate()
     if arguments.paths:
         return _run_explicit_paths_mode(validate_content, arguments, repository_root)
     if arguments.immediate:

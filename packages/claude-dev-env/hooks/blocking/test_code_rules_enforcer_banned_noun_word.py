@@ -28,7 +28,7 @@ assert hook_spec.loader is not None
 hook_module = importlib.util.module_from_spec(hook_spec)
 hook_spec.loader.exec_module(hook_module)
 check_banned_noun_word_boundary = hook_module.check_banned_noun_word_boundary
-validate_content = hook_module.validate_content
+validate_content = hook_module.validate_content_for_full_gate
 
 from code_rules_banned_identifiers import (  # noqa: E402
     _find_banned_noun_word,

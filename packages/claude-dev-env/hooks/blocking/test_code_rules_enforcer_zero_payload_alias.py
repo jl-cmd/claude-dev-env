@@ -240,7 +240,7 @@ def test_should_not_flag_recursive_self_call() -> None:
     )
 
 
-def test_should_flag_through_validate_content_for_hook_file() -> None:
+def test_should_flag_through_validate_content_for_full_gate_for_hook_file() -> None:
     source = (
         "def find_bare_path_segments(content: str) -> set[str]:\n"
         "    return {part for part in content.split() if part}\n"
@@ -248,7 +248,7 @@ def test_should_flag_through_validate_content_for_hook_file() -> None:
         "def find_bare_index_segments(content: str) -> set[str]:\n"
         "    return find_bare_path_segments(content)\n"
     )
-    issues = code_rules_enforcer.validate_content(source, HOOK_INFRASTRUCTURE_PATH)
+    issues = code_rules_enforcer.validate_content_for_full_gate(source, HOOK_INFRASTRUCTURE_PATH)
     assert any("find_bare_index_segments" in each for each in issues), (
         f"validate_content must surface the alias for hook files, got: {issues!r}"
     )
