@@ -47,7 +47,10 @@ def test_allows_proactive_status() -> None:
 
 def test_corrective_message_points_to_native_windows_app() -> None:
     assert "native Windows app" in CORRECTIVE_MESSAGE
+    assert "Invoke-Item -LiteralPath" in CORRECTIVE_MESSAGE
     assert "Show-Asset.ps1" not in CORRECTIVE_MESSAGE
+    assert "Cursor.exe" in CORRECTIVE_MESSAGE
+    assert "EPIPE" in CORRECTIVE_MESSAGE
 
 
 def test_corrective_message_names_proactive_escape_hatch() -> None:

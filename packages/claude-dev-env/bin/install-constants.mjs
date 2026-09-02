@@ -6,14 +6,13 @@
  */
 
 /**
- * Entry names the source walk leaves behind, whatever directory they sit in.
+ * Entry names the source walk keeps out of installed trees.
  *
- * Each name belongs to a tool that writes beside the source it reads: Python
- * bytecode caches, the ruff, pytest, and mypy caches, an installed
- * `node_modules` tree, and the macOS Finder's `.DS_Store` marker. A contributor
- * who runs the test suites and then runs `node bin/install.mjs` copies from a
- * source tree carrying all of them, so skipping the names at the walk keeps them
- * out of `~/.claude` and out of the install manifest.
+ * Each name represents local metadata or build output.
+ * A contributor who runs the test suites and then runs `node bin/install.mjs`
+ * copies from a source tree carrying these entries, so skipping the names at
+ * the walk keeps installed trees and the install manifest focused on runtime
+ * files.
  */
 export const SKIPPED_SOURCE_ENTRY_NAMES = new Set([
     '__pycache__',
@@ -46,28 +45,62 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
     /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
 
 /**
- * The directory name skill directories carry in a package source and under
- * `~/.claude`.
+ * Package subdirectory that holds the canonical skill and agent source trees.
  *
- * The copy loop reads `<package-root>/skills` and writes `~/.claude/skills`, the
- * dependency walk reads `<dependency-root>/skills`, the retired-skill prune reads
- * the installed directory, and the per-root stale-file prune names it as one of
- * its roots. One spelling serves every one of them, so the copy destination and
- * the prune target stay the same directory.
+ * This package keeps those trees at `<package-root>/.agents/skills` and
+ * `<package-root>/.agents/agents`. `packages/claude-dev-env/.claude/skills` and
+ * `.claude/agents` are directory pointers to that home. A dependency package
+ * may still keep `skills/` and `agents/` at its package root; the source
+ * resolver tries this directory first and falls back to the package-root name.
+ */
+export const PACKAGE_AGENTS_HOME_DIRECTORY_NAME = '.agents';
+
+/**
+ * The directory name skill directories carry in a package source and under
+ * the agents home.
+ *
+ * The copy loop reads `<package-root>/.agents/skills` (or `<package-root>/skills`
+ * when a dependency still ships that layout) and writes `~/.agents/skills`.
+ * Claude Code still looks up skills at `~/.claude/skills`, which the installer
+ * publishes as a directory pointer to that agents-home folder. The dependency
+ * walk reads the resolved skills source, the retired-skill prune reads the
+ * installed directory through the pointer, and the per-root stale-file prune
+ * names it as one of its roots. One spelling serves every one of them, so the
+ * copy destination and the prune target stay the same directory.
  */
 export const MANAGED_SKILLS_DIRECTORY_NAME = 'skills';
 
 /**
- * The directory name hook scripts carry in a package source and under
- * `~/.claude`.
+ * The directory name agent definition files carry in a package source and under
+ * the agents home.
  *
- * The copy loop reads `<package-root>/hooks` and writes `~/.claude/hooks`, the
- * hooks.json reads sit under the same name in each package source, the git-hook
- * shims and the mypy configuration point at the installed directory, the
- * retired-hook diff takes its relative paths against it, and the per-root
- * stale-file prune names it as one of its roots.
+ * The copy loop reads `<package-root>/.agents/agents` (or `<package-root>/agents`
+ * when a dependency still ships that layout) and writes `~/.agents/agents`.
+ * Claude Code still looks up agents at `~/.claude/agents`, which the installer
+ * publishes as a directory pointer to that agents-home folder.
+ */
+export const MANAGED_AGENTS_DIRECTORY_NAME = 'agents';
+
+/**
+ * The directory name hook scripts carry in a package source and under
+ * the agents home.
+ *
+ * The copy loop reads `<package-root>/.agents/hooks` (or `<package-root>/hooks`
+ * for a dependency with the legacy layout) and writes `~/.agents/hooks`.
+ * Claude and Codex lookup paths point at that canonical directory.
  */
 export const MANAGED_HOOKS_DIRECTORY_NAME = 'hooks';
+
+/**
+ * The directory name reusable scripts carry in a package source and under the
+ * agents home.
+ */
+export const MANAGED_SCRIPTS_DIRECTORY_NAME = 'scripts';
+
+/**
+ * Directory name Codex uses for installed hook scripts.
+ */
+export const CODEX_HOOKS_DIRECTORY_NAME = 'hooks';
 
 /**
  * The `~/.claude` file name that holds the user's harness settings.
@@ -86,3 +119,59 @@ export const SETTINGS_FILE_NAME = 'settings.json';
  * removes the file the install created.
  */
 export const MYPY_INI_FILE_NAME = '.mypy.ini';
+
+/**
+ * Environment variable Codex uses for its config home. When unset, Codex reads
+ * `~/.codex`. The installer copies shipped exec-policy files into
+ * `<that home>/rules`.
+ */
+export const CODEX_HOME_ENVIRONMENT_VARIABLE = 'CODEX_HOME';
+
+/**
+ * Directory name Codex uses under the user home when `CODEX_HOME` is unset.
+ */
+export const DEFAULT_CODEX_DIRECTORY_NAME = '.codex';
+
+/**
+ * Directory name under the Codex home that holds `*.rules` exec-policy files.
+ * Codex loads every file in that directory; see `load_exec_policy` in Codex.
+ */
+export const CODEX_RULES_DIRECTORY_NAME = 'rules';
+
+/**
+ * Package subdirectory that holds the shipped Codex exec-policy files. The
+ * installer copies this tree into the Codex rules directory, not into
+ * `~/.claude/`.
+ */
+export const CODEX_RULES_PACKAGE_DIRECTORY_NAME = 'codex-rules';
+
+/**
+ * Shipped exec-policy file name. A distinct name keeps a local `default.rules`
+ * file in place.
+ */
+export const CODEX_RULES_SHIPPED_FILE_NAME = 'claude-dev-env.rules';
+
+/**
+ * Directory name Cursor uses under the user home for editor config.
+ */
+export const DEFAULT_CURSOR_DIRECTORY_NAME = '.cursor';
+
+/**
+ * Directory name under the Cursor home that holds generated `.mdc` rule files.
+ */
+export const CURSOR_RULES_DIRECTORY_NAME = 'rules';
+
+/**
+ * Installed script that writes Cursor `.mdc` files from Claude rules.
+ */
+export const CURSOR_SYNC_SCRIPT_FILE_NAME = 'sync_to_cursor.py';
+
+/**
+ * Windows Python launcher command the installer may bake into hook settings.
+ */
+export const WINDOWS_PYTHON_LAUNCHER_COMMAND = 'py -3';
+
+/**
+ * Maximum time each Python interpreter probe may run during detection.
+ */
+export const PYTHON_PROBE_TIMEOUT_MILLISECONDS = 10_000;

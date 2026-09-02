@@ -23,5 +23,4 @@ The depth budget shrinks once the evidence is in hand. When you can already name
 
 ## Relationship to other rules
 
-- **conservative-action.md** gates *whether* to act. This rule governs *how deeply* to investigate.
 - **research-mode.md** ensures factual claims are grounded. This rule ensures implementation plans are grounded in the actual codebase.

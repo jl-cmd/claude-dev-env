@@ -6,6 +6,17 @@ Extracted from code_rules_enforcer.py to satisfy the constants-location rule.
 import re
 import tokenize
 
+from hooks_constants.multi_edit_reconstruction import (  # noqa: F401  re-exported for code_rules_enforcer.py
+    apply_edits,
+    edits_for_tool,
+)
+from hooks_constants.validation_phase_constants import (  # noqa: F401  re-exported for code_rules_enforcer.py
+    ALL_VALIDATION_PHASES,
+    EDIT_LANE_PHASE,
+    FULL_GATE_PHASE,
+    UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
+)
+
 ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS: tuple[type[BaseException], ...] = (
     tokenize.TokenError,
     IndentationError,
@@ -32,10 +43,14 @@ ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\
 ALL_WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
 
+CONSTANTS_MODULE_SUFFIX: str = "_constants.py"
+CONFIG_DIRECTORY_SEGMENT: str = "config"
+
 ADVISORY_LINE_THRESHOLD_SOFT = 400
 ADVISORY_LINE_THRESHOLD_HARD = 1000
 
 DENY_REASON_ISSUE_PREVIEW_COUNT = 10
+VIOLATION_SEPARATOR = "; "
 
 ALL_BOOLEAN_NAME_PREFIXES: tuple[str, ...] = ("is_", "has_", "should_", "can_", "was_", "did_")
 UPPER_SNAKE_CONSTANT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")

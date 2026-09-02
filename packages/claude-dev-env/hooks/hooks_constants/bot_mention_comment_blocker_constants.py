@@ -15,6 +15,5 @@ CORRECTIVE_MESSAGE_COPILOT: str = (
     "BLOCKED [bot-mention]: Invalid comment. "
     "To request a Copilot review, use the GitHub REST API:\n"
     "  gh api --method POST repos/<owner>/<repo>/pulls/<number>/requested_reviewers \\\n"
-    "    -f 'reviewers[]=copilot-pull-request-reviewer[bot]'\n"
-    "See ~/.claude/skills/pr-converge/reference/convergence-gates.md."
+    "    -f 'reviewers[]=copilot-pull-request-reviewer[bot]'"
 )

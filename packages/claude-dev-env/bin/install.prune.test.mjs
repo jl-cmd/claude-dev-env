@@ -1,4 +1,4 @@
-import { test, after } from 'node:test';
+import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -9,15 +9,20 @@ import {
     readFileSync,
     readdirSync,
     rmSync,
-    cpSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+    MANAGED_SKILLS_DIRECTORY_NAME,
+    PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+} from './install-constants.mjs';
+import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
 const THIS_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
 const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
+const INSTALLER_PROCESS_TIMEOUT_MS = 60_000;
 const EXCLUDED_PACKAGE_COPY_DIRECTORY = 'node_modules';
 
 const RETIRED_SKILL_DIRECTORIES = [
@@ -28,21 +33,15 @@ const RETIRED_SKILL_DIRECTORIES = [
     'pr-consistency-audit',
     'bdd-protocol',
 ];
-const PERSONAL_SKILL_DIRECTORIES = ['balatro', 'midjourney-sref', 'credit-card-picker'];
+const PERSONAL_SKILL_DIRECTORIES = ['credit-card-picker', 'midjourney-sref'];
 const SHIPPED_SKILL_DIRECTORY = 'autoconverge';
 const PRUNED_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill and stale-file prune';
 const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
-const DEPENDENCY_STUB_PACKAGE_SEGMENTS = ['@jl-cmd', 'prompt-generator'];
-const DEPENDENCY_SUPPLIED_SKILL_DIRECTORY = 'dependency-supplied-skill';
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
 const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
-    'small-cl',
-    'comments',
-    'reviews',
-    'descriptions',
-    'emergencies',
+    'pr-small-cl',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',
@@ -63,76 +62,12 @@ const RETIRED_HOOK_RELATIVE_SEGMENTS = ['blocking', 'retired_gate.py'];
 const USER_HOOK_COMMAND = 'python3 my_own_gate.py --user-authored';
 const RETIRED_HOOK_EVENT_TYPE = 'PreToolUse';
 const DROPPED_HOOK_EVENT_TYPE = 'PreCompact';
-const RETIRED_HOOK_MATCHER = 'Write|Edit|MultiEdit';
+const DISPATCHER_HOOK_COMMAND_SEGMENT = 'pre_tool_use_dispatcher.py';
 const UNMANAGED_SIBLING_DIRECTORY = 'my-notes';
 const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
 const MYPY_INI_FILE_NAME = '.mypy.ini';
 const SKIPPED_RECORD_SUMMARY_MARKER = 'manifest record(s) skipped';
-
-/**
- * Create a stub node_modules tree the installer can resolve the declared
- * dependency package from, and return its root for the child's NODE_PATH.
- *
- * The installer resolves `@jl-cmd/prompt-generator/package.json`; a lone
- * package.json at that path is enough for `createRequire.resolve` to succeed.
- * The stub makes the dependency resolvable inside the sandbox so a full install
- * exercises the real prune path. It does not prove the real private package
- * resolves in a real install — CI cannot host that package — only that the
- * resolved-dependency branch prunes as designed.
- *
- * @param {string} homeDirectory The sandbox home the stub is nested under.
- * @returns {string} The stub modules root to place on the child's NODE_PATH.
- */
-let isolatedInstallerPath = null;
-let isolatedPackageCopyRoot = null;
-
-/**
- * Copy the package into a temp directory without node_modules and return the
- * copy's installer path.
- *
- * The installer resolves its declared dependencies with Node's regular
- * node_modules walk starting at its own file, so the real installer under the
- * repo always finds `@jl-cmd/prompt-generator` once `npm install` has run —
- * removing NODE_PATH from the child cannot make the dependency unresolvable
- * there. Running the copy makes resolution genuinely fail through the
- * installer's own catch path: no node_modules sits in the copy's ancestry and
- * the child gets no NODE_PATH. The copy is created once and shared by every
- * unresolved-dependency install; installs write only into their sandbox HOME.
- *
- * @returns {string} The path to `bin/install.mjs` inside the package copy.
- */
-function ensureIsolatedInstallerPath() {
-    if (isolatedInstallerPath !== null) return isolatedInstallerPath;
-    isolatedPackageCopyRoot = mkdtempSync(join(tmpdir(), 'cdev-prune-package-'));
-    cpSync(PACKAGE_DIRECTORY, isolatedPackageCopyRoot, {
-        recursive: true,
-        filter: sourcePath => basename(sourcePath) !== EXCLUDED_PACKAGE_COPY_DIRECTORY,
-    });
-    isolatedInstallerPath = join(isolatedPackageCopyRoot, 'bin', 'install.mjs');
-    return isolatedInstallerPath;
-}
-
-after(() => {
-    if (isolatedPackageCopyRoot !== null) {
-        rmSync(isolatedPackageCopyRoot, { recursive: true, force: true });
-    }
-});
-
-function ensureDependencyStub(homeDirectory) {
-    const stubModulesRoot = join(homeDirectory, 'dependency-stub-modules');
-    const stubPackageDirectory = join(stubModulesRoot, ...DEPENDENCY_STUB_PACKAGE_SEGMENTS);
-    mkdirSync(stubPackageDirectory, { recursive: true });
-    writeFileSync(
-        join(stubPackageDirectory, 'package.json'),
-        JSON.stringify({
-            name: DEPENDENCY_STUB_PACKAGE_SEGMENTS.join('/'),
-            version: '1.0.0',
-            description: 'sandbox dependency stub',
-        }) + '\n',
-    );
-    return stubModulesRoot;
-}
 
 /**
  * Report whether a path under one managed root landed in a run backup.
@@ -173,14 +108,69 @@ function prunedSkillBackupContains(claudeDirectory, skillsRelativePath) {
  *
  * @returns {{homeDirectory: string, claudeDirectory: string, skillsDirectory: string, manifestPath: string}}
  */
-function createSandbox() {
-    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-prune-home-'));
+function createSandbox(homeDirectoryPrefix = 'cdev-prune-home-') {
+    const homeDirectory = mkdtempSync(join(tmpdir(), homeDirectoryPrefix));
     const claudeDirectory = join(homeDirectory, '.claude');
     const skillsDirectory = join(claudeDirectory, 'skills');
     mkdirSync(skillsDirectory, { recursive: true });
     const manifestPath = join(claudeDirectory, '.claude-dev-env-manifest.json');
     return { homeDirectory, claudeDirectory, skillsDirectory, manifestPath };
 }
+
+test('the retired-skill fallback covers every current shipped skill', () => {
+    const sourceSkillsDirectory = join(
+        PACKAGE_DIRECTORY,
+        PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
+        MANAGED_SKILLS_DIRECTORY_NAME,
+    );
+    const allCurrentSkillNames = readdirSync(sourceSkillsDirectory, { withFileTypes: true })
+        .filter(eachEntry => eachEntry.isDirectory())
+        .filter(eachEntry => existsSync(join(sourceSkillsDirectory, eachEntry.name, 'SKILL.md')))
+        .map(eachEntry => eachEntry.name);
+    const allUncoveredSkillNames = allCurrentSkillNames.filter(
+        eachSkillName => !EVER_SHIPPED_SKILL_NAMES.has(eachSkillName),
+    );
+
+    assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
+});
+
+test('a core install runs the spaced-path Write dispatcher and captures its red denial', () => {
+    const sandbox = createSandbox('cdev prune & (home)-');
+    try {
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
+        const settings = readSettings(sandbox.claudeDirectory);
+        const dispatcherHooks = settings.hooks.PreToolUse
+            .flatMap(eachGroup => eachGroup.hooks)
+            .filter(eachHook => /(?:^|[\\/])pre_tool_use_dispatcher\.py["']?(?:\s|$)/.test(eachHook.command));
+        assert.equal(dispatcherHooks.length, 1, 'the core install writes one PreToolUse dispatcher');
+
+        const protectedFilePath = join(sandbox.homeDirectory, 'protected file.txt');
+        writeFileSync(protectedFilePath, 'existing content\n');
+        const writePayload = JSON.stringify({
+            tool_name: 'Write',
+            tool_input: { file_path: protectedFilePath, content: 'replacement content\n' },
+        });
+        const { childEnvironment } = resolveInstallerInvocation(sandbox.homeDirectory);
+        const dispatcherRun = spawnSync(dispatcherHooks[0].command, {
+            cwd: dirname(INSTALLER_PATH),
+            encoding: 'utf8',
+            env: childEnvironment,
+            input: `${writePayload}\n`,
+            shell: true,
+            timeout: 30000,
+        });
+
+        assert.equal(dispatcherRun.status, 0, dispatcherRun.stderr);
+        const shownRedDecision = JSON.parse(dispatcherRun.stdout.trim());
+        assert.equal(shownRedDecision.hookSpecificOutput.permissionDecision, 'deny');
+        assert.match(
+            shownRedDecision.hookSpecificOutput.permissionDecisionReason,
+            /BLOCKED: Write on existing file/,
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
 
 /**
  * Plant a skill directory under the sandbox with a single marker file.
@@ -203,24 +193,17 @@ function plantSkillDirectory(skillsDirectory, skillName, withSkillManifest) {
 /**
  * Run the real installer against the sandbox home and return its stdout.
  *
- * The declared dependency package is resolvable by default: the child's
- * NODE_PATH points at a sandbox stub so `createRequire.resolve` finds it and the
- * full-install prune runs. Passing ``{ dependencyResolvable: false }`` runs the
- * installer from an isolated package copy with no node_modules in its ancestry
- * and no NODE_PATH, so the dependency fails to resolve and the installer skips
- * the prune.
- *
  * @param {string} homeDirectory The sandbox home the installer writes into.
  * @param {string[]} extraArguments Installer arguments (for example ``['--only', 'core']``).
- * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
  * @returns {string} The installer's stdout.
  */
-function runInstaller(homeDirectory, extraArguments, options = {}) {
-    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, options);
+function runInstaller(homeDirectory, extraArguments) {
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory);
     return execFileSync('node', [installerPath, ...extraArguments], {
         cwd: dirname(installerPath),
         encoding: 'utf8',
         env: childEnvironment,
+        timeout: INSTALLER_PROCESS_TIMEOUT_MS,
     });
 }
 
@@ -228,23 +211,17 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
  * Build the installer path and child environment one sandbox run uses.
  *
  * @param {string} homeDirectory The sandbox home the installer writes into.
- * @param {{dependencyResolvable?: boolean}} options Whether the dependency resolves.
  * @returns {{installerPath: string, childEnvironment: object}} The invocation inputs.
  */
-function resolveInstallerInvocation(homeDirectory, options) {
-    const dependencyResolvable = options.dependencyResolvable !== false;
+function resolveInstallerInvocation(homeDirectory) {
     const childEnvironment = {
         ...process.env,
         HOME: homeDirectory,
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+        CODEX_HOME: join(homeDirectory, '.codex'),
     };
-    if (dependencyResolvable) {
-        childEnvironment.NODE_PATH = ensureDependencyStub(homeDirectory);
-        return { installerPath: INSTALLER_PATH, childEnvironment };
-    }
-    delete childEnvironment.NODE_PATH;
-    return { installerPath: ensureIsolatedInstallerPath(), childEnvironment };
+    return { installerPath: INSTALLER_PATH, childEnvironment };
 }
 
 /**
@@ -258,7 +235,7 @@ function resolveInstallerInvocation(homeDirectory, options) {
  * @returns {string} The child's stdout and stderr, joined.
  */
 function runInstallerReadingBothStreams(homeDirectory, extraArguments) {
-    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory, {});
+    const { installerPath, childEnvironment } = resolveInstallerInvocation(homeDirectory);
     const completedRun = spawnSync('node', [installerPath, ...extraArguments], {
         cwd: dirname(installerPath),
         encoding: 'utf8',
@@ -633,7 +610,7 @@ test('a full reinstall prunes a manifest-recorded skill absent from the package 
     const sandbox = createSandbox();
     try {
         const retiredManifestSkill = 'ghost-skill';
-        const personalSkill = 'balatro';
+        const personalSkill = 'credit-card-picker';
         plantSkillDirectory(sandbox.skillsDirectory, retiredManifestSkill, true);
         plantSkillDirectory(sandbox.skillsDirectory, personalSkill, false);
         writeFileSync(
@@ -700,115 +677,25 @@ test('a scoped --only install leaves retired skills in place because prune runs 
     }
 });
 
-test('a full reinstall keeps pr-fix-protocol because the package ships it again', () => {
+test('a full reinstall keeps autoconverge because the package ships it again', () => {
     const sandbox = createSandbox();
     try {
-        plantSkillDirectory(sandbox.skillsDirectory, 'pr-fix-protocol', true);
-        writeFileSync(join(sandbox.skillsDirectory, 'pr-fix-protocol', 'SKILL.md'), 'stale seeded copy\n');
+        plantSkillDirectory(sandbox.skillsDirectory, 'autoconverge', true);
+        writeFileSync(join(sandbox.skillsDirectory, 'autoconverge', 'SKILL.md'), 'stale seeded copy\n');
 
         const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
         assert.equal(
             installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
             false,
-            'the resolvable-dependency install runs the prune rather than skipping it',
+            'the full install runs the prune rather than skipping it',
         );
-        const restoredSkillPath = join(sandbox.skillsDirectory, 'pr-fix-protocol', 'SKILL.md');
-        assert.equal(existsSync(restoredSkillPath), true, 'pr-fix-protocol survives and is reinstalled');
+        const restoredSkillPath = join(sandbox.skillsDirectory, 'autoconverge', 'SKILL.md');
+        assert.equal(existsSync(restoredSkillPath), true, 'autoconverge survives and is reinstalled');
         assert.notEqual(
             readFileSync(restoredSkillPath, 'utf8'),
             'stale seeded copy\n',
-            'the shipped pr-fix-protocol overwrites the stale seeded copy',
-        );
-    } finally {
-        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
-    }
-});
-
-test('a full reinstall with an unresolved dependency skips the prune and leaves retired skills untouched', () => {
-    const sandbox = createSandbox();
-    try {
-        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
-            plantSkillDirectory(sandbox.skillsDirectory, retiredSkill, true);
-        }
-
-        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
-
-        assert.equal(
-            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
-            true,
-            'the installer logs a notice that it is skipping the prune',
-        );
-        for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
-            assert.equal(
-                existsSync(join(sandbox.skillsDirectory, retiredSkill)),
-                true,
-                `retired skill ${retiredSkill} should survive when a dependency is unresolved`,
-            );
-            assert.equal(
-                prunedSkillBackupContains(sandbox.claudeDirectory, retiredSkill),
-                false,
-                `retired skill ${retiredSkill} should not be moved to backup when the prune is skipped`,
-            );
-        }
-    } finally {
-        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
-    }
-});
-
-test('a full install that holds the prune keeps prior manifest file entries it did not itself write', () => {
-    const sandbox = createSandbox();
-    try {
-        runInstaller(sandbox.homeDirectory, []);
-        const { staleFilePath } = seedStaleSkillFile(sandbox);
-        const filesBeforeHeldPrune = readManifest(sandbox.manifestPath).files;
-
-        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
-
-        assert.equal(
-            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
-            true,
-            'the unresolved-dependency install holds both prunes',
-        );
-        const recordedFiles = new Set(readManifest(sandbox.manifestPath).files);
-        assert.equal(
-            recordedFiles.has(staleFilePath),
-            true,
-            'the entry a later pruning install needs to spot the stale file stays on the record',
-        );
-        const droppedEntries = filesBeforeHeldPrune.filter(priorPath => !recordedFiles.has(priorPath));
-        assert.deepEqual(droppedEntries, [], 'a held prune drops no prior file entry');
-    } finally {
-        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
-    }
-});
-
-test('a full install that holds the prune keeps prior manifest skill names it did not itself install', () => {
-    const sandbox = createSandbox();
-    try {
-        runInstaller(sandbox.homeDirectory, []);
-        plantSkillDirectory(sandbox.skillsDirectory, DEPENDENCY_SUPPLIED_SKILL_DIRECTORY, true);
-        const manifest = readManifest(sandbox.manifestPath);
-        manifest.skills.push(DEPENDENCY_SUPPLIED_SKILL_DIRECTORY);
-        writeFileSync(sandbox.manifestPath, JSON.stringify(manifest, null, 2) + '\n');
-
-        const installerOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
-
-        assert.equal(
-            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
-            true,
-            'the unresolved-dependency install holds both prunes',
-        );
-        const recordedSkills = new Set(readManifest(sandbox.manifestPath).skills);
-        assert.equal(
-            recordedSkills.has(DEPENDENCY_SUPPLIED_SKILL_DIRECTORY),
-            true,
-            'the name a later pruning install needs to spot the retired skill stays on the record',
-        );
-        assert.equal(
-            recordedSkills.has(SHIPPED_SKILL_DIRECTORY),
-            true,
-            'the held run still records the skills it installed itself',
+            'the shipped autoconverge overwrites the stale seeded copy',
         );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
@@ -855,43 +742,38 @@ test('a scoped core install ships the canonical review guide skills', () => {
     }
 });
 
-test('the prune skip is scoped: once the dependency resolves a later full install prunes normally', () => {
+test('a scoped core install leaves retired skills in place; a later full install prunes them', () => {
     const sandbox = createSandbox();
     try {
         for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
             plantSkillDirectory(sandbox.skillsDirectory, retiredSkill, true);
         }
 
-        const skippedOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: false });
-        assert.equal(
-            skippedOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
-            true,
-            'the unresolved-dependency install skips the prune',
-        );
+        runInstaller(sandbox.homeDirectory, ['--only', 'core']);
         for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
             assert.equal(
                 existsSync(join(sandbox.skillsDirectory, retiredSkill)),
                 true,
-                `retired skill ${retiredSkill} should still be present after the skipped prune`,
+                `retired skill ${retiredSkill} should survive a scoped install`,
             );
         }
 
-        const resolvedOutput = runInstaller(sandbox.homeDirectory, [], { dependencyResolvable: true });
+        const fullOutput = runInstaller(sandbox.homeDirectory, []);
         assert.equal(
-            resolvedOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
+            fullOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
             false,
-            'the resolved-dependency install runs the prune, proving the skip is not a permanent disable',
+            'the full install runs the prune',
         );
         for (const retiredSkill of RETIRED_SKILL_DIRECTORIES) {
             assert.equal(
                 existsSync(join(sandbox.skillsDirectory, retiredSkill)),
                 false,
-                `retired skill ${retiredSkill} should be pruned once the dependency resolves`,
+                `retired skill ${retiredSkill} should be pruned on the full install`,
             );
             assert.equal(
                 prunedSkillBackupContains(sandbox.claudeDirectory, retiredSkill),
                 true,
-                `retired skill ${retiredSkill} should be moved to the prune backup on the resolved install`,
+                `retired skill ${retiredSkill} should be moved to the prune backup`,
             );
         }
     } finally {
@@ -1027,7 +909,9 @@ function seedRetiredManagedHook(sandbox) {
     const lookalikeHookCommand = `python3 "${retiredHookPath.replace(/\\/g, '/')}.bak"`;
     const settings = readSettings(sandbox.claudeDirectory);
     const liveGroup = settings.hooks[RETIRED_HOOK_EVENT_TYPE]
-        .find(group => group.matcher === RETIRED_HOOK_MATCHER);
+        .find(group => group.hooks.some(
+            hook => hook.command.includes(DISPATCHER_HOOK_COMMAND_SEGMENT),
+        ));
     liveGroup.hooks.push({ type: 'command', command: retiredHookCommand });
     liveGroup.hooks.push({ type: 'command', command: USER_HOOK_COMMAND });
     liveGroup.hooks.push({ type: 'command', command: lookalikeHookCommand });
@@ -1227,7 +1111,7 @@ test('an uninstall removes the home-directory .mypy.ini the install wrote and sk
         assert.equal(
             existsSync(mypyIniPath),
             false,
-            'the uninstall removes the one file the install writes outside ~/.claude',
+            'the uninstall removes the mypy configuration the install writes outside ~/.claude',
         );
         assert.equal(
             installerOutput.includes(`skipping ${mypyIniPath}`),

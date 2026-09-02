@@ -1,0 +1,52 @@
+name: Validate instruction pairs
+
+on:
+  workflow_call:
+    inputs:
+      validator-ref:
+        description: Commit containing the shared instruction validator.
+        required: true
+        type: string
+      checkout-ref:
+        description: Git ref to check out as the tree under validation.
+        required: true
+        type: string
+      skip-validation:
+        description: Succeed without validating the tree for release-please pull requests.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  instruction-pairs:
+    name: instruction-pairs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip validation for release-please pull requests
+        if: ${{ inputs.skip-validation }}
+        run: echo "Skipping instruction-pairs tree validation for a release-please pull request."
+
+      - name: Checkout repository
+        if: ${{ !inputs.skip-validation }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.checkout-ref }}
+          persist-credentials: false
+
+      - name: Load shared instruction validator
+        if: ${{ !inputs.skip-validation }}
+        uses: actions/checkout@v5
+        with:
+          repository: jl-cmd/claude-dev-env
+          ref: ${{ inputs.validator-ref }}
+          path: .instruction-pair-validator
+          sparse-checkout: packages/claude-dev-env/scripts/validate_instruction_pairs.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Validate exact instruction imports
+        if: ${{ !inputs.skip-validation }}
+        run: python .instruction-pair-validator/packages/claude-dev-env/scripts/validate_instruction_pairs.py --repository-root .

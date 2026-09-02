@@ -14,42 +14,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
 
-try:
-    from hooks_constants.python_style_checks_constants import (
-        EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
-        MINIMUM_ARGUMENT_COUNT,
-    )
-except ModuleNotFoundError:
-    if _hooks_directory not in sys.path:
-        sys.path.insert(0, _hooks_directory)
-    from hooks_constants.python_style_checks_constants import (
-        EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
-        MINIMUM_ARGUMENT_COUNT,
-    )
-
-try:
-    from validators.python_style_helpers import (
-        FunctionNode,
-        blank_line_for_source,
-        function_start_line,
-        gap_is_blank_only,
-        iter_function_definitions,
-        real_newline_lines,
-        top_level_functions,
-    )
-except ModuleNotFoundError:
-    if _hooks_directory not in sys.path:
-        sys.path.insert(0, _hooks_directory)
-    from validators.python_style_helpers import (
-        FunctionNode,
-        blank_line_for_source,
-        function_start_line,
-        gap_is_blank_only,
-        iter_function_definitions,
-        real_newline_lines,
-        top_level_functions,
-    )
+from hooks_constants.python_style_checks_constants import (  # noqa: E402
+    EXPECTED_BLANK_LINES_BETWEEN_FUNCTIONS,
+    MINIMUM_ARGUMENT_COUNT,
+)
+from validators.python_style_helpers import (  # noqa: E402
+    FunctionNode,
+    blank_line_for_source,
+    function_start_line,
+    gap_is_blank_only,
+    is_docstring_statement,
+    is_import_statement,
+    iter_function_definitions,
+    real_newline_lines,
+    top_level_functions,
+)
+from validators.python_style_import_bootstrap import (  # noqa: E402
+    is_sys_path_bootstrap_prelude,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,37 +68,26 @@ def check_imports_at_top(tree: ast.AST, filename: str) -> list[Violation]:
     return violations
 
 
-def _is_import_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is an import or from-import."""
-    return isinstance(statement, (ast.Import, ast.ImportFrom))
-
-
-def _is_docstring_statement(statement: ast.stmt) -> bool:
-    """Return True when the statement is a string-literal docstring."""
-    if not isinstance(statement, ast.Expr):
-        return False
-    literal = statement.value
-    return isinstance(literal, ast.Constant) and isinstance(literal.value, str)
-
-
 def _check_module_level_import_order(tree: ast.AST, filename: str) -> list[Violation]:
-    """Flag module-level imports that appear after other statements."""
+    """Flag module-level imports after other statements, exempting a sys.path bootstrap run."""
     if not isinstance(tree, ast.Module):
         return []
     violations: list[Violation] = []
     has_seen_non_import = False
+    pending_prelude_statements: list[ast.stmt] = []
     for each_statement in tree.body:
-        is_import = _is_import_statement(each_statement)
-        if is_import and has_seen_non_import:
-            violations.append(
-                Violation(
-                    filename,
-                    each_statement.lineno,
-                    "Import statement must be at top of file",
-                )
-            )
-        if not is_import and not _is_docstring_statement(each_statement):
+        if not is_import_statement(each_statement):
+            if not is_docstring_statement(each_statement):
+                pending_prelude_statements.append(each_statement)
+            continue
+        if pending_prelude_statements and not is_sys_path_bootstrap_prelude(
+            pending_prelude_statements
+        ):
             has_seen_non_import = True
+        pending_prelude_statements = []
+        if has_seen_non_import:
+            message = "Import statement must be at top of file"
+            violations.append(Violation(filename, each_statement.lineno, message))
     return violations
 
 
@@ -169,7 +143,7 @@ def _decorator_gap_violation(
     return Violation(
         filename,
         last_decorator_line,
-        "No empty line allowed between decorator and function",
+        "Place the decorator directly above the function",
     )
 
 

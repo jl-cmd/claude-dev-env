@@ -1,4 +1,4 @@
-"""Bind and consult a read-only Codex CLI session at Sol xhigh."""
+"""Bind and consult a read-only Codex CLI session at Sol low effort."""
 
 from __future__ import annotations
 
@@ -22,6 +22,8 @@ if _config_directory_text not in sys.path:
 
 from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
+    ALL_SOL_TRUTHY_VALUES,
+    CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
     CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
@@ -29,15 +31,19 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
     CODEX_READ_ONLY_SANDBOX,
-    CODEX_REASONING_CONFIG,
+    CODEX_REASONING_CONFIG_TEMPLATE,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
-    CLAUDE_CONFIG_DIRECTORY_NAME,
+    USAGE_PROBE_FILENAME,
+    USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
+    USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
+    USAGE_PROBE_SHARED_DIRECTORY_NAME,
     SOL_BIND_FAILURE_REASON,
     SOL_CODEX_TIMEOUT_REASON,
     SOL_CODEX_TIMEOUT_SECONDS,
-    SOL_ENV_VAR,
+    SOL_EFFORT_FLAG,
     SOL_ENABLE_FLAG,
+    SOL_ENV_VAR,
     SOL_EXECUTABLE_NOT_FOUND_REASON,
     SOL_FALLBACK_KIND_BROKEN,
     SOL_FALLBACK_KIND_DECLINED,
@@ -48,14 +54,16 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     SOL_PROBE_TIMEOUT_REASON,
     SOL_REPLY_FAILURE_REASON,
     SOL_SESSION_ID_METAVAR,
-    ALL_SOL_TRUTHY_VALUES,
     SOL_USAGE_PROBE_TIMEOUT_SECONDS,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
     ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_EFFORT_DEFAULT,
+    ADVISOR_EFFORT_ENV_VAR,
     ADVISOR_FALLBACK_RESULT,
     ADVISOR_FALLBACK_TIER,
     ADVISOR_MODEL_TIER,
+    ALL_ADVISOR_EFFORT_LEVELS,
     ALL_ADVISOR_GUIDANCE_SIGNALS,
     CODEX_BIND_SUCCESS_TOKEN,
     SPAWN_OUTCOME_KEY,
@@ -143,7 +151,7 @@ def _resolved_setting_by_name(
 def is_sol_advisor_enabled(
     setting_by_name: Mapping[str, str] | None,
 ) -> bool:
-    """Return whether the optional Sol xhigh rung is enabled.
+    """Return whether the optional Sol rung is enabled.
 
     Args:
         setting_by_name: Optional environment-like settings mapping.
@@ -158,8 +166,52 @@ def is_sol_advisor_enabled(
     )
 
 
+def resolve_advisor_effort(
+    setting_by_name: Mapping[str, str] | None,
+) -> str:
+    """Return the shared advisor effort from settings, or the default.
+
+    ::
+
+        resolve_advisor_effort({"ADVISOR_EFFORT": "medium"})
+        # ok: "medium"
+        resolve_advisor_effort({"ADVISOR_EFFORT": "MAX"})
+        # ok: "max"
+        resolve_advisor_effort({})
+        # ok: default low
+        resolve_advisor_effort({"ADVISOR_EFFORT": "nope"})
+        # ok: default low
+        resolve_advisor_effort({"ADVISOR_SOL_EFFORT": "high"})
+        # ok: default low
+
+    Fable and Sol both read this value. Unset and unrecognized values use
+    low. The Sol-only name does not set effort.
+
+    Args:
+        setting_by_name: Optional environment-like settings mapping.
+
+    Returns:
+        One of low, medium, high, xhigh, or max.
+    """
+    resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
+    requested_effort = (
+        resolved_setting_by_name.get(ADVISOR_EFFORT_ENV_VAR, "").strip().lower()
+    )
+    if requested_effort in ALL_ADVISOR_EFFORT_LEVELS:
+        return requested_effort
+    return ADVISOR_EFFORT_DEFAULT
+
+
 def resolve_usage_probe_path(home_directory: Path) -> Path:
     """Return the installed Codex weekly usage probe path.
+
+    ::
+
+        resolve_usage_probe_path(Path.home())
+            -> ~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py
+
+    This is the only probe path the Sol helper uses. Do not search worktrees
+    or archived ``skills/codex-review`` trees for a second copy.
 
     Args:
         home_directory: Home directory used to construct the path.
@@ -170,10 +222,10 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
     return (
         home_directory
         / CLAUDE_CONFIG_DIRECTORY_NAME
-        / "skills"
-        / "codex-review"
-        / "scripts"
-        / "codex_usage_probe.py"
+        / USAGE_PROBE_SHARED_DIRECTORY_NAME
+        / USAGE_PROBE_PACKAGE_DIRECTORY_NAME
+        / USAGE_PROBE_SCRIPTS_DIRECTORY_NAME
+        / USAGE_PROBE_FILENAME
     )
 
 
@@ -290,12 +342,14 @@ def resolve_codex_executable(
 def build_codex_arguments(
     codex_executable: str,
     session_id: str | None = None,
+    reasoning_effort: str = ADVISOR_EFFORT_DEFAULT,
 ) -> list[str]:
     """Build the installed CLI's shell-free bind or resume argv.
 
     Args:
         codex_executable: Resolved executable name or path to invoke.
         session_id: Optional existing session to resume.
+        reasoning_effort: Codex model_reasoning_effort token.
 
     Returns:
         The shell-free Codex command argument vector.
@@ -306,7 +360,7 @@ def build_codex_arguments(
         CODEX_MODEL_FLAG,
         ADVISOR_CODEX_MODEL_ID,
         CODEX_CONFIG_FLAG,
-        CODEX_REASONING_CONFIG,
+        CODEX_REASONING_CONFIG_TEMPLATE.format(effort=reasoning_effort),
         CODEX_SANDBOX_FLAG,
         CODEX_READ_ONLY_SANDBOX,
         CODEX_JSON_FLAG,
@@ -435,7 +489,11 @@ def run_codex_sol_advisor(
         )
     try:
         completed_process = process_runner(
-            build_codex_arguments(codex_executable, session_id=session_id),
+            build_codex_arguments(
+                codex_executable,
+                session_id=session_id,
+                reasoning_effort=resolve_advisor_effort(setting_by_name),
+            ),
             cwd=str(working_directory),
             input=prompt,
             capture_output=True,
@@ -467,7 +525,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         The parser for the helper's bind and resume modes.
     """
     argument_parser = argparse.ArgumentParser(
-        description="Bind or consult a read-only Codex Sol xhigh advisor."
+        description="Bind or consult a read-only Codex Sol advisor."
     )
     mode_group = argument_parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument("--bind", action="store_true")
@@ -478,6 +536,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
         dest="is_sol_requested",
         action="store_true",
         help="Open the Sol rung for this invocation without an environment flag.",
+    )
+    argument_parser.add_argument(
+        SOL_EFFORT_FLAG,
+        dest="sol_effort",
+        choices=ALL_ADVISOR_EFFORT_LEVELS,
+        default=None,
+        help="Shared advisor effort for this invocation.",
     )
     return argument_parser
 
@@ -492,9 +557,11 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         Zero for a successful Sol response, or one for an explicit fallback.
     """
     parsed_arguments = build_argument_parser().parse_args(list(all_cli_arguments))
-    setting_by_name: Mapping[str, str] = os.environ
+    setting_by_name: dict[str, str] = dict(os.environ)
     if parsed_arguments.is_sol_requested:
-        setting_by_name = {**os.environ, SOL_ENV_VAR: "1"}
+        setting_by_name[SOL_ENV_VAR] = "1"
+    if parsed_arguments.sol_effort is not None:
+        setting_by_name[ADVISOR_EFFORT_ENV_VAR] = parsed_arguments.sol_effort
     advisor_reply = run_codex_sol_advisor(
         prompt=sys.stdin.read(),
         working_directory=parsed_arguments.cwd,

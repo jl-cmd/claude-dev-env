@@ -74,7 +74,7 @@ class _RunHook:
 _run_hook = _RunHook()
 
 
-def test_historical_phrase_scan_is_default_off(
+def test_historical_phrase_scan_runs_with_the_env_flag_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CLAUDE_PROSE_STYLE_ENFORCEMENT", raising=False)
@@ -87,8 +87,8 @@ def test_historical_phrase_scan_is_default_off(
         is_prose_style_enabled=False,
     )
     assert result.returncode == 0
-    assert result.stdout == ""
-    assert _evaluate_without_opt_in(
+    assert result.stdout.strip() != ""
+    deny_reason = _evaluate_without_opt_in(
         {
             "tool_name": "Write",
             "tool_input": {
@@ -96,7 +96,9 @@ def test_historical_phrase_scan_is_default_off(
                 "content": VIOLATION_INSTEAD_OF_COMMENT,
             },
         }
-    ) is None
+    )
+    assert deny_reason is not None
+    assert "instead of" in deny_reason
 
 
 def test_block_clean_python_comment_passes():
@@ -291,6 +293,74 @@ def test_clean_edit_passes():
     )
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_detects_multi_edit_second_new_string() -> None:
+    """A violation in the second edit of a MultiEdit is denied, not only the first."""
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
+                {"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "previously" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_clean_multi_edit_passes() -> None:
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": CLEAN_PYTHON},
+                {"old_string": "b = 2", "new_string": CLEAN_COMMENT},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_multi_edit_new_strings_join_on_a_separator_not_concatenation() -> None:
+    """Two clean edit fragments stay clean even when one ends where the next begins.
+
+    The first edit's new_string ends in "# describes the previous", and the
+    second's begins with "ly implemented step.". Concatenated with no
+    separator the two would spell "previously" and trip a false deny; joined
+    on a real separator they stay two distinct fragments.
+    """
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": "# describes the previous"},
+                {"old_string": "b = 2", "new_string": "ly implemented step."},
+            ],
+        },
+    )
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_multi_edit_with_a_single_edit_still_denies() -> None:
+    result = _run_hook(
+        "MultiEdit",
+        {
+            "file_path": "src/main.py",
+            "edits": [{"old_string": "old_comment", "new_string": VIOLATION_PREVIOUSLY_COMMENT}],
+        },
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_system_message_and_suppress_output():
@@ -644,6 +714,7 @@ def test_additional_context_contains_examples():
     ctx = output["hookSpecificOutput"].get("additionalContext", "")
     assert "BAD:" in ctx
     assert "GOOD:" in ctx
+    assert "~/.claude/rules/asd-ste100-language.md" in ctx
 
 
 def test_handles_non_dict_stdin():

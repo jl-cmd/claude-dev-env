@@ -35,25 +35,33 @@ import re
 import sys
 from pathlib import Path
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
+try:
+    _hooks_dir = str(Path(__file__).resolve().parent.parent)
+    if _hooks_dir not in sys.path:
+        sys.path.insert(0, _hooks_dir)
 
-from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
-    prose_style_enforcement_enabled_in_environment,
-)
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.hook_prose_detector_consistency_constants import (  # noqa: E402
-    CONSTANTS_MODULE_SUFFIX,
-    CORRECTIVE_MESSAGE,
-    EDIT_TOOL_NAME,
-    HOOK_MODULE_PATH_SEGMENT,
-    OVERSTATED_OUTPUT_KEY_PHRASE_PATTERN,
-    PATH_SEPARATOR_CLASS_PATTERN,
-    PYTHON_FILE_SUFFIX,
-    TEST_MODULE_PREFIX,
-    WRITE_TOOL_NAME,
-)
+    from blocking.config.prose_style_enforcement_constants import (
+        prose_style_enforcement_enabled_in_environment,
+    )
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.hook_prose_detector_consistency_constants import (
+        CONSTANTS_MODULE_SUFFIX,
+        CORRECTIVE_MESSAGE,
+        EDIT_TOOL_NAME,
+        HOOK_MODULE_PATH_SEGMENT,
+        MULTI_EDIT_TOOL_NAME,
+        OVERSTATED_OUTPUT_KEY_PHRASE_PATTERN,
+        PATH_SEPARATOR_CLASS_PATTERN,
+        PYTHON_FILE_SUFFIX,
+        TEST_MODULE_PREFIX,
+        WRITE_TOOL_NAME,
+    )
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
+except ImportError as import_error:
+    raise ImportError(
+        "hook_prose_detector_consistency: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
 
 
 def written_content(tool_name: str, all_tool_input: dict[str, object]) -> str:
@@ -63,6 +71,8 @@ def written_content(tool_name: str, all_tool_input: dict[str, object]) -> str:
     if tool_name == EDIT_TOOL_NAME:
         new_string = all_tool_input.get("new_string", "")
         return new_string if isinstance(new_string, str) else ""
+    if tool_name == MULTI_EDIT_TOOL_NAME:
+        return joined_new_strings(all_tool_input)
     return ""
 
 
@@ -125,7 +135,7 @@ def main() -> None:
         sys.exit(0)
 
     tool_name = hook_input.get("tool_name", "")
-    if tool_name not in (WRITE_TOOL_NAME, EDIT_TOOL_NAME):
+    if tool_name not in (WRITE_TOOL_NAME, EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME):
         sys.exit(0)
 
     all_tool_input = hook_input.get("tool_input", {})

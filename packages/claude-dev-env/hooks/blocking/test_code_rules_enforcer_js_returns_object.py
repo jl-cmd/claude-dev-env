@@ -1,6 +1,6 @@
 """Enforcer-dispatch tests for the JS returns-object schema-less branch check.
 
-These drive ``validate_content`` end-to-end on a ``.mjs`` payload, so they prove
+These drive ``validate_content_for_full_gate`` end-to-end on a ``.mjs`` payload, so they prove
 the check is wired into the JavaScript branch of the enforcer, not just callable
 in isolation. The drift: a ``function`` whose JSDoc ``@returns {Promise<object>}``
 promises a structured object while one branch returns the agent helper with an
@@ -62,11 +62,11 @@ def _has_returns_object_finding(all_issues: list[str]) -> bool:
 
 def test_enforcer_reports_schema_less_branch_under_returns_object() -> None:
     drift_source = _mixed_schema_mjs()
-    all_issues = code_rules_enforcer.validate_content(drift_source, _MJS_PATH, drift_source)
+    all_issues = code_rules_enforcer.validate_content_for_full_gate(drift_source, _MJS_PATH, drift_source)
     assert _has_returns_object_finding(all_issues)
 
 
 def test_enforcer_accepts_every_branch_with_a_schema() -> None:
     clean_source = _all_schema_mjs()
-    all_issues = code_rules_enforcer.validate_content(clean_source, _MJS_PATH, clean_source)
+    all_issues = code_rules_enforcer.validate_content_for_full_gate(clean_source, _MJS_PATH, clean_source)
     assert not _has_returns_object_finding(all_issues)

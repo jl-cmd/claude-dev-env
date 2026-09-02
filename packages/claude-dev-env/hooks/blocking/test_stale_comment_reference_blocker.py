@@ -207,6 +207,77 @@ def test_allows_old_string_not_found(tmp_path: Path) -> None:
     assert outcome.stdout == ""
 
 
+def test_multi_edit_denies_when_the_first_edit_writes_the_stale_comment(
+    tmp_path: Path,
+) -> None:
+    """The comment the second edit orphans is one the first edit just wrote.
+
+    A non-cumulative check reads the ORIGINAL "# Old note" comment and finds
+    nothing to orphan; only applying the first edit before the second reveals
+    "# Mock asyncio" above the removed line.
+    """
+    written_module_path = _write_module(
+        tmp_path,
+        "def launch_export() -> None:\n    # Old note\n" + PATCHED_SLEEP_LINE,
+    )
+    all_edits = [
+        {"old_string": "    # Old note\n", "new_string": KEPT_COMMENT_LINE},
+        {
+            "old_string": PATCHED_SLEEP_LINE.rstrip("\n"),
+            "new_string": PATCHED_POLL_LINE.rstrip("\n"),
+        },
+    ]
+    outcome = _run_hook(
+        "MultiEdit", {"file_path": str(written_module_path), "edits": all_edits}
+    )
+    assert outcome.returncode == 0
+    decision = json.loads(outcome.stdout)
+    assert decision["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "asyncio" in decision["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_multi_edit_allows_two_unrelated_edits(tmp_path: Path) -> None:
+    written_module_path = _write_module(
+        tmp_path,
+        "def launch_export() -> None:\n" + KEPT_COMMENT_LINE + PATCHED_SLEEP_LINE,
+    )
+    all_edits = [
+        {
+            "old_string": "def launch_export() -> None:",
+            "new_string": "def launch_export_now() -> None:",
+        },
+        {
+            "old_string": PATCHED_SLEEP_LINE,
+            "new_string": KEPT_COMMENT_LINE + PATCHED_SLEEP_LINE,
+        },
+    ]
+    outcome = _run_hook(
+        "MultiEdit", {"file_path": str(written_module_path), "edits": all_edits}
+    )
+    assert outcome.returncode == 0
+    assert outcome.stdout == ""
+
+
+def test_multi_edit_skips_a_step_whose_old_string_is_absent(tmp_path: Path) -> None:
+    """A MultiEdit step whose old_string never occurs in the current content is skipped."""
+    written_module_path = _write_module(
+        tmp_path,
+        "def launch_export() -> None:\n" + KEPT_COMMENT_LINE + PATCHED_SLEEP_LINE,
+    )
+    all_edits = [
+        {"old_string": "never present anywhere", "new_string": "still never present"},
+        {
+            "old_string": PATCHED_SLEEP_LINE,
+            "new_string": KEPT_COMMENT_LINE + PATCHED_SLEEP_LINE,
+        },
+    ]
+    outcome = _run_hook(
+        "MultiEdit", {"file_path": str(written_module_path), "edits": all_edits}
+    )
+    assert outcome.returncode == 0
+    assert outcome.stdout == ""
+
+
 def test_deny_payload_logs_the_block(tmp_path: Path) -> None:
     """One record lands in the block journal for each denial built through
     evaluate plus build_deny_payload.

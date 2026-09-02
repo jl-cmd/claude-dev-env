@@ -2,6 +2,9 @@
 
 Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
+The gate records each candidate test's content hash at every sighting and
+compares that hash on the next write. A first sighting requires content that
+differs from HEAD.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """
@@ -21,9 +24,14 @@ try:
         is_ephemeral_script_path,
         is_under_session_scratchpad,
     )
+    from codex_apply_patch import (
+        payload_patch_target_paths,
+    )
+    from hooks_constants.pre_tool_use_dispatcher_constants import APPLY_PATCH_TOOL_NAME
     from tdd_enforcer_parts import (
         candidate_paths,
         content_analysis,
+        content_hash_store,
         decisions,
         freshness,
         git_tracking,
@@ -56,8 +64,8 @@ candidate_test_paths_for = candidate_paths.candidate_test_paths_for
 _ancestor_tests_directories = candidate_paths._ancestor_tests_directories
 _parent_walk_limit = candidate_paths._parent_walk_limit
 _freshness_seconds = freshness._freshness_seconds
-has_fresh_test = freshness.has_fresh_test
 _read_candidate_text = freshness._read_candidate_text
+has_recorded_or_fresh_test = content_hash_store.has_recorded_or_fresh_test
 _is_constants_only_python_content = content_analysis._is_constants_only_python_content
 _is_post_edit_import_only = content_analysis._is_post_edit_import_only
 _is_post_edit_constants_only = content_analysis._is_post_edit_constants_only
@@ -72,8 +80,12 @@ def _resolve_payload(input_data: dict) -> tuple[str, dict, str]:
     return input_data.get("tool_name", ""), tool_input, tool_input.get("file_path", "")
 
 
-def _is_silently_skipped(file_path: str, extension: str, path: Path) -> bool:
-    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(file_path):
+def _is_silently_skipped(
+    file_path: str, extension: str, path: Path, repository_root: str = ""
+) -> bool:
+    if _is_inside_dotclaude_segment(file_path) or is_ephemeral_script_path(
+        file_path, repository_root
+    ):
         return True
     if _is_agent_home_tooling_write(file_path):
         return True
@@ -117,29 +129,64 @@ def _write_is_exempt(
     return _edit_is_constants_or_import_only(tool_name, tool_input, path, extension)
 
 
+def _decide_for_target(
+    tool_name: str, tool_input: dict, file_path: str, input_data: dict
+) -> tuple[bool, str] | None:
+    """Return (is_allowed, deny_reason) for one target file, or None to skip silently."""
+    if not file_path:
+        return None
+    if _is_session_scratchpad_write(file_path, input_data):
+        return None
+    path = Path(file_path)
+    extension = path.suffix.lower()
+    repository_root = str(input_data.get("cwd") or "")
+    if _is_silently_skipped(file_path, extension, path, repository_root):
+        return None
+    if _write_is_exempt(tool_name, tool_input, path, extension):
+        return True, ""
+    all_candidates = candidate_test_paths_for(path)
+    session_id = str(input_data.get("session_id") or "")
+    is_recorded_or_fresh = has_recorded_or_fresh_test(
+        all_candidates, session_id, repository_root, _freshness_seconds()
+    )
+    if is_recorded_or_fresh:
+        return True, ""
+    return False, build_deny_reason(path, all_candidates)
+
+
+def _decide_apply_patch(input_data: dict, tool_input: dict) -> None:
+    """Run the TDD gate over every file a Codex apply_patch payload touches."""
+    for each_file_path in payload_patch_target_paths(input_data, tool_input):
+        decision = _decide_for_target(
+            APPLY_PATCH_TOOL_NAME, tool_input, each_file_path, input_data
+        )
+        if decision is None:
+            continue
+        is_allowed, deny_reason = decision
+        if not is_allowed:
+            emit_deny(deny_reason)
+            return
+    emit_allow()
+
+
 def main() -> None:
-    """Run the TDD gate over one PreToolUse Write, Edit, or MultiEdit payload."""
+    """Run the TDD gate over one PreToolUse Write, Edit, MultiEdit, or apply_patch payload."""
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
         sys.exit(0)
     tool_name, tool_input, file_path = _resolve_payload(input_data)
-    if not file_path:
+    if tool_name == APPLY_PATCH_TOOL_NAME:
+        _decide_apply_patch(input_data, tool_input)
         sys.exit(0)
-    if _is_session_scratchpad_write(file_path, input_data):
+    decision = _decide_for_target(tool_name, tool_input, file_path, input_data)
+    if decision is None:
         sys.exit(0)
-    path = Path(file_path)
-    extension = path.suffix.lower()
-    if _is_silently_skipped(file_path, extension, path):
-        sys.exit(0)
-    if _write_is_exempt(tool_name, tool_input, path, extension):
+    is_allowed, deny_reason = decision
+    if is_allowed:
         emit_allow()
         sys.exit(0)
-    all_candidates = candidate_test_paths_for(path)
-    if has_fresh_test(all_candidates, _freshness_seconds()):
-        emit_allow()
-        sys.exit(0)
-    emit_deny(build_deny_reason(path, all_candidates))
+    emit_deny(deny_reason)
     sys.exit(0)
 
 

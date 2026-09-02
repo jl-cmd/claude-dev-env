@@ -19,6 +19,11 @@ try:
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
     from code_rules_shared import is_ephemeral_path
+    from codex_apply_patch import (
+        CodexPatchError,
+        parse_codex_apply_patch,
+        payload_patch_command,
+    )
     from pii_prevention_blocker_parts.repository_exemption import (
         repository_allowlisted_values,
     )
@@ -46,6 +51,62 @@ except ImportError as import_error:
         "pii_payload_scan: cannot import its sibling modules; "
         "ensure the blocking and hooks directories are importable."
     ) from import_error
+
+
+def _apply_patch_post_contents(
+    command: str, working_directory: str | None
+) -> list[tuple[str, str]]:
+    """Return (file_path, post_content) pairs for a Codex apply_patch command."""
+    if not command:
+        return []
+    try:
+        all_patch_files = parse_codex_apply_patch(command, working_directory)
+    except CodexPatchError:
+        return []
+    return [
+        (each_patch_file.file_path, each_patch_file.post_content)
+        for each_patch_file in all_patch_files
+        if each_patch_file.post_content
+    ]
+
+
+def _apply_patch_target_deny_reason(
+    each_file_path: str,
+    each_post_content: str,
+    hook_payload: dict | None,
+) -> str | None:
+    """Return the deny reason for one apply_patch target, or None when it is clean or exempt."""
+    if is_path_exempt_from_pii_scan(each_file_path):
+        return None
+    if _target_is_ephemeral_outside_repository(each_file_path, hook_payload):
+        return None
+    return _write_deny_reason_for_texts([each_post_content], each_file_path, frozenset())
+
+
+def evaluate_apply_patch_payload(
+    all_tool_input: dict[str, object],
+    hook_payload: dict | None = None,
+) -> str | None:
+    """Return a deny reason when a Codex apply_patch payload's post content carries PII.
+
+    Args:
+        all_tool_input: The apply_patch payload's ``command`` and other input fields.
+        hook_payload: The PreToolUse payload carrying ``cwd`` and the session id.
+
+    Returns:
+        Deny reason text for the first target carrying non-allowlisted PII, or
+        None when every target is clean or out of scope.
+    """
+    command, working_directory = payload_patch_command(hook_payload, all_tool_input)
+    for each_file_path, each_post_content in _apply_patch_post_contents(
+        command, working_directory
+    ):
+        deny_reason = _apply_patch_target_deny_reason(
+            each_file_path, each_post_content, hook_payload
+        )
+        if deny_reason is not None:
+            return deny_reason
+    return None
 
 
 def _target_is_ephemeral_outside_repository(

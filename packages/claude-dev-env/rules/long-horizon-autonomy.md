@@ -8,7 +8,7 @@ Source: [Anthropic - Prompting Claude Fable 5](https://platform.claude.com/docs/
 
 When you have enough to act, act. Do not re-derive facts already settled in the conversation, re-open a decision the user already made, or narrate options you will not pursue in user-facing text. When you weigh a choice, give a recommendation, not a full survey. This shapes user-facing messages, not your private reasoning.
 
-This is the autonomous-run partner to `conservative-action`: that rule covers the ambiguous case (research and recommend first); this one covers the clear case (once the evidence is in hand, act).
+This is the autonomous-run partner to the ambiguous case: research and recommend first when intent is unclear; this rule covers the clear case, where the evidence is already in hand.
 
 ## Do not end a turn on a promise
 
@@ -30,7 +30,7 @@ On a long build, set a checkpoint cadence and hold to it. At each interval, chec
 
 Before you report progress, check each claim against a tool result from this session. State only what the evidence backs; name anything unverified as unverified. If tests fail, say so with the output; if a step was skipped, say that.
 
-Visible progress follows [`opus5-communication-contract.md`](opus5-communication-contract.md) (`opus5-communication-contract-v1`): the **first progress update is one sentence**; later updates mark only **important discoveries or a direction change**.
+Visible progress follows the [ASD-STE100 language policy](asd-ste100-language.md) and this rule's run-completion contract: the **first progress update is one sentence**; later updates mark only **important discoveries or a direction change**.
 
 ## Re-ground the final message
 

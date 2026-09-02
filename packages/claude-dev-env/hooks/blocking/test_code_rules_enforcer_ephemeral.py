@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -22,70 +20,40 @@ if _HOOKS_DIRECTORY not in sys.path:
 
 from code_rules_enforcer import main as enforcer_main  # noqa: E402
 from code_rules_shared import is_ephemeral_script_path  # noqa: E402
+from code_rules_enforcer_test_support import (  # noqa: E402
+    build_write_payload,
+    run_enforcer_cli,
+    run_write_entrypoint,
+)
 
 _ENFORCER_SCRIPT = Path(__file__).resolve().parent / "code_rules_enforcer.py"
 _TDD_SCRIPT = Path(__file__).resolve().parent / "tdd_enforcer.py"
 
 _VIOLATING_PRODUCTION_SOURCE = "def process_data(payload: str) -> None:\n    print(payload)\n"
 
-code_rules_enforcer_module = SimpleNamespace(main=enforcer_main, sys=sys)
-
 
 def _run_enforcer_cli(
     all_cli_arguments: list[str],
-    extra_env: dict[str, str],
+    extra_environment_by_name: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Drive the enforcer script through its real argv entry point.
 
     Args:
         all_cli_arguments: The argument vector appended after the script path.
-        extra_env: Additional environment variables merged into the subprocess env.
+        extra_environment_by_name: Additional environment variables merged into the subprocess environment.
 
     Returns:
         The completed process carrying stdout, stderr, and the exit code.
     """
-    subprocess_env = {**os.environ, **extra_env}
-    return subprocess.run(
-        [sys.executable, str(_ENFORCER_SCRIPT), *all_cli_arguments],
-        input="",
-        capture_output=True,
-        text=True,
-        check=False,
-        env=subprocess_env,
-    )
+    return run_enforcer_cli(_ENFORCER_SCRIPT, all_cli_arguments, extra_environment_by_name)
 
 
 def _run_main_with_write_payload(
     file_path: str,
     content: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> tuple[str, int]:
-    """Drive enforcer_main through its stdin entry point for a Write payload.
-
-    Args:
-        file_path: The destination path the Write targets.
-        content: The content of the Write.
-        monkeypatch: The pytest fixture used to redirect sys.stdin.
-        capsys: The pytest fixture used to capture the deny payload on stdout.
-
-    Returns:
-        A tuple of (captured_stdout, exit_code).
-    """
-    write_payload = json.dumps(
-        {
-            "tool_name": "Write",
-            "tool_input": {"file_path": file_path, "content": content},
-        }
-    )
-    monkeypatch.setattr(code_rules_enforcer_module.sys, "stdin", io.StringIO(write_payload))
-    exit_code = 0
-    try:
-        code_rules_enforcer_module.main([])
-    except SystemExit as each_exit:
-        exit_code = int(each_exit.code or 0)
-    captured = capsys.readouterr()
-    return captured.out, exit_code
+    """Drive enforcer_main through its stdin entry point for a Write payload."""
+    return run_write_entrypoint(enforcer_main, file_path, content)
 
 
 def _run_tdd_with_write_payload(
@@ -101,18 +69,12 @@ def _run_tdd_with_write_payload(
     Returns:
         The completed process carrying stdout, stderr, and the exit code.
     """
-    write_payload = json.dumps(
-        {
-            "tool_name": "Write",
-            "tool_input": {"file_path": file_path, "content": content},
-        }
-    )
+    write_payload = build_write_payload(file_path, content)
     return subprocess.run(
         [sys.executable, str(_TDD_SCRIPT)],
         input=write_payload,
         capture_output=True,
         text=True,
-        check=False,
     )
 
 
@@ -207,8 +169,18 @@ def test_should_return_true_for_root_anchored_tmp_and_temp(
     raw_path: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B4: classifier returns True for root-anchored /tmp and /temp paths."""
+    """B4: classifier returns True for root-anchored /tmp and /temp paths.
+
+    A Windows drive-letter literal is absolute only on Windows. On POSIX,
+    os.path.abspath() joins a non-absolute path with the process cwd, so a
+    drive-letter case's pass or fail state depends on whatever directory the
+    runner happens to sit in. Skip it on a host that does not treat the
+    literal as absolute, so the assertion checks its own precondition rather
+    than the runner's ambient cwd.
+    """
     monkeypatch.delenv("CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT", raising=False)
+    if not os.path.isabs(raw_path):
+        pytest.skip(f"{raw_path!r} is not absolute on this host")
     assert is_ephemeral_script_path(raw_path) is True
 
 
@@ -279,7 +251,6 @@ def test_should_return_false_for_empty_path() -> None:
 def test_should_exit_zero_for_ephemeral_pretooluse_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """B11: enforcer main exits 0 with no deny payload for an ephemeral file_path."""
     monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
@@ -287,8 +258,6 @@ def test_should_exit_zero_for_ephemeral_pretooluse_target(
     captured_stdout, exit_code = _run_main_with_write_payload(
         ephemeral_path,
         _VIOLATING_PRODUCTION_SOURCE,
-        monkeypatch,
-        capsys,
     )
     assert exit_code == 0
     assert "deny" not in captured_stdout.lower()
@@ -297,7 +266,6 @@ def test_should_exit_zero_for_ephemeral_pretooluse_target(
 def test_should_exit_zero_for_ephemeral_path_with_hooks_substring(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """B12: an ephemeral path carrying /hooks/ exits 0 (hook-infra route short-circuited)."""
     monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
@@ -305,8 +273,6 @@ def test_should_exit_zero_for_ephemeral_path_with_hooks_substring(
     captured_stdout, exit_code = _run_main_with_write_payload(
         ephemeral_hooks_path,
         _VIOLATING_PRODUCTION_SOURCE,
-        monkeypatch,
-        capsys,
     )
     assert exit_code == 0
     assert "deny" not in captured_stdout.lower()
@@ -319,7 +285,7 @@ def test_should_return_zero_from_precheck_for_ephemeral_target(
     candidate_file = tmp_path / "candidate.py"
     candidate_file.write_text(_VIOLATING_PRODUCTION_SOURCE, encoding="utf-8")
     ephemeral_target = "/tmp/target.py"
-    completed = _run_enforcer_cli(["--check", str(candidate_file), "--as", ephemeral_target], extra_env={})
+    completed = _run_enforcer_cli(["--check", str(candidate_file), "--as", ephemeral_target])
     assert completed.returncode == 0
 
 
@@ -332,7 +298,6 @@ def test_should_run_full_suite_for_non_ephemeral_target(
     non_ephemeral_target = "/repo/src/orders.py"
     completed = _run_enforcer_cli(
         ["--check", str(candidate_file), "--as", non_ephemeral_target],
-        extra_env={},
     )
     assert completed.returncode == 1
 
@@ -346,7 +311,7 @@ def test_should_run_full_suite_when_override_truthy(
     ephemeral_target = "/tmp/scratch.py"
     completed = _run_enforcer_cli(
         ["--check", str(candidate_file), "--as", ephemeral_target],
-        extra_env={"CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1"},
+        extra_environment_by_name={"CLAUDE_CODE_RULES_DISABLE_EPHEMERAL_EXEMPT": "1"},
     )
     assert completed.returncode == 1
 
@@ -354,7 +319,6 @@ def test_should_run_full_suite_when_override_truthy(
 def test_should_exempt_same_path_set_on_both_gates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """B21: every ephemeral path exits 0 on both enforcer main and TDD enforcer main."""
     monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
@@ -367,8 +331,6 @@ def test_should_exempt_same_path_set_on_both_gates(
         captured_stdout, exit_code = _run_main_with_write_payload(
             each_ephemeral_path,
             _VIOLATING_PRODUCTION_SOURCE,
-            monkeypatch,
-            capsys,
         )
         assert exit_code == 0, (
             f"enforcer must exit 0 for ephemeral path {each_ephemeral_path!r}, "

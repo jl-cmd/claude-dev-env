@@ -17,13 +17,22 @@ import re
 import sys
 from pathlib import Path
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
+try:
+    _hooks_dir = str(Path(__file__).resolve().parent.parent)
+    if _hooks_dir not in sys.path:
+        sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
-from hooks_constants.windows_rmtree_blocker_constants import PYTHON_FILE_EXTENSION  # noqa: E402
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
+    from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+    from hooks_constants.windows_rmtree_blocker_constants import (
+        PYTHON_FILE_EXTENSION,
+    )
+except ImportError as import_error:
+    raise ImportError(
+        "windows_rmtree_blocker: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
 
 
 def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
@@ -37,6 +46,11 @@ def payload_contains_unsafe_rmtree(payload_text: str) -> bool:
 
 
 def extract_payload_text(tool_name: str, tool_input: dict) -> str:
+    if tool_name == "MultiEdit":
+        file_path = tool_input.get("file_path", "")
+        if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):
+            return ""
+        return joined_new_strings(tool_input)
     if tool_name in {"Write", "Edit"}:
         file_path = tool_input.get("file_path", "")
         if file_path and not file_path.endswith(PYTHON_FILE_EXTENSION):

@@ -12,10 +12,14 @@ The consult rules it restates are owned by [`consult-format.md`](consult-format.
 
 > A shared session advisor named `<name>` is reachable via SendMessage; send each consult to it directly by that name.
 
+## Transport preamble — Codex host
+
+> A shared session advisor named `<name>` is reachable as a native Codex Sol subagent; send each consult to it in-session by that name.
+
 ## Transport preamble — third-party host
 
 > The orchestrating session owns a standing advisor for this run.
-> The advisor chain, strongest first: sol xhigh through the Codex CLI when the sol flag and its preflight open that rung, then Claude Fable at effort high, then Claude Opus at effort xhigh through the CLI Claude-chain.
+> The advisor chain: Claude Fable, then Sol through the Codex CLI when Fable is out of usage and the sol flag and its preflight open that rung. Both rungs use `ADVISOR_EFFORT` (default low). When neither binds, there is no advisor.
 > The orchestrating session is your one path to it: send each consult as a report to the session that assigned you, and it relays the advisor's reply.
 
 ## Shared core — every host

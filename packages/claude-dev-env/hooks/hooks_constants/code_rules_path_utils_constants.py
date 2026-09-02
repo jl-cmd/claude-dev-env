@@ -20,7 +20,6 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "skills_pr_loop_constants",
         "pr_converge_skill_constants",
         "pr_converge_scripts_constants",
-        "bugteam_scripts_constants",
         "usage_pause_constants",
         "prototype_scripts_constants",
         "codex_review_scripts_constants",

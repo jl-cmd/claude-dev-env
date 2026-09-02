@@ -13,7 +13,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit|MultiEdit|apply_patch",
         "hooks": [
           {
             "type": "command",
@@ -68,6 +68,16 @@
         ]
       },
       {
+        "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "ScheduleWakeup|CronCreate",
         "hooks": [
           {
@@ -83,6 +93,11 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/plain_language_blocker.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/ask_user_question_shape_blocker.py",
             "timeout": 10
           }
         ]
@@ -108,6 +123,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/style_reminder_prompt.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "",
@@ -124,11 +151,6 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/gh_pr_author_session_cleanup.py",
             "timeout": 30
           },
@@ -139,7 +161,7 @@
           },
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_list_loop_starter.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/task_tool_prompt.py",
             "timeout": 10
           },
           {
@@ -213,7 +235,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit|MultiEdit|apply_patch",
         "hooks": [
           {
             "type": "command",
@@ -228,6 +250,11 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/workflow/investigation_tracker_reset.py",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/observability/pr_description_writer_spawn_tracker.py",
             "timeout": 30
           }
         ]

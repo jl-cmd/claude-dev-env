@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import io
 import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -21,7 +22,10 @@ from code_rules_annotations_length import (  # noqa: E402
 from code_rules_enforcer import (  # noqa: E402
     main,
     prior_and_post_edit_content,
-    validate_content,
+    validate_content_for_full_gate as validate_content,
+)
+from code_rules_enforcer_test_support import (  # noqa: E402
+    run_serialized_payload_entrypoint,
 )
 
 code_rules_enforcer = SimpleNamespace(
@@ -32,12 +36,12 @@ code_rules_enforcer = SimpleNamespace(
     validate_content=validate_content,
 )
 
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
+
 
 def _oversized_function_source(name: str) -> str:
     body_line_count = code_rules_enforcer.FUNCTION_LENGTH_BLOCKING_THRESHOLD - 1
-    body_lines = [
-        f"    bound_{each_index} = {each_index}" for each_index in range(body_line_count)
-    ]
+    body_lines = [f"    bound_{each_index} = {each_index}" for each_index in range(body_line_count)]
     return f"def {name}() -> None:\n" + "\n".join(body_lines) + "\n"
 
 
@@ -45,21 +49,8 @@ def _run_main_with_edit_payload(
     file_path: str,
     old_string: str,
     new_string: str,
-    monkeypatch: object,
-    capsys: object,
 ) -> str:
-    """Drive ``main()`` through its stdin entry point for an Edit and return stdout.
-
-    Args:
-        file_path: The on-disk path the Edit targets.
-        old_string: The Edit's ``old_string`` fragment.
-        new_string: The Edit's ``new_string`` fragment.
-        monkeypatch: The pytest fixture used to redirect ``sys.stdin``.
-        capsys: The pytest fixture used to capture the deny payload on stdout.
-
-    Returns:
-        The captured stdout, which holds the deny payload when violations fire.
-    """
+    """Drive ``main()`` through its stdin entry point for an Edit."""
     edit_payload = json.dumps(
         {
             "tool_name": "Edit",
@@ -70,13 +61,10 @@ def _run_main_with_edit_payload(
             },
         }
     )
-    getattr(monkeypatch, "setattr")(code_rules_enforcer.sys, "stdin", io.StringIO(edit_payload))
-    try:
-        code_rules_enforcer.main([])
-    except SystemExit:
-        pass
-    captured = getattr(capsys, "readouterr")()
-    return captured.out
+    captured_stdout, _exit_code = run_serialized_payload_entrypoint(
+        code_rules_enforcer.main, edit_payload
+    )
+    return captured_stdout
 
 
 def test_banned_noun_word_keeps_in_scope_binding_among_untouched_ones() -> None:
@@ -85,8 +73,7 @@ def test_banned_noun_word_keeps_in_scope_binding_among_untouched_ones() -> None:
     binding while leaving the untouched bindings out of scope."""
     leading_count = 5
     leading_bindings = "".join(
-        f"LEADING_{each_index}_RESULT_PATH = {each_index}\n"
-        for each_index in range(leading_count)
+        f"LEADING_{each_index}_RESULT_PATH = {each_index}\n" for each_index in range(leading_count)
     )
     target_before = "PLACEHOLDER_NAME = 0\n"
     target_after = "INTRODUCED_RESULT_PATH = 0\n"
@@ -99,9 +86,9 @@ def test_banned_noun_word_keeps_in_scope_binding_among_untouched_ones() -> None:
         full_file_content=post_edit_full_file,
         prior_full_file_content=prior_full_file,
     )
-    assert any(
-        "INTRODUCED_RESULT_PATH" in each_issue for each_issue in issues
-    ), f"in-scope banned-noun past the cap window must still block, got: {issues!r}"
+    assert any("INTRODUCED_RESULT_PATH" in each_issue for each_issue in issues), (
+        f"in-scope banned-noun past the cap window must still block, got: {issues!r}"
+    )
 
 
 def test_banned_noun_edit_drops_untouched_out_of_scope_binding() -> None:
@@ -122,9 +109,9 @@ def test_banned_noun_edit_drops_untouched_out_of_scope_binding() -> None:
         full_file_content=post_edit_full_file,
         prior_full_file_content=prior_full_file,
     )
-    assert not any(
-        "RESULT_PATH" in each_issue for each_issue in issues
-    ), f"untouched banned-noun bindings must stay out of scope, got: {issues!r}"
+    assert not any("RESULT_PATH" in each_issue for each_issue in issues), (
+        f"untouched banned-noun bindings must stay out of scope, got: {issues!r}"
+    )
 
 
 def test_banned_noun_edit_keeps_touched_binding_in_scope() -> None:
@@ -144,9 +131,9 @@ def test_banned_noun_edit_keeps_touched_binding_in_scope() -> None:
         full_file_content=post_edit_full_file,
         prior_full_file_content=prior_full_file,
     )
-    assert any(
-        "INTRODUCED_RESULT_PATH" in each_issue for each_issue in issues
-    ), f"introduced banned-noun binding must block, got: {issues!r}"
+    assert any("INTRODUCED_RESULT_PATH" in each_issue for each_issue in issues), (
+        f"introduced banned-noun binding must block, got: {issues!r}"
+    )
 
 
 def test_banned_noun_edit_does_not_reflag_param_when_unrelated_body_line_changes() -> None:
@@ -171,9 +158,9 @@ def test_banned_noun_edit_does_not_reflag_param_when_unrelated_body_line_changes
         full_file_content=post_edit_full_file,
         prior_full_file_content=prior_full_file,
     )
-    assert not any(
-        "canned_results" in each_issue for each_issue in issues
-    ), f"pre-existing param must not re-flag on unrelated body edit, got: {issues!r}"
+    assert not any("canned_results" in each_issue for each_issue in issues), (
+        f"pre-existing param must not re-flag on unrelated body edit, got: {issues!r}"
+    )
 
 
 def test_unreadable_prior_yields_no_prior_and_no_reconstruction() -> None:
@@ -190,14 +177,36 @@ def test_unreadable_prior_yields_no_prior_and_no_reconstruction() -> None:
     assert post_edit_content is None
 
 
+def test_prior_and_post_edit_content_honors_replace_all(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """An Edit carrying replace_all rewrites every occurrence in the post-edit view.
+
+    The MultiEdit lane reconstructs through apply_edits and has honored the flag
+    since it landed there. The Edit lane must agree, or the enforcer judges a
+    replace_all Edit against a file that never exists on disk.
+    """
+    production_directory = tmp_path_factory.mktemp("replace_all_pkg")
+    source_file = production_directory / "edited_module.py"
+    source_file.write_text("value = 1\nvalue = 1\n", encoding="utf-8")
+    prior_content, post_edit_content = code_rules_enforcer.prior_and_post_edit_content(
+        str(source_file),
+        old_string="value = 1",
+        new_string="value = 2",
+        is_replace_all=True,
+    )
+    assert prior_content == "value = 1\nvalue = 1\n"
+    assert post_edit_content == "value = 2\nvalue = 2\n"
+
+
 def test_edit_with_missing_old_string_runs_whole_file_against_on_disk_content(
-    tmp_path_factory: object, monkeypatch: object, capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """When an Edit's old_string is absent from the file, ``prior_and_post_edit_content``
     yields ``(None, None)``; ``main()`` must analyze the real on-disk file whole-file
     rather than the new_string fragment, so an oversized function elsewhere in the
     file is still reported with its true line numbers."""
-    production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
+    production_directory = tmp_path_factory.mktemp("production_pkg")
     untouched_long_function = _oversized_function_source("untouched_long")
     short_helper = "def short_helper() -> int:\n    return 1\n"
     on_disk_content = untouched_long_function + "\n" + short_helper
@@ -206,7 +215,9 @@ def test_edit_with_missing_old_string_runs_whole_file_against_on_disk_content(
     absent_fragment_old = "def absent_function() -> int:\n    return 0\n"
     short_fragment_new = "def absent_function() -> int:\n    return 2\n"
     stdout = _run_main_with_edit_payload(
-        str(source_file), absent_fragment_old, short_fragment_new, monkeypatch, capsys,
+        str(source_file),
+        absent_fragment_old,
+        short_fragment_new,
     )
     assert "untouched_long" in stdout, (
         "an unreconstructable Edit must fall back to whole-file on-disk analysis, "
@@ -215,13 +226,13 @@ def test_edit_with_missing_old_string_runs_whole_file_against_on_disk_content(
 
 
 def test_edit_with_unreadable_file_does_not_analyze_fragment_as_whole_file(
-    tmp_path_factory: object, monkeypatch: object, capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """When the on-disk file cannot be read, no well-defined post-edit content
     exists; ``main()`` must exit cleanly rather than analyze the new_string
     fragment as if it were the whole file, so the fragment's own function-length
     violation does not surface as a deny payload."""
-    production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
+    production_directory = tmp_path_factory.mktemp("production_pkg")
     missing_path = str(production_directory / "never_created.py")
     oversized_fragment_old = "def grows() -> int:\n    return 0\n"
     oversized_fragment_new = _oversized_function_source("grows")
@@ -229,8 +240,6 @@ def test_edit_with_unreadable_file_does_not_analyze_fragment_as_whole_file(
         missing_path,
         oversized_fragment_old,
         oversized_fragment_new,
-        monkeypatch,
-        capsys,
     )
     assert stdout == "", (
         "an unreadable Edit target has no well-defined whole-file content, so the "

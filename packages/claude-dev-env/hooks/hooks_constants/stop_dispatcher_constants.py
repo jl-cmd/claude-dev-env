@@ -18,9 +18,6 @@ DECISION_KEY = "decision"
 REASON_KEY = "reason"
 
 ALL_STOP_HOSTED_HOOK_PATHS: tuple[str, ...] = (
-    "blocking/hedging_language_blocker.py",
     "blocking/question_to_user_enforcer.py",
-    "blocking/intent_only_ending_blocker.py",
     "blocking/session_handoff_blocker.py",
-    "blocking/eli11_reply_enforcer.py",
 )

@@ -23,13 +23,15 @@ from ._path_setup import hooks_directory_on_path  # noqa: F401
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
-    ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES,
 )
+from .fast_save_validators import run_fast_save_validators
 from .health_check import get_system_health, get_validator_version, print_health_report
 from .mypy_integration import check_mypy_available, run_mypy_check
+from .system_temporary_roots import enclosing_system_temporary_root
 from .output_formatter import OutputFormatter, OutputMode, ValidatorResultDict
 from .python_style_checks import fix_file
 from .ruff_integration import check_ruff_available, run_ruff_check
+from .validator_base import ValidatorResult
 from blocking.code_rules_shared import is_ephemeral_path
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import (
@@ -228,17 +230,6 @@ def build_json_output(
         ],
         "timing": metrics.validator_times if include_timing else None,
     }
-
-
-@dataclass(frozen=True)
-class ValidatorResult:
-    """Result from running a validator."""
-
-    name: str
-    checks: str
-    passed: bool
-    output: str
-    skipped: bool = False
 
 
 def run_with_fallback(
@@ -731,38 +722,6 @@ def reconstruct_proposed_content(
     return apply_edits(existing_content, edits_for_tool(tool_name, dict(tool_input)))
 
 
-def run_file_scoped_validators(
-    all_files: List[Path], config_source_path: Optional[Path] = None
-) -> List[ValidatorResult]:
-    """Run every file-scoped validator against *all_files*.
-
-    Excludes the branch-scoped File Structure and Git validators.
-
-    Args:
-        all_files: The files under validation — one reconstructed file in gate mode.
-        config_source_path: Original path ruff and mypy resolve their config from.
-
-    Returns:
-        One ValidatorResult per file-scoped validator, in run order.
-    """
-    return [
-        run_python_style_checks(all_files),
-        run_test_safety_checks(all_files),
-        run_react_checks(all_files),
-        run_ruff_checks(all_files, config_source_path),
-        run_mypy_checks(all_files, config_source_path),
-        run_abbreviation_checks(all_files),
-        run_pr_reference_checks(all_files),
-        run_magic_value_checks(all_files),
-        run_useless_test_checks(all_files),
-        run_security_checks(all_files),
-        run_code_quality_checks(all_files),
-        run_python_antipattern_checks(all_files),
-        run_todo_checks(all_files),
-        run_type_safety_checks(all_files),
-    ]
-
-
 def _escapes_temporary_root(path_part: str) -> bool:
     """Return True when a path part would climb out of or re-anchor the temp root.
 
@@ -786,32 +745,6 @@ def _escapes_temporary_root(path_part: str) -> bool:
         return True
     part_as_path = Path(path_part)
     return part_as_path.is_absolute() or bool(part_as_path.anchor)
-
-
-def _all_system_temporary_roots() -> tuple[Path, ...]:
-    """Return resolved roots that count as system temporary directories.
-
-    ::
-
-        gettempdir() plus TEMP / TMP / TMPDIR / RUNNER_TEMP when set.
-
-    GitHub Actions puts pytest basetemp under ``RUNNER_TEMP``
-    (``/home/runner/work/_temp``) while ``tempfile.gettempdir()`` is ``/tmp``.
-    Both must count so pytest-shaped ``test_*`` parents disable substring
-    exemption matching during staging.
-    """
-    all_candidate_roots: list[str] = [tempfile.gettempdir()]
-    for each_environment_name in ALL_SYSTEM_TEMPORARY_ROOT_ENVIRONMENT_VARIABLE_NAMES:
-        environment_value = os.environ.get(each_environment_name)
-        if environment_value:
-            all_candidate_roots.append(environment_value)
-    all_resolved_roots: list[Path] = []
-    for each_candidate in all_candidate_roots:
-        try:
-            all_resolved_roots.append(Path(each_candidate).resolve())
-        except OSError:
-            continue
-    return tuple(all_resolved_roots)
 
 
 def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
@@ -840,14 +773,7 @@ def _is_absolute_path_under_system_temporary_directory(file_path: str) -> bool:
     destination_path = Path(file_path)
     if not destination_path.is_absolute():
         return False
-    try:
-        resolved_destination = destination_path.resolve()
-    except OSError:
-        return False
-    return any(
-        resolved_destination.is_relative_to(each_temporary_root)
-        for each_temporary_root in _all_system_temporary_roots()
-    )
+    return enclosing_system_temporary_root(destination_path) is not None
 
 
 def _directory_segment_signals_exemption(
@@ -952,18 +878,20 @@ def validate_proposed_file(
     Writes the content to a temporary file that preserves the exemption-relevant
     directory tail and basename so directory-based exemptions, suffix-based
     filtering, and test-name-based filtering match the real path, then runs the
-    file-scoped validators against it. Ruff and mypy resolve their config by
-    walking up from the config source path, so the staged copy is graded under
-    the project config the real path sits in rather than the temp directory's.
+    save-path checks in-process against it, plus Ruff. Ruff resolves its config
+    by walking up from the config source path, so the staged copy is graded
+    under the project config the real path sits in rather than the temp
+    directory's.
 
     Args:
         file_path: The destination path the write or edit targets.
         proposed_content: The reconstructed post-edit content of that file.
-        config_source_path: Path ruff and mypy resolve their config from;
-            defaults to *file_path* when the caller passes nothing.
+        config_source_path: Path Ruff resolves its config from; defaults to
+            *file_path* when the caller passes nothing.
 
     Returns:
-        One ValidatorResult per file-scoped validator.
+        One ValidatorResult per save-path check, plus Ruff. Mypy never runs
+        here; CLI/full mode is the only caller that still runs it.
     """
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_file = _temporary_path_preserving_directory_signal(
@@ -975,9 +903,10 @@ def validate_proposed_file(
             if config_source_path is not None
             else Path(file_path)
         )
-        return run_file_scoped_validators(
-            [temporary_file], config_source_path=resolved_config_source_path
-        )
+        return [
+            *run_fast_save_validators([temporary_file]),
+            run_ruff_checks([temporary_file], resolved_config_source_path),
+        ]
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:

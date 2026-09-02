@@ -1,21 +1,21 @@
 # Code Standards
 
-> **Canonical policy:** repository-root [`AGENTS.md`](../../../AGENTS.md) — the human and AI review contract for code quality.
-> **Compact projection:** [`CODE_RULES.md`](../docs/CODE_RULES.md) — validated summary for generation load.
+> **Canonical review contract:** [`CODE_RULES.md`](../docs/CODE_RULES.md) — the human and AI review contract for code quality, loaded on demand.
+> **Checked-in pointer:** [`.cursor/BUGBOT.md`](../../../.cursor/BUGBOT.md) — the file Cursor BugBot reads; it points at `CODE_RULES.md`.
 > **Production enforcement:** `hooks/blocking/code_rules_enforcer.py` — hand-maintained Write/Edit gates; each mechanical rule carries a synchronization test.
 
 ## Policy surface map
 
 | Layer | Path | Role |
 |---|---|---|
-| Canonical | `AGENTS.md` (repo root) | Full review criteria for PR agents; BugBot sync source |
-| Projection | `docs/CODE_RULES.md` | Compact always-load reference; must not diverge from AGENTS |
+| Contract | `docs/CODE_RULES.md` | Full review criteria for PR agents, loaded on demand |
+| Pointer | `.cursor/BUGBOT.md` | Checked-in file Cursor BugBot reads; points at `CODE_RULES.md` |
 | Enforcer | `hooks/blocking/code_rules_enforcer.py` | Hand-maintained blockers; not generated from the docs |
 | Session rules | `rules/*.md` | Runtime session policy (questions, tasks, shell) |
 
-Load `AGENTS.md` when reviewing a PR or resolving a policy conflict. Load `CODE_RULES.md` when generating code under the compact checklist. Prefer linking these refs over restating rules.
+Load `CODE_RULES.md` when reviewing a PR, resolving a policy conflict, or generating code. Prefer linking this ref over restating rules.
 
-Two standards live in the canonical policy in full (and in the projection by name):
+Two standards live in `CODE_RULES.md` in full:
 
 - **TDD** — CODE_RULES §8 / AGENTS Tests: red, green, refactor; no production code before a failing test.
 - **Right-sized engineering** — CODE_RULES §7 / AGENTS Design: functions over classes; concrete over abstract; add an abstraction at the commit that introduces its second concrete implementation.
@@ -30,10 +30,6 @@ BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers
 | Task tracking / worker completion | [`workers-done-before-complete.md`](workers-done-before-complete.md) |
 | Multi-step task list | skill `task-build` (see agents catalog) |
 
-## Synchronization
+## Validation
 
-Mechanical enforcer coverage is checked by `tests/test_agents_policy_parity.py` and the existing `hooks/blocking/test_code_rules_enforcer*.py` suite. BugBot projection drift is checked with:
-
-```
-python .github/scripts/sync_ai_rules.py --check
-```
+Mechanical enforcer coverage is checked by the existing `hooks/blocking/test_code_rules_enforcer*.py` suite.

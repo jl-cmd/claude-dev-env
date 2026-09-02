@@ -60,7 +60,9 @@ def test_enabled_eligible_startup_emits_directive() -> None:
     payload = run_issue_tracker_session_starter(
         {"source": "startup"}, True, True, DEFAULT_TIMEOUT
     )
-    assert payload["additionalContext"] == ISSUE_TRACKER_SESSION_START_DIRECTIVE
+    hook_output = payload["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "SessionStart"
+    assert hook_output["additionalContext"] == ISSUE_TRACKER_SESSION_START_DIRECTIVE
 
 
 def test_timeout_zero_emits_nothing() -> None:

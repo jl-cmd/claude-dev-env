@@ -31,12 +31,14 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
+from blocking.codex_apply_patch import payload_patch_target_paths  # noqa: E402
 from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
     read_hook_input_dictionary_from_stdin,
 )
 from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     ALL_EDITED_FILE_PATHS_KEY,
     ALL_TRACKED_EDIT_TOOL_NAMES,
+    APPLY_PATCH_TOOL_NAME,
     LOCK_ACQUIRE_RETRY_SECONDS,
     LOCK_ACQUIRE_TIMEOUT_SECONDS,
     SESSION_EDIT_FILE_PREFIX,
@@ -47,6 +49,23 @@ from hooks_constants.session_edit_stage_gate_constants import (  # noqa: E402
     STATE_FILE_DEFAULT_SESSION_ID,
     STATE_FILE_JSON_INDENT_SPACES,
 )
+
+
+def _resolved_path_or_none(file_path: str) -> str | None:
+    """Return the resolved absolute path, or None when resolution fails."""
+    try:
+        return str(Path(file_path).resolve())
+    except OSError:
+        return None
+
+
+def _record_apply_patch_edits(hook_payload: dict, tool_input: dict) -> None:
+    """Record the resolved path of every file a Codex apply_patch payload names."""
+    session_id = str(hook_payload.get("session_id") or "")
+    for each_file_path in payload_patch_target_paths(hook_payload, tool_input):
+        resolved_file_path = _resolved_path_or_none(each_file_path)
+        if resolved_file_path is not None:
+            _record_edited_path(session_id, resolved_file_path)
 
 
 def _session_edit_file_path(session_id: str) -> Path:
@@ -193,7 +212,7 @@ def _record_edited_path(session_id: str, resolved_file_path: str) -> None:
 
 
 def main() -> None:
-    """Record the edited file path for a Write, Edit, or MultiEdit.
+    """Record the edited file path for a Write, Edit, MultiEdit, or apply_patch.
 
     Reads the PostToolUse payload from stdin, and for a tracked edit tool
     appends the resolved absolute file path to this session's tracker file.
@@ -209,12 +228,14 @@ def main() -> None:
     tool_input = hook_payload.get("tool_input", {})
     if not isinstance(tool_input, dict):
         return
+    if tool_name == APPLY_PATCH_TOOL_NAME:
+        _record_apply_patch_edits(hook_payload, tool_input)
+        return
     file_path = tool_input.get("file_path", "")
     if not isinstance(file_path, str) or not file_path:
         return
-    try:
-        resolved_file_path = str(Path(file_path).resolve())
-    except OSError:
+    resolved_file_path = _resolved_path_or_none(file_path)
+    if resolved_file_path is None:
         return
     session_id = str(hook_payload.get("session_id") or "")
     _record_edited_path(session_id, resolved_file_path)

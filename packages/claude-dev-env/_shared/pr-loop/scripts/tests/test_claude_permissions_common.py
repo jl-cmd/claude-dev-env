@@ -1,4 +1,4 @@
-"""Tests for _shared permission helpers extracted from skills/bugteam/scripts/."""
+"""Tests for _shared permission helpers (historically extracted from bugteam scripts)."""
 
 import importlib.util
 import inspect

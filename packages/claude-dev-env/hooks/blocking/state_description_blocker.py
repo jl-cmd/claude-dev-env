@@ -15,31 +15,43 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
+try:
+    _hooks_dir = str(Path(__file__).resolve().parent.parent)
+    if _hooks_dir not in sys.path:
+        sys.path.insert(0, _hooks_dir)
 
-from blocking.code_rules_shared import is_ephemeral_path  # noqa: E402
-from blocking.config.prose_style_enforcement_constants import (  # noqa: E402
-    prose_style_enforcement_enabled_in_environment,
-)
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
-from hooks_constants.state_description_blocker_constants import (  # noqa: E402
-    ALL_BLOCK_COMMENT_EXTENSIONS,
-    ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
-    ALL_COMMENT_BEARING_EXTENSIONS,
-    ALL_COMMENT_TRANSITION_PATTERNS,
-    ALL_DEFINITION_HEADER_PREFIXES,
-    ALL_HASH_AND_SLASH_EXTENSIONS,
-    ALL_HASH_ONLY_EXTENSIONS,
-    ALL_MARKDOWN_EXTENSIONS,
-    CODE_FENCE_PATTERN,
-    DOUBLE_QUOTED_SPAN_PATTERN,
-    INLINE_CODE_PATTERN,
-    PYTHON_EXTENSION,
-    TRIPLE_QUOTED_BLOCK_PATTERN,
-)
+    from blocking.code_rules_shared import is_ephemeral_path
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.multi_edit_reconstruction import joined_new_strings
+    from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+    from hooks_constants.state_description_blocker_constants import (
+        ALL_BLOCK_COMMENT_EXTENSIONS,
+        ALL_BLOCK_COMMENT_ONLY_EXTENSIONS,
+        ALL_COMMENT_BEARING_EXTENSIONS,
+        ALL_COMMENT_TRANSITION_PATTERNS,
+        ALL_DEFINITION_HEADER_PREFIXES,
+        ALL_HASH_AND_SLASH_EXTENSIONS,
+        ALL_HASH_ONLY_EXTENSIONS,
+        ALL_MARKDOWN_EXTENSIONS,
+        CODE_FENCE_PATTERN,
+        DOUBLE_QUOTED_SPAN_PATTERN,
+        INLINE_CODE_PATTERN,
+        PYTHON_EXTENSION,
+        TRIPLE_QUOTED_BLOCK_PATTERN,
+    )
+except ImportError as import_error:
+    raise ImportError(
+        "state_description_blocker: cannot import its sibling modules"
+    ) from import_error
+
+
+def _content_to_check(tool_name: str, all_tool_input: dict) -> str:
+    """Return the text a Write, Edit, or MultiEdit payload introduces."""
+    if tool_name == "MultiEdit":
+        return joined_new_strings(all_tool_input)
+    content_key = "content" if tool_name == "Write" else "new_string"
+    raw_content = all_tool_input.get(content_key, "")
+    return raw_content if isinstance(raw_content, str) else ""
 
 
 def _get_file_extension(file_path: str) -> str:
@@ -281,8 +293,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
 
     Applies the same tool-name gate, file-extension gate, content selection, and
     pattern scan the standalone hook applies. Returns the deny-reason text when a
-    historical phrase is found, or None to allow. Opinionated prose enforcement
-    is default-off via ``prose_style_enforcement_enabled_in_environment()``.
+    historical phrase is found, or None to allow. The check is unconditional.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
@@ -291,11 +302,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
         The permissionDecisionReason text when the write is denied, or None when
         the write is allowed.
     """
-    if not prose_style_enforcement_enabled_in_environment():
-        return None
     raw_tool_name = payload_by_key.get("tool_name", "")
     tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
-    if tool_name not in ("Write", "Edit"):
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
         return None
 
     raw_tool_input = payload_by_key.get("tool_input", {})
@@ -309,9 +318,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     if not (is_markdown_file(file_path) or is_comment_bearing_file(file_path)):
         return None
 
-    content_key = "content" if tool_name == "Write" else "new_string"
-    raw_content = tool_input.get(content_key, "")
-    content_to_check = raw_content if isinstance(raw_content, str) else ""
+    content_to_check = _content_to_check(tool_name, tool_input)
     if not content_to_check:
         return None
 
@@ -351,7 +358,7 @@ def build_deny_payload(deny_reason: str) -> dict[str, object]:
                 "only the current state. For example:\n"
                 '  BAD: "Uses X instead of Y"  →  GOOD: "Uses X"\n'
                 '  BAD: "Previously configured via Z"  →  GOOD: "Configured via Z"\n'
-                "See ~/.claude/rules/doc-prose-cuts.md for full rules."
+                "Apply ~/.claude/rules/asd-ste100-language.md for user-facing language."
             ),
         },
         "systemMessage": "Agent wrote comparative/historical language - describe current state only",

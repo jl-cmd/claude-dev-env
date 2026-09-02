@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
 if _BLOCKING_DIRECTORY not in sys.path:
@@ -17,7 +19,7 @@ from code_rules_annotations_length import (  # noqa: E402
     FUNCTION_LENGTH_BLOCKING_THRESHOLD,
 )
 from code_rules_enforcer import (  # noqa: E402
-    validate_content,
+    validate_content_for_full_gate as validate_content,
 )
 
 code_rules_enforcer = SimpleNamespace(
@@ -28,8 +30,6 @@ code_rules_enforcer = SimpleNamespace(
 
 DUPLICATED_FORMAT_PRODUCTION_FILE_PATH = "packages/app/services/api_client.py"
 
-INCOMPLETE_MOCK_TEST_FILE_PATH = "packages/app/tests/test_orders.py"
-
 
 def _oversized_function_source(name: str) -> str:
     body_line_count = code_rules_enforcer.FUNCTION_LENGTH_BLOCKING_THRESHOLD - 1
@@ -39,24 +39,9 @@ def _oversized_function_source(name: str) -> str:
     return f"def {name}() -> None:\n" + "\n".join(body_lines) + "\n"
 
 
-def test_should_emit_advisories_for_incomplete_mocks_and_format_patterns_via_validate_content(
-    capsys: object,
+def test_should_emit_advisory_for_duplicated_format_patterns_via_validate_content(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    incomplete_mock_source = (
-        "mock_order = {'id': 1}\n"
-        "\n"
-        "def test_order_total() -> None:\n"
-        "    total = mock_order['total']\n"
-        "    assert total > 0\n"
-    )
-    code_rules_enforcer.validate_content(
-        incomplete_mock_source, INCOMPLETE_MOCK_TEST_FILE_PATH
-    )
-    captured = getattr(capsys, "readouterr")()
-    assert "mock_order" in captured.err and "total" in captured.err, (
-        f"Expected incomplete-mock advisory from validate_content, got: {captured.err!r}"
-    )
-
     repeated_pattern_source = (
         "def get_user(user_id: str) -> str:\n"
         "    return f'/api/{user_id}'\n"

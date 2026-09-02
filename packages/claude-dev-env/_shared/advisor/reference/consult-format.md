@@ -16,7 +16,7 @@ The first consult is complete and self-contained. It carries:
 - Unresolved risks
 - Load-bearing paths or excerpts
 
-On a shared advisor with multiple consumers, open with who is asking and the assignment. A single-consumer team-advisor session may omit the identity opener while keeping the assignment.
+If more than one party consults the same advisor, open with who is asking and the assignment. A `/team-advisor` session talks to its advisor alone, so it may omit that identity opener while keeping the assignment.
 
 Later consults carry only the delta: changed actions, new output, changed decisions, new validation, and newly discovered risks.
 
@@ -36,6 +36,8 @@ After a CORRECTION or PLAN, your next consult on that topic opens with what happ
 ## Handling the reply
 
 Address a CORRECTION before treating the plan or the work as done, whether it names a wrong step or a risk worth closing.
-Report a STOP, or a consult that finds the advisor unreachable, upward: team-advisor's sole consumer is the session itself, so it reports to the user; orchestrator's executors report to the orchestrating session, which decides.
-When the advisor becomes unreachable, report that to the session that owns its lifecycle ([`lifecycle.md`](lifecycle.md)); that session alone decides whether to respawn (Claude Agent or third-party CLI re-bind).
+
+`/team-advisor` is the skill that binds one warm advisor for the session that ran it. That lead session sends every consult. The bound advisor (`team-advisor-agent` on Claude) replies only to the lead session. If the lead session later spawns worker subagents, those workers do not consult the bound advisor, and the bound advisor does not reply to them. When the reply is STOP, or the bound advisor cannot be reached, the lead session tells the human. The lead session has no parent session to report to.
+
+When the advisor becomes unreachable, report that to the session that owns its lifecycle ([`lifecycle.md`](lifecycle.md)); that session alone decides whether to respawn (Claude Agent, Codex native Sol, or third-party CLI re-bind).
 A third-party host that cannot re-bind follows the fail-closed rule in [`third-party-bind.md`](third-party-bind.md).

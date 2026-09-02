@@ -165,6 +165,31 @@ def test_extract_payload_returns_content_for_write_without_file_path() -> None:
     assert extracted == "some python code"
 
 
+def test_extract_payload_reads_every_multi_edit_new_string() -> None:
+    extracted = extract_payload_text(
+        "MultiEdit",
+        {
+            "file_path": "foo.py",
+            "edits": [
+                {"old_string": "a = 1", "new_string": "a = 11"},
+                {"old_string": "b = 2", "new_string": DANGEROUS_RMTREE_SNIPPET},
+            ],
+        },
+    )
+    assert DANGEROUS_RMTREE_SNIPPET in extracted
+
+
+def test_extract_payload_reads_a_single_item_multi_edit() -> None:
+    extracted = extract_payload_text(
+        "MultiEdit",
+        {
+            "file_path": "foo.py",
+            "edits": [{"old_string": "a = 1", "new_string": DANGEROUS_RMTREE_SNIPPET}],
+        },
+    )
+    assert extracted == DANGEROUS_RMTREE_SNIPPET
+
+
 def _run_hook_with_stdin_text(stdin_text: str) -> tuple[str, str, int]:
     captured_stdout = io.StringIO()
     captured_stderr = io.StringIO()
@@ -205,6 +230,44 @@ def test_main_blocks_unsafe_bash_command() -> None:
     decision_block = response_payload["hookSpecificOutput"]
     assert decision_block["permissionDecision"] == "deny"
     assert "windows-rmtree" in decision_block["permissionDecisionReason"]
+
+
+def test_main_blocks_unsafe_rmtree_introduced_by_second_multi_edit() -> None:
+    """An unsafe rmtree call in the second edit of a MultiEdit is caught, not only the first."""
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": "cleanup.py",
+                "edits": [
+                    {"old_string": "a = 1", "new_string": "a = 11"},
+                    {"old_string": "b = 2", "new_string": DANGEROUS_RMTREE_SNIPPET},
+                ],
+            },
+        }
+    )
+    assert exit_code == 0
+    response_payload = json.loads(stdout_text)
+    decision_block = response_payload["hookSpecificOutput"]
+    assert decision_block["permissionDecision"] == "deny"
+    assert "windows-rmtree" in decision_block["permissionDecisionReason"]
+
+
+def test_main_allows_clean_multi_edit() -> None:
+    stdout_text, exit_code = _run_hook(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": "cleanup.py",
+                "edits": [
+                    {"old_string": "a = 1", "new_string": "a = 11"},
+                    {"old_string": "b = 2", "new_string": "shutil.rmtree(path, onexc=handler)"},
+                ],
+            },
+        }
+    )
+    assert exit_code == 0
+    assert stdout_text == ""
 
 
 def test_main_passes_through_safe_write() -> None:

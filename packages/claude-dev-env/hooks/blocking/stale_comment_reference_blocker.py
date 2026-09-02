@@ -11,28 +11,95 @@ directly above it, denying the edit when that line is a standalone ``#``
 comment naming an identifier ``old_string`` carries and ``new_string`` drops.
 """
 
+import functools
 import json
 import re
 import sys
 from pathlib import Path
 from typing import TextIO
 
-_hooks_dir = str(Path(__file__).resolve().parent.parent)
-if _hooks_dir not in sys.path:
-    sys.path.insert(0, _hooks_dir)
+try:
+    _hooks_dir = str(Path(__file__).resolve().parent.parent)
+    if _hooks_dir not in sys.path:
+        sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pre_tool_use_dispatcher_constants import EDIT_TOOL_NAME  # noqa: E402
-from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
-from hooks_constants.stale_comment_reference_blocker_constants import (  # noqa: E402
-    ALL_COMMENT_STOPWORDS,
-    COMMENT_IDENTIFIER_PATTERN,
-    COMMENT_LINE_PREFIX,
-    PYTHON_FILE_SUFFIX,
-    STALE_COMMENT_ADDITIONAL_CONTEXT,
-    STALE_COMMENT_DENY_TEMPLATE,
-    STALE_COMMENT_SYSTEM_MESSAGE,
-)
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.multi_edit_reconstruction import edits_for_tool
+    from hooks_constants.pre_tool_use_dispatcher_constants import (
+        EDIT_TOOL_NAME,
+        MULTI_EDIT_TOOL_NAME,
+    )
+    from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+    from hooks_constants.stale_comment_reference_blocker_constants import (
+        ALL_COMMENT_STOPWORDS,
+        COMMENT_IDENTIFIER_PATTERN,
+        COMMENT_LINE_PREFIX,
+        PYTHON_FILE_SUFFIX,
+        STALE_COMMENT_ADDITIONAL_CONTEXT,
+        STALE_COMMENT_DENY_TEMPLATE,
+        STALE_COMMENT_SYSTEM_MESSAGE,
+    )
+except ImportError as import_error:
+    raise ImportError(
+        "stale_comment_reference_blocker: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
+
+
+def _edit_step_fields(each_edit: object) -> tuple[str, str, bool] | None:
+    """Return (old_string, new_string, is_replace_all) for one usable MultiEdit step."""
+    if not isinstance(each_edit, dict):
+        return None
+    old_string = each_edit.get("old_string", "")
+    new_string = each_edit.get("new_string", "")
+    if not isinstance(old_string, str) or not isinstance(new_string, str) or not old_string:
+        return None
+    return old_string, new_string, each_edit.get("replace_all") is True
+
+
+def _evaluate_multi_edit(file_path: str, all_tool_input: dict[str, object]) -> str | None:
+    """Judge each MultiEdit step against the content the prior steps already left.
+
+    Args:
+        file_path: The destination path the MultiEdit targets.
+        all_tool_input: The MultiEdit payload's input mapping.
+
+    Returns:
+        The deny-reason text for the first step whose kept comment orphans an
+        identifier, or None when every step stays consistent.
+    """
+    try:
+        current_content = Path(file_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    for each_edit in edits_for_tool(MULTI_EDIT_TOOL_NAME, all_tool_input):
+        edit_fields = _edit_step_fields(each_edit)
+        if edit_fields is None:
+            continue
+        old_string, new_string, is_replace_all = edit_fields
+        if old_string not in current_content:
+            continue
+        deny_reason = _find_stale_comment_reference(
+            current_content, old_string, new_string, is_replace_all, file_path
+        )
+        if deny_reason is not None:
+            return deny_reason
+        current_content = current_content.replace(old_string, new_string, -1 if is_replace_all else 1)
+    return None
+
+
+@functools.lru_cache
+def _bounded_identifier_pattern(identifier: str) -> re.Pattern[str]:
+    """Return the compiled whole-word pattern for one comment-named identifier.
+
+    Args:
+        identifier: The identifier the comment names.
+
+    Returns:
+        The compiled pattern matching identifier with no adjoining word
+        character on either side.
+    """
+    return re.compile("(?<![A-Za-z0-9_])" + re.escape(identifier) + "(?![A-Za-z0-9_])")
 
 
 def _first_orphaned_identifier(
@@ -57,9 +124,7 @@ def _first_orphaned_identifier(
     for each_identifier in COMMENT_IDENTIFIER_PATTERN.findall(words_in_comment):
         if each_identifier.lower() in ALL_COMMENT_STOPWORDS:
             continue
-        bounded_pattern = re.compile(
-            "(?<![A-Za-z0-9_])" + re.escape(each_identifier) + "(?![A-Za-z0-9_])"
-        )
+        bounded_pattern = _bounded_identifier_pattern(each_identifier)
         if bounded_pattern.search(original_block_text) and not bounded_pattern.search(
             revised_block_text
         ):
@@ -159,13 +224,15 @@ def _find_stale_comment_reference(
 
 
 def evaluate(payload_by_key: dict[str, object]) -> str | None:
-    """Decide whether an Edit payload orphans a comment above a changed line.
+    """Decide whether an Edit or MultiEdit payload orphans a comment above a changed line.
 
     Reads the target file from disk and checks the line directly above each
-    occurrence the edit rewrites for a kept standalone comment whose named
-    identifier the edit removes from the line below it. Non-Edit tools,
-    non-Python targets, unreadable files, and an old_string absent from the
-    file all pass.
+    occurrence a step rewrites for a kept standalone comment whose named
+    identifier the step carries and drops. A MultiEdit's steps are judged in
+    order against the content the prior steps already left, so a step that
+    only reads as stale once an earlier step in the same payload has run is
+    still caught. Non-Edit/MultiEdit tools, non-Python targets, unreadable
+    files, and an old_string absent from the file all pass.
 
     Args:
         payload_by_key: The PreToolUse payload with tool_name and tool_input.
@@ -175,7 +242,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     """
     raw_tool_name = payload_by_key.get("tool_name", "")
     tool_name = raw_tool_name if isinstance(raw_tool_name, str) else ""
-    if tool_name != EDIT_TOOL_NAME:
+    if tool_name not in (EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME):
         return None
 
     raw_tool_input = payload_by_key.get("tool_input", {})
@@ -184,6 +251,9 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     file_path = tool_input.get("file_path", "")
     if not isinstance(file_path, str) or not file_path.endswith(PYTHON_FILE_SUFFIX):
         return None
+
+    if tool_name == MULTI_EDIT_TOOL_NAME:
+        return _evaluate_multi_edit(file_path, tool_input)
 
     raw_old_string = tool_input.get("old_string", "")
     raw_new_string = tool_input.get("new_string", "")

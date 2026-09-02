@@ -2,8 +2,8 @@
 
 Hooks in this repo enforce the conventions below. Follow them so your suggestions match what the gates accept.
 
-**Canonical policy:** repository-root `AGENTS.md` (also projected to `.cursor/BUGBOT.md`).
-**Compact projection:** `packages/claude-dev-env/docs/CODE_RULES.md`. When those disagree, `AGENTS.md` wins.
+**Canonical review contract:** `packages/claude-dev-env/docs/CODE_RULES.md`.
+**Checked-in pointer:** `.cursor/BUGBOT.md`.
 
 ## Naming
 

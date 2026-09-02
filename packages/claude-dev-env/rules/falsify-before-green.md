@@ -55,14 +55,6 @@ The harness writes the row, file, or event the assertion counts, so the assertio
 
 All three land together. A record carrying the red alone shows a check that fails on everything; a record carrying the control alone shows a check that passes on everything.
 
-## Sibling rules
-
-| Rule | Role |
-|---|---|
-| `anti-corollary-tests.md` | Each test carries information; the stated mutation names one code change and how many tests it kills |
-| `verify-runtime-state.md` | A runtime verdict rests on a live probe from this session |
-| `measurement-denominators.md` | Every count names what it scanned; a rate needs two runs |
-
 ## Enforcement
 
 This rule binds as prose discipline: a reviewer reads the shown-red record beside each new check a PR adds. No hook backs it, because a green that measured the code and a green that measured nothing look the same to a regex — the difference sits in what the check reached at run time.

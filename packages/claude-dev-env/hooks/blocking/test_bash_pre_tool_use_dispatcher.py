@@ -219,8 +219,10 @@ def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
         for each_entry in select_applicable_entries(POWERSHELL_TOOL_NAME)
     ]
     assert powershell_paths == [
+        "blocking/cursor_cli_python_misfire_blocker.py",
         "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
+        "blocking/pr_description_writer_gate.py",
     ]
 
 
@@ -258,6 +260,20 @@ def test_emit_decision_re_emits_silent_deny_fields(
     assert hook_specific["additionalContext"] == "see docs/runbook.md"
     assert emitted_payload["systemMessage"] == "[gh-gate] blocked redirected gh pr create"
     assert emitted_payload["suppressOutput"] is True
+
+
+def test_dispatcher_denies_subshell_disguised_as_arithmetic_expansion() -> None:
+    """The dispatcher denies a `$((cd X) && Y)` subshell, not only the bare hook.
+
+    `echo $((cd /tmp) && pwd)` opens with a `$((` two-character lookahead
+    match, so a function-level test alone does not prove the block reaches
+    the live Bash tool path.
+    """
+    payload_text = _bash_payload("echo $((cd /tmp) && pwd)")
+    decision, _reason = _decision_from_stdout(
+        _run_process(_DISPATCHER_SCRIPT, payload_text).stdout
+    )
+    assert decision == "deny"
 
 
 def test_dispatch_emits_deny_immediately_and_skips_later_hooks(

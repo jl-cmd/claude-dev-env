@@ -42,53 +42,27 @@ if _blocking_dir not in sys.path:
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from code_rules_shared import is_test_file  # noqa: E402
+try:
+    from code_rules_shared import is_test_file
 
-from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
-from hooks_constants.pre_tool_use_stdin import (  # noqa: E402
-    read_hook_input_dictionary_from_stdin,
-)
-from hooks_constants.subprocess_budget_completeness_constants import (  # noqa: E402
-    ALL_BUDGET_NAME_MARKERS,
-    BUDGET_ENTRY_POINT_FUNCTION_NAME,
-    SUBPROCESS_TIMEOUT_KEYWORD,
-)
-from hooks_constants.windows_rmtree_blocker_constants import (  # noqa: E402
-    PYTHON_FILE_EXTENSION,
-)
+    from hooks_constants.hook_block_logger import log_hook_block
+    from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
+    from hooks_constants.subprocess_budget_completeness_constants import (
+        ALL_BUDGET_NAME_MARKERS,
+        BUDGET_ENTRY_POINT_FUNCTION_NAME,
+        SUBPROCESS_TIMEOUT_KEYWORD,
+    )
+    from hooks_constants.subprocess_budget_completeness_content import resolved_content
+    from hooks_constants.windows_rmtree_blocker_constants import PYTHON_FILE_EXTENSION
+except ImportError as import_error:
+    raise ImportError(
+        "subprocess_budget_completeness: cannot import its sibling modules; "
+        "ensure the hooks directory is importable."
+    ) from import_error
 
 
 def is_python_target(file_path: str) -> bool:
     return file_path.endswith(PYTHON_FILE_EXTENSION)
-
-
-def resolved_content(all_tool_input_fields: dict[str, object]) -> str:
-    written_content = all_tool_input_fields.get("content")
-    if isinstance(written_content, str):
-        return written_content
-    return reconstructed_edit_content(all_tool_input_fields)
-
-
-def reconstructed_edit_content(all_tool_input_fields: dict[str, object]) -> str:
-    file_path = all_tool_input_fields.get("file_path")
-    old_string = all_tool_input_fields.get("old_string")
-    new_string = all_tool_input_fields.get("new_string")
-    if not isinstance(file_path, str) or not isinstance(old_string, str):
-        return ""
-    if not isinstance(new_string, str) or not old_string:
-        return ""
-    existing_content = existing_file_content(file_path)
-    if existing_content is None or old_string not in existing_content:
-        return ""
-    return existing_content.replace(old_string, new_string, 1)
-
-
-def existing_file_content(file_path: str) -> str | None:
-    try:
-        with open(file_path, "r", encoding="utf-8") as existing_file:
-            return existing_file.read()
-    except (FileNotFoundError, OSError, UnicodeDecodeError):
-        return None
 
 
 def integer_literal_value(node: ast.expr) -> int | None:

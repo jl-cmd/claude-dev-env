@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import io
 import json
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+
+import pytest
 
 _BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
 _HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
@@ -18,14 +18,15 @@ if _HOOKS_DIRECTORY not in sys.path:
 
 from code_rules_enforcer import (  # noqa: E402
     main,
-    validate_content,
+    validate_content_for_full_gate as validate_content,
+)
+from code_rules_enforcer_test_support import (  # noqa: E402
+    run_enforcer_cli,
+    run_precheck,
+    run_serialized_payload_entrypoint,
 )
 
-code_rules_enforcer = SimpleNamespace(
-    main=main,
-    sys=sys,
-    validate_content=validate_content,
-)
+pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
 
 _ENFORCER_SCRIPT_PATH = Path(__file__).resolve().parent / "code_rules_enforcer.py"
 
@@ -57,13 +58,7 @@ def _run_enforcer_cli(
     Returns:
         The completed process carrying stdout, stderr, and the exit code.
     """
-    return subprocess.run(
-        [sys.executable, str(_ENFORCER_SCRIPT_PATH), *all_cli_arguments],
-        input="",
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return run_enforcer_cli(_ENFORCER_SCRIPT_PATH, all_cli_arguments, None)
 
 
 def _run_precheck(
@@ -80,28 +75,15 @@ def _run_precheck(
     Returns:
         The completed process carrying the pre-check stdout, stderr, and exit code.
     """
-    return _run_enforcer_cli(["--check", candidate_path, "--as", target_path])
+    return run_precheck(Path(candidate_path), target_path, None)
 
 
 def _run_main_with_edit_payload(
     file_path: str,
     old_string: str,
     new_string: str,
-    monkeypatch: object,
-    capsys: object,
 ) -> str:
-    """Drive ``main()`` through its stdin entry point for an Edit and return stdout.
-
-    Args:
-        file_path: The on-disk path the Edit targets.
-        old_string: The Edit's ``old_string`` fragment.
-        new_string: The Edit's ``new_string`` fragment.
-        monkeypatch: The pytest fixture used to redirect ``sys.stdin``.
-        capsys: The pytest fixture used to capture the deny payload on stdout.
-
-    Returns:
-        The captured stdout, which holds the deny payload when violations fire.
-    """
+    """Drive ``main()`` through its stdin entry point for an Edit."""
     edit_payload = json.dumps(
         {
             "tool_name": "Edit",
@@ -112,13 +94,8 @@ def _run_main_with_edit_payload(
             },
         }
     )
-    getattr(monkeypatch, "setattr")(code_rules_enforcer.sys, "stdin", io.StringIO(edit_payload))
-    try:
-        code_rules_enforcer.main([])
-    except SystemExit:
-        pass
-    captured = getattr(capsys, "readouterr")()
-    return captured.out
+    captured_stdout, _exit_code = run_serialized_payload_entrypoint(main, edit_payload)
+    return captured_stdout
 
 
 def test_precheck_stream_parameter_carries_no_banned_noun() -> None:
@@ -130,9 +107,7 @@ def test_precheck_stream_parameter_carries_no_banned_noun() -> None:
     banned-noun check fires. Scanning the enforcer source at a production path
     proves the introduced stream parameter is free of that violation."""
     enforcer_source = _ENFORCER_SCRIPT_PATH.read_text(encoding="utf-8")
-    issues = code_rules_enforcer.validate_content(
-        enforcer_source, "/project/src/code_rules_enforcer.py"
-    )
+    issues = validate_content(enforcer_source, "/project/src/code_rules_enforcer.py")
     banned_noun_issues = [
         each_issue
         for each_issue in issues
@@ -144,7 +119,7 @@ def test_precheck_stream_parameter_carries_no_banned_noun() -> None:
 
 
 def test_precheck_reports_violations_and_exits_nonzero_for_production_candidate(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A violating candidate judged at a production target prints each violation to
     stdout and exits 1."""
@@ -167,7 +142,7 @@ def test_precheck_reports_violations_and_exits_nonzero_for_production_candidate(
 
 
 def test_precheck_emits_no_output_and_exits_zero_for_clean_candidate(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A clean candidate produces no stdout and exits 0."""
     staging_directory = getattr(tmp_path_factory, "mktemp")("staging")
@@ -184,7 +159,7 @@ def test_precheck_emits_no_output_and_exits_zero_for_clean_candidate(
 
 
 def test_precheck_target_path_drives_test_file_exemptions(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """Production-shaped content judged against a ``test_*.py`` target passes
     because test-file exemptions apply through the target path."""
@@ -201,7 +176,7 @@ def test_precheck_target_path_drives_test_file_exemptions(
 
 
 def test_precheck_noncode_target_exits_zero_with_no_output(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A non-code target extension is exempt: the pre-check exits 0 with no output."""
     staging_directory = getattr(tmp_path_factory, "mktemp")("staging")
@@ -215,7 +190,7 @@ def test_precheck_noncode_target_exits_zero_with_no_output(
 
 
 def test_precheck_missing_candidate_errors_on_stderr_without_traceback(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A nonexistent candidate path prints a one-line stderr error and exits
     nonzero without a Python traceback."""
@@ -233,9 +208,7 @@ def test_precheck_missing_candidate_errors_on_stderr_without_traceback(
 
 
 def test_edit_deny_reason_includes_forecast_and_precheck_hint(
-    tmp_path_factory: object,
-    monkeypatch: object,
-    capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """An Edit whose new_string introduces a violation on a file that already
     contains a separate violation elsewhere blocks on the fragment violation and
@@ -244,9 +217,7 @@ def test_edit_deny_reason_includes_forecast_and_precheck_hint(
     production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
     untouched_print_violation = _UNTOUCHED_PRINT_VIOLATION_SOURCE
     clean_before = _CLEAN_FRAGMENT_BEFORE
-    introduces_banned_noun_after = (
-        "def short_helper() -> int:\n    output = 0\n    return output\n"
-    )
+    introduces_banned_noun_after = "def short_helper() -> int:\n    output = 0\n    return output\n"
     on_disk_before = untouched_print_violation + "\n" + clean_before
     source_file = production_directory / "production_module.py"
     source_file.write_text(on_disk_before, encoding="utf-8")
@@ -254,8 +225,6 @@ def test_edit_deny_reason_includes_forecast_and_precheck_hint(
         str(source_file),
         clean_before,
         introduces_banned_noun_after,
-        monkeypatch,
-        capsys,
     )
     deny_payload = json.loads(stdout)
     reason = deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
@@ -263,9 +232,7 @@ def test_edit_deny_reason_includes_forecast_and_precheck_hint(
     assert "output" in blocking_section, (
         f"fragment-introduced banned-noun must block, got reason: {reason!r}"
     )
-    assert forecast_section != "", (
-        f"forecast section must be present, got reason: {reason!r}"
-    )
+    assert forecast_section != "", f"forecast section must be present, got reason: {reason!r}"
     assert "Library print()" in forecast_section, (
         f"forecast must name the untouched print violation, got reason: {reason!r}"
     )
@@ -273,9 +240,7 @@ def test_edit_deny_reason_includes_forecast_and_precheck_hint(
 
 
 def test_edit_clean_fragment_on_dirty_file_produces_no_deny_payload(
-    tmp_path_factory: object,
-    monkeypatch: object,
-    capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A clean Edit fragment on a file that is dirty elsewhere must not block —
     the forecast never converts a clean-fragment edit into a deny."""
@@ -290,8 +255,6 @@ def test_edit_clean_fragment_on_dirty_file_produces_no_deny_payload(
         str(source_file),
         clean_before,
         clean_after,
-        monkeypatch,
-        capsys,
     )
     assert stdout == "", (
         f"a clean fragment on a dirty file must not produce a deny payload, got stdout: {stdout!r}"
@@ -299,9 +262,7 @@ def test_edit_clean_fragment_on_dirty_file_produces_no_deny_payload(
 
 
 def test_every_deny_reason_carries_the_precheck_hint(
-    tmp_path_factory: object,
-    monkeypatch: object,
-    capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A deny with no forecast still appends the pre-check hint to the reason."""
     production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
@@ -313,8 +274,6 @@ def test_every_deny_reason_carries_the_precheck_hint(
         str(source_file),
         clean_before,
         introduces_violation_after,
-        monkeypatch,
-        capsys,
     )
     deny_payload = json.loads(stdout)
     reason = deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
@@ -332,9 +291,7 @@ def test_every_deny_reason_carries_the_precheck_hint(
 
 
 def test_forecast_skipped_when_edit_prior_is_unreconstructable(
-    tmp_path_factory: object,
-    monkeypatch: object,
-    capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """An Edit whose old_string is absent from the file has no reliable prior to
     diff against, so the full-file forecast must not run: a pre-existing inline
@@ -350,8 +307,6 @@ def test_forecast_skipped_when_edit_prior_is_unreconstructable(
         str(source_file),
         absent_old,
         introduces_print_new,
-        monkeypatch,
-        capsys,
     )
     deny_payload = json.loads(stdout)
     reason = deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
@@ -362,9 +317,7 @@ def test_forecast_skipped_when_edit_prior_is_unreconstructable(
 
 
 def test_forecast_omits_the_fragment_introduced_violation(
-    tmp_path_factory: object,
-    monkeypatch: object,
-    capsys: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """An Edit that introduces the file's only print() blocks on it without the
     forecast re-listing that same violation under its full-file line number."""
@@ -378,8 +331,6 @@ def test_forecast_omits_the_fragment_introduced_violation(
         str(source_file),
         _CLEAN_FRAGMENT_BEFORE,
         introduces_print_after,
-        monkeypatch,
-        capsys,
     )
     deny_payload = json.loads(stdout)
     reason = deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
@@ -406,7 +357,7 @@ def test_precheck_missing_candidate_value_exits_two_with_usage() -> None:
 
 
 def test_precheck_flag_shaped_candidate_value_exits_two_with_usage(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """``--check`` immediately followed by ``--as`` is a usage error rather than
     an attempt to read a file literally named ``--as``."""
@@ -423,7 +374,7 @@ def test_precheck_flag_shaped_candidate_value_exits_two_with_usage(
 
 
 def test_precheck_rejects_unrecognized_trailing_token_with_usage(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A pre-check vector carrying a token beyond the supported
     ``--check <candidate> [--as <target>]`` shape is a usage error: an extra
@@ -446,7 +397,7 @@ def test_precheck_rejects_unrecognized_trailing_token_with_usage(
 
 
 def test_precheck_strips_candidate_byte_order_mark_before_validation(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A UTF-8 byte-order mark on the candidate must not hide AST-based
     violations: the candidate is judged exactly as its decoded content would
@@ -454,9 +405,7 @@ def test_precheck_strips_candidate_byte_order_mark_before_validation(
     staging_directory = getattr(tmp_path_factory, "mktemp")("staging")
     production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
     candidate_file = staging_directory / "candidate.py"
-    candidate_file.write_text(
-        "\ufeff" + _VIOLATING_PRODUCTION_SOURCE, encoding="utf-8"
-    )
+    candidate_file.write_text("\ufeff" + _VIOLATING_PRODUCTION_SOURCE, encoding="utf-8")
     target_path = str(production_directory / "production_module.py")
     completed = _run_precheck(str(candidate_file), target_path)
     assert completed.returncode == 1, (
@@ -470,7 +419,7 @@ def test_precheck_strips_candidate_byte_order_mark_before_validation(
 
 
 def test_precheck_strips_every_leading_byte_order_mark_before_validation(
-    tmp_path_factory: object,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """Stacked byte-order marks must not hide AST-based violations: every
     leading mark is stripped, so a double-BOM candidate fails exactly like its
@@ -478,9 +427,7 @@ def test_precheck_strips_every_leading_byte_order_mark_before_validation(
     staging_directory = getattr(tmp_path_factory, "mktemp")("staging")
     production_directory = getattr(tmp_path_factory, "mktemp")("production_pkg")
     candidate_file = staging_directory / "candidate.py"
-    candidate_file.write_text(
-        "\ufeff\ufeff" + _VIOLATING_PRODUCTION_SOURCE, encoding="utf-8"
-    )
+    candidate_file.write_text("\ufeff\ufeff" + _VIOLATING_PRODUCTION_SOURCE, encoding="utf-8")
     target_path = str(production_directory / "production_module.py")
     completed = _run_precheck(str(candidate_file), target_path)
     assert completed.returncode == 1, (

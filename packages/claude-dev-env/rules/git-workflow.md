@@ -17,6 +17,8 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh` (no ex
 
 **ALWAYS create PRs as DRAFT:** Use `gh pr create --draft` for ALL PRs
 
+**The pr-description-writer agent writes the body:** Spawn the `pr-description-writer` agent (Agent tool, `subagent_type` `pr-description-writer`), then publish what it returns with `--body-file`. `pr_description_writer_gate.py` (PreToolUse on Bash and PowerShell, hosted by `bash_pre_tool_use_dispatcher`) denies a `gh pr create` when the session records no such spawn. A trailing `# pr-description-skip` comment on the command opts out for a body you write yourself.
+
 ## Git Golden Rules (NON-NEGOTIABLE)
 
 1. **DRAFT BEFORE PUSH**: When pushing ANYTHING to a PR, it MUST be in draft state first
@@ -55,12 +57,4 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 
 Repair only reported findings, then re-verify after every repair.
 
-## See also
-
-| Rule | Covers |
-|---|---|
-| [`gh-cli-conventions.md`](gh-cli-conventions.md) | `--body-file` for post bodies; `--paginate --slurp` for list reads |
-| [`re-stage-before-commit.md`](re-stage-before-commit.md) | Staging session edits so a commit does not drop them |
-| [`durable-post-artifacts.md`](durable-post-artifacts.md) | Keeping volatile scratch paths out of a post body |
-| [`destructive-commands.md`](destructive-commands.md) | Allowed removal forms; destructive literals in commit and post bodies |
-| [`code-standards.md`](code-standards.md) | The code standards a PR's diff is reviewed against |
+Every `gh` post in this workflow uses `--body-file` per `gh-cli-conventions.md` and keeps volatile scratch paths out per `durable-post-artifacts.md`; stage session edits per `re-stage-before-commit.md` before each commit.

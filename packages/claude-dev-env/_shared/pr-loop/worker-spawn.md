@@ -121,13 +121,14 @@ preflight/runner classification strings (for example `grok_binary_missing`,
 After a grok fallthrough the dispatcher calls `detect_host_profile()` from
 `tier_model_ids` (advisor scripts). Detection order:
 
-1. `ADVISOR_HOST_PROFILE` when set — must be `Claude` or `ThirdParty` (any letter case).
+1. `ADVISOR_HOST_PROFILE` when set — must be `Claude`, `Codex`, or `ThirdParty` (any letter case).
 2. `THIRD_PARTY` when truthy — `1`, `true`, `yes`, or `on`.
 3. Default: `Claude`.
 
-Profiles are the real names `Claude` and `ThirdParty` (not a separate Grok host
+Profiles are the real names `Claude`, `Codex`, and `ThirdParty` (not a separate Grok host
 profile). Grok is tier 1 on every host; host profile only chooses the post-grok
-branch (Agent-tool handoff vs headless claude chain).
+branch (Agent-tool handoff vs headless claude chain). A Codex profile takes the
+non-Claude branch.
 
 ## Code-review host routing
 

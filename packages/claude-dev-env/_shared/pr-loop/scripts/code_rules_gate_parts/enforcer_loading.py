@@ -1,8 +1,8 @@
-"""Load the code-rules enforcer's ``validate_content`` for in-process use.
+"""Load the code-rules enforcer's ``validate_content_for_full_gate`` for in-process use.
 
-The gate runs the same ``validate_content`` the PreToolUse enforcer runs, so it
-locates the ``hooks/blocking/code_rules_enforcer.py`` module from disk, executes
-it with the hooks directory on ``sys.path``, and hands back its callable.
+The gate runs the enforcer's full-gate validation phase, so it locates the
+``hooks/blocking/code_rules_enforcer.py`` module from disk, executes it with
+the hooks directory on ``sys.path``, and hands back its callable.
 """
 
 import importlib.machinery
@@ -138,11 +138,11 @@ def _exec_enforcer_with_hooks_on_path(
         _restore_hooks_constants_modules(all_saved_modules, hooks_root_path)
 
 
-def load_validate_content() -> ValidateContentCallable:
-    """Load ``code_rules_enforcer.validate_content`` for in-process use.
+def load_validate_content_for_full_gate() -> ValidateContentCallable:
+    """Load ``code_rules_enforcer.validate_content_for_full_gate`` for in-process use.
 
     Returns:
-        The ``validate_content`` callable from the enforcer module.
+        The ``validate_content_for_full_gate`` callable from the enforcer module.
 
     Raises:
         SystemExit: When the package root or the enforcer module cannot load.
@@ -153,7 +153,7 @@ def load_validate_content() -> ValidateContentCallable:
     )
     module = importlib.util.module_from_spec(specification)
     _exec_enforcer_with_hooks_on_path(specification, module)
-    return module.validate_content
+    return module.validate_content_for_full_gate
 
 
 def _restore_hooks_constants_modules(
