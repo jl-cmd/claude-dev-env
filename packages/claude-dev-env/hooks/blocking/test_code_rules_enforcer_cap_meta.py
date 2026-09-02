@@ -45,6 +45,7 @@ _hook_spec.loader.exec_module(_hook_module)
 
 VOID_ADVISORY_CHECK_FUNCTION_NAMES: frozenset[str] = frozenset(
     {
+        "check_constants_outside_config_advisory",
         "check_duplicated_format_patterns",
         "check_flag_gated_scenario_test_naming",
     }
@@ -65,7 +66,6 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_comment_changes",
         "check_constant_equality_tests",
         "check_constants_outside_config",
-        "check_constants_outside_config_advisory",
         "check_existence_check_tests",
         "check_file_global_constants_use_count",
         "check_imports_at_top",

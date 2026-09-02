@@ -149,18 +149,19 @@ def _scan_function_body_constants(content: str) -> list[str]:
     return advisory_issues
 
 
-def check_constants_outside_config_advisory(content: str, file_path: str) -> list[str]:
-    """Return advisory entries for UPPER_SNAKE assignments inside function bodies.
+def check_constants_outside_config_advisory(content: str, file_path: str) -> None:
+    """Emit stderr advisories for UPPER_SNAKE assignments inside function bodies.
 
     Module-level UPPER_SNAKE outside config/ is blocking (see
     check_constants_outside_config). Function-local UPPER_SNAKE is a softer
     smell — it belongs in config/ but does not block the write. This function
-    surfaces those as advisory so callers can route them to stderr rather than
-    to the blocking deny payload.
+    writes each finding straight to stderr, matching the other advisory-only
+    checks, so the write proceeds regardless of what it finds.
     """
     if _is_exempt_for_advisory_scan(file_path):
-        return []
-    return _scan_function_body_constants(content)
+        return
+    for each_issue in _scan_function_body_constants(content):
+        sys.stderr.write(f"[CODE_RULES advisory] {file_path}: {each_issue}\n")
 
 
 def _is_upper_snake_constant_name(name: str) -> bool:
