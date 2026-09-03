@@ -234,6 +234,10 @@ test('EVER_SHIPPED_SKILL_NAMES retains recovering-codex-startup so reinstall pru
     assert.ok(
         EVER_SHIPPED_SKILL_NAMES.has('recovering-codex-startup'),
         'recovering-codex-startup must remain in the retirement registry after the package stops shipping it',
+test('EVER_SHIPPED_SKILL_NAMES retains repairing-hook-boundaries so reinstall prunes the retired skill', () => {
+    assert.ok(
+        EVER_SHIPPED_SKILL_NAMES.has('repairing-hook-boundaries'),
+        'repairing-hook-boundaries must remain in the retirement registry after the package stops shipping it',
     );
 });
 
