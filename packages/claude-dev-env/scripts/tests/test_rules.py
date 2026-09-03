@@ -85,10 +85,13 @@ def test_comment_guidance_reaches_installed_instruction_surfaces() -> None:
         "docstrings remain allowed.",
     )
     all_surface_paths = (
+        _PACKAGE_ROOT.parent.parent / "AGENTS.md",
         _PACKAGE_ROOT / "AGENTS.md",
         _PACKAGE_ROOT / "docs" / "CODE_RULES.md",
         _PACKAGE_ROOT / "system-prompts" / "software-engineer.xml",
         _PACKAGE_ROOT / ".agents" / "agents" / "clean-coder.md",
+        _PACKAGE_ROOT / ".agents" / "skills" / "grok-spawn" / "reference" / "worker-briefs.md",
+        _PACKAGE_ROOT.parent.parent / ".github" / "copilot-instructions.md",
     )
 
     for each_surface_path in all_surface_paths:

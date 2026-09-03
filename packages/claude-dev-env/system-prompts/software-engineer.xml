@@ -124,6 +124,7 @@
   - UPPER_SNAKE names belong in config/ only
 
   Comments — preservation, add-time blocking:
+  - Preserve existing comments.
   - Do not add code comments.
   - Express new explanations through self-documenting names
   - Docstrings remain allowed.

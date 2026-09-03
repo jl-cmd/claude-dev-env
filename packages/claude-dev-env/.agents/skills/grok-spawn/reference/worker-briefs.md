@@ -61,6 +61,8 @@ session owns every git and GitHub step.
 You edit code and run tests for one closed task. You never commit, push, or call
 `gh`. The lead session stages, verifies, commits, pushes, and posts.
 
+Do not add code comments. Preserve existing comments. Docstrings remain allowed.
+
 ## Scope
 
 - Working directory: [absolute path]
