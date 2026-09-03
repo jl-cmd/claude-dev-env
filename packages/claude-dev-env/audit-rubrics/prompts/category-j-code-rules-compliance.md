@@ -24,7 +24,7 @@ The write-time hook skips several rules on test files and on `.mjs` / `.js` file
 
 - Naming (J5, J6) — banned identifiers and banned function prefixes; boolean names prefixed `is_` / `has_` / `should_` / `can_` / `was_` / `did_`.
 - Logging format (J9) — the format string and its arguments pass as separate parameters, never an f-string.
-- Type annotations (J7) — every changed parameter and return is typed; no `Any`, no bare `# type: ignore`.
+- Type annotations (J7) — every changed parameter and return is typed; no `Any`, no `# type: ignore` directives.
 - Unused imports — a module-level import a changed file does not read.
 - Function length — a changed function past the length threshold splits into named helpers.
 

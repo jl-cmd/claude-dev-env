@@ -44,7 +44,7 @@ python "<gate_script>" --base origin/<base_branch> --only-under <prefix> [--only
 - File-global UPPER_SNAKE constants (must live in `config/` outside exempt path families)
 - Magic values in production function bodies (literals other than 0, 1, -1)
 - Imports outside top of module
-- New code comments anywhere (existing comments preserved untouched)
+- New code comments anywhere; comments tied to touched code are removed and comments tied to untouched code remain unchanged
 - File-global constants used by fewer than 2 functions/methods
 - Logging format-arg violations
 - Database column-name string magic (snake_case strings as first element of 2-tuples in function bodies)

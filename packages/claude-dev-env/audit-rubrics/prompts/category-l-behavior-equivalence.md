@@ -52,7 +52,7 @@ ID prefix: `find`.
 - The BEFORE implementation used [TAG_BEFORE] (regex / tokenize / str-method / library). The AFTER uses [TAG_AFTER]. For each input shape the BEFORE-tag accepted (e.g., a regex pattern accepted inline `#!` because the `re.MULTILINE` flag matched at any line start), does the AFTER-tag accept the same shape via a different mechanism?
 - Adversarial probes: (a) enumerate the BEFORE-tag's capabilities that the AFTER-tag does not natively have (e.g., regex `\b` boundaries vs tokenize stream events) — has the AFTER implementation added compensating logic? (b) enumerate the AFTER-tag's capabilities that the BEFORE-tag did not have — are any of them silently expanding the accept set? (c) construct an input shape that the BEFORE-tag rejected only because of its tag's limitations — does the AFTER accept now and is that intentional?
 
-**L7. Skipped-category exhaustion**
+**L7. Changed-comment handling**
 - Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 - Adversarial probes: compare shebang and docstring handling with the changed marker-comment result across the original and changed-code paths.
 
@@ -112,7 +112,7 @@ ID prefix: `find`.
 - Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 - Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
-**L7. Skipped-category exhaustion**
+**L7. Changed-comment handling**
 - Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L8. Sibling-implementation comparison**
