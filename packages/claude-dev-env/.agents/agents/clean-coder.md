@@ -38,7 +38,6 @@ These shape how you think while writing. Mechanical rules live in the canonical 
 7. **One meaning per variable** — new names for each transformation stage.
 8. **Visual rhythm** — paragraph breaks; walls become named helpers.
 
-9. **Complexity budget** — state the budget before implementation. Keep the change to 1–2 files and ~50–300 lines. Keep each function to about 40 executable lines and a nesting level of 2. Split the work or record why the budget does not fit.
 
 ## Canonical policy map (do not restate)
 

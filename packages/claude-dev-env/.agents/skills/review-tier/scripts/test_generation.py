@@ -2,8 +2,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
-from review_tier import build_generation, inventory_generation, router_state_directory, router_state_root, router_state_root_id
+from review_tier import (
+    build_generation,
+    inventory_generation,
+    router_state_directory,
+    router_state_root,
+    router_state_root_id,
+)
 
 
 def test_generation_uses_live_git_surface(tmp_path: Path) -> None:
@@ -92,23 +97,6 @@ def test_diff_hash_changes_when_same_path_content_changes(tmp_path: Path) -> Non
     first_hash = inventory_generation(tmp_path)["diff_hash"]
     tracked_path.write_text("changed\n", encoding="utf-8")
     assert inventory_generation(tmp_path)["diff_hash"] != first_hash
-
-
-def test_effective_lines_include_committed_staged_unstaged_and_untracked(tmp_path: Path) -> None:
-    _git_repository(tmp_path)
-    committed_path = tmp_path / "committed.txt"
-    committed_path.write_text("one\ntwo\n", encoding="utf-8")
-    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
-    subprocess.run(["git", "commit", "-qm", "committed"], cwd=tmp_path, check=True)
-    staged_path = tmp_path / "staged.txt"
-    staged_path.write_text("one\ntwo\n", encoding="utf-8")
-    subprocess.run(["git", "add", str(staged_path)], cwd=tmp_path, check=True)
-    staged_path.write_text("one\ntwo\nthree\n", encoding="utf-8")
-    unstaged_path = tmp_path / "seed.txt"
-    unstaged_path.write_text("seed\nchanged\n", encoding="utf-8")
-    (tmp_path / "untracked.txt").write_text("one\ntwo\n", encoding="utf-8")
-    inventory = inventory_generation(tmp_path)
-    assert inventory["lines"] >= 6
 
 
 def test_inventory_preserves_rename_prior_path_and_operations(tmp_path: Path) -> None:

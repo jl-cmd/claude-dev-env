@@ -1,4 +1,4 @@
-"""CLI entrypoint that applies the five PR label axes: type, size, status, area, stacked.
+"""CLI entrypoint that applies the PR label axes: type, status, area, stacked.
 
 ::
 
