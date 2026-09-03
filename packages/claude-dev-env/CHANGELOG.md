@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.33.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.32.0...claude-dev-env-v2.33.0) (2026-09-03)
+
+
+### Features
+
+* add no-code-comments guidance ([dcc84a1](https://github.com/jl-cmd/claude-dev-env/commit/dcc84a1e2efde1f0992a31c72820c818f365b04f))
+* extend no-comment policy to worker surfaces ([9e6d0ac](https://github.com/jl-cmd/claude-dev-env/commit/9e6d0ac4cd7e69881e9b252611bc03cb6c759c3e))
+* name every changed behavior before writing the PR body ([abff5e7](https://github.com/jl-cmd/claude-dev-env/commit/abff5e7128873eefbc6fe8929442c67926bb1c7e))
+* require atomic behavior coverage in PR descriptions ([76cb6c1](https://github.com/jl-cmd/claude-dev-env/commit/76cb6c1582b66846bf77d7eb61f8b29a758bcf1d))
+* Tell coding sessions not to add code comments ([d79d9a9](https://github.com/jl-cmd/claude-dev-env/commit/d79d9a9a47e1c5de3858a1cdbc073386c788dc6b))
+
+
+### Bug Fixes
+
+* align comment cleanup boundary ([6867e06](https://github.com/jl-cmd/claude-dev-env/commit/6867e066bea9f6ab12dfa11f36fed524e4aefac5))
+* align comment enforcement guidance ([b76f9f8](https://github.com/jl-cmd/claude-dev-env/commit/b76f9f83088e58b476496bf8b59e399f97585bf7))
+* align comment policy guidance ([aabeeac](https://github.com/jl-cmd/claude-dev-env/commit/aabeeac85bb28acc6935d6bd285bfaf88a98c23b))
+* align comment policy summaries ([d24e6f6](https://github.com/jl-cmd/claude-dev-env/commit/d24e6f6427938fe2fe5f972886480242e1382430))
+* block retained comments on changed code ([106e997](https://github.com/jl-cmd/claude-dev-env/commit/106e99717e9e0a29f54c789d9c60206683ada6ec))
+* enforce changed comment cleanup ([3bc5704](https://github.com/jl-cmd/claude-dev-env/commit/3bc5704da04fad6d0beea8e64d9853f9ef744bb3))
+* enforce comment policy in tests ([38e698e](https://github.com/jl-cmd/claude-dev-env/commit/38e698ede98d75a2ac1046bd9d635fd3db1922b3))
+* make comment policy an opt-in diff linter ([d0ab524](https://github.com/jl-cmd/claude-dev-env/commit/d0ab524ddcc4498c1c5ca863751a89fed2f4e869))
+* move comment policy checks to diff-aware linting ([114296d](https://github.com/jl-cmd/claude-dev-env/commit/114296d1069f96204a532fd50f742588b4e761a9))
+* publish the comment scanner with its consumers ([d271ee7](https://github.com/jl-cmd/claude-dev-env/commit/d271ee79922b342f6a5b7e058fc9de461fc242b7))
+* report changed comments when the diff is checked ([2ba9471](https://github.com/jl-cmd/claude-dev-env/commit/2ba9471062f39b3da1a39f1557fe6a14a29b27c9))
+* retire stale comment cap exception ([06514c4](https://github.com/jl-cmd/claude-dev-env/commit/06514c43224c1bd386b5f417ffa5927cebda288d))
+
+
+### Documentation
+
+* let PR descriptions cover independent changes ([829479c](https://github.com/jl-cmd/claude-dev-env/commit/829479ca8b2cfbb95a1e49f7b9d2aaf04fe6b4a1))
+
+
+### Maintenance
+
+* remove PR size enforcement ([1a243dc](https://github.com/jl-cmd/claude-dev-env/commit/1a243dca95be6342f80f016b36f6325779949f17))
+
 ## [2.32.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.31.1...claude-dev-env-v2.32.0) (2026-09-03)
 
 
