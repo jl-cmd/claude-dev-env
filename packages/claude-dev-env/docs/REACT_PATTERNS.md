@@ -104,7 +104,7 @@ components/
 
 - **Complete type annotations** - All props, state, and return types defined
 - **No `any` types** - Use generics, union types, or `unknown` with type guards
-- **No `@ts-ignore` or `@ts-expect-error`** without clear justification
+- **Resolve `@ts-ignore` and `@ts-expect-error`** instead of adding or justifying them
 - **Functional components only** - No class components (except error boundaries)
 - **Custom hooks for logic** - Separate business logic from UI
 - **Props interfaces** - Define explicit Props type for every component
