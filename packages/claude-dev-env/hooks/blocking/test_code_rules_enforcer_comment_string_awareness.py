@@ -336,3 +336,30 @@ def test_edit_lane_allows_existing_comment_removal_without_advisory(
     issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
     assert not any("Existing comment removed" in each_issue for each_issue in issues)
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize(
+    ("file_path", "old_content", "new_content"),
+    (
+        ("totals.py", "total = 1  # TODO #999: track\n", "total = 2  # TODO #999: track\n"),
+        ("totals.py", "# TODO #999: track\ntotal = 1\n", "# TODO #999: track\ntotal = 2\n"),
+        ("totals.py", "total = 1  # noqa\n", "total = 2  # noqa\n"),
+        (
+            "totals.js",
+            "const total = 1; // eslint-disable-next-line\n",
+            "const total = 2; // eslint-disable-next-line\n",
+        ),
+    ),
+)
+def test_check_comment_changes_blocks_retained_comments_on_changed_code(
+    file_path: str, old_content: str, new_content: str
+) -> None:
+    issues = code_rules_enforcer.check_comment_changes(old_content, new_content, file_path)
+    assert any("retained on changed code" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_accepts_distant_untouched_comment() -> None:
+    old_content = "# TODO #999: distant note\n\ntotal = 1\n"
+    new_content = "# TODO #999: distant note\n\ntotal = 2\n"
+    issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "totals.py")
+    assert not any("retained on changed code" in each_issue for each_issue in issues)

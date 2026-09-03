@@ -1,5 +1,6 @@
 """Comment-presence and comment-change checks for Python and JavaScript sources."""
 
+import difflib
 import io
 import sys
 import tokenize
@@ -148,7 +149,7 @@ def extract_comment_texts(
                 before_slash = each_line[:each_line.index("//")]
                 if before_slash.strip():
                     comment_start = stripped.index("//")
-                    comment_text = stripped[comment_start + 2 :].strip()
+                    comment_text = stripped[comment_start + len("//") :].strip()
                     if include_directive_comments or not comment_text.startswith(
                         ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES
                     ):
@@ -202,8 +203,46 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
         issues.append(
             f"Standalone comment added: {sample[:60]} - remove the comment or move its meaning into code structure"
         )
+    issues.extend(_retained_comment_issues(old_content, new_content, file_path))
 
     return issues
+
+
+def _changed_line_numbers(old_content: str, new_content: str) -> set[int]:
+    changed_line_numbers: set[int] = set()
+    matcher = difflib.SequenceMatcher(
+        None, old_content.splitlines(), new_content.splitlines(), autojunk=False
+    )
+    for each_tag, _, _, each_new_start, each_new_end in matcher.get_opcodes():
+        if each_tag != "equal":
+            changed_line_numbers.update(
+                range(each_new_start + 1, each_new_end + 1)
+            )
+    return changed_line_numbers
+
+
+def _retained_comment_issues(
+    old_content: str, new_content: str, file_path: str
+) -> list[str]:
+    old_inline, old_standalone = extract_comment_texts(old_content, file_path, True)
+    new_inline, new_standalone = extract_comment_texts(new_content, file_path, True)
+    shared_inline = old_inline & new_inline
+    shared_standalone = old_standalone & new_standalone
+    if not shared_inline and not shared_standalone:
+        return []
+    changed_lines = _changed_line_numbers(old_content, new_content)
+    new_lines = new_content.splitlines()
+    issues: list[str] = []
+    for each_line_number in sorted(changed_lines):
+        inline_comment = next((each_comment for each_comment in shared_inline if each_comment in new_lines[each_line_number - 1]), None)
+        if inline_comment is not None:
+            issues.append(f"Inline comment retained on changed code: {inline_comment} - remove the comment")
+        preceding_line_number = each_line_number - 1
+        if preceding_line_number > 0 and new_lines[preceding_line_number - 1].strip() in shared_standalone:
+            issues.append(f"Standalone comment retained on changed code: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
+        if len(issues) >= MAX_COMMENT_ISSUES:
+            break
+    return issues[:MAX_COMMENT_ISSUES]
 
 
 def _python_tokens(source: str) -> Iterator[tokenize.TokenInfo]:

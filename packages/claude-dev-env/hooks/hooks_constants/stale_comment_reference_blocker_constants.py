@@ -60,14 +60,13 @@ STALE_COMMENT_DENY_TEMPLATE: str = (
     "The comment above the changed line in {file_path} names "
     "'{orphaned_name}', which this edit removes from the line below. "
     "The comment left in place reads: {contradicted_comment}. "
-    "Update or remove the comment in the same edit."
+    "Remove the comment in the same edit."
 )
 
 STALE_COMMENT_ADDITIONAL_CONTEXT: str = (
     "A standalone comment directly above an edited line describes that "
-    "line. When the edit drops a name the comment carries, rewrite the "
-    "comment to describe the rewritten line, or delete the comment, inside "
-    "the same Edit call."
+    "line. When the edit drops a name the comment carries, remove the "
+    "comment inside the same Edit call."
 )
 
 STALE_COMMENT_SYSTEM_MESSAGE: str = (
