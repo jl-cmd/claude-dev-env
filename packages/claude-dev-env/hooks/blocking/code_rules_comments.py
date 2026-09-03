@@ -305,12 +305,11 @@ def _python_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
 def _comment_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
     """Yield COMMENT tokens from *source* one at a time.
 
-    Streams from ``_python_tokens`` so consumers that early-exit (e.g.
-    ``check_comments_python`` caps at ``MAX_COMMENT_ISSUES``) avoid
-    materializing the entire token list. Silently stops on tokenize
-    failure so callers receive only valid comment tokens — no
-    indeterminate signal is exposed at this layer because the consumers
-    that need a tokenize status use the occurrence helper.
+    Streams from ``_python_tokens`` so consumers that early-exit, such as
+    ``check_comments_python`` capping at ``MAX_COMMENT_ISSUES``, avoid
+    materializing the entire token list. Tokenize failure stops the
+    stream with no extra flag. Callers that need to know tokenize failed
+    use ``_python_comment_occurrences``.
     """
     try:
         for each_token in _python_tokens(source):
