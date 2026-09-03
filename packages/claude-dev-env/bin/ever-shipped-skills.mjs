@@ -96,6 +96,8 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'rebase',
     'recall',
     'reconcile-account',
+    'recovering-codex-startup',
+    'repairing-hook-boundaries',
     'reddit-post-optimizer',
     'refine',
     'release-notes-html',
