@@ -15,7 +15,9 @@ Hooks in this repo enforce the conventions below. Follow them so your suggestion
 
 ## Comments and documentation
 
-- Write self-documenting code. Do not add new inline `#` or `//` comments in production code — the name carries the meaning.
+- Do not add code comments. Preserve existing comments. Docstrings remain allowed.
+- When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+- Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 - Docstrings on modules, classes, and functions are welcome. Keep the prose in step with the code: a docstring that lists the cases the body handles lists every one of them.
 - Never drop an existing comment on a line you are not otherwise changing.
 - Documentation describes the current state of the code. State what the code is and does, not how it got there.
@@ -23,7 +25,7 @@ Hooks in this repo enforce the conventions below. Follow them so your suggestion
 ## Types
 
 - Every function parameter and every return is typed.
-- Do not use `Any`, do not use `cast()`, and do not add a bare `# type: ignore`. When an ignore cannot be avoided, add a short reason after it.
+- Do not use `Any`, do not use `cast()`, or add `# type: ignore`; remove the escape hatch and use a typed boundary or real type.
 
 ## Constants and configuration
 

@@ -61,7 +61,9 @@ Tradeoff for category-restricted mode: parallel category invocation loses cross-
 
 ## Comment Preservation
 
-Preserve every existing comment. Findings on production code report only on new code added by the diff; existing comments on lines that remain otherwise unchanged stay outside the audit's scope. New inline comments added by this PR's diff are themselves a category J finding (production code self-documents through naming).
+Leave comments tied to untouched code unchanged. Findings on production and test code report only on new code added by the diff; comments on lines that remain otherwise unchanged stay outside the audit's scope. New inline comments added by this PR's diff are themselves a category J finding (code self-documents through naming).
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 
 ## Read-Only Stance
 
@@ -93,7 +95,7 @@ For each category's full description, examples, sub-bucket decomposition, and co
 | P | Name / regex / word-list vs behavior-contract precision | `<managed-root>/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md`) |
 | Q | Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard) | `<managed-root>/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md`) |
 
-Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families documented in the J reference also opt out of the constants-location sub-item.
+Test files use the same no-new-comment policy. The exempt path families documented in the J reference still opt out of the constants-location sub-item.
 
 Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed parallel line. The `failure_mode` field describes the contradiction between the two states. K is narrow but recurrent — linters and unit tests rarely catch these findings.
 

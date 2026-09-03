@@ -80,7 +80,7 @@ Load only the group that matches the task. Keep session policy details in these 
 
 Material implementation questions must return to the caller for `AskUserQuestion` handling; do not ask in plain text or guess.
 
-Type-ignore rule (AGENTS Types): a `# type: ignore` needs a second trailing `#` justification of at least five characters. Prefer a real type when available.
+Type-ignore rule (AGENTS Types): avoid `# type: ignore`; remove it and use a typed boundary or real type.
 
 Constants (AGENTS Magic values): use named constants from the target layout. Search its constants module first. Do not force a generic `config/` layout. Example:
 
@@ -133,11 +133,13 @@ Consult the advisor the spawn ticket names. When the ticket names the orchestrat
 ```
 [1] Local config searched and reused?
 [2] Full words; correct naming prefixes?
-[3] Parameters and returns typed; no bare Any / bare type: ignore?
-[4] No new production inline comments; existing comments preserved?
-[5] Magic values and UPPER_SNAKE live in config/ where required?
-[6] Function short; one job; guards over else-chains?
-[7] Pre-check --check clean for the real destination path?
+[3] Parameters and returns typed; no Any / no type-ignore directives?
+[4] Do not add code comments. Preserve existing comments. Docstrings remain allowed.
+[5] When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+[6] Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
+[7] Magic values and UPPER_SNAKE live in config/ where required?
+[8] Function short; one job; guards over else-chains?
+[9] Pre-check --check clean for the real destination path?
 ```
 
 ## Scope, TDD, and outcomes

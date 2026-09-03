@@ -192,7 +192,7 @@
         },
         {
           "id": "E8",
-          "axis_name": "Stub / placeholder code without TODO"
+          "axis_name": "Stub / placeholder code without tracking"
         },
         {
           "id": "E9",
@@ -509,7 +509,7 @@
         },
         {
           "id": "L7",
-          "axis_name": "Skipped-category exhaustion"
+          "axis_name": "Changed-comment handling"
         },
         {
           "id": "L8",

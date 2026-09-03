@@ -44,13 +44,16 @@ python "<gate_script>" --base origin/<base_branch> --only-under <prefix> [--only
 - File-global UPPER_SNAKE constants (must live in `config/` outside exempt path families)
 - Magic values in production function bodies (literals other than 0, 1, -1)
 - Imports outside top of module
-- New comments in production code (existing comments preserved untouched)
+- New code comments anywhere; comments tied to touched code are removed and comments tied to untouched code remain unchanged
 - File-global constants used by fewer than 2 functions/methods
 - Logging format-arg violations
 - Database column-name string magic (snake_case strings as first element of 2-tuples in function bodies)
 - Public-wrapper-drops-optional-kwargs of same-file delegates
 
-Test files (`test_*.py`, `*_test.py`, `*.spec.*`, `conftest.py`, paths under `/tests/`) are exempt from comment, magic-value, and constants-location rules.
+Test files use the same no-new-comment policy; their magic-value and constants-location exemptions remain.
+
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 
 ## Halt-fix-rerun protocol
 

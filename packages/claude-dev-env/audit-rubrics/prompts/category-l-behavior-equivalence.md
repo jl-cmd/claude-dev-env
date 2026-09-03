@@ -1,5 +1,8 @@
 Audit [REPO/ARTIFACT] [TARGET_ID] for **Category L only** (behavior-equivalence for refactors). Skip A–K, M–P. Sub-bucket forced-exhaustion mode: Category L is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
+
 [ARTIFACT METADATA — include the BEFORE state of the rewritten function so the agent can compare BEFORE vs AFTER behavior on the same input corpus]
 
 - Title / one-line summary: [TITLE]
@@ -30,16 +33,16 @@ ID prefix: `find`.
 
 **L2. Whitespace / separator variants**
 - For every input the BEFORE implementation accepted, does the AFTER implementation also accept the variant with: no space where the BEFORE allowed space, leading whitespace, trailing whitespace, multiple internal spaces, tab vs single space, CRLF vs LF?
-- Adversarial probes: (a) construct inputs identical to KNOWN_GOOD_INPUTS but with the space stripped (`#noqa` vs `# noqa`) — does the AFTER state still accept? (b) construct inputs with trailing whitespace and CRLF — does the AFTER state strip them the same way the BEFORE state did? (c) construct inputs with a tab where the BEFORE allowed a space — does the AFTER state's tokenizer / regex treat them identically?
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L3. Adjacent-form regressions**
 - Does the AFTER implementation use a looser pattern than the BEFORE (e.g., `startswith("## Problem")` where the BEFORE used `re.match(r"^## Problem\b")`)? A loose pattern accepts inputs the original rejected.
-- Does the AFTER implementation use a tighter pattern than the BEFORE (e.g., `re.match(r"^# noqa\b")` where the BEFORE used `startswith("# noqa")`)? A tight pattern rejects inputs the original accepted.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 - Adversarial probes: (a) construct inputs that satisfy the AFTER pattern but NOT the BEFORE — these are inputs the rewrite silently accepted; (b) construct inputs that satisfy the BEFORE pattern but NOT the AFTER — these are inputs the rewrite silently rejected; (c) walk the BEFORE pattern's anchors (`^`, `\b`, `\s`) and the AFTER pattern's anchors — does every BEFORE anchor have a semantic equivalent in the AFTER pattern?
 
 **L4. Empty / boundary inputs**
 - For empty string, single character, single-newline, single-line, EOF-without-newline — does the AFTER implementation produce the same accept/reject decision as the BEFORE?
-- Adversarial probes: (a) does the AFTER tokenizer raise on an empty input where the BEFORE returned False? (b) does the AFTER regex match on a single-newline input where the BEFORE skipped? (c) does the AFTER state handle the EOF-without-newline edge that the BEFORE state's `splitlines()` call did?
+- Adversarial probes: compare empty and single-line inputs under the original and changed-code paths; both preserve the same handling.
 
 **L5. Invariant preservation**
 - Does the BEFORE implementation enforce an invariant (early-exit on first match, idempotence under repeated invocation, stable iteration order, ordering of returned items)? Does the AFTER preserve each invariant?
@@ -49,9 +52,9 @@ ID prefix: `find`.
 - The BEFORE implementation used [TAG_BEFORE] (regex / tokenize / str-method / library). The AFTER uses [TAG_AFTER]. For each input shape the BEFORE-tag accepted (e.g., a regex pattern accepted inline `#!` because the `re.MULTILINE` flag matched at any line start), does the AFTER-tag accept the same shape via a different mechanism?
 - Adversarial probes: (a) enumerate the BEFORE-tag's capabilities that the AFTER-tag does not natively have (e.g., regex `\b` boundaries vs tokenize stream events) — has the AFTER implementation added compensating logic? (b) enumerate the AFTER-tag's capabilities that the BEFORE-tag did not have — are any of them silently expanding the accept set? (c) construct an input shape that the BEFORE-tag rejected only because of its tag's limitations — does the AFTER accept now and is that intentional?
 
-**L7. Skipped-category exhaustion**
-- Inputs the BEFORE explicitly skipped — shebang on line 1 only, exempt markers without trailing prose, free-form `# type:` directives carrying a trailing justification — does the AFTER state continue to skip them?
-- Adversarial probes: (a) does the AFTER state's skip-list match the BEFORE state's skip-list literally? (b) for each skip rule, construct an input the BEFORE skipped — does the AFTER also skip? (c) for each skip rule, construct an input one character off from the skip pattern — does the AFTER fall through to the main check or also skip?
+**L7. Changed-comment handling**
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Adversarial probes: compare shebang and docstring handling with the changed marker-comment result across the original and changed-code paths.
 
 **L8. Sibling-implementation comparison**
 - If a parallel implementation exists in another language or paradigm (Python + PowerShell hook, regex + tokenize, JavaScript + Go), does the AFTER implementation produce the same accept/reject decisions as the sibling for shared inputs?
@@ -75,53 +78,53 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket L1-L8, produce Shape A 
 
 Audit jl-cmd/claude-dev-env PR #479 for **Category L only** (behavior-equivalence for refactors). Skip A–K, M, N. Sub-bucket forced-exhaustion mode: Category L is decomposed into 8 sub-buckets below.
 
-PR: refactor(hooks): tokenize-based exempt-marker recognition for the no-new-comments gate
+PR: refactor(hooks): tokenize-based comment recognition
 Base SHA: (the commit before the tokenize-based rewrite landed)
 Head SHA at audit time: (the commit that landed the rewrite)
 ID prefix: `find`.
 
-The rewrite changed `_is_exempt_python_comment` from a normalization-based check (it ran `comment_string[1:].lstrip()` to strip the leading `#` and surrounding whitespace, then tested the body against the exempt-marker set) to a tokenize-based recognizer that tests each raw `tokenize.COMMENT` token string against `startswith("# noqa")`. The wider hook structure was left unchanged. The audit goal: identify any input shape the normalization-based BEFORE implementation accepted that the tokenize-based AFTER implementation now misclassifies as a non-exempt comment, OR any input the BEFORE rejected that the AFTER now accepts.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 ## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
 
 **L1. KNOWN_GOOD_INPUTS table presence**
-- The PR ships `test_code_rules_enforcer_exempt_marker_chained.py` with 14 parametric inputs covering `# noqa`, `# pylint:`, `# pragma:`, `# type:`, `# TODO`, `# FIXME`, shebang at line 1, and a chained-comment variant. The table does NOT include the no-space variant `#noqa` — this is the first L1 gap.
-- Adversarial probes: scan the BEFORE implementation for the literal `"# noqa"` — production files at the base SHA carry `#noqa: F401` (no space) on at least three import lines. These are KNOWN_GOOD_INPUTS the table is missing.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L2. Whitespace / separator variants**
-- The BEFORE state stripped the leading `#` and surrounding whitespace from the comment text, then tested the body against the exempt-marker set — both `# noqa: F401` and `#noqa: F401` reduce to the body `noqa: F401`, which the set contains, so the BEFORE accepts both. The tokenize-based AFTER tests each raw `tokenize.COMMENT` token string against `startswith("# noqa")`, which matches only when a space separates `#` from `noqa`; `#noqa: F401` fails the prefix check. The AFTER therefore drops `#noqa` while the BEFORE accepts it — a behavior regression on the no-space axis.
-- Adversarial probe: construct `#noqa: F401` and trace through both. The BEFORE's strip-`#`-and-whitespace step yields body `noqa: F401`, which IS in the exempt-marker set, so the BEFORE returns True. The AFTER's `startswith("# noqa")` against the raw token `"#noqa: F401"` returns False (no space separating `#` from `noqa`) — the AFTER returns False. L2 detects a dropped accept on the no-space variant.
-- Per Category L's stated equivalence rule, a dropped accept is a regression: an exempt marker the BEFORE recognizes falls through to the main check under the AFTER, so the no-new-comments gate blocks writes carrying `#noqa: F401` that the BEFORE passed. Flag it P1 because the regression silently re-enables blocking on inputs production code carries.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 - The CRLF / tab variants pass through the AFTER tokenizer identically.
 
 **L3. Adjacent-form regressions**
-- The BEFORE pattern `startswith("# noqa")` is a 6-character prefix check. The AFTER's tokenize-based check strips `#` and surrounding whitespace, then tests the body against the exempt-marker set. The AFTER's pattern is therefore looser on the leading whitespace axis (accepts `#  noqa` and `# noqa`) but no looser on the body content. Verified clean.
-- Adversarial probe: construct `# noqa-but-not-really: F401` — does the BEFORE startswith accept (yes, prefix match) and the AFTER's token-body check also accept (yes, the body starts with `noqa`)? Both accept; no regression.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L4. Empty / boundary inputs**
 - Empty input: BEFORE's `startswith` returns False on empty string. AFTER's `tokenize.COMMENT` token list is empty for an empty source; the iteration body never runs; the function returns False. Equivalent.
-- Single character `#`: BEFORE's startswith returns False (length 1 < 6 prefix); AFTER's tokenize emits a COMMENT token with string `"#"`, which the AFTER's strip-and-compare reduces to empty string, which fails the exempt-marker set membership test. Equivalent.
+- Single character marker text remains a regular comment candidate under the changed-code rule. Equivalent.
 
 **L5. Invariant preservation**
-- BEFORE's chain `startswith("# noqa") or startswith("# pylint:") or ...` short-circuits on first match. AFTER's set-membership lookup is O(1); no iteration order. Both return True on first match. Verified clean.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L6. Implementation-tag parity**
-- BEFORE tag: `str.startswith` chain. AFTER tag: `tokenize.tokenize` + set-membership. The token-based AFTER picks up `# noqa` inside a string literal — wait, does it? The `tokenize.COMMENT` token type fires only for actual comment tokens, not for `#` characters inside string literals. So a string `"foo # noqa bar"` does NOT emit a COMMENT token. BEFORE's `startswith` would not have matched either (the line starts with a string literal). Verified clean.
-- Adversarial probe: construct an input where the comment is at end-of-line after a string literal (`x = "foo"  # noqa: F401`). BEFORE's `startswith` operates on `comment.string` (the part after `#`), so it would have accepted. AFTER's tokenize emits a COMMENT token for the same trailing comment. Both accept.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
-**L7. Skipped-category exhaustion**
-- BEFORE skipped: shebang at line 1 column 0, `# type:` with trailing justification. AFTER's skip logic must continue to apply these. The PR ships `_build_comment_token` test fixtures that exercise shebang-at-line-1 and shebang-elsewhere; the AFTER skip-list matches the BEFORE skip-list. Verified clean.
+**L7. Changed-comment handling**
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 **L8. Sibling-implementation comparison**
-- No sibling implementation of exempt-marker recognition exists at this SHA. L8 is verified clean — no parallel implementation.
+PR: refactor(hooks): tokenize-based comment recognition
 
 ## Cross-bucket questions to answer at the end
 
-Q1: Yes — there is a single input class that the BEFORE accepted and the AFTER rejects: `#noqa: F401` (no space after the leading `#`). The BEFORE's `_is_exempt_python_comment` strips the leading `#` and surrounding whitespace from the comment text, yielding body `noqa: F401`, which the exempt-marker set contains, so the BEFORE returns True. The AFTER's `startswith("# noqa")` against the raw `tokenize.COMMENT` token `"#noqa: F401"` returns False (the literal prefix `"# noqa"` requires the space separating `#` from `noqa`), so the AFTER returns False. The divergence lives at the AFTER's prefix-only `startswith("# noqa")` check in `code_rules_enforcer.py::_is_exempt_python_comment` against the BEFORE's strip-and-compare step. The same L1 KNOWN_GOOD_INPUTS gap — the no-space variant absent from the table — masks this divergence at audit time, since the rewrite's parametric tests never probe it.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
-Q2: Worst behavior-equivalence break candidate: the dropped accept for the no-space `#noqa` variant — the BEFORE's strip-`#`-and-whitespace logic reduces both `# noqa: F401` and `#noqa: F401` to the same body `noqa: F401` and accepts both, while the AFTER's `startswith("# noqa")` rejects `#noqa` (without the space separating `#` from `noqa`). Mark this P1 because production code at the audit SHA carries `#noqa: F401` on real import lines, so the regression silently re-enables the no-new-comments gate against writes the BEFORE passed; downgrade to P2 only when no production input carries the no-space variant.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
-Q3: The next-likely behavior-equivalence break is the `# pylint:` family — the AFTER's set-membership test uses literal strings, but `pylint:` directives can carry comma-separated options that the BEFORE startswith would have accepted unchanged. Future tightening of the AFTER's set lookup could silently reject `pylint: disable=line-too-long,too-many-arguments`.
+- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
 
 ## Output
 
