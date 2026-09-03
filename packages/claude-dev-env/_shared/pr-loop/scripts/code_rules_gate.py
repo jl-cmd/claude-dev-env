@@ -337,7 +337,9 @@ def _run_diff_mode(
         + paths_from_git_untracked(repository_root)
     )
     if not all_candidate_paths:
-        return _report_empty_diff()
+        if arguments.comment_policy:
+            return _report_empty_diff()
+        return _report_empty_file_set()
     file_paths = filter_paths_under_prefixes(
         all_candidate_paths, repository_root, arguments.only_under
     )

@@ -651,6 +651,128 @@ def test_run_gate_base_mode_blocks_retained_comment_on_changed_line(
     assert exit_code == 1
 
 
+def test_run_gate_staged_mode_blocks_shifted_modified_inline_comment(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # note\nkeep_total = 3\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\ntotal = 2  # note\nkeep_total = 3\n",
+    )
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
+
+    assert exit_code == 1
+
+
+def test_run_gate_base_mode_blocks_shifted_modified_inline_comment(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # note\nkeep_total = 3\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\ntotal = 2  # note\nkeep_total = 3\n",
+    )
+    commit_all_files(temporary_git_repository, "shift inline comment")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
+
+    assert exit_code == 1
+
+
+def test_run_gate_staged_mode_reserves_equal_duplicate_before_fallback(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_file(
+        temporary_git_repository / "module.py",
+        "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n",
+    )
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n",
+    )
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.count("comment still on the changed lines") == 1
+    assert "at deleted code" not in captured.err
+
+
+def test_run_gate_base_mode_reserves_equal_duplicate_before_fallback(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_file(
+        temporary_git_repository / "module.py",
+        "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n",
+    )
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n",
+    )
+    commit_all_files(temporary_git_repository, "reserve equal duplicate")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.count("comment still on the changed lines") == 1
+    assert "at deleted code" not in captured.err
+
+
+def test_run_gate_staged_mode_blocks_comment_attached_to_deleted_code(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(
+        temporary_git_repository / "module.py",
+        "# attached\nremoved_total = 1\nkeep_total = 2\n",
+    )
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(temporary_git_repository / "module.py", "# attached\nkeep_total = 2\n")
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
+
+    assert exit_code == 1
+
+
+def test_run_gate_base_mode_blocks_comment_attached_to_deleted_code(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(
+        temporary_git_repository / "module.py",
+        "# attached\nremoved_total = 1\nkeep_total = 2\n",
+    )
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(temporary_git_repository / "module.py", "# attached\nkeep_total = 2\n")
+    commit_all_files(temporary_git_repository, "remove attached code")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
+
+    assert exit_code == 1
+
+
 def test_run_gate_treats_new_files_prior_content_as_empty(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2949,7 +3071,7 @@ def test_diff_mode_untracked_png_does_not_flood_stderr(
     assert "untracked_icon.png" not in captured.err
 
 
-def test_diff_mode_empty_diff_exits_zero(
+def test_comment_policy_diff_mode_empty_surface_exits_zero(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -2958,7 +3080,7 @@ def test_diff_mode_empty_diff_exits_zero(
     commit_all_files(temporary_git_repository, "seed")
     monkeypatch.chdir(temporary_git_repository)
 
-    exit_code = gate_module.main(["--base", "HEAD"])
+    exit_code = gate_module.main(["--base", "HEAD", "--comment-policy"])
 
     captured = capsys.readouterr()
     assert exit_code == 0
