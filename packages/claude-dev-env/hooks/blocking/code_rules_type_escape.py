@@ -673,7 +673,7 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
     type_ignore_issues: list[str] = []
     for each_ignore_line in _find_unjustified_type_ignore_lines(content):
         type_ignore_issues.append(
-            f"Line {each_ignore_line}: Unjustified # type: ignore - add trailing '# reason' explaining why"
+            f"Line {each_ignore_line}: # type: ignore is not allowed - remove it and use a typed boundary or real type"
         )
     issues.extend(type_ignore_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 

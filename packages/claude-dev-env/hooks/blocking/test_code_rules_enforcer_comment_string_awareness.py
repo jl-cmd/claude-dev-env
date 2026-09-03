@@ -14,6 +14,7 @@ a string still flag.
 from __future__ import annotations
 
 import sys
+import importlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,12 +32,12 @@ from code_rules_comments import (  # noqa: E402
     check_comments_python,
     extract_comment_texts,
 )
-
 code_rules_enforcer = SimpleNamespace(
     check_comment_changes=check_comment_changes,
     check_comments_python=check_comments_python,
     extract_comment_texts=extract_comment_texts,
 )
+code_rules_enforcer_module = importlib.import_module("code_rules_enforcer")
 
 
 def test_python_check_should_not_flag_hex_color_literal() -> None:
@@ -194,3 +195,99 @@ def test_extract_should_classify_inline_shebang_lookalike_as_inline_comment() ->
     inline, standalone = code_rules_enforcer.extract_comment_texts(content, "foo.py")
     assert inline != set()
     assert standalone == set()
+
+
+def test_python_edit_lane_blocks_inline_comment_in_test_file() -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content="total = 1  # added\n",
+        old_content="total = 1\n",
+        effective_content="total = 1  # added\n",
+        file_path="test_totals.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    assert any("Inline comment added" in each_issue for each_issue in issues)
+
+
+def test_javascript_edit_lane_blocks_inline_comment_in_test_file() -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content="const total = 1; // added\n",
+        old_content="const total = 1;\n",
+        effective_content="const total = 1; // added\n",
+        file_path="totals.test.js",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._javascript_comment_and_naming_issues(context)
+    assert any("Inline comment added" in each_issue for each_issue in issues)
+
+
+def test_edit_lane_keeps_directive_comment_exempt_in_test_file() -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content="total = 1  # noqa\n",
+        old_content="total = 1\n",
+        effective_content="total = 1  # noqa\n",
+        file_path="test_totals.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    assert not any("comment added" in each_issue.lower() for each_issue in issues)
+
+
+def test_edit_lane_advises_standalone_comment_in_test_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content="# added\ntotal = 1\n",
+        old_content="total = 1\n",
+        effective_content="# added\ntotal = 1\n",
+        file_path="test_totals.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    assert not any("Standalone comment added" in each_issue for each_issue in issues)
+    assert "Standalone comment added" in capsys.readouterr().err
+
+
+def test_edit_lane_preserves_shebang_and_docstring_in_test_file() -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content='#!/usr/bin/env python3\n"""Describe totals."""\ntotal = 1\n',
+        old_content="#!/usr/bin/env python3\n",
+        effective_content='#!/usr/bin/env python3\n"""Describe totals."""\ntotal = 1\n',
+        file_path="test_totals.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    assert not any("comment added" in each_issue.lower() for each_issue in issues)
+
+
+def test_edit_lane_advises_existing_comment_removal_in_test_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    context = code_rules_enforcer_module._ValidationContext(
+        content="total = 1\n",
+        old_content="total = 1  # existing\n",
+        effective_content="total = 1\n",
+        file_path="test_totals.py",
+        all_changed_lines=None,
+        defer_scope_to_caller=False,
+        sibling_directory=None,
+        phase="edit",
+    )
+    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    assert not any("Existing comment removed" in each_issue for each_issue in issues)
+    assert "Existing comment removed" in capsys.readouterr().err

@@ -128,7 +128,6 @@ from code_rules_shared import (  # noqa: E402
     get_file_extension,
     is_ephemeral_script_path,
     is_hook_infrastructure,
-    is_test_file,
     is_under_session_scratchpad,
 )
 from code_rules_string_magic import (  # noqa: E402
@@ -325,8 +324,7 @@ def _python_comment_and_logging_issues(context: _ValidationContext) -> list[str]
         context.file_path,
     )
     all_issues: list[str] = []
-    if not is_test_file(file_path):
-        all_issues.extend(check_comment_changes(old_content, content, file_path))
+    all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_imports_at_top(content))
     all_issues.extend(check_logging_fstrings(content))
     all_issues.extend(check_logging_printf_tokens(content, file_path))
@@ -576,8 +574,7 @@ def _javascript_comment_and_naming_issues(context: _ValidationContext) -> list[s
         context.file_path,
     )
     all_issues: list[str] = []
-    if not is_test_file(file_path):
-        all_issues.extend(check_comment_changes(old_content, content, file_path))
+    all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_e2e_test_naming(content, file_path))
     all_issues.extend(
         check_js_boolean_naming(

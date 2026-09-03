@@ -56,6 +56,7 @@ def test_should_flag_bare_type_ignore() -> None:
     source = "x = 1  # type: ignore\n"
     issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
     assert any("type: ignore" in issue for issue in issues)
+    assert any("remove it and use a typed boundary or real type" in issue for issue in issues)
 
 
 def test_should_flag_coded_type_ignore_without_justification() -> None:
