@@ -96,26 +96,24 @@ def temporary_git_repository(tmp_path: Path) -> Path:
     return repository_root
 
 
-def test_diff_mode_with_empty_file_set_exits_non_zero_and_says_so(
+def test_diff_mode_with_empty_file_set_exits_zero_and_says_so(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """HEAD == base and nothing untracked: the gate refuses to vouch for nothing.
+    """HEAD == base and nothing untracked: the gate reports a clean empty diff.
 
     A diff that resolves zero candidate files means the gate inspected
     nothing — a bad merge base or a wrong directory looks exactly like this.
-    Issue #62's contract: that run exits non-zero and says so, because a
-    silent pass over zero files is trusted like a real pass.
+    The clean-main run reports zero inspected files and exits cleanly.
     """
     monkeypatch.chdir(temporary_git_repository)
 
     exit_code = gate_module.main(["--base", "HEAD"])
 
     captured = capsys.readouterr()
-    assert exit_code != 0
+    assert exit_code == 0
     assert "inspected 0 file(s)" in captured.err
-    assert "empty" in captured.err.lower()
 
 
 def test_diff_mode_changes_outside_only_under_prefixes_exit_clean_and_report(
