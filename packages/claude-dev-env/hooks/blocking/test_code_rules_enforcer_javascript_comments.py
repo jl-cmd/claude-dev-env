@@ -51,7 +51,7 @@ def test_check_comment_changes_does_not_match_comment_text_inside_changed_string
         "totals.py",
     )
 
-    assert not any("retained on changed code" in each_issue for each_issue in issues)
+    assert not any("still on the changed lines" in each_issue for each_issue in issues)
 
 
 def test_check_comment_changes_flags_comment_attached_to_deleted_code() -> None:
@@ -61,10 +61,10 @@ def test_check_comment_changes_flags_comment_attached_to_deleted_code() -> None:
         "totals.py",
     )
 
-    assert any("Standalone comment retained" in each_issue for each_issue in issues)
+    assert any("Standalone comment still on the changed lines" in each_issue for each_issue in issues)
 
 
-def test_full_gate_is_comment_neutral_by_default() -> None:
+def test_full_gate_skips_comment_policy_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",
         "totals.py",

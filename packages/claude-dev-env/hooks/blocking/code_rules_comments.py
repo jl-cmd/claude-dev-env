@@ -102,7 +102,12 @@ def check_comments_javascript(content: str) -> list[str]:
 def _comment_occurrences(
     content: str, file_path: str, include_directive_comments: bool = False
 ) -> tuple[list[tuple[str, int, bool]], bool]:
-    """Return comment occurrences with source lines and placement."""
+    """List comments as text, line number, and inline vs standalone.
+
+    Python tokenize failure returns an empty list and False. JavaScript
+    returns the shared scanner's list and True. Other extensions return
+    an empty list and True.
+    """
     extension = get_file_extension(file_path)
     if extension in ALL_PYTHON_EXTENSIONS:
         return _python_comment_occurrences(content, include_directive_comments)
@@ -212,7 +217,7 @@ def _changed_line_numbers(old_content: str, new_content: str) -> set[int]:
 
 
 def _deleted_line_numbers(old_content: str, new_content: str) -> set[int]:
-    """Return old source lines removed by the content change."""
+    """Old-file line numbers that a delete or replace covers."""
     matcher = difflib.SequenceMatcher(
         None, old_content.splitlines(), new_content.splitlines(), autojunk=False
     )
@@ -227,7 +232,7 @@ def _deleted_line_numbers(old_content: str, new_content: str) -> set[int]:
 def _comment_lines_by_key(
     all_occurrences: list[tuple[str, int, bool]],
 ) -> dict[tuple[str, bool], list[int]]:
-    """Index comment occurrence lines by exact text and placement."""
+    """Group line numbers by comment text and inline vs standalone."""
     lines_by_key: dict[tuple[str, bool], list[int]] = {}
     for each_text, each_line_number, each_is_inline in all_occurrences:
         lines_by_key.setdefault((each_text, each_is_inline), []).append(each_line_number)
@@ -241,7 +246,12 @@ def _is_attached_to_changed_code(
     all_changed_lines: set[int],
     all_deleted_lines: set[int],
 ) -> bool:
-    """Return whether a retained occurrence sits on or beside changed code."""
+    """Check if this leftover comment still sits on a changed line.
+
+    Inline comments count when their own line changed. Standalone comments
+    count when the next line changed, or when the next line in the old file
+    was deleted.
+    """
     if each_is_inline:
         return each_line_number in all_changed_lines
     return each_line_number + 1 in all_changed_lines or old_line_number + 1 in all_deleted_lines
@@ -267,7 +277,7 @@ def _retained_comment_issues(
             continue
         comment_kind = "Inline" if each_is_inline else "Standalone"
         issues.append(
-            f"Line {each_line_number}: {comment_kind} comment retained on changed code: "
+            f"Line {each_line_number}: {comment_kind} comment still on the changed lines: "
             f"{each_text} - remove the comment"
         )
         if len(issues) >= MAX_COMMENT_ISSUES:
@@ -291,12 +301,11 @@ def _python_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
 def _comment_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
     """Yield COMMENT tokens from *source* one at a time.
 
-    Streams from ``_python_tokens`` so consumers that early-exit (e.g.
-    ``check_comments_python`` caps at ``MAX_COMMENT_ISSUES``) avoid
-    materializing the entire token list. Silently stops on tokenize
-    failure so callers receive only valid comment tokens — no
-    indeterminate signal is exposed at this layer because the consumers
-    that need a tokenize status use the occurrence helper.
+    Streams from ``_python_tokens`` so consumers that early-exit, such as
+    ``check_comments_python`` capping at ``MAX_COMMENT_ISSUES``, avoid
+    materializing the entire token list. Tokenize failure stops the
+    stream with no extra flag. Callers that need to know tokenize failed
+    use ``_python_comment_occurrences``.
     """
     try:
         for each_token in _python_tokens(source):

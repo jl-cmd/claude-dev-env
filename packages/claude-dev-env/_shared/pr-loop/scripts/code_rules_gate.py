@@ -252,7 +252,11 @@ def _report_empty_file_set() -> int:
 
 
 def _report_empty_diff() -> int:
-    """Report a clean run when the selected baseline has no changed files."""
+    """Print inspected 0 and return 0 when git has no changed files.
+
+    HEAD equals the chosen base and nothing is untracked. That is a clean
+    tree, so the gate stays quiet.
+    """
     sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
     return 0
 

@@ -63,8 +63,8 @@ function Resolve-CommentPolicyBase {
     }
 
     $headCommit = & git -C $repositoryRoot rev-parse --verify --quiet 'HEAD^{commit}' 2>$null
-    $continuousIntegrationBases = @($env:GITHUB_BASE_SHA, $env:GITHUB_EVENT_BEFORE)
-    foreach ($candidateBase in @($continuousIntegrationBases + 'origin/main' + 'HEAD^1')) {
+    $ciBases = @($env:GITHUB_BASE_SHA, $env:GITHUB_EVENT_BEFORE)
+    foreach ($candidateBase in @($ciBases + 'origin/main' + 'HEAD^1')) {
         if (-not $candidateBase) {
             continue
         }
@@ -76,7 +76,7 @@ function Resolve-CommentPolicyBase {
             return $candidateBase
         }
     }
-    throw 'Comment-policy baseline does not resolve to a continuous-integration base, origin/main, or HEAD^1.'
+    throw 'Comment-policy baseline does not resolve to a CI base, origin/main, or HEAD^1.'
 }
 
 $commentPolicyBase = Resolve-CommentPolicyBase -ExplicitBase $CommentPolicyBase

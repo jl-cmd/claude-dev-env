@@ -101,11 +101,10 @@ def test_diff_mode_with_empty_file_set_exits_zero_and_says_so(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """HEAD == base and nothing untracked: the gate reports a clean empty diff.
+    """HEAD equals base and nothing is untracked, so there is no diff.
 
-    A diff that resolves zero candidate files means the gate inspected
-    nothing — a bad merge base or a wrong directory looks exactly like this.
-    The clean-main run reports zero inspected files and exits cleanly.
+    Report inspected 0 and exit 0. A bad merge base or a wrong directory
+    can also look empty, but a clean tree is the case this test covers.
     """
     monkeypatch.chdir(temporary_git_repository)
 

@@ -2949,7 +2949,7 @@ def test_diff_mode_untracked_png_does_not_flood_stderr(
     assert "untracked_icon.png" not in captured.err
 
 
-def test_diff_mode_empty_surface_exits_zero(
+def test_diff_mode_empty_diff_exits_zero(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
