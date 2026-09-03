@@ -242,6 +242,14 @@ def test_pull_request_reminder_prints_url(
     assert output.startswith("Review this pull request: https://github.com/example/repo/pull/1\n")
     assert "<PR link>" not in output
     assert "Do not use the branch name, commit message, labels, current title" in output
+    assert (
+        "Before writing, inventory every independently observable behavior in the full diff."
+        in output
+        and "Lead with the central behavior for readability, then give every other behavior its own short paragraph or bullet."
+        in output
+        and "For each behavior, state the trigger or observer, the Before -> After result" in output
+        and "OVERRIDE:" not in output
+    )
     assert "gh pr edit https://github.com/example/repo/pull/1" in output
     assert output.rstrip().endswith("Report the saved result.")
 
