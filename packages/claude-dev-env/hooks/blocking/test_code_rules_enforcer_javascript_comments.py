@@ -96,6 +96,17 @@ def test_check_comment_changes_reserves_equal_duplicate_before_fallback() -> Non
     ]
 
 
+def test_check_comment_changes_reserves_fallback_before_deleted_attachment() -> None:
+    old_content = "# duplicate\nfirst_total = 1\n# duplicate\nsecond_total = 2\n"
+    new_content = "prefix_total = 0\n# duplicate\nfirst_total = 1\n# duplicate\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert issues == [
+        "Line 4: Standalone comment still on the changed lines at deleted code: # duplicate - remove the comment"
+    ]
+
+
 def test_full_gate_is_comment_neutral_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",

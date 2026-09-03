@@ -241,9 +241,8 @@ def _reserve_mapped_old_comment_lines(all_new_occurrences: list[tuple[str, int, 
     reserved_old_line_by_new_index: dict[int, int] = {}
     for each_index, (each_text, each_line_number, each_is_inline) in enumerate(all_new_occurrences):
         mapped_old_line = all_old_line_by_new_line.get(each_line_number if each_is_inline else each_line_number + 1, 0) - (0 if each_is_inline else 1)
-        if mapped_old_line not in all_old_line_by_key.get((each_text, each_is_inline), []) or mapped_old_line in reserved_old_line_by_new_index.values():
-            continue
-        reserved_old_line_by_new_index[each_index] = mapped_old_line
+        if mapped_old_line in all_old_line_by_key.get((each_text, each_is_inline), []) and mapped_old_line not in reserved_old_line_by_new_index.values():
+            reserved_old_line_by_new_index[each_index] = mapped_old_line
     return reserved_old_line_by_new_index
 
 
@@ -254,7 +253,6 @@ def _is_attached_to_changed_code(
     all_changed_lines: set[int],
     all_deleted_lines: set[int],
 ) -> bool:
-    """Return whether a retained occurrence sits on or beside changed code."""
     if each_is_inline:
         return each_line_number in all_changed_lines
     return each_line_number + 1 in all_changed_lines or old_line_number + 1 in all_deleted_lines
@@ -276,9 +274,11 @@ def _retained_comment_issues(
     issues: list[str] = []
     for each_text, each_line_number, each_is_inline in new_occurrences:
         old_line_number = _matching_old_comment_line(each_text, each_line_number, each_is_inline, old_line_by_key, old_line_by_new_line, used_old_lines, set(reserved_old_line_by_new_index.values()))
-        if old_line_number is None or not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
+        if old_line_number is None:
             continue
         used_old_lines.add(old_line_number)
+        if not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
+            continue
         is_deleted_attachment = not each_is_inline and each_line_number + 1 not in all_changed_lines and old_line_number + 1 in all_deleted_lines
         issue_line = each_line_number if is_deleted_attachment or each_is_inline else each_line_number + 1
         comment_kind = "Inline" if each_is_inline else "Standalone"
