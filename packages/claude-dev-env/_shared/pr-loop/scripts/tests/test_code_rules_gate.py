@@ -651,6 +651,42 @@ def test_run_gate_base_mode_blocks_retained_comment_on_changed_line(
     assert exit_code == 1
 
 
+def test_run_gate_staged_mode_blocks_shifted_modified_inline_comment(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # note\nkeep_total = 3\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\ntotal = 2  # note\nkeep_total = 3\n",
+    )
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
+
+    assert exit_code == 1
+
+
+def test_run_gate_base_mode_blocks_shifted_modified_inline_comment(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # note\nkeep_total = 3\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(
+        temporary_git_repository / "module.py",
+        "prep_total = 0\ntotal = 2  # note\nkeep_total = 3\n",
+    )
+    commit_all_files(temporary_git_repository, "shift inline comment")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
+
+    assert exit_code == 1
+
+
 def test_run_gate_staged_mode_blocks_comment_attached_to_deleted_code(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,

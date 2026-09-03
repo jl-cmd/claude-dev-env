@@ -228,11 +228,14 @@ def _matching_old_comment_line(
 ) -> int | None:
     all_matching_old_lines = all_old_line_by_key.get((each_text, each_is_inline), [])
     mapped_old_line = all_old_line_by_new_line.get(each_line_number)
-    return next(
-        (each_candidate for each_candidate in (mapped_old_line, each_line_number)
-         if each_candidate in all_matching_old_lines and each_candidate not in all_used_old_lines),
-        None,
-    )
+    all_available_old_lines = [
+        each_candidate for each_candidate in all_matching_old_lines if each_candidate not in all_used_old_lines
+    ]
+    if mapped_old_line in all_available_old_lines:
+        return mapped_old_line
+    if not all_available_old_lines:
+        return None
+    return min(all_available_old_lines, key=lambda each_candidate: (abs(each_candidate - each_line_number), each_candidate))
 
 
 def _is_attached_to_changed_code(

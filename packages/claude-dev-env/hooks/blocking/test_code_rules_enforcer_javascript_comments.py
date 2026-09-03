@@ -73,6 +73,15 @@ def test_check_comment_changes_maps_identical_comments_to_equal_lines() -> None:
     assert not any("still on the changed lines" in each_issue for each_issue in issues)
 
 
+def test_check_comment_changes_flags_shifted_modified_inline_comment() -> None:
+    old_content = "total = 1  # note\n"
+    new_content = "prep = 0\ntotal = 2  # note\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert any("Line 2: Inline comment still on the changed lines" in each_issue for each_issue in issues)
+
+
 def test_full_gate_is_comment_neutral_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",
