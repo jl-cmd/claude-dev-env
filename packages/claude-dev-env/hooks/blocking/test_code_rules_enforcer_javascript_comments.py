@@ -64,7 +64,50 @@ def test_check_comment_changes_flags_comment_attached_to_deleted_code() -> None:
     assert any("Standalone comment still on the changed lines" in each_issue for each_issue in issues)
 
 
-def test_full_gate_skips_comment_policy_by_default() -> None:
+def test_check_comment_changes_maps_identical_comments_to_equal_lines() -> None:
+    old_content = "# duplicate\nold_total = 1\n# duplicate\nlater_total = 2\n"
+    new_content = "# duplicate\nlater_total = 2\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert not any("still on the changed lines" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_flags_shifted_modified_inline_comment() -> None:
+    old_content = "total = 1  # note\n"
+    new_content = "prep = 0\ntotal = 2  # note\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert any("Line 2: Inline comment still on the changed lines" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_reserves_equal_duplicate_before_fallback() -> None:
+    old_content = "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n"
+    new_content = "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    changed_occurrence_issues = [
+        each_issue for each_issue in issues if "still on the changed lines" in each_issue
+    ]
+    assert changed_occurrence_issues == [
+        "Line 3: Standalone comment still on the changed lines: # duplicate - remove the comment"
+    ]
+
+
+def test_check_comment_changes_reserves_fallback_before_deleted_attachment() -> None:
+    old_content = "# duplicate\nfirst_total = 1\n# duplicate\nsecond_total = 2\n"
+    new_content = "prefix_total = 0\n# duplicate\nfirst_total = 1\n# duplicate\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert issues == [
+        "Line 4: Standalone comment still on the changed lines at deleted code: # duplicate - remove the comment"
+    ]
+
+
+def test_full_gate_is_comment_neutral_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",
         "totals.py",
