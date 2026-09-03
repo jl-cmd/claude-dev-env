@@ -29,11 +29,6 @@ from .config.baseline_identity_constants import (
     STANDALONE_NUMBER_PATTERN,
     WORD_BOUNDARY_PATTERN,
 )
-from .config.codex_patch_payload_constants import (
-    CODEX_APPLY_PATCH_TOOL_NAME,
-    CODEX_PATCH_COMMAND_KEY,
-    PAYLOAD_WORKING_DIRECTORY_KEY,
-)
 from .config.directory_exemption_constants import (
     ALL_DIRECTORY_EXEMPTION_SEGMENT_NAMES,
     ALL_DIRECTORY_EXEMPTION_SUBSTRING_PATTERNS,
@@ -54,6 +49,10 @@ from blocking.codex_apply_patch import (
     CodexPatchError,
     CodexPatchFile,
     parse_codex_apply_patch,
+    payload_patch_command,
+)
+from hooks_constants.pre_tool_use_dispatcher_constants import (
+    APPLY_PATCH_TOOL_NAME,
 )
 from hooks_constants.hook_block_logger import log_hook_block
 from hooks_constants.multi_edit_reconstruction import (
@@ -1508,12 +1507,13 @@ def _evaluate_codex_apply_patch(pre_tool_use_payload: dict, tool_input: dict) ->
         pre_tool_use_payload: The whole PreToolUse payload.
         tool_input: The payload's tool input mapping.
     """
-    patch_command = tool_input.get(CODEX_PATCH_COMMAND_KEY, "")
-    if not isinstance(patch_command, str) or not patch_command:
+    patch_command, working_directory = payload_patch_command(
+        pre_tool_use_payload, tool_input
+    )
+    if not patch_command:
         return
-    working_directory = pre_tool_use_payload.get(PAYLOAD_WORKING_DIRECTORY_KEY, "")
     try:
-        all_patch_files = parse_codex_apply_patch(patch_command, str(working_directory))
+        all_patch_files = parse_codex_apply_patch(patch_command, working_directory)
     except CodexPatchError:
         return
     for each_patch_file in all_patch_files:
@@ -1542,7 +1542,7 @@ def _evaluate_pre_tool_use_payload() -> None:
     tool_input = pre_tool_use_payload.get("tool_input", {})
     if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
         return
-    if tool_name == CODEX_APPLY_PATCH_TOOL_NAME:
+    if tool_name == APPLY_PATCH_TOOL_NAME:
         _evaluate_codex_apply_patch(pre_tool_use_payload, tool_input)
         return
     file_path = tool_input.get("file_path", "")

@@ -74,11 +74,6 @@ def run_gate(payload: dict[str, object]) -> "subprocess.CompletedProcess[str]":
     return run_validators_entrypoint_subprocess(["--pre-tool-use"], stdin_text=json.dumps(payload))
 
 
-def json_embedded_path(target_path: Path) -> str:
-    """Return the path exactly as a JSON deny payload spells it."""
-    return json.dumps(str(target_path))[1:-1]
-
-
 def update_patch_command(relative_path: str, added_line: str) -> str:
     """Build an Update File patch rewriting the module's return line."""
     return UPDATE_PATCH_TEMPLATE.format(
