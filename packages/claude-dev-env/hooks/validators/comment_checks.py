@@ -1,4 +1,4 @@
-"""Comment detection validator.
+"""Comment detection helpers used by the opt-in diff-aware linter.
 
 Implements check 26: No comments in code (self-documenting code principle).
 
@@ -12,7 +12,7 @@ Exceptions (NOT flagged):
 - Docstrings (triple-quoted strings for function contracts)
 
 Note: Docstrings documenting function Args/Returns/Raises are acceptable
-per CODE_RULES.md. This validator only flags # and // style comments.
+per CODE_RULES.md. The save-path validator does not invoke these helpers.
 """
 
 import re

@@ -601,9 +601,24 @@ def test_run_gate_detects_new_inline_comment_in_touched_file(
     stage_file(temporary_git_repository, "module.py")
 
     monkeypatch.chdir(temporary_git_repository)
-    exit_code = gate_module.main(["--staged"])
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
 
     assert exit_code == 1
+
+
+def test_main_staged_mode_omits_comments_without_opt_in(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(temporary_git_repository / "module.py", "total = 1  # added\n")
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 0
 
 
 def test_run_gate_staged_mode_blocks_retained_comment_on_changed_line(
@@ -616,7 +631,7 @@ def test_run_gate_staged_mode_blocks_retained_comment_on_changed_line(
     stage_file(temporary_git_repository, "module.py")
 
     monkeypatch.chdir(temporary_git_repository)
-    exit_code = gate_module.main(["--staged"])
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
 
     assert exit_code == 1
 
@@ -631,7 +646,7 @@ def test_run_gate_base_mode_blocks_retained_comment_on_changed_line(
     commit_all_files(temporary_git_repository, "change")
 
     monkeypatch.chdir(temporary_git_repository)
-    exit_code = gate_module.main(["--base", "HEAD~1"])
+    exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
 
     assert exit_code == 1
 
@@ -649,7 +664,7 @@ def test_run_gate_treats_new_files_prior_content_as_empty(
     stage_file(temporary_git_repository, "brand_new.py")
 
     monkeypatch.chdir(temporary_git_repository)
-    exit_code = gate_module.main(["--staged"])
+    exit_code = gate_module.main(["--staged", "--comment-policy"])
 
     assert exit_code == 1
 
@@ -2417,6 +2432,7 @@ def test_parse_arguments_applies_documented_defaults() -> None:
 
     assert parsed_arguments.staged is False
     assert parsed_arguments.immediate is False
+    assert parsed_arguments.comment_policy is False
     assert parsed_arguments.base == "origin/main"
     assert parsed_arguments.repo_root is None
     assert parsed_arguments.only_under == []

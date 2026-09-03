@@ -410,18 +410,12 @@ def run_git_checks() -> ValidatorResult:
 
 
 def run_comment_checks(files: List[Path]) -> ValidatorResult:
-    """Comment preservation is enforced by code_rules_enforcer hook.
-
-    The hook compares old vs new content to block NEW comments and
-    print a stderr advisory when an existing comment is removed. This
-    standalone validator is disabled because it flags ALL comments in
-    existing files, which forces agents to remove them to pass validation.
-    """
+    """Report that comment policy runs through the explicit diff-aware linter."""
     return ValidatorResult(
         name="No Comments",
         checks="26",
         passed=True,
-        output="Handled by code_rules_enforcer hook (old vs new comparison)",
+        output="Run code_rules_gate.py with --comment-policy",
     )
 
 
@@ -1675,7 +1669,6 @@ def main() -> int:
             ("Security", lambda: run_security_checks(files)),
             ("Code Quality", lambda: run_code_quality_checks(files)),
             ("Python Anti-patterns", lambda: run_python_antipattern_checks(files)),
-            ("TODO Tracking", lambda: run_todo_checks(files)),
             ("Type Safety", lambda: run_type_safety_checks(files)),
         ]
 

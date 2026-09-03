@@ -9,7 +9,6 @@ from .fast_save_validators import run_fast_save_validators
 from .magic_value_checks import validate_file as read_magic_literal_violations
 from .react_checks import check_no_class_components
 from .test_safety_checks import check_no_skip_decorators
-from .todo_checks import validate_file as read_todo_violations
 
 MAGIC_LITERAL_SOURCE = "def compute_total(unit_price: int) -> int:\n    return unit_price * 199\n"
 _UNTRACKED_TODO_MARKER = "#" + " TODO"
@@ -24,7 +23,6 @@ _ALL_EXPECTED_FAST_SAVE_VALIDATOR_NAMES = frozenset(
         "Python Style",
         "Abbreviations",
         "Magic Values",
-        "TODO Tracking",
         "Security",
         "Code Quality",
         "Python Anti-patterns",
@@ -103,16 +101,12 @@ def test_magic_values_outcome_matches_direct_validate_file_call(
     assert magic_values_outcome.output == "\n".join(expected_lines)
 
 
-def test_todo_outcome_matches_direct_validate_file_call(tmp_path: Path) -> None:
+def test_todo_comments_do_not_run_on_save_path(tmp_path: Path) -> None:
     target_file = tmp_path / "legacy_module.py"
     target_file.write_text(TODO_SOURCE, encoding="utf-8")
-    expected_lines = [str(each) for each in read_todo_violations(target_file)]
-    assert expected_lines != []
-
     all_outcomes = run_fast_save_validators([target_file])
 
-    todo_outcome = next(each for each in all_outcomes if each.name == "TODO Tracking")
-    assert todo_outcome.output == "\n".join(expected_lines)
+    assert all(each.name != "TODO Tracking" for each in all_outcomes)
 
 
 def test_abbreviations_outcome_reports_clean_for_a_clean_file(tmp_path: Path) -> None:

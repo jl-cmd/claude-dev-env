@@ -25,5 +25,12 @@ def test_parse_arguments_collects_only_under_and_paths() -> None:
 def test_parse_arguments_defaults_base_to_origin_main() -> None:
     arguments = gate_arguments.parse_arguments([])
     assert arguments.base == "origin/main"
+    assert arguments.comment_policy is False
     assert arguments.staged is False
     assert arguments.only_under == []
+
+
+def test_parse_arguments_accepts_opt_in_comment_policy() -> None:
+    arguments = gate_arguments.parse_arguments(["--comment-policy"])
+
+    assert arguments.comment_policy is True

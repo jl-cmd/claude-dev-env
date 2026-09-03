@@ -1,11 +1,14 @@
 """Comment-presence and comment-change checks for Python and JavaScript sources."""
 
 import difflib
+import importlib
 import io
 import sys
 import tokenize
+from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 
 _blocking_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
@@ -21,7 +24,6 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_FREE_FORM_EXEMPT_COMMENT_BODIES,
     ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES,
-    ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES,
     ALL_JAVASCRIPT_EXTENSIONS,
     ALL_PYTHON_EXTENSIONS,
     ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS,
@@ -29,6 +31,10 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES,
     CHAINED_INLINE_COMMENT_PATTERN,
     MAX_COMMENT_ISSUES,
+)
+_javascript_comment_scanner = importlib.import_module("javascript_comment_scanner")
+extract_javascript_comment_occurrences = (
+    _javascript_comment_scanner.extract_javascript_comment_occurrences
 )
 
 
@@ -116,46 +122,46 @@ def extract_comment_texts(
         )
         return inline_comments, standalone_comments
 
-    lines = content.split("\n")
-
     if extension in ALL_JAVASCRIPT_EXTENSIONS:
-        is_in_multiline = False
-        for each_line in lines:
-            stripped = each_line.strip()
-            if not stripped:
-                continue
-            if is_in_multiline:
-                if "*/" in stripped:
-                    is_in_multiline = False
-                continue
-            block_comment_start = stripped.find("/*")
-            if block_comment_start > 0:
-                block_comment = stripped[block_comment_start:]
-                if not block_comment.startswith("/**"):
-                    inline_comments.add(block_comment)
-                is_in_multiline = "*/" not in block_comment
-                continue
-            if stripped.startswith("/*"):
-                is_in_multiline = "*/" not in stripped
-                if not stripped.startswith("/**"):
-                    standalone_comments.add(stripped)
-                continue
-            if stripped.startswith("//"):
-                if include_directive_comments or not stripped.startswith(
-                    ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES
-                ):
-                    standalone_comments.add(stripped)
-            elif "//" in each_line:
-                before_slash = each_line[:each_line.index("//")]
-                if before_slash.strip():
-                    comment_start = stripped.index("//")
-                    comment_text = stripped[comment_start + len("//") :].strip()
-                    if include_directive_comments or not comment_text.startswith(
-                        ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES
-                    ):
-                        inline_comments.add(stripped[comment_start:])
+        all_occurrences: list[tuple[str, int, bool]] = cast(
+            list[tuple[str, int, bool]],
+            extract_javascript_comment_occurrences(content, include_directive_comments),
+        )
+        inline_comments = {
+            each_text
+            for each_text, _each_line_number, is_inline in all_occurrences
+            if is_inline
+        }
+        standalone_comments = {
+            each_text
+            for each_text, _each_line_number, is_inline in all_occurrences
+            if not is_inline
+        }
 
     return inline_comments, standalone_comments
+
+
+def _python_comment_occurrences(
+    content: str,
+) -> tuple[list[tuple[str, int, bool]], bool]:
+    """Return Python comments with exact lines and a tokenize status."""
+    source_lines = content.split("\n")
+    try:
+        all_tokens = list(_python_tokens(content))
+    except ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS:
+        return [], False
+    all_occurrences: list[tuple[str, int, bool]] = []
+    for each_token in all_tokens:
+        if each_token.type != tokenize.COMMENT:
+            continue
+        if each_token.string.startswith("#!") and each_token.start == (1, 0):
+            continue
+        source_line = source_lines[each_token.start[0] - 1]
+        is_inline = bool(source_line[: each_token.start[1]].strip())
+        all_occurrences.append(
+            (each_token.string.strip(), each_token.start[0], is_inline)
+        )
+    return all_occurrences, True
 
 
 def check_comment_changes(old_content: str, new_content: str, file_path: str) -> list[str]:
@@ -176,33 +182,30 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
 
     extension = get_file_extension(file_path)
     if extension in ALL_PYTHON_EXTENSIONS:
-        old_inline, old_standalone, old_tokenize_ok = _extract_python_comment_sets(
-            old_content, True
-        )
-        new_inline, new_standalone, new_tokenize_ok = _extract_python_comment_sets(
-            new_content, True
-        )
+        old_occurrences, old_tokenize_ok = _python_comment_occurrences(old_content)
+        new_occurrences, new_tokenize_ok = _python_comment_occurrences(new_content)
         if not (old_tokenize_ok and new_tokenize_ok):
             return issues
     else:
-        old_inline, old_standalone = extract_comment_texts(
-            old_content, file_path, True
-        )
-        new_inline, new_standalone = extract_comment_texts(
-            new_content, file_path, True
-        )
+        old_occurrences = extract_javascript_comment_occurrences(old_content, True)
+        new_occurrences = extract_javascript_comment_occurrences(new_content, True)
 
-    added_inline = new_inline - old_inline
-    if added_inline:
-        sample = next(iter(added_inline))
-        line_number = next((each_line_number for each_line_number, each_line in enumerate(new_content.splitlines(), 1) if sample in each_line), 1)
-        issues.append(f"Line {line_number}: Inline comment added: {sample[:60]} - refactor to self-documenting code")
-
-    added_standalone = new_standalone - old_standalone
-    if added_standalone:
-        sample = next(iter(added_standalone))
-        line_number = next((each_line_number for each_line_number, each_line in enumerate(new_content.splitlines(), 1) if sample in each_line), 1)
-        issues.append(f"Line {line_number}: Standalone comment added: {sample[:60]} - remove the comment or move its meaning into code structure")
+    old_occurrence_counts = Counter(
+        (each_text, is_inline)
+        for each_text, _line_number, is_inline in old_occurrences
+    )
+    seen_occurrence_counts: Counter[tuple[str, bool]] = Counter()
+    for each_text, each_line_number, each_is_inline in new_occurrences:
+        occurrence_key = (each_text, each_is_inline)
+        if seen_occurrence_counts[occurrence_key] >= old_occurrence_counts[occurrence_key]:
+            comment_kind = "Inline" if each_is_inline else "Standalone"
+            issues.append(
+                f"Line {each_line_number}: {comment_kind} comment added: "
+                f"{each_text[:60]} - refactor to self-documenting code"
+            )
+        seen_occurrence_counts[occurrence_key] += 1
+        if len(issues) >= MAX_COMMENT_ISSUES:
+            break
     issues.extend(_retained_comment_issues(old_content, new_content, file_path))
 
     return issues
@@ -225,7 +228,7 @@ def _retained_comment_issues(
 ) -> list[str]:
     old_inline, old_standalone = extract_comment_texts(old_content, file_path, True)
     new_inline, new_standalone = extract_comment_texts(new_content, file_path, True)
-    shared_inline = old_inline & new_inline
+    shared_inline = set(Counter(old_inline) & Counter(new_inline))
     shared_standalone = old_standalone & new_standalone
     if not shared_inline and not shared_standalone:
         return []
@@ -238,7 +241,7 @@ def _retained_comment_issues(
             issues.append(f"Line {each_line_number}: Inline comment retained on changed code: {inline_comment} - remove the comment")
         preceding_line_number = each_line_number - 1
         if preceding_line_number > 0 and new_lines[preceding_line_number - 1].strip() in shared_standalone:
-            issues.append(f"Line {preceding_line_number}: Standalone comment retained on changed code: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
+            issues.append(f"Line {each_line_number}: Standalone comment retained on changed code at line {preceding_line_number}: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
         if len(issues) >= MAX_COMMENT_ISSUES:
             break
     return issues[:MAX_COMMENT_ISSUES]

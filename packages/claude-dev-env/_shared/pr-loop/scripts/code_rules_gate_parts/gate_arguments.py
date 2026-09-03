@@ -9,6 +9,16 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
 )
 
 
+def _add_comment_policy_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the opt-in diff-aware comment-policy switch."""
+    parser.add_argument(
+        "--comment-policy",
+        action="store_true",
+        default=False,
+        help="Include the opt-in diff-aware comment-policy checks.",
+    )
+
+
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
     """Add the repo-root, base-ref, and staged-scope arguments to *parser*."""
     parser.add_argument(
@@ -22,6 +32,7 @@ def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
         default="origin/main",
         help="Merge-base ref for git diff (default: origin/main).",
     )
+    _add_comment_policy_argument(parser)
     staged_scope_group = parser.add_mutually_exclusive_group()
     staged_scope_group.add_argument(
         "--staged",
@@ -77,6 +88,7 @@ def parse_arguments(all_arguments: list[str]) -> argparse.Namespace:
 
     Returns:
         The parsed namespace with ``repo_root``, ``base``, ``staged``,
-        ``immediate``, ``only_under``, and ``paths`` attributes.
+        ``immediate``, ``comment_policy``, ``only_under``, and ``paths``
+        attributes.
     """
     return _build_argument_parser().parse_args(all_arguments)

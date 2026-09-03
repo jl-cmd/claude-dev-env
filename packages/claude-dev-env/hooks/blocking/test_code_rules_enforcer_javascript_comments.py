@@ -1,0 +1,44 @@
+"""Tests for JavaScript comment extraction and diff occurrence reporting."""
+
+from __future__ import annotations
+
+import importlib
+import sys
+from pathlib import Path
+
+_BLOCKING_DIRECTORY = str(Path(__file__).resolve().parent)
+_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
+if _BLOCKING_DIRECTORY not in sys.path:
+    sys.path.insert(0, _BLOCKING_DIRECTORY)
+if _HOOKS_DIRECTORY not in sys.path:
+    sys.path.insert(0, _HOOKS_DIRECTORY)
+
+check_comment_changes = importlib.import_module(
+    "code_rules_comments"
+).check_comment_changes
+
+
+def test_check_comment_changes_ignores_javascript_url_string() -> None:
+    issues = check_comment_changes(
+        "", 'const docsUrl = "https://example.com/guide";\n', "docs.js"
+    )
+
+    assert issues == []
+
+
+def test_check_comment_changes_reports_javascript_comment_line() -> None:
+    issues = check_comment_changes(
+        "", 'const total = 1;\nconst next = 2; // added\n', "totals.js"
+    )
+
+    assert any("Line 2: Inline comment added" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_reports_duplicate_identical_comment_occurrence() -> None:
+    issues = check_comment_changes(
+        "total = 1  # repeated\n",
+        "total = 1  # repeated\ntotal = 2  # repeated\n",
+        "totals.py",
+    )
+
+    assert any("Line 2: Inline comment added" in each_issue for each_issue in issues)
