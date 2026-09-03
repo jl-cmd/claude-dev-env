@@ -1,5 +1,62 @@
 # Changelog
 
+## [2.32.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.31.1...claude-dev-env-v2.32.0) (2026-09-03)
+
+
+### Features
+
+* Let a real failing test run satisfy the test-first gate ([114d5ad](https://github.com/jl-cmd/claude-dev-env/commit/114d5ad68b4cebb4326e5866f50ff0afe4918c42))
+
+
+### Bug Fixes
+
+* Close the heredoc strip bypass now live on main ([f62de60](https://github.com/jl-cmd/claude-dev-env/commit/f62de6014ee315fa4bb46984df9cc23fcef2206c))
+* **hooks:** read a quoted heredoc body as text, not as shell input ([f51e25b](https://github.com/jl-cmd/claude-dev-env/commit/f51e25b0e12b375772f254378aff17d764ffe368))
+* **hooks:** read an opener only outside quotes, and only when it closes ([d74183c](https://github.com/jl-cmd/claude-dev-env/commit/d74183c62f578c33d6d609c726e62dce487623ac))
+* **hooks:** run the validators on MultiEdit and apply_patch ([a1a7328](https://github.com/jl-cmd/claude-dev-env/commit/a1a73286426e40693ef6bf74ae5e72893ab970f0))
+* Read a quoted heredoc body as text, not as shell input ([5be07a9](https://github.com/jl-cmd/claude-dev-env/commit/5be07a9a7a3bf186840461bf4309ac6552a77761))
+* Run the validators on MultiEdit and apply_patch ([dd554b9](https://github.com/jl-cmd/claude-dev-env/commit/dd554b96f977e0fb43eb7eca4087fae8d69e2b48))
+* **validators:** keep the ancestor_directories re-export mypy_validator imports ([7cee6b2](https://github.com/jl-cmd/claude-dev-env/commit/7cee6b2447f610c0ad793524431c7dc8230ffc97))
+
+
+### Documentation
+
+* **code-rules:** state the current staging rule in section 11.6 ([e4d5449](https://github.com/jl-cmd/claude-dev-env/commit/e4d54491661c6cdafba74cf40ecdbcefdf71ca3f))
+* State the current staging rule in CODE_RULES 11.6 ([7d95027](https://github.com/jl-cmd/claude-dev-env/commit/7d950272d0d29bae4ad8e2131fe293241af90ddd))
+
+
+### Refactoring
+
+* **hooks:** call the shared lock by name, finish the extractions [#1238](https://github.com/jl-cmd/claude-dev-env/issues/1238) started ([a66608f](https://github.com/jl-cmd/claude-dev-env/commit/a66608f89edef2278fe570fe2113134614eb37a2))
+* **hooks:** finish the three extractions [#1238](https://github.com/jl-cmd/claude-dev-env/issues/1238) started ([a301a48](https://github.com/jl-cmd/claude-dev-env/commit/a301a4830cc63ecfdd74c489ea942188c56f900a))
+* **hooks:** share the heredoc terminator match, correct three docstrings ([6b5a51e](https://github.com/jl-cmd/claude-dev-env/commit/6b5a51efd47c719dfadc8bb079e3904c8647fb5f))
+* **hooks:** share the heredoc terminator match, correct three docstrings ([b098448](https://github.com/jl-cmd/claude-dev-env/commit/b0984489127ffe7385de88f182db47e765b38896))
+* **scripts:** make the shared-tree resolver reusable ([4d55799](https://github.com/jl-cmd/claude-dev-env/commit/4d5579914cb38471e1cee016a67ae6c9e27d811b))
+* **validators:** give the temp-root env names their own constants module ([31abeb2](https://github.com/jl-cmd/claude-dev-env/commit/31abeb2b70f3cb70ee5ef0bff220839127d21023))
+* **validators:** give the temp-root env names their own constants module ([d6bb94c](https://github.com/jl-cmd/claude-dev-env/commit/d6bb94c841396a077c3dccf27eb721bfc7f28605))
+* **validators:** name the project-root walk for what it does ([e10ccc7](https://github.com/jl-cmd/claude-dev-env/commit/e10ccc7793d725266a5d532ad66a19a3444f0537))
+* **validators:** name the project-root walk for what it does ([c881348](https://github.com/jl-cmd/claude-dev-env/commit/c8813484539cb6fd872cee2c528f73d99e7c7ba5))
+* **validators:** read a Codex apply_patch payload with the one shared reader ([b551cf7](https://github.com/jl-cmd/claude-dev-env/commit/b551cf72cf7f49d1fbd56ac4170867ac9c547dc6))
+* **validators:** read the apply_patch payload through the shared helper ([7a70917](https://github.com/jl-cmd/claude-dev-env/commit/7a709178720af2cb41f28382497a2acc82f7230e))
+
+
+### Performance
+
+* **hooks:** dump each statement once in the inline-duplicate scan ([903f6e7](https://github.com/jl-cmd/claude-dev-env/commit/903f6e775e4018cfd37f54b923316e02e59a3cb9))
+* **hooks:** dump each statement once in the inline-duplicate scan ([1badb3e](https://github.com/jl-cmd/claude-dev-env/commit/1badb3e6d7f72dbe7059094f54873551e74d1b6c))
+* **hooks:** host gh_pr_author_restore and the recorder in one process ([485f893](https://github.com/jl-cmd/claude-dev-env/commit/485f8939a62e4fd38357d8142ac6008d8bd9c383))
+* **validators:** cache the masked message the rename match compares ([b30accf](https://github.com/jl-cmd/claude-dev-env/commit/b30accf446661f868c6bb5b2bb8f7fda42bcf5dd))
+* **validators:** cache the masked message the rename match compares ([07b63ea](https://github.com/jl-cmd/claude-dev-env/commit/07b63ea1023bbde46a6769b6d66b67fcfe58e5ac))
+
+
+### Tests
+
+* **hooks:** one repository anchor for the blocking tests ([24a1642](https://github.com/jl-cmd/claude-dev-env/commit/24a16427a36b3b3e9742546ce9738edbca18f3da))
+* **hooks:** one repository anchor for the blocking tests ([a75b1b4](https://github.com/jl-cmd/claude-dev-env/commit/a75b1b489ca910667fce14c9268ca7a392038cb3))
+* **installer:** count the validators runner by coverage, not by tool list ([707b31d](https://github.com/jl-cmd/claude-dev-env/commit/707b31d9274c142473412e348e9f1cbddee6c605))
+* **installer:** say write path in the assertion message ([e0eec51](https://github.com/jl-cmd/claude-dev-env/commit/e0eec510e3d29c5c9bfde9b63ae014348978e0e4))
+* **validators:** say which gate denies a malformed patch ([44e0d24](https://github.com/jl-cmd/claude-dev-env/commit/44e0d24ea0e41c86e8cf539c52d5e3ec13ac6728))
+
 ## [2.31.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.31.0...claude-dev-env-v2.31.1) (2026-09-02)
 
 
