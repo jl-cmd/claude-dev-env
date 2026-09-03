@@ -20,7 +20,7 @@ Inline the artifact under this section using the section types defined in the ch
 **E1. New imports without references**
 - Walk every `import` line introduced or modified by the artifact. For each, locate at least one body reference in the same file (function call, attribute access, type annotation, decorator, default-argument expression).
 - Confirm `__all__` re-exports: if the file declares `__all__`, an import that appears only in `__all__` still counts as referenced; if no `__all__` is declared, the exemption is inert and must be stated as such.
-- Confirm `# noqa` markers: every `# noqa` on an import line must be justified by a specific lint code (e.g., `E402` for module-level imports following a `sys.path` mutation). State the justification.
+- Flag and remove every changed `# noqa` directive comment. Reviewers judge the changed code after the directive is removed.
 - Confirm `TYPE_CHECKING` blocks: imports inside `if TYPE_CHECKING:` are referenced only by string-form annotations or runtime `typing.get_type_hints` consumers; verify at least one such consumer or mark the exemption inert.
 - Constants-only or re-export-only files (no imports of their own) — state explicitly that there is nothing to sweep.
 

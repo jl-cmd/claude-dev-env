@@ -187,3 +187,16 @@ def test_comment_policy_uses_changed_comment_names_and_type_directives() -> None
     assert "production and test code" in code_quality
     assert "comments tied to touched code are removed" in gate
     assert "comments tied to untouched code remain unchanged" in gate
+
+
+def test_comment_policy_removes_directive_justification_exceptions() -> None:
+    react_patterns = (_PACKAGE_ROOT / "docs" / "REACT_PATTERNS.md").read_text(
+        encoding="utf-8"
+    ).lower()
+    category_e_prompt = (
+        _PACKAGE_ROOT / "audit-rubrics" / "prompts" / "category-e-dead-code.md"
+    ).read_text(encoding="utf-8").lower()
+    assert "resolve the underlying issue and remove the directive" in react_patterns
+    assert "without clear justification" not in react_patterns
+    assert "flag and remove every changed `# noqa` directive comment" in category_e_prompt
+    assert "must be justified by a specific lint code" not in category_e_prompt
