@@ -10,7 +10,8 @@ The canonical review-criteria instruction set for every AI agent that audits pul
 
 Do not add code comments. Preserve existing comments. Docstrings remain allowed.
 
-If you are operating on existing code and you find a comment within the lines you are editing, remove the comments. All other comments that are not within scope of your actionable task can remain.
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 
 ---
 
@@ -46,7 +47,7 @@ Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` fo
 
 ### Public compatibility definitions
 
-A public function may use the exact inline marker `# pragma: no-banned-noun` on its `def` line. The banned-noun check permits the function name and parameters on that definition. Body local bindings, other definitions, and similar names remain checked.
+The banned-noun check applies to public function definitions, parameters, and body bindings. Use clear names instead of a directive marker.
 
 ---
 
@@ -56,7 +57,7 @@ ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remov
 
 ## 6.5 FILE LENGTH GUIDANCE
 
-Advisory only, never blocking: soft advisory at >= 400 lines, strong nudge at >= 1000 (pylint / SonarQube defaults). Split on cohesion (SRP, "Large Class" smell), not line count — run the readability rubric when an advisory fires.
+Advisory only, never blocking: emit a stderr advisory at >= 400 lines and a stronger stderr advisory at >= 1000 (pylint / SonarQube defaults). Split on cohesion (SRP, "Large Class" smell), not line count — run the readability rubric when an advisory fires.
 
 ---
 

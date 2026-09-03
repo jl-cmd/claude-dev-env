@@ -5,7 +5,7 @@ Audit [REPO/ARTIFACT] [TARGET_ID] for **Category J only** (CODE_RULES.md complia
 - Head SHA / Revision: [SHA or revision identifier]
 - Scope: [files / line ranges / packages in scope]
 - Languages in scope: [e.g., Python, PowerShell, TypeScript]
-- Production vs test split: [explicit list of which files are production and which are test files; test files are exempt from most J sub-buckets]
+- Production vs test split: [explicit list of which files are production and which are test files; both use the same comment rule]
 
 ID prefix: `find`.
 
@@ -17,7 +17,10 @@ Replace this paragraph with the chunked source material before issuing the promp
 
 ## Write-time exemptions do not scope this audit
 
-The write-time hook skips several rules on test files and on `.mjs` / `.js` files; this audit does not. Apply these rules to every changed line — production, test, and JavaScript files alike:
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
+
+The write-time hook skips several rules on test files and on `.mjs` / `.js` files; comment changes use one rule for production and tests. This audit does not skip the other listed rules. Apply these rules to every changed line — production, test, and JavaScript files alike:
 
 - Naming (J5, J6) — banned identifiers and banned function prefixes; boolean names prefixed `is_` / `has_` / `should_` / `can_` / `was_` / `did_`.
 - Logging format (J9) — the format string and its arguments pass as separate parameters, never an f-string.
@@ -31,7 +34,8 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 
 **J1. Magic values in production function bodies**
 - Walk every numeric or non-trivial literal other than `0`, `1`, `-1` inside production function bodies.
-- Test files follow the same no-new-comment policy. Module-level declarations are J3-scope, not J1-scope.
+- Test files follow the same no-new-comment policy.
+- Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified. Module-level declarations are J3-scope, not J1-scope.
 - For each literal found, decide: structural value that belongs in `config/` (flag) vs. truly local arithmetic constant tied to the line's logic (defendable).
 - Adversarial probes must each verify a distinct angle: (a) does the literal duplicate an existing value already centralized in `config/`? (b) does the literal silently couple two languages (e.g., a Python config value and a hand-typed PowerShell / shell mirror)? (c) does the literal appear in user-facing help/doc text in a way that would silently lie if the canonical value changed?
 
@@ -69,8 +73,9 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 **J8. New inline comments**
 - Every `#` or `//` comment line **added** by this diff in any code — flag.
 - Module/function/class docstrings are always allowed.
-- Existing comments are NEVER removed (Comment Preservation rule); if the diff removes an existing comment, that is a separate violation outside J8 (the hook emits a stderr advisory for it rather than blocking).
+- Comments tied to untouched code remain unchanged; a changed comment is removed with the code it describes.
 - Test files follow the same no-new-comment policy.
+- Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 - Adversarial probes: (a) is there any `# type:` or marker comment that is actually inert prose rather than a real type-checker / linter directive? (b) is any docstring carrying inline-comment content (line-level explanations rather than module/function description)? (c) does any newly-added blank line between code stanzas function as a comment substitute, suggesting the author wanted to add a comment but couldn't?
 
 **J9. Logging format**
@@ -81,7 +86,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 
 **J10. Imports inside functions**
 - Every `import` / `from ... import ...` statement — verify at module scope.
-- Test files: deferred imports after a `sys.path.insert(0, ...)` guard at module scope are allowed (documented circular-import-style workaround).
+- Test file — lines 152-158 are module-scope imports, and line 164 is a deferred import at module scope after the sys.path guard. The documented import placement remains allowed.
 - Adversarial probes: (a) is there any lazy `import` inside a production function body? (b) does any conditional `import` (e.g., inside `if TYPE_CHECKING:`) escape into runtime accidentally? (c) does any non-Python language analog (e.g., `require(...)` inside a JS function, `Import-Module` inside a PowerShell `if` branch) appear in production code?
 
 **J11. sys.path.insert dedup**
@@ -167,7 +172,7 @@ ID prefix: `find`.
 - Flag any name from the vague list: `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`. Vague verb prefixes: `handle`, `process`, `manage`, `do`.
 - `sweep_empty_dirs.py` — variable `removed: list[str]` (line 81) is domain-specific (what was removed from disk), not vague. `now` (line 80) is a time concept, not on the vague list. `created` (line 87) is a domain timestamp, not vague.
 - Function names: `sweep`, `_log_walk_error`, `_build_parser`, `main` — none use the vague verb prefixes (`handle`, `process`, `manage`, `do`). `sweep` is concrete domain action.
-- Test file — exempt.
+- Test file — the same no-new-comment rule applies.
 - Adversarial probes: (a) does `removed` (line 81) overlap with the vague-name list? It does not — the list is `result`, `data`, `output`, etc., and `removed` is none of those. (b) is `arguments` (line 115) on any vague list? No — `arguments` is the argparse-namespace canonical name. (c) does any callback parameter use a vague name? `_log_walk_error(os_error)` — `os_error` is concrete. Clean.
 
 **J7. Type hints**
@@ -181,24 +186,24 @@ ID prefix: `find`.
 - Adversarial probes: (a) does any production function rely on inferred return type from a single `return` path? All four production functions have explicit return annotations. (b) does any parameter use a string-quoted forward reference that masks `Any`? No — all annotations are direct. (c) is there a `# type: ignore` anywhere? Grep the diff: no occurrences.
 
 **J8. New inline comments**
-- Every `#` comment line added by this diff in production code — flag, except for exempt markers (shebangs, `# type:`, `# noqa`, `# pylint:`, `# pragma:`).
+- Every `#` comment line added by this diff in production or test code — flag. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are also findings.
 - `sweep_empty_dirs.py` — line 61 (`#!/usr/bin/env python3`) is a shebang, exempt. Line 62 is a module-level docstring, allowed. Lines 78 and 102 are function docstrings, allowed. No inline `#` comments. Clean.
 - `config/sweep_config.py` — line 140 is a module-level docstring. No inline comments. Clean.
-- Test file — exempt.
+- Test file — the same no-new-comment rule applies.
 - `Install-SweepEmptyDirs.ps1` — line 227 (`#!/usr/bin/env pwsh`) is a shebang, exempt. No inline `#` comments added in the PowerShell file. Clean.
 - Adversarial probes: (a) is there any `# type:` comment that is actually inert noise rather than a type-checker directive? No occurrences in the diff. (b) is any docstring carrying inline-comment content as line-level explanations rather than module/function description? Module docstring on line 62 is one line ("Delete empty directories older than 2 minutes under a given root."); function docstrings on 78 and 102 are one-liners. Clean. (c) does any newly-added blank line between code stanzas function as a comment substitute? Visual whitespace is allowed.
 
 **J9. Logging format**
 - Walk every `log_*(...)` call. Must be `log_*("template with {}", arg)`, not `log_*(f"...")`.
 - `sweep_empty_dirs.py` uses `print()`, not a logger. The rule applies to `log_*` (the project's structured logger), not stdlib `print`. The print f-strings on lines 74, 93, 118, 125, 131 are J2-scope (string-template magic), not J9-scope.
-- Test file — exempt.
+- Test file — the same no-new-comment rule applies.
 - Adversarial probes: (a) is there any imported `log_*` function in `sweep_empty_dirs.py` that uses an f-string? No — no logger import in the diff. (b) is `print(..., file=sys.stderr)` (lines 74, 118) a logger-equivalent call that should be subject to J9? No — `print` is stdlib stdout/stderr, not the structured-logger family. (c) does the PowerShell `Write-Host` / `Write-Error` family count? J9 is Python-specific (`log_*` callable convention).
 
 **J10. Imports inside functions**
 - Every `import` / `from ... import ...` statement — verify at module scope.
 - `sweep_empty_dirs.py` lines 64-70 — all imports at module top. Function bodies (lines 73-135) contain no `import` statements. Clean.
 - `config/sweep_config.py` — no imports. Clean.
-- Test file — exempt; nevertheless lines 152-158 are all module-scope imports, line 164 is a deferred import (`from sweep_empty_dirs import sweep  # noqa: E402`) at module scope after the `sys.path.insert` guard. Documented circular-import-style workaround pattern; allowed.
+- Test file — lines 152-158 are module-scope imports, and line 164 is a deferred import at module scope after the sys.path guard. The documented import placement remains allowed.
 - Adversarial probes: (a) is there any lazy `import` inside `sweep`, `main`, or `_build_parser` body? No occurrences. (b) is `argparse.ArgumentParser` accessed via `argparse.ArgumentParser` (line 102) using the module-scope import on line 64? Yes. (c) does the PowerShell file have any `Import-Module` calls inside `if` branches? No — the script imports nothing.
 
 **J11. sys.path.insert dedup**
@@ -211,7 +216,7 @@ ID prefix: `find`.
 - Any string literal containing a user-specific home path?
 - `sweep_empty_dirs.py` — no hardcoded user paths. The `arguments.root` value is supplied at runtime via argparse positional argument (line 103). Clean.
 - `config/sweep_config.py` — no paths at all. Clean.
-- Test file — exempt; uses `tempfile.TemporaryDirectory()` (lines 178, 188, 197, 210, 216) which is the canonical safe pattern. Clean.
+- Test file — uses `tempfile.TemporaryDirectory()` (lines 178, 188, 197, 210, 216), which is the canonical safe pattern. Clean.
 - `Install-SweepEmptyDirs.ps1` — `$ScriptDir = Split-Path -Parent $PSCommandPath` (line 272), `$ScriptPath = Join-Path $ScriptDir "sweep_empty_dirs.py"` (line 273). Both derive from `$PSCommandPath` (the script's own path), not a hardcoded user home. Clean. The `$Target` parameter is supplied at install time (line 230); not hardcoded.
 - Adversarial probes: (a) does any error message or help string embed a user-specific home path? Grep the diff — no occurrences. (b) does the scheduled task `-Argument` string at line 296 hardcode a path? It interpolates `$ScriptPath`, `$AgeSeconds`, and `$Target` — all dynamic. Clean. (c) does any docstring example show a user-specific home? Module docstrings on lines 62 and 140 are short and contain no example paths. Clean.
 
@@ -301,7 +306,8 @@ def main() -> None:
             sweep(arguments.root, arguments.age)
             time.sleep(arguments.interval)
     except KeyboardInterrupt:
-        print("\nstopped.")
+        print("
+stopped.")
 
 
 if __name__ == "__main__":

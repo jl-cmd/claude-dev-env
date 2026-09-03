@@ -1,11 +1,14 @@
 # Category L — Behavior-equivalence for refactors
 
+When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
+Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
+
 **What this category audits:** rewrites of an existing function (especially an enforcement check, parser, classifier, or normalizer) where the new implementation must accept every input the old implementation accepted and reject every input the old implementation rejected. Common when a regex-based check is rewritten as a tokenize-based check, when a `str.startswith` chain is consolidated into a single regex, when a hand-rolled split is replaced with a library call, or when a multi-step pipeline is collapsed into one pass.
 
 **Why this category is its own bucket:** Categories A–K catch failure modes inside the rewrite itself (wrong signature, dead code, missed branch). Category L catches the failure mode that emerges between the rewrite and the *historically valid inputs* the original code accepted. The diff looks internally consistent and the new unit tests pass — but inputs the prior code accepted fall through under the new implementation, or inputs the prior code rejected slip past. The bug only surfaces against the corpus of canonical inputs the original implementation was tuned for.
 
 **Examples of Category L findings:**
-- A tokenize-based exempt-marker check drops `#noqa` (no space after `#`) when the original normalization-based check accepted it. (ccc#479 F1)
+- A refactored comment check changes acceptance for marker-shaped input when code changes.
 - A new comment classifier misreads a bare `#` lookalike that the original regex correctly rejected. (ccc#479 F4)
 - A refactored shebang detector drops the inline `#!` variant the original handled. (ccc#479 F5)
 - An invariant the original loop enforced at the first match (early-exit) is dropped in the rewrite. (ccc#479 F6)
@@ -27,7 +30,7 @@ Decomposition is by the **kind of historically valid input** the rewrite must co
 | L4 | Empty / boundary inputs | Empty string, single character, single-line vs multi-line, EOF without newline retain their original classification. |
 | L5 | Invariant preservation | Early-exit guarantees, idempotence, ordering, stable iteration, "first match wins" semantics carry over. |
 | L6 | Implementation-tag parity | Token-based vs regex-based vs str-method-based: the new tag accepts every input shape the old tag accepted (no shape silently dropped). |
-| L7 | Skipped-category exhaustion | Inputs that the original explicitly skipped (e.g., shebang on line 1 only, exempt markers without trailing prose, `# type:` with a trailing justification) remain skipped. |
+| L7 | Changed-comment handling | Shebangs on line 1 and docstrings retain their handling. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are findings. |
 | L8 | Sibling-implementation comparison | When two parallel implementations exist (e.g., Python + PowerShell, regex + tokenize), the rewrite of one must still produce the same accept/reject decisions as the sibling for shared inputs. |
 
 Customize per-artifact: a parser refactor without an explicit sibling implementation reduces L8 to "verified clean — no parallel implementation"; a single-axis rewrite (whitespace handling only) may exhaust the per-sub-bucket checks against just L2 and L7.
@@ -42,4 +45,4 @@ The reusable Variant C template for Category L is in [`../prompts/category-l-beh
 
 Categories A–K describe failure modes that show up in the rewrite's own surface. Category L describes the failure mode that shows up only when the rewrite is compared against the inputs the original was tuned for. A reviewer walking only A–K reads the rewrite, finds it clean, and approves it — without re-running the original test inputs through the new code path. L forces the reviewer to pin the original's known-good inputs in a table and assert each still passes against the rewrite.
 
-The ccc#479 F1 case illustrates the cost of not running L. The refactor of `_is_exempt_python_comment` replaced a `comment_string[1:].lstrip()` normalization (which reduced both `# noqa` and `#noqa` to the body `noqa` before the membership test) with a tokenize-based recognizer that tested the raw `tokenize.COMMENT` token text against `startswith("# noqa")`. Production code carrying `#noqa: F401` (no space) silently stopped matching the exempt marker after the refactor, and the no-new-comments gate began blocking writes that the original implementation passed. The dropped no-space variant only surfaces under a KNOWN_GOOD_INPUTS table that enumerates spaced, no-space, tab-separated, and multi-space inputs — fixtures the rewrite's own tests would otherwise miss.
+The ccc#479 F1 case illustrates the cost of not comparing changed-code marker handling with the original input corpus. Category L requires the reviewer to pin the original inputs and verify that shebangs and docstrings remain preserved while changed marker comments are rejected.
