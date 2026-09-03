@@ -199,39 +199,40 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
     return issues
 
 
-def _changed_line_numbers(old_content: str, new_content: str) -> set[int]:
+def _line_diff_data(
+    old_content: str, new_content: str
+) -> tuple[set[int], set[int], dict[int, int]]:
     matcher = difflib.SequenceMatcher(
         None, old_content.splitlines(), new_content.splitlines(), autojunk=False
     )
-    return {
-        each_line_number
-        for each_tag, _, _, each_new_start, each_new_end in matcher.get_opcodes()
-        if each_tag != "equal"
-        for each_line_number in range(each_new_start + 1, each_new_end + 1)
-    }
+    all_changed_lines: set[int] = set()
+    all_deleted_lines: set[int] = set()
+    old_line_by_new_line: dict[int, int] = {}
+    for each_tag, each_old_start, each_old_end, each_new_start, each_new_end in matcher.get_opcodes():
+        if each_tag == "equal":
+            old_line_by_new_line.update({each_new_start + each_offset + 1: each_old_start + each_offset + 1 for each_offset in range(each_old_end - each_old_start)})
+            continue
+        all_changed_lines.update(range(each_new_start + 1, each_new_end + 1))
+        if each_tag in {"delete", "replace"}:
+            all_deleted_lines.update(range(each_old_start + 1, each_old_end + 1))
+    return all_changed_lines, all_deleted_lines, old_line_by_new_line
 
 
-def _deleted_line_numbers(old_content: str, new_content: str) -> set[int]:
-    """Return old source lines removed by the content change."""
-    matcher = difflib.SequenceMatcher(
-        None, old_content.splitlines(), new_content.splitlines(), autojunk=False
+def _matching_old_comment_line(
+    each_text: str,
+    each_line_number: int,
+    each_is_inline: bool,
+    all_old_line_by_key: dict[tuple[str, bool], list[int]],
+    all_old_line_by_new_line: dict[int, int],
+    all_used_old_lines: set[int],
+) -> int | None:
+    all_matching_old_lines = all_old_line_by_key.get((each_text, each_is_inline), [])
+    mapped_old_line = all_old_line_by_new_line.get(each_line_number)
+    return next(
+        (each_candidate for each_candidate in (mapped_old_line, each_line_number)
+         if each_candidate in all_matching_old_lines and each_candidate not in all_used_old_lines),
+        None,
     )
-    return {
-        each_line_number
-        for each_tag, each_old_start, each_old_end, _, _ in matcher.get_opcodes()
-        if each_tag in {"delete", "replace"}
-        for each_line_number in range(each_old_start + 1, each_old_end + 1)
-    }
-
-
-def _comment_lines_by_key(
-    all_occurrences: list[tuple[str, int, bool]],
-) -> dict[tuple[str, bool], list[int]]:
-    """Index comment occurrence lines by exact text and placement."""
-    lines_by_key: dict[tuple[str, bool], list[int]] = {}
-    for each_text, each_line_number, each_is_inline in all_occurrences:
-        lines_by_key.setdefault((each_text, each_is_inline), []).append(each_line_number)
-    return lines_by_key
 
 
 def _is_attached_to_changed_code(
@@ -250,26 +251,26 @@ def _is_attached_to_changed_code(
 def _retained_comment_issues(
     old_content: str, new_content: str, file_path: str
 ) -> list[str]:
-    old_occurrences, old_tokenize_ok = _comment_occurrences(old_content, file_path, True)
-    new_occurrences, new_tokenize_ok = _comment_occurrences(new_content, file_path, True)
+    (old_occurrences, old_tokenize_ok), (new_occurrences, new_tokenize_ok) = (_comment_occurrences(old_content, file_path, True), _comment_occurrences(new_content, file_path, True))
     if not (old_tokenize_ok and new_tokenize_ok):
         return []
-    all_changed_lines = _changed_line_numbers(old_content, new_content)
-    all_deleted_lines = _deleted_line_numbers(old_content, new_content)
-    old_line_by_key = _comment_lines_by_key(old_occurrences)
+    all_changed_lines, all_deleted_lines, old_line_by_new_line = _line_diff_data(old_content, new_content)
+    old_line_by_key = {
+        each_key: [each_line for each_text, each_line, each_is_inline in old_occurrences if (each_text, each_is_inline) == each_key]
+        for each_key in {(each_text, each_is_inline) for each_text, _each_line, each_is_inline in old_occurrences}
+    }
+    used_old_lines: set[int] = set()
     issues: list[str] = []
     for each_text, each_line_number, each_is_inline in new_occurrences:
-        matching_old_lines = old_line_by_key.get((each_text, each_is_inline), [])
-        if not matching_old_lines:
+        old_line_number = _matching_old_comment_line(each_text, each_line_number, each_is_inline, old_line_by_key, old_line_by_new_line, used_old_lines)
+        if old_line_number is None or not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
             continue
-        old_line_number = matching_old_lines.pop(0)
-        if not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
-            continue
+        used_old_lines.add(old_line_number)
+        is_deleted_attachment = not each_is_inline and each_line_number + 1 not in all_changed_lines and old_line_number + 1 in all_deleted_lines
+        issue_line = each_line_number if is_deleted_attachment or each_is_inline else each_line_number + 1
         comment_kind = "Inline" if each_is_inline else "Standalone"
-        issues.append(
-            f"Line {each_line_number}: {comment_kind} comment retained on changed code: "
-            f"{each_text} - remove the comment"
-        )
+        attachment_label = " at deleted code" if is_deleted_attachment else ""
+        issues.append(f"Line {issue_line}: {comment_kind} comment retained on changed code{attachment_label}: {each_text} - remove the comment")
         if len(issues) >= MAX_COMMENT_ISSUES:
             break
     return issues[:MAX_COMMENT_ISSUES]

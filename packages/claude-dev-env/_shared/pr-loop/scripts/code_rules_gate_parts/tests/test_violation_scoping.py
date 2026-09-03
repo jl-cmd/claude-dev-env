@@ -73,3 +73,14 @@ def test_split_violations_by_scope_blocks_everything_when_scope_is_none() -> Non
     )
     assert blocking == ["Line 5: a", "Line 9: b"]
     assert advisory == []
+
+
+def test_split_violations_by_scope_blocks_deleted_code_comment_without_added_lines() -> None:
+    issues = [
+        "Line 1: Standalone comment retained on changed code at deleted code: # attached - remove the comment"
+    ]
+
+    blocking, advisory = violation_scoping.split_violations_by_scope(issues, set())
+
+    assert blocking == issues
+    assert advisory == []

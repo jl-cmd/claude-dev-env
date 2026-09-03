@@ -64,6 +64,15 @@ def test_check_comment_changes_flags_comment_attached_to_deleted_code() -> None:
     assert any("Standalone comment retained" in each_issue for each_issue in issues)
 
 
+def test_check_comment_changes_maps_identical_comments_to_equal_lines() -> None:
+    old_content = "# duplicate\nold_total = 1\n# duplicate\nlater_total = 2\n"
+    new_content = "# duplicate\nlater_total = 2\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    assert not any("retained on changed code" in each_issue for each_issue in issues)
+
+
 def test_full_gate_is_comment_neutral_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",

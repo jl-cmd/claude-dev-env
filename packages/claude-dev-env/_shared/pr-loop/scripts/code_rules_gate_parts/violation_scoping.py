@@ -284,6 +284,8 @@ def _issue_is_blocking(each_issue: str, all_added_line_numbers: set[int]) -> boo
     Returns:
         True when the issue's span or line meets an added line.
     """
+    if "comment retained on changed code at deleted code:" in each_issue:
+        return True
     inline_duplicate_lines = inline_duplicate_body_span_lines(each_issue)
     if inline_duplicate_lines is not None:
         return bool(inline_duplicate_lines & all_added_line_numbers)
