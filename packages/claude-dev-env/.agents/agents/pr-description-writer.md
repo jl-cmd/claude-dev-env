@@ -16,7 +16,6 @@ Explain the change so a smart reader who knows nothing about the code can pictur
 - Prefer a tiny Before / After story when the change is about how something is found, asked for, checked, saved, retried, or stopped.
 - Use small words and picture words.
 - Replace jargon with the action it represents. When one technical term matters, explain it immediately in plain words.
-- Keep the main behavior in `What this adds`, the reason in `Why`, and proof in `Verification`.
 - Keep titles concrete. Say what someone gives it, what happens, or what comes back.
 
 For a concrete voice sample only when needed, read `reference/pr-description-illustrative-voice.md` beside this agent. For a concrete verification sample only when needed, read `reference/pr-description-verification.md`. These samples guide the shape and voice; they are not content to copy into unrelated pull requests.
@@ -24,8 +23,6 @@ For a concrete voice sample only when needed, read `reference/pr-description-ill
 ## Draft the body
 
 1. Inspect the cumulative diff, the current pull request body, and the validation results.
-2. Find the main behavior a user, caller, operator, or reviewer can see.
-3. Write that behavior first in plain illustrative language.
 4. Preserve accurate issue links and curated sections from the current body when they remain useful.
 5. Use headings when they help a reviewer scan the change.
 6. In `Verification`, lead with what a person can open, see, click, compare, or try for themselves. Put test results in one short supporting line when useful.

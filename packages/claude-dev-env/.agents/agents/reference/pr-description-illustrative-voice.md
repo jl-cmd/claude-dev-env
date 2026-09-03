@@ -39,7 +39,6 @@ The person running the loop asked for a full look, so every pass gets a full loo
 - Prefer Before / After when the change is about how something is asked, found, checked, saved, retried, or stopped.
 - Use picture words: hand it, open it, find it, check it, save it, skip it, stop, call by name.
 - Prefer spoken results: “found it,” “missing,” “duplicated,” “couldn’t.”
-- Keep the main behavior in `What this adds`.
 - Keep `Why` short and concrete.
 - Put proof only in `Verification`.
 - Explain jargon immediately or replace it.

@@ -12,7 +12,6 @@ Review this pull request: <PR link>
 
 Read the PR and its full diff. Do not use the branch name, commit message, labels, current title, or a shallow summary.
 
-Find the main thing this adds for a user, caller, or operator.
 
 Write like the reader is smart but knows nothing about this code. Pretend they asked you to explain it like they are five and feel stupid. If a word needs another sentence to explain it, replace the word — or turn it into a tiny story.
 
@@ -68,7 +67,6 @@ Then write a short, paste-ready PR description.
 Use this structure:
 
 What this adds
-1–2 short paragraphs in that illustrative voice. Lead with a scene when you can (“The theme package has a phone icon somewhere…”). If the change is a new way to ask, use Before / After. Say what you give it, what it does with its hands, and what you get back. If an abstract machine-word must appear, gloss it immediately (“That’s all X is — …”). Describe the job people can see. Do not describe inner machinery. Mention a check only if it is central to the feature. If there are many changes, keep the main one. Mention others only if they explain the main one.
 
 Why
 One short paragraph. Same plain level. Say who needs this and what goes wrong without it (the “yell and wait for a hand” problem). If this is needed to decode the feature, rewrite “What this adds.”

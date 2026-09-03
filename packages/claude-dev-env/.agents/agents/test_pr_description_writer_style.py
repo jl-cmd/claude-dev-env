@@ -29,7 +29,6 @@ def test_voice_reference_keeps_the_plain_illustrative_shape() -> None:
         "found it",
         "missing",
         "duplicated",
-        "What this adds",
         "Why",
         "Verification",
     ):
