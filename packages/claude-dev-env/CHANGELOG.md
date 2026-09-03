@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.33.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.1...claude-dev-env-v2.33.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* align empty diff test with clean lint runs ([cc80947](https://github.com/jl-cmd/claude-dev-env/commit/cc809472970eaa329699adde2f790c5f05b704cd))
+* repair opt-in comment policy linter ([5bbd026](https://github.com/jl-cmd/claude-dev-env/commit/5bbd026d393137f865c92de3ff15e01517d9cac2))
+* Run comment checks only when the diff linter is requested ([41023df](https://github.com/jl-cmd/claude-dev-env/commit/41023dfdcb616ee095aa1166bf4401340991e0ae))
+* unslop comment-linter names and docstrings ([b5d283c](https://github.com/jl-cmd/claude-dev-env/commit/b5d283cb6b874e1c9c0ba859dcfa0cab1c590276))
+
 ## [2.33.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.0...claude-dev-env-v2.33.1) (2026-09-03)
 
 
