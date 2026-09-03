@@ -1393,6 +1393,14 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
         'shipped hooks.json must retain the inline run_all_validators runner on the write path',
     );
 
+    for (const retiredGateName of ['code_review_push_gate.py', 'code_review_pr_create_gate.py']) {
+        assert.equal(
+            allPreCommands.some(command => command.includes(retiredGateName)),
+            false,
+            `shipped hooks.json must not register retired PreToolUse gate ${retiredGateName}`,
+        );
+    }
+
     const allPostToolUseGroups = shippedHooksConfig.hooks.PostToolUse || [];
     const postDispatcherCommands = allPostToolUseGroups
         .flatMap(group => group.hooks.map(hook => hook.command))
