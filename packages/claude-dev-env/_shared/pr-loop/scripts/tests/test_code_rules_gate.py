@@ -606,6 +606,36 @@ def test_run_gate_detects_new_inline_comment_in_touched_file(
     assert exit_code == 1
 
 
+def test_run_gate_staged_mode_blocks_retained_comment_on_changed_line(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # TODO #999: track\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(temporary_git_repository / "module.py", "total = 2  # TODO #999: track\n")
+    stage_file(temporary_git_repository, "module.py")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--staged"])
+
+    assert exit_code == 1
+
+
+def test_run_gate_base_mode_blocks_retained_comment_on_changed_line(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_file(temporary_git_repository / "module.py", "total = 1  # noqa\n")
+    commit_all_files(temporary_git_repository, "initial")
+    write_file(temporary_git_repository / "module.py", "total = 2  # noqa\n")
+    commit_all_files(temporary_git_repository, "change")
+
+    monkeypatch.chdir(temporary_git_repository)
+    exit_code = gate_module.main(["--base", "HEAD~1"])
+
+    assert exit_code == 1
+
+
 def test_run_gate_treats_new_files_prior_content_as_empty(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,

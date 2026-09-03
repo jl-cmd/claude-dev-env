@@ -40,6 +40,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
+$repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '..' '..')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
 $prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
 $processTreeScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'process-tree' 'scripts')
@@ -75,6 +76,15 @@ if (-not $SkipRuff) {
         } finally {
             Pop-Location
         }
+    }
+}
+
+Invoke-Tool -Label 'comment-policy' -Action {
+    Push-Location $prLoopScriptsRoot
+    try {
+        python code_rules_gate.py --base origin/main --repo-root $repositoryRoot
+    } finally {
+        Pop-Location
     }
 }
 

@@ -195,30 +195,29 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
     added_inline = new_inline - old_inline
     if added_inline:
         sample = next(iter(added_inline))
-        issues.append(f"Inline comment added: {sample[:60]} - refactor to self-documenting code")
+        line_number = next((each_line_number for each_line_number, each_line in enumerate(new_content.splitlines(), 1) if sample in each_line), 1)
+        issues.append(f"Line {line_number}: Inline comment added: {sample[:60]} - refactor to self-documenting code")
 
     added_standalone = new_standalone - old_standalone
     if added_standalone:
         sample = next(iter(added_standalone))
-        issues.append(
-            f"Standalone comment added: {sample[:60]} - remove the comment or move its meaning into code structure"
-        )
+        line_number = next((each_line_number for each_line_number, each_line in enumerate(new_content.splitlines(), 1) if sample in each_line), 1)
+        issues.append(f"Line {line_number}: Standalone comment added: {sample[:60]} - remove the comment or move its meaning into code structure")
     issues.extend(_retained_comment_issues(old_content, new_content, file_path))
 
     return issues
 
 
 def _changed_line_numbers(old_content: str, new_content: str) -> set[int]:
-    changed_line_numbers: set[int] = set()
     matcher = difflib.SequenceMatcher(
         None, old_content.splitlines(), new_content.splitlines(), autojunk=False
     )
-    for each_tag, _, _, each_new_start, each_new_end in matcher.get_opcodes():
-        if each_tag != "equal":
-            changed_line_numbers.update(
-                range(each_new_start + 1, each_new_end + 1)
-            )
-    return changed_line_numbers
+    return {
+        each_line_number
+        for each_tag, _, _, each_new_start, each_new_end in matcher.get_opcodes()
+        if each_tag != "equal"
+        for each_line_number in range(each_new_start + 1, each_new_end + 1)
+    }
 
 
 def _retained_comment_issues(
@@ -236,10 +235,10 @@ def _retained_comment_issues(
     for each_line_number in sorted(changed_lines):
         inline_comment = next((each_comment for each_comment in shared_inline if each_comment in new_lines[each_line_number - 1]), None)
         if inline_comment is not None:
-            issues.append(f"Inline comment retained on changed code: {inline_comment} - remove the comment")
+            issues.append(f"Line {each_line_number}: Inline comment retained on changed code: {inline_comment} - remove the comment")
         preceding_line_number = each_line_number - 1
         if preceding_line_number > 0 and new_lines[preceding_line_number - 1].strip() in shared_standalone:
-            issues.append(f"Standalone comment retained on changed code: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
+            issues.append(f"Line {preceding_line_number}: Standalone comment retained on changed code: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
         if len(issues) >= MAX_COMMENT_ISSUES:
             break
     return issues[:MAX_COMMENT_ISSUES]

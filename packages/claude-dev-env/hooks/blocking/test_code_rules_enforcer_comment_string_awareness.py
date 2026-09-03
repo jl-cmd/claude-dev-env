@@ -197,7 +197,7 @@ def test_extract_should_classify_inline_shebang_lookalike_as_inline_comment() ->
     assert standalone == set()
 
 
-def test_python_edit_lane_blocks_inline_comment_in_test_file() -> None:
+def test_full_gate_blocks_python_inline_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="total = 1  # added\n",
         old_content="total = 1\n",
@@ -208,11 +208,11 @@ def test_python_edit_lane_blocks_inline_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
-def test_javascript_edit_lane_blocks_inline_comment_in_test_file() -> None:
+def test_full_gate_blocks_javascript_inline_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="const total = 1; // added\n",
         old_content="const total = 1;\n",
@@ -223,11 +223,11 @@ def test_javascript_edit_lane_blocks_inline_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._javascript_comment_and_naming_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
-def test_javascript_edit_lane_blocks_inline_block_comment_in_test_file() -> None:
+def test_full_gate_blocks_javascript_inline_block_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="const total = 1; /* added */\n",
         old_content="const total = 1;\n",
@@ -238,11 +238,11 @@ def test_javascript_edit_lane_blocks_inline_block_comment_in_test_file() -> None
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._javascript_comment_and_naming_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
-def test_javascript_edit_lane_blocks_directive_comment_in_test_file() -> None:
+def test_full_gate_blocks_javascript_directive_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="const total = 1; // eslint-disable-next-line\n",
         old_content="const total = 1;\n",
@@ -253,11 +253,11 @@ def test_javascript_edit_lane_blocks_directive_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._javascript_comment_and_naming_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
-def test_edit_lane_blocks_directive_comment_in_test_file() -> None:
+def test_full_gate_blocks_python_directive_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="total = 1  # noqa\n",
         old_content="total = 1\n",
@@ -268,14 +268,14 @@ def test_edit_lane_blocks_directive_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("comment added" in each_issue.lower() for each_issue in issues)
 
 
 @pytest.mark.parametrize(
     "each_marker", ("# TODO #999: track", "# FIXME #999: track", "# HACK #999: track", "# XXX #999: track", "# type: ignore[misc]")
 )
-def test_edit_lane_blocks_changed_marker_comments_in_test_file(each_marker: str) -> None:
+def test_full_gate_blocks_changed_marker_comments_in_test_file(each_marker: str) -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content=f"total = 1  {each_marker}\n",
         old_content="total = 1\n",
@@ -286,11 +286,11 @@ def test_edit_lane_blocks_changed_marker_comments_in_test_file(each_marker: str)
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("comment added" in each_issue.lower() for each_issue in issues)
 
 
-def test_edit_lane_blocks_standalone_comment_in_test_file() -> None:
+def test_full_gate_blocks_standalone_comment_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content="# added\ntotal = 1\n",
         old_content="total = 1\n",
@@ -301,11 +301,11 @@ def test_edit_lane_blocks_standalone_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert any("Standalone comment added" in each_issue for each_issue in issues)
 
 
-def test_edit_lane_preserves_shebang_and_docstring_in_test_file() -> None:
+def test_full_gate_preserves_shebang_and_docstring_in_test_file() -> None:
     context = code_rules_enforcer_module._ValidationContext(
         content='#!/usr/bin/env python3\n"""Describe totals."""\ntotal = 1\n',
         old_content="#!/usr/bin/env python3\n",
@@ -316,11 +316,11 @@ def test_edit_lane_preserves_shebang_and_docstring_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert not any("comment added" in each_issue.lower() for each_issue in issues)
 
 
-def test_edit_lane_allows_existing_comment_removal_without_advisory(
+def test_full_gate_allows_existing_comment_removal_without_advisory(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     context = code_rules_enforcer_module._ValidationContext(
@@ -333,9 +333,27 @@ def test_edit_lane_allows_existing_comment_removal_without_advisory(
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module._python_comment_and_logging_issues(context)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
     assert not any("Existing comment removed" in each_issue for each_issue in issues)
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize(
+    ("file_path", "old_content", "new_content"),
+    (
+        ("totals.py", "total = 1\n", "total = 2  # TODO #999: track\n"),
+        ("test_totals.py", "total = 1\n", "total = 2  # TODO #999: track\n"),
+        ("totals.js", "const total = 1;\n", "const total = 2; // eslint-disable-next-line\n"),
+        ("totals.test.js", "const total = 1;\n", "const total = 2; // eslint-disable-next-line\n"),
+    ),
+)
+def test_edit_lane_does_not_report_comment_policy(
+    file_path: str, old_content: str, new_content: str
+) -> None:
+    issues = code_rules_enforcer_module.validate_content_for_edit_lane(
+        new_content, file_path, old_content
+    )
+    assert not any("comment" in each_issue.lower() for each_issue in issues)
 
 
 @pytest.mark.parametrize(

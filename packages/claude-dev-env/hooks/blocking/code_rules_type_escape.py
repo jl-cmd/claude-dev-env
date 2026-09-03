@@ -615,14 +615,17 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
     return offending_parameters
 
 
-def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
+def check_type_escape_hatches(
+    content: str, file_path: str, include_type_ignore_comments: bool = True
+) -> list[str]:
     """Flag type escape hatches and every type-ignore comment."""
     issues: list[str] = []
     type_ignore_issues: list[str] = []
-    for each_ignore_line in _find_type_ignore_lines(content):
-        type_ignore_issues.append(
-            f"Line {each_ignore_line}: # type: ignore is not allowed - remove it and use a typed boundary or real type"
-        )
+    if include_type_ignore_comments:
+        for each_ignore_line in _find_type_ignore_lines(content):
+            type_ignore_issues.append(
+                f"Line {each_ignore_line}: # type: ignore is not allowed - remove it and use a typed boundary or real type"
+            )
     if is_test_file(file_path) or is_hook_infrastructure(file_path):
         return type_ignore_issues
 

@@ -84,6 +84,18 @@ def test_should_flag_type_ignore_in_test_files() -> None:
     assert not any("Any annotation" in issue for issue in issues)
 
 
+def test_edit_lane_does_not_report_type_ignore_comment_policy() -> None:
+    source = "total = 1  # type: ignore[misc]\n"
+    issues = hook_module.validate_content_for_edit_lane(source, TEST_FILE_PATH)
+    assert not any("type: ignore" in issue for issue in issues)
+
+
+def test_edit_lane_does_not_report_production_type_ignore_comment_policy() -> None:
+    source = "total = 1  # type: ignore[misc]\n"
+    issues = hook_module.validate_content_for_edit_lane(source, PRODUCTION_FILE_PATH)
+    assert not any("type: ignore" in issue for issue in issues)
+
+
 def test_should_flag_any_on_positional_only_parameter() -> None:
     source = "def foo(x: Any, /) -> None:\n    pass\n"
     issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)

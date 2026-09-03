@@ -327,7 +327,8 @@ def _python_comment_and_logging_issues(context: _ValidationContext) -> list[str]
         context.file_path,
     )
     all_issues: list[str] = []
-    all_issues.extend(check_comment_changes(old_content, content, file_path))
+    if context.phase == FULL_GATE_PHASE:
+        all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_imports_at_top(content))
     all_issues.extend(check_logging_fstrings(content))
     all_issues.extend(check_logging_printf_tokens(content, file_path))
@@ -367,7 +368,13 @@ def _python_duplicate_body_and_banned_issues(context: _ValidationContext) -> lis
     all_issues = check_same_file_inline_duplicate_body(
         effective_content, file_path, changed, defer
     )
-    all_issues.extend(check_type_escape_hatches(effective_content, file_path))
+    all_issues.extend(
+        check_type_escape_hatches(
+            effective_content,
+            file_path,
+            include_type_ignore_comments=context.phase == FULL_GATE_PHASE,
+        )
+    )
     all_issues.extend(
         check_banned_identifiers(effective_content, file_path, changed, defer)
     )
@@ -577,7 +584,8 @@ def _javascript_comment_and_naming_issues(context: _ValidationContext) -> list[s
         context.file_path,
     )
     all_issues: list[str] = []
-    all_issues.extend(check_comment_changes(old_content, content, file_path))
+    if context.phase == FULL_GATE_PHASE:
+        all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_e2e_test_naming(content, file_path))
     all_issues.extend(
         check_js_boolean_naming(
