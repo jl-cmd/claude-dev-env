@@ -74,7 +74,6 @@ def test_should_grandfather_unchanged_join_separator_in_wide_edit() -> None:
     )
     proposed_fragment = (
         "def render(all_paths: list) -> str:\n"
-        "    # keep the join separator the same\n"
         "    return ', '.join(str(each_path) for each_path in all_paths)\n"
     )
     issues = code_rules_enforcer.validate_content_for_full_gate(

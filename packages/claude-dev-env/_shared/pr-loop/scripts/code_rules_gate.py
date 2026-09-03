@@ -2,7 +2,8 @@
 
 ::
 
-    default mode: git diff since merge-base, joined with untracked files
+    default mode: git diff since merge-base, joined with untracked files;
+    --comment-policy: opt into changed-comment findings
     --staged:     validate the staged index; --paths: validate explicit files
     --immediate:  validate staged rules and terminology at commit time
     every mode ends by naming how many files it inspected
@@ -13,6 +14,7 @@ and re-exports their surface for the test suite.
 
 import argparse
 import sys
+from functools import partial
 from pathlib import Path
 
 
@@ -44,7 +46,6 @@ try:
         ALL_WINDOWS_VENV_PYTHON_RELATIVE_PATH_SEGMENTS,
         EMPTY_FILE_SET_EXIT_CODE,
         EMPTY_FILE_SET_MESSAGE,
-        IMMEDIATE_SCOPE_ARGUMENT,
         INSPECTED_COUNT_MESSAGE,
         MAXIMUM_STAGED_PYTEST_COMMAND_LINE_CHARACTERS,
         MINIMUM_STAGED_PYTEST_PYTHON_MAJOR,
@@ -357,7 +358,10 @@ def main(all_arguments: list[str]) -> int:
     repository_root = (
         arguments.repo_root.resolve() if arguments.repo_root is not None else Path.cwd().resolve()
     )
-    validate_content = load_validate_content_for_full_gate()
+    validate_content = partial(
+        load_validate_content_for_full_gate(),
+        include_comment_policy=arguments.comment_policy,
+    )
     if arguments.paths:
         return _run_explicit_paths_mode(validate_content, arguments, repository_root)
     if arguments.immediate:

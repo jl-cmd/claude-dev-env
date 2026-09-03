@@ -196,6 +196,8 @@ from hooks_constants.subprocess_budget_completeness_content import (  # noqa: E4
     existing_file_content,
 )
 
+__all__ = ("is_test_file",)
+
 
 def _multiedit_post_edit_view(
     file_path: str, all_tool_input: dict[str, object]
@@ -234,6 +236,7 @@ class _ValidationContext(NamedTuple):
     defer_scope_to_caller: bool
     sibling_directory: Path | None
     phase: str
+    include_comment_policy: bool = True
 
 
 def _validated_phase(phase: str) -> str:
@@ -325,7 +328,7 @@ def _python_comment_and_logging_issues(context: _ValidationContext) -> list[str]
         context.file_path,
     )
     all_issues: list[str] = []
-    if not is_test_file(file_path):
+    if context.phase == FULL_GATE_PHASE and context.include_comment_policy:
         all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_imports_at_top(content))
     all_issues.extend(check_logging_fstrings(content))
@@ -366,7 +369,15 @@ def _python_duplicate_body_and_banned_issues(context: _ValidationContext) -> lis
     all_issues = check_same_file_inline_duplicate_body(
         effective_content, file_path, changed, defer
     )
-    all_issues.extend(check_type_escape_hatches(effective_content, file_path))
+    all_issues.extend(
+        check_type_escape_hatches(
+            effective_content,
+            file_path,
+            include_type_ignore_comments=(
+                context.phase == FULL_GATE_PHASE and context.include_comment_policy
+            ),
+        )
+    )
     all_issues.extend(
         check_banned_identifiers(effective_content, file_path, changed, defer)
     )
@@ -576,7 +587,7 @@ def _javascript_comment_and_naming_issues(context: _ValidationContext) -> list[s
         context.file_path,
     )
     all_issues: list[str] = []
-    if not is_test_file(file_path):
+    if context.phase == FULL_GATE_PHASE and context.include_comment_policy:
         all_issues.extend(check_comment_changes(old_content, content, file_path))
     all_issues.extend(check_e2e_test_naming(content, file_path))
     all_issues.extend(
@@ -642,6 +653,7 @@ def validate_content_for_phase(
     sibling_directory: Path | None = None,
     *,
     phase: str,
+    include_comment_policy: bool = True,
 ) -> list[str]:
     """Run all applicable validators on content for one named validation phase."""
     validated_phase = _validated_phase(phase)
@@ -649,10 +661,7 @@ def validate_content_for_phase(
     effective_content, all_changed_lines = _effective_content_and_changed_lines(
         content, full_file_content, prior_full_file_content
     )
-    context = _ValidationContext(
-        content, old_content, effective_content, file_path, all_changed_lines,
-        defer_scope_to_caller, sibling_directory, validated_phase,
-    )
+    context = _ValidationContext(content, old_content, effective_content, file_path, all_changed_lines, defer_scope_to_caller, sibling_directory, validated_phase, include_comment_policy)
     all_issues: list[str] = []
     if extension in ALL_PYTHON_EXTENSIONS:
         all_issues = _python_extension_issues(context)
@@ -693,6 +702,8 @@ def validate_content_for_full_gate(
     prior_full_file_content: str = "",
     defer_scope_to_caller: bool = False,
     sibling_directory: Path | None = None,
+    *,
+    include_comment_policy: bool = True,
 ) -> list[str]:
     """Run the full-gate phase, including the six checks that read sibling files."""
     return validate_content_for_phase(
@@ -704,6 +715,7 @@ def validate_content_for_full_gate(
         defer_scope_to_caller,
         sibling_directory,
         phase=FULL_GATE_PHASE,
+        include_comment_policy=include_comment_policy,
     )
 
 

@@ -27,6 +27,7 @@ class TestUntrackedTodos:
         violations = check_untracked_todos(code, "test.py")
         assert len(violations) == 1
         assert "TODO" in violations[0].message
+        assert "remove it from source code and track the work outside the file" in violations[0].message
 
     def test_todo_with_issue_passes(self) -> None:
         code = "# TODO #123: fix this later\ndef foo(): pass"

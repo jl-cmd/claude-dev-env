@@ -25,6 +25,9 @@
 .PARAMETER SkipRuff
     Skip the ruff run.
 
+.PARAMETER CommentPolicyBase
+    Optional git reference used as the comment-policy baseline.
+
 .OUTPUTS
     Per-tool status lines on stdout. Final summary line:
         CHECK: OK
@@ -34,18 +37,40 @@
 param(
     [switch]$SkipTests,
     [switch]$SkipMypy,
-    [switch]$SkipRuff
+    [switch]$SkipRuff,
+    [string]$CommentPolicyBase
 )
 
 $ErrorActionPreference = 'Stop'
 
 $hooksRoot = Resolve-Path (Join-Path $PSScriptRoot '..' 'hooks')
+$repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '..' '..')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
 $prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
 $processTreeScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'process-tree' 'scripts')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0
+
+function Resolve-CommentPolicyBase {
+    param([string]$ExplicitBase)
+    if ($ExplicitBase) {
+        $resolvedExplicitBase = & git -C $repositoryRoot rev-parse --verify --quiet "${ExplicitBase}^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $resolvedExplicitBase) {
+            return $ExplicitBase
+        }
+        throw "Comment-policy baseline '$ExplicitBase' does not resolve in the repository."
+    }
+    foreach ($candidateBase in @('origin/main', 'HEAD^1')) {
+        $resolvedCandidateBase = & git -C $repositoryRoot rev-parse --verify --quiet "${candidateBase}^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $resolvedCandidateBase) {
+            return $candidateBase
+        }
+    }
+    throw 'Comment-policy baseline does not resolve to origin/main or HEAD^1.'
+}
+
+$commentPolicyBase = Resolve-CommentPolicyBase -ExplicitBase $CommentPolicyBase
 
 function Invoke-Tool {
     param(
@@ -75,6 +100,15 @@ if (-not $SkipRuff) {
         } finally {
             Pop-Location
         }
+    }
+}
+
+Invoke-Tool -Label 'comment-policy' -Action {
+    Push-Location $prLoopScriptsRoot
+    try {
+        python code_rules_gate.py --base $commentPolicyBase --comment-policy --repo-root $repositoryRoot
+    } finally {
+        Pop-Location
     }
 }
 

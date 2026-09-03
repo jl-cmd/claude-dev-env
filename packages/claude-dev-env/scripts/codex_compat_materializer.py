@@ -62,6 +62,7 @@ codex_hook_dependency_manifest = (
     "hooks/blocking/code_rules_boolean_mustcheck.py",
     "hooks/blocking/code_rules_command_dispatch.py",
     "hooks/blocking/code_rules_comments.py",
+    "hooks/blocking/javascript_comment_scanner.py",
     "hooks/blocking/code_rules_constants_config.py",
     "hooks/blocking/codex_apply_patch.py",
     "hooks/blocking/config/__init__.py",

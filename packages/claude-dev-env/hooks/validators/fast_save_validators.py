@@ -42,7 +42,6 @@ from .test_safety_checks import (
     check_debug_guard_in_dev_scripts,
     check_no_skip_decorators,
 )
-from .todo_checks import validate_file as validate_todo_file
 from .type_safety_checks import validate_file as validate_type_safety_file
 from .useless_test_checks import validate_file as validate_useless_test_file
 from .validator_base import ValidatorResult
@@ -151,14 +150,6 @@ def _all_fast_save_validator_specifications() -> (
             "7",
             _is_python_file,
             _violation_lines_from(validate_magic_literal_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        # Python code quality and TODO tracking.
-        _FastSaveValidatorSpecification(
-            "TODO Tracking",
-            "36",
-            _is_python_file,
-            _violation_lines_from(validate_todo_file),
             NO_PYTHON_FILES_MESSAGE,
         ),
         _FastSaveValidatorSpecification(

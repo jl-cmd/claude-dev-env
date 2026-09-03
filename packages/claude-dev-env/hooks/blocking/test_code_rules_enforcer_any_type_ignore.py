@@ -56,6 +56,7 @@ def test_should_flag_bare_type_ignore() -> None:
     source = "x = 1  # type: ignore\n"
     issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
     assert any("type: ignore" in issue for issue in issues)
+    assert any("remove it and use a typed boundary or real type" in issue for issue in issues)
 
 
 def test_should_flag_coded_type_ignore_without_justification() -> None:
@@ -64,16 +65,35 @@ def test_should_flag_coded_type_ignore_without_justification() -> None:
     assert any("type: ignore" in issue for issue in issues)
 
 
-def test_should_allow_justified_type_ignore() -> None:
+def test_should_flag_justified_type_ignore() -> None:
     source = "x = 1  # type: ignore[misc]  # stubs missing in foo library\n"
     issues = check_type_escape_hatches(source, PRODUCTION_FILE_PATH)
+    assert any("type: ignore" in issue for issue in issues)
+
+
+def test_should_flag_justified_type_ignore_in_test_files() -> None:
+    source = "x = 1  # type: ignore[misc]  # stubs missing in foo library\n"
+    issues = check_type_escape_hatches(source, TEST_FILE_PATH)
+    assert any("type: ignore" in issue for issue in issues)
+
+
+def test_should_flag_type_ignore_in_test_files() -> None:
+    source = "def foo(x: Any) -> Any:\n    y: Any = 1  # type: ignore\n    return y\n"
+    issues = check_type_escape_hatches(source, TEST_FILE_PATH)
+    assert any("type: ignore" in issue for issue in issues)
+    assert not any("Any annotation" in issue for issue in issues)
+
+
+def test_edit_lane_does_not_report_type_ignore_comment_policy() -> None:
+    source = "total = 1  # type: ignore[misc]\n"
+    issues = hook_module.validate_content_for_edit_lane(source, TEST_FILE_PATH)
     assert not any("type: ignore" in issue for issue in issues)
 
 
-def test_should_skip_test_files() -> None:
-    source = "def foo(x: Any) -> Any:\n    y: Any = 1  # type: ignore\n    return y\n"
-    issues = check_type_escape_hatches(source, TEST_FILE_PATH)
-    assert issues == []
+def test_edit_lane_does_not_report_production_type_ignore_comment_policy() -> None:
+    source = "total = 1  # type: ignore[misc]\n"
+    issues = hook_module.validate_content_for_edit_lane(source, PRODUCTION_FILE_PATH)
+    assert not any("type: ignore" in issue for issue in issues)
 
 
 def test_should_flag_any_on_positional_only_parameter() -> None:

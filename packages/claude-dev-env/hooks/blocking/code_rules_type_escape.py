@@ -79,23 +79,13 @@ def _find_any_annotation_lines(source: str) -> list[int]:
     return offending_line_numbers
 
 
-def _find_unjustified_type_ignore_lines(source: str) -> list[int]:
-    """Return line numbers of # type: ignore comments lacking a trailing reason."""
+def _find_type_ignore_lines(source: str) -> list[int]:
+    """Return line numbers of all type-ignore comments."""
     ignore_pattern = re.compile(r"#\s*type:\s*ignore(?:\[[^\]]*\])?(.*)$")
-    minimum_justification_characters = len("xxxxx")
     offending_line_numbers: list[int] = []
     for each_comment_token in _comment_tokens(source):
-        matched = ignore_pattern.search(each_comment_token.string)
-        if not matched:
-            continue
-        line_number = each_comment_token.start[0]
-        trailing_text = matched.group(1).strip()
-        if not trailing_text.startswith("#"):
-            offending_line_numbers.append(line_number)
-            continue
-        justification_text = trailing_text.lstrip("#").strip()
-        if len(justification_text) < minimum_justification_characters:
-            offending_line_numbers.append(line_number)
+        if ignore_pattern.search(each_comment_token.string):
+            offending_line_numbers.append(each_comment_token.start[0])
     return offending_line_numbers
 
 
@@ -625,12 +615,20 @@ def _find_object_annotated_parameter_lines(source: str) -> list[tuple[int, str]]
     return offending_parameters
 
 
-def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
-    """Flag Any annotations, Any imports, cast() calls, object-typed dereferenced parameters, and unjustified # type: ignore."""
-    if is_test_file(file_path) or is_hook_infrastructure(file_path):
-        return []
-
+def check_type_escape_hatches(
+    content: str, file_path: str, include_type_ignore_comments: bool = True
+) -> list[str]:
+    """Flag type escape hatches and every type-ignore comment."""
     issues: list[str] = []
+    type_ignore_issues: list[str] = []
+    if include_type_ignore_comments:
+        for each_ignore_line in _find_type_ignore_lines(content):
+            type_ignore_issues.append(
+                f"Line {each_ignore_line}: # type: ignore is not allowed - remove it and use a typed boundary or real type"
+            )
+    if is_test_file(file_path) or is_hook_infrastructure(file_path):
+        return type_ignore_issues
+
     is_any_exempt = _file_path_matches_any_exemption(file_path)
 
     if not is_any_exempt:
@@ -670,11 +668,6 @@ def check_type_escape_hatches(content: str, file_path: str) -> list[str]:
             )
         issues.extend(object_parameter_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
-    type_ignore_issues: list[str] = []
-    for each_ignore_line in _find_unjustified_type_ignore_lines(content):
-        type_ignore_issues.append(
-            f"Line {each_ignore_line}: Unjustified # type: ignore - add trailing '# reason' explaining why"
-        )
     issues.extend(type_ignore_issues[:MAX_TYPE_ESCAPE_HATCH_ISSUES])
 
     return issues

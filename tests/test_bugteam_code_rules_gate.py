@@ -63,6 +63,7 @@ def copy_enforcer_into(repository_root: Path) -> None:
     blocking_destination.mkdir(parents=True, exist_ok=True)
     all_enforcer_modules = (
         *blocking_source.glob("code_rules_*.py"),
+        blocking_source / "javascript_comment_scanner.py",
         blocking_source / "codex_apply_patch.py",
     )
     for each_enforcer_module in sorted(all_enforcer_modules):
