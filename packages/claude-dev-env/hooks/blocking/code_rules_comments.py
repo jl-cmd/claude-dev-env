@@ -93,7 +93,9 @@ def check_comments_javascript(content: str) -> list[str]:
     return issues
 
 
-def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[str]]:
+def extract_comment_texts(
+    content: str, file_path: str, include_directive_comments: bool = False
+) -> tuple[set[str], set[str]]:
     """Extract normalized comment text strings from content for comparison.
 
     Returns:
@@ -108,7 +110,9 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
         return inline_comments, standalone_comments
 
     if extension in ALL_PYTHON_EXTENSIONS:
-        inline_comments, standalone_comments, _ = _extract_python_comment_sets(content)
+        inline_comments, standalone_comments, _ = _extract_python_comment_sets(
+            content, include_directive_comments
+        )
         return inline_comments, standalone_comments
 
     lines = content.split("\n")
@@ -123,20 +127,31 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
                 if "*/" in stripped:
                     is_in_multiline = False
                 continue
+            block_comment_start = stripped.find("/*")
+            if block_comment_start > 0:
+                block_comment = stripped[block_comment_start:]
+                if not block_comment.startswith("/**"):
+                    inline_comments.add(block_comment)
+                is_in_multiline = "*/" not in block_comment
+                continue
             if stripped.startswith("/*"):
                 is_in_multiline = "*/" not in stripped
                 if not stripped.startswith("/**"):
                     standalone_comments.add(stripped)
                 continue
             if stripped.startswith("//"):
-                if not stripped.startswith(ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES):
+                if include_directive_comments or not stripped.startswith(
+                    ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES
+                ):
                     standalone_comments.add(stripped)
             elif "//" in each_line:
                 before_slash = each_line[:each_line.index("//")]
                 if before_slash.strip():
                     comment_start = stripped.index("//")
                     comment_text = stripped[comment_start + 2 :].strip()
-                    if not comment_text.startswith(ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES):
+                    if include_directive_comments or not comment_text.startswith(
+                        ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES
+                    ):
                         inline_comments.add(stripped[comment_start:])
 
     return inline_comments, standalone_comments
@@ -145,9 +160,8 @@ def extract_comment_texts(content: str, file_path: str) -> tuple[set[str], set[s
 def check_comment_changes(old_content: str, new_content: str, file_path: str) -> list[str]:
     """Check for comment additions or removals between old and new content.
 
-    Inline comments (after code on same line): BLOCK when added.
-    Standalone comment lines: NUDGE (print advisory) when added.
-    Existing comments being removed: NUDGE (print advisory) — comment preservation is advisory.
+    Inline and standalone comments are blocking findings when added.
+    Existing comments can be removed when the touched code no longer needs them.
 
     When the file is Python and either *old_content* or *new_content* cannot
     be tokenized (common for mid-edit Edit fragments), the comparison is
@@ -161,13 +175,21 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
 
     extension = get_file_extension(file_path)
     if extension in ALL_PYTHON_EXTENSIONS:
-        old_inline, old_standalone, old_tokenize_ok = _extract_python_comment_sets(old_content)
-        new_inline, new_standalone, new_tokenize_ok = _extract_python_comment_sets(new_content)
+        old_inline, old_standalone, old_tokenize_ok = _extract_python_comment_sets(
+            old_content, True
+        )
+        new_inline, new_standalone, new_tokenize_ok = _extract_python_comment_sets(
+            new_content, True
+        )
         if not (old_tokenize_ok and new_tokenize_ok):
             return issues
     else:
-        old_inline, old_standalone = extract_comment_texts(old_content, file_path)
-        new_inline, new_standalone = extract_comment_texts(new_content, file_path)
+        old_inline, old_standalone = extract_comment_texts(
+            old_content, file_path, True
+        )
+        new_inline, new_standalone = extract_comment_texts(
+            new_content, file_path, True
+        )
 
     added_inline = new_inline - old_inline
     if added_inline:
@@ -177,18 +199,9 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
     added_standalone = new_standalone - old_standalone
     if added_standalone:
         sample = next(iter(added_standalone))
-        print(f"[CODE_RULES advisory] Standalone comment added: {sample[:60]} - prefer self-documenting code", file=sys.stderr)
-
-    all_old = old_inline | old_standalone
-    all_new = new_inline | new_standalone
-    removed_comments = all_old - all_new
-    if removed_comments:
-        old_line_count = len([line for line in old_content.split("\n") if line.strip()])
-        new_line_count = len([line for line in new_content.split("\n") if line.strip()])
-        code_was_removed = new_line_count < old_line_count - len(removed_comments)
-        if not code_was_removed:
-            sample = next(iter(removed_comments))
-            print(f"[CODE_RULES advisory] Existing comment removed: {sample[:60]} - comment preservation is advisory", file=sys.stderr)
+        issues.append(
+            f"Standalone comment added: {sample[:60]} - remove the comment or move its meaning into code structure"
+        )
 
     return issues
 
@@ -304,7 +317,9 @@ def _starts_with_bounded_token_anchored_directive(directive_body: str) -> bool:
     return False
 
 
-def _extract_python_comment_sets(content: str) -> tuple[set[str], set[str], bool]:
+def _extract_python_comment_sets(
+    content: str, include_directive_comments: bool = False
+) -> tuple[set[str], set[str], bool]:
     """Return (inline_comments, standalone_comments, tokenize_succeeded).
 
     Streams *content* once via ``_python_tokens``. A tokenize failure
@@ -321,7 +336,10 @@ def _extract_python_comment_sets(content: str) -> tuple[set[str], set[str], bool
         for each_token in _python_tokens(content):
             if each_token.type != tokenize.COMMENT:
                 continue
-            if _is_exempt_python_comment(each_token):
+            is_shebang = each_token.string.startswith("#!") and each_token.start == (1, 0)
+            if is_shebang or (
+                not include_directive_comments and _is_exempt_python_comment(each_token)
+            ):
                 continue
             line_number = each_token.start[0]
             column_offset = each_token.start[1]

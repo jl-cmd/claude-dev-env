@@ -128,6 +128,7 @@ from code_rules_shared import (  # noqa: E402
     get_file_extension,
     is_ephemeral_script_path,
     is_hook_infrastructure,
+    is_test_file,
     is_under_session_scratchpad,
 )
 from code_rules_string_magic import (  # noqa: E402
@@ -194,6 +195,8 @@ from hooks_constants.setup_project_paths_constants import (  # noqa: E402
 from hooks_constants.subprocess_budget_completeness_content import (  # noqa: E402
     existing_file_content,
 )
+
+__all__ = ("is_test_file",)
 
 
 def _multiedit_post_edit_view(
