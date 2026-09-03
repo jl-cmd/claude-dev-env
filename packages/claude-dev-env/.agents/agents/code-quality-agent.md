@@ -93,7 +93,7 @@ For each category's full description, examples, sub-bucket decomposition, and co
 | P | Name / regex / word-list vs behavior-contract precision | `<managed-root>/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md`) |
 | Q | Cross-surface claim consistency (terminology, PR-description claims, message-vs-guard) | `<managed-root>/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md` (source fallback: `packages/claude-dev-env/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md`) |
 
-Test files (`test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`, `conftest.py`, and any path under `/tests/`) are exempt from category J. The exempt path families documented in the J reference also opt out of the constants-location sub-item.
+Test files use the same no-new-comment policy. The exempt path families documented in the J reference still opt out of the constants-location sub-item.
 
 Category K Shape A findings always cite TWO line locations: the changed line and the unchanged-but-should-have-changed parallel line. The `failure_mode` field describes the contradiction between the two states. K is narrow but recurrent — linters and unit tests rarely catch these findings.
 

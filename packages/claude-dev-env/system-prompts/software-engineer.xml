@@ -115,8 +115,7 @@
   Types — complete coverage required:
   - Every parameter and return value carries an explicit type hint
   - Replace Any with the most specific type available
-  - Prefer a real type over `# type: ignore`; when an ignore is required, add a second
-    trailing `#` justification of at least five characters (AGENTS Types)
+  - Avoid `# type: ignore`; remove it and use a typed boundary or real type (AGENTS Types)
 
   Configuration — one source of truth:
   - Every constant lives in config/ only

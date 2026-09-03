@@ -31,7 +31,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 
 **J1. Magic values in production function bodies**
 - Walk every numeric or non-trivial literal other than `0`, `1`, `-1` inside production function bodies.
-- Test files are exempt. Module-level declarations are J3-scope, not J1-scope.
+- Test files follow the same no-new-comment policy. Module-level declarations are J3-scope, not J1-scope.
 - For each literal found, decide: structural value that belongs in `config/` (flag) vs. truly local arithmetic constant tied to the line's logic (defendable).
 - Adversarial probes must each verify a distinct angle: (a) does the literal duplicate an existing value already centralized in `config/`? (b) does the literal silently couple two languages (e.g., a Python config value and a hand-typed PowerShell / shell mirror)? (c) does the literal appear in user-facing help/doc text in a way that would silently lie if the canonical value changed?
 
@@ -67,10 +67,10 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 - Adversarial probes: (a) does any production function rely on inferred return type from a single `return` path? (b) does any parameter use a string-quoted forward reference that masks `Any`? (c) is there a `# type: ignore` anywhere? Grep the diff explicitly.
 
 **J8. New inline comments**
-- Every `#` or `//` comment line **added** by this diff in production code — flag, except for exempt markers (shebangs, `# type:`, `# noqa`, `# pylint:`, `# pragma:`, `// @ts-`, `// eslint-`, `// prettier-`, `/// `).
+- Every `#` or `//` comment line **added** by this diff in any code — flag.
 - Module/function/class docstrings are always allowed.
 - Existing comments are NEVER removed (Comment Preservation rule); if the diff removes an existing comment, that is a separate violation outside J8 (the hook emits a stderr advisory for it rather than blocking).
-- Test files are exempt.
+- Test files follow the same no-new-comment policy.
 - Adversarial probes: (a) is there any `# type:` or marker comment that is actually inert prose rather than a real type-checker / linter directive? (b) is any docstring carrying inline-comment content (line-level explanations rather than module/function description)? (c) does any newly-added blank line between code stanzas function as a comment substitute, suggesting the author wanted to add a comment but couldn't?
 
 **J9. Logging format**
@@ -90,9 +90,9 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 - Adversarial probes: (a) is the guard expression semantically equivalent to `if X not in sys.path:` where `X` is exactly the value being inserted (no string/Path mismatch)? (b) is there a second `sys.path` mutation elsewhere in the file that is not guarded? (c) would importing the module twice (e.g., via test collection re-runs) re-trigger the insert?
 
 **J12. Hardcoded user paths**
-- Any string literal containing `C:/Users/<name>/...`, `/Users/<name>/...`, `/home/<name>/...` in production code? Use `pathlib.Path.home()` or `os.path.expanduser('~')`.
+- Any string literal containing a user-specific home path in production code? Use `pathlib.Path.home()` or `os.path.expanduser('~')`.
 - Exempt: test files, `config/` files, workflow registry paths (`/workflow/`, `_tab.py`, `/states.py`, `/modules.py`), Django migrations (`/migrations/`), and hook infrastructure.
-- Adversarial probes: (a) does any error message, help string, or docstring example embed a `C:/Users/...`, `/home/...`, or `/Users/...` example? Grep the diff. (b) does any scheduled-task / launcher / installer artifact hardcode a path that should be derived from `$PSCommandPath`, `__file__`, or `os.getcwd()`? (c) does any docstring example show a user-specific home, even if the runtime code itself is path-clean?
+- Adversarial probes: (a) does any error message, help string, or docstring example embed a user-specific home path? Grep the diff. (b) does any scheduled-task / launcher / installer artifact hardcode a path that should be derived from `$PSCommandPath`, `__file__`, or `os.getcwd()`? (c) does any docstring example show a user-specific home, even if the runtime code itself is path-clean?
 
 ## Cross-bucket questions to answer at the end
 
@@ -208,12 +208,12 @@ ID prefix: `find`.
 - Adversarial probes: (a) is the guard expression `if str(_SCRIPTS_DIR) not in sys.path:` semantically equivalent to `if X not in sys.path:` where `X` is exactly the value being inserted? Yes — both use `str(_SCRIPTS_DIR)`. (b) is there a second `sys.path` mutation elsewhere in the test file that's not guarded? No — only one occurrence at line 162. (c) would importing the test module twice (e.g., via pytest's collection re-runs) re-trigger the insert? The guard prevents it. Clean.
 
 **J12. Hardcoded user paths**
-- Any string literal containing `C:/Users/<name>/...`, `/Users/<name>/...`, `/home/<name>/...`?
+- Any string literal containing a user-specific home path?
 - `sweep_empty_dirs.py` — no hardcoded user paths. The `arguments.root` value is supplied at runtime via argparse positional argument (line 103). Clean.
 - `config/sweep_config.py` — no paths at all. Clean.
 - Test file — exempt; uses `tempfile.TemporaryDirectory()` (lines 178, 188, 197, 210, 216) which is the canonical safe pattern. Clean.
 - `Install-SweepEmptyDirs.ps1` — `$ScriptDir = Split-Path -Parent $PSCommandPath` (line 272), `$ScriptPath = Join-Path $ScriptDir "sweep_empty_dirs.py"` (line 273). Both derive from `$PSCommandPath` (the script's own path), not a hardcoded user home. Clean. The `$Target` parameter is supplied at install time (line 230); not hardcoded.
-- Adversarial probes: (a) does any error message or help string embed a `C:/Users/...` example? Grep the diff for `C:/Users`, `/home/`, `/Users/` — no occurrences. (b) does the scheduled task `-Argument` string at line 296 hardcode a path? It interpolates `$ScriptPath`, `$AgeSeconds`, and `$Target` — all dynamic. Clean. (c) does any docstring example show a user-specific home? Module docstrings on lines 62 and 140 are short and contain no example paths. Clean.
+- Adversarial probes: (a) does any error message or help string embed a user-specific home path? Grep the diff — no occurrences. (b) does the scheduled task `-Argument` string at line 296 hardcode a path? It interpolates `$ScriptPath`, `$AgeSeconds`, and `$Target` — all dynamic. Clean. (c) does any docstring example show a user-specific home? Module docstrings on lines 62 and 140 are short and contain no example paths. Clean.
 
 ## Cross-bucket questions to answer at the end
 

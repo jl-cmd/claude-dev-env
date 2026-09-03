@@ -63,10 +63,10 @@ Inline the artifact under this section using the section types defined in the ch
 - Helpers defined inside a single test body that are never called within that body are dead.
 - Adversarial probes for proof-of-absence: (a) any test that defines a local helper (e.g., `def make_dir(...):`) and never calls it? (b) any imported test name from the production module that no test exercises? (c) any module-level constant whose call graph collapses to zero references after the diff?
 
-**E8. Stub / placeholder code without TODO**
+**E8. Stub / placeholder code without tracking**
 - Distinguish real-behavior `pass` / `continue` / empty-handler bodies (intentional swallowing of expected exceptions, no-op branches that exist to satisfy a contract) from scaffolding stubs.
-- Real-behavior bodies do NOT require a TODO; the audit must state the rationale (e.g., "rmdir race with concurrent writer is intentionally swallowed").
-- Scaffolding bodies (`pass`, `...`, `raise NotImplementedError`, empty `else { }`, single-statement `return None` placeholders) without a `# TODO` comment ARE Category E findings under the project's `CODE_RULES.md` → "COMMENT PRESERVATION" rule.
+- Real-behavior bodies need no source-code marker; the audit must state the rationale (e.g., "rmdir race with concurrent writer is intentionally swallowed").
+- Scaffolding bodies (`pass`, `...`, `raise NotImplementedError`, empty `else { }`, single-statement `return None` placeholders) are Category E findings. Judge the stub itself; track follow-up work outside source code.
 - Adversarial probes for proof-of-absence: (a) any empty brace block in PowerShell / TypeScript / Go (`{ }` with no statements)? (b) any function whose entire body is `pass` / `return` / `return None`? (c) any branch that exits cleanly only because the surrounding loop is no-op for an empty input — is the no-op intentional or a placeholder?
 
 **E9. Constants-module exports with no importer**
@@ -160,12 +160,12 @@ ID prefix: `find`.
 - No test data builders or mock factories are defined in this PR.
 - Adversarial probes for proof-of-absence: (a) does any of the five tests define a local helper inside its body that is then never called? (e.g., a `def make_dir(...):` defined but unused) — scan each test body. (b) does any test import a name from `sweep_empty_dirs` that it never uses? — only `sweep` is imported, and every test calls it. (c) does the `_SCRIPTS_DIR` block survive if pytest is invoked with `sweep_empty_dirs.py` already on `sys.path`? — yes, the membership-test guards the insert, so the constant is still meaningfully consumed even on the second run.
 
-**E8. Stub / placeholder code without TODO**
-- `sweep_empty_dirs.py` line 30: `except OSError: pass` — the `pass` is the entire handler body, intentionally swallowing rmdir failures (e.g., directory became non-empty between the walk and the rmdir, race with another writer). This is a real-behavior `pass`, not a stub. No TODO is required because the handler IS the intended behavior.
+**E8. Stub / placeholder code without tracking**
+- `sweep_empty_dirs.py` line 30: `except OSError: pass` — the `pass` is the entire handler body, intentionally swallowing rmdir failures (e.g., directory became non-empty between the walk and the rmdir, race with another writer). This is a real-behavior `pass`, not a stub. No source-code marker is needed because the handler IS the intended behavior.
 - `sweep_empty_dirs.py` line 28: the second `except OSError: continue` similarly is intended behavior (skip the directory whose ctime is unreadable), not a stub.
 - No `...` literal anywhere in the four files.
 - No `raise NotImplementedError` anywhere.
-- No `# TODO` markers in the diff — the project's own rule (`CODE_RULES.md` → "COMMENT PRESERVATION") requires TODOs only for scaffolding/placeholder code. The two `pass`/`continue` bodies above are production behavior, not scaffolding.
+- The two `pass`/`continue` bodies above are production behavior, not scaffolding. No source-code marker is needed because the audit judges the body directly.
 - Adversarial probes for proof-of-absence: (a) does the PowerShell script have an empty `else { }` or empty branch body? — scan lines 14-71 for any `{ }` with no statements between the braces. (b) does any function body consist of a single `pass` or `return` with no work done? — every function body in this PR performs at least one statement. (c) does the `Status` branch (lines 14-31) exit cleanly even when `$task.Triggers` is empty? — the `foreach` loop at line 26 is a no-op for an empty collection, which is correct behavior, not a stub.
 
 **E9. Constants-module exports with no importer**

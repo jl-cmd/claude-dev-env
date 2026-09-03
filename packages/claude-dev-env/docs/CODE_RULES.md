@@ -52,7 +52,7 @@ A public function may use the exact inline marker `# pragma: no-banned-noun` on 
 
 ## 6. COMPLETE TYPE HINTS
 
-ALL parameters typed, ALL returns typed. No `Any`. A `# type: ignore` is allowed only with a second trailing `#` justification of at least five characters (e.g. `# type: ignore[misc]  # stubs missing in foo library`); bare ignores are blocked by `code_rules_enforcer.py`. Prefer fixing the type over an ignore when a real annotation is available.
+ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remove it and use a typed boundary or real type. Prefer fixing the type over an ignore when a real annotation is available.
 
 ## 6.5 FILE LENGTH GUIDANCE
 

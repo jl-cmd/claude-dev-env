@@ -80,7 +80,7 @@ Load only the group that matches the task. Keep session policy details in these 
 
 Material implementation questions must return to the caller for `AskUserQuestion` handling; do not ask in plain text or guess.
 
-Type-ignore rule (AGENTS Types): a `# type: ignore` needs a second trailing `#` justification of at least five characters. Prefer a real type when available.
+Type-ignore rule (AGENTS Types): avoid `# type: ignore`; remove it and use a typed boundary or real type.
 
 Constants (AGENTS Magic values): use named constants from the target layout. Search its constants module first. Do not force a generic `config/` layout. Example:
 
