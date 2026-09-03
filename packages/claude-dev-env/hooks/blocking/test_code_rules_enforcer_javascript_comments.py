@@ -13,9 +13,9 @@ if _BLOCKING_DIRECTORY not in sys.path:
 if _HOOKS_DIRECTORY not in sys.path:
     sys.path.insert(0, _HOOKS_DIRECTORY)
 
-check_comment_changes = importlib.import_module(
-    "code_rules_comments"
-).check_comment_changes
+comment_rules_module = importlib.import_module("code_rules_comments")
+check_comment_changes = comment_rules_module.check_comment_changes
+code_rules_enforcer_module = importlib.import_module("code_rules_enforcer")
 
 
 def test_check_comment_changes_ignores_javascript_url_string() -> None:
@@ -42,3 +42,33 @@ def test_check_comment_changes_reports_duplicate_identical_comment_occurrence() 
     )
 
     assert any("Line 2: Inline comment added" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_does_not_match_comment_text_inside_changed_string() -> None:
+    issues = check_comment_changes(
+        "# note\n\ntotal = 1\n",
+        '"# note"\ntotal = 2\n',
+        "totals.py",
+    )
+
+    assert not any("still on the changed lines" in each_issue for each_issue in issues)
+
+
+def test_check_comment_changes_flags_comment_attached_to_deleted_code() -> None:
+    issues = check_comment_changes(
+        "# attached\nold_total = 1\nnew_total = 2\n",
+        "# attached\nnew_total = 2\n",
+        "totals.py",
+    )
+
+    assert any("Standalone comment still on the changed lines" in each_issue for each_issue in issues)
+
+
+def test_full_gate_skips_comment_policy_by_default() -> None:
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(
+        "total = 1  # added\n",
+        "totals.py",
+        "total = 1\n",
+    )
+
+    assert not any("comment" in each_issue.lower() for each_issue in issues)

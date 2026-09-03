@@ -236,7 +236,7 @@ class _ValidationContext(NamedTuple):
     defer_scope_to_caller: bool
     sibling_directory: Path | None
     phase: str
-    include_comment_policy: bool = True
+    include_comment_policy: bool = False
 
 
 def _validated_phase(phase: str) -> str:
@@ -653,7 +653,7 @@ def validate_content_for_phase(
     sibling_directory: Path | None = None,
     *,
     phase: str,
-    include_comment_policy: bool = True,
+    include_comment_policy: bool = False,
 ) -> list[str]:
     """Run all applicable validators on content for one named validation phase."""
     validated_phase = _validated_phase(phase)
@@ -703,7 +703,7 @@ def validate_content_for_full_gate(
     defer_scope_to_caller: bool = False,
     sibling_directory: Path | None = None,
     *,
-    include_comment_policy: bool = True,
+    include_comment_policy: bool = False,
 ) -> list[str]:
     """Run the full-gate phase, including the six checks that read sibling files."""
     return validate_content_for_phase(

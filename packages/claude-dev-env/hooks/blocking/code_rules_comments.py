@@ -8,7 +8,6 @@ import tokenize
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
-from typing import cast
 
 _blocking_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
@@ -100,49 +99,41 @@ def check_comments_javascript(content: str) -> list[str]:
     return issues
 
 
+def _comment_occurrences(
+    content: str, file_path: str, include_directive_comments: bool = False
+) -> tuple[list[tuple[str, int, bool]], bool]:
+    """List comments as text, line number, and inline vs standalone.
+
+    Python tokenize failure returns an empty list and False. JavaScript
+    returns the shared scanner's list and True. Other extensions return
+    an empty list and True.
+    """
+    extension = get_file_extension(file_path)
+    if extension in ALL_PYTHON_EXTENSIONS:
+        return _python_comment_occurrences(content, include_directive_comments)
+    if extension in ALL_JAVASCRIPT_EXTENSIONS:
+        all_occurrences = extract_javascript_comment_occurrences(
+            content, include_directive_comments
+        )
+        return [tuple(each_occurrence) for each_occurrence in all_occurrences], True
+    return [], True
+
+
 def extract_comment_texts(
     content: str, file_path: str, include_directive_comments: bool = False
 ) -> tuple[set[str], set[str]]:
-    """Extract normalized comment text strings from content for comparison.
-
-    Returns:
-        Tuple of (inline_comments, standalone_comments).
-        Inline comments appear after code on the same line.
-        Standalone comments are lines where the entire line is a comment.
-    """
-    extension = get_file_extension(file_path)
-    inline_comments: set[str] = set()
-    standalone_comments: set[str] = set()
-    if not content:
-        return inline_comments, standalone_comments
-
-    if extension in ALL_PYTHON_EXTENSIONS:
-        inline_comments, standalone_comments, _ = _extract_python_comment_sets(
-            content, include_directive_comments
-        )
-        return inline_comments, standalone_comments
-
-    if extension in ALL_JAVASCRIPT_EXTENSIONS:
-        all_occurrences: list[tuple[str, int, bool]] = cast(
-            list[tuple[str, int, bool]],
-            extract_javascript_comment_occurrences(content, include_directive_comments),
-        )
-        inline_comments = {
-            each_text
-            for each_text, _each_line_number, is_inline in all_occurrences
-            if is_inline
-        }
-        standalone_comments = {
-            each_text
-            for each_text, _each_line_number, is_inline in all_occurrences
-            if not is_inline
-        }
-
-    return inline_comments, standalone_comments
+    """Extract normalized comment text strings from content for comparison."""
+    all_occurrences, _ = _comment_occurrences(
+        content, file_path, include_directive_comments
+    )
+    return (
+        {each_text for each_text, _each_line, each_is_inline in all_occurrences if each_is_inline},
+        {each_text for each_text, _each_line, each_is_inline in all_occurrences if not each_is_inline},
+    )
 
 
 def _python_comment_occurrences(
-    content: str,
+    content: str, include_directive_comments: bool = True
 ) -> tuple[list[tuple[str, int, bool]], bool]:
     """Return Python comments with exact lines and a tokenize status."""
     source_lines = content.split("\n")
@@ -155,6 +146,8 @@ def _python_comment_occurrences(
         if each_token.type != tokenize.COMMENT:
             continue
         if each_token.string.startswith("#!") and each_token.start == (1, 0):
+            continue
+        if not include_directive_comments and _is_exempt_python_comment(each_token):
             continue
         source_line = source_lines[each_token.start[0] - 1]
         is_inline = bool(source_line[: each_token.start[1]].strip())
@@ -182,8 +175,8 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
 
     extension = get_file_extension(file_path)
     if extension in ALL_PYTHON_EXTENSIONS:
-        old_occurrences, old_tokenize_ok = _python_comment_occurrences(old_content)
-        new_occurrences, new_tokenize_ok = _python_comment_occurrences(new_content)
+        old_occurrences, old_tokenize_ok = _python_comment_occurrences(old_content, True)
+        new_occurrences, new_tokenize_ok = _python_comment_occurrences(new_content, True)
         if not (old_tokenize_ok and new_tokenize_ok):
             return issues
     else:
@@ -223,25 +216,70 @@ def _changed_line_numbers(old_content: str, new_content: str) -> set[int]:
     }
 
 
+def _deleted_line_numbers(old_content: str, new_content: str) -> set[int]:
+    """Old-file line numbers that a delete or replace covers."""
+    matcher = difflib.SequenceMatcher(
+        None, old_content.splitlines(), new_content.splitlines(), autojunk=False
+    )
+    return {
+        each_line_number
+        for each_tag, each_old_start, each_old_end, _, _ in matcher.get_opcodes()
+        if each_tag in {"delete", "replace"}
+        for each_line_number in range(each_old_start + 1, each_old_end + 1)
+    }
+
+
+def _comment_lines_by_key(
+    all_occurrences: list[tuple[str, int, bool]],
+) -> dict[tuple[str, bool], list[int]]:
+    """Group line numbers by comment text and inline vs standalone."""
+    lines_by_key: dict[tuple[str, bool], list[int]] = {}
+    for each_text, each_line_number, each_is_inline in all_occurrences:
+        lines_by_key.setdefault((each_text, each_is_inline), []).append(each_line_number)
+    return lines_by_key
+
+
+def _is_attached_to_changed_code(
+    each_line_number: int,
+    each_is_inline: bool,
+    old_line_number: int,
+    all_changed_lines: set[int],
+    all_deleted_lines: set[int],
+) -> bool:
+    """Check if this leftover comment still sits on a changed line.
+
+    Inline comments count when their own line changed. Standalone comments
+    count when the next line changed, or when the next line in the old file
+    was deleted.
+    """
+    if each_is_inline:
+        return each_line_number in all_changed_lines
+    return each_line_number + 1 in all_changed_lines or old_line_number + 1 in all_deleted_lines
+
+
 def _retained_comment_issues(
     old_content: str, new_content: str, file_path: str
 ) -> list[str]:
-    old_inline, old_standalone = extract_comment_texts(old_content, file_path, True)
-    new_inline, new_standalone = extract_comment_texts(new_content, file_path, True)
-    shared_inline = set(Counter(old_inline) & Counter(new_inline))
-    shared_standalone = old_standalone & new_standalone
-    if not shared_inline and not shared_standalone:
+    old_occurrences, old_tokenize_ok = _comment_occurrences(old_content, file_path, True)
+    new_occurrences, new_tokenize_ok = _comment_occurrences(new_content, file_path, True)
+    if not (old_tokenize_ok and new_tokenize_ok):
         return []
-    changed_lines = _changed_line_numbers(old_content, new_content)
-    new_lines = new_content.splitlines()
+    all_changed_lines = _changed_line_numbers(old_content, new_content)
+    all_deleted_lines = _deleted_line_numbers(old_content, new_content)
+    old_line_by_key = _comment_lines_by_key(old_occurrences)
     issues: list[str] = []
-    for each_line_number in sorted(changed_lines):
-        inline_comment = next((each_comment for each_comment in shared_inline if each_comment in new_lines[each_line_number - 1]), None)
-        if inline_comment is not None:
-            issues.append(f"Line {each_line_number}: Inline comment retained on changed code: {inline_comment} - remove the comment")
-        preceding_line_number = each_line_number - 1
-        if preceding_line_number > 0 and new_lines[preceding_line_number - 1].strip() in shared_standalone:
-            issues.append(f"Line {each_line_number}: Standalone comment retained on changed code at line {preceding_line_number}: {new_lines[preceding_line_number - 1].strip()} - remove the comment")
+    for each_text, each_line_number, each_is_inline in new_occurrences:
+        matching_old_lines = old_line_by_key.get((each_text, each_is_inline), [])
+        if not matching_old_lines:
+            continue
+        old_line_number = matching_old_lines.pop(0)
+        if not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
+            continue
+        comment_kind = "Inline" if each_is_inline else "Standalone"
+        issues.append(
+            f"Line {each_line_number}: {comment_kind} comment still on the changed lines: "
+            f"{each_text} - remove the comment"
+        )
         if len(issues) >= MAX_COMMENT_ISSUES:
             break
     return issues[:MAX_COMMENT_ISSUES]
@@ -263,12 +301,11 @@ def _python_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
 def _comment_tokens(source: str) -> Iterator[tokenize.TokenInfo]:
     """Yield COMMENT tokens from *source* one at a time.
 
-    Streams from ``_python_tokens`` so consumers that early-exit (e.g.
-    ``check_comments_python`` caps at ``MAX_COMMENT_ISSUES``) avoid
-    materializing the entire token list. Silently stops on tokenize
-    failure so callers receive only valid comment tokens — no
-    indeterminate signal is exposed at this layer because the consumers
-    that need it (``_extract_python_comment_sets``) bypass this helper.
+    Streams from ``_python_tokens`` so consumers that early-exit, such as
+    ``check_comments_python`` capping at ``MAX_COMMENT_ISSUES``, avoid
+    materializing the entire token list. Tokenize failure stops the
+    stream with no extra flag. Callers that need to know tokenize failed
+    use ``_python_comment_occurrences``.
     """
     try:
         for each_token in _python_tokens(source):
@@ -356,41 +393,3 @@ def _starts_with_bounded_token_anchored_directive(directive_body: str) -> bool:
         if next_character in ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS:
             return True
     return False
-
-
-def _extract_python_comment_sets(
-    content: str, include_directive_comments: bool = False
-) -> tuple[set[str], set[str], bool]:
-    """Return (inline_comments, standalone_comments, tokenize_succeeded).
-
-    Streams *content* once via ``_python_tokens``. A tokenize failure
-    (mid-edit fragment, syntax error) returns empty sets and ``False``
-    so callers can treat the situation as indeterminate rather than as
-    "no comments present". Inline vs standalone is decided by inspecting
-    the column offset of each ``COMMENT`` token against its source
-    line: an all-whitespace prefix means standalone.
-    """
-    inline_comments: set[str] = set()
-    standalone_comments: set[str] = set()
-    lines = content.split("\n")
-    try:
-        for each_token in _python_tokens(content):
-            if each_token.type != tokenize.COMMENT:
-                continue
-            is_shebang = each_token.string.startswith("#!") and each_token.start == (1, 0)
-            if is_shebang or (
-                not include_directive_comments and _is_exempt_python_comment(each_token)
-            ):
-                continue
-            line_number = each_token.start[0]
-            column_offset = each_token.start[1]
-            source_line = lines[line_number - 1] if line_number - 1 < len(lines) else ""
-            text_before_comment = source_line[:column_offset]
-            normalized_comment_text = each_token.string.strip()
-            if not text_before_comment.strip():
-                standalone_comments.add(normalized_comment_text)
-            else:
-                inline_comments.add(normalized_comment_text)
-    except ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS:
-        return set(), set(), False
-    return inline_comments, standalone_comments, True
