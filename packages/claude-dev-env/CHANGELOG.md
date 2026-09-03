@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.33.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.0...claude-dev-env-v2.33.1) (2026-09-03)
+
+
+### Bug Fixes
+
+* remove comment directive justification guidance ([704ae2f](https://github.com/jl-cmd/claude-dev-env/commit/704ae2f8acd2c092acee4bdabddb0c04de3d0545))
+
 ## [2.33.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.32.0...claude-dev-env-v2.33.0) (2026-09-03)
 
 
