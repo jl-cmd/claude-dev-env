@@ -10,8 +10,7 @@ The canonical review-criteria instruction set for every AI agent that audits pul
 
 Do not add code comments. Preserve existing comments. Docstrings remain allowed.
 
-**Keep existing comments in place.** Only evaluate comments on lines you are actively changing. Do not add new inline comments in code — write self-documenting code. Docstrings (module/class/function) are always allowed. The hook treats the two directions differently: adding a new inline comment blocks the edit, while removing an existing comment prints a stderr advisory and lets the edit through.
-
+If you are operating on existing code and you find a comment within the lines you are editing, remove the comments. All other comments that are not within scope of your actionable task can remain.
 
 ---
 
