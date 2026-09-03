@@ -2949,6 +2949,23 @@ def test_diff_mode_untracked_png_does_not_flood_stderr(
     assert "untracked_icon.png" not in captured.err
 
 
+def test_diff_mode_empty_surface_exits_zero(
+    temporary_git_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_file(temporary_git_repository / "seed.txt", "seed\n")
+    commit_all_files(temporary_git_repository, "seed")
+    monkeypatch.chdir(temporary_git_repository)
+
+    exit_code = gate_module.main(["--base", "HEAD"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "inspected 0 file(s)" in captured.err
+    assert gate_module.EMPTY_FILE_SET_MESSAGE not in captured.err
+
+
 def test_diff_mode_image_only_surface_exits_zero_not_empty_file_set(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -61,13 +61,22 @@ function Resolve-CommentPolicyBase {
         }
         throw "Comment-policy baseline '$ExplicitBase' does not resolve in the repository."
     }
-    foreach ($candidateBase in @('origin/main', 'HEAD^1')) {
+
+    $headCommit = & git -C $repositoryRoot rev-parse --verify --quiet 'HEAD^{commit}' 2>$null
+    $continuousIntegrationBases = @($env:GITHUB_BASE_SHA, $env:GITHUB_EVENT_BEFORE)
+    foreach ($candidateBase in @($continuousIntegrationBases + 'origin/main' + 'HEAD^1')) {
+        if (-not $candidateBase) {
+            continue
+        }
         $resolvedCandidateBase = & git -C $repositoryRoot rev-parse --verify --quiet "${candidateBase}^{commit}" 2>$null
         if ($LASTEXITCODE -eq 0 -and $resolvedCandidateBase) {
+            if ($candidateBase -eq 'origin/main' -and $resolvedCandidateBase.Trim() -eq $headCommit.Trim()) {
+                continue
+            }
             return $candidateBase
         }
     }
-    throw 'Comment-policy baseline does not resolve to origin/main or HEAD^1.'
+    throw 'Comment-policy baseline does not resolve to a continuous-integration base, origin/main, or HEAD^1.'
 }
 
 $commentPolicyBase = Resolve-CommentPolicyBase -ExplicitBase $CommentPolicyBase

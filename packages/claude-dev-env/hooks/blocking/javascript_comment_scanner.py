@@ -1,14 +1,11 @@
 """Extract JavaScript comments without matching comment-like strings."""
 
-import io
 import re
-import tokenize
 from typing import NamedTuple
 
 from hooks_constants.code_rules_enforcer_constants import (
     ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES,
     ALL_JAVASCRIPT_EXEMPT_INLINE_COMMENT_PREFIXES,
-    ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS,
 )
 
 
@@ -72,28 +69,3 @@ def extract_javascript_comment_occurrences(
             JavaScriptCommentOccurrence(comment_text, line_number, is_inline)
         )
     return all_occurrences
-
-
-def extract_python_comment_occurrences(
-    content: str,
-) -> tuple[list[JavaScriptCommentOccurrence], bool]:
-    """Return Python comments with exact lines and a tokenize status."""
-    source_lines = content.split("\n")
-    try:
-        all_tokens = list(tokenize.generate_tokens(io.StringIO(content).readline))
-    except ALL_PYTHON_TOKENIZE_FAILURE_EXCEPTIONS:
-        return [], False
-    all_occurrences: list[JavaScriptCommentOccurrence] = []
-    for each_token in all_tokens:
-        if each_token.type != tokenize.COMMENT:
-            continue
-        if each_token.string.startswith("#!") and each_token.start == (1, 0):
-            continue
-        source_line = source_lines[each_token.start[0] - 1]
-        is_inline = bool(source_line[: each_token.start[1]].strip())
-        all_occurrences.append(
-            JavaScriptCommentOccurrence(
-                each_token.string.strip(), each_token.start[0], is_inline
-            )
-        )
-    return all_occurrences, True
