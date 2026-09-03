@@ -208,7 +208,12 @@ def test_full_gate_blocks_python_inline_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(
+        context.content,
+        context.file_path,
+        context.old_content,
+        include_comment_policy=True,
+    )
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
@@ -223,7 +228,7 @@ def test_full_gate_blocks_javascript_inline_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
@@ -238,7 +243,7 @@ def test_full_gate_blocks_javascript_inline_block_comment_in_test_file() -> None
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
@@ -253,7 +258,7 @@ def test_full_gate_blocks_javascript_directive_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("Inline comment added" in each_issue for each_issue in issues)
 
 
@@ -268,7 +273,7 @@ def test_full_gate_blocks_python_directive_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("comment added" in each_issue.lower() for each_issue in issues)
 
 
@@ -286,7 +291,7 @@ def test_full_gate_blocks_changed_marker_comments_in_test_file(each_marker: str)
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("comment added" in each_issue.lower() for each_issue in issues)
 
 
@@ -301,7 +306,7 @@ def test_full_gate_blocks_standalone_comment_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert any("Standalone comment added" in each_issue for each_issue in issues)
 
 
@@ -316,7 +321,7 @@ def test_full_gate_preserves_shebang_and_docstring_in_test_file() -> None:
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert not any("comment added" in each_issue.lower() for each_issue in issues)
 
 
@@ -333,7 +338,7 @@ def test_full_gate_allows_existing_comment_removal_without_advisory(
         sibling_directory=None,
         phase="edit",
     )
-    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content)
+    issues = code_rules_enforcer_module.validate_content_for_full_gate(context.content, context.file_path, context.old_content, include_comment_policy=True)
     assert not any("Existing comment removed" in each_issue for each_issue in issues)
     assert capsys.readouterr().err == ""
 
@@ -373,11 +378,11 @@ def test_check_comment_changes_blocks_retained_comments_on_changed_code(
     file_path: str, old_content: str, new_content: str
 ) -> None:
     issues = code_rules_enforcer.check_comment_changes(old_content, new_content, file_path)
-    assert any("retained on changed code" in each_issue for each_issue in issues)
+    assert any("still on the changed lines" in each_issue for each_issue in issues)
 
 
 def test_check_comment_changes_accepts_distant_untouched_comment() -> None:
     old_content = "# TODO #999: distant note\n\ntotal = 1\n"
     new_content = "# TODO #999: distant note\n\ntotal = 2\n"
     issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "totals.py")
-    assert not any("retained on changed code" in each_issue for each_issue in issues)
+    assert not any("still on the changed lines" in each_issue for each_issue in issues)

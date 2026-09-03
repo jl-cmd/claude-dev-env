@@ -251,6 +251,16 @@ def _report_empty_file_set() -> int:
     return EMPTY_FILE_SET_EXIT_CODE
 
 
+def _report_empty_diff() -> int:
+    """Print inspected 0 and return 0 when git has no changed files.
+
+    HEAD equals the chosen base and nothing is untracked. That is a clean
+    tree, so the gate stays quiet.
+    """
+    sys.stderr.write(INSPECTED_COUNT_MESSAGE.format(inspected_count=0) + "\n")
+    return 0
+
+
 def _run_explicit_paths_mode(
     validate_content: enforcer_loading.ValidateContentCallable,
     arguments: argparse.Namespace,
@@ -327,7 +337,7 @@ def _run_diff_mode(
         + paths_from_git_untracked(repository_root)
     )
     if not all_candidate_paths:
-        return _report_empty_file_set()
+        return _report_empty_diff()
     file_paths = filter_paths_under_prefixes(
         all_candidate_paths, repository_root, arguments.only_under
     )

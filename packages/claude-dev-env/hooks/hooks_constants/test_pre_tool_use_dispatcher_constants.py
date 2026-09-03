@@ -165,7 +165,6 @@ _ALL_DEFERRED_LINT_SCRIPT_PATHS = (
     "blocking/duplicate_rmtree_helper_blocker.py",
     "validation/hook_format_validator.py",
     "blocking/hook_prose_detector_consistency.py",
-    "blocking/stale_comment_reference_blocker.py",
     "blocking/subprocess_budget_completeness.py",
     "blocking/windows_rmtree_blocker.py",
     "advisory/refactor_guard.py",
