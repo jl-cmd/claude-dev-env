@@ -68,7 +68,6 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
     {
         "check_boolean_naming",
         "check_collection_prefix",
-        "check_comment_changes",
         "check_constant_equality_tests",
         "check_constants_outside_config",
         "check_existence_check_tests",
