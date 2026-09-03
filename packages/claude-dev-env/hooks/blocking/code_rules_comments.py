@@ -270,7 +270,7 @@ def _retained_comment_issues(
         issue_line = each_line_number if is_deleted_attachment or each_is_inline else each_line_number + 1
         comment_kind = "Inline" if each_is_inline else "Standalone"
         attachment_label = " at deleted code" if is_deleted_attachment else ""
-        issues.append(f"Line {issue_line}: {comment_kind} comment retained on changed code{attachment_label}: {each_text} - remove the comment")
+        issues.append(f"Line {issue_line}: {comment_kind} comment still on the changed lines{attachment_label}: {each_text} - remove the comment")
         if len(issues) >= MAX_COMMENT_ISSUES:
             break
     return issues[:MAX_COMMENT_ISSUES]

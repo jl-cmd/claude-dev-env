@@ -77,7 +77,7 @@ def test_split_violations_by_scope_blocks_everything_when_scope_is_none() -> Non
 
 def test_split_violations_by_scope_blocks_deleted_code_comment_without_added_lines() -> None:
     issues = [
-        "Line 1: Standalone comment retained on changed code at deleted code: # attached - remove the comment"
+        "Line 1: Standalone comment still on the changed lines at deleted code: # attached - remove the comment"
     ]
 
     blocking, advisory = violation_scoping.split_violations_by_scope(issues, set())
