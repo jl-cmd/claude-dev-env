@@ -230,6 +230,14 @@ test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired 
 });
 
 
+test('EVER_SHIPPED_SKILL_NAMES retains repairing-hook-boundaries so reinstall prunes the retired skill', () => {
+    assert.ok(
+        EVER_SHIPPED_SKILL_NAMES.has('repairing-hook-boundaries'),
+        'repairing-hook-boundaries must remain in the retirement registry after the package stops shipping it',
+    );
+});
+
+
 test('CONTENT_DIRECTORIES includes audit-rubrics so installer copies category rubrics and prompts to ~/.claude/audit-rubrics/', () => {
     assert.ok(
         CONTENT_DIRECTORIES.includes('audit-rubrics'),
