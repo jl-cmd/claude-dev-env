@@ -83,8 +83,8 @@ def test_check_comment_changes_flags_shifted_modified_inline_comment() -> None:
 
 
 def test_check_comment_changes_reserves_equal_duplicate_before_fallback() -> None:
-    old_content = "total = 1  # duplicate\n# duplicate\ndistant_total = 4\n"
-    new_content = "prep_total = 0\ntotal = 2  # duplicate\n# duplicate\ndistant_total = 4\n"
+    old_content = "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n"
+    new_content = "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n"
 
     issues = check_comment_changes(old_content, new_content, "totals.py")
 
@@ -92,7 +92,7 @@ def test_check_comment_changes_reserves_equal_duplicate_before_fallback() -> Non
         each_issue for each_issue in issues if "still on the changed lines" in each_issue
     ]
     assert changed_occurrence_issues == [
-        "Line 2: Inline comment still on the changed lines: # duplicate - remove the comment"
+        "Line 3: Standalone comment still on the changed lines: # duplicate - remove the comment"
     ]
 
 

@@ -690,15 +690,16 @@ def test_run_gate_base_mode_blocks_shifted_modified_inline_comment(
 def test_run_gate_staged_mode_reserves_equal_duplicate_before_fallback(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     write_file(
         temporary_git_repository / "module.py",
-        "total = 1  # duplicate\n# duplicate\ndistant_total = 4\n",
+        "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n",
     )
     commit_all_files(temporary_git_repository, "initial")
     write_file(
         temporary_git_repository / "module.py",
-        "prep_total = 0\ntotal = 2  # duplicate\n# duplicate\ndistant_total = 4\n",
+        "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n",
     )
     stage_file(temporary_git_repository, "module.py")
 
@@ -706,20 +707,24 @@ def test_run_gate_staged_mode_reserves_equal_duplicate_before_fallback(
     exit_code = gate_module.main(["--staged", "--comment-policy"])
 
     assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.count("comment still on the changed lines") == 1
+    assert "at deleted code" not in captured.err
 
 
 def test_run_gate_base_mode_reserves_equal_duplicate_before_fallback(
     temporary_git_repository: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     write_file(
         temporary_git_repository / "module.py",
-        "total = 1  # duplicate\n# duplicate\ndistant_total = 4\n",
+        "# duplicate\ntotal = 1\n# duplicate\ndistant_total = 4\n",
     )
     commit_all_files(temporary_git_repository, "initial")
     write_file(
         temporary_git_repository / "module.py",
-        "prep_total = 0\ntotal = 2  # duplicate\n# duplicate\ndistant_total = 4\n",
+        "prep_total = 0\n# duplicate\ntotal = 2\n# duplicate\ndistant_total = 4\n",
     )
     commit_all_files(temporary_git_repository, "reserve equal duplicate")
 
@@ -727,6 +732,9 @@ def test_run_gate_base_mode_reserves_equal_duplicate_before_fallback(
     exit_code = gate_module.main(["--base", "HEAD~1", "--comment-policy"])
 
     assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.count("comment still on the changed lines") == 1
+    assert "at deleted code" not in captured.err
 
 
 def test_run_gate_staged_mode_blocks_comment_attached_to_deleted_code(

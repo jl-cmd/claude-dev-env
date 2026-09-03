@@ -228,7 +228,7 @@ def _matching_old_comment_line(
     all_reserved_old_lines: set[int],
 ) -> int | None:
     all_matching_old_lines = all_old_line_by_key.get((each_text, each_is_inline), [])
-    mapped_old_line = all_old_line_by_new_line.get(each_line_number)
+    mapped_old_line = all_old_line_by_new_line.get(each_line_number if each_is_inline else each_line_number + 1, 0) - (0 if each_is_inline else 1)
     if mapped_old_line in all_matching_old_lines and mapped_old_line not in all_used_old_lines:
         return mapped_old_line
     all_available_old_lines = [each_candidate for each_candidate in all_matching_old_lines if each_candidate not in all_used_old_lines | all_reserved_old_lines]
@@ -240,7 +240,7 @@ def _matching_old_comment_line(
 def _reserve_mapped_old_comment_lines(all_new_occurrences: list[tuple[str, int, bool]], all_old_line_by_key: dict[tuple[str, bool], list[int]], all_old_line_by_new_line: dict[int, int]) -> dict[int, int]:
     reserved_old_line_by_new_index: dict[int, int] = {}
     for each_index, (each_text, each_line_number, each_is_inline) in enumerate(all_new_occurrences):
-        mapped_old_line = all_old_line_by_new_line.get(each_line_number)
+        mapped_old_line = all_old_line_by_new_line.get(each_line_number if each_is_inline else each_line_number + 1, 0) - (0 if each_is_inline else 1)
         if mapped_old_line not in all_old_line_by_key.get((each_text, each_is_inline), []) or mapped_old_line in reserved_old_line_by_new_index.values():
             continue
         reserved_old_line_by_new_index[each_index] = mapped_old_line
@@ -274,8 +274,8 @@ def _retained_comment_issues(
     used_old_lines: set[int] = set()
     reserved_old_line_by_new_index = _reserve_mapped_old_comment_lines(new_occurrences, old_line_by_key, old_line_by_new_line)
     issues: list[str] = []
-    for each_index, (each_text, each_line_number, each_is_inline) in enumerate(new_occurrences):
-        old_line_number = _matching_old_comment_line(each_text, each_line_number, each_is_inline, old_line_by_key, old_line_by_new_line, used_old_lines, set(reserved_old_line_by_new_index.values()) - {reserved_old_line_by_new_index.get(each_index)})
+    for each_text, each_line_number, each_is_inline in new_occurrences:
+        old_line_number = _matching_old_comment_line(each_text, each_line_number, each_is_inline, old_line_by_key, old_line_by_new_line, used_old_lines, set(reserved_old_line_by_new_index.values()))
         if old_line_number is None or not _is_attached_to_changed_code(each_line_number, each_is_inline, old_line_number, all_changed_lines, all_deleted_lines):
             continue
         used_old_lines.add(old_line_number)
