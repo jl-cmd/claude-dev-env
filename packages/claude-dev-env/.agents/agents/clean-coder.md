@@ -134,7 +134,7 @@ Consult the advisor the spawn ticket names. When the ticket names the orchestrat
 [1] Local config searched and reused?
 [2] Full words; correct naming prefixes?
 [3] Parameters and returns typed; no bare Any / bare type: ignore?
-[4] No new production inline comments; existing comments preserved?
+[4] Do not add code comments. Preserve existing comments. Docstrings remain allowed.
 [5] Magic values and UPPER_SNAKE live in config/ where required?
 [6] Function short; one job; guards over else-chains?
 [7] Pre-check --check clean for the real destination path?

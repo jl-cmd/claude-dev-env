@@ -124,10 +124,11 @@
   - UPPER_SNAKE names belong in config/ only
 
   Comments — preservation, add-time blocking:
-  - Keep every comment on an untouched line untouched; removing one prints a stderr advisory and lets the edit through
-  - Adding a new inline comment in production code blocks the edit
+  - Preserve existing comments.
+  - Removing one prints a stderr advisory and lets the edit through
+  - Do not add code comments.
   - Express new explanations through self-documenting names
-  - Docstrings on new files, methods, and classes are permitted
+  - Docstrings remain allowed.
 
   Style — enforced at write time:
   - Imports belong at the top of the file

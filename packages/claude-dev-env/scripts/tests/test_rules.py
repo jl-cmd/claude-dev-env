@@ -76,3 +76,22 @@ def test_every_shipped_claude_rule_maps_to_an_mdc() -> None:
         if each_rule_file.name in _SKIPPED_RULE_FILE_NAMES:
             continue
         assert each_rule_file.name in output_name_by_rule_file, each_rule_file.name
+
+
+def test_comment_guidance_reaches_installed_instruction_surfaces() -> None:
+    expected_phrases = (
+        "do not add code comments.",
+        "preserve existing comments.",
+        "docstrings remain allowed.",
+    )
+    all_surface_paths = (
+        _PACKAGE_ROOT / "AGENTS.md",
+        _PACKAGE_ROOT / "docs" / "CODE_RULES.md",
+        _PACKAGE_ROOT / "system-prompts" / "software-engineer.xml",
+        _PACKAGE_ROOT / ".agents" / "agents" / "clean-coder.md",
+    )
+
+    for each_surface_path in all_surface_paths:
+        surface_text = each_surface_path.read_text(encoding="utf-8").lower()
+        for each_phrase in expected_phrases:
+            assert each_phrase in surface_text, each_surface_path
