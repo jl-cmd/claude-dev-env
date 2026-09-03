@@ -61,7 +61,7 @@ Tradeoff for category-restricted mode: parallel category invocation loses cross-
 
 ## Comment Preservation
 
-Preserve every existing comment. Findings on production code report only on new code added by the diff; existing comments on lines that remain otherwise unchanged stay outside the audit's scope. New inline comments added by this PR's diff are themselves a category J finding (production code self-documents through naming).
+Leave comments tied to untouched code unchanged. Findings on production code report only on new code added by the diff; comments on lines that remain otherwise unchanged stay outside the audit's scope. New inline comments added by this PR's diff are themselves a category J finding (production code self-documents through naming).
 When a change touches code that an existing comment describes or is attached to, remove that comment in the same change and carry its meaning through clear names and structure. Leave comments tied to untouched code unchanged. Keep comment cleanup inside the requested task.
 Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
 
