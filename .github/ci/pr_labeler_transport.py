@@ -25,7 +25,7 @@ _repo_root_path = str(Path(__file__).resolve().parents[2])
 if _repo_root_path not in sys.path:
     sys.path.insert(0, _repo_root_path)
 
-from pr_labeler_derivation import LabelDiff, PullRequestSnapshot, coerce_to_int
+from pr_labeler_derivation import LabelDiff, PullRequestSnapshot
 
 from config.pr_labeler_constants import (
     DEFAULT_BRANCH_NAME_FALLBACK,
@@ -151,7 +151,7 @@ def fetch_pull_request_detail(
     github_token: str,
     call_api: GitHubApiCaller = call_github_api,
 ) -> dict[str, object]:
-    """Fetch the raw PR detail: title, draft state, base ref, additions, deletions, labels.
+    """Fetch the raw PR detail: title, draft state, base ref, and labels.
 
     Args:
         repository: The `owner/name` repository slug.
@@ -250,8 +250,6 @@ def build_pull_request_snapshot(
         is_draft=bool(all_pull_request_detail["draft"]),
         base_branch_name=str(all_base_ref_fields["ref"]),
         default_branch_name=default_branch_name_from_base_ref(all_base_ref_fields),
-        changed_line_count=coerce_to_int(all_pull_request_detail["additions"])
-        + coerce_to_int(all_pull_request_detail["deletions"]),
         changed_file_paths=all_changed_file_paths,
         current_labels=extract_current_labels(all_pull_request_detail),
     )

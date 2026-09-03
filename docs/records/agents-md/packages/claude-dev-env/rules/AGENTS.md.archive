@@ -30,7 +30,7 @@ Rule files installed into `~/.claude/rules/` by `bin/install.mjs`. A rule withou
 | `file-global-constants.md` | File-global constants need at least two same-file references; otherwise move value to `config/` |
 | `filesystem-search.md` | Every filesystem search names a scope; `es.exe`, `Glob`, `Grep`, and `Read` are equally sanctioned, and the `unscoped_search_blocker` denies a walk from a root |
 | `gh-cli-conventions.md` | `--body-file` for every `gh` body; `--paginate --slurp` piped to external `jq` for every paginated list read |
-| `git-workflow.md` | PR workflow: always create as draft, one commit per review stage, never commit working docs or images; carries the review-response protocol |
+| `git-workflow.md` | PR workflow: always create as draft, never commit working docs or images; carries the review-response protocol |
 | `hedging-claims.md` | State the evidence or name the claim unverified; a hedge word stands in for evidence not gathered, prose discipline with no hook |
 | `long-horizon-autonomy.md` | Autonomous-run behaviors: act on what you have, do not end on a promise, delegate and keep working |
 | `measurement-denominators.md` | Every reported count names what it scanned and carries its denominator; a rate needs two runs; the consumer cross-checks the count against the scope its denominator names |
