@@ -723,14 +723,12 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     """
     all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
     all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
-    assert "blocking/stale_comment_reference_blocker.py" in all_edit_script_paths, (
-        "stale_comment_reference_blocker belongs in the Edit applicable set"
-    )
+    assert "blocking/stale_comment_reference_blocker.py" not in all_edit_script_paths
     assert "advisory/refactor_guard.py" in all_edit_script_paths, (
         "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 21, (
-        f"expected 21 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 20, (
+        f"expected 20 Edit entries, got {len(all_edit_entries)}"
     )
 
 
