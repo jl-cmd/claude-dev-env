@@ -12,6 +12,12 @@ Review this pull request: <PR link>
 
 Read the PR and its full diff. Do not use the branch name, commit message, labels, current title, or a shallow summary.
 
+## Full-diff behavior standard
+
+Before writing, inventory every independently observable behavior in the full diff. A behavior is independent when a user, caller, operator, automation, output, error, exit status, fallback, or side effect can observe it separately. Lead with the central behavior for readability, then give every other behavior its own short paragraph or bullet.
+
+For each behavior, state the trigger or observer, the Before -> After result, the affected surface/caller when shared, and focused proof. Include important preserved behavior and fallback paths when they help a coder rule a regression in or out. Describe outcomes, not line-by-line implementation, and do not hide multiple behaviors under vague umbrella wording.
+
 
 Write like the reader is smart but knows nothing about this code. Pretend they asked you to explain it like they are five and feel stupid. If a word needs another sentence to explain it, replace the word — or turn it into a tiny story.
 

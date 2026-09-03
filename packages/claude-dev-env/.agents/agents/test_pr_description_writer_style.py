@@ -44,3 +44,27 @@ def test_verification_leads_with_a_human_visible_check() -> None:
         assert visible_action in reference_text
     assert "Tests: focused checks pass." in reference_text
     assert "Machine checks can support the claim." in reference_text
+
+
+def test_full_diff_behavior_standard_is_explicit_in_writer_sources() -> None:
+    all_writer_source_texts = [
+        (AGENT_DIRECTORY.parent / "skills" / "pr-title-description" / "SKILL.md").read_text(
+            encoding="utf-8"
+        ),
+        AGENT_PATH.read_text(encoding="utf-8"),
+        VOICE_REFERENCE_PATH.read_text(encoding="utf-8"),
+    ]
+
+    for each_required_text in (
+        "independently observable behavior",
+        "Before -> After result",
+        "affected surface/caller when shared",
+        "focused proof",
+        "preserved behavior and fallback paths",
+        "outcomes, not line-by-line implementation",
+        "vague umbrella wording",
+    ):
+        assert all(
+            each_required_text in each_source_text
+            for each_source_text in all_writer_source_texts
+        )

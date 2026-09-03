@@ -12,6 +12,12 @@ After: show the new action in a tiny scene.
 
 Keep machine words out when a plain action works. If one technical term matters, explain it in the same breath with a simple picture.
 
+## Full-diff behavior standard
+
+Before writing, inventory every independently observable behavior in the full diff. A behavior is independent when a user, caller, operator, automation, output, error, exit status, fallback, or side effect can observe it separately. Lead with the central behavior for readability, then give every other behavior its own short paragraph or bullet.
+
+For each behavior, state the trigger or observer, the Before -> After result, the affected surface/caller when shared, and focused proof. Include important preserved behavior and fallback paths when they help a coder rule a regression in or out. Describe outcomes, not line-by-line implementation, and do not hide multiple behaviors under vague umbrella wording.
+
 ## Sample 1 — call the right helper directly
 
 The theme package has a phone icon somewhere. We need to find it.
