@@ -82,6 +82,20 @@ def test_check_comment_changes_flags_shifted_modified_inline_comment() -> None:
     assert any("Line 2: Inline comment still on the changed lines" in each_issue for each_issue in issues)
 
 
+def test_check_comment_changes_reserves_equal_duplicate_before_fallback() -> None:
+    old_content = "total = 1  # duplicate\n# duplicate\ndistant_total = 4\n"
+    new_content = "prep_total = 0\ntotal = 2  # duplicate\n# duplicate\ndistant_total = 4\n"
+
+    issues = check_comment_changes(old_content, new_content, "totals.py")
+
+    changed_occurrence_issues = [
+        each_issue for each_issue in issues if "still on the changed lines" in each_issue
+    ]
+    assert changed_occurrence_issues == [
+        "Line 2: Inline comment still on the changed lines: # duplicate - remove the comment"
+    ]
+
+
 def test_full_gate_is_comment_neutral_by_default() -> None:
     issues = code_rules_enforcer_module.validate_content_for_full_gate(
         "total = 1  # added\n",
