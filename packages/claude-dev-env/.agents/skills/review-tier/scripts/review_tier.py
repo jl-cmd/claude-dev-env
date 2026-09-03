@@ -6,10 +6,38 @@ import hashlib
 import json
 import os
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
 
-from review_tier_constants.config.constants import ALL_DEPENDENCY_MARKERS, ALL_HARD_TRIGGER_MARKERS, ALL_PACKAGE_ROOT_NAMES, ALL_PUBLIC_API_MARKERS, ALL_SOURCE_SUFFIXES, ALL_STATUS_ARGUMENTS, ALL_STATUS_DOMAINS, ALL_TIER_ORDER, ALL_UNTRACKED_ARGUMENTS, AMBIGUOUS_BASE_REF, DEFAULT_BRANCH_FALLBACK, GIT_COMMAND_FAILED, GIT_HEAD_REF, INVALID_BASE_REF, JSON_INDENT, MALFORMED_TIER_POLICY, MAX_AXIS_VALUE, MIN_NONEMPTY_RISK, PATH_SEPARATOR, PLUGIN_DATA_ENVIRONMENT, REMOTE_HEAD_REF, ROOT_PACKAGE, ROUTING_STATE_ROOT_TRACKED, STATUS_CODE_LENGTH, STATUS_PREFIX_LENGTH, UNAPPROVED_TIER_DOWNGRADE, UNKNOWN_TIER
+from review_tier_constants.config.constants import (
+    ALL_DEPENDENCY_MARKERS,
+    ALL_HARD_TRIGGER_MARKERS,
+    ALL_PACKAGE_ROOT_NAMES,
+    ALL_PUBLIC_API_MARKERS,
+    ALL_SOURCE_SUFFIXES,
+    ALL_STATUS_ARGUMENTS,
+    ALL_STATUS_DOMAINS,
+    ALL_TIER_ORDER,
+    ALL_UNTRACKED_ARGUMENTS,
+    AMBIGUOUS_BASE_REF,
+    DEFAULT_BRANCH_FALLBACK,
+    GIT_COMMAND_FAILED,
+    GIT_HEAD_REF,
+    INVALID_BASE_REF,
+    JSON_INDENT,
+    MALFORMED_TIER_POLICY,
+    MAX_AXIS_VALUE,
+    MIN_NONEMPTY_RISK,
+    PATH_SEPARATOR,
+    PLUGIN_DATA_ENVIRONMENT,
+    REMOTE_HEAD_REF,
+    ROOT_PACKAGE,
+    ROUTING_STATE_ROOT_TRACKED,
+    STATUS_CODE_LENGTH,
+    STATUS_PREFIX_LENGTH,
+    UNAPPROVED_TIER_DOWNGRADE,
+    UNKNOWN_TIER,
+)
 
 
 def router_state_root(repo_root: str | Path, all_environment: Mapping[str, str] | None = None) -> Path:
@@ -197,9 +225,8 @@ def inventory_generation(repo_root: str | Path, base_ref: str | None = None, sta
     untracked_identities = [{"path": each_path, "sha256": record["content_sha256"]} for each_path, record in ((record["path"], record) for record in records) if "untracked" in record["domains"]]
     base_source = "explicit" if base_ref else ("remote_default" if requested_base == REMOTE_HEAD_REF else "configured_fallback")
     canonical = json.dumps({"base_ref": requested_base, "base_source": base_source, "base_sha": base, "merge_base_sha": merge_base, "head_sha": head, "domains": {each_domain: sorted(all_paths) for each_domain, all_paths in domains.items()}, "files": records, "untracked_identities": sorted(untracked_identities, key=lambda record: record["path"])}, sort_keys=True, separators=(",", ":")).encode() + patch_bytes
-    lines = sum(int(record["added"]) + int(record["deleted"]) for record in records)
     digest = hashlib.sha256(canonical).hexdigest()
-    return {"paths": [record["path"] for record in records], "files_by_domain": records, "committed": sorted(committed), "staged": sorted(domains["staged"]), "unstaged": sorted(domains["unstaged"]), "untracked": sorted(domains["untracked"]), "base_ref": requested_base, "base_source": base_source, "base_sha": base, "merge_base_sha": merge_base, "head_sha": head, "merge_base": merge_base, "HEAD": head, "inventory_hash": digest, "diff_hash": digest, "files": len(records), "lines": lines, "packages": len(packages), "risk": MIN_NONEMPTY_RISK if records else 0, "public_api": public_api, "dependencies": dependencies, "hard_triggers": triggers}
+    return {"paths": [record["path"] for record in records], "files_by_domain": records, "committed": sorted(committed), "staged": sorted(domains["staged"]), "unstaged": sorted(domains["unstaged"]), "untracked": sorted(domains["untracked"]), "base_ref": requested_base, "base_source": base_source, "base_sha": base, "merge_base_sha": merge_base, "head_sha": head, "merge_base": merge_base, "HEAD": head, "inventory_hash": digest, "diff_hash": digest, "packages": len(packages), "risk": MIN_NONEMPTY_RISK if records else 0, "public_api": public_api, "dependencies": dependencies, "hard_triggers": triggers}
 
 
 def _package_key(path: str) -> str:

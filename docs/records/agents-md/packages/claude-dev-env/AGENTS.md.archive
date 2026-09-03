@@ -72,14 +72,6 @@ Use direct claims and direct actions. The canonical rule owns sentence form; cap
 
 Use full capability names for files, modules, functions, variables, branches, and tests. Name reusable components for the capability they provide. Keep workflow words on driver surfaces.
 
-  # Change size
-
-
-
-  When planning work or opening a pull request, size the change first: one self-contained change, around 100 lines, with its tests. Read the small-changelists guide for the numbers, the allowed exceptions, and how to split.
-
-Use `~/.claude/skills/pr-small-cl/SKILL.md` for change-size guidance and review-sized boundaries.
-
 ## Execution and delegation
 
 Delegate all task work to Tier 3 agents.

@@ -111,7 +111,7 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
 | `parallel-tools` | Independent tool calls run simultaneously |
 | `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
-| `git-workflow` | Draft PRs, one commit per review stage, stacked PR patterns, review-response protocol |
+| `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `context7` | Fetch current docs via Context7 MCP instead of relying on training data |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |

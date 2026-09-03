@@ -4,7 +4,7 @@
 # matched by `name`; its colour and description are set from the entry here.
 # A label the repository carries that is missing from this file is left alone.
 #
-# Five axes carry one label each per item — priority, type, status, size, and
+# Four axes carry one label each per item — priority, type, status, and
 # area — plus standalone flags. Keep the names byte for byte: the sync matches
 # on the exact string, so a renamed entry creates a second label and leaves the
 # original untouched.
@@ -76,25 +76,6 @@
   color: "b60205"
   description: "Waiting on something else to land"
 
-# Size: how much work the item carries. On a pull request this comes from the
-# changed-line count; on an issue it comes from the number of distinct pieces
-# of work the body asks for.
-- name: "size: XS"
-  color: "c2e0c6"
-  description: "Up to 20 changed lines, or one piece of work"
-- name: "size: S"
-  color: "c2e0c6"
-  description: "21 to 100 changed lines, or two to three pieces"
-- name: "size: M"
-  color: "fef2c0"
-  description: "101 to 500 changed lines, or four to eight pieces"
-- name: "size: L"
-  color: "f9d0c4"
-  description: "501 to 1000 changed lines, or nine to fifteen pieces"
-- name: "size: XL"
-  color: "e99695"
-  description: "Over 1000 changed lines, or a parent with sub-issues"
-
 # Area: which part of the tree the work touches. An item may carry up to three.
 - name: "area: hooks"
   color: "1d76db"
@@ -136,12 +117,6 @@
 - name: "epic"
   color: "6f42c1"
   description: "Parent issue tracking a stream of child PRs"
-- name: "child"
-  color: "0e8a16"
-  description: "Bite-sized issue scoped to one small PR"
-- name: "file-split"
-  color: "5319e7"
-  description: "Split an over-400-line file into clean sub-cap modules"
 - name: "critical"
   color: "b60205"
   description: "Must-do follow-up"

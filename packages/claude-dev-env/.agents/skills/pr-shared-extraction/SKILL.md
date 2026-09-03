@@ -42,7 +42,7 @@ Shared extraction audit:
 - [ ] 3. Grep for offense patterns (see reference/offense-taxonomy.md)
 - [ ] 4. Write prioritized findings (P0–P3)
 - [ ] 5. Apply **Mode routing** after the report
-- [ ] 6. Extract in small CLs (~100 lines) + move/adjust tests
+- [ ] 6. Extract in small CLs + move/adjust tests
 - [ ] 7. Run scoped pytest, then follow the selected mode's mutation boundary
 - [ ] 8. When the mode is `preflight-proposal`, record proposal evidence from the [shared preflight proposal contract](../_shared/pr-loop/preflight-proposal.md) and require downstream owner selection before reapplication
 ```
@@ -115,7 +115,7 @@ Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign prior
 3. **Retarget every caller, then delete the old module** — grep the old import path; remove re-export facades
 4. **Constants:** one source; workflow CLI keeps only workflow-specific names (`LEDGER_FILENAME`, exit codes)
 5. **Tests move with behavior** — shared module gets shared tests; orchestration keeps integration tests only
-6. **Small CLs** — one concern per commit (~100 lines); run scoped pytest after each
+6. **Small CLs** — one concern per commit; run scoped pytest after each
 
 ### Canonical target map (this repo)
 

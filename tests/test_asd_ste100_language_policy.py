@@ -152,7 +152,6 @@ def test_package_hub_preserves_operational_contract() -> None:
     assert "rules/asd-ste100-language.md` owns sentence-level" in package_text
     assert "~/.claude/agents/session-advisor.md" in package_text
     assert "~/.claude/skills/everything-search/SKILL.md" in package_text
-    assert "~/.claude/skills/pr-small-cl/SKILL.md" in package_text
     assert "Use the named review workflow for code-review response reporting." in package_text
 
 

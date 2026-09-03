@@ -1,6 +1,6 @@
 """Specifications for the PR label derivation logic.
 
-Every fixture below is either a real title, path, or line count pulled from
+Every fixture below is either a real title or path pulled from
 jl-cmd/claude-dev-env's own pull request history, or a synthetic-but-realistic
 conventional-commit title for a prefix (style, build) that has never appeared
 in this repository's history. The derivation functions under test never call
@@ -37,14 +37,13 @@ TDD_ENFORCER_SNAPSHOT = pr_labeler_derivation.PullRequestSnapshot(
     is_draft=True,
     base_branch_name="main",
     default_branch_name="main",
-    changed_line_count=115 + 11,
     changed_file_paths=(
         "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
         "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/config/tdd_enforcer_constants.py",
         "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/tests/test_candidate_paths.py",
     ),
     current_labels=frozenset(
-        {"type: bug", "status: draft", "size: M", "area: hooks", "area: tests", "P1"}
+        {"type: bug", "status: draft", "area: hooks", "area: tests", "P1"}
     ),
 )
 
@@ -201,31 +200,6 @@ class TestDeriveTypeLabel:
                 'Revert "feat: add the v2 endpoint"'
             )
             is None
-        )
-
-
-class TestDeriveSizeLabel:
-    @pytest.mark.parametrize(
-        ("changed_line_count", "expected_size_label"),
-        [
-            (20, "size: XS"),
-            (21, "size: S"),
-            (100, "size: S"),
-            (101, "size: M"),
-            (500, "size: M"),
-            (501, "size: L"),
-            (1000, "size: L"),
-            (1001, "size: XL"),
-        ],
-    )
-    def should_label_lines_at_each_threshold_boundary(
-        self, changed_line_count: int, expected_size_label: str
-    ) -> None:
-        assert (
-            pr_labeler_derivation.derive_size_label(
-                changed_line_count, CLAUDE_DEV_ENV_CONFIG.size_thresholds
-            )
-            == expected_size_label
         )
 
 
@@ -389,9 +363,6 @@ class TestLoadLabelerConfig:
     def should_load_the_configured_path_prefix_to_strip(self) -> None:
         assert CLAUDE_DEV_ENV_CONFIG.path_prefix_to_strip == "packages/claude-dev-env/"
 
-    def should_load_the_configured_size_thresholds(self) -> None:
-        assert CLAUDE_DEV_ENV_CONFIG.size_thresholds.small_max_lines == 100
-
     def should_load_the_hooks_and_ci_area_mappings(self) -> None:
         area_label_by_path_prefix = {
             each_mapping.path_prefix: each_mapping.area_label
@@ -513,15 +484,15 @@ class TestComputeLabelDiff:
             TDD_ENFORCER_SNAPSHOT,
             is_draft=False,
             current_labels=frozenset(
-                {"type: chore", "status: draft", "size: S", "area: docs", "tech-debt"}
+                {"type: chore", "status: draft", "area: docs", "tech-debt"}
             ),
         )
         label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
         assert label_diff.labels_to_add == frozenset(
-            {"type: bug", "status: needs-review", "size: M", "area: hooks", "area: tests"}
+            {"type: bug", "status: needs-review", "area: hooks", "area: tests"}
         )
         assert label_diff.labels_to_remove == frozenset(
-            {"type: chore", "status: draft", "size: S", "area: docs"}
+            {"type: chore", "status: draft", "area: docs"}
         )
         assert "tech-debt" not in label_diff.labels_to_remove
 
@@ -533,7 +504,7 @@ class TestComputeLabelDiff:
                 "packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/candidate_paths.py",
             ),
             current_labels=frozenset(
-                {"type: bug", "status: changes-requested", "size: S", "area: hooks"}
+                {"type: bug", "status: changes-requested", "area: hooks"}
             ),
         )
         label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
@@ -547,7 +518,6 @@ class TestComputeLabelDiff:
             is_draft=False,
             base_branch_name="main",
             default_branch_name="main",
-            changed_line_count=211 + 2,
             changed_file_paths=(
                 ".github/ISSUE_TEMPLATE/bug-report.yml",
                 ".github/ISSUE_TEMPLATE/feature-request.yml",
@@ -555,7 +525,7 @@ class TestComputeLabelDiff:
                 ".github/workflows/sync-labels.yml",
             ),
             current_labels=frozenset(
-                {"stacked", "type: chore", "size: M", "status: needs-review", "area: ci"}
+                {"stacked", "type: chore", "status: needs-review", "area: ci"}
             ),
         )
         label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
@@ -568,10 +538,9 @@ class TestComputeLabelDiff:
             is_draft=False,
             base_branch_name="main",
             default_branch_name="main",
-            changed_line_count=1 + 1,
             changed_file_paths=("packages/claude-dev-env/package.json",),
             current_labels=frozenset(
-                {"type: docs", "status: needs-review", "size: XS", "area: docs"}
+                {"type: docs", "status: needs-review", "area: docs"}
             ),
         )
         label_diff = pr_labeler_derivation.compute_label_diff(snapshot, CLAUDE_DEV_ENV_CONFIG)
@@ -586,7 +555,6 @@ class TestIdempotence:
             is_draft=True,
             base_branch_name="feat/split-pr-slice-collection",
             default_branch_name="main",
-            changed_line_count=1276 + 3,
             changed_file_paths=(
                 "packages/claude-dev-env/.agents/skills/split-pr/SKILL.md",
                 (
@@ -613,7 +581,7 @@ class TestIdempotence:
 class TestFormatLabelDiffReport:
     def should_render_current_add_and_remove_labels_sorted(self) -> None:
         label_diff = pr_labeler_derivation.LabelDiff(
-            labels_to_add=frozenset({"type: bug", "size: M"}),
+            labels_to_add=frozenset({"type: bug", "P2"}),
             labels_to_remove=frozenset({"type: chore"}),
         )
         current_labels = frozenset({"P1", "area: hooks"})
@@ -622,7 +590,7 @@ class TestFormatLabelDiffReport:
 
         assert report_text == (
             "current labels: ['P1', 'area: hooks']\n"
-            "labels to add: ['size: M', 'type: bug']\n"
+            "labels to add: ['P2', 'type: bug']\n"
             "labels to remove: ['type: chore']"
         )
 
@@ -730,7 +698,7 @@ class TestMain:
         post_call = recording_api_caller.all_recorded_calls[2]
         assert post_call[0] == "https://api.github.com/repos/jl-cmd/claude-dev-env/issues/679/labels"
         assert post_call[3] == {
-            "labels": ["area: hooks", "size: M", "status: needs-review", "type: bug"]
+            "labels": ["area: hooks", "status: needs-review", "type: bug"]
         }
 
         delete_call = recording_api_caller.all_recorded_calls[3]
@@ -810,7 +778,7 @@ class TestApplyLabelDiff:
     def should_add_and_remove_labels_through_the_injected_caller_only(self) -> None:
         recording_api_caller = RecordingApiCaller()
         label_diff = pr_labeler_derivation.LabelDiff(
-            labels_to_add=frozenset({"type: bug", "size: M"}),
+            labels_to_add=frozenset({"type: bug", "P2"}),
             labels_to_remove=frozenset({"type: chore", "status: draft"}),
         )
 
@@ -836,7 +804,7 @@ class TestApplyLabelDiff:
                 "https://api.github.com/repos/jl-cmd/claude-dev-env/issues/679/labels",
                 "fake-token",
                 "POST",
-                {"labels": ["size: M", "type: bug"]},
+                {"labels": ["P2", "type: bug"]},
             )
         ]
         assert {each_call[0] for each_call in all_remove_calls} == {
@@ -846,10 +814,10 @@ class TestApplyLabelDiff:
         assert len(recording_api_caller.all_recorded_calls) == 3
 
     def should_treat_a_404_on_delete_as_already_removed_and_continue(self) -> None:
-        flaky_api_caller = FlakyRemovalApiCaller({"size: M": 404})
+        flaky_api_caller = FlakyRemovalApiCaller({"P2": 404})
         label_diff = pr_labeler_derivation.LabelDiff(
             labels_to_add=frozenset(),
-            labels_to_remove=frozenset({"size: M", "status: draft", "type: chore"}),
+            labels_to_remove=frozenset({"P2", "status: draft", "type: chore"}),
         )
 
         pr_labeler_transport.apply_label_diff(
@@ -862,10 +830,10 @@ class TestApplyLabelDiff:
         assert len(all_delete_calls) == 3
 
     def should_attempt_every_removal_then_raise_when_a_non_404_failure_occurs(self) -> None:
-        flaky_api_caller = FlakyRemovalApiCaller({"size: M": 500})
+        flaky_api_caller = FlakyRemovalApiCaller({"P2": 500})
         label_diff = pr_labeler_derivation.LabelDiff(
             labels_to_add=frozenset(),
-            labels_to_remove=frozenset({"size: M", "status: draft", "type: chore"}),
+            labels_to_remove=frozenset({"P2", "status: draft", "type: chore"}),
         )
 
         with pytest.raises(pr_labeler_transport.GitHubApiError):
@@ -887,7 +855,7 @@ class TestAddLabelsToPullRequest:
             "jl-cmd/claude-dev-env",
             679,
             "fake-token",
-            frozenset({"type: bug", "size: M"}),
+            frozenset({"type: bug", "P2"}),
             call_api=recording_api_caller,
         )
 
@@ -896,7 +864,7 @@ class TestAddLabelsToPullRequest:
                 "https://api.github.com/repos/jl-cmd/claude-dev-env/issues/679/labels",
                 "fake-token",
                 "POST",
-                {"labels": ["size: M", "type: bug"]},
+                {"labels": ["P2", "type: bug"]},
             )
         ]
         assert returned_response == {"id": 1}
@@ -1014,13 +982,6 @@ class TestBuildTypeLabelPlan:
         assert type_plan.removable_labels == frozenset()
 
 
-class TestBuildSizeLabelPlan:
-    def should_desire_the_derived_size_label(self) -> None:
-        size_plan = pr_labeler_derivation.build_size_label_plan(126, CLAUDE_DEV_ENV_CONFIG.size_thresholds)
-        assert size_plan.desired_labels == frozenset({"size: M"})
-        assert size_plan.removable_labels == pr_labeler_derivation.ALL_SIZE_LABELS
-
-
 class TestBuildAreaLabelPlan:
     def should_desire_the_derived_area_labels(self) -> None:
         changed_paths = [
@@ -1071,19 +1032,6 @@ class TestDiffFromLabelPlans:
         assert label_diff.labels_to_add == frozenset({"type: bug", "stacked"})
         assert label_diff.labels_to_remove == frozenset({"type: chore"})
         assert "tech-debt" not in label_diff.labels_to_remove
-
-
-class TestLoadSizeThresholds:
-    def should_build_size_thresholds_from_a_raw_mapping(self) -> None:
-        size_thresholds = pr_labeler_derivation.load_size_thresholds(
-            {"xs_max": 20, "s_max": 100, "m_max": 500, "l_max": 1000}
-        )
-        assert size_thresholds == pr_labeler_derivation.SizeThresholds(
-            extra_small_max_lines=20,
-            small_max_lines=100,
-            medium_max_lines=500,
-            large_max_lines=1000,
-        )
 
 
 class TestLoadAreaMappings:
@@ -1248,7 +1196,6 @@ class TestBuildPullRequestSnapshot:
         assert snapshot.is_draft is True
         assert snapshot.base_branch_name == "main"
         assert snapshot.default_branch_name == "main"
-        assert snapshot.changed_line_count == 126
         assert snapshot.current_labels == frozenset({"type: bug", "status: draft"})
 
 
@@ -1273,7 +1220,6 @@ class TestFetchPullRequestSnapshot:
         )
 
         assert snapshot.title == "docs(rules): add state-what-is rule"
-        assert snapshot.changed_line_count == 26
         assert snapshot.changed_file_paths == (
             "packages/claude-dev-env/rules/CLAUDE.md",
             "packages/claude-dev-env/rules/state-what-is.md",
@@ -1292,7 +1238,6 @@ class TestLabelVocabularyMatchesDeclaredLabels:
         declared_label_names = _declared_label_names()
         all_labeler_managed_labels = (
             pr_labeler_derivation.ALL_TYPE_LABELS
-            | pr_labeler_derivation.ALL_SIZE_LABELS
             | pr_labeler_derivation.ALL_AUTOMATED_STATUS_LABELS
             | pr_labeler_derivation.ALL_HUMAN_MANAGED_STATUS_LABELS
             | pr_labeler_derivation.area_label_universe(CLAUDE_DEV_ENV_CONFIG)
@@ -1385,7 +1330,7 @@ class TestPrLabelerWorkflowContract:
 
         An existence check alone passes for any config file, so a workflow
         drifted onto the wrong config would still read as correct while
-        every area, size, and prefix-liveness test kept validating the old
+        every area and prefix-liveness test kept validating the old
         config through the module-level path. `load_labeler_config` already
         fails collection when the file is missing, so identity subsumes
         the existence check for free.

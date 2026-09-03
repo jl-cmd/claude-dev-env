@@ -1,11 +1,11 @@
 ---
 name: pr-refinement
-description: Coordinate shared-extraction and capability-naming audits, then update an existing pull request or publish a required focused GitHub pull-request stack. Use when a user asks to turn a PR architecture audit into extracted shared code and small pull requests.
+description: Coordinate shared-extraction and capability-naming audits, then update an existing pull request or publish a focused GitHub pull-request stack. Use when a user asks to turn a PR architecture audit into extracted shared code and small pull requests.
 ---
 
 # PR Refinement
 
-Turn audit findings into a focused existing pull-request update or a required dependency-ordered GitHub pull-request stack.
+Turn audit findings into a focused existing pull-request update or a dependency-ordered GitHub pull-request stack.
 
 ## Peer skills
 
