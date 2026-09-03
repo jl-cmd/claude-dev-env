@@ -25,13 +25,6 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh` (no ex
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
-2. **ONE COMMIT PER REVIEW STAGE**: Each review round gets exactly ONE commit
-   - Initial feature: 1 commit
-   - After review #1: 2 commits (initial + review #1 fixes)
-   - After review #2: 3 commits (initial + review #1 fixes + review #2 fixes)
-   - NEVER squash multiple review stages into one commit
-   - NEVER have multiple commits for the same review stage
-
 ## Never Commit Working Documents or Images
 
 **NEVER commit these files to the repo:**
@@ -53,7 +46,6 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 2. Create a TodoWrite checklist with one item per comment.
 3. Fix systematically, marking each todo complete.
 4. Reply to each comment inline.
-5. Create one review-fix commit. Do not squash it with the original.
 
 Repair only reported findings, then re-verify after every repair.
 

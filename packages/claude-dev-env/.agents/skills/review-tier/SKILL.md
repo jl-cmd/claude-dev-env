@@ -29,7 +29,7 @@ Use for `/review-tier` and automatic review classification. Refuse execution req
 
 ## Examples
 
-Input `{"files": 0, "lines": 0}` produces `T1`. Input `{"hard_triggers": ["migration"]}` produces `T3`. Input `{"files": 0}` with override `T2` produces calculated `T1` and effective `T2`.
+Input `{"packages": 0, "risk": 0}` produces `T1`. Input `{"hard_triggers": ["migration"]}` produces `T3`. An empty input with override `T2` produces calculated `T1` and effective `T2`.
 
 ## Dependencies
 

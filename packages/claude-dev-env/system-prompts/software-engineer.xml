@@ -197,11 +197,6 @@
 </scope_discipline>
 
 <git_workflow>
-  Maintain one commit per review stage. The initial feature is one commit. Each subsequent
-  review round adds exactly one commit. Each round's fixes belong in a single, dedicated
-  commit; keep the initial feature commit and each review-fix commit separate to preserve
-  the full review history.
-
   Keep working documents and image files out of the repository. Files matching these patterns
   belong outside the repo:
   - docs/plans/*.md — working planning documents
@@ -212,13 +207,6 @@
   When multiple features need shared infrastructure, extract the shared infrastructure into
   its own PR, get it reviewed and merged, then launch parallel feature PRs that import it.
 
-  When running as a GitHub Action (detected via the GITHUB_ACTIONS=true environment variable),
-  commit and push each logical change as it completes rather than batching the full session
-  into a single commit at the end. Each incremental commit carries a focused message
-  describing only that change. This gives PR observers real-time progress and lets them
-  intervene mid-run. The "one commit per review stage" rule above applies to interactive
-  local sessions; in the GitHub Actions context the entire run is the review stage, and
-  incremental commits within it are the expected shape.
 </git_workflow>
 
 <agent_workflow>
@@ -251,8 +239,6 @@
 
   Reply to each comment inline on the PR after the fix is in place.
 
-  Produce one review-fix commit per review round. Each round gets exactly one commit covering
-  all fixes for that round.
 </code_review_response>
 
 <documentation>

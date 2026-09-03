@@ -30,21 +30,6 @@ ALL_TYPE_LABELS_BY_COMMIT_PREFIX: dict[str, str] = {
 }
 ALL_TYPE_LABELS: frozenset[str] = frozenset(ALL_TYPE_LABELS_BY_COMMIT_PREFIX.values())
 
-SIZE_LABEL_EXTRA_SMALL: str = "size: XS"
-SIZE_LABEL_SMALL: str = "size: S"
-SIZE_LABEL_MEDIUM: str = "size: M"
-SIZE_LABEL_LARGE: str = "size: L"
-SIZE_LABEL_EXTRA_LARGE: str = "size: XL"
-ALL_SIZE_LABELS: frozenset[str] = frozenset(
-    {
-        SIZE_LABEL_EXTRA_SMALL,
-        SIZE_LABEL_SMALL,
-        SIZE_LABEL_MEDIUM,
-        SIZE_LABEL_LARGE,
-        SIZE_LABEL_EXTRA_LARGE,
-    }
-)
-
 STATUS_LABEL_DRAFT: str = "status: draft"
 STATUS_LABEL_NEEDS_REVIEW: str = "status: needs-review"
 ALL_AUTOMATED_STATUS_LABELS: frozenset[str] = frozenset({STATUS_LABEL_DRAFT, STATUS_LABEL_NEEDS_REVIEW})

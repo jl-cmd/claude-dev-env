@@ -1,12 +1,9 @@
-"""Pure derivation for the five PR label axes: type, size, status, area, stacked.
+"""Pure derivation for the PR label axes: type, status, area, stacked.
 
 ::
 
     ok:   title="fix(install): ..."           -> derive_type_label -> "type: bug"
-    ok:   changed_line_count=126, thresholds   -> derive_size_label -> "size: M"
-    flag: changed_line_count=100, thresholds   -> derive_size_label -> "size: S" (boundary)
-
-Every function here is pure: it takes a title, a line count, a path list, or a
+Every function here is pure: it takes a title, a path list, or a
 `PullRequestSnapshot`, and returns labels or a `LabelDiff`. None of it touches
 the network — the GitHub API transport lives in `pr_labeler_transport.py`
 beside this module, and the CLI entrypoint lives in `pr_labeler.py`.
@@ -26,30 +23,16 @@ if _repo_root_path not in sys.path:
 from config.pr_labeler_constants import (
     ALL_AUTOMATED_STATUS_LABELS,
     ALL_HUMAN_MANAGED_STATUS_LABELS,
-    ALL_SIZE_LABELS,
     ALL_TEST_PATH_PATTERNS,
     ALL_TYPE_LABELS,
     ALL_TYPE_LABELS_BY_COMMIT_PREFIX,
     CONVENTIONAL_COMMIT_PREFIX_PATTERN,
     MAXIMUM_AREA_LABELS,
-    SIZE_LABEL_EXTRA_LARGE,
-    SIZE_LABEL_EXTRA_SMALL,
-    SIZE_LABEL_LARGE,
-    SIZE_LABEL_MEDIUM,
-    SIZE_LABEL_SMALL,
     STACKED_LABEL,
     STATUS_LABEL_DRAFT,
     STATUS_LABEL_NEEDS_REVIEW,
     TESTS_AREA_LABEL,
 )
-
-
-@dataclass(frozen=True)
-class SizeThresholds:
-    extra_small_max_lines: int
-    small_max_lines: int
-    medium_max_lines: int
-    large_max_lines: int
 
 
 @dataclass(frozen=True)
@@ -62,7 +45,6 @@ class AreaMapping:
 class LabelerConfig:
     path_prefix_to_strip: str
     area_mappings: tuple[AreaMapping, ...]
-    size_thresholds: SizeThresholds
 
 
 @dataclass(frozen=True)
@@ -71,7 +53,6 @@ class PullRequestSnapshot:
     is_draft: bool
     base_branch_name: str
     default_branch_name: str
-    changed_line_count: int
     changed_file_paths: tuple[str, ...]
     current_labels: frozenset[str]
 
@@ -167,27 +148,6 @@ def derive_type_label(pull_request_title: str) -> str | None:
     if matched_prefix is None:
         return None
     return ALL_TYPE_LABELS_BY_COMMIT_PREFIX.get(matched_prefix.group(1))
-
-
-def derive_size_label(changed_line_count: int, size_thresholds: SizeThresholds) -> str:
-    """Return the `size:` label for a changed-line count against the configured thresholds.
-
-    Args:
-        changed_line_count: Total additions plus deletions for the pull request.
-        size_thresholds: The per-repo XS/S/M/L boundary values.
-
-    Returns:
-        One of the five `size:` labels, from XS up to XL.
-    """
-    if changed_line_count <= size_thresholds.extra_small_max_lines:
-        return SIZE_LABEL_EXTRA_SMALL
-    if changed_line_count <= size_thresholds.small_max_lines:
-        return SIZE_LABEL_SMALL
-    if changed_line_count <= size_thresholds.medium_max_lines:
-        return SIZE_LABEL_MEDIUM
-    if changed_line_count <= size_thresholds.large_max_lines:
-        return SIZE_LABEL_LARGE
-    return SIZE_LABEL_EXTRA_LARGE
 
 
 def derive_status_label(is_pull_request_draft: bool) -> str:
@@ -328,11 +288,6 @@ def build_type_label_plan(pull_request_title: str) -> LabelPlan:
     return LabelPlan.from_derivation(derived_type_labels, ALL_TYPE_LABELS)
 
 
-def build_size_label_plan(changed_line_count: int, size_thresholds: SizeThresholds) -> LabelPlan:
-    size_label = derive_size_label(changed_line_count, size_thresholds)
-    return LabelPlan.from_derivation(frozenset({size_label}), ALL_SIZE_LABELS)
-
-
 def build_status_label_plan(
     is_pull_request_draft: bool, all_current_labels: frozenset[str]
 ) -> LabelPlan:
@@ -415,7 +370,7 @@ def diff_from_label_plans(
 
     Args:
         all_current_labels: Every label the pull request carries right now.
-        all_label_plans: One `LabelPlan` per axis (type, size, status, area, stacked).
+        all_label_plans: One `LabelPlan` per axis (type, status, area, stacked).
 
     Returns:
         The combined `LabelDiff` across every axis.
@@ -434,46 +389,23 @@ def diff_from_label_plans(
 
 
 def compute_label_diff(snapshot: PullRequestSnapshot, config: LabelerConfig) -> LabelDiff:
-    """Compute the full five-axis label diff for one pull request snapshot.
+    """Compute the full label diff for one pull request snapshot.
 
     Args:
         snapshot: The pull request's title, draft state, base branch, changed
-            line count, changed paths, and current labels.
-        config: The area map and size thresholds to derive labels against.
+            paths, and current labels.
+        config: The area map used to derive labels.
 
     Returns:
-        The labels to add and the labels to remove across all five axes.
+        The labels to add and the labels to remove across all axes.
     """
     all_label_plans = [
         build_type_label_plan(snapshot.title),
-        build_size_label_plan(snapshot.changed_line_count, config.size_thresholds),
         build_status_label_plan(snapshot.is_draft, snapshot.current_labels),
         build_area_label_plan(snapshot.changed_file_paths, config),
         build_stacked_label_plan(snapshot.base_branch_name, snapshot.default_branch_name),
     ]
     return diff_from_label_plans(snapshot.current_labels, all_label_plans)
-
-
-def coerce_to_int(value: object) -> int:
-    assert isinstance(value, int)
-    return value
-
-
-def load_size_thresholds(all_raw_thresholds: dict[str, object]) -> SizeThresholds:
-    """Build typed size thresholds from the raw `size_thresholds` config mapping.
-
-    Args:
-        all_raw_thresholds: The parsed `size_thresholds` block from the YAML config.
-
-    Returns:
-        The typed `SizeThresholds` the raw mapping describes.
-    """
-    return SizeThresholds(
-        extra_small_max_lines=coerce_to_int(all_raw_thresholds["xs_max"]),
-        small_max_lines=coerce_to_int(all_raw_thresholds["s_max"]),
-        medium_max_lines=coerce_to_int(all_raw_thresholds["m_max"]),
-        large_max_lines=coerce_to_int(all_raw_thresholds["l_max"]),
-    )
 
 
 def load_area_mappings(all_raw_area_map: list[dict[str, object]]) -> tuple[AreaMapping, ...]:
@@ -505,5 +437,4 @@ def load_labeler_config(config_path: Path) -> LabelerConfig:
     return LabelerConfig(
         path_prefix_to_strip=str(raw_config.get("area_path_prefix_strip", "")),
         area_mappings=load_area_mappings(raw_config["area_map"]),
-        size_thresholds=load_size_thresholds(raw_config["size_thresholds"]),
     )

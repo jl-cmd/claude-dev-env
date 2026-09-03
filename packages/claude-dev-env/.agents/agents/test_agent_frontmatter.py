@@ -934,15 +934,6 @@ def test_code_quality_agent_contract_forbids_mutating_commands() -> None:
     assert "run no commands that write files or create PRs." in body
 
 
-def test_clean_coder_sets_a_small_complexity_budget() -> None:
-    body = _clean_coder_body()
-    assert "Complexity budget" in body
-    assert "1–2 files" in body
-    assert "~50–300 lines" in body
-    assert "about 40 executable lines" in body
-    assert "nesting level of 2" in body
-
-
 def test_clean_coder_defines_a_liveness_boundary_for_dead_code_cleanup() -> None:
     body = _clean_coder_body()
     assert "orphaned or dead code" in body.lower()
