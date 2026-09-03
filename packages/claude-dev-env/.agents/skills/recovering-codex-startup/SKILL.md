@@ -8,9 +8,8 @@ description: >-
 
 ## Principle
 
-Collect fresh, live, read-only evidence before making a startup claim. Report
-only what the evidence supports. This baseline does not change process or
-installation state.
+Collect a fresh, read-only process listing before you say Codex is stuck, stale, or running.
+Report only what that listing supports. Do not change process or installation state.
 
 ## Gotchas
 
@@ -20,7 +19,6 @@ installation state.
 - Do not call a process stale or suspended without fresh supporting evidence.
 - Route installation issues to `/run-claude-dev-env`.
 - Run `/privacy-hygiene` before durable output.
-- A later stacked PR may add a separately reviewed guarded action.
 
 ## When this applies
 
@@ -40,8 +38,8 @@ For a non-Windows run, return exactly:
 7. Route installation evidence to `/run-claude-dev-env`.
 8. Run `/privacy-hygiene` before saving or publishing a report.
 
-No action follows from this baseline. A human must explicitly authorize any
-future process or installation change.
+Do not change process or installation state. A human must authorize any later
+process or installation change.
 
 ## Sub-skills
 
@@ -52,8 +50,8 @@ future process or installation change.
 
 ## Files
 
-- `SKILL.md` — Diagnosis boundary and process.
-- `reference/task-seeds.md` — Ordered tasks for one diagnosis.
+- `SKILL.md`. Diagnosis rules and process.
+- `reference/task-seeds.md`. Ordered tasks for one diagnosis.
 
 ```text
 recovering-codex-startup/
