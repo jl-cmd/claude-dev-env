@@ -19,7 +19,7 @@ The source-only CI call omits the three optional installed inputs:
 python -m scripts.hook_audit --package-root packages/claude-dev-env --format json
 ```
 
-A test or another Python tool uses one call. It does not coordinate loaders, parsers, or comparison passes.
+A test or another Python tool calls `audit` once.
 
 ```python
 from pathlib import Path
@@ -54,11 +54,11 @@ report = audit(
 
 ## Problem
 
-`hooks/hooks.json` records direct commands, but five dispatchers hide their leaf hooks in Python roster constants. The current source has 32 direct commands. The installed Claude and Codex files contain different merged and older shapes, including standalone commands that also occur inside dispatcher rosters. The installer rewrites plugin-root paths and native Git uses the effective `core.hooksPath`. A text search cannot tell whether two commands run the same leaf hook, whether an installed roster drifted from source, or whether a hook has an explicit lifecycle decision. The audit needs one graph that records direct declarations and expanded executions while keeping all personal paths out of its output.
+`hooks/hooks.json` records direct commands, but five dispatchers hide their leaf hooks in Python roster constants. The current source has 32 direct commands. The installed Claude and Codex files contain different merged and older shapes, including standalone commands that also occur inside dispatcher rosters. The installer rewrites plugin-root paths and native Git uses the effective `core.hooksPath`. A text search cannot tell whether two commands run the same leaf hook, whether an installed roster drifted from source, or whether a hook has an explicit lifecycle decision. The audit needs one graph that records direct declarations and expanded executions. Personal paths stay out of the output.
 
 ## Shape
 
-The tool is a graph builder, not a collection of source-specific reports. It first creates `Registration` nodes for package, installed Claude, installed Codex, and optional native Git sources. It then resolves each command into a `HookTarget` and adds `EffectiveExecution` nodes. A dispatcher registration adds one classified runner node plus one leaf execution for every roster entry. Direct commands add one leaf execution. The graph retains `route`, so a duplicate can say that a standalone command and a dispatcher child reach the same target.
+The tool is a graph builder. It first creates `Registration` nodes for package, installed Claude, installed Codex, and optional native Git sources. It then resolves each command into a `HookTarget` and adds `EffectiveExecution` nodes. A dispatcher registration adds one classified runner node plus one leaf execution for every roster entry. Direct commands add one leaf execution. The graph retains `route`, so a duplicate can say that a standalone command and a dispatcher child reach the same target.
 
 The five dispatcher specifications are fixed metadata in the audit module. They identify the Python file, its event, the constants file, and the roster symbol.
 
@@ -89,7 +89,7 @@ class LifecycleClass(StrEnum):
 
 The audit does not infer a class from `blocking/`, `validation/`, or any other directory. Duplicate registry keys, unknown classes, a missing entry, and an entry for an unknown target are findings. Strict mode returns a nonzero status for any of them. A registry can classify a user hook by the emitted external digest without exposing its path.
 
-The public interface is three functions. `audit` hides file decoding, matcher coverage, static roster parsing, path redaction, Git probing, duplicate detection, drift comparison, and classification checks. `render_json` emits sorted keys and stable arrays. `main` parses CLI options and returns a status. No transport or JSON dictionary type crosses the public boundary.
+The public interface is three functions. `audit` builds the graph and findings. `render_json` emits sorted keys and stable arrays. `main` parses command-line options and returns a status. Callers pass typed records, not raw JSON dictionaries.
 
 ```python
 from dataclasses import dataclass
@@ -122,8 +122,6 @@ def main(arguments: Sequence[str] | None = None) -> int:
     """Run the audit CLI and print one machine-readable report."""
     raise NotImplementedError("design only")
 ```
-
-The domain types make the comparison rules explicit.
 
 ```python
 from collections.abc import Callable
@@ -254,7 +252,7 @@ class AuditReport:
         raise NotImplementedError("design only")
 ```
 
-The internal signatures keep each boundary pure and testable.
+The internal signatures keep each boundary testable.
 
 ```python
 def read_config_registrations(
@@ -340,7 +338,7 @@ Drift comparison pairs source and installed executions by `hook_id`, event, and 
 
 ## Synthesis decision
 
-This candidate recommends the graph-first shape as the arena base. The graph keeps the dispatcher route beside the leaf target, which makes duplicate findings explainable without exposing internal parser stages to callers. The static AST roster reader preserves the five Python rosters as their source of truth. The exact lifecycle registry keeps policy out of directory names and gives missing classifications a hard, testable failure.
+This candidate recommends the graph-first shape as the base. The graph keeps the dispatcher route beside the leaf target, so a duplicate finding can name both paths. The static AST roster reader keeps the five Python rosters as the source of truth. The exact lifecycle registry keeps policy out of directory names. A missing classification is a hard, testable failure.
 
 ## Tradeoffs accepted
 
@@ -352,11 +350,11 @@ This candidate recommends the graph-first shape as the arena base. The graph kee
 
 ## Alternatives considered
 
-The flat command walker reads every `command` field and compares normalized strings. It is short, but it hides dispatcher children and cannot explain a standalone child versus a dispatcher duplicate. It loses on coverage completeness.
+The flat command walker reads every `command` field and compares normalized strings. It is short, but it hides dispatcher children and cannot explain a standalone child versus a dispatcher duplicate.
 
-Importing dispatcher constants and calling their Python objects gives exact rosters with little parser code. It also imports the dispatcher dependency graph, can trigger import-time behavior, and makes the read-only guarantee depend on every hook author. It loses on safety.
+Importing dispatcher constants and calling their Python objects gives exact rosters with little parser code. It also imports the dispatcher dependency graph, can trigger import-time behavior, and makes the read-only guarantee depend on every hook author.
 
-A parser per source writes separate package, Claude, Codex, and Git reports and merges them later. Each parser would repeat target normalization and matcher rules. The caller would learn several report shapes, and path drift would hide behind a late merge. It loses on interface depth and single-source comparison rules.
+A parser per source writes separate package, Claude, Codex, and Git reports and merges them later. Each parser would repeat target normalization and matcher rules. The caller would learn several report shapes, and path drift would hide behind a late merge.
 
 ## Open questions and risks
 

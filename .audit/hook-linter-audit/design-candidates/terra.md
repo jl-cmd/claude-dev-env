@@ -2,9 +2,9 @@
 
 ## Problem
 
-The package manifest hides real executions behind five dispatchers. Installed Claude and Codex files can add, copy, or change those registrations. Git can add another boundary through `core.hooksPath`. The audit needs one complete, reviewable picture without importing a hook module, running a command string, or printing a local path or command payload.
+The package manifest hides real executions behind five dispatchers. Installed Claude and Codex files can add, copy, or change those registrations. Git can add another boundary through `core.hooksPath`. The audit needs one complete inventory without importing a hook module, running a command string, or printing a local path or command payload.
 
-## Usage (caller's view)
+## Usage
 
 Run the package-only audit first. It inventories every direct manifest command and expands the five declared dispatcher rosters.
 
@@ -325,7 +325,7 @@ packages/claude-dev-env/
         fixtures/
 ```
 
-`sources.py` owns untrusted text and filesystem boundaries. `roster_reader.py` owns the small static Python language used by existing roster constants. `audit.py` owns the domain decision of what is effective, duplicated, drifting, or unclassified. `render.py` only serializes an already-sanitized report. This keeps source formats out of callers and stops transport records from escaping through the library interface.
+`sources.py` owns untrusted text and filesystem boundaries. `roster_reader.py` owns the small static Python language used by existing roster constants. `audit.py` owns the domain decision of what is effective, duplicated, drifting, or unclassified. `render.py` only serializes an already-sanitized report. Callers never see source JSON or raw filesystem records.
 
 Output uses UTF-8, sorted object keys, fixed source order (`package`, `claude`, `codex`, `git`), and registration order within each source. It has no timestamp, hostname, absolute path, command string, environment value, or file content. The same inputs produce byte-identical JSON.
 
@@ -352,15 +352,15 @@ python packages/claude-dev-env/scripts/audit_hooks.py --format json --strict
 
 ## Rationale
 
-The audit's hard part is reconstructing logical executions while avoiding the behavior it studies. Static reading gives the dispatcher constants their existing ownership and keeps the audit side-effect free. The single `audit()` call hides configuration shapes, matcher arithmetic, AST details, source-plane comparisons, and privacy handling. Callers see one immutable report. That is a deep interface with a small surface.
+The audit's hard part is reconstructing logical executions while avoiding the behavior it studies. Static reading leaves roster ownership on the dispatcher constants and does not run hook code. Callers call `audit()` once and get one immutable report.
 
-`hook_lifecycle.json` is the sole decision record. The audit derives coverage from manifests and rosters, then checks the catalog against that derived set. A new hook therefore fails visibly until someone records a lifecycle decision. The catalog also records why the decision belongs there, which gives the later linter or CI migration a useful trail.
+`hook_lifecycle.json` is the sole decision record. The audit derives coverage from manifests and rosters, then checks the catalog against that derived set. A new hook therefore fails visibly until someone records a lifecycle decision. The catalog also records why the decision belongs there, so a later linter or continuous-integration migration can read the reason.
 
-The compiler preserves registration order for evidence and uses normalized identities only for comparison. It separates active runtime planes from expected source so installed copies show drift without looking like duplicate active processes. Per boundary-discipline, JSON, AST, filesystem, and Git output are validated at their edges. The core comparisons use typed records and pure functions.
+The compiler preserves registration order for evidence and uses normalized identities only for comparison. It separates active runtime planes from expected source so installed copies show drift without looking like duplicate active processes. JSON, AST, filesystem, and Git output are validated at their edges. The core comparisons use typed records and pure functions.
 
 ## Synthesis decision
 
-This is the Terra candidate. Arena should choose it only if the static roster reader and one-snapshot interface beat the other candidates on complete expansion and a smaller caller surface.
+This is the Terra candidate. Choose it only if the static roster reader and one-snapshot interface beat the other candidates on complete expansion and a smaller caller interface.
 
 ## Tradeoffs accepted
 

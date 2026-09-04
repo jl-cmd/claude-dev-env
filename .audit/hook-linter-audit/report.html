@@ -116,14 +116,14 @@
     <div class="stat"><span>Canonical logical associations</span><strong>70</strong><span>32 direct plus 43 hosted, less 5 dispatcher wrappers</span></div>
     <div class="stat"><span>Targets classified</span><strong>79/79</strong><span>Canonical, installed-only, and native Git targets</span></div>
     <div class="stat"><span>Live configuration findings</span><strong>11</strong><span>Duplicates and missing registrations</span></div>
-    <div class="stat"><span>Target blocking hooks</span><strong>0</strong><span>Linters and native controls take over</span></div>
+    <div class="stat"><span>Target blocking hooks</span><strong>0</strong><span>Linters and native controls replace them</span></div>
   </div>
 
   <section aria-labelledby="map-title">
-    <h2 id="map-title">The simple change</h2>
+    <h2 id="map-title">Move checks to their owners</h2>
     <div class="map">
       <div class="lane current">
-        <div class="lane-title"><h3>Current path</h3><span class="badge">interrupts work</span></div>
+        <div class="lane-title"><h3>Today</h3><span class="badge">interrupts work</span></div>
         <div class="flow">
           <div class="block">Edit triggers blocking source checks</div>
           <div class="block">Commit and push trigger more policy gates</div>
@@ -133,9 +133,9 @@
       </div>
       <div class="arrow" aria-hidden="true">→</div>
       <div class="lane target">
-        <div class="lane-title"><h3>Target path</h3><span class="badge">feedback at the owner</span></div>
+        <div class="lane-title"><h3>After migration</h3><span class="badge">checks stay with owners</span></div>
         <div class="flow">
-          <div class="lint">Editor runs fast file diagnostics</div>
+          <div class="lint">Editor runs file diagnostics</div>
           <div class="lint">Staged linter checks the full change</div>
           <div class="lint">Required continuous integration checks the repository</div>
           <div class="safe">Native controls protect destructive and external actions</div>
@@ -145,7 +145,7 @@
   </section>
 
   <section aria-labelledby="destinations-title">
-    <h2 id="destinations-title">Every target has a destination</h2>
+    <h2 id="destinations-title">Where each target goes</h2>
     <div class="panel">
       <div class="bar" role="img" aria-label="22 delete, 16 move to linter, 17 move to explicit command, 13 keep as nonblocking automation, 7 move to continuous integration, 4 replace with boundary controls">
         <span class="delete">22</span><span class="linter">16</span><span class="command">17</span><span class="automation">13</span><span class="ci">7</span><span class="boundary">4</span>
@@ -154,7 +154,7 @@
         <div><b>22 delete</b><br>Preferences, prose gates, duplicates, and stale installed targets</div>
         <div><b>16 move to linter</b><br>Deterministic source and document rules</div>
         <div><b>17 explicit commands</b><br>Test, search, worktree, cleanup, SSH, and pull request work</div>
-        <div><b>13 nonblocking</b><br>Useful lifecycle tracking and formatting</div>
+        <div><b>13 nonblocking</b><br>Lifecycle tracking and formatting</div>
         <div><b>7 continuous integration</b><br>Repository, Git, and pull request rules</div>
         <div><b>4 boundary controls</b><br>Destructive actions, secrets, private data, and payload schema</div>
       </div>
@@ -176,7 +176,7 @@
   </section>
 
   <section aria-labelledby="plan-title">
-    <h2 id="plan-title">Safe migration order</h2>
+    <h2 id="plan-title">Migration order</h2>
     <div class="steps">
       <article class="step"><h3>Freeze the inventory</h3><p>Land the static audit and lifecycle catalog. Make count drift fail continuous integration.</p></article>
       <article class="step"><h3>Prune drift</h3><p>Remove installed duplicates, missing targets, and stale registrations.</p></article>

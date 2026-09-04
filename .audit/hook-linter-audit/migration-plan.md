@@ -4,7 +4,7 @@
 
 No Claude, Codex, Cursor-imported, or native Git hook denies an action. Linters can fail their own command. Required continuous integration checks can fail a pull request. Product permissions can require approval for destructive or external actions.
 
-Lifecycle handlers can remain when the event is their actual input. They stay bounded, nonblocking, and free of policy decisions.
+Lifecycle handlers can remain when the event is their actual input. They stay bounded and nonblocking. They do not make policy decisions.
 
 ## Static source and document checks
 
@@ -145,4 +145,4 @@ Delete reminder hooks when an instruction, skill, or task list already owns the 
 - No registered hook can emit `deny`, `block`, or `ask`.
 - No native pre-commit or pre-push hook blocks Git.
 - Destructive-command, tracked-secret, outbound-personal-data, protected-branch, and pull-request checks pass through their replacement controls.
-- A clean edit receives diagnostics without a tool interruption.
+- An editor edit gets diagnostics. A hook does not deny the edit.
