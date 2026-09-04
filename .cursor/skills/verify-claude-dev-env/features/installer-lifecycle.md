@@ -10,7 +10,7 @@ The installer shows help, installs the package into a disposable home, and unins
 
 ## How to get to it (user POV)
 
-Run the isolated verification helper. It supplies disposable home and Git configuration roots for install and uninstall.
+Run the isolated verification helper. It supplies a disposable home and Git configuration roots for install and uninstall.
 
 ## Driving it with Node.js
 

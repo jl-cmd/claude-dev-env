@@ -1,11 +1,11 @@
 ---
 name: verify-claude-dev-env
-description: Verifies the claude-dev-env command-line installer in a disposable home. Maps checks for configuration projections, hooks, policy lint, and continuous integration.
+description: Verifies the claude-dev-env command-line installer in a disposable home. Use when checking configuration projections, hooks, policy lint, or continuous integration.
 ---
 
 # Verify claude-dev-env
 
-Run the installer with disposable home and Git configuration roots. Never use the live install commands for verification.
+Run the installer with a disposable home and Git configuration roots. Never use the live install commands for verification.
 
 ## Launch
 
@@ -29,9 +29,9 @@ Continue only when the command prints `Doctor command: ready`.
 
 ## Drive
 
-`run` covers the installer lifecycle only. It calls `packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs`.
+The `run` command covers the installer lifecycle only. It calls `packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs`.
 
-For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before you verify. Later changes add the policy-lint and hook-lifecycle commands after those commands exist.
+For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before you verify.
 
 Do not run `node packages/claude-dev-env/bin/install.mjs` without an isolated home. That command writes to the user configuration directories.
 
@@ -42,7 +42,7 @@ Store evidence in `.audit/hook-linter-conversion/evidence/`.
 - `installer-doctor.json` records tool availability.
 - `installer-transcript.json` records the command, exit status, actions, and results.
 
-The transcript must show each installer step and its result. Inspect installed settings, Codex hooks, Git configuration, and manifests when a change affects them.
+The transcript lists each installer step and its result. Inspect installed settings, Codex hooks, Git configuration, and manifests when a change affects them.
 
 ## Cleanup
 
