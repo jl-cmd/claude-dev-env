@@ -1,7 +1,7 @@
 """Flag a prose term that names a code identifier a hair differently.
 
 A change adds the field ``premium_request_interactions`` while the same
-branch's docs call it the ``premium-request-budget`` field: one thing, two
+branch's docs call it the ``premium-request-budget`` field. One thing, two
 names, and a reader who searches one never finds the other.
 
 ::
@@ -14,11 +14,11 @@ names, and a reader who searches one never finds the other.
 
 The sweep reads a unified diff, collects the multi-word identifiers added on
 code lines, and scans each added prose line for a hyphen or space variant that
-renames only the final word of an identifier: it agrees on every earlier word
-and differs on the last. A term that diverges in any earlier word, or shares
-only one leading word, is ordinary prose. It also spares English compound
-tails, singular/plural forms, stopword windows, and words that are themselves
-tokens of another introduced identifier.
+renames only the final word of an identifier. The variant agrees on every
+earlier word and differs on the last. A term that diverges in any earlier
+word, or shares only one leading word, is ordinary prose. It also spares
+English compound tails, singular/plural forms, stopword windows, and words
+that are themselves tokens of another introduced identifier.
 """
 
 import argparse
@@ -177,8 +177,8 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     A Markdown line is prose with its inline-code spans removed, since a
     backticked span names code verbatim. A code line contributes its comment
     tail, its JSDoc continuation text, and the contents of its string
-    literals. A test module contributes its comment tail and JSDoc text only
-    — its string literals hold fixture data, not prose.
+    literals. A test module contributes its comment tail and JSDoc text only.
+    Its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -205,9 +205,9 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
 def _is_test_file(file_path: str) -> bool:
     """Return whether a diff path names a test code module.
 
-    A test module's string literals hold fixture data — embedded diffs,
-    generated source, file trees — not documentation prose, so the sweep
-    reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
+    A test module's string literals hold fixture data: embedded diffs,
+    generated source, and file trees. That is not documentation prose, so the
+    sweep reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
     ``layout.spec.ts``, and a ``fixtures.py`` under a tests directory are all
     test modules, so every one of these paths counts::
 
@@ -264,8 +264,8 @@ def _string_literal_fragments(line_text: str) -> list[str]:
     Escape sequences inside a literal (``\\n``, ``\\t``) are replaced with
     spaces before the words are read, so an escape letter never glues onto a
     neighbouring word as a phantom prose term. A literal left with no
-    whitespace after that replacement is an identifier-shaped value — a UID,
-    a key, a path — not prose, and contributes nothing.
+    whitespace after that replacement is an identifier-shaped value: a UID,
+    a key, or a path. It is not prose, and contributes nothing.
     """
     all_fragments: list[str] = []
     for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
@@ -628,8 +628,8 @@ def _base_tree_names(
 
     Each name is looked up as a whole word in the base revision's tree. A
     repository with no commits yet, or a lookup that git cannot run, reports
-    the name as absent, so the sweep then treats it as newly introduced —
-    the behaviour the sweep has with no base-tree check at all.
+    the name as absent, so the sweep then treats it as newly introduced.
+    That is the behaviour the sweep has with no base-tree check at all.
 
     Args:
         repository_root: The repository root the lookups run in.
@@ -716,13 +716,17 @@ def _strict_base_tree_names(
 
 
 def strict_staged_terminology_findings(repository_root: Path) -> list[str]:
-    """Return staged findings and raise when Git cannot provide complete input.
+    """Return near-miss findings for the staged diff.
 
     Args:
         repository_root: The repository root the staged diff is read from.
 
     Returns:
         One finding string per near-miss term on a staged prose line.
+
+    Raises:
+        RuntimeError: Git could not read the staged diff or look up an
+            identifier in HEAD.
     """
     diff_process = _run_strict_git(
         repository_root, ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND
@@ -740,7 +744,7 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it — only genuinely new
+    introduces, so no prose is flagged against it. Only genuinely new
     identifiers are swept.
 
     Args:

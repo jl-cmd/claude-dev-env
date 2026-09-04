@@ -233,13 +233,13 @@ def test_pairing_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...
 
 
 def terminology_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...]:
-    """Report staged prose terms that near-miss introduced identifiers.
+    """Report staged prose that near-misses a newly introduced identifier.
 
     Args:
         document_set: Candidate staged documents and repository root.
 
     Returns:
-        Source-located terminology diagnostics for the staged diff.
+        Diagnostics that name the prose file and line.
     """
     return adapter_detectors.terminology_diagnostics(
         document_set, _pr_loop_script_module
