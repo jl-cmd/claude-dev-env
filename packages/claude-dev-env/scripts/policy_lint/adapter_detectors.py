@@ -48,7 +48,7 @@ def validator_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Run the current fast validator set for one document.
+    """Run the fast validator set on one document.
 
     Args:
         document: Current source text and path.
@@ -56,7 +56,7 @@ def validator_diagnostics(
         load_module: Hook module loader.
 
     Returns:
-        Stable diagnostics for failed validators.
+        Path-normalized diagnostics for failed validators.
     """
     absolute_path = adapter_support._document_path(repository_root, document)
     validator_module = load_module("validators.run_all_validators")
@@ -76,7 +76,7 @@ def code_rule_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the existing pure code-rule engine to one document.
+    """Run the code-rule engine on one document.
 
     Args:
         document: Current text and optional prior text.
@@ -84,7 +84,7 @@ def code_rule_diagnostics(
         load_module: Hook module loader.
 
     Returns:
-        Stable diagnostics translated from the legacy engine.
+        Diagnostics from the code-rule engine.
     """
     absolute_path = adapter_support._document_path(repository_root, document)
     legacy_module = load_module("blocking.code_rules_enforcer")
@@ -107,7 +107,7 @@ def state_description_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure state-description detector.
+    """Run the state-description detector on one document.
 
     Args:
         document: Current document text.
@@ -130,7 +130,7 @@ def plain_language_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure stored-prose detector.
+    """Run the stored-prose detector on one document.
 
     Args:
         document: Current document text.
@@ -152,7 +152,7 @@ def docstring_gate_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure docstring gate-count detector.
+    """Run the docstring gate-count detector on one document.
 
     Args:
         document: Current document text.
@@ -175,7 +175,7 @@ def workflow_substitution_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure workflow substitution detector.
+    """Run the workflow substitution detector on one document.
 
     Args:
         document: Current document text.
@@ -199,7 +199,7 @@ def rmtree_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt pure Windows cleanup detectors.
+    """Run the Windows cleanup detectors on one document.
 
     Args:
         document: Current text.
@@ -228,7 +228,7 @@ def subprocess_budget_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure subprocess budget detector.
+    """Run the subprocess budget detector on one document.
 
     Args:
         document: Current text.
@@ -253,7 +253,7 @@ def hook_prose_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure hook-prose consistency detector.
+    """Run the hook-prose consistency detector on one document.
 
     Args:
         document: Current text.
@@ -283,7 +283,7 @@ def open_question_diagnostics(
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure open-question plan detector.
+    """Run the open-question plan detector on one document.
 
     Args:
         document: Current plan text.
@@ -315,7 +315,7 @@ def hook_format_diagnostics(
         load_module: Hook module loader.
 
     Returns:
-        A diagnostic when the legacy command form occurs.
+        A diagnostic when the command uses a home-relative Python script path.
     """
     adapter_support._document_path(repository_root, document)
     detector_module = load_module("validation.hook_format_validator")

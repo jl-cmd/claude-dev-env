@@ -333,7 +333,7 @@ class LintReport:
 
     @property
     def exit_code(self) -> int:
-        """Return the process status represented by this report.
+        """Return the process exit code for this report.
 
         Returns:
             Zero for clean output, one for findings, or three for rule failure.
@@ -345,7 +345,7 @@ class LintReport:
         return 0
 
     def as_dict(self) -> dict[str, object]:
-        """Return the stable JSON result shape.
+        """Return the JSON result.
 
         Returns:
             The complete report mapping.

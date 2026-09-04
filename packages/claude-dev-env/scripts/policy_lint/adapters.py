@@ -26,14 +26,14 @@ def _hooks_module(module_name: str) -> ModuleType:
 def validator_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Run the current fast validator set for one document.
+    """Run the fast validator set on one document.
 
     Args:
         document: Current source text and path.
         repository_root: Request repository root for configuration resolution.
 
     Returns:
-        Stable diagnostics for failed validators.
+        Path-normalized diagnostics for failed validators.
     """
     return adapter_detectors.validator_diagnostics(
         document, repository_root, _hooks_module
@@ -43,14 +43,14 @@ def validator_diagnostics(
 def code_rule_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the existing pure code-rule engine to one document.
+    """Run the code-rule engine on one document.
 
     Args:
         document: Current text and optional prior text.
         repository_root: Request repository root for sibling-file resolution.
 
     Returns:
-        Stable diagnostics translated from the legacy engine.
+        Diagnostics from the code-rule engine.
     """
     return adapter_detectors.code_rule_diagnostics(
         document, repository_root, _hooks_module
@@ -60,7 +60,7 @@ def code_rule_diagnostics(
 def state_description_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure state-description detector.
+    """Run the state-description detector on one document.
 
     Args:
         document: Current document text.
@@ -77,7 +77,7 @@ def state_description_diagnostics(
 def plain_language_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure stored-prose detector.
+    """Run the stored-prose detector on one document.
 
     Args:
         document: Current document text.
@@ -94,7 +94,7 @@ def plain_language_diagnostics(
 def docstring_gate_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure docstring gate-count detector.
+    """Run the docstring gate-count detector on one document.
 
     Args:
         document: Current document text.
@@ -111,7 +111,7 @@ def docstring_gate_diagnostics(
 def workflow_substitution_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure workflow substitution detector.
+    """Run the workflow substitution detector on one document.
 
     Args:
         document: Current document text.
@@ -128,7 +128,7 @@ def workflow_substitution_diagnostics(
 def rmtree_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt pure Windows cleanup detectors.
+    """Run the Windows cleanup detectors on one document.
 
     Args:
         document: Current text.
@@ -145,7 +145,7 @@ def rmtree_diagnostics(
 def subprocess_budget_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure subprocess budget detector.
+    """Run the subprocess budget detector on one document.
 
     Args:
         document: Current text.
@@ -162,7 +162,7 @@ def subprocess_budget_diagnostics(
 def hook_prose_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure hook-prose consistency detector.
+    """Run the hook-prose consistency detector on one document.
 
     Args:
         document: Current text.
@@ -179,7 +179,7 @@ def hook_prose_diagnostics(
 def open_question_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Adapt the pure open-question plan detector.
+    """Run the open-question plan detector on one document.
 
     Args:
         document: Current plan text.
@@ -232,7 +232,7 @@ def hook_format_diagnostics(
         repository_root: Request repository root for document-path resolution.
 
     Returns:
-        A diagnostic when the legacy command form occurs.
+        A diagnostic when the command uses a home-relative Python script path.
     """
     return adapter_detectors.hook_format_diagnostics(
         document, repository_root, _hooks_module

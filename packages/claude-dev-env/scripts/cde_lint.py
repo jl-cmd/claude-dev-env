@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Public command for the policy linter."""
+"""Run the policy linter."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class _LintUsageError(ValueError):
 
 class _LintArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> Never:
-        """Raise a usage error and return control to the caller.
+        """Raise a usage error instead of printing and exiting.
 
         Args:
             message: Parser error text.
@@ -224,7 +224,7 @@ def main(
     stderr: TextIO = sys.stderr,
     lint_runner: Callable[[LintRequest], LintReport] = lint,
 ) -> int:
-    """Run the public policy-lint command.
+    """Run the policy-lint command.
 
     Args:
         all_arguments: Command arguments.
@@ -235,7 +235,7 @@ def main(
         lint_runner: Policy-lint engine.
 
     Returns:
-        The process status.
+        The process exit code.
     """
     try:
         return _render_lint(

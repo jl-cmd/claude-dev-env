@@ -14,7 +14,7 @@ class ReportFormat(StrEnum):
 
 
 def render(report: LintReport, report_format: ReportFormat) -> str:
-    """Render a lint report for a caller.
+    """Render a lint report.
 
     ::
 
@@ -23,7 +23,7 @@ def render(report: LintReport, report_format: ReportFormat) -> str:
         text   -> editor lines plus diagnostics with no location
 
     Args:
-        report: Stable lint report from the engine.
+        report: Lint report from the engine.
         report_format: text, json, or editor.
 
     Returns:

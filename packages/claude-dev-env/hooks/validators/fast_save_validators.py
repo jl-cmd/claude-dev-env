@@ -225,7 +225,7 @@ def run_fast_save_validators(
     """Run every save-path validator in-process, skipping Mypy and Ruff.
 
     Args:
-        files: The files under validation -- one reconstructed file in gate mode.
+        files: Files under validation. Gate mode passes one reconstructed file.
         excluded_validator_names: Display names omitted from this run.
 
     Returns:

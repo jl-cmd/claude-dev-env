@@ -34,7 +34,7 @@ SelectionError = SelectionRunFatal
 
 
 def select_documents(request: LintRequest) -> DocumentSet:
-    """Resolve one typed request into immutable documents.
+    """Resolve one request into documents.
 
     Args:
         request: Source selection and repository root.

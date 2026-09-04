@@ -123,10 +123,10 @@ def _configuration_document_rules() -> tuple[model.Rule, ...]:
 
 
 def default_registry() -> tuple[model.Rule, ...]:
-    """Return policy rules in stable execution order.
+    """Return the default policy rules in a fixed order.
 
     Returns:
-        The immutable policy registry.
+        The default policy rules.
     """
     return (
         *_python_document_rules(),
@@ -153,7 +153,7 @@ def selected_rules(
         all_rule_sets: Rule sets requested by the caller.
 
     Returns:
-        Matching registry entries in stable order.
+        Matching rules in registry order.
     """
     return tuple(
         each_rule

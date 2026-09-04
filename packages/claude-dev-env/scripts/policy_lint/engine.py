@@ -23,14 +23,14 @@ def lint(
     request: LintRequest,
     all_registry: Sequence[Rule] | None = None,
 ) -> LintReport:
-    """Run the selected custom rules over one source selection.
+    """Run the selected rules on one source selection.
 
     Args:
         request: Repository root, source, and rule sets.
-        all_registry: Optional registry replacement used by focused callers.
+        all_registry: Optional registry replacement.
 
     Returns:
-        A stable report containing diagnostics and rule execution state.
+        A report of diagnostics and rule execution state.
     """
     document_set = select_documents(request)
     candidate_rules = tuple(all_registry) if all_registry is not None else default_registry()
