@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-09-04T14:37:47.620Z",
+  "isReady": true,
+  "checks": {
+    "driverExists": true,
+    "packageExists": true,
+    "nodeVersionSupported": true,
+    "gitAvailable": true,
+    "pythonAvailable": true
+  },
+  "nodeVersion": "22.17.0",
+  "gitVersion": "git version 2.50.1.windows.1",
+  "pythonVersion": "Python 3.13.5",
+  "paths": {
+    "driver": "packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs",
+    "package": "packages/claude-dev-env"
+  }
+}
