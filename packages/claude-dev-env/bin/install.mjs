@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync, constants as filesystemConstants } from 'node:fs';
 import { join, dirname, resolve, relative, basename, isAbsolute, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync, spawnSync } from 'node:child_process';
@@ -26,6 +26,9 @@ import {
     SETTINGS_FILE_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
+    CURSOR_RULES_DIRECTORY_NAME,
+    PSTACK_MODEL_RULE_FILE_NAME,
+    PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
@@ -420,6 +423,31 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
         ],
         { stdio: 'inherit' },
     );
+}
+
+function seedCodexPstackPreferences() {
+    const preferenceDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
+    const preferencePath = join(
+        preferenceDirectory,
+        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
+    );
+    const preferenceSource = join(
+        PACKAGE_ROOT,
+        'bin',
+        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
+    );
+    mkdirSync(preferenceDirectory, { recursive: true });
+    try {
+        copyFileSync(
+            preferenceSource,
+            preferencePath,
+            filesystemConstants.COPYFILE_EXCL,
+        );
+        return preferencePath;
+    } catch (copyError) {
+        if (copyError.code === 'EEXIST') return null;
+        throw copyError;
+    }
 }
 
 /**
@@ -2130,6 +2158,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     ];
 
     const allInstalledFiles = [];
+    const allUserOwnedPreferencePaths = new Set();
     const summary = {};
     for (const directory of CONTENT_DIRECTORIES) {
         const hasFullAccess = !allowedDirectories || allowedDirectories.has(directory);
@@ -2237,6 +2266,20 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         const generatedCursorPaths = collectManagedCursorSyncPaths(cursorRoot);
         allInstalledFiles.push(...generatedCursorPaths);
         summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
+        syncWrittenPaths(allInstalledFiles);
+        const pstackRuleSource = join(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory, PSTACK_MODEL_RULE_FILE_NAME);
+        const sharedRuleDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
+        const sharedRulePath = join(sharedRuleDirectory, PSTACK_MODEL_RULE_FILE_NAME);
+        mkdirSync(sharedRuleDirectory, { recursive: true });
+        copyFileSync(pstackRuleSource, sharedRulePath);
+        allInstalledFiles.push(sharedRulePath);
+        syncWrittenPaths(allInstalledFiles);
+        const seededPreferencePath = seedCodexPstackPreferences();
+        if (seededPreferencePath) {
+            allInstalledFiles.push(seededPreferencePath);
+            allUserOwnedPreferencePaths.add(seededPreferencePath);
+        }
+        syncWrittenPaths(allInstalledFiles);
     }
     let skillsCreated = 0;
     let skillsUpdated = 0;
@@ -2420,9 +2463,12 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     const manifestSkillNames = didPruneFinish
         ? [...installedSkillNames].sort()
         : unionOfSkillNames(priorManifestSkills || [], [...installedSkillNames]).sort();
+    const allManagedInstalledFiles = allInstalledFiles.filter(
+        eachPath => !allUserOwnedPreferencePaths.has(eachPath),
+    );
     const manifestFiles = didPruneFinish
-        ? manifestFilesWithFailedPrunes(allInstalledFiles, failedPrunePaths)
-        : unionOnComparisonKey(priorManifestFiles || [], allInstalledFiles);
+        ? manifestFilesWithFailedPrunes(allManagedInstalledFiles, failedPrunePaths)
+        : unionOnComparisonKey(priorManifestFiles || [], allManagedInstalledFiles);
     const managedPermissionDenyEntries = summary.managedPermissions.managedDenyEntries;
     writeManifest(
         manifestFiles,
