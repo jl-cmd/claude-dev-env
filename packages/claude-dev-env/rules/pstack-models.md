@@ -1,12 +1,12 @@
 # Pstack delegation policy
 
-Pstack uses portable role requirements. Model IDs belong to host preference
-files. The active native subagent tool decides which model IDs the current host
-accepts.
+Pstack names each role by the capability it needs. Model IDs live in host
+preference files. The active native subagent tool lists the model IDs this
+host accepts.
 
-This policy replaces the fixed model defaults in pstack skills and setup-pstack's
-legacy step that writes one universal model rule. Setup updates only the selected
-host preference JSON. The installer keeps this portable policy current.
+These role requirements override the model defaults in pstack skills.
+Setup-pstack writes only the selected host preference JSON. The installer
+copies this policy into the Cursor rule and the agents-home rule file.
 
 ## Setup
 
@@ -67,14 +67,14 @@ $selection = $selectorInput | node "$HOME/.agents/scripts/select_pstack_models.m
 ```
 
 `availableModelIds` comes from the current native tool metadata.
-`confirmedSuitableModelIds` contains available alternatives whose suitability
-for this role the host metadata or user has confirmed. Do not rank or classify a
-model from its name.
+`confirmedSuitableModelIds` lists available alternatives. The host metadata or
+the user has already confirmed that each one fits this role. Do not rank or
+classify a model from its name.
 
 Use the returned `nativeSpawnArguments` in the native subagent call. An empty
-object with `omitNativeModelArgument: true` means parent inheritance, so omit
-the native `model` argument. Stop when `canDelegate` is false. Ask the user
-when `requiresUserChoice` is true.
+object with `omitNativeModelArgument: true` means parent inheritance. Omit the
+native `model` argument in that case. Stop when `canDelegate` is false. Ask the
+user when `requiresUserChoice` is true.
 
 Run the selector again before the next agent call. Pass the same panel contract
 and the new delegation index with the refreshed inventory. Report
