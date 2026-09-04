@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Collection, Dict, List, Optional, Tuple
 
 from ._path_setup import hooks_directory_on_path  # noqa: F401
 from .config.baseline_identity_constants import (
@@ -51,7 +51,7 @@ from blocking.codex_apply_patch import (
     parse_codex_apply_patch,
     payload_patch_command,
 )
-from hooks_constants.pre_tool_use_dispatcher_constants import (
+from hooks_constants.tool_names import (
     APPLY_PATCH_TOOL_NAME,
 )
 from hooks_constants.hook_block_logger import log_hook_block
@@ -885,6 +885,8 @@ def validate_proposed_file(
     file_path: str,
     proposed_content: str,
     config_source_path: Optional[Path] = None,
+    include_ruff: bool = True,
+    excluded_validator_names: Collection[str] = (),
 ) -> List[ValidatorResult]:
     """Validate *proposed_content* as if written to *file_path*.
 
@@ -901,10 +903,12 @@ def validate_proposed_file(
         proposed_content: The reconstructed post-edit content of that file.
         config_source_path: Path Ruff resolves its config from; defaults to
             *file_path* when the caller passes nothing.
+        include_ruff: Whether to run Ruff after the in-process validators.
+        excluded_validator_names: Display names omitted from the in-process run.
 
     Returns:
-        One ValidatorResult per save-path check, plus Ruff. Mypy never runs
-        here; CLI/full mode is the only caller that still runs it.
+        One ValidatorResult per in-process check, plus Ruff when requested.
+        Mypy never runs here; CLI/full mode is the only caller that still runs it.
     """
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_file = _temporary_path_preserving_directory_signal(
@@ -916,10 +920,14 @@ def validate_proposed_file(
             if config_source_path is not None
             else Path(file_path)
         )
-        return [
-            *run_fast_save_validators([temporary_file]),
-            run_ruff_checks([temporary_file], resolved_config_source_path),
-        ]
+        all_results = run_fast_save_validators(
+            [temporary_file], excluded_validator_names
+        )
+        if include_ruff:
+            all_results.append(
+                run_ruff_checks([temporary_file], resolved_config_source_path)
+            )
+        return all_results
 
 
 def _validator_summaries(results: List[ValidatorResult]) -> str:

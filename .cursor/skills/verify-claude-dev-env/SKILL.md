@@ -31,7 +31,21 @@ Continue only when the command prints `Doctor command: ready`.
 
 `run` covers the installer lifecycle only. It calls `packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs`.
 
-For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before you verify. Later changes add the policy-lint and hook-lifecycle commands after those commands exist.
+For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before final verification.
+
+## Policy linter
+
+Run the public command through Node.js:
+
+```powershell
+node packages/claude-dev-env/bin/cde.mjs lint --files <path>
+node packages/claude-dev-env/bin/cde.mjs lint --staged
+node packages/claude-dev-env/bin/cde.mjs lint --base origin/main
+node packages/claude-dev-env/bin/cde.mjs lint --repository
+Get-Content -Raw .\src\file.py | node packages/claude-dev-env/bin/cde.mjs lint --text-as .\src\file.py
+```
+
+Use `--format text`, `--format json`, or `--format editor`. Relative `--files` and `--text-as` paths resolve from the caller directory, including when the command runs below the repository root. Use `--python <command>` to select the Python interpreter. Exit 0 is clean, 1 reports diagnostics, 2 reports invalid input or a launcher start failure, and 3 reports an incomplete rule run.
 
 Do not run `node packages/claude-dev-env/bin/install.mjs` without an isolated home. That command writes to the user configuration directories.
 
@@ -58,4 +72,6 @@ Run these helpers:
 node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs doctor
 node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs run
 node --test .cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs
+python -m pytest packages/claude-dev-env/scripts/tests/test_policy_lint_selection.py packages/claude-dev-env/scripts/tests/test_policy_lint_rules_engine.py packages/claude-dev-env/scripts/tests/test_policy_lint_rules_registry.py packages/claude-dev-env/scripts/tests/test_cde_lint.py -q
+node --test packages/claude-dev-env/bin/cde.test.mjs
 ```
