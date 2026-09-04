@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hook to linter audit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07101d;
+      --panel: #0f1b2d;
+      --panel-2: #13243a;
+      --text: #f5f7fb;
+      --muted: #a7b5c9;
+      --line: #29405f;
+      --good: #42d392;
+      --warn: #ffcb6b;
+      --bad: #ff6b7a;
+      --blue: #69a7ff;
+      --violet: #b794f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 0%, #193b68 0%, transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 72px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 860px; margin-bottom: 14px; font-size: clamp(2.3rem, 6vw, 5.2rem); line-height: .95; letter-spacing: -.055em; }
+    h2 { margin-bottom: 18px; font-size: 1.5rem; letter-spacing: -.02em; }
+    h3 { margin-bottom: 7px; font-size: 1rem; }
+    p { color: var(--muted); }
+    a { color: #9cc4ff; }
+    .eyebrow { color: var(--good); font-size: .82rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .lede { max-width: 780px; font-size: 1.15rem; }
+    .callout {
+      margin: 30px 0;
+      padding: 18px 22px;
+      border: 1px solid #2b885f;
+      border-radius: 16px;
+      background: #0e2a25;
+      color: #d8ffed;
+      font-size: 1.08rem;
+    }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 44px; }
+    .stat, .panel, .step, .finding {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    }
+    .stat { padding: 20px; min-height: 132px; }
+    .stat strong { display: block; margin: 4px 0; font-size: 2.6rem; line-height: 1; }
+    .stat span { color: var(--muted); font-size: .9rem; }
+    section { margin-top: 54px; }
+    .map { display: grid; grid-template-columns: 1fr 72px 1fr; align-items: stretch; }
+    .lane { padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .lane.current { box-shadow: inset 4px 0 var(--bad); }
+    .lane.target { box-shadow: inset 4px 0 var(--good); }
+    .lane-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .badge { padding: 5px 9px; border-radius: 999px; background: #263a56; color: var(--muted); font-size: .75rem; font-weight: 800; }
+    .flow { display: grid; gap: 9px; margin-top: 20px; }
+    .flow div { padding: 12px 14px; border-radius: 10px; background: #081423; color: #dce7f8; }
+    .flow .block { border-left: 3px solid var(--bad); }
+    .flow .lint { border-left: 3px solid var(--blue); }
+    .flow .safe { border-left: 3px solid var(--good); }
+    .arrow { display: grid; place-items: center; color: var(--good); font-size: 2.5rem; }
+    .bar { display: flex; height: 44px; overflow: hidden; border-radius: 11px; background: #081423; }
+    .bar span { display: grid; place-items: center; min-width: 24px; color: #07101d; font-size: .78rem; font-weight: 900; }
+    .delete { width: 27.85%; background: var(--bad); }
+    .linter { width: 20.25%; background: var(--blue); }
+    .command { width: 21.52%; background: var(--violet); }
+    .automation { width: 16.46%; background: var(--good); }
+    .ci { width: 8.86%; background: var(--warn); }
+    .boundary { width: 5.06%; background: #ff9955; }
+    .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin-top: 18px; }
+    .legend div { color: var(--muted); }
+    .legend b { color: var(--text); }
+    .findings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .finding { padding: 18px; }
+    .finding p { margin-bottom: 0; }
+    .finding .code { color: var(--warn); font: 700 .75rem ui-monospace, monospace; letter-spacing: .05em; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; counter-reset: phase; }
+    .step { min-height: 180px; padding: 18px; counter-increment: phase; }
+    .step::before { content: counter(phase); display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 18px; border-radius: 50%; background: var(--blue); color: #061020; font-weight: 900; }
+    .step p { margin-bottom: 0; font-size: .9rem; }
+    .panel { padding: 22px; }
+    .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .links a { display: block; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: #081423; text-decoration: none; }
+    .note { margin-top: 18px; font-size: .86rem; }
+    @media (max-width: 850px) {
+      .stats, .steps { grid-template-columns: repeat(2, 1fr); }
+      .map { grid-template-columns: 1fr; gap: 12px; }
+      .arrow { transform: rotate(90deg); }
+      .legend, .links { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+      main { width: min(100% - 20px, 1180px); padding-top: 28px; }
+      .stats, .findings, .steps, .legend, .links { grid-template-columns: 1fr; }
+      .bar span { color: transparent; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Full hook audit</p>
+  <h1>Zero blocking hooks is feasible.</h1>
+  <p class="lede">Move code checks to linters and required continuous integration. Move action safety to native product controls. Keep only bounded, nonblocking lifecycle work.</p>
+
+  <div class="callout">The target is zero blocking hooks, not zero blocking controls. Destructive actions and outbound private data still need protection outside the hook system.</div>
+
+  <div class="stats" aria-label="Audit summary">
+    <div class="stat"><span>Canonical logical associations</span><strong>70</strong><span>32 direct plus 43 hosted, less 5 dispatcher wrappers</span></div>
+    <div class="stat"><span>Targets classified</span><strong>79/79</strong><span>Canonical, installed-only, and native Git targets</span></div>
+    <div class="stat"><span>Live configuration findings</span><strong>11</strong><span>Duplicates and missing registrations</span></div>
+    <div class="stat"><span>Target blocking hooks</span><strong>0</strong><span>Linters and native controls take over</span></div>
+  </div>
+
+  <section aria-labelledby="map-title">
+    <h2 id="map-title">The simple change</h2>
+    <div class="map">
+      <div class="lane current">
+        <div class="lane-title"><h3>Current path</h3><span class="badge">interrupts work</span></div>
+        <div class="flow">
+          <div class="block">Edit triggers blocking source checks</div>
+          <div class="block">Commit and push trigger more policy gates</div>
+          <div class="block">Pull request commands trigger account and prose gates</div>
+          <div class="block">One broad log records every block decision</div>
+        </div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="lane target">
+        <div class="lane-title"><h3>Target path</h3><span class="badge">feedback at the owner</span></div>
+        <div class="flow">
+          <div class="lint">Editor runs fast file diagnostics</div>
+          <div class="lint">Staged linter checks the full change</div>
+          <div class="lint">Required continuous integration checks the repository</div>
+          <div class="safe">Native controls protect destructive and external actions</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="destinations-title">
+    <h2 id="destinations-title">Every target has a destination</h2>
+    <div class="panel">
+      <div class="bar" role="img" aria-label="22 delete, 16 move to linter, 17 move to explicit command, 13 keep as nonblocking automation, 7 move to continuous integration, 4 replace with boundary controls">
+        <span class="delete">22</span><span class="linter">16</span><span class="command">17</span><span class="automation">13</span><span class="ci">7</span><span class="boundary">4</span>
+      </div>
+      <div class="legend">
+        <div><b>22 delete</b><br>Preferences, prose gates, duplicates, and stale installed targets</div>
+        <div><b>16 move to linter</b><br>Deterministic source and document rules</div>
+        <div><b>17 explicit commands</b><br>Test, search, worktree, cleanup, SSH, and pull request work</div>
+        <div><b>13 nonblocking</b><br>Useful lifecycle tracking and formatting</div>
+        <div><b>7 continuous integration</b><br>Repository, Git, and pull request rules</div>
+        <div><b>4 boundary controls</b><br>Destructive actions, secrets, private data, and payload schema</div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="findings-title">
+    <h2 id="findings-title">What the live audit found</h2>
+    <div class="findings">
+      <article class="finding"><span class="code">INSTALL MERGE</span><h3>Claude drops one managed validator</h3><p>Two canonical write groups use the same matcher. The installer replaces the first group with the second. The live configuration is missing the shared validator registration.</p></article>
+      <article class="finding"><span class="code">DUPLICATE EXECUTION</span><h3>Eight effective routes repeat</h3><p>Live Claude and Codex configurations keep legacy direct checks beside dispatcher children. A single action can run the same policy twice.</p></article>
+      <article class="finding"><span class="code">MISSING TARGET</span><h3>Codex points to two absent scripts</h3><p>The diagnostic stop wrapper and task list loop starter are registered but missing from the installed hook tree.</p></article>
+      <article class="finding"><span class="code">FALSE POSITIVE</span><h3>Safe PowerShell inspection was denied</h3><p>The Bash shell substitution rule interpreted a PowerShell backtick as command substitution during this audit.</p></article>
+      <article class="finding"><span class="code">ORDERING RISK</span><h3>Pull request author state can remain switched</h3><p>The author gate changes the global GitHub account before a later body gate can deny the same command. The restore event then does not run.</p></article>
+      <article class="finding"><span class="code">GIT RISK</span><h3>Push checks do not prove every pushed object</h3><p>The pre-push path checks the first update and the checkout head. It has no deadline around the shared gate process.</p></article>
+      <article class="finding"><span class="code">HIDDEN SIDE EFFECT</span><h3>Post-commit can create another commit</h3><p>A submodule commit can trigger a parent repository commit. Move that action to an explicit sync command.</p></article>
+      <article class="finding"><span class="code">RUNTIME EVIDENCE</span><h3>The block log reached 117 MB</h3><p>The snapshot held 182,713 valid block decisions and 11 malformed records. One recorded pre-commit gate timed out after 240 seconds. These are events, not unique user interruptions.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="plan-title">
+    <h2 id="plan-title">Safe migration order</h2>
+    <div class="steps">
+      <article class="step"><h3>Freeze the inventory</h3><p>Land the static audit and lifecycle catalog. Make count drift fail continuous integration.</p></article>
+      <article class="step"><h3>Prune drift</h3><p>Remove installed duplicates, missing targets, and stale registrations.</p></article>
+      <article class="step"><h3>Build one linter</h3><p>Put deterministic rules behind changed-file, staged, base-revision, and JSON modes.</p></article>
+      <article class="step"><h3>Add required checks</h3><p>Run Ruff, Mypy, custom rules, JavaScript checks, tests, and document checks in continuous integration.</p></article>
+      <article class="step"><h3>Move workflow policy</h3><p>Give pull request, test, search, SSH, scheduler, and worktree policy to their owning commands.</p></article>
+      <article class="step"><h3>Prove native safety</h3><p>Test sandbox, approval, secret, private-data, and protected-branch controls on real actions.</p></article>
+      <article class="step"><h3>Remove all hook decisions</h3><p>Delete every deny, block, and ask path. Remove blocking native Git hooks.</p></article>
+      <article class="step"><h3>Reinstall and read back</h3><p>Verify Claude, Codex, and Git have no duplicate route, missing target, or blocking hook.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="evidence-title">
+    <h2 id="evidence-title">Audit files</h2>
+    <div class="panel links">
+      <a href="inventory.json">Machine inventory</a>
+      <a href="lifecycle-catalog.json">Lifecycle catalog</a>
+      <a href="migration-plan.md">Migration plan</a>
+      <a href="swarm-summary.md">Swarm summary</a>
+      <a href="design-synthesis.md">Tool design</a>
+      <a href="decisions.tsv">Decision ledger</a>
+    </div>
+    <p class="note">Audit date: September 4, 2026. The audit changed no live hook registration, user setting, Git hook path, account, branch, commit, push, or pull request.</p>
+  </section>
+</main>
+</body>
+</html>

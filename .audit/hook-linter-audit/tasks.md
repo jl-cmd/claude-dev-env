@@ -1,0 +1,43 @@
+# Hook to linter audit tasks
+
+- [x] Read the Poteto Mode Principles section in full.
+- [x] Frame the task with a falsifiable done predicate, quantified scope, and high rigor.
+- [x] Design the complete audit workflow as independently verifiable units.
+- [x] Run each unit as a measured experiment.
+- [x] Keep the canonical decision trail current.
+- [x] Verify the whole audit against the live repository and installed hooks.
+- [x] Route through the how skill in Critique mode.
+- [x] Set the throughput checkpoint to `throughput checkpoint: n/a, read-only investigation`.
+- [x] Produce the how-shaped output with a recommendation and tradeoffs.
+- [x] Apply the unslop skill to the reply.
+- [x] Frame the swarm.
+- [x] Fan out the swarm.
+- [x] Aggregate the swarm.
+- [x] Report the swarm result.
+- [x] Resolve the active HTML artifact path as `.audit/hook-linter-audit/report.html`.
+- [x] Create the self-contained HTML artifact.
+- [x] Apply the ASD-STE100 rule to page and response sentences.
+- [x] Add the concise beginner explanation and a large visual.
+- [x] Review accuracy, terminology, safety, confidentiality, accessibility, and legibility.
+- [x] Share the updated artifact with the user.
+- [x] Inventory every configured repository and installed hook.
+- [x] Map each hook to its trigger, checks, side effects, blocking behavior, and latency risk.
+- [x] Map existing linters and continuous integration checks.
+- [x] Classify each hook as delete, move to a linter, move to continuous integration, keep as nonblocking automation, or keep as an unavoidable boundary check.
+- [x] Build a rerunnable audit tool and machine-readable inventory.
+- [x] Ground the audit tool design.
+- [x] Sketch at least two audit tool designs.
+- [x] Agree on the audit tool design. Proceed without a checkpoint.
+- [x] Pick and implement one audit tool design.
+- [x] Replace the design if implementation exposes repeated friction.
+- [x] Frame the audit tool design arena.
+- [x] Fan out the audit tool design arena.
+- [x] Cross-judge the audit tool designs.
+- [x] Pick the audit tool design base.
+- [x] Graft the best parts into the base.
+- [x] Verify the synthesized audit tool design.
+- [x] Verify the audit against the live worktree and installed configuration.
+- [x] Record implementation phases that reach zero blocking hooks.
+- [x] Run a fresh cross-model review of the evidence trail.
+
+throughput checkpoint: n/a, read-only investigation

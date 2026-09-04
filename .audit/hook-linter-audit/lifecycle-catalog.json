@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "hooks": {
+    "external:claude:SessionStart:25": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This installed external SessionStart command can remain only when a current consumer uses it.",
+      "replacement": null
+    },
+    "external:codex:SessionStart:36": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This installed external SessionStart command can remain only when a current consumer uses it.",
+      "replacement": null
+    },
+    "git:post-commit": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Parent repository updates and reminders belong in an explicit sync command.",
+      "replacement": "explicit submodule sync command"
+    },
+    "git:pre-commit": {
+      "lifecycle": "move_to_linter",
+      "reason": "The staged check belongs in an explicit linter command and editor workflow.",
+      "replacement": "staged policy linter"
+    },
+    "git:pre-push": {
+      "lifecycle": "move_to_ci",
+      "reason": "Remote branch and repository policy belongs in required continuous integration and GitHub rulesets.",
+      "replacement": "required continuous integration and GitHub rulesets"
+    },
+    "script:advisory/migration_safety_advisor.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This advisory can remain when a current consumer uses it.",
+      "replacement": null
+    },
+    "script:advisory/refactor_guard.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This advisory can remain when a current consumer uses it.",
+      "replacement": null
+    },
+    "script:blocking/ask_user_question_shape_blocker.py": {
+      "lifecycle": "keep_boundary_check",
+      "reason": "Payload shape belongs in product schema validation.",
+      "replacement": "product schema validation"
+    },
+    "script:blocking/block_main_commit.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Protected branches belong in GitHub rulesets.",
+      "replacement": "GitHub branch ruleset"
+    },
+    "script:blocking/bot_mention_comment_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "This is a posting preference and does not need an action gate.",
+      "replacement": null
+    },
+    "script:blocking/claude_md_orphan_file_blocker.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Repository file references need one full-tree check.",
+      "replacement": "required documentation check"
+    },
+    "script:blocking/codemap_first_redirector.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Code map routing belongs in the search command.",
+      "replacement": "search command router"
+    },
+    "script:blocking/code_rules_enforcer.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "These deterministic source rules belong in one code linter.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/conventional_pr_title_gate.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Pull request title rules belong in the remote pull request check.",
+      "replacement": "required pull request title check"
+    },
+    "script:blocking/content_search_to_zoekt_redirector.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Content search routing belongs in the search command.",
+      "replacement": "search command router"
+    },
+    "script:blocking/cursor_cli_python_misfire_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "The command owner can report invalid flags without a hook.",
+      "replacement": null
+    },
+    "script:blocking/destructive_command_blocker.py": {
+      "lifecycle": "keep_boundary_check",
+      "reason": "Destructive actions need native approval and filesystem controls.",
+      "replacement": "host sandbox and native approval policy"
+    },
+    "script:blocking/docstring_rule_gate_count_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "This deterministic document count belongs in the code linter.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/duplicate_rmtree_helper_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Duplicate helper detection is a source check.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/env_var_table_code_drift_blocker.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Environment documentation drift needs repository-wide context.",
+      "replacement": "required documentation check"
+    },
+    "script:blocking/es_exe_path_rewriter.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Search routing belongs in the search command.",
+      "replacement": "search command router"
+    },
+    "script:blocking/fable_spawn_gate.py": {
+      "lifecycle": "delete",
+      "reason": "Model selection belongs in agent configuration.",
+      "replacement": null
+    },
+    "script:blocking/gh_body_arg_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "This lexical command check rejects valid shell input.",
+      "replacement": null
+    },
+    "script:blocking/gh_pr_author_enforcer.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Account selection belongs in a scoped pull request command.",
+      "replacement": "scoped pull request command"
+    },
+    "script:blocking/gh_pr_author_restore.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "A scoped process removes the need to restore global account state.",
+      "replacement": "scoped pull request command"
+    },
+    "script:blocking/hook_prose_detector_consistency.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Detector and prose consistency is a source check.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/luna_fast_mode_gate.py": {
+      "lifecycle": "delete",
+      "reason": "Service tier selection belongs in agent configuration.",
+      "replacement": null
+    },
+    "script:blocking/nas_ssh_binary_enforcer.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Network connection policy belongs in the approved SSH command.",
+      "replacement": "approved SSH wrapper and configuration"
+    },
+    "script:blocking/open_questions_in_plans_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Plan structure is a document lint rule.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/orchestrator_refresh_reschedule_gate.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Scheduler state belongs in the scheduler.",
+      "replacement": "scheduler state validation"
+    },
+    "script:blocking/package_inventory_stale_blocker.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Package inventory needs repository-wide context.",
+      "replacement": "required package inventory check"
+    },
+    "script:blocking/pii_prevention_blocker.py": {
+      "lifecycle": "keep_boundary_check",
+      "reason": "Tracked data and outbound posts need separate native data controls.",
+      "replacement": "secret scanner and product data loss prevention"
+    },
+    "script:blocking/piped_pytest_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "This shell-shape preference rejects valid inspection commands.",
+      "replacement": null
+    },
+    "script:blocking/plain_language_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Stored prompt prose can use a document linter.",
+      "replacement": "prompt file linter"
+    },
+    "script:blocking/pr_description_writer_gate.py": {
+      "lifecycle": "delete",
+      "reason": "Pull request body quality belongs in the pull request command and review.",
+      "replacement": null
+    },
+    "script:blocking/pr_description_enforcer.py": {
+      "lifecycle": "delete",
+      "reason": "The installed legacy pull request gate duplicates the scoped pull request command.",
+      "replacement": null
+    },
+    "script:blocking/pytest_testpaths_orphan_blocker.py": {
+      "lifecycle": "move_to_ci",
+      "reason": "Test discovery coverage needs repository-wide context.",
+      "replacement": "required test discovery check"
+    },
+    "script:blocking/question_to_user_enforcer.py": {
+      "lifecycle": "delete",
+      "reason": "Assistant prose does not need a stop gate.",
+      "replacement": null
+    },
+    "script:blocking/send_user_file_open_locally_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "File transfer intent belongs in the product action.",
+      "replacement": null
+    },
+    "script:blocking/sensitive_file_protector.py": {
+      "lifecycle": "keep_boundary_check",
+      "reason": "Sensitive files need filesystem policy and tracked secret scanning.",
+      "replacement": "filesystem permissions and secret scanner"
+    },
+    "script:blocking/session_edit_stage_gate.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Staging completeness belongs in the commit command.",
+      "replacement": "explicit commit check"
+    },
+    "script:blocking/session_handoff_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "Assistant handoff prose does not need a stop gate.",
+      "replacement": null
+    },
+    "script:blocking/shell_substitution_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "The Bash detector rejects valid PowerShell syntax.",
+      "replacement": null
+    },
+    "script:blocking/state_description_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Source and document wording is a lint rule.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/subprocess_budget_completeness.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Subprocess budget completeness is a source check.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/tdd_enforcer.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Test pairing belongs at staged change or continuous integration time.",
+      "replacement": "staged test pairing check"
+    },
+    "script:blocking/test_preflight_check.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Test setup and builds belong in the test runner.",
+      "replacement": "explicit test command"
+    },
+    "script:blocking/unscoped_search_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "Search scope guidance belongs in the search command.",
+      "replacement": null
+    },
+    "script:blocking/volatile_path_in_post_blocker.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Post validation belongs in the command that sends the post.",
+      "replacement": "scoped pull request and comment command"
+    },
+    "script:blocking/windows_rmtree_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Unsafe removal syntax is a deterministic source check.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/workflow_substitution_slot_blocker.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Workflow placeholder use is a deterministic source check.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:blocking/write_existing_file_blocker.py": {
+      "lifecycle": "delete",
+      "reason": "This edit preference duplicates normal file editing behavior.",
+      "replacement": null
+    },
+    "script:lifecycle/config_change_guard.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Managed hook configuration can use a file-based audit.",
+      "replacement": "hook configuration linter"
+    },
+    "script:lifecycle/enter_worktree_origin_prefetch.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Origin prefetch belongs in the worktree creation command.",
+      "replacement": "worktree creation command"
+    },
+    "script:lifecycle/session_end_cleanup.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Cleanup belongs in a bounded maintenance command.",
+      "replacement": "session maintenance command"
+    },
+    "script:lifecycle/mcp_session_lifecycle.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This handler observes the actual Model Context Protocol session lifecycle.",
+      "replacement": null
+    },
+    "script:diagnostic/hook_log_stop_wrapper.py": {
+      "lifecycle": "delete",
+      "reason": "The installed target is missing and has no current implementation.",
+      "replacement": null
+    },
+    "script:notification/attention_needed_notify.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "Attention notification can remain bounded and nonblocking.",
+      "replacement": null
+    },
+    "script:observability/instructions_loaded_logger.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This logger observes an actual lifecycle event.",
+      "replacement": null
+    },
+    "script:observability/pr_description_writer_spawn_tracker.py": {
+      "lifecycle": "delete",
+      "reason": "The pull request command removes the need for spawn authorization state.",
+      "replacement": null
+    },
+    "script:observability/session_file_edit_tracker.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "The tracker can remain when the explicit commit check consumes it.",
+      "replacement": null
+    },
+    "script:observability/test_failure_recorder.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This recorder observes completed test commands and does not block them.",
+      "replacement": null
+    },
+    "script:session/gh_pr_author_session_cleanup.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Scoped account selection removes session account cleanup.",
+      "replacement": "scoped pull request command"
+    },
+    "script:session/issue_tracker_session_starter.py": {
+      "lifecycle": "delete",
+      "reason": "The issue skill already owns this reminder.",
+      "replacement": null
+    },
+    "script:session/orchestrator_auto_starter.py": {
+      "lifecycle": "delete",
+      "reason": "The orchestrator skill already owns this reminder.",
+      "replacement": null
+    },
+    "script:session/plugin_data_dir_cleanup.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Cache cleanup belongs in a bounded maintenance command.",
+      "replacement": "session maintenance command"
+    },
+    "script:session/session_edit_tracker_cleanup.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Tracker cleanup belongs in a bounded maintenance command.",
+      "replacement": "session maintenance command"
+    },
+    "script:session/session_env_cleanup.py": {
+      "lifecycle": "move_to_explicit_command",
+      "reason": "Environment cleanup belongs in a bounded maintenance command.",
+      "replacement": "session maintenance command"
+    },
+    "script:session/style_reminder_prompt.py": {
+      "lifecycle": "delete",
+      "reason": "The repository instructions already own this reminder.",
+      "replacement": null
+    },
+    "script:session/task_tool_prompt.py": {
+      "lifecycle": "delete",
+      "reason": "The task workflow already owns this reminder.",
+      "replacement": null
+    },
+    "script:session/task_list_loop_starter.py": {
+      "lifecycle": "delete",
+      "reason": "The installed target is missing and the task workflow owns this behavior.",
+      "replacement": null
+    },
+    "script:session/working_style_prompt.py": {
+      "lifecycle": "delete",
+      "reason": "The repository instructions already own this reminder.",
+      "replacement": null
+    },
+    "script:validation/hook_format_validator.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Hook command format is a file-based configuration rule.",
+      "replacement": "hook configuration linter"
+    },
+    "script:validation/mypy_validator.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "Type checking belongs in the normal Mypy command.",
+      "replacement": "Mypy at staged change and continuous integration time"
+    },
+    "script:validators/run_all_validators.py": {
+      "lifecycle": "move_to_linter",
+      "reason": "The custom static checks belong behind one linter command.",
+      "replacement": "changed-file policy linter"
+    },
+    "script:workflow/auto_formatter.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "Formatting can remain nonblocking or move to editor format on save.",
+      "replacement": "editor format on save"
+    },
+    "script:workflow/investigation_tracker_reset.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This tracker can remain when its current consumer uses it.",
+      "replacement": null
+    },
+    "script:worktree/worktree_create.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This handler can remain bounded and nonblocking for the actual worktree event.",
+      "replacement": null
+    },
+    "script:worktree/worktree_remove.py": {
+      "lifecycle": "keep_nonblocking_automation",
+      "reason": "This handler can remain bounded and nonblocking for the actual worktree event.",
+      "replacement": null
+    }
+  }
+}
