@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.35.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.34.0...claude-dev-env-v2.35.0) (2026-09-04)
+
+
+### Features
+
+* **hooks:** add rerunnable hook audit ([cc32921](https://github.com/jl-cmd/claude-dev-env/commit/cc32921f4548fdea67a39f1633e86ac83e0badc1))
+* **verification:** add isolated installer skill ([bbd7091](https://github.com/jl-cmd/claude-dev-env/commit/bbd709136ff1a13f860c232df3b2b243be9bbd65))
+
 ## [2.34.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.2...claude-dev-env-v2.34.0) (2026-09-04)
 
 
