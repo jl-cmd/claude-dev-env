@@ -1,6 +1,6 @@
 # Installer lifecycle
 
-The command shows help, installs the package into a disposable home, and uninstalls every tracked file.
+The installer shows help, installs the package into a disposable home, and uninstalls every tracked file.
 
 ## Sub-features
 

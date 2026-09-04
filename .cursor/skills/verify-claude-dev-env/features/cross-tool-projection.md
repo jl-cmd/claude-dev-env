@@ -18,4 +18,4 @@ Run `node packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs`.
 
 ## Gotchas
 
-The normal installer and Codex materializer have different owners. Verify both projections after a hook change.
+The installer and the Codex materializer have different owners. Verify both projections after a hook change.

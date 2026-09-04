@@ -1,12 +1,12 @@
 # Hook lifecycle
 
-The package registers bounded lifecycle automation and moves policy checks into explicit linters and continuous integration.
+The package registers session, tool, stop, and session-end hooks. Policy checks run as linters and continuous-integration jobs.
 
 ## Sub-features
 
 - Session, tool, stop, and session-end events.
 - Policy-linter timing.
-- Claude, Codex, and native Git readback.
+- Claude, Codex, and native Git configuration.
 
 ## How to get to it (user POV)
 
@@ -14,8 +14,8 @@ Install into a disposable profile. Exercise one edit, one staged lint, and the p
 
 ## Driving it with Node.js
 
-Run the installer helper. Then run `node packages/claude-dev-env/scripts/audit-hooks-cli.mjs --format text` and the focused hook tests.
+Run the installer helper. Then run `node packages/claude-dev-env/scripts/audit-hooks-cli.mjs --format text` and the hook tests.
 
 ## Gotchas
 
-No hook can return `deny`, `block`, or `ask` in the target state. Linters can fail only their own command.
+Hooks must not return `deny`, `block`, or `ask`. A linter may fail only its own command.

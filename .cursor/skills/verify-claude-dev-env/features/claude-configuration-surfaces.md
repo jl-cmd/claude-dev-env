@@ -1,6 +1,6 @@
 # Claude configuration surfaces
 
-The installer publishes rules, skills, agents, commands, and the `CLAUDE.md` hub.
+The installer installs rules, skills, agents, commands, and the `CLAUDE.md` hub.
 
 ## Sub-features
 
@@ -14,8 +14,8 @@ Start a fresh Claude session after installation. The session loads the installed
 
 ## Driving it with Node.js
 
-Run `npm test` from `packages/claude-dev-env`. Use the tests under `tests/fresh-session/` for the changed surface.
+Run `npm test` from `packages/claude-dev-env`. Use the tests under `tests/fresh-session/` for the changed configuration.
 
 ## Gotchas
 
-Fresh-session tests use disposable profiles. The real command-line interface path is opt-in and needs explicit binary mappings.
+Fresh-session tests use disposable profiles. The command-line interface path is opt-in and needs explicit binary mappings.
