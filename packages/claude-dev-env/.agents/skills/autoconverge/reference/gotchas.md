@@ -46,9 +46,9 @@ fails in a new way.
   not `~/.claude/...`; a tilde resolves to the wrong home and gives a
   file-not-found error that looks like a script failure.
 
-- **`gh` token drift across accounts.** When a run touches more than one GitHub
-  account, pin the token with `--user <login>`; `gh auth token` alone can return
-  another account's token after a switch.
+- **Local identity drift across accounts.** A local run that touches more than
+  one GitHub account must use the selected local account. Cloud runs use the
+  connected GitHub MCP identity and never use local CLI identity commands.
 
 - **Commit or push fails after a repair.** Read the hook or command output,
   repair the named issue, and record the rerun. Apply the

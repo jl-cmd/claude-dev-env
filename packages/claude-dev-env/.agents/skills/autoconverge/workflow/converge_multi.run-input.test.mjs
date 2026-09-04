@@ -68,6 +68,18 @@ test('valid coordinates classify with no blocker and keep every PR entry', () =>
   assert.equal(classified.input.prs.length, 2);
 });
 
+test('a cloud transport classifies with no blocker', () => {
+  const classified = classifyMultiInput({ ...validArgs(), transport: 'cloud' });
+  assert.equal(classified.blocker, null);
+  assert.equal(classified.input.transport, 'cloud');
+});
+
+test('an unknown transport is blocked before child workflows start', () => {
+  const classified = classifyMultiInput({ ...validArgs(), transport: 'proxy' });
+  assert.equal(classified.input, null);
+  assert.match(classified.blocker, /transport/i);
+});
+
 test('a missing convergeScriptPath is blocked', () => {
   const classified = classifyMultiInput({ prs: [validEntry(101)] });
   assert.equal(classified.input, null);
@@ -136,6 +148,10 @@ test('childRunInput forwards bugbotDisabled true when the entry opts out', () =>
 
 test('childRunInput defaults bugbotDisabled to false when the entry omits it', () => {
   assert.equal(childRunInput(validEntry(101)).bugbotDisabled, false);
+});
+
+test('childRunInput forwards the selected cloud transport', () => {
+  assert.equal(childRunInput(validEntry(101), '/home/dev', 'cloud').transport, 'cloud');
 });
 
 test('childRunInput forwards the run-level home directory to the child run', () => {

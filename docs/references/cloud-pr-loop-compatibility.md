@@ -8,6 +8,9 @@ This document lets a zero-context agent run the PR-loop skill family
 scripts) inside a Claude Code cloud session, and lays out the code changes
 that make those skills cloud-native.
 
+This reference describes the Claude Code cloud runtime. Other Cloud runtimes
+can use the same transport rule, but their push credentials remain runtime-specific.
+
 A cloud session differs from a local install in one way that touches every
 PR-loop skill: the `gh` CLI is absent, so each `gh ...` shell step and each
 `subprocess.run(["gh", ...])` in a helper script fails with
@@ -17,11 +20,11 @@ proxy. Git push works too, after one repo-root fix.
 
 Read it two ways:
 
-- **Run a skill today.** Section 5 is a paste-ready session preamble. Apply
-  it once at session start, then follow each skill's normal steps, swapping
-  every `gh` operation for the cloud path in the Section 4 matrix.
-- **Land the permanent fix.** Section 6 is a phased plan, one work item per
-  file, each with an exact change and an acceptance check.
+- **Run a skill today.** Section 5 sets the Cloud transport rule. Select it
+  before the skill starts, then follow each skill's normal steps, swapping
+  every local CLI operation for the Cloud path in the Section 4 matrix.
+- **Review the broader remediation plan.** Section 6 lists the remaining script
+  work, one item per file, with an exact change and an acceptance check.
 
 Every fact here traces to a live probe in a cloud session, the operation
 inventory of the installed skills, or both. Rows that need a probe against a
@@ -162,21 +165,15 @@ session before the first `mcp__github__*` call (Section 5).
 Each row above rests on a live probe recorded in Section 7 or the
 operation inventory of the installed skills.
 
-## 5. Interim session preamble
+## 5. Cloud transport rule
 
-Paste this block at the start of any cloud PR-loop run. It sets up MCP
-schemas, the push fix, transport rules, identity rules, the Copilot
-fallback, and hook notes. The `pr-loop-cloud-transport` skill carries this
-preamble as a step-by-step workflow with a progress checklist, so a run can
-invoke the skill in place of pasting the block. The skill's transport
-decision routes on three checks: `command -v gh`, `gh auth status`, and —
-once owner and repo are known — `gh api repos/<owner>/<repo> --jq
-.permissions.push` printing `true`. The `permissions` object in that
-response reports the authenticated account's own rights on the repo,
-`push` included (Section 7 carries the live probe row), so a
-present-but-unauthenticated `gh`, or one on an account without push
-rights to the PR's repo, takes the cloud transport the same way a
-missing binary does.
+Select Cloud transport before the first GitHub operation. A Cloud session
+does not run `command -v gh`, any GitHub CLI authentication command, or a
+local CLI permission probe. It loads the GitHub MCP schemas, reads the
+connected identity with `mcp__github__get_me`, and uses the Section 4 Cloud
+operation for each GitHub read or write. Local commits use only the
+credentialed push path supplied by the Cloud session. A rejected push is a
+blocker to report, not a reason to start a local login flow.
 
 ### 5.1 Load MCP schemas (once per session)
 
@@ -201,6 +198,8 @@ git -C <repo-root> remote set-head origin -a
 
 ### 5.3 Transport rules
 
+- A Cloud session never invokes the local GitHub CLI for authentication,
+  account switching, or token lookup.
 - Route every GitHub read and write through the Section 4 matrix.
 - Prefer the `mcp__github__*` tool for a given operation. MCP reads work for
   both in-scope repos.

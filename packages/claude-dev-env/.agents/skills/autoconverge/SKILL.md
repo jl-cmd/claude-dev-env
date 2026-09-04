@@ -59,8 +59,10 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
   **Do not abort** because the Workflow tool is missing.
 
-Transport still needs authenticated GitHub access for the PR's owner (`gh` or
-`pr-loop-cloud-transport`).
+Set the GitHub transport directive before any GitHub step. Use `transport: "cloud"` in a
+Cloud session. Use `transport: "local"` in a local session. Cloud uses the
+connected GitHub MCP tools and never starts a local GitHub CLI authentication
+flow.
 
 ## Review-lens boundary
 
@@ -68,18 +70,19 @@ The code-review lens boundary (workflow agent versus the built-in `/code-review`
 command) is defined on the **Code-review lens** bullet in
 [`reference/convergence.md`](reference/convergence.md).
 
-## Transport check (before any GitHub step)
+## Select the GitHub transport directive before any GitHub step
 
-Run `command -v gh`; when it succeeds, run `gh auth status`; once the PR
-scope is resolved, run `gh api repos/<owner>/<repo> --jq .permissions.push`
-and take `true` as the pass. When any check fails, run the
-`pr-loop-cloud-transport` skill first and route every `gh` operation in this
-skill through its substitution matrix. The workflow script
-(`workflow/converge.mjs`) embeds `gh` commands and gh-backed helper scripts in
-its agent prompts, so a cloud run also applies the same substitution to those
-agent prompts when it authors the launch — the transport skill covers the
-orchestrating session's own steps, and the script's agent-prompt text carries
-`gh` calls the spawned agents cannot run in a cloud session.
+In a Cloud session, set `transport: "cloud"` and load the GitHub MCP schemas
+before the first GitHub tool call. Do not run any local GitHub CLI
+authentication, account-switch, or token command. Use the operation in
+[`cloud-pr-loop-compatibility.md`](../../../docs/references/cloud-pr-loop-compatibility.md)
+for each GitHub read or write. Use the Cloud session's credentialed push path
+for local commits. If that path rejects a push, report the exact error instead
+of trying to log in through the local CLI.
+
+In a local session, set `transport: "local"` and use the authenticated local
+GitHub CLI. The workflow defaults to this value when older callers omit the
+field.
 
 ## Pre-flight (main session)
 
@@ -161,7 +164,7 @@ orchestrating session's own steps, and the script's agent-prompt text carries
 ```
 Workflow({
   scriptPath: "<this skill dir>/workflow/converge.mjs",
-  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false, homeDirectory: "<HOME>" }
+  args: { owner: "<O>", repo: "<R>", prNumber: <N>, bugbotDisabled: false, copilotDisabled: false, homeDirectory: "<HOME>", transport: "<cloud|local>" }
 })
 ```
 
@@ -173,7 +176,8 @@ the absolute path to the directory that holds `.claude` (resolve it once from
 runs in a sandbox with no access to environment variables, so the run reads the
 home directory from this arg to build the path to the codex-review scripts the
 Codex gate calls; leave it out and the Codex gate cannot find those scripts. Set
-`bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
+`transport: "cloud"` for Cloud and `transport: "local"` for local execution.
+Set `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
 own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
 and `false` when it exits 0; on `true` the workflow skips the Copilot gate with
