@@ -1,8 +1,8 @@
 # Pstack model choices
 
 These role choices override pstack skill defaults. Each panel entry runs one
-agent. The arena cross-judge pool supplies one judge. Use the named model IDs
-with the host's separate reasoning-effort setting.
+agent. The arena cross-judge pool selects one judge. Reasoning effort is a
+host setting.
 
 feature, refactoring: gpt-5.6-sol
 bug-fix: gpt-5.6-sol
