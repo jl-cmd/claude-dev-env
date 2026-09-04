@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.36.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.35.0...claude-dev-env-v2.36.0) (2026-09-04)
+
+
+### Features
+
+* **lint:** add cde lint for policy rules ([c583a24](https://github.com/jl-cmd/claude-dev-env/commit/c583a2408f6949c5b2efcf783a06a799448cf500))
+* **lint:** add staged policy diagnostics ([66be5ad](https://github.com/jl-cmd/claude-dev-env/commit/66be5ad495479d8bf6a56f474f1ab8b80b69d1f1))
+* persist approved pstack model assignments ([c337e15](https://github.com/jl-cmd/claude-dev-env/commit/c337e156ca5e946064ab2e11828579e8fcb5078d))
+* **pstack:** select available models for each host ([f241e45](https://github.com/jl-cmd/claude-dev-env/commit/f241e45a637122268d29f48af8651efc02254197))
+* **pstack:** select available models for each host ([ffa7ac7](https://github.com/jl-cmd/claude-dev-env/commit/ffa7ac7c39d02bd025a44edf09af3d0c168307d2))
+
+
+### Bug Fixes
+
+* **autoconverge:** select cloud GitHub transport explicitly ([5a0a342](https://github.com/jl-cmd/claude-dev-env/commit/5a0a342e77ffcc57e716d9c0fc7dd2498960b1c1))
+* **autoconverge:** skip host GitHub auth for cloud runs ([48f4cef](https://github.com/jl-cmd/claude-dev-env/commit/48f4ceff5c3e8aaea55d045343939b963428e829))
+* roll back pstack rule copy failures ([9072221](https://github.com/jl-cmd/claude-dev-env/commit/90722215d6d0eb4a3676b212a3de40ef5d58abd0))
+
 ## [2.35.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.34.0...claude-dev-env-v2.35.0) (2026-09-04)
 
 
