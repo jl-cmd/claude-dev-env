@@ -1,6 +1,6 @@
 # Static execution graph for hook audits
 
-## Usage first
+## Usage
 
 The command prints one deterministic report to standard output. It does not create a cache, update a catalog, import a hook, or invoke a hook command.
 
@@ -66,7 +66,7 @@ Every path in the report uses a portable form such as `<REPO>/...`, `<HOME>/...`
 
 The package has 32 direct commands in `hooks/hooks.json`, but five of those commands are dispatchers. Their ordered rosters add 43 effective hook executions. Claude installs rewritten copies in `~/.claude/settings.json`. Codex keeps a focused projection in `~/.codex/hooks.json`. Git selects native shims through scoped `core.hooksPath` values. A flat JSON scan misses the dispatcher children and cannot distinguish a second snapshot from a second execution. Importing constants would also run module initialization, which is too close to executing the code under audit.
 
-The tool needs one honest model of execution. It must retain the direct registration for traceability, expand routers into leaf hooks, compare runtime snapshots against their own expected projections, prove duplicate executions only where trigger domains overlap, and require a lifecycle decision for every leaf.
+The tool needs one honest model of execution. It keeps the direct registration, expands routers into leaf hooks, and compares each runtime snapshot with its expected projection. A duplicate counts only where trigger domains overlap. Every leaf needs a lifecycle decision.
 
 ## Shape
 
@@ -479,7 +479,7 @@ packages/claude-dev-env/scripts/tests/test_hook_audit_policy.py
     Duplicate, matcher, catalog, rendering, and no-execution tests.
 ```
 
-The public interface has one operation. `readers.py` hides five source formats and three installation projections. `audit.py` owns comparison policy. Callers never coordinate load, expand, compare, classify, and render stages themselves. This is a deep module with a short call chain, per boundary discipline and minimize-reader-load.
+The public interface has one operation. `readers.py` hides five source formats and three installation projections. `audit.py` owns comparison policy. Callers call `audit_hooks`. They do not load, expand, compare, classify, and render as separate stages.
 
 ## Test plan
 
@@ -503,17 +503,17 @@ The source count tests are deliberate tripwires. A hook registration or roster c
 
 ## Rationale
 
-The execution graph is the load-bearing choice. A flat inventory cannot tell whether a dispatcher is a hook, whether an installed file is another execution or another snapshot, or whether a native Git shim owns policy. Routes preserve that distinction while the leaf target gives duplicates, drift, and lifecycle coverage one stable join key.
+The execution graph is the core model. A flat inventory cannot tell whether a dispatcher is a hook, whether an installed file is another execution or another snapshot, or whether a native Git shim owns policy. Routes preserve that distinction. The leaf target gives duplicates, drift, and lifecycle coverage one stable join key.
 
-Static, syntax-limited adapters are safer than imports. They also fail clearly when a roster stops being declarative. Five explicit adapters look less clever than a general Python evaluator, and that is a virtue here. The audit stays understandable and never runs the code it judges.
+Static, syntax-limited adapters are safer than imports. They return an unsupported-syntax finding when a roster stops being declarative. Five explicit adapters look less clever than a general Python evaluator, and that is a virtue here. The audit stays understandable and never runs the code it judges.
 
 Portable identities solve two problems together. They make source-to-install comparisons meaningful, and they stop reports from leaking usernames or machine paths. Fingerprints keep opaque hooks visible without printing command text.
 
-The catalog records decisions, not discovery. Discovery comes from live configuration and roster sources on every run. That division prevents a hand-maintained inventory from becoming a second registration list while preserving one source of truth for the five lifecycle outcomes.
+The catalog records decisions, not discovery. Discovery comes from live configuration and roster sources on every run. A hand-maintained inventory would become a second registration list. The catalog stays the one source of truth for the five lifecycle outcomes.
 
 ## Synthesis decision
 
-This candidate recommends the static execution graph as the base. Its defining choices are restricted AST readers, snapshot-scoped duplicate analysis, projection-specific drift, and target-keyed lifecycle policy. Arena synthesis remains responsible for selecting or grafting it.
+This candidate recommends the static execution graph as the base. Its defining choices are restricted AST readers, snapshot-scoped duplicate analysis, projection-specific drift, and target-keyed lifecycle policy. Synthesis still selects or grafts this candidate.
 
 ## Tradeoffs accepted
 

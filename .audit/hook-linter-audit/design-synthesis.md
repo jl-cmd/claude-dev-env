@@ -10,11 +10,11 @@ Use the Sol static execution graph. It makes the 32 direct commands, five dispat
 - Keep two public entry points. Use the command-line interface and `audit(request)`.
 - Assert that Git inspection runs only fixed read-only configuration queries.
 
-## Removed design weight
+## What we left out
 
-- Keep file access and Git probes private until a real second caller appears.
+- File access and Git probes stay private until a real second caller appears.
 - Support only the current literal roster syntax.
-- Keep dispatcher route details internal unless a finding needs them as evidence.
+- Dispatcher route details stay internal unless a finding needs them as evidence.
 
 ## Rejections
 
@@ -24,7 +24,7 @@ Use the Sol static execution graph. It makes the 32 direct commands, five dispat
 
 ## Dropout
 
-The Luna candidate did not finish before synthesis. Terra and Sol both completed. Their common static-parser shape gives a strong agreement signal.
+The Luna candidate did not finish before synthesis. Terra and Sol both completed. Both parse rosters statically instead of importing hook code.
 
 ## Verification contract
 
