@@ -14,7 +14,7 @@ the CLI mode calls. A save-path finding matches the CLI mode's finding for
 the same validator; only Mypy and the process-per-check overhead are gone.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -125,92 +125,61 @@ class _FastSaveValidatorSpecification:
     no_matching_files_message: str
 
 
-def _all_fast_save_validator_specifications() -> (
-    "tuple[_FastSaveValidatorSpecification, ...]"
-):
-    """Return the save-path roster: every non-Mypy, non-Ruff file-scoped check."""
+def _build_specification(
+    display_name: str,
+    checks: str,
+    applies_to_file: FilePredicate,
+    collect_violation_lines: FileViolationLineCollector,
+    no_matching_files_message: str,
+) -> _FastSaveValidatorSpecification:
+    return _FastSaveValidatorSpecification(
+        display_name,
+        checks,
+        applies_to_file,
+        collect_violation_lines,
+        no_matching_files_message,
+    )
+
+
+def _python_specifications() -> tuple[_FastSaveValidatorSpecification, ...]:
     return (
-        # Python naming, style, and constants.
-        _FastSaveValidatorSpecification(
-            "Python Style",
-            "1,2,3,4",
-            _is_python_file,
-            _violation_lines_from(validate_python_style_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Abbreviations",
-            "5",
-            _is_python_file,
-            _violation_lines_from(validate_abbreviation_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Magic Values",
-            "7",
-            _is_python_file,
-            _violation_lines_from(validate_magic_literal_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Security",
-            "27,28,29",
-            _is_python_file,
-            _violation_lines_from(validate_security_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Code Quality",
-            "30,31,32",
-            _is_python_file,
-            _violation_lines_from(validate_code_quality_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        # Python anti-patterns and typing.
-        _FastSaveValidatorSpecification(
-            "Python Anti-patterns",
-            "33,34,35",
-            _is_python_file,
-            _violation_lines_from(validate_python_antipattern_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Type Safety",
-            "39,40",
-            _is_python_file,
-            _violation_lines_from(validate_type_safety_file),
-            NO_PYTHON_FILES_MESSAGE,
-        ),
-        # Scoped to a test_*.py-shaped file.
-        _FastSaveValidatorSpecification(
-            "Test Safety",
-            "11,21",
-            _is_test_python_file,
-            _collect_test_safety_violation_lines,
-            NO_TEST_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "Useless Tests",
-            "12",
-            _is_test_python_file,
-            _violation_lines_from(validate_useless_test_file),
-            NO_TEST_FILES_MESSAGE,
-        ),
-        # Non-Python or multi-language files.
-        _FastSaveValidatorSpecification(
-            "React",
-            "17",
-            _is_react_file,
-            _collect_react_violation_lines,
-            NO_REACT_FILES_MESSAGE,
-        ),
-        _FastSaveValidatorSpecification(
-            "PR References",
-            "6",
-            _is_code_reference_file,
-            _violation_lines_from(validate_pr_reference_file),
-            NO_CODE_REFERENCE_FILES_MESSAGE,
-        ),
+        _build_specification("Python Style", "1,2,3,4", _is_python_file, _violation_lines_from(validate_python_style_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Abbreviations", "5", _is_python_file, _violation_lines_from(validate_abbreviation_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Magic Values", "7", _is_python_file, _violation_lines_from(validate_magic_literal_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Security", "27,28,29", _is_python_file, _violation_lines_from(validate_security_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Code Quality", "30,31,32", _is_python_file, _violation_lines_from(validate_code_quality_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Python Anti-patterns", "33,34,35", _is_python_file, _violation_lines_from(validate_python_antipattern_file), NO_PYTHON_FILES_MESSAGE),
+        _build_specification("Type Safety", "39,40", _is_python_file, _violation_lines_from(validate_type_safety_file), NO_PYTHON_FILES_MESSAGE),
+    )
+
+
+def _test_specifications() -> tuple[_FastSaveValidatorSpecification, ...]:
+    return (
+        _build_specification("Test Safety", "11,21", _is_test_python_file, _collect_test_safety_violation_lines, NO_TEST_FILES_MESSAGE),
+        _build_specification("Useless Tests", "12", _is_test_python_file, _violation_lines_from(validate_useless_test_file), NO_TEST_FILES_MESSAGE),
+    )
+
+
+def _non_python_specifications() -> tuple[_FastSaveValidatorSpecification, ...]:
+    return (
+        _build_specification("React", "17", _is_react_file, _collect_react_violation_lines, NO_REACT_FILES_MESSAGE),
+        _build_specification("PR References", "6", _is_code_reference_file, _violation_lines_from(validate_pr_reference_file), NO_CODE_REFERENCE_FILES_MESSAGE),
+    )
+
+
+def _all_fast_save_validator_specifications(
+    excluded_validator_names: Collection[str] = (),
+) -> tuple[_FastSaveValidatorSpecification, ...]:
+    """Return the save-path roster: every non-Mypy, non-Ruff file-scoped check."""
+    all_specifications = (
+        *_python_specifications(),
+        *_test_specifications(),
+        *_non_python_specifications(),
+    )
+    return tuple(
+        each_specification
+        for each_specification in all_specifications
+        if each_specification.display_name not in excluded_validator_names
     )
 
 
@@ -250,11 +219,14 @@ def _run_specification(
     return _fast_save_outcome(specification, False, violation_report)
 
 
-def run_fast_save_validators(files: "list[Path]") -> "list[ValidatorResult]":
+def run_fast_save_validators(
+    files: "list[Path]", excluded_validator_names: Collection[str] = ()
+) -> "list[ValidatorResult]":
     """Run every save-path validator in-process, skipping Mypy and Ruff.
 
     Args:
-        files: The files under validation -- one reconstructed file in gate mode.
+        files: Files under validation. Gate mode passes one reconstructed file.
+        excluded_validator_names: Display names omitted from this run.
 
     Returns:
         One result per in-process validator, in roster order. The caller adds
@@ -262,5 +234,7 @@ def run_fast_save_validators(files: "list[Path]") -> "list[ValidatorResult]":
     """
     return [
         _run_specification(each_specification, files)
-        for each_specification in _all_fast_save_validator_specifications()
+        for each_specification in _all_fast_save_validator_specifications(
+            excluded_validator_names
+        )
     ]
