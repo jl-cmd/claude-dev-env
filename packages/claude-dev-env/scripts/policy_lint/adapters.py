@@ -23,6 +23,16 @@ def _hooks_module(module_name: str) -> ModuleType:
     return importlib.import_module(module_name)
 
 
+def _pr_loop_script_module(module_name: str) -> ModuleType:
+    package_directory = Path(__file__).resolve().parent.parent.parent
+    scripts_directory = str(
+        package_directory.joinpath(*constants.ALL_PR_LOOP_SCRIPTS_PATH_SEGMENTS)
+    )
+    if scripts_directory not in sys.path:
+        sys.path.insert(0, scripts_directory)
+    return importlib.import_module(module_name)
+
+
 def validator_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
@@ -220,6 +230,20 @@ def test_pairing_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...
         Test-pairing diagnostics for unmatched production files.
     """
     return adapter_pairing.test_pairing_diagnostics(document_set, _hooks_module)
+
+
+def terminology_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...]:
+    """Report staged prose that near-misses a newly introduced identifier.
+
+    Args:
+        document_set: Candidate staged documents and repository root.
+
+    Returns:
+        Diagnostics that name the prose file and line.
+    """
+    return adapter_detectors.terminology_diagnostics(
+        document_set, _pr_loop_script_module
+    )
 
 
 def hook_format_diagnostics(

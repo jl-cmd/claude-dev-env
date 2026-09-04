@@ -133,7 +133,16 @@ def default_registry() -> tuple[model.Rule, ...]:
         *_text_document_rules(),
         *_configuration_document_rules(),
         model.ChangeSetRule(
-            "test-pairing", frozenset({"changed"}), adapters.test_pairing_diagnostics
+            "test-pairing",
+            frozenset({"changed"}),
+            frozenset({model.SelectionKind.STAGED, model.SelectionKind.BASE}),
+            adapters.test_pairing_diagnostics,
+        ),
+        model.ChangeSetRule(
+            "terminology-sweep",
+            frozenset({"changed"}),
+            frozenset({model.SelectionKind.STAGED}),
+            adapters.terminology_diagnostics,
         ),
         model.RepositoryRule(
             "repository-path-collision",

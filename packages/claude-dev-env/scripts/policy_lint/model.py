@@ -284,6 +284,7 @@ class DocumentRule:
 class ChangeSetRule:
     rule_id: str
     rule_sets: frozenset[str]
+    selections: frozenset[SelectionKind]
     check: DocumentSetChecker
 
 

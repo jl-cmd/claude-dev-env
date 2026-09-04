@@ -1,3 +1,5 @@
+import re
+
 INCOMPLETE_EXIT_CODE = 3
 INVALID_INPUT_EXIT_CODE = 2
 GIT_EXECUTABLE = "git"
@@ -64,3 +66,12 @@ FAST_SAVE_VALIDATORS_STEM = "fast_save_validators"
 ALL_OVERLAPPING_VALIDATOR_NAMES = frozenset(
     {"Python Style", "Magic Values", "Type Safety", "Test Safety", "React"}
 )
+ALL_PR_LOOP_SCRIPTS_PATH_SEGMENTS = ("_shared", "pr-loop", "scripts")
+TERMINOLOGY_SWEEP_MODULE_NAME = "terminology_sweep"
+TERMINOLOGY_SWEEP_RULE_ID = "terminology-sweep"
+TERMINOLOGY_FINDING_PATTERN = re.compile(
+    r"^(?P<path>.+):(?P<line_number>\d+): (?P<message>.+)$"
+)
+TERMINOLOGY_PATH_GROUP = "path"
+TERMINOLOGY_LINE_NUMBER_GROUP = "line_number"
+TERMINOLOGY_MESSAGE_GROUP = "message"

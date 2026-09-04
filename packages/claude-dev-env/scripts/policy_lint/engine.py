@@ -180,7 +180,7 @@ def _run_changeset_rule(
     all_diagnostics: list[Diagnostic],
     all_skipped_rules: list[str],
 ) -> None:
-    if document_set.selection not in {SelectionKind.STAGED, SelectionKind.BASE}:
+    if document_set.selection not in rule.selections:
         all_skipped_rules.append(rule.rule_id)
         return
     all_diagnostics.extend(rule.check(document_set))

@@ -1,7 +1,7 @@
 """Flag a prose term that names a code identifier a hair differently.
 
 A change adds the field ``premium_request_interactions`` while the same
-branch's docs call it the ``premium-request-budget`` field: one thing, two
+branch's docs call it the ``premium-request-budget`` field. One thing, two
 names, and a reader who searches one never finds the other.
 
 ::
@@ -14,38 +14,29 @@ names, and a reader who searches one never finds the other.
 
 The sweep reads a unified diff, collects the multi-word identifiers added on
 code lines, and scans each added prose line for a hyphen or space variant that
-renames only the final word of an identifier: it agrees on every earlier word
-and differs on the last. A term that diverges in any earlier word, or shares
-only one leading word, is ordinary prose. It also spares English compound
-tails, singular/plural forms, stopword windows, and words that are themselves
-tokens of another introduced identifier.
+renames only the final word of an identifier. The variant agrees on every
+earlier word and differs on the last. A term that diverges in any earlier
+word, or shares only one leading word, is ordinary prose. It also spares
+English compound tails, singular/plural forms, stopword windows, and words
+that are themselves tokens of another introduced identifier.
 """
 
 import argparse
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
-parent_directory = str(Path(__file__).resolve().parent)
-if parent_directory not in sys.path:
-    sys.path.insert(0, parent_directory)
-
-from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
+from pr_loop_shared_constants.terminology_sweep_constants import (
     ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS,
+    ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
+    ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
     ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
     ALL_PROSE_STOPWORD_TOKENS,
     ALL_STRING_ESCAPE_SEQUENCES,
-    ALL_TEST_FILE_NAME_INFIX_MARKERS,
-    GIT_BASE_TREE_REVISION,
-    IDENTIFIER_TOKEN_SEPARATOR,
-    PROSE_WINDOW_WORD_SEPARATOR,
-    TEST_DIRECTORY_PATH_SEGMENT,
-    TEST_FILE_PREFIX,
-    TEST_FILE_SUFFIX,
-    ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
-    ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
     ALL_SWEEP_CODE_FILE_EXTENSIONS,
+    ALL_TEST_FILE_NAME_INFIX_MARKERS,
     CAMEL_CASE_IDENTIFIER_PATTERN,
     CAMEL_CASE_WORD_PATTERN,
     DIFF_ADDED_LINE_PREFIX,
@@ -55,19 +46,32 @@ from pr_loop_shared_constants.terminology_sweep_constants import (  # noqa: E402
     DIFF_NEW_FILE_HEADER_PREFIX,
     DIFF_OLD_FILE_HEADER_PREFIX,
     DIFF_REMOVED_LINE_PREFIX,
+    GIT_BASE_TREE_REVISION,
+    GIT_DECODE_ERRORS,
+    GIT_DIFF_OPERATION,
     GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
+    GIT_FAILURE_WITHOUT_DETAILS,
+    GIT_GREP_OPERATION_TEMPLATE,
+    GIT_NO_MATCH_EXIT_CODE,
+    GIT_OPERATION_FAILURE_TEMPLATE,
+    GIT_TEXT_ENCODING,
     HYPHENATED_PROSE_TOKEN_PATTERN,
+    IDENTIFIER_TOKEN_SEPARATOR,
     INLINE_CODE_SPAN_PATTERN,
     JAVASCRIPT_LINE_COMMENT_MARKER,
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
+    PROSE_WINDOW_WORD_SEPARATOR,
     PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
     SNAKE_CASE_IDENTIFIER_PATTERN,
     STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
     TERMINOLOGY_SWEEP_DESCRIPTION,
+    TEST_DIRECTORY_PATH_SEGMENT,
+    TEST_FILE_PREFIX,
+    TEST_FILE_SUFFIX,
 )
 
 IdentifierTuple = tuple[str, ...]
@@ -173,8 +177,8 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     A Markdown line is prose with its inline-code spans removed, since a
     backticked span names code verbatim. A code line contributes its comment
     tail, its JSDoc continuation text, and the contents of its string
-    literals. A test module contributes its comment tail and JSDoc text only
-    — its string literals hold fixture data, not prose.
+    literals. A test module contributes its comment tail and JSDoc text only.
+    Its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -201,9 +205,9 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
 def _is_test_file(file_path: str) -> bool:
     """Return whether a diff path names a test code module.
 
-    A test module's string literals hold fixture data — embedded diffs,
-    generated source, file trees — not documentation prose, so the sweep
-    reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
+    A test module's string literals hold fixture data: embedded diffs,
+    generated source, and file trees. That is not documentation prose, so the
+    sweep reads only its comments and JSDoc lines. A ``quota.test.mjs``, a
     ``layout.spec.ts``, and a ``fixtures.py`` under a tests directory are all
     test modules, so every one of these paths counts::
 
@@ -260,8 +264,8 @@ def _string_literal_fragments(line_text: str) -> list[str]:
     Escape sequences inside a literal (``\\n``, ``\\t``) are replaced with
     spaces before the words are read, so an escape letter never glues onto a
     neighbouring word as a phantom prose term. A literal left with no
-    whitespace after that replacement is an identifier-shaped value — a UID,
-    a key, a path — not prose, and contributes nothing.
+    whitespace after that replacement is an identifier-shaped value: a UID,
+    a key, or a path. It is not prose, and contributes nothing.
     """
     all_fragments: list[str] = []
     for each_match in STRING_LITERAL_CONTENT_PATTERN.finditer(line_text):
@@ -413,9 +417,7 @@ def _word_is_identifier_vocabulary(
         return True
     if prose_word.endswith("es") and prose_word[:-2] in all_identifier_tokens:
         return True
-    if prose_word.endswith("ies") and prose_word[:-3] + "y" in all_identifier_tokens:
-        return True
-    return False
+    return prose_word.endswith("ies") and prose_word[:-3] + "y" in all_identifier_tokens
 
 
 def _near_miss_identifier(
@@ -525,22 +527,8 @@ def _findings_for_line(
     return all_findings
 
 
-def sweep_diff(
-    diff_text: str,
-    all_preexisting_identifier_tuples: frozenset[IdentifierTuple] = frozenset(),
-) -> list[str]:
-    """Return every terminology near-miss finding for a unified diff.
-
-    Args:
-        diff_text: The unified-diff text to sweep.
-        all_preexisting_identifier_tuples: Token tuples of added-line identifiers
-            the base tree already names. A pre-existing identifier is not one
-            the diff introduces, so no prose is flagged against it. Its
-            tokens still count as code vocabulary.
-
-    Returns:
-        One finding string per near-miss term on an added prose line.
-    """
+def _find_terminology_near_misses(
+    diff_text: str, all_preexisting_identifier_tuples: frozenset[IdentifierTuple]) -> list[str]:
     all_added_lines = _parse_added_lines(diff_text)
     all_identifier_tuples = _collect_introduced_identifiers(all_added_lines)
     all_identifier_tokens = frozenset(
@@ -569,6 +557,27 @@ def sweep_diff(
             )
         )
     return all_findings
+
+
+def sweep_diff(
+    diff_text: str,
+    all_preexisting_identifier_tuples: frozenset[IdentifierTuple] = frozenset(),
+) -> list[str]:
+    """Return every terminology near-miss finding for a unified diff.
+
+    Args:
+        diff_text: The unified-diff text to sweep.
+        all_preexisting_identifier_tuples: Token tuples of added-line identifiers
+            the base tree already names. A pre-existing identifier is not one
+            the diff introduces, so no prose is flagged against it. Its
+            tokens still count as code vocabulary.
+
+    Returns:
+        One finding string per near-miss term on an added prose line.
+    """
+    return _find_terminology_near_misses(
+        diff_text, all_preexisting_identifier_tuples
+    )
 
 
 def repository_environment() -> dict[str, str]:
@@ -619,8 +628,8 @@ def _base_tree_names(
 
     Each name is looked up as a whole word in the base revision's tree. A
     repository with no commits yet, or a lookup that git cannot run, reports
-    the name as absent, so the sweep then treats it as newly introduced —
-    the behaviour the sweep has with no base-tree check at all.
+    the name as absent, so the sweep then treats it as newly introduced.
+    That is the behaviour the sweep has with no base-tree check at all.
 
     Args:
         repository_root: The repository root the lookups run in.
@@ -652,11 +661,90 @@ def _base_tree_names(
     return frozenset(all_present_names)
 
 
+def _run_strict_git(
+    repository_root: Path, all_arguments: Sequence[str]
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            list(all_arguments),
+            cwd=str(repository_root),
+            capture_output=True,
+            text=True,
+            encoding=GIT_TEXT_ENCODING,
+            errors=GIT_DECODE_ERRORS,
+            timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
+            check=False,
+            env=repository_environment(),
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        raise RuntimeError(str(e)) from e
+
+
+def _raise_for_git_failure(
+    git_process: subprocess.CompletedProcess[str], operation: str
+) -> None:
+    if git_process.returncode == 0:
+        return
+    details = git_process.stderr.strip() or git_process.stdout.strip()
+    raise RuntimeError(
+        GIT_OPERATION_FAILURE_TEMPLATE.format(
+            operation=operation,
+            details=details or GIT_FAILURE_WITHOUT_DETAILS,
+        )
+    )
+
+
+def _strict_base_tree_names(
+    repository_root: Path, all_names: frozenset[str]
+) -> frozenset[str]:
+    all_present_names: set[str] = set()
+    for each_name in sorted(all_names):
+        all_arguments = (
+            *ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
+            each_name,
+            GIT_BASE_TREE_REVISION,
+        )
+        grep_process = _run_strict_git(repository_root, all_arguments)
+        if grep_process.returncode == 0:
+            all_present_names.add(each_name)
+            continue
+        if grep_process.returncode == GIT_NO_MATCH_EXIT_CODE:
+            continue
+        operation = GIT_GREP_OPERATION_TEMPLATE.format(identifier=each_name)
+        _raise_for_git_failure(grep_process, operation)
+    return frozenset(all_present_names)
+
+
+def strict_staged_terminology_findings(repository_root: Path) -> list[str]:
+    """Return near-miss findings for the staged diff.
+
+    Args:
+        repository_root: The repository root the staged diff is read from.
+
+    Returns:
+        One finding string per near-miss term on a staged prose line.
+
+    Raises:
+        RuntimeError: Git could not read the staged diff or look up an
+            identifier in HEAD.
+    """
+    diff_process = _run_strict_git(
+        repository_root, ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND
+    )
+    _raise_for_git_failure(diff_process, GIT_DIFF_OPERATION)
+    all_added_names = _identifier_names_on_added_code_lines(diff_process.stdout)
+    preexisting_tuples = frozenset(
+        _identifier_token_tuple(each_name)
+        for each_name in _strict_base_tree_names(repository_root, all_added_names)
+    )
+    return _find_terminology_near_misses(diff_process.stdout, preexisting_tuples)
+
+
 def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it — only genuinely new
+    introduces, so no prose is flagged against it. Only genuinely new
     identifiers are swept.
 
     Args:
@@ -684,7 +772,7 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         _identifier_token_tuple(each_name)
         for each_name in _base_tree_names(repository_root, all_added_names)
     )
-    return sweep_diff(diff_process.stdout, preexisting_tuples)
+    return _find_terminology_near_misses(diff_process.stdout, preexisting_tuples)
 
 
 def _read_diff_text(diff_file_path: str | None) -> str:

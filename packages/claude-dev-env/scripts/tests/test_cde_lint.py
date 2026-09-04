@@ -304,13 +304,37 @@ def test_staged_clean_reports_keep_legacy_advisories_outside_renderer(
 
     assert json_exit_code == 0
     assert json_stderr == ""
-    assert json.loads(json_stdout)["diagnostics"] == []
+    json_report = json.loads(json_stdout)
+    assert json_report["diagnostics"] == []
+    assert "terminology-sweep" in json_report["executed_rules"]
     assert text_exit_code == 0
     assert text_stdout == ""
     assert text_stderr == ""
     assert editor_exit_code == 0
     assert editor_stdout == ""
     assert editor_stderr == ""
+
+
+def test_staged_git_failure_exits_three_with_valid_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stage_oversized_test_file(tmp_path)
+    adapter_module = sys.modules["policy_lint.adapters"]
+    terminology_module = adapter_module._pr_loop_script_module("terminology_sweep")
+
+    def fail_git(
+        _repository_root: Path, _all_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        raise RuntimeError("simulated Git failure")
+
+    monkeypatch.setattr(terminology_module, "_run_strict_git", fail_git)
+    exit_code, stdout_text, stderr_text = _run_staged_format("json", tmp_path)
+    parsed_report = json.loads(stdout_text)
+
+    assert exit_code == 3
+    assert stderr_text == ""
+    assert parsed_report["diagnostics"] == []
+    assert parsed_report["failed_rules"] == ["terminology-sweep"]
 
 
 def test_should_exit_one_when_diagnostics_exist(tmp_path: Path) -> None:

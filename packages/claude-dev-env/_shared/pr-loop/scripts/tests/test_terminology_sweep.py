@@ -2,6 +2,7 @@
 
 import importlib.util
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -10,17 +11,26 @@ import pytest
 
 def _load_sweep_module() -> ModuleType:
     module_path = Path(__file__).parent.parent / "terminology_sweep.py"
+    module_directory = str(module_path.parent)
+    should_remove_module_directory = module_directory not in sys.path
+    if should_remove_module_directory:
+        sys.path.insert(0, module_directory)
     spec = importlib.util.spec_from_file_location("terminology_sweep", module_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if should_remove_module_directory:
+            sys.path.remove(module_directory)
     return module
 
 
 sweep_module = _load_sweep_module()
 sweep_diff = sweep_module.sweep_diff
 staged_terminology_findings = sweep_module.staged_terminology_findings
+strict_staged_terminology_findings = sweep_module.strict_staged_terminology_findings
 main = sweep_module.main
 parse_added_lines = sweep_module._parse_added_lines
 
@@ -282,6 +292,8 @@ def test_staged_terminology_findings_flags_staged_prose(tmp_path: Path) -> None:
         env=_hermetic_git_environment(),
     )
     findings = staged_terminology_findings(tmp_path)
+    with pytest.raises(RuntimeError, match="git grep"):
+        strict_staged_terminology_findings(tmp_path)
     assert any("premium-request" in each_finding for each_finding in findings)
 
 
