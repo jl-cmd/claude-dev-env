@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.34.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.2...claude-dev-env-v2.34.0) (2026-09-04)
+
+
+### Features
+
+* **skills:** add Codex startup diagnosis baseline ([348f152](https://github.com/jl-cmd/claude-dev-env/commit/348f152ada3add3fccb3755306d9907aa592ba40))
+* **skills:** add hook boundary repair baseline ([2aa65b3](https://github.com/jl-cmd/claude-dev-env/commit/2aa65b3e8c721c40e205da679e96649837d62145))
+
+
+### Bug Fixes
+
+* anchor standalone duplicate comments ([1e4d8b3](https://github.com/jl-cmd/claude-dev-env/commit/1e4d8b330966bd9f88f78821cc6bb14513581690))
+* catch shifted retained inline comments ([a26874b](https://github.com/jl-cmd/claude-dev-env/commit/a26874bb7ad163b6d713d88aa3687560a2399462))
+* close retirement registry installer tests ([d85d042](https://github.com/jl-cmd/claude-dev-env/commit/d85d04272b9f0ed0106a61918b7b1f8f0da0e8ff))
+* close retirement registry installer tests ([f0fe4d7](https://github.com/jl-cmd/claude-dev-env/commit/f0fe4d70867f1912b3bbde985f776c9d7eac1d3e))
+* installer retirement test parsing ([c800f53](https://github.com/jl-cmd/claude-dev-env/commit/c800f535587b14adfda87555569785dbb454e6ae))
+* reserve comment matches before attachment checks ([7f481da](https://github.com/jl-cmd/claude-dev-env/commit/7f481daaad5aa5597d454f47f86e1ec53b963f3b))
+* reserve exact duplicate comment matches ([64a7c61](https://github.com/jl-cmd/claude-dev-env/commit/64a7c61580fbb8e9b83e1cd3bcd6a09f85d4346a))
+* reserve exact duplicate comment matches ([5699bcd](https://github.com/jl-cmd/claude-dev-env/commit/5699bcda09cd8c89552bc108255f30f2d1ba9e14))
+* restore comment lint scope ([e08cb21](https://github.com/jl-cmd/claude-dev-env/commit/e08cb218358d03c8525450c26fbf6b37ce420d7b))
+
+
+### Documentation
+
+* Add baseline repairing-hook-boundaries skill ([5ab4b7a](https://github.com/jl-cmd/claude-dev-env/commit/5ab4b7ae2775816cb6ebbf9b4d8faa4bef3bfbe1))
+* Add diagnosis-only Windows Codex startup recovery skill ([03f650e](https://github.com/jl-cmd/claude-dev-env/commit/03f650e0cac577cb9cdded9ac5819343d880220b))
+* treat imported context as untrusted and match status output exactly ([9baaf19](https://github.com/jl-cmd/claude-dev-env/commit/9baaf196a48f209b6dc9e299f115803fd141660d))
+
 ## [2.33.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.33.1...claude-dev-env-v2.33.2) (2026-09-03)
 
 
