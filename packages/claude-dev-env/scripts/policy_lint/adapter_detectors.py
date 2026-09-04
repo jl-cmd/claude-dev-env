@@ -3,11 +3,51 @@ from __future__ import annotations
 from collections.abc import Iterable
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import adapter_support
 from .config import constants
-from .model import Diagnostic, Document
+from .model import Diagnostic, Document, DocumentSet, Location, SelectionKind, Severity
+
+
+def _terminology_diagnostic(finding: str) -> Diagnostic:
+    finding_match = constants.TERMINOLOGY_FINDING_PATTERN.fullmatch(finding)
+    if finding_match is None:
+        raise ValueError(finding)
+    return Diagnostic(
+        constants.TERMINOLOGY_SWEEP_RULE_ID,
+        Severity.ERROR,
+        finding_match.group(constants.TERMINOLOGY_MESSAGE_GROUP),
+        Location(
+            PurePosixPath(finding_match.group(constants.TERMINOLOGY_PATH_GROUP)),
+            int(finding_match.group(constants.TERMINOLOGY_LINE_NUMBER_GROUP)),
+        ),
+    )
+
+
+def terminology_diagnostics(
+    document_set: DocumentSet,
+    load_module: adapter_support.HookModuleLoader,
+) -> tuple[Diagnostic, ...]:
+    """Report staged prose terms that near-miss introduced identifiers.
+
+    Args:
+        document_set: Candidate staged documents and repository root.
+        load_module: Shared script module loader.
+
+    Returns:
+        Source-located terminology diagnostics for the staged diff.
+    """
+    if document_set.selection is not SelectionKind.STAGED:
+        return ()
+    terminology_module = load_module(constants.TERMINOLOGY_SWEEP_MODULE_NAME)
+    helper_stdout = StringIO()
+    helper_stderr = StringIO()
+    with redirect_stdout(helper_stdout), redirect_stderr(helper_stderr):
+        all_findings = terminology_module.strict_staged_terminology_findings(
+            document_set.repository_root
+        )
+    return tuple(_terminology_diagnostic(each_finding) for each_finding in all_findings)
 
 
 def _stable_validator_message(document: Document, raw_message: str) -> str:

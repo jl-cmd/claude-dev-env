@@ -11,6 +11,7 @@ import pytest
 from policy_lint import adapters, registry
 from policy_lint.engine import lint
 from policy_lint.model import (
+    ChangeSetRule,
     Document,
     DocumentRule,
     DocumentSet,
@@ -39,6 +40,60 @@ def _ensure_git_repository(repository_root: Path) -> None:
         check=True,
         capture_output=True,
     )
+
+
+def _commit_repository(repository_root: Path, message: str) -> None:
+    subprocess.run(
+        ("git", "config", "user.email", "test@example.com"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ("git", "config", "user.name", "Test"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ("git", "add", "-A"), cwd=repository_root, check=True, capture_output=True
+    )
+    subprocess.run(
+        ("git", "commit", "-m", message),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _stage_terminology_change(
+    repository_root: Path,
+    base_source: str,
+    current_source: str,
+    documentation_text: str,
+) -> None:
+    _ensure_git_repository(repository_root)
+    source_path = repository_root / "src" / "quota.py"
+    source_path.parent.mkdir()
+    source_path.write_text(base_source, encoding="utf-8")
+    _commit_repository(repository_root, "base")
+    source_path.write_text(current_source, encoding="utf-8")
+    documentation_path = repository_root / "docs" / "README.md"
+    documentation_path.parent.mkdir()
+    documentation_path.write_text(documentation_text, encoding="utf-8")
+    subprocess.run(
+        ("git", "add", "-A"), cwd=repository_root, check=True, capture_output=True
+    )
+
+
+def _terminology_rule() -> ChangeSetRule:
+    terminology_rule = next(
+        each_rule
+        for each_rule in registry.default_registry()
+        if each_rule.rule_id == "terminology-sweep"
+    )
+    assert isinstance(terminology_rule, ChangeSetRule)
+    return terminology_rule
 
 
 def test_hook_format_accepts_claude_settings() -> None:
@@ -231,6 +286,68 @@ def test_registry_registers_unique_python_validator_rule() -> None:
     validator_rule = _rule_named("validators")
     assert validator_rule.accepts(Document.from_text("module.py", _FUNCTION_SOURCE))
     assert not validator_rule.accepts(Document.from_text("module.ts", _FUNCTION_SOURCE))
+
+
+def test_registry_registers_terminology_change_set_rule() -> None:
+    terminology_rule = _terminology_rule()
+    assert terminology_rule.rule_sets == _CHANGED_RULE_SETS
+    assert terminology_rule.selections == frozenset({SelectionKind.STAGED})
+
+
+def test_registry_runs_test_pairing_for_staged_and_base_changes() -> None:
+    test_pairing_rule = next(
+        each_rule
+        for each_rule in registry.default_registry()
+        if each_rule.rule_id == "test-pairing"
+    )
+    assert isinstance(test_pairing_rule, ChangeSetRule)
+    assert test_pairing_rule.selections == frozenset(
+        {SelectionKind.STAGED, SelectionKind.BASE}
+    )
+
+
+def test_terminology_rule_reports_cross_surface_path_and_line(
+    tmp_path: Path,
+) -> None:
+    _stage_terminology_change(
+        tmp_path,
+        "baseline = 1\n",
+        "premium_request_interactions = 5\n",
+        "Quota fields use one name.\n"
+        "The premium-request-budget field gates the run.\n",
+    )
+    lint_report = lint(LintRequest.staged(tmp_path), all_registry=(_terminology_rule(),))
+
+    assert len(lint_report.diagnostics) == 1
+    diagnostic = lint_report.diagnostics[0]
+    assert diagnostic.rule_id == "terminology-sweep"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == PurePosixPath("docs/README.md")
+    assert diagnostic.location.start_line == 2
+
+
+def test_terminology_rule_suppresses_identifier_present_in_prior_tree(
+    tmp_path: Path,
+) -> None:
+    _stage_terminology_change(
+        tmp_path,
+        "premium_request_interactions = 5\n",
+        "premium_request_interactions = 5\n"
+        "premium_request_interactions = 6\n",
+        "The premium-request-budget field gates the run.\n",
+    )
+    lint_report = lint(LintRequest.staged(tmp_path), all_registry=(_terminology_rule(),))
+
+    assert lint_report.diagnostics == ()
+
+
+def test_terminology_rule_skips_file_selection(tmp_path: Path) -> None:
+    document_set = DocumentSet(
+        (Document.from_text("docs/README.md", "text\n"),),
+        SelectionKind.FILES,
+        tmp_path,
+    )
+    assert adapters.terminology_diagnostics(document_set) == ()
 
 
 def test_lint_keeps_skipped_rules_out_of_executed_rules(tmp_path: Path) -> None:

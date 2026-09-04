@@ -109,6 +109,20 @@ ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND: tuple[str, ...] = (
 
 GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS: int = 30
 
+GIT_NO_MATCH_EXIT_CODE: int = 1
+
+GIT_OPERATION_FAILURE_TEMPLATE: str = "{operation} failed: {details}"
+
+GIT_DIFF_OPERATION: str = "git diff --cached"
+
+GIT_GREP_OPERATION_TEMPLATE: str = "git grep for {identifier}"
+
+GIT_FAILURE_WITHOUT_DETAILS: str = "no diagnostic text"
+
+GIT_TEXT_ENCODING: str = "utf-8"
+
+GIT_DECODE_ERRORS: str = "replace"
+
 TERMINOLOGY_SWEEP_GATE_HEADER: str = (
     "terminology_sweep: {finding_count} cross-surface terminology near-miss(es) "
     "on staged prose:"
