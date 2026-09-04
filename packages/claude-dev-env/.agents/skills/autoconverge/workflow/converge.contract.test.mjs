@@ -32,6 +32,17 @@ test('review tasks use code-quality-agent and keep the working tree read-only', 
   assert.match(reviewTaskSource, /Make no edit to the tree under verification/)
 })
 
+test('workflow agents receive the selected GitHub transport before role instructions', () => {
+  assert.match(
+    workflowSource,
+    /HEADLESS_EDIT_PREAMBLE\}\$\{githubTransportDirective\(activeGithubTransport\)\}\$\{worktreeDirective/,
+  )
+  assert.match(
+    workflowSource,
+    /HEADLESS_READONLY_PREAMBLE\}\$\{githubTransportDirective\(activeGithubTransport\)\}\$\{worktreeDirective/,
+  )
+})
+
 test('review result parser accepts one standalone terminal disposition only', () => {
   const parseReviewResult = loadReviewResultParser()
 

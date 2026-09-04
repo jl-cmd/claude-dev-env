@@ -91,6 +91,7 @@ const HEADLESS_READONLY_PREAMBLE = HEADLESS_EDIT_PREAMBLE.replace(
 )
 
 let activeRepoPath = null
+let activeGithubTransport = 'local'
 
 /**
  * Build the per-agent worktree directive for a path-scoped run.
@@ -111,33 +112,11 @@ const worktreeDirective = (repoPath) =>
     ? `WORKTREE — this PR is checked out at ${repoPath}. Unless a step explicitly names a different repository directory (for example an environment-hardening repo checkout, which you cd into exactly as that step directs), run every git, gh, diff, edit, commit, push, and test command for this PR in that worktree: cd "${repoPath}" before any such command, and resolve repository roots from there.\n\n`
     : ''
 
-/**
- * Spawn a workflow agent that edits code, with the full edit preamble prepended
- * to its prompt. An edit agent may run rm during cleanup, so it inherits the
- * rm-shape rules alongside the no-confirmation-prompt guidance. On a path-scoped
- * run the worktree directive is prepended too, so the agent runs in the PR's own
- * worktree (activeRepoPath); on a single-PR run that directive is empty and the
- * agent keeps its own working directory. A read-only agent (a review, verify, or
- * utility spawn) routes through convergeReadOnlyAgent for the trimmed preamble.
- * @param {string} prompt the agent's role-specific instruction body
- * @param {object} options the agent() options (label, phase, schema, agentType, model)
- * @returns {Promise<*>} the agent() result
- */
 const convergeAgent = (prompt, options) =>
-  agent(`${HEADLESS_EDIT_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
+  agent(`${HEADLESS_EDIT_PREAMBLE}${githubTransportDirective(activeGithubTransport)}${worktreeDirective(activeRepoPath)}${prompt}`, options)
 
-/**
- * Spawn a read-only workflow agent with the trimmed read-only preamble prepended
- * to its prompt. A review, verify, or utility agent edits nothing and never runs
- * rm, so it receives the read-only preamble that drops the rm-shape-rules bullet.
- * The worktree directive is prepended on a path-scoped run exactly as for
- * convergeAgent, so a read-only agent still runs in the PR's own worktree.
- * @param {string} prompt the agent's role-specific instruction body
- * @param {object} options the agent() options (label, phase, schema, agentType, model)
- * @returns {Promise<*>} the agent() result
- */
 const convergeReadOnlyAgent = (prompt, options) =>
-  agent(`${HEADLESS_READONLY_PREAMBLE}${worktreeDirective(activeRepoPath)}${prompt}`, options)
+  agent(`${HEADLESS_READONLY_PREAMBLE}${githubTransportDirective(activeGithubTransport)}${worktreeDirective(activeRepoPath)}${prompt}`, options)
 
 /**
  * Spawn a fresh git-utility Explore agent for a specific task. The one task,
@@ -1627,19 +1606,32 @@ function normalizeRunInput(rawArgs) {
   }
 }
 
-/**
- * Validate the normalized run input into either usable coordinates or a
- * structured blocker. The run cannot build a single GitHub call without owner,
- * repo, and prNumber, so a null payload (failed parse or missing args) or a
- * payload missing any coordinate yields a blocker the top-level run reports as
- * {converged:false, blocker} rather than throwing on input.owner at startup.
- * @param {string|object} rawArgs the workflow args global (JSON string or object)
- * @returns {{input: object|null, blocker: string|null}} usable coordinates or a blocker
- */
+const DEFAULT_GITHUB_TRANSPORT = 'local'
+const GITHUB_TRANSPORT_DIRECTIVES = {
+  local:
+    'LOCAL GITHUB TRANSPORT DIRECTIVE. Use the authenticated local GitHub CLI for GitHub operations. Report local authentication or permission failures directly.\n\n',
+  cloud:
+    'CLOUD GITHUB TRANSPORT DIRECTIVE. Use the connected GitHub MCP tools for every GitHub API read and write. Load the GitHub MCP schemas before the first MCP call and resolve the connected identity with mcp__github__get_me. Do not invoke a local GitHub CLI for authentication, account switching, token lookup, pull-request operations, review operations, or push setup. Replace local CLI steps in this prompt with the matching operation in docs/references/cloud-pr-loop-compatibility.md. For a local commit push, use only the credentialed push path supplied by the Cloud session. If no credentialed path is available, return a named blocker instead of attempting a login.\n\n',
+}
+const VALID_GITHUB_TRANSPORTS = new Set(Object.keys(GITHUB_TRANSPORT_DIRECTIVES))
+
+function githubTransportDirective(transport) {
+  return GITHUB_TRANSPORT_DIRECTIVES[transport] || GITHUB_TRANSPORT_DIRECTIVES[DEFAULT_GITHUB_TRANSPORT]
+}
+
 function classifyRunInput(rawArgs) {
   const candidate = normalizeRunInput(rawArgs)
   const hasUsableCoordinates =
     candidate != null && candidate.owner && candidate.repo && candidate.prNumber
+  const hasValidTransport =
+    candidate != null &&
+    (candidate.transport === undefined || VALID_GITHUB_TRANSPORTS.has(candidate.transport))
+  if (hasUsableCoordinates && !hasValidTransport) {
+    return {
+      input: null,
+      blocker: 'invalid run transport: expected "local" or "cloud"',
+    }
+  }
   if (hasUsableCoordinates) return { input: candidate, blocker: null }
   return {
     input: null,
@@ -1654,6 +1646,7 @@ if (runInput.blocker) {
 }
 const input = runInput.input
 activeRepoPath = typeof input.repoPath === 'string' && input.repoPath ? input.repoPath : null
+activeGithubTransport = input.transport === undefined ? DEFAULT_GITHUB_TRANSPORT : input.transport
 const prCoordinates = `owner=${input.owner} repo=${input.repo} PR #${input.prNumber} (https://github.com/${input.owner}/${input.repo}/pull/${input.prNumber})`
 
 /**

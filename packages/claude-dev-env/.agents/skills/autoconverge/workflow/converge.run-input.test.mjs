@@ -17,10 +17,10 @@ function sourceSliceBetween(startNeedle, endNeedle) {
 
 const productionModule = new Function(
   `${sourceSliceBetween('function normalizeRunInput(', '\nconst runInput =')}\n` +
-    'return { normalizeRunInput, classifyRunInput };',
+    'return { normalizeRunInput, classifyRunInput, githubTransportDirective };',
 )();
 
-const { normalizeRunInput, classifyRunInput } = productionModule;
+const { normalizeRunInput, classifyRunInput, githubTransportDirective } = productionModule;
 
 const VALID_COORDINATES = { owner: 'jl-cmd', repo: 'claude-dev-env', prNumber: 543 };
 
@@ -44,6 +44,19 @@ test('classifyRunInput accepts coordinates carrying owner, repo, and prNumber', 
   const classified = classifyRunInput(VALID_COORDINATES);
   assert.deepEqual(classified.input, VALID_COORDINATES);
   assert.equal(classified.blocker, null);
+});
+
+test('classifyRunInput accepts the cloud transport without changing the input shape', () => {
+  const cloudInput = { ...VALID_COORDINATES, transport: 'cloud' };
+  const classified = classifyRunInput(cloudInput);
+  assert.deepEqual(classified.input, cloudInput);
+  assert.equal(classified.blocker, null);
+});
+
+test('classifyRunInput blocks an unknown transport before any GitHub work starts', () => {
+  const classified = classifyRunInput({ ...VALID_COORDINATES, transport: 'proxy' });
+  assert.equal(classified.input, null);
+  assert.match(classified.blocker, /transport/i);
 });
 
 test('classifyRunInput blocks a failed parse with a structured blocker and no input', () => {
@@ -89,4 +102,15 @@ test('classifyRunInput passes copilotDisabled through alongside the coordinates'
 test('classifyRunInput leaves copilotDisabled undefined when the input omits it', () => {
   const classified = classifyRunInput(VALID_COORDINATES);
   assert.equal(classified.input.copilotDisabled, undefined);
+});
+
+test('the cloud transport directive selects MCP and contains no local CLI auth command', () => {
+  const cloudDirective = githubTransportDirective('cloud');
+  assert.match(cloudDirective, /mcp__github__/);
+  assert.match(cloudDirective, /credentialed push path/);
+  assert.doesNotMatch(cloudDirective, /gh auth/);
+});
+
+test('the local transport directive keeps the local CLI path', () => {
+  assert.match(githubTransportDirective('local'), /authenticated local GitHub CLI/);
 });

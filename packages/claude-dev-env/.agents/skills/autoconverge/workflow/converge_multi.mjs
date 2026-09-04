@@ -57,18 +57,9 @@ function isUsablePrEntry(prEntry) {
   )
 }
 
-/**
- * Validate the normalized multi-PR input into usable coordinates or a blocker.
- *
- * A fan-out run needs the absolute converge.mjs script path and a non-empty list
- * of PR entries that each carry owner, repo, prNumber, and the absolute worktree
- * path the PR is checked out in. A payload that fails to parse, a non-string
- * convergeScriptPath, a missing or empty prs list, or any entry missing a
- * coordinate yields a blocker the top-level run reports as
- * {converged:false, blocker} rather than throwing on a missing field.
- * @param {string|object} rawArgs the workflow args global (JSON string or object)
- * @returns {{input: object|null, blocker: string|null}} usable coordinates or a blocker
- */
+const DEFAULT_GITHUB_TRANSPORT = 'local'
+const VALID_GITHUB_TRANSPORTS = new Set(['local', 'cloud'])
+
 function classifyMultiInput(rawArgs) {
   const candidate = normalizeMultiInput(rawArgs)
   if (candidate == null) {
@@ -82,6 +73,12 @@ function classifyMultiInput(rawArgs) {
       input: null,
       blocker:
         'invalid run coordinates: convergeScriptPath (absolute path to converge.mjs) is required',
+    }
+  }
+  if (candidate.transport !== undefined && !VALID_GITHUB_TRANSPORTS.has(candidate.transport)) {
+    return {
+      input: null,
+      blocker: 'invalid run transport: expected "local" or "cloud"',
     }
   }
   if (!Array.isArray(candidate.prs) || candidate.prs.length === 0) {
@@ -102,21 +99,7 @@ function classifyMultiInput(rawArgs) {
   return { input: candidate, blocker: null }
 }
 
-/**
- * Build the converge.mjs child-run args for one validated PR entry.
- *
- * Every per-run opt-out the child converge.mjs reads is forwarded here so the
- * fan-out honors it: bugbotDisabled skips the Bugbot phase, and copilotDisabled
- * short-circuits the Copilot quota gate when the account is out of premium
- * requests. An entry that omits an opt-out defaults it to false so the child
- * runs that phase. homeDirectory is a run-level value forwarded to every child
- * so the child can build its codex-review scripts path: the workflow sandbox
- * exposes no process global, so the child reads home from its args, not env.
- * @param {object} prEntry one validated element of the args.prs array
- * @param {string} homeDirectory the run-level home directory for every child
- * @returns {object} the args object passed to the converge.mjs child run
- */
-function childRunInput(prEntry, homeDirectory) {
+function childRunInput(prEntry, homeDirectory, transport = DEFAULT_GITHUB_TRANSPORT) {
   return {
     owner: prEntry.owner,
     repo: prEntry.repo,
@@ -125,6 +108,7 @@ function childRunInput(prEntry, homeDirectory) {
     bugbotDisabled: Boolean(prEntry.bugbotDisabled),
     copilotDisabled: Boolean(prEntry.copilotDisabled),
     homeDirectory,
+    transport,
   }
 }
 
@@ -141,7 +125,7 @@ const childResults = await parallel(
   input.prs.map((eachPr) => async () => {
     const childOutcome = await workflow(
       { scriptPath: input.convergeScriptPath },
-      childRunInput(eachPr, input.homeDirectory),
+      childRunInput(eachPr, input.homeDirectory, input.transport),
     )
     return {
       owner: eachPr.owner,
