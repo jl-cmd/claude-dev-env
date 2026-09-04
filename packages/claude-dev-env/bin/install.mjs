@@ -26,6 +26,8 @@ import {
     SETTINGS_FILE_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
+    CURSOR_RULES_DIRECTORY_NAME,
+    PSTACK_MODEL_RULE_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
@@ -2237,6 +2239,12 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         const generatedCursorPaths = collectManagedCursorSyncPaths(cursorRoot);
         allInstalledFiles.push(...generatedCursorPaths);
         summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
+        const pstackRuleSource = join(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory, PSTACK_MODEL_RULE_FILE_NAME);
+        const sharedRuleDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
+        const sharedRulePath = join(sharedRuleDirectory, PSTACK_MODEL_RULE_FILE_NAME);
+        mkdirSync(sharedRuleDirectory, { recursive: true });
+        copyFileSync(pstackRuleSource, sharedRulePath);
+        allInstalledFiles.push(sharedRulePath);
     }
     let skillsCreated = 0;
     let skillsUpdated = 0;

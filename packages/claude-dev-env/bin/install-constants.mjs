@@ -55,6 +55,8 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
  */
 export const PACKAGE_AGENTS_HOME_DIRECTORY_NAME = '.agents';
 
+export const PSTACK_MODEL_RULE_FILE_NAME = 'pstack-models.mdc';
+
 /**
  * The directory name skill directories carry in a package source and under
  * the agents home.
