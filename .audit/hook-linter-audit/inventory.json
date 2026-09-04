@@ -1,0 +1,4204 @@
+{
+  "directRegistrations": [
+    {
+      "event": "ConfigChange",
+      "matcher": "user_settings",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/config_change_guard.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "InstructionsLoaded",
+      "matcher": "compact|include|nested_traversal|path_glob_match|session_start",
+      "ordinal": 31,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/instructions_loaded_logger.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/pr_description_writer_spawn_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 30,
+      "role": "dispatcher",
+      "scope": "canonical",
+      "target": "script:blocking/bash_post_call_dispatcher.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 26,
+      "role": "dispatcher",
+      "scope": "canonical",
+      "target": "script:validation/post_tool_use_dispatcher.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/luna_fast_mode_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 10,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 2,
+      "role": "dispatcher",
+      "scope": "canonical",
+      "target": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "CronCreate|ScheduleWakeup",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 1,
+      "role": "dispatcher",
+      "scope": "canonical",
+      "target": "script:blocking/pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:validators/run_all_validators.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "EnterWorktree",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/enter_worktree_origin_prefetch.py",
+      "timeoutSeconds": 25
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 4,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 3,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "SendUserFile",
+      "ordinal": 11,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/send_user_file_open_locally_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 17,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/task_tool_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 19,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 22,
+      "role": "dispatcher",
+      "scope": "canonical",
+      "target": "script:blocking/stop_dispatcher.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/style_reminder_prompt.py",
+      "timeoutSeconds": 10
+    }
+  ],
+  "findings": [
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "claude",
+      "severity": "error",
+      "target": "script:blocking/gh_pr_author_restore.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:blocking/block_main_commit.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:blocking/destructive_command_blocker.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:blocking/es_exe_path_rewriter.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:blocking/test_preflight_check.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:blocking/windows_rmtree_blocker.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:validation/mypy_validator.py"
+    },
+    {
+      "code": "DUPLICATE_EFFECTIVE_EXECUTION",
+      "message": "The same event, matcher, and target run 2 times.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:workflow/auto_formatter.py"
+    },
+    {
+      "code": "MISSING_HOOK_TARGET",
+      "message": "The registered script is missing from the installed hook tree.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:diagnostic/hook_log_stop_wrapper.py"
+    },
+    {
+      "code": "MISSING_HOOK_TARGET",
+      "message": "The registered script is missing from the installed hook tree.",
+      "scope": "codex",
+      "severity": "error",
+      "target": "script:session/task_list_loop_starter.py"
+    },
+    {
+      "code": "MISSING_MANAGED_REGISTRATION",
+      "message": "The installed configuration is missing a canonical registration.",
+      "scope": "claude",
+      "severity": "error",
+      "target": "script:validators/run_all_validators.py"
+    }
+  ],
+  "hostedRegistrations": [
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 41,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 42,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:observability/test_failure_recorder.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 39,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 40,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 25,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/cursor_cli_python_misfire_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 29,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 36,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pr_description_writer_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 26,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/unscoped_search_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 31,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 30,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/conventional_pr_title_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 21,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 20,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 22,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_body_arg_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 35,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_pr_author_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 27,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/nas_ssh_binary_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 24,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/piped_pytest_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 32,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/session_edit_stage_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 23,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/shell_substitution_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 28,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 34,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 4,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 2,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 1,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 12,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/claude_md_orphan_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 17,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/docstring_rule_gate_count_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 7,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/duplicate_rmtree_helper_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 14,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/env_var_table_code_drift_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 10,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/hook_prose_detector_consistency.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 16,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/open_questions_in_plans_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 13,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/package_inventory_stale_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 15,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pytest_testpaths_orphan_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 8,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/state_description_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 9,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/subprocess_budget_completeness.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 6,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 11,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/workflow_substitution_slot_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 3,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 19,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 18,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 37,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/question_to_user_enforcer.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 38,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/session_handoff_blocker.py",
+      "timeoutSeconds": 90
+    }
+  ],
+  "installedRegistrations": [
+    {
+      "event": "ConfigChange",
+      "matcher": "user_settings",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/config_change_guard.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "InstructionsLoaded",
+      "matcher": "compact|include|nested_traversal|path_glob_match|session_start",
+      "ordinal": 1,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/instructions_loaded_logger.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/pr_description_writer_spawn_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 3,
+      "role": "dispatcher",
+      "scope": "claude",
+      "target": "script:blocking/bash_post_call_dispatcher.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 2,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 4,
+      "role": "dispatcher",
+      "scope": "claude",
+      "target": "script:validation/post_tool_use_dispatcher.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/luna_fast_mode_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 19,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 10,
+      "role": "dispatcher",
+      "scope": "claude",
+      "target": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "CronCreate|ScheduleWakeup",
+      "ordinal": 17,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 11,
+      "role": "dispatcher",
+      "scope": "claude",
+      "target": "script:blocking/pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "EnterWorktree",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/enter_worktree_origin_prefetch.py",
+      "timeoutSeconds": 25
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__serena__find_declaration",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/codemap_first_redirector.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "SendUserFile",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/send_user_file_open_locally_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 22,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 45
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "claude",
+      "target": "external:claude:SessionStart:25",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 26,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 34,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 33,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 30,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 31,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/task_tool_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 32,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 35,
+      "role": "dispatcher",
+      "scope": "claude",
+      "target": "script:blocking/stop_dispatcher.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "ordinal": 36,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/style_reminder_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "WorktreeCreate",
+      "matcher": "*",
+      "ordinal": 37,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:worktree/worktree_create.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "WorktreeRemove",
+      "matcher": "*",
+      "ordinal": 38,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:worktree/worktree_remove.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 30,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 32,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 31,
+      "role": "dispatcher",
+      "scope": "codex",
+      "target": "script:validation/post_tool_use_dispatcher.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "apply_patch",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:notification/attention_needed_notify.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "automation_update",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 17,
+      "role": "dispatcher",
+      "scope": "codex",
+      "target": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 10,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/content_search_to_zoekt_redirector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 11,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/pr_description_enforcer.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 19,
+      "role": "dispatcher",
+      "scope": "codex",
+      "target": "script:blocking/pre_tool_use_dispatcher.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 2,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 4,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 1,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 3,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validators/run_all_validators.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Grep|Search",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/content_search_to_zoekt_redirector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 22,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__serena__find_declaration",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/codemap_first_redirector.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "request_user_input",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "request_user_input",
+      "ordinal": 26,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 47,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 48,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 49,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 36,
+      "role": "hook",
+      "scope": "codex",
+      "target": "external:codex:SessionStart:36",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 37,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 38,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 43,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 42,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 34,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 39,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 35,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 40,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/task_list_loop_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 41,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 46,
+      "role": "dispatcher",
+      "scope": "codex",
+      "target": "script:blocking/stop_dispatcher.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 45,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:diagnostic/hook_log_stop_wrapper.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 44,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:notification/attention_needed_notify.py",
+      "timeoutSeconds": 15
+    }
+  ],
+  "installedLogicalRegistrations": [
+    {
+      "event": "ConfigChange",
+      "matcher": "user_settings",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/config_change_guard.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "InstructionsLoaded",
+      "matcher": "compact|include|nested_traversal|path_glob_match|session_start",
+      "ordinal": 1,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/instructions_loaded_logger.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/pr_description_writer_spawn_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 2,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 41,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 42,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:observability/test_failure_recorder.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 39,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 40,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/luna_fast_mode_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 19,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 25,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/cursor_cli_python_misfire_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 29,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 36,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/pr_description_writer_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 26,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/unscoped_search_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 31,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 30,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/conventional_pr_title_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 21,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 20,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 22,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/gh_body_arg_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 35,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/gh_pr_author_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 27,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/nas_ssh_binary_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 24,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/piped_pytest_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 32,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/session_edit_stage_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 23,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/shell_substitution_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 28,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 34,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "CronCreate|ScheduleWakeup",
+      "ordinal": 17,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 4,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 2,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 1,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 12,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/claude_md_orphan_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 17,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/docstring_rule_gate_count_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 7,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/duplicate_rmtree_helper_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 14,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/env_var_table_code_drift_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 10,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/hook_prose_detector_consistency.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 16,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/open_questions_in_plans_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 13,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/package_inventory_stale_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 15,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/pytest_testpaths_orphan_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 8,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/state_description_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 9,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/subprocess_budget_completeness.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 6,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 11,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/workflow_substitution_slot_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 3,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 19,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 18,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "EnterWorktree",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/enter_worktree_origin_prefetch.py",
+      "timeoutSeconds": 25
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__serena__find_declaration",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/codemap_first_redirector.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "SendUserFile",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:blocking/send_user_file_open_locally_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 22,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 45
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "claude",
+      "target": "external:claude:SessionStart:25",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 26,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 34,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 33,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 30,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 31,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/task_tool_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 32,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 37,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/question_to_user_enforcer.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 38,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "claude",
+      "target": "script:blocking/session_handoff_blocker.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "ordinal": 36,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:session/style_reminder_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "WorktreeCreate",
+      "matcher": "*",
+      "ordinal": 37,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:worktree/worktree_create.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "WorktreeRemove",
+      "matcher": "*",
+      "ordinal": 38,
+      "role": "hook",
+      "scope": "claude",
+      "target": "script:worktree/worktree_remove.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 30,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 32,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 39,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 40,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "apply_patch",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:notification/attention_needed_notify.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "automation_update",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 25,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/cursor_cli_python_misfire_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 29,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 36,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/pr_description_writer_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 26,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/unscoped_search_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 10,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 31,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/content_search_to_zoekt_redirector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 30,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/conventional_pr_title_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 21,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 20,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 22,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/gh_body_arg_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 35,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/gh_pr_author_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 27,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/nas_ssh_binary_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 24,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/piped_pytest_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 11,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/pr_description_enforcer.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 32,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/session_edit_stage_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 23,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/shell_substitution_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 28,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 34,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 4,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 2,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 1,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 12,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/claude_md_orphan_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 17,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/docstring_rule_gate_count_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 7,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/duplicate_rmtree_helper_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 14,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/env_var_table_code_drift_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 10,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/hook_prose_detector_consistency.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 16,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/open_questions_in_plans_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 13,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/package_inventory_stale_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 15,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/pytest_testpaths_orphan_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 8,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/state_description_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 9,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/subprocess_budget_completeness.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 6,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 11,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/workflow_substitution_slot_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 3,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 19,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 18,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 2,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 4,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 1,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 3,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:validators/run_all_validators.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Grep|Search",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/content_search_to_zoekt_redirector.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 22,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__serena__find_declaration",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/codemap_first_redirector.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "request_user_input",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "request_user_input",
+      "ordinal": 26,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 47,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 48,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "other",
+      "ordinal": 49,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 3
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 36,
+      "role": "hook",
+      "scope": "codex",
+      "target": "external:codex:SessionStart:36",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 37,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:lifecycle/mcp_session_lifecycle.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 38,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 43,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 42,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 34,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 39,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 35,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 40,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/task_list_loop_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 41,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 37,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/question_to_user_enforcer.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 38,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "codex",
+      "target": "script:blocking/session_handoff_blocker.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 45,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:diagnostic/hook_log_stop_wrapper.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 44,
+      "role": "hook",
+      "scope": "codex",
+      "target": "script:notification/attention_needed_notify.py",
+      "timeoutSeconds": 15
+    }
+  ],
+  "gitRegistrations": [
+    {
+      "event": "pre-commit",
+      "matcher": "*",
+      "ordinal": 0,
+      "role": "native",
+      "scope": "git",
+      "target": "git:pre-commit",
+      "timeoutSeconds": null
+    },
+    {
+      "event": "pre-push",
+      "matcher": "*",
+      "ordinal": 1,
+      "role": "native",
+      "scope": "git",
+      "target": "git:pre-push",
+      "timeoutSeconds": null
+    },
+    {
+      "event": "post-commit",
+      "matcher": "*",
+      "ordinal": 2,
+      "role": "native",
+      "scope": "git",
+      "target": "git:post-commit",
+      "timeoutSeconds": null
+    }
+  ],
+  "lifecycle": [
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "external:claude:SessionStart:25"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "external:codex:SessionStart:36"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "git:post-commit"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "git:pre-commit"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "git:pre-push"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:advisory/migration_safety_advisor.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:advisory/refactor_guard.py"
+    },
+    {
+      "lifecycle": "keep_boundary_check",
+      "target": "script:blocking/ask_user_question_shape_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/block_main_commit.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/bot_mention_comment_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/claude_md_orphan_file_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/codemap_first_redirector.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/code_rules_enforcer.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/conventional_pr_title_gate.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/content_search_to_zoekt_redirector.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/cursor_cli_python_misfire_blocker.py"
+    },
+    {
+      "lifecycle": "keep_boundary_check",
+      "target": "script:blocking/destructive_command_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/docstring_rule_gate_count_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/duplicate_rmtree_helper_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/env_var_table_code_drift_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/es_exe_path_rewriter.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/fable_spawn_gate.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/gh_body_arg_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/gh_pr_author_enforcer.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/gh_pr_author_restore.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/hook_prose_detector_consistency.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/luna_fast_mode_gate.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/nas_ssh_binary_enforcer.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/open_questions_in_plans_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/package_inventory_stale_blocker.py"
+    },
+    {
+      "lifecycle": "keep_boundary_check",
+      "target": "script:blocking/pii_prevention_blocker.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/piped_pytest_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/plain_language_blocker.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/pr_description_writer_gate.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/pr_description_enforcer.py"
+    },
+    {
+      "lifecycle": "move_to_ci",
+      "target": "script:blocking/pytest_testpaths_orphan_blocker.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/question_to_user_enforcer.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/send_user_file_open_locally_blocker.py"
+    },
+    {
+      "lifecycle": "keep_boundary_check",
+      "target": "script:blocking/sensitive_file_protector.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/session_edit_stage_gate.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/session_handoff_blocker.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/shell_substitution_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/state_description_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/subprocess_budget_completeness.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/tdd_enforcer.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/test_preflight_check.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/unscoped_search_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:blocking/volatile_path_in_post_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/windows_rmtree_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:blocking/workflow_substitution_slot_blocker.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:blocking/write_existing_file_blocker.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:lifecycle/config_change_guard.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:lifecycle/enter_worktree_origin_prefetch.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:lifecycle/session_end_cleanup.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:lifecycle/mcp_session_lifecycle.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:diagnostic/hook_log_stop_wrapper.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:notification/attention_needed_notify.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:observability/instructions_loaded_logger.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:observability/pr_description_writer_spawn_tracker.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:observability/session_file_edit_tracker.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:observability/test_failure_recorder.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:session/gh_pr_author_session_cleanup.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/issue_tracker_session_starter.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/orchestrator_auto_starter.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:session/plugin_data_dir_cleanup.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:session/session_edit_tracker_cleanup.py"
+    },
+    {
+      "lifecycle": "move_to_explicit_command",
+      "target": "script:session/session_env_cleanup.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/style_reminder_prompt.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/task_tool_prompt.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/task_list_loop_starter.py"
+    },
+    {
+      "lifecycle": "delete",
+      "target": "script:session/working_style_prompt.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:validation/hook_format_validator.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:validation/mypy_validator.py"
+    },
+    {
+      "lifecycle": "move_to_linter",
+      "target": "script:validators/run_all_validators.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:workflow/auto_formatter.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:workflow/investigation_tracker_reset.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:worktree/worktree_create.py"
+    },
+    {
+      "lifecycle": "keep_nonblocking_automation",
+      "target": "script:worktree/worktree_remove.py"
+    }
+  ],
+  "logicalRegistrations": [
+    {
+      "event": "ConfigChange",
+      "matcher": "user_settings",
+      "ordinal": 25,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/config_change_guard.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "InstructionsLoaded",
+      "matcher": "compact|include|nested_traversal|path_glob_match|session_start",
+      "ordinal": 31,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/instructions_loaded_logger.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 29,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/pr_description_writer_spawn_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Agent|Task|TeamCreate",
+      "ordinal": 28,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:workflow/investigation_tracker_reset.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 41,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_pr_author_restore.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "ordinal": 42,
+      "parentTarget": "script:blocking/bash_post_call_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:observability/test_failure_recorder.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 27,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:observability/session_file_edit_tracker.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 39,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:validation/mypy_validator.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "ordinal": 40,
+      "parentTarget": "script:validation/post_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:workflow/auto_formatter.py",
+      "timeoutSeconds": 180
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
+      "ordinal": 7,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/luna_fast_mode_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task",
+      "ordinal": 6,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/fable_spawn_gate.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 10,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/ask_user_question_shape_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "ordinal": 9,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/plain_language_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 25,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/cursor_cli_python_misfire_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 29,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 36,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pr_description_writer_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell",
+      "ordinal": 26,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/unscoped_search_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 31,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/block_main_commit.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 30,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/conventional_pr_title_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 21,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/destructive_command_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 20,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/es_exe_path_rewriter.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 22,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_body_arg_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 35,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/gh_pr_author_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 27,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/nas_ssh_binary_enforcer.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 24,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/piped_pytest_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 32,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/session_edit_stage_gate.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 23,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/shell_substitution_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 33,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/test_preflight_check.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 28,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "ordinal": 34,
+      "parentTarget": "script:blocking/bash_pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 400
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "CronCreate|ScheduleWakeup",
+      "ordinal": 8,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/orchestrator_refresh_reschedule_gate.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 4,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/code_rules_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 2,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 1,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/sensitive_file_protector.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 5,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/tdd_enforcer.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/write_existing_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write|apply_patch",
+      "ordinal": 0,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:validators/run_all_validators.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 12,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/claude_md_orphan_file_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 17,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/docstring_rule_gate_count_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 7,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/duplicate_rmtree_helper_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 14,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/env_var_table_code_drift_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 10,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/hook_prose_detector_consistency.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 16,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/open_questions_in_plans_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 13,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/package_inventory_stale_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 15,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/pytest_testpaths_orphan_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 8,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/state_description_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 9,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/subprocess_budget_completeness.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 6,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/windows_rmtree_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 11,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/workflow_substitution_slot_blocker.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit|Write",
+      "ordinal": 3,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:validation/hook_format_validator.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 19,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:advisory/migration_safety_advisor.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|MultiEdit",
+      "ordinal": 18,
+      "parentTarget": "script:blocking/pre_tool_use_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:advisory/refactor_guard.py",
+      "timeoutSeconds": 60
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "EnterWorktree",
+      "ordinal": 12,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/enter_worktree_origin_prefetch.py",
+      "timeoutSeconds": 25
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 5,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/pii_prevention_blocker.py",
+      "timeoutSeconds": 20
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__.*",
+      "ordinal": 4,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/volatile_path_in_post_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "mcp__plugin_github_github__add_issue_comment",
+      "ordinal": 3,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/bot_mention_comment_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "SendUserFile",
+      "ordinal": 11,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:blocking/send_user_file_open_locally_blocker.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 23,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:lifecycle/session_end_cleanup.py",
+      "timeoutSeconds": 15
+    },
+    {
+      "event": "SessionEnd",
+      "matcher": "*",
+      "ordinal": 24,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 16,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/gh_pr_author_session_cleanup.py",
+      "timeoutSeconds": 30
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 21,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/issue_tracker_session_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 20,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/orchestrator_auto_starter.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 14,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/plugin_data_dir_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 17,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_edit_tracker_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 15,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/session_env_cleanup.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 18,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/task_tool_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "ordinal": 19,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/working_style_prompt.py",
+      "timeoutSeconds": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 37,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/question_to_user_enforcer.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "ordinal": 38,
+      "parentTarget": "script:blocking/stop_dispatcher.py",
+      "role": "hosted",
+      "scope": "canonical",
+      "target": "script:blocking/session_handoff_blocker.py",
+      "timeoutSeconds": 90
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "ordinal": 13,
+      "role": "hook",
+      "scope": "canonical",
+      "target": "script:session/style_reminder_prompt.py",
+      "timeoutSeconds": 10
+    }
+  ],
+  "schemaVersion": 1,
+  "summary": {
+    "claudeDirectCount": 39,
+    "codexDirectCount": 50,
+    "directCount": 32,
+    "dispatcherCount": 5,
+    "effectiveCount": 43,
+    "findingCount": 11,
+    "gitHookCount": 3,
+    "lifecycleCount": 79,
+    "logicalAssociationCount": 70,
+    "unclassifiedCount": 0,
+    "uniqueTargetCount": 79
+  }
+}
