@@ -2239,12 +2239,14 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         const generatedCursorPaths = collectManagedCursorSyncPaths(cursorRoot);
         allInstalledFiles.push(...generatedCursorPaths);
         summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
+        syncWrittenPaths(allInstalledFiles);
         const pstackRuleSource = join(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory, PSTACK_MODEL_RULE_FILE_NAME);
         const sharedRuleDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
         const sharedRulePath = join(sharedRuleDirectory, PSTACK_MODEL_RULE_FILE_NAME);
         mkdirSync(sharedRuleDirectory, { recursive: true });
         copyFileSync(pstackRuleSource, sharedRulePath);
         allInstalledFiles.push(sharedRulePath);
+        syncWrittenPaths(allInstalledFiles);
     }
     let skillsCreated = 0;
     let skillsUpdated = 0;

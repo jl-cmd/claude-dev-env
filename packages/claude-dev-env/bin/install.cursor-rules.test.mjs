@@ -168,3 +168,18 @@ for (const targetName of [null, 'profile']) {
         }
     });
 }
+
+test('a blocked shared rule destination rolls back generated Cursor files', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-pstack-rollback-'));
+    try {
+        const sharedRulesPath = join(homeDirectory, '.agents', 'rules');
+        mkdirSync(dirname(sharedRulesPath), { recursive: true });
+        writeFileSync(sharedRulesPath, 'keep-existing-file');
+        assert.throws(() => runInstaller(homeDirectory, ['--only', 'core']));
+        assert.equal(readFileSync(sharedRulesPath, 'utf8'), 'keep-existing-file');
+        assert.equal(existsSync(join(homeDirectory, '.cursor', 'rules', 'pstack-models.mdc')), false);
+        assert.equal(existsSync(join(homeDirectory, '.cursor', '.sync-manifest.json')), false);
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
