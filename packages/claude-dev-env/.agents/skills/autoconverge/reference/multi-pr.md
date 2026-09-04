@@ -88,12 +88,11 @@ checked out in. `homeDirectory` is the absolute path to the directory that holds
 `.claude` (resolve it once from `$HOME`, or `$env:USERPROFILE` on Windows, with
 forward slashes); the fan-out forwards it to every child run, which needs it to
 build the codex-review scripts path because the workflow sandbox has no access to
-environment variables. Set `transport: "cloud"` in a Cloud session and
+environment variables. Set `transport: "cloud"` in a Cloud session. Set
 `transport: "local"` in a local session. Cloud uses the connected GitHub MCP
 tools and skips local CLI authentication. The workflow runs in the background
-and notifies the session on completion; watch live progress with `/workflows`,
-where each PR's child run
-appears under its own group.
+and notifies the session on completion. Watch live progress with `/workflows`,
+where each PR's child run appears under its own group.
 
 The workflow returns
 `{ converged, prCount, convergedCount, results, allDeferredPrs, blocker }`, where

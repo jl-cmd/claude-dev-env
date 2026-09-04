@@ -59,10 +59,9 @@ python "$HOME/.claude/skills/_shared/pr-loop/scripts/select_converge_pacer.py" \
   [`../_shared/pr-loop/portable-driver.md`](../_shared/pr-loop/portable-driver.md).
   **Do not abort** because the Workflow tool is missing.
 
-Set the GitHub transport directive before any GitHub step. Use `transport: "cloud"` in a
+Set the GitHub transport before any GitHub step. Use `transport: "cloud"` in a
 Cloud session. Use `transport: "local"` in a local session. Cloud uses the
-connected GitHub MCP tools and never starts a local GitHub CLI authentication
-flow.
+connected GitHub MCP tools. It never starts a local GitHub CLI login.
 
 ## Review-lens boundary
 
@@ -70,19 +69,18 @@ The code-review lens boundary (workflow agent versus the built-in `/code-review`
 command) is defined on the **Code-review lens** bullet in
 [`reference/convergence.md`](reference/convergence.md).
 
-## Select the GitHub transport directive before any GitHub step
+## Select the GitHub transport before any GitHub step
 
 In a Cloud session, set `transport: "cloud"` and load the GitHub MCP schemas
 before the first GitHub tool call. Do not run any local GitHub CLI
 authentication, account-switch, or token command. Use the operation in
 [`cloud-pr-loop-compatibility.md`](../../../docs/references/cloud-pr-loop-compatibility.md)
 for each GitHub read or write. Use the Cloud session's credentialed push path
-for local commits. If that path rejects a push, report the exact error instead
-of trying to log in through the local CLI.
+for local commits. If that path rejects a push, report the exact error. Do not
+try to log in through the local CLI.
 
 In a local session, set `transport: "local"` and use the authenticated local
-GitHub CLI. The workflow defaults to this value when older callers omit the
-field.
+GitHub CLI. The workflow uses this value when the caller omits the field.
 
 ## Pre-flight (main session)
 
@@ -176,8 +174,8 @@ the absolute path to the directory that holds `.claude` (resolve it once from
 runs in a sandbox with no access to environment variables, so the run reads the
 home directory from this arg to build the path to the codex-review scripts the
 Codex gate calls; leave it out and the Codex gate cannot find those scripts. Set
-`transport: "cloud"` for Cloud and `transport: "local"` for local execution.
-Set `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
+`transport: "cloud"` for a Cloud session and `transport: "local"` for a local
+session. Set `bugbotDisabled: true` only when the user has opted Cursor Bugbot out for the
 run; otherwise the workflow detects an opt-out or an unreachable Bugbot on its
 own. Set `copilotDisabled: true` when the step 5 quota pre-check exits non-zero,
 and `false` when it exits 0; on `true` the workflow skips the Copilot gate with

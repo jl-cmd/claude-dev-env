@@ -8,8 +8,8 @@ This document lets a zero-context agent run the PR-loop skill family
 scripts) inside a Claude Code cloud session, and lays out the code changes
 that make those skills cloud-native.
 
-This reference describes the Claude Code cloud runtime. Other Cloud runtimes
-can use the same transport rule, but their push credentials remain runtime-specific.
+This reference describes the Claude Code cloud runtime. Other cloud runtimes
+can use the same transport rule. Push credentials stay specific to each runtime.
 
 A cloud session differs from a local install in one way that touches every
 PR-loop skill: the `gh` CLI is absent, so each `gh ...` shell step and each
@@ -20,11 +20,11 @@ proxy. Git push works too, after one repo-root fix.
 
 Read it two ways:
 
-- **Run a skill today.** Section 5 sets the Cloud transport rule. Select it
+- **Run a skill today.** Section 5 sets the cloud transport rule. Select it
   before the skill starts, then follow each skill's normal steps, swapping
-  every local CLI operation for the Cloud path in the Section 4 matrix.
-- **Review the broader remediation plan.** Section 6 lists the remaining script
-  work, one item per file, with an exact change and an acceptance check.
+  every local CLI operation for the cloud path in the Section 4 matrix.
+- **Review the remaining script work.** Section 6 lists one item per file,
+  with an exact change and an acceptance check.
 
 Every fact here traces to a live probe in a cloud session, the operation
 inventory of the installed skills, or both. Rows that need a probe against a
@@ -167,13 +167,13 @@ operation inventory of the installed skills.
 
 ## 5. Cloud transport rule
 
-Select Cloud transport before the first GitHub operation. A Cloud session
+Select cloud transport before the first GitHub operation. A cloud session
 does not run `command -v gh`, any GitHub CLI authentication command, or a
 local CLI permission probe. It loads the GitHub MCP schemas, reads the
-connected identity with `mcp__github__get_me`, and uses the Section 4 Cloud
+connected identity with `mcp__github__get_me`, and uses the Section 4 cloud
 operation for each GitHub read or write. Local commits use only the
-credentialed push path supplied by the Cloud session. A rejected push is a
-blocker to report, not a reason to start a local login flow.
+credentialed push path supplied by the cloud session. A rejected push is a
+blocker to report, not a reason to start a local login.
 
 ### 5.1 Load MCP schemas (once per session)
 
@@ -198,7 +198,7 @@ git -C <repo-root> remote set-head origin -a
 
 ### 5.3 Transport rules
 
-- A Cloud session never invokes the local GitHub CLI for authentication,
+- A cloud session never runs the local GitHub CLI for authentication,
   account switching, or token lookup.
 - Route every GitHub read and write through the Section 4 matrix.
 - Prefer the `mcp__github__*` tool for a given operation. MCP reads work for
