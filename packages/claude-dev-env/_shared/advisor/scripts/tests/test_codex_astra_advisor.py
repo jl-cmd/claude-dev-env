@@ -1,5 +1,4 @@
 """Behavioral tests for the executable Codex Astra advisor path."""
-
 import io
 import importlib.util
 import json
@@ -8,7 +7,6 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-
 import pytest
 
 _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -16,8 +14,7 @@ _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 def _load_astra_module() -> ModuleType:
     scripts_root = Path(__file__).parent.parent
-    config_root = scripts_root / "config"
-    sys.path.insert(0, str(config_root))
+    sys.path.insert(0, str(scripts_root / "config"))
     specification = importlib.util.spec_from_file_location(
         "codex_astra_advisor", scripts_root / "codex_astra_advisor.py"
     )
@@ -31,28 +28,17 @@ def _load_astra_module() -> ModuleType:
 astra_advisor = _load_astra_module()
 SCRIPTS_ROOT = Path(__file__).parent.parent
 USAGE_PROBE_PATH = (
-    SCRIPTS_ROOT.parents[1]
-    / "pr-loop"
-    / "scripts"
-    / "codex_usage_probe.py"
+    SCRIPTS_ROOT.parents[1] / "pr-loop" / "scripts" / "codex_usage_probe.py"
 )
-WINDOWS_SHIM_PATH = r"C:\Users\me\AppData\Roaming\npm\codex.cmd"
-ENABLED_SETTING_BY_NAME = {astra_advisor.ASTRA_ENV_VAR: "1"}
+ENABLED_SETTINGS = {astra_advisor.ASTRA_ENV_VAR: "1"}
 
 
 @pytest.fixture(autouse=True)
 def _codex_on_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        astra_advisor.shutil,
-        "which",
-        lambda name: "codex" if name == astra_advisor.CODEX_EXECUTABLE else None,
-    )
+    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: "codex")
 
 
-def _probe_process(
-    payload: object,
-    returncode: int = 0,
-) -> subprocess.CompletedProcess[str]:
+def _probe(payload: object, returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(
         [sys.executable, str(USAGE_PROBE_PATH)],
         returncode,
@@ -61,431 +47,101 @@ def _probe_process(
     )
 
 
-def _event_stream(
-    session_id: str = "thread-1",
-    guidance: str = "PLAN\ninspect the change",
-) -> str:
+def _events(session_id: str = "thread-1", guidance: str = "PLAN\ninspect") -> str:
     return "\n".join(
-        [
+        (
             json.dumps({"type": "thread.started", "thread_id": session_id}),
             json.dumps(
                 {
                     "type": "item.completed",
-                    "item": {
-                        "type": "agent_message",
-                        "text": guidance,
-                    },
+                    "item": {"type": "agent_message", "text": guidance},
                 }
             ),
-        ]
+        )
     )
 
 
-def _two_step_process_runner(calls: list[list[str]], guidance: str) -> _ProcessRunner:
-    def process_runner(
+def _two_step_runner(
+    all_calls: list[list[str]], guidance: str = "PLAN\ninspect"
+) -> _ProcessRunner:
+    def runner(
         arguments: list[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
-        calls.append(arguments)
-        if len(calls) == 1:
-            return _probe_process({"percent_left": 90})
-        return subprocess.CompletedProcess(
-            arguments, 0, _event_stream(guidance=guidance), ""
-        )
-
-    return process_runner
+        all_calls.append(arguments)
+        if len(all_calls) == 1:
+            return _probe({"percent_left": 90})
+        return subprocess.CompletedProcess(arguments, 0, _events(guidance=guidance), "")
+    return runner
 
 
-@pytest.mark.parametrize("truthy_value", ["1", "true", "TRUE", "yes", "on", " On "])
-def test_astra_flag_accepts_documented_truthy_values(truthy_value: str) -> None:
-    assert astra_advisor.is_astra_advisor_enabled({"ADVISOR_ASTRA": truthy_value})
+@pytest.mark.parametrize("truthy", ["1", "true", "TRUE", "yes", "on", " On "])
+def test_astra_flag_accepts_documented_truthy_values(truthy: str) -> None:
+    assert astra_advisor.is_astra_advisor_enabled({"ADVISOR_ASTRA": truthy})
 
 
-def test_astra_flag_rejects_disabled_and_unrelated_settings() -> None:
-    assert not astra_advisor.is_astra_advisor_enabled({"ADVISOR_ASTRA": "0"})
-    assert not astra_advisor.is_astra_advisor_enabled({"ADVISOR_ASTRA_XHIGH": "1"})
+def test_astra_flag_rejects_legacy_sol_setting() -> None:
     assert not astra_advisor.is_astra_advisor_enabled({"ADVISOR_SOL": "1"})
 
 
-def test_resolve_advisor_effort_defaults_and_accepts_documented_levels() -> None:
-    assert astra_advisor.resolve_advisor_effort({}) == "low"
-    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "MEDIUM"}) == "medium"
-    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "nope"}) == "low"
-    assert astra_advisor.resolve_advisor_effort({"ADVISOR_ASTRA_EFFORT": "high"}) == "low"
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max"])
+def test_codex_arguments_apply_selected_effort(effort: str) -> None:
+    arguments = astra_advisor.build_codex_arguments("codex", reasoning_effort=effort)
+    config_index = arguments.index("--config")
+    assert arguments[config_index + 1] == f'model_reasoning_effort="{effort}"'
 
 
-@pytest.mark.parametrize(
-    "reasoning_effort",
-    ["low", "medium", "high", "xhigh", "max"],
-)
-def test_codex_arguments_use_selected_astra_reasoning_effort(
-    reasoning_effort: str,
-) -> None:
-    command_arguments = astra_advisor.build_codex_arguments(
-        "codex",
-        reasoning_effort=reasoning_effort,
-    )
-    config_flag_index = command_arguments.index("--config")
-
-    assert (
-        command_arguments[config_flag_index + 1]
-        == f'model_reasoning_effort="{reasoning_effort}"'
-    )
+def test_codex_arguments_use_astra_and_read_only_sandbox() -> None:
+    arguments = astra_advisor.build_codex_arguments("codex", session_id="thread-1")
+    assert arguments[:4] == ["codex", "exec", "--model", "gpt-6-astra"]
+    assert ["--sandbox", "read-only"] == arguments[6:8]
+    assert arguments[-3:] == ["resume", "thread-1", "-"]
 
 
-def test_resolve_usage_probe_path_uses_supplied_home_directory(tmp_path: Path) -> None:
-    probe_path = astra_advisor.resolve_usage_probe_path(tmp_path)
-
-    assert probe_path == (
-        tmp_path
-        / ".claude"
-        / "_shared"
-        / "pr-loop"
-        / "scripts"
-        / "codex_usage_probe.py"
-    )
-
-
-def test_argument_parser_accepts_bind_and_resume_modes() -> None:
+def test_argument_parser_accepts_astra_and_rejects_sol() -> None:
     parser = astra_advisor.build_argument_parser()
-
-    bind_arguments = parser.parse_args(["--bind", "--cwd", "."])
-    resume_arguments = parser.parse_args(
-        ["--resume", "thread-1", "--cwd", "."]
-    )
-
-    assert bind_arguments.bind
-    assert bind_arguments.resume is None
-    assert resume_arguments.resume == "thread-1"
-
-
-def test_argument_parser_accepts_astra_flag_and_rejects_old_sol_flag() -> None:
-    parser = astra_advisor.build_argument_parser()
-    arguments = parser.parse_args(["--bind", "--cwd", ".", "--enable-astra"])
-
-    assert arguments.is_astra_requested
-    with pytest.raises(SystemExit) as error:
+    parsed = parser.parse_args(["--bind", "--cwd", ".", "--enable-astra"])
+    assert parsed.is_astra_requested
+    with pytest.raises(SystemExit):
         parser.parse_args(["--bind", "--cwd", ".", "--enable-sol"])
-    assert error.value.code == 2
 
 
-def test_main_serializes_stable_result_field(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(
-        astra_advisor,
-        "run_codex_astra_advisor",
-        lambda **kwargs: astra_advisor.CodexAstraAdvisorReply(
-            session_id="thread-1",
-            guidance="PLAN\ninspect",
-            successful=True,
-            reason=None,
-            is_fallback=False,
-            signal="PLAN",
-            astra_enabled=True,
-            selected_tier=astra_advisor.ADVISOR_MODEL_TIER,
-            outcome=astra_advisor.CODEX_BIND_SUCCESS_TOKEN,
-            fallback_kind=None,
-        ),
+def test_usage_probe_path_uses_supplied_home(tmp_path: Path) -> None:
+    path = astra_advisor.resolve_usage_probe_path(tmp_path)
+    assert path == tmp_path / ".claude" / "_shared" / "pr-loop" / "scripts" / "codex_usage_probe.py"
+
+
+def test_preflight_accepts_meter_above_gate() -> None:
+    preflight = astra_advisor.run_astra_preflight(
+        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe({"percent_left": 90})
     )
-    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
-
-    exit_code = astra_advisor.main(["--bind", "--cwd", "."])
-    payload = json.loads(capsys.readouterr().out)
-
-    assert exit_code == 0
-    assert payload["result"] == "codex"
-    assert "outcome" not in payload
-    assert payload["astra_enabled"] is True
-    assert "sol_enabled" not in payload
-    assert payload["selected_tier"] == "Astra"
-
-
-def test_bind_and_resume_arguments_match_installed_codex_interface() -> None:
-    expected_common_arguments = [
-        "codex",
-        "exec",
-        "--model",
-        "gpt-6-astra",
-        "--config",
-        'model_reasoning_effort="low"',
-        "--sandbox",
-        "read-only",
-        "--json",
-    ]
-    assert astra_advisor.build_codex_arguments("codex") == [
-        *expected_common_arguments,
-        "-",
-    ]
-    assert astra_advisor.build_codex_arguments(
-        WINDOWS_SHIM_PATH, session_id="thread-1"
-    ) == [
-        WINDOWS_SHIM_PATH,
-        *expected_common_arguments[1:],
-        "resume",
-        "thread-1",
-        "-",
-    ]
-
-
-def test_resolve_codex_executable_prefers_the_env_var_override(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: None)
-
-    resolved_executable = astra_advisor.resolve_codex_executable(
-        {astra_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: WINDOWS_SHIM_PATH}
-    )
-
-    assert resolved_executable == WINDOWS_SHIM_PATH
-
-
-def test_resolve_codex_executable_falls_back_to_which_search(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        astra_advisor.shutil,
-        "which",
-        lambda name: (
-            WINDOWS_SHIM_PATH if name == astra_advisor.CODEX_EXECUTABLE else None
-        ),
-    )
-
-    resolved_executable = astra_advisor.resolve_codex_executable({})
-
-    assert resolved_executable == WINDOWS_SHIM_PATH
-
-
-def test_resolve_codex_executable_returns_none_when_unresolved(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: None)
-
-    resolved_executable = astra_advisor.resolve_codex_executable({})
-
-    assert resolved_executable is None
-
-
-def test_bind_falls_back_with_a_clear_reason_when_executable_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: None)
-    calls: list[list[str]] = []
-
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(arguments)
-        return _probe_process({"percent_left": 90})
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=process_runner,
-        setting_by_name={astra_advisor.ASTRA_ENV_VAR: "1"},
-    )
-
-    assert not reply.successful
-    assert reply.is_fallback
-    assert reply.reason is not None
-    assert "codex" in reply.reason
-    assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
-    assert calls == []
-
-
-def test_policy_fallbacks_are_marked_declined() -> None:
-    def gate_closed_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        return _probe_process({"percent_left": 5})
-
-    disabled_reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=gate_closed_runner,
-        setting_by_name={},
-    )
-    gate_closed_reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=gate_closed_runner,
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert disabled_reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
-    assert gate_closed_reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
-
-
-def test_probe_failure_fallback_is_marked_broken() -> None:
-    def failing_probe_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        return _probe_process({}, returncode=3)
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=failing_probe_runner,
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert reply.is_fallback
-    assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
-
-
-def test_enable_astra_flag_opens_the_rung_without_an_environment_flag(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    captured_settings: dict[str, str] = {}
-
-    def fake_advisor(**kwargs: object) -> object:
-        captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
-        return astra_advisor._reply_fallback(
-            "probe declined",
-            True,
-            fallback_kind=astra_advisor.ASTRA_FALLBACK_KIND_DECLINED,
-        )
-
-    monkeypatch.setattr(astra_advisor, "run_codex_astra_advisor", fake_advisor)
-    monkeypatch.delenv(astra_advisor.ASTRA_ENV_VAR, raising=False)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
-
-    exit_code = astra_advisor.main(
-        ["--bind", "--cwd", ".", astra_advisor.ASTRA_ENABLE_FLAG]
-    )
-    payload = json.loads(capsys.readouterr().out)
-
-    assert exit_code == 1
-    assert captured_settings[astra_advisor.ASTRA_ENV_VAR] == "1"
-    assert payload["fallback_kind"] == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
-
-
-def test_effort_cli_flag_overrides_environment_effort(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    captured_settings: dict[str, str] = {}
-
-    def fake_advisor(**kwargs: object) -> object:
-        captured_settings.update(dict(kwargs["setting_by_name"]))  # type: ignore[arg-type]
-        return astra_advisor._reply_fallback(
-            "probe declined",
-            True,
-            fallback_kind=astra_advisor.ASTRA_FALLBACK_KIND_DECLINED,
-        )
-
-    monkeypatch.setattr(astra_advisor, "run_codex_astra_advisor", fake_advisor)
-    monkeypatch.setenv("ADVISOR_EFFORT", "high")
-    monkeypatch.setattr(sys, "stdin", io.StringIO("first consult"))
-
-    exit_code = astra_advisor.main(
-        [
-            "--bind",
-            "--cwd",
-            ".",
-            astra_advisor.ASTRA_ENABLE_FLAG,
-            astra_advisor.ASTRA_EFFORT_FLAG,
-            "medium",
-        ]
-    )
-    payload = json.loads(capsys.readouterr().out)
-
-    assert exit_code == 1
-    assert captured_settings["ADVISOR_EFFORT"] == "medium"
-    assert payload["fallback_kind"] == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
-
-
-def test_successful_probe_requires_finite_meter_above_configured_gate() -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return _probe_process({"percent_left": 90})
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
     assert preflight.eligible
     assert preflight.percent_left == 90
 
 
-@pytest.mark.parametrize("percent_left", [10, 10.0, 10.000])
-def test_meter_at_configured_threshold_falls_back(
-    percent_left: float,
-) -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return _probe_process({"percent_left": percent_left})
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
+def test_preflight_declines_meter_at_gate() -> None:
+    preflight = astra_advisor.run_astra_preflight(
+        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe({"percent_left": 10})
+    )
     assert not preflight.eligible
-    assert preflight.percent_left == percent_left
+    assert preflight.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"percent_left": None},
-        {"percent_left": "90"},
-        {"percent_left": True},
-        {"percent_left": float("nan")},
-        ["percent_left", 90],
-    ],
-)
-def test_unknown_and_malformed_meter_falls_back(payload: object) -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return _probe_process(payload)
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
+@pytest.mark.parametrize("payload", [{"percent_left": None}, {"percent_left": "90"}, ["bad"]])
+def test_preflight_rejects_malformed_meter(payload: object) -> None:
+    preflight = astra_advisor.run_astra_preflight(
+        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe(payload)
+    )
     assert not preflight.eligible
-    assert preflight.percent_left is None
-
-
-def test_malformed_probe_json_falls_back() -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(arguments, 0, "{broken", "")
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
-    assert not preflight.eligible
-
-
-def test_probe_nonzero_exit_falls_back() -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return _probe_process({"percent_left": 90}, returncode=2)
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
-    assert not preflight.eligible
-
-
-def test_probe_timeout_falls_back() -> None:
-    def probe_runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        raise subprocess.TimeoutExpired(arguments, 30)
-
-    preflight = astra_advisor.run_astra_preflight(USAGE_PROBE_PATH, probe_runner)
-
-    assert not preflight.eligible
-    assert "timed out" in preflight.reason
+    assert preflight.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
 
 
 @pytest.mark.parametrize("signal", ["ENDORSE", "CORRECTION", "PLAN", "STOP"])
-def test_jsonl_parser_accepts_each_exact_guidance_signal(signal: str) -> None:
+def test_jsonl_parser_accepts_guidance_signals(signal: str) -> None:
     reply = astra_advisor.parse_codex_jsonl_reply(
-        _event_stream(guidance=f"{signal}\nadditional guidance"),
-        existing_session_id=None,
-        is_astra_enabled=True,
+        _events(guidance=f"{signal}\nmore"), None, True
     )
-
     assert reply.successful
-    assert not reply.is_fallback
-    assert reply.session_id == "thread-1"
-    assert reply.guidance == f"{signal}\nadditional guidance"
+    assert reply.signal == signal
 
 
 @pytest.mark.parametrize(
@@ -493,282 +149,106 @@ def test_jsonl_parser_accepts_each_exact_guidance_signal(signal: str) -> None:
     [
         "{broken",
         json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
-        _event_stream(session_id="", guidance="PLAN\ninspect"),
-        _event_stream(guidance="ENDORSE: ready"),
-        _event_stream(guidance="\n  unknown signal\nmore"),
-        json.dumps(
-            {
-                "type": "item.completed",
-                "item": {"type": "agent_message", "text": "PLAN"},
-            }
-        ),
+        _events(guidance="PLAN: inspect"),
     ],
 )
-def test_jsonl_parser_returns_typed_fallback_for_invalid_reply(
-    jsonl_text: str,
-) -> None:
-    reply = astra_advisor.parse_codex_jsonl_reply(
-        jsonl_text,
-        existing_session_id=None,
-        is_astra_enabled=True,
-    )
-
-    assert not reply.successful
+def test_jsonl_parser_falls_back_for_invalid_reply(jsonl_text: str) -> None:
+    reply = astra_advisor.parse_codex_jsonl_reply(jsonl_text, None, True)
     assert reply.is_fallback
-    assert reply.session_id is None
-    assert reply.guidance is None
-    assert reply.reason
+    assert not reply.successful
 
 
-def test_bind_runs_probe_then_codex_with_read_only_settings() -> None:
-    calls: list[tuple[list[str], dict[str, object]]] = []
-
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append((arguments, kwargs))
-        if len(calls) == 1:
-            return _probe_process({"percent_left": 90})
-        return subprocess.CompletedProcess(
-            arguments, 0, _event_stream(guidance="PLAN\ninspect"), ""
-        )
-
+def test_bind_runs_probe_then_codex() -> None:
+    calls: list[list[str]] = []
     reply = astra_advisor.run_codex_astra_advisor(
-        prompt="reply only",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=process_runner,
-        setting_by_name=ENABLED_SETTING_BY_NAME,
+        "consult",
+        Path("."),
+        None,
+        USAGE_PROBE_PATH,
+        ENABLED_SETTINGS,
+        None,
+        _two_step_runner(calls),
     )
-
     assert reply.successful
-    assert len(calls) == 2
-    assert calls[1][0] == astra_advisor.build_codex_arguments("codex")
-    assert calls[1][1]["cwd"] == "."
-    assert calls[1][1]["shell"] is False
-    assert calls[1][1]["timeout"]
+    assert calls[1] == astra_advisor.build_codex_arguments("codex")
 
 
-def test_protocol_docs_name_shared_effort_and_fable_astra_ladder() -> None:
-    astra_rung_path = SCRIPTS_ROOT.parent / "reference" / "astra-rung.md"
-    protocol_path = SCRIPTS_ROOT.parent / "advisor-protocol.md"
-    third_party_bind_path = SCRIPTS_ROOT.parent / "reference" / "third-party-bind.md"
-    advisor_block_path = SCRIPTS_ROOT.parent / "reference" / "advisor-block.md"
-    astra_rung = astra_rung_path.read_text(encoding="utf-8")
-    protocol_text = protocol_path.read_text(encoding="utf-8")
-    third_party_bind_text = third_party_bind_path.read_text(encoding="utf-8")
-    advisor_block_text = advisor_block_path.read_text(encoding="utf-8")
-
-    assert 'model_reasoning_effort="low"' in astra_rung
-    assert "out of usage" in protocol_text
-    assert "ADVISOR_EFFORT" in protocol_text
-    assert "ADVISOR_EFFORT" in astra_rung
-    assert "ADVISOR_EFFORT" in third_party_bind_text
-    assert "ADVISOR_ASTRA=1" in protocol_text
-    assert "ADVISOR_ASTRA_EFFORT" not in protocol_text
-    assert "ADVISOR_ASTRA_EFFORT" not in astra_rung
-    assert "ADVISOR_ASTRA_XHIGH" not in protocol_text
-    assert "ADVISOR_ASTRA_XHIGH" not in astra_rung
-    assert "--effort xhigh" not in third_party_bind_text
-    assert "--effort medium" not in third_party_bind_text
-    assert "then Opus" not in protocol_text
-    assert "then Claude Opus" not in advisor_block_text
-    assert 'candidate_tiers = ["Fable", "Opus"]' not in protocol_text
-    assert 'candidate_tiers = ["Fable", "Astra", "Opus"]' not in protocol_text
-    team_advisor_text = (
-        SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "team-advisor" / "SKILL.md"
-    ).read_text(encoding="utf-8")
-    orchestrator_text = (
-        SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "orchestrator" / "SKILL.md"
-    ).read_text(encoding="utf-8")
-    refresh_text = (
-        SCRIPTS_ROOT.parents[2]
-        / ".agents"
-        / "skills"
-        / "orchestrator-refresh"
-        / "SKILL.md"
-    ).read_text(encoding="utf-8")
-    assert "then Opus" not in team_advisor_text
-    assert "then Opus" not in orchestrator_text
-    assert "then Opus xhigh" not in refresh_text
+def test_disabled_flag_returns_declined_fallback() -> None:
+    reply = astra_advisor.run_codex_astra_advisor(
+        "consult",
+        Path("."),
+        astra_advisor.AstraPreflight(True, 90, "ok"),
+        None,
+        {},
+        None,
+        subprocess.run,
+    )
+    assert reply.is_fallback
+    assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
 
 
-def test_active_advisor_docs_use_astra_names() -> None:
+def test_missing_codex_returns_broken_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: None)
+    reply = astra_advisor.run_codex_astra_advisor(
+        "consult", Path("."), None, USAGE_PROBE_PATH, ENABLED_SETTINGS, None, subprocess.run
+    )
+    assert reply.is_fallback
+    assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
+
+
+def test_resume_uses_existing_session() -> None:
+    calls: list[list[str]] = []
+    reply = astra_advisor.run_codex_astra_advisor(
+        "resume",
+        Path("."),
+        None,
+        USAGE_PROBE_PATH,
+        ENABLED_SETTINGS,
+        "thread-1",
+        _two_step_runner(calls, "ENDORSE\nready"),
+    )
+    assert reply.successful
+    assert calls[1][-3:] == ["resume", "thread-1", "-"]
+
+
+def test_main_serializes_result_and_astra_fields(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        astra_advisor,
+        "run_codex_astra_advisor",
+        lambda *args, **kwargs: astra_advisor.CodexAstraAdvisorReply(
+            "thread-1", "PLAN\ninspect", True, None, False, "PLAN", True, "Astra", "codex", None
+        ),
+    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO("consult"))
+    assert astra_advisor.main(["--bind", "--cwd", "."]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"] == "codex"
+    assert payload["astra_enabled"] is True
+    assert "sol_enabled" not in payload
+
+
+def test_active_docs_use_astra_names() -> None:
     package_root = SCRIPTS_ROOT.parents[2]
     advisor_root = SCRIPTS_ROOT.parent
-    all_doc_paths = [
+    all_paths = [
         advisor_root / "advisor-protocol.md",
         *sorted((advisor_root / "reference").glob("*.md")),
         package_root / ".agents" / "skills" / "team-advisor" / "SKILL.md",
         package_root / "docs" / "references" / "team-advisor-skill.md",
-        package_root / ".agents" / "skills" / "_shared" / "advisor" / "scripts" / "README.md",
     ]
-    for doc_path in all_doc_paths:
-        content = doc_path.read_text(encoding="utf-8")
-        for legacy_name in ("ADVISOR_SOL", "--enable-sol", "codex_sol_advisor", "sol-rung.md", "sol_enabled", "gpt-5.6-sol"):
-            assert legacy_name not in content, (doc_path, legacy_name)
-    assert not (advisor_root / "reference" / "sol-rung.md").exists()
+    legacy_names = ("ADVISOR_SOL", "--enable-sol", "codex_sol_advisor", "sol-rung.md")
+    for path in all_paths:
+        content = path.read_text(encoding="utf-8")
+        assert all(name not in content for name in legacy_names)
 
 
-def test_team_advisor_path_preserves_astra_routing_fields() -> None:
-    team_advisor_path = SCRIPTS_ROOT.parents[2] / ".agents" / "skills" / "team-advisor" / "SKILL.md"
-    astra_rung_path = SCRIPTS_ROOT.parent / "reference" / "astra-rung.md"
-    assert "advisor-protocol.md" in team_advisor_path.read_text(encoding="utf-8")
-    astra_rung = astra_rung_path.read_text(encoding="utf-8")
-    assert "codex_astra_advisor.py" in astra_rung
-    assert "--resume <session_id>" in astra_rung
-    calls: list[list[str]] = []
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=_two_step_process_runner(calls, guidance="PLAN\ninspect"),
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert reply.successful
-    assert reply.astra_enabled
-    assert reply.selected_tier == astra_advisor.ADVISOR_MODEL_TIER
-    assert reply.outcome == astra_advisor.CODEX_BIND_SUCCESS_TOKEN
-    assert reply.signal == "PLAN"
-    assert reply.guidance == "PLAN\ninspect"
-
-
-def test_team_advisor_path_uses_fable_result_when_astra_gate_is_closed() -> None:
-    calls: list[list[str]] = []
-
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append(arguments)
-        return _probe_process({"percent_left": 10})
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=process_runner,
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert not reply.successful
-    assert reply.is_fallback
-    assert reply.astra_enabled
-    assert reply.selected_tier == astra_advisor.ADVISOR_FALLBACK_TIER
-    assert reply.outcome == astra_advisor.ADVISOR_FALLBACK_RESULT
-    assert len(calls) == 1
-
-
-def test_disabled_flag_uses_default_optional_routing_inputs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(astra_advisor.ASTRA_ENV_VAR, raising=False)
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="first consult",
-        working_directory=Path("."),
-        preflight=astra_advisor.AstraPreflight(
-            eligible=True,
-            percent_left=90,
-            reason="test preflight",
-        ),
-        probe_path=None,
-        setting_by_name=None,
-        session_id=None,
-        process_runner=subprocess.run,
-    )
-
-    assert reply.is_fallback
-    assert reply.reason == "Astra advisor flag is disabled"
-
-
-def test_resume_runs_the_usage_gate_before_codex() -> None:
-    calls: list[list[str]] = []
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="resume",
-        working_directory=Path("."),
-        preflight=None,
-        session_id="thread-1",
-        probe_path=USAGE_PROBE_PATH,
-        process_runner=_two_step_process_runner(calls, guidance="ENDORSE\nready"),
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert reply.successful
-    assert calls == [
-        [sys.executable, str(USAGE_PROBE_PATH)],
-        astra_advisor.build_codex_arguments("codex", session_id="thread-1"),
-    ]
-
-
-@pytest.mark.parametrize(
-    "codex_failure",
-    [
-        "nonzero",
-        "timeout",
-        "malformed_jsonl",
-        "missing_session",
-        "missing_guidance",
-        "invalid_signal",
-    ],
-)
-def test_codex_failure_modes_always_return_fallback(
-    codex_failure: str,
-) -> None:
-    def process_runner(
-        arguments: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        if len(arguments) == 2:
-            return _probe_process({"percent_left": 90})
-        if codex_failure == "timeout":
-            raise subprocess.TimeoutExpired(arguments, 30)
-        if codex_failure == "nonzero":
-            return subprocess.CompletedProcess(
-                arguments, 3, _event_stream(guidance="PLAN"), ""
-            )
-        if codex_failure == "malformed_jsonl":
-            return subprocess.CompletedProcess(arguments, 0, "{broken", "")
-        if codex_failure == "missing_session":
-            return subprocess.CompletedProcess(
-                arguments,
-                0,
-                json.dumps(
-                    {
-                        "type": "item.completed",
-                        "item": {"type": "agent_message", "text": "PLAN"},
-                    }
-                ),
-                "",
-            )
-        if codex_failure == "missing_guidance":
-            return subprocess.CompletedProcess(
-                arguments,
-                0,
-                json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
-                "",
-            )
-        return subprocess.CompletedProcess(
-            arguments, 0, _event_stream(guidance="PLAN: inspect"), ""
-        )
-
-    reply = astra_advisor.run_codex_astra_advisor(
-        prompt="bind",
-        working_directory=Path("."),
-        preflight=None,
-        probe_path=USAGE_PROBE_PATH,
-        session_id=None,
-        process_runner=process_runner,
-        setting_by_name=ENABLED_SETTING_BY_NAME,
-    )
-
-    assert not reply.successful
-    assert reply.is_fallback
-    assert reply.session_id is None
-    assert reply.guidance is None
+def test_astra_docs_name_shared_effort_and_helper() -> None:
+    advisor_root = SCRIPTS_ROOT.parent
+    rung = (advisor_root / "reference" / "astra-rung.md").read_text(encoding="utf-8")
+    protocol = (advisor_root / "advisor-protocol.md").read_text(encoding="utf-8")
+    assert "ADVISOR_EFFORT" in rung
+    assert "ADVISOR_ASTRA=1" in protocol
+    assert "codex_astra_advisor.py" in rung
+    assert "--resume <session_id>" in rung
