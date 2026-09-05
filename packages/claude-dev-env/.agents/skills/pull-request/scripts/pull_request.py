@@ -19,13 +19,10 @@ from github_pr_command_constants.config.constants import (
     ACTION_FAILED_MESSAGE,
     ACTION_REVIEW,
     ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS,
-    ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS,
     ALL_LINTER_ACTIONS_BY_COMMAND,
     ALL_REVIEW_FLAGS_BY_EVENT,
     CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY,
     DEFAULT_MANAGED_ROOT_DIRECTORY_NAME,
-    GH_TOKEN_ENVIRONMENT_KEY,
-    GITHUB_TOKEN_ENVIRONMENT_KEY,
     PACKAGE_ROOT_PARENT_INDEX,
     REVIEW_EVENT_COMMENT,
     SELECTED_ACCOUNT_ENVIRONMENT_KEY,
@@ -160,8 +157,8 @@ def _post_arguments(arguments: argparse.Namespace) -> list[str]:
 
 def _lookup_environment(all_environment: Mapping[str, str]) -> dict[str, str]:
     lookup_environment = dict(all_environment)
-    for each_name in ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS:
-        lookup_environment.pop(each_name, None)
+    lookup_environment.pop("GITHUB_TOKEN", None)
+    lookup_environment.pop("GH_TOKEN", None)
     return lookup_environment
 
 
@@ -205,8 +202,8 @@ def _action_environment(
     if account_authorization is None:
         return None
     action_environment = dict(all_environment)
-    action_environment.pop(GITHUB_TOKEN_ENVIRONMENT_KEY, None)
-    action_environment[GH_TOKEN_ENVIRONMENT_KEY] = account_authorization
+    action_environment.pop("GITHUB_TOKEN", None)
+    action_environment["GH_TOKEN"] = account_authorization
     return action_environment
 
 
