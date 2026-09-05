@@ -3,26 +3,26 @@
 Detail behind the **Advisor block** section of [`advisor-protocol.md`](../advisor-protocol.md).
 Open this when assembling the block for an executor spawn prompt.
 
-Assembly order: one transport preamble picked by host profile, then the shared core, then — for an executor at Sonnet or below — the weak-executor add-on.
+Assembly order: one transport preamble picked by host profile, then the shared core, then the weak-executor add-on for an executor at Sonnet or below.
 Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
-The assembled block is self-contained — the executor receives this text alone, so every path it names is absolute.
+The assembled block is self-contained. The executor receives this text alone, so every path it names is absolute.
 The consult rules it restates are owned by [`consult-format.md`](consult-format.md); edit that file first and carry the change here.
 
-## Transport preamble — Claude host
+## Transport preamble for a Claude host
 
 > A shared session advisor named `<name>` is reachable via SendMessage; send each consult to it directly by that name.
 
-## Transport preamble — Codex host
+## Transport preamble for a Codex host
 
 > A shared session advisor named `<name>` is reachable as a native Codex Astra subagent; send each consult to it in-session by that name.
 
-## Transport preamble — third-party host
+## Transport preamble for a third-party host
 
 > The orchestrating session owns a standing advisor for this run.
 > The advisor chain: Claude Fable, then Astra through the Codex CLI when Fable is out of usage and the Astra flag and its preflight open that rung. Both rungs use `ADVISOR_EFFORT` (default low). When neither binds, there is no advisor.
 > The orchestrating session is your one path to it: send each consult as a report to the session that assigned you, and it relays the advisor's reply.
 
-## Shared core — every host
+## Shared core for every host
 
 > Consult before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
 > Build the first consult with the complete format in `$HOME/.claude/_shared/advisor/reference/consult-format.md`: assignment, desired outcome, constraints and exclusions, actions taken in order, real output and current state, live decision or blocker, validation evidence, unresolved risks, and load-bearing paths or excerpts. Later consults carry only changed evidence.
@@ -31,7 +31,7 @@ The consult rules it restates are owned by [`consult-format.md`](consult-format.
 > Replies open with one of ENDORSE, CORRECTION, PLAN, or STOP — treat CORRECTION and PLAN as actions to take.
 > On STOP, or when the advisor is unreachable, stop and report that back to whoever assigned you; advisor binding and the four signals stay with the session that owns the advisor.
 
-## Weak-executor add-on — Sonnet or below, either host
+## Weak-executor add-on for Sonnet or below, either host
 
 > Send your first consult right after orientation and before your first write.
 > Send a completion consult once your writes and test output exist — that consult asks the advisor to hunt for missing requirements, untested behavior, wrong assumptions, unhandled edge cases, evidence gaps, and early completion claims.

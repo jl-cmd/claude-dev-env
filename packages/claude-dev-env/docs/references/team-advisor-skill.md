@@ -1,6 +1,6 @@
-# Team-Advisor Skill
+# Team-advisor skill
 
-`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. This skill is the selected custom reproduction path for advisor behavior: it forwards explicit packets to a warm Agent/SendMessage advisor or the read-only `codex_astra_advisor.py` path across many decision points.
+`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. It sends explicit packets to a warm Agent/SendMessage advisor or the read-only `codex_astra_advisor.py` helper.
 
 ## Refs
 

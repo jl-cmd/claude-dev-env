@@ -1,8 +1,7 @@
 """Mechanically validate a model-tier spawn-walk log.
 
 The advisor protocol's Model floor section emits a structured spawn-walk log.
-This validator reads that log back and checks its invariants. A run is judged
-from data, not inferred from a transcript.
+This validator reads that log back and checks its invariants.
 
 ::
 
@@ -166,7 +165,7 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
 
     Candidate tiers are Fable, plus Astra when ``is_astra_enabled`` is true, on
     Claude and ThirdParty hosts. A Codex host walks Astra only. Consumer
-    ``own_tier`` is recorded and must be a known tier; it does not add Opus
+    ``own_tier`` is recorded and must be a known tier. It does not add Opus
     to the advisor walk. Tries walk that list in order. Early stop only
     after ``spawned``, ``cli``, or Astra ``codex`` (and Astra ``spawned`` on a
     Codex host). A null selected_tier requires a full walk plus

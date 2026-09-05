@@ -1,4 +1,4 @@
-"""Shared advisor_route_constants for advisor selection and replies."""
+"""Shared constants for advisor selection and replies."""
 
 from __future__ import annotations
 

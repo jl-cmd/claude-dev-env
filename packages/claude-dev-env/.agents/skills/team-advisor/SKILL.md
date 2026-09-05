@@ -16,10 +16,10 @@ One warm advisor at the strongest tier this session can reach. This session is t
 
 | Doc | Holds |
 |---|---|
-| [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight** — when to call, hard rule before first write, how to treat advice. Read this for every consult. |
-| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle** — session identity, host detect, model floor, warm-up, CLI fallback; its read map routes each moment to a `reference/` detail file. |
-| [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract** — ENDORSE / CORRECTION / PLAN / STOP; SendMessage only. |
-| [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background — read it when tuning the bind, not on every consult. |
+| [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight.** When to call, the hard rule before first write, and how to treat advice. Read this for every consult. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle.** Session identity, host detect, model floor, warm-up, CLI fallback. Its read map routes each moment to a `reference/` detail file. |
+| [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract.** ENDORSE / CORRECTION / PLAN / STOP. SendMessage only. |
+| [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background. Read it when tuning the bind, not on every consult. |
 
 ## Bind
 
@@ -27,12 +27,12 @@ One warm advisor at the strongest tier this session can reach. This session is t
 2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
 3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
 4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
-5. Skip the multi-consumer "who you are" opener — sole consumer.
+5. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
-**GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin — not Agent/Task, not a probe-path search. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../_shared/advisor/reference/astra-rung.md).
+**GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin. Do not use Agent or Task. Do not search for a probe path. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../_shared/advisor/reference/astra-rung.md).
 
-Full walk, charter, consult packet, Astra routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
+Full walk, charter, consult packet, Astra routing, and drift re-bind live in the protocol read map and its `reference/` files.
 
 ## Consult
 
