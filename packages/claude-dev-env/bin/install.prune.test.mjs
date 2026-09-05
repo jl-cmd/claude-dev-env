@@ -1054,6 +1054,65 @@ test('a full reinstall drops a retired hook script and its settings entry in one
     }
 });
 
+test('a full reinstall removes the retired Everything path rewriter and keeps a foreign hook neighbor', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const retiredHookPath = join(
+            sandbox.claudeDirectory,
+            HOOKS_DIRECTORY_NAME,
+            'blocking',
+            'es_exe_path_rewriter.py',
+        );
+        writeFileWithParents(retiredHookPath, 'a hook an earlier install wrote\n');
+        appendManifestFiles(sandbox.manifestPath, [retiredHookPath]);
+
+        const foreignHookPath = join(
+            sandbox.claudeDirectory,
+            HOOKS_DIRECTORY_NAME,
+            'blocking',
+            'foreign_search_hook.py',
+        );
+        const foreignHookBytes = Buffer.from('a user hook the installer never wrote\n');
+        writeFileWithParents(foreignHookPath, foreignHookBytes);
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        const freshManifest = readManifest(sandbox.manifestPath);
+        const installedDispatcherConstantsPath = join(
+            sandbox.claudeDirectory,
+            HOOKS_DIRECTORY_NAME,
+            'hooks_constants',
+            'bash_pre_tool_use_dispatcher_constants.py',
+        );
+        assert.equal(existsSync(retiredHookPath), false, 'the retired search hook leaves the installed hooks');
+        assert.equal(
+            freshManifest.files.includes(retiredHookPath),
+            false,
+            'the fresh manifest drops the retired search hook',
+        );
+        assert.equal(
+            freshManifest.files.includes(foreignHookPath),
+            false,
+            'the fresh manifest does not claim the foreign hook',
+        );
+        assert.deepEqual(
+            readFileSync(foreignHookPath),
+            foreignHookBytes,
+            'the foreign hook keeps its original bytes',
+        );
+        assert.equal(
+            readFileSync(installedDispatcherConstantsPath, 'utf8').includes(
+                'es_exe_path_rewriter.py',
+            ),
+            false,
+            'the installed dispatcher constants omit the retired search hook',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('a full reinstall removes a retired hook entry under an event type the current config leaves out', () => {
     const sandbox = createSandbox();
     try {

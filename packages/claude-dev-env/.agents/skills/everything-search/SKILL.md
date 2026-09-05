@@ -19,7 +19,17 @@ When `es.exe` fails or returns nothing, self-heal first: fall back to the `Glob`
 
 ## Registry tokens
 
-The `es_exe_path_rewriter` hook resolves scope tokens before the command runs. A `{project-name}` placeholder or a bare registry key from `~/.claude/project-paths.json` becomes its quoted absolute path in the command. The hook allows and rewrites — it never blocks — so a search scoped to a registered project names the project token and lets the hook fill in the path.
+Use the bundled command for registry-backed searches:
+
+```text
+python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <project-name> <search arguments>
+```
+
+The command reads `~/.claude/project-paths.json`. It expands an exact bare project name or exact `{project-name}` argument to one absolute path argument, then starts `es.exe` without a shell. It preserves unknown names, absolute paths, flags, and spaces inside each argument.
+
+Put the search scope first. The first argument names a project, path, file, extension, date, or size scope. An options-only request exits before `es.exe` starts. Use `-version` alone to read the installed Everything command version.
+
+A missing registry permits direct path and operator searches. Malformed registry content, an empty search, a missing `es.exe`, or a process start failure returns a nonzero exit. The command returns the `es.exe` exit status after a successful start.
 
 ## Instructions
 
@@ -131,9 +141,14 @@ Run separate searches for each extension type:
 
 - Everything must be running (system tray) for es.exe to work
 - Run one extension per search for cleaner results
-- Use `dm:` for recent file searches instead of manual date filtering
+- Use `dm:` to filter recent files by the index timestamp
 - Combine with path to narrow scope
 - Results return instantly regardless of drive size
+
+## Files
+
+- `scripts/everything_search.py` runs one argument-safe Everything search.
+- `scripts/test_everything_search.py` verifies registry expansion and command failures.
 
 ### Junctions, Symlinks & Drive Mapping
 

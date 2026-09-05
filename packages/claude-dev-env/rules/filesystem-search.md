@@ -45,7 +45,7 @@ When `es.exe` fails or returns nothing, fall back to `Glob` or `Grep` without pa
 
 Issue one shell search at a time when the walk is large. Parallel full-tree searches contend for the shell and can lock the host. Harness `Grep` and `Glob` calls carry no such cost and run in parallel freely.
 
-## Enforcement
+## Search controls
 
 - `unscoped_search_blocker` (PreToolUse on Bash and PowerShell, hosted by `bash_pre_tool_use_dispatcher`) denies a walk from an unscoped root and returns the scoped alternative.
-- `es_exe_path_rewriter` (PreToolUse on Bash) substitutes `{project-name}` placeholders and bare registry keys in an `es.exe` command with their quoted absolute paths, read from `~/.claude/project-paths.json`. It allows and rewrites; it never blocks, and a machine with no registry file passes the command through unchanged. `scripts/setup_project_paths.py` writes the registry.
+- For registry-backed Everything searches, run `python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <project-name> <search arguments>`. The command expands exact project-name arguments from `~/.claude/project-paths.json` and starts `es.exe` without a shell. `scripts/setup_project_paths.py` writes the registry.
