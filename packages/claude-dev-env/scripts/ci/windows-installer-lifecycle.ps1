@@ -1,13 +1,3 @@
-# Windows CI adapter for the Node installer lifecycle driver.
-#
-# The driver already redirects HOME, USERPROFILE, and GIT_CONFIG_GLOBAL into a
-# throwaway sandbox. This adapter records that isolation contract, runs the
-# 16-check driver, and writes bounded evidence under -EvidenceRoot so a failed
-# Windows runner leaves an actionable artifact.
-#
-# Usage (from packages/claude-dev-env):
-#   pwsh -NoProfile -File scripts/ci/windows-installer-lifecycle.ps1 -EvidenceRoot <dir>
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -17,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $packageRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$driverPath = Join-Path $packageRoot '.claude\skills\run-claude-dev-env\driver.mjs'
+$driverPath = Join-Path $PSScriptRoot 'installer-lifecycle.mjs'
 $allIsolationEnvNames = @(
     'HOME',
     'USERPROFILE',

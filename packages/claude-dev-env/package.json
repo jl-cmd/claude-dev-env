@@ -9,7 +9,7 @@
         "cde": "bin/cde.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\" \"scripts/ci/*.test.mjs\""
     },
     "files": [
         "bin/",

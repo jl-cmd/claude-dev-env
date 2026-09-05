@@ -5,6 +5,7 @@ INVALID_INPUT_EXIT_CODE = 2
 GIT_EXECUTABLE = "git"
 UTF8_ENCODING = "utf-8"
 PATH_SEPARATOR = "/"
+ARCHIVED_SKILLS_DIRECTORY_NAME = "skill-archive"
 NUL_BYTE = b"\0"
 ALL_GIT_ROOT_ARGUMENTS = ("rev-parse", "--show-toplevel")
 ALL_GIT_HEAD_ARGUMENTS = ("rev-parse", "--verify", "HEAD")
