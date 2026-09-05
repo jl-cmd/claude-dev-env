@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from types import ModuleType
 
@@ -67,8 +67,29 @@ def find_documentation_findings_for_path(
     absolute_path = repository_root / relative_path
     if not absolute_path.is_file():
         return []
+    return _find_documentation_file_findings(
+        repository_root,
+        relative_path,
+        absolute_path,
+        drift_module,
+        drift_constants,
+    )
+
+
+def _find_documentation_file_findings(
+    repository_root: Path,
+    relative_path: str,
+    absolute_path: Path,
+    drift_module: ModuleType,
+    drift_constants: ModuleType,
+) -> list[RepositoryFinding]:
     content = absolute_path.read_text(encoding=UTF8_ENCODING)
-    _require_readable_code_files(content, repository_root, drift_constants)
+    _require_readable_code_files(
+        content,
+        repository_root,
+        drift_module,
+        drift_constants,
+    )
     all_drift_rows = drift_module.find_drift_rows(content, absolute_path.parent)
     return _build_findings(relative_path, all_drift_rows)
 
@@ -89,17 +110,18 @@ def _build_findings(
 def _require_readable_code_files(
     content: str,
     repository_root: Path,
+    drift_module: ModuleType,
     drift_constants: ModuleType,
 ) -> None:
     resolved_repository_root = repository_root.resolve(strict=True)
-    for each_match in drift_constants.BACKTICK_TOKEN_PATTERN.finditer(content):
-        token = each_match.group(1).strip()
-        suffix = Path(token).suffix.lower()
-        if suffix not in drift_constants.ALL_CODE_FILE_EXTENSIONS:
-            continue
+    for each_code_reference in _iter_env_var_code_references(
+        content,
+        drift_module,
+        drift_constants,
+    ):
         maybe_code_file = _resolve_code_file(
             repository_root,
-            token,
+            each_code_reference,
             drift_constants,
         )
         if maybe_code_file is None:
@@ -109,6 +131,48 @@ def _require_readable_code_files(
             maybe_code_file,
         )
         resolved_code_file.read_text(encoding=UTF8_ENCODING)
+
+
+def _iter_env_var_code_references(
+    content: str,
+    drift_module: ModuleType,
+    drift_constants: ModuleType,
+) -> Iterator[str]:
+    is_inside_code_fence = False
+    for each_line in content.splitlines():
+        if drift_constants.CODE_FENCE_PATTERN.match(each_line) is not None:
+            is_inside_code_fence = not is_inside_code_fence
+            continue
+        if is_inside_code_fence:
+            continue
+        if drift_constants.TABLE_ROW_PATTERN.match(each_line) is None:
+            continue
+        maybe_code_reference = _code_reference_for_env_var_row(
+            each_line,
+            drift_module,
+            drift_constants,
+        )
+        if maybe_code_reference is not None:
+            yield maybe_code_reference
+
+
+def _code_reference_for_env_var_row(
+    table_line: str,
+    drift_module: ModuleType,
+    drift_constants: ModuleType,
+) -> str | None:
+    all_cells = drift_module._row_cells(table_line)
+    if len(all_cells) < drift_constants.MINIMUM_ENV_VAR_ROW_CELL_COUNT:
+        return None
+    if drift_module._is_separator_row(all_cells):
+        return None
+    if drift_module._env_var_name_in_cell(all_cells[0]) is None:
+        return None
+    for each_cell in all_cells[1:]:
+        maybe_code_reference = drift_module._code_file_reference_in_cell(each_cell)
+        if maybe_code_reference is not None:
+            return maybe_code_reference
+    return None
 
 
 def _resolve_inside_repository(

@@ -15,6 +15,7 @@ from repository_checks.config.constants import (
     CHECK_ID_ENV_VAR_DOCUMENTATION,
     FAILED_CHECK_EXIT_CODE,
     FINDINGS_EXIT_CODE,
+    SUCCESS_EXIT_CODE,
 )
 from repository_policy_test_support import (
     commit_tracked_files,
@@ -44,6 +45,30 @@ def test_should_flag_environment_variable_documentation_drift(tmp_path: Path) ->
     assert CHECK_ID_ENV_VAR_DOCUMENTATION in stdout_text
     assert "docs/configuration.md" in stdout_text
     assert "GOOGLE_APPLICATION_CREDENTIALS -> auth/google_auth.py" in stdout_text
+
+
+def test_should_ignore_long_code_reference_inside_code_fence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    long_code_reference = ("x" * 300) + ".py"
+    write_text(
+        repository_root / "docs" / "review.md",
+        f"# Review\n\n~~~diff\n+ `{long_code_reference}`\n~~~\n",
+    )
+    commit_tracked_files(repository_root)
+    original_is_file = Path.is_file
+
+    def reject_long_filename(candidate_path: Path) -> bool:
+        if len(candidate_path.name) > 255:
+            raise OSError(candidate_path)
+        return original_is_file(candidate_path)
+
+    monkeypatch.setattr(Path, "is_file", reject_long_filename)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == SUCCESS_EXIT_CODE
+    assert CHECK_ID_ENV_VAR_DOCUMENTATION not in stdout_text
 
 
 def test_should_fail_closed_when_an_env_var_code_file_cannot_be_read(
