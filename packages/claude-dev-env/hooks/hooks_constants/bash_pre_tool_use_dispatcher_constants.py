@@ -35,7 +35,9 @@ BASH_TOOL_NAME = "Bash"
 POWERSHELL_TOOL_NAME = "PowerShell"
 
 ALL_BASH_ONLY_TOOL_NAMES: frozenset[str] = frozenset({BASH_TOOL_NAME})
-ALL_BASH_AND_POWERSHELL_TOOL_NAMES: frozenset[str] = frozenset({BASH_TOOL_NAME, POWERSHELL_TOOL_NAME})
+ALL_BASH_AND_POWERSHELL_TOOL_NAMES: frozenset[str] = frozenset(
+    {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}
+)
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,6 @@ class BashHostedHookEntry:
 
 
 ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
-    BashHostedHookEntry("blocking/es_exe_path_rewriter.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/destructive_command_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/shell_substitution_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
@@ -62,14 +63,10 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
         "blocking/cursor_cli_python_misfire_blocker.py",
         ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
     ),
-    BashHostedHookEntry(
-        "blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
+    BashHostedHookEntry("blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
     BashHostedHookEntry("blocking/nas_ssh_binary_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/volatile_path_in_post_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
+    BashHostedHookEntry("blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
     BashHostedHookEntry("blocking/conventional_pr_title_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/block_main_commit.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/session_edit_stage_gate.py", ALL_BASH_ONLY_TOOL_NAMES),

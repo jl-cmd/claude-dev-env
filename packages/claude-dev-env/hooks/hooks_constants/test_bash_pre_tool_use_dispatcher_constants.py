@@ -7,22 +7,18 @@ registration order the standalone chain used.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
+from runpy import run_path
 
-_HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
-if _HOOKS_DIR not in sys.path:
-    sys.path.insert(0, _HOOKS_DIR)
-
-from hooks_constants.bash_pre_tool_use_dispatcher_constants import (  # noqa: E402
-    ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
-    ALL_BASH_HOSTED_HOOK_ENTRIES,
-    BASH_TOOL_NAME,
-    POWERSHELL_TOOL_NAME,
+ALL_CONSTANT_BINDINGS = run_path(
+    str(Path(__file__).with_name("bash_pre_tool_use_dispatcher_constants.py"))
 )
+ALL_BASH_AND_POWERSHELL_TOOL_NAMES = ALL_CONSTANT_BINDINGS["ALL_BASH_AND_POWERSHELL_TOOL_NAMES"]
+ALL_BASH_HOSTED_HOOK_ENTRIES = ALL_CONSTANT_BINDINGS["ALL_BASH_HOSTED_HOOK_ENTRIES"]
+BASH_TOOL_NAME = ALL_CONSTANT_BINDINGS["BASH_TOOL_NAME"]
+POWERSHELL_TOOL_NAME = ALL_CONSTANT_BINDINGS["POWERSHELL_TOOL_NAME"]
 
 _EXPECTED_BASH_ORDER = (
-    "blocking/es_exe_path_rewriter.py",
     "blocking/destructive_command_blocker.py",
     "blocking/gh_body_arg_blocker.py",
     "blocking/shell_substitution_blocker.py",
@@ -78,8 +74,6 @@ def test_powershell_hooks_carry_the_shared_tool_set() -> None:
     for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES:
         if each_entry.script_relative_path in _POWERSHELL_APPLICABLE:
             assert each_entry.applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-
-
 
 
 def test_every_roster_path_points_at_an_existing_hook() -> None:

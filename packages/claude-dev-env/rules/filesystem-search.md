@@ -1,6 +1,6 @@
 # Filesystem Search
 
-**When this applies:** Any search for files by name, path, extension, size, or date — through `es.exe`, a shell `find`, a recursive `Get-ChildItem` / `gci` / `dir` / `ls -R`, or the harness Grep and Glob tools.
+**When this applies:** Any search for files by name, path, extension, size, or date. That includes `es.exe`, a shell `find`, a recursive `Get-ChildItem` / `gci` / `dir` / `ls -R`, or the harness Grep and Glob tools.
 
 ## The scope invariant
 
@@ -14,7 +14,7 @@ Three tools are equally sanctioned; pick by what you know:
 
 | You know | Use |
 |---|---|
-| The exact path | `Read` — no search at all |
+| The exact path | `Read`. Do not search. |
 | A name, extension, or date, on Windows | `es.exe` with a path scope |
 | A name or path pattern | The harness `Glob` tool |
 | Text inside files | The harness `Grep` tool |
@@ -39,13 +39,13 @@ When `es.exe` fails or returns nothing, fall back to `Glob` or `Grep` without pa
 | Git Bash drive root | `find /c -name '*.py'` |
 | Windows drive root | `find C:\ -name foo` / `Get-ChildItem C:\ -Recurse` |
 | Bare home | `find ~ -name README.md` / `find $HOME -type f` |
-| Network share root | `find //server/share -name x` — a path under the share (`//server/share/project/src`) is allowed |
+| Network share root | `find //server/share -name x`. A path under the share (`//server/share/project/src`) is allowed |
 
 ## Shell batching
 
 Issue one shell search at a time when the walk is large. Parallel full-tree searches contend for the shell and can lock the host. Harness `Grep` and `Glob` calls carry no such cost and run in parallel freely.
 
-## Enforcement
+## Search controls
 
 - `unscoped_search_blocker` (PreToolUse on Bash and PowerShell, hosted by `bash_pre_tool_use_dispatcher`) denies a walk from an unscoped root and returns the scoped alternative.
-- `es_exe_path_rewriter` (PreToolUse on Bash) substitutes `{project-name}` placeholders and bare registry keys in an `es.exe` command with their quoted absolute paths, read from `~/.claude/project-paths.json`. It allows and rewrites; it never blocks, and a machine with no registry file passes the command through unchanged. `scripts/setup_project_paths.py` writes the registry.
+- For Everything searches that use a project name, run `python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <project-name> <search arguments>`. An exact project name becomes its path from `~/.claude/project-paths.json`. The command then starts `es.exe` without a shell. `scripts/setup_project_paths.py` writes the registry.
