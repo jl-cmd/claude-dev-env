@@ -86,6 +86,106 @@ def _stage_terminology_change(
     )
 
 
+def _base_terminology_repository(
+    repository_root: Path, source_text: str
+) -> tuple[Path, Path, str]:
+    _ensure_git_repository(repository_root)
+    source_path = repository_root / "src" / "quota.py"
+    documentation_path = repository_root / "docs" / "README.md"
+    source_path.parent.mkdir()
+    documentation_path.parent.mkdir()
+    source_path.write_text(source_text, encoding="utf-8")
+    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
+    _commit_repository(repository_root, "base")
+    comparison_revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return source_path, documentation_path, comparison_revision
+
+
+def _commit_file(
+    repository_root: Path, file_path: Path, text: str, message: str
+) -> None:
+    file_path.write_text(text, encoding="utf-8")
+    _commit_repository(repository_root, message)
+
+
+def _committed_terminology_repository(
+    repository_root: Path,
+) -> tuple[Path, Path, str]:
+    source_path, documentation_path, comparison_revision = _base_terminology_repository(
+        repository_root, "baseline = 1\n"
+    )
+    _commit_file(
+        repository_root,
+        source_path,
+        "baseline = 1\npremium_request_interactions = 5\n",
+        "identifier",
+    )
+    _commit_file(
+        repository_root,
+        documentation_path,
+        "The premium-request-budget field gates the run.\n",
+        "documentation",
+    )
+    return source_path, documentation_path, comparison_revision
+
+
+def _staged_worktree_terminology_repository(repository_root: Path) -> str:
+    source_path, documentation_path, comparison_revision = _committed_terminology_repository(
+        repository_root
+    )
+    source_path.write_text(
+        "baseline = 1\n"
+        "premium_request_interactions = 5\n"
+        "another_request_total = 2\n",
+        encoding="utf-8",
+    )
+    documentation_path.write_text(
+        "The another-request-budget field gates the run.\n", encoding="utf-8"
+    )
+    subprocess.run(
+        ("git", "add", "-A"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    )
+    documentation_path.write_text(
+        "The another-request-total field gates the run.\n", encoding="utf-8"
+    )
+    return comparison_revision
+
+
+def _renamed_deleted_terminology_repository(repository_root: Path) -> str:
+    old_source_path, _, comparison_revision = _base_terminology_repository(
+        repository_root, "baseline = 1\n"
+    )
+    deleted_documentation_path = repository_root / "docs" / "obsolete.md"
+    deleted_documentation_path.write_text("Obsolete quota text.\n", encoding="utf-8")
+    _commit_repository(repository_root, "obsolete documentation")
+    new_source_path = repository_root / "src" / "new_quota.py"
+    subprocess.run(
+        ("git", "mv", "--", str(old_source_path), str(new_source_path)),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    )
+    new_source_path.write_text(
+        "baseline = 1\npremium_request_interactions = 5\n", encoding="utf-8"
+    )
+    deleted_documentation_path.unlink()
+    documentation_path = repository_root / "docs" / "README.md"
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n", encoding="utf-8"
+    )
+    _commit_repository(repository_root, "rename and delete")
+    return comparison_revision
+
+
 def _terminology_rule() -> ChangeSetRule:
     terminology_rule = next(
         each_rule
@@ -291,7 +391,9 @@ def test_registry_registers_unique_python_validator_rule() -> None:
 def test_registry_registers_terminology_change_set_rule() -> None:
     terminology_rule = _terminology_rule()
     assert terminology_rule.rule_sets == _CHANGED_RULE_SETS
-    assert terminology_rule.selections == frozenset({SelectionKind.STAGED})
+    assert terminology_rule.selections == frozenset(
+        {SelectionKind.STAGED, SelectionKind.BASE}
+    )
 
 
 def test_registry_runs_test_pairing_for_staged_and_base_changes() -> None:
@@ -339,6 +441,92 @@ def test_terminology_rule_suppresses_identifier_present_in_prior_tree(
     lint_report = lint(LintRequest.staged(tmp_path), all_registry=(_terminology_rule(),))
 
     assert lint_report.diagnostics == ()
+
+
+def test_terminology_rule_reports_committed_changes_from_base(
+    tmp_path: Path,
+) -> None:
+    _, _, comparison_revision = _committed_terminology_repository(tmp_path)
+    (tmp_path / "staged.txt").write_text("unrelated index content\n", encoding="utf-8")
+    subprocess.run(
+        ("git", "add", "--", "staged.txt"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert len(lint_report.diagnostics) == 1
+    assert lint_report.diagnostics[0].location is not None
+    assert lint_report.diagnostics[0].location.path == PurePosixPath("docs/README.md")
+
+
+def test_terminology_base_uses_worktree_while_staged_uses_index(
+    tmp_path: Path,
+) -> None:
+    comparison_revision = _staged_worktree_terminology_repository(tmp_path)
+
+    base_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+    staged_report = lint(
+        LintRequest.staged(tmp_path),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert base_report.diagnostics == ()
+    assert len(staged_report.diagnostics) == 1
+    assert staged_report.diagnostics[0].location is not None
+    assert staged_report.diagnostics[0].location.path == PurePosixPath(
+        "docs/README.md"
+    )
+
+
+def test_terminology_base_suppresses_identifier_present_in_comparison_base(
+    tmp_path: Path,
+) -> None:
+    source_path, documentation_path, comparison_revision = _base_terminology_repository(
+        tmp_path, "premium_request_interactions = 5\n"
+    )
+    source_path.write_text(
+        "premium_request_interactions = 5\n"
+        "premium_request_interactions = 6\n",
+        encoding="utf-8",
+    )
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "existing identifier")
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert lint_report.diagnostics == ()
+
+
+def test_terminology_base_handles_renames_and_deletions(
+    tmp_path: Path,
+) -> None:
+    comparison_revision = _renamed_deleted_terminology_repository(tmp_path)
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert len(lint_report.diagnostics) == 1
+    assert lint_report.diagnostics[0].location is not None
+    assert lint_report.diagnostics[0].location.path == PurePosixPath(
+        "docs/README.md"
+    )
 
 
 def test_terminology_rule_skips_file_selection(tmp_path: Path) -> None:

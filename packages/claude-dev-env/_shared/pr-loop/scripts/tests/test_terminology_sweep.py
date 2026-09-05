@@ -31,6 +31,7 @@ sweep_module = _load_sweep_module()
 sweep_diff = sweep_module.sweep_diff
 staged_terminology_findings = sweep_module.staged_terminology_findings
 strict_staged_terminology_findings = sweep_module.strict_staged_terminology_findings
+strict_base_terminology_findings = sweep_module.strict_base_terminology_findings
 main = sweep_module.main
 parse_added_lines = sweep_module._parse_added_lines
 
@@ -51,6 +52,49 @@ def _init_git_repository(repository_path: Path) -> None:
             capture_output=True,
             env=_hermetic_git_environment(),
         )
+
+
+def _commit_repository(repository_path: Path, message: str) -> None:
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=repository_path,
+        check=True,
+        capture_output=True,
+        env=_hermetic_git_environment(),
+    )
+    subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=repository_path,
+        check=True,
+        capture_output=True,
+        env=_hermetic_git_environment(),
+    )
+
+
+def _committed_near_miss_repository(repository_path: Path) -> str:
+    _init_git_repository(repository_path)
+    source_path = repository_path / "quota.py"
+    documentation_path = repository_path / "README.md"
+    source_path.write_text("baseline = 1\n", encoding="utf-8")
+    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
+    _commit_repository(repository_path, "base")
+    comparison_revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_hermetic_git_environment(),
+    ).stdout.strip()
+    source_path.write_text(
+        "baseline = 1\npremium_request_interactions = 5\n", encoding="utf-8"
+    )
+    _commit_repository(repository_path, "identifier")
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n", encoding="utf-8"
+    )
+    _commit_repository(repository_path, "documentation")
+    return comparison_revision
 
 
 CODE_AND_PROSE_DIFF = (
@@ -308,6 +352,18 @@ def test_staged_terminology_findings_empty_when_clean(tmp_path: Path) -> None:
         env=_hermetic_git_environment(),
     )
     assert staged_terminology_findings(tmp_path) == []
+
+
+def test_strict_base_terminology_findings_reports_committed_near_miss(
+    tmp_path: Path,
+) -> None:
+    comparison_revision = _committed_near_miss_repository(tmp_path)
+
+    all_findings = strict_base_terminology_findings(tmp_path, comparison_revision)
+
+    assert len(all_findings) == 1
+    assert "README.md:1" in all_findings[0]
+    assert "premium-request-budget" in all_findings[0]
 
 
 def test_parse_added_lines_counts_pre_increment_content_as_added_line() -> None:

@@ -113,8 +113,10 @@ def test_retirement_and_restoration_preserve_live_change_metadata(tmp_path: Path
         tmp_path,
         (deleted_path, PurePosixPath("skill-archive/deleted.py")),
         ((retired_path, archive_path), (restored_source, restored_path)),
+        base_revision="base-sha",
     )
     runtime_set = _runtime_document_set(document_set)
     assert tuple(document.path for document in runtime_set.documents) == (restored_path,)
     assert runtime_set.deleted_paths == (deleted_path, retired_path)
     assert runtime_set.renamed_paths == ((restored_source, restored_path),)
+    assert runtime_set.base_revision == "base-sha"

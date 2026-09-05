@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 from .config.constants import ARCHIVED_SKILLS_DIRECTORY_NAME
@@ -72,12 +73,11 @@ def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:
     all_renamed_paths = tuple(
         each_pair for each_pair in document_set.renamed_paths if _is_runtime_path(each_pair[1])
     )
-    return DocumentSet(
-        all_documents,
-        document_set.selection,
-        document_set.repository_root,
-        all_deleted_paths,
-        all_renamed_paths,
+    return replace(
+        document_set,
+        documents=all_documents,
+        deleted_paths=all_deleted_paths,
+        renamed_paths=all_renamed_paths,
     )
 
 

@@ -247,8 +247,17 @@ def test_base_source_should_compare_merge_base_and_read_worktree_bytes(
 
     document_set = select_documents(LintRequest.base(repository_root, "main"))
     selected_document = _document_for(document_set, "file.py")
+    expected_revision = subprocess.run(
+        (constants.GIT_EXECUTABLE, "merge-base", "main", "HEAD"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_git_environment(),
+    ).stdout.strip()
 
     assert document_set.selection == SelectionKind.BASE
+    assert document_set.base_revision == expected_revision
     assert selected_document.text == "feature-worktree\n"
     assert selected_document.prior_text == "base-text\n"
     assert selected_document.origin == ContentOrigin.REVISION_DIFF
